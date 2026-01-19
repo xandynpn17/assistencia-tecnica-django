@@ -17,3 +17,39 @@ venv/
 # IDE
 .idea/
 .vscode/
+# Django
+*.log
+*.pyc
+__pycache__/
+local_settings.py
+db.sqlite3
+media/
+
+# Ambiente virtual
+venv/
+env/
+ENV/
+myenv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos de backup
+*.bak
+*.backup
+
+# Arquivos temporários
+*.tmp
+*.temp
+
+# Secretos
+secret_key.txt
+credentials.json
