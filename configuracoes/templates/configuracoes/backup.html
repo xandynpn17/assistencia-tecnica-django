@@ -1,0 +1,27 @@
+{% extends "core/base.html" %}
+{% block title %}Backup do Sistema{% endblock %}
+
+{% block content %}
+<div class="card card-modern">
+  <div class="card-modern-header">
+    <i class="fas fa-database"></i> Backup e Restauração do Sistema
+  </div>
+  <div class="card-modern-body text-center">
+    <p class="lead text-muted mb-4">
+      Aqui você pode gerar um backup completo dos dados da aplicação ou restaurar um backup existente.
+    </p>
+
+    <a href="{% url 'configuracoes:backup_banco' %}" class="btn btn-success btn-lg mb-3">
+      <i class="fas fa-download"></i> Fazer Backup
+    </a>
+
+    <a href="{% url 'configuracoes:restore_banco' %}" class="btn btn-secondary btn-lg mb-3">
+      <i class="fas fa-upload"></i> Restaurar Backup
+    </a>
+
+    <div class="alert alert-info mt-4">
+      <i class="fas fa-info-circle"></i> Funções de backup e restauração estão em desenvolvimento.
+    </div>
+  </div>
+</div>
+{% endblock %}

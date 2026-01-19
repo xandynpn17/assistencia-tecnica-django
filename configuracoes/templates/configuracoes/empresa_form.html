@@ -1,0 +1,18 @@
+{% extends 'core/base.html' %}
+{% block title %}Editar Empresa{% endblock %}
+
+{% block content %}
+<div class="card card-modern">
+  <div class="card-modern-header">
+    <i class="fas fa-building"></i> Editar Empresa
+  </div>
+  <div class="card-modern-body">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+      <a href="{% url 'configuracoes:painel' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

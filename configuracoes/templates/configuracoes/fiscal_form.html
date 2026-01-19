@@ -1,0 +1,28 @@
+{% extends "core/base.html" %}
+{% block title %}Configuração Fiscal{% endblock %}
+
+{% block content %}
+<div class="card card-modern">
+  <div class="card-modern-header">
+    <i class="fas fa-file-invoice-dollar"></i> Configurações Fiscais
+  </div>
+  <div class="card-modern-body">
+    <p class="text-muted">
+      Essa seção permitirá ajustar parâmetros fiscais e tributários, como:
+    </p>
+    <ul class="list-group list-group-flush mb-3">
+      <li class="list-group-item">Percentual de IVA padrão</li>
+      <li class="list-group-item">Regime tributário da empresa</li>
+      <li class="list-group-item">Modelos de nota fiscal</li>
+    </ul>
+
+    <div class="alert alert-info">
+      <i class="fas fa-tools"></i> Essa funcionalidade está em desenvolvimento.
+    </div>
+
+    <a href="{% url 'configuracoes:painel' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar ao Painel
+    </a>
+  </div>
+</div>
+{% endblock %}

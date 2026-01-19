@@ -1,0 +1,363 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Ordens de Serviço{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card-modern {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        margin-bottom: 25px;
+        transition: transform 0.3s ease;
+        background: #ffffff;
+    }
+
+    .card-modern:hover {
+        transform: translateY(-3px);
+    }
+
+    .card-modern-header {
+        background: linear-gradient(120deg, #2c3e50, #4a6580);
+        color: white;
+        border-radius: 12px 12px 0 0;
+        padding: 15px 25px;
+        font-weight: 600;
+        border: none;
+    }
+
+    .btn-primary-modern {
+        background: linear-gradient(120deg, #3a7bd5, #3498db);
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s;
+    }
+
+    .btn-primary-modern:hover {
+        background: linear-gradient(120deg, #2c65c4, #2980b9);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .table-modern {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .table-modern thead th {
+        background-color: #f8f9fa;
+        color: #2c3e50;
+        font-weight: 600;
+        padding: 15px;
+        border-bottom: 2px solid #e9ecef;
+        position: sticky;
+        top: 0;
+    }
+
+    .table-modern tbody td {
+        padding: 15px;
+        vertical-align: middle;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .table-modern tbody tr {
+        transition: background-color 0.2s;
+    }
+
+    .table-modern tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+
+    .badge-modern {
+        padding: 7px 12px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    .badge-success {
+        background: linear-gradient(120deg, #28a745, #20c997);
+    }
+
+    .badge-warning {
+        background: linear-gradient(120deg, #ffc107, #fd7e14);
+        color: #343a40;
+    }
+
+    .badge-danger {
+        background: linear-gradient(120deg, #dc3545, #c82333);
+    }
+
+    .badge-secondary {
+        background: linear-gradient(120deg, #6c757d, #5a6268);
+    }
+
+    .btn-action {
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        margin-right: 5px;
+    }
+
+    .page-title {
+        color: #2c3e50;
+        font-weight: 700;
+        margin-bottom: 5px;
+    }
+
+    .text-muted {
+        color: #6c757d !important;
+    }
+
+    .search-container {
+        position: relative;
+        margin-bottom: 20px;
+    }
+
+    .search-input {
+        padding-left: 40px;
+        border-radius: 25px;
+        border: 1px solid #e1e5eb;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 15px;
+        top: 12px;
+        color: #6c757d;
+    }
+
+    .filter-btn {
+        background: white;
+        border: 1px solid #e1e5eb;
+        border-radius: 25px;
+        padding: 8px 20px;
+        color: #6c757d;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        margin-left: 10px;
+    }
+
+    .filter-btn:hover {
+        background: #f8f9fa;
+        color: #2c3e50;
+    }
+
+    .status-filter {
+        display: inline-flex;
+        margin-bottom: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 5px;
+    }
+
+    .status-filter-btn {
+        padding: 8px 15px;
+        border-radius: 6px;
+        margin: 0 3px;
+        cursor: pointer;
+        transition: all 0.3s;
+        border: none;
+        background: transparent;
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    .status-filter-btn.active, .status-filter-btn:hover {
+        background: white;
+        color: #2c3e50;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #6c757d;
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 15px;
+        color: #dee2e6;
+    }
+
+    @media (max-width: 768px) {
+        .table-modern thead {
+            display: none;
+        }
+
+        .table-modern tbody tr {
+            display: block;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+        }
+
+        .table-modern tbody td {
+            display: block;
+            text-align: right;
+            padding: 10px 15px;
+            position: relative;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .table-modern tbody td:before {
+            content: attr(data-label);
+            position: absolute;
+            left: 15px;
+            top: 10px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .btn-action {
+            display: block;
+            margin-bottom: 5px;
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block header %}
+<div class="row align-items-center mb-4">
+    <div class="col-md-6">
+        <h1 class="page-title">
+            <i class="fas fa-clipboard-list mr-2"></i>Ordens de Serviço
+        </h1>
+        <p class="text-muted">Gerencie todas as ordens de serviço do sistema</p>
+    </div>
+    <div class="col-md-6 text-md-right">
+        <a href="{% url 'ordens:nova_ordem' %}" class="btn btn-primary-modern">
+            <i class="fas fa-plus mr-2"></i> Nova OS
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="card-modern">
+        <div class="card-modern-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title mb-0"><i class="fas fa-list mr-2"></i>Lista de Ordens de Serviço</h3>
+            <div class="d-flex">
+                <div class="search-container">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" class="form-control search-input" placeholder="Buscar ordens..." id="searchInput">
+                </div>
+                <button class="filter-btn">
+                    <i class="fas fa-filter mr-2"></i>Filtrar
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="status-filter">
+                <button class="status-filter-btn active" data-status="all">Todas</button>
+                <button class="status-filter-btn" data-status="pendente">Pendentes</button>
+                <button class="status-filter-btn" data-status="em_andamento">Em Andamento</button>
+                <button class="status-filter-btn" data-status="concluida">Concluídas</button>
+            </div>
+
+            {% if ordens %}
+            <div class="table-responsive">
+                <table class="table-modern">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Cliente</th>
+                            <th>Equipamento</th>
+                            <th>Tipo de Reparo</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ordem in ordens %}
+                        <tr data-status="{{ ordem.status }}">
+                            <td data-label="ID">{{ ordem.numero_os }}</td>
+                            <td data-label="Cliente">{{ ordem.equipamento.cliente.nome }}</td>
+                            <td data-label="Equipamento">{{ ordem.equipamento.tipo }} - {{ ordem.equipamento.modelo }}</td>
+                            <td data-label="Tipo de Reparo">{{ ordem.get_tipo_reparo_display }}</td>
+                            <td data-label="Status">
+                                <span class="badge badge-modern badge-{% if ordem.status == 'concluida' %}success{% elif ordem.status == 'em_andamento' %}warning{% elif ordem.status == 'pendente' %}danger{% else %}secondary{% endif %}">
+                                    {{ ordem.get_status_display }}
+                                </span>
+                            </td>
+                            <td data-label="Ações">
+                                <a href="{% url 'ordens:editar_ordem' ordem.pk %}" class="btn btn-warning btn-action">
+                                    <i class="fas fa-edit"></i> Editar
+                                </a>
+                                <a href="#" class="btn btn-info btn-action">
+                                    <i class="fas fa-eye"></i> Ver
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-clipboard-list"></i>
+                <h4>Nenhuma ordem de serviço encontrada</h4>
+                <p>Quando houver ordens de serviço, elas aparecerão aqui.</p>
+                <a href="{% url 'ordens:nova_ordem' %}" class="btn btn-primary-modern mt-3">
+                    <i class="fas fa-plus mr-2"></i> Criar Primeira OS
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Filtro de status
+        const filterButtons = document.querySelectorAll('.status-filter-btn');
+        const tableRows = document.querySelectorAll('tbody tr');
+
+        filterButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const status = this.getAttribute('data-status');
+
+                // Ativar botão clicado
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+
+                // Filtrar linhas da tabela
+                tableRows.forEach(row => {
+                    if (status === 'all' || row.getAttribute('data-status') === status) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        });
+
+        // Busca em tempo real
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('keyup', function() {
+                const searchText = this.value.toLowerCase();
+
+                tableRows.forEach(row => {
+                    const rowText = row.textContent.toLowerCase();
+                    if (rowText.includes(searchText)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

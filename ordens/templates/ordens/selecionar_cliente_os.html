@@ -1,0 +1,27 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Selecionar Cliente para OS{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Selecionar Cliente para Ordem de Serviço</h3>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>Selecione o cliente:</label>
+                <select name="cliente_id" class="form-control" required>
+                    <option value="">-- Selecione um cliente --</option>
+                    {% for cliente in clientes %}
+                    <option value="{{ cliente.id }}">{{ cliente.nome }} - {{ cliente.telefone }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Continuar</button>
+            <a href="{% url 'ordens:lista_clientes' %}" class="btn btn-secondary">Cadastrar Novo Cliente</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

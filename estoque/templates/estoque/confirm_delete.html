@@ -1,0 +1,21 @@
+{% extends "core/base.html" %}
+
+{% block title %}Confirmar Exclusão{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Confirmar Exclusão</h1>
+{% endblock %}
+
+{% block content %}
+<div class="card card-modern">
+    <div class="card-modern-header">Confirmação</div>
+    <div class="card-modern-body">
+        <p>Você tem certeza que deseja excluir o produto <strong>{{ produto.nome }}</strong>?</p>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Sim, excluir</button>
+            <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-secondary">Cancelar</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

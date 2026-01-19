@@ -1,0 +1,26 @@
+<form id="linha-form" method="post" action="">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="linha">
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="id_status" class="form-label">Status da OS</label>
+            {{ form.status }}
+        </div>
+        <div class="col-md-12 mb-3">
+            <label for="id_descricao" class="form-label">Descrição (opcional)</label>
+            {{ form.descricao }}
+        </div>
+    </div>
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+</form>
+
+<script>
+$(document).ready(function() {
+    $('#linha-form select, #linha-form textarea').addClass('form-control');
+});
+</script>

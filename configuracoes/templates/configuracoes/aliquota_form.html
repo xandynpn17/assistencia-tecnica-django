@@ -1,0 +1,18 @@
+{% extends "core/base.html" %}
+{% block title %}Adicionar / Editar Alíquota{% endblock %}
+
+{% block content %}
+<div class="card card-modern">
+  <div class="card-modern-header">
+    <i class="fas fa-percentage"></i> Adicionar / Editar Alíquota
+  </div>
+  <div class="card-modern-body">
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+      <a href="{% url 'configuracoes:lista_aliquotas' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

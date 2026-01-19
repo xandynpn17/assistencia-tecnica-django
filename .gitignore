@@ -1,0 +1,19 @@
+﻿# BANCO DE DADOS LOCAL (NÃO ENVIAR!)
+db.sqlite3
+db.sqlite3-journal
+
+# ARQUIVOS DE MÍDIA/UPLOADS
+media/
+
+# PYTHON
+__pycache__/
+*.pyc
+*.pyo
+
+# AMBIENTE VIRTUAL
+venv/
+.env
+
+# IDE
+.idea/
+.vscode/

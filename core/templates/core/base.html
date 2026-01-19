@@ -1,0 +1,420 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Assistência{% endblock %}</title>
+
+  <!-- Fonts & Icons -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+  <link rel="stylesheet" href="{% static 'adminlte/plugins/fontawesome-free/css/all.min.css' %}">
+  <link rel="stylesheet" href="{% static 'adminlte/plugins/bootstrap/css/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'adminlte/dist/css/adminlte.min.css' %}">
+
+
+  {% block extra_css %}
+
+
+  <style>
+  .search-container {
+      position: relative;
+      display: inline-block;
+  }
+  #search-input {
+      padding: 5px 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      width: 220px;
+  }
+  .search-results {
+      position: absolute;
+      top: 36px;
+      left: 0;
+      width: 100%;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      z-index: 9999;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+  }
+  .result-item {
+      padding: 6px 10px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+  }
+  .result-item a {
+      text-decoration: none;
+      color: #333;
+      display: block;
+  }
+  .result-item:hover {
+      background: #f5f5f5;
+  }
+  .no-results {
+      padding: 6px 10px;
+      color: #888;
+  }
+  .navbar .search-container { max-width: 320px; }
+  </style>
+  {% endblock %}
+</head>
+<body class="hold-transition sidebar-mini layout-fixed">
+<div class="wrapper">
+
+  <!-- Navbar -->
+  <nav class="main-header navbar navbar-expand navbar-light bg-light">
+    <ul class="navbar-nav">
+      <li class="nav-item">
+        <a class="nav-link" data-widget="pushmenu" href="#"><i class="fas fa-bars"></i></a>
+      </li>
+    </ul>
+
+    <ul class="navbar-nav ml-auto align-items-center">
+      {% if user.is_authenticated %}
+      <!-- Barra de Pesquisa -->
+      <li class="nav-item">
+        <div class="search-container">
+          <input type="text" id="search-input" class="form-control form-control-sm"
+                 placeholder="Pesquisar OS, tel:, id:, sn:" autocomplete="off">
+          <div id="search-results" class="search-results"></div>
+        </div>
+      </li>
+
+      <!-- Botão Sair -->
+      <li class="nav-item ml-3">
+        <a class="nav-link text-dark" href="{% url 'core:logout' %}">
+          <i class="fas fa-sign-out-alt"></i> Sair
+        </a>
+      </li>
+      {% else %}
+      <li class="nav-item">
+        <a class="nav-link text-dark" href="{% url 'core:login' %}">
+          <i class="fas fa-sign-in-alt"></i> Login
+        </a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+
+    <!-- Sidebar -->
+    {% if user.is_authenticated %}
+    <aside class="main-sidebar sidebar-dark-primary elevation-4">
+      <!-- Logo -->
+      <a href="{% url 'core:dashboard' %}" class="brand-link d-flex flex-column align-items-center py-3">
+        {% if empresa and empresa.logo %}
+        <img src="{{ empresa.logo.url }}" alt="Logo"
+             class="brand-image-lg"
+             style="max-height: 100px; width: auto;">
+        {% else %}
+        <span class="brand-text font-weight-light">Assistência</span>
+        {% endif %}
+      </a>
+
+      <!-- Sidebar -->
+      <div class="sidebar mt-3">
+        <nav class="mt-2">
+          <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview"
+              role="menu" data-accordion="false">
+
+            <!-- Dashboard -->
+            <li class="nav-item">
+              <a href="{% url 'core:dashboard' %}" class="nav-link {% if menu_sub == 'dashboard' %}active{% endif %}">
+                <i class="nav-icon fas fa-tachometer-alt"></i>
+                <p>Dashboard</p>
+              </a>
+            </li>
+
+            <!-- Clientes -->
+            <li class="nav-item">
+              <a href="{% url 'clientes:lista_clientes' %}"
+                 class="nav-link {% if menu_app == 'clientes' %}active{% endif %}">
+                <i class="nav-icon fas fa-users"></i>
+                <p>Clientes</p>
+              </a>
+            </li>
+
+            <!-- Ordens de Serviço -->
+            <li class="nav-item has-treeview {% if menu_app == 'ordens' %}menu-open{% endif %}">
+              <a href="#" class="nav-link {% if menu_app == 'ordens' %}active{% endif %}">
+                <i class="nav-icon fas fa-tools"></i>
+                <p>
+                  Ordens de Serviço
+                  <i class="right fas fa-angle-left"></i>
+                </p>
+              </a>
+              <ul class="nav nav-treeview">
+                <li class="nav-item">
+                  <a href="{% url 'ordens:verificar_cliente_os' %}"
+                     class="nav-link {% if menu_sub == 'verificar_cliente_os' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Criar Ordem</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'ordens:lista_ordens' %}"
+                     class="nav-link {% if menu_sub == 'lista_ordens' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Listar Ordens</p>
+                  </a>
+                </li>
+              </ul>
+            </li>
+
+            <!-- Estoque -->
+            <li class="nav-item has-treeview {% if menu_app == 'estoque' %}menu-open{% endif %}">
+              <a href="#" class="nav-link {% if menu_app == 'estoque' %}active{% endif %}">
+                <i class="nav-icon fas fa-boxes"></i>
+                <p>
+                  Estoque
+                  <i class="right fas fa-angle-left"></i>
+                </p>
+              </a>
+              <ul class="nav nav-treeview">
+                <li class="nav-item">
+                  <a href="{% url 'estoque:lista_produtos' %}"
+                     class="nav-link {% if menu_sub == 'lista_produtos' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Listar Produtos</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'estoque:criar_produto' %}"
+                     class="nav-link {% if menu_sub == 'criar_produto' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Adicionar Produto</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'estoque:buscar_produtos' %}"
+                     class="nav-link {% if menu_sub == 'buscar_produtos' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Buscar Produto</p>
+                  </a>
+                </li>
+              </ul>
+            </li>
+
+            <!-- Caixa -->
+            <li class="nav-item has-treeview {% if menu_app == 'caixa' %}menu-open{% endif %}">
+              <a href="#" class="nav-link {% if menu_app == 'caixa' %}active{% endif %}">
+                <i class="nav-icon fas fa-cash-register"></i>
+                <p>
+                  Caixa
+                  <i class="right fas fa-angle-left"></i>
+                </p>
+              </a>
+              <ul class="nav nav-treeview">
+                <li class="nav-item">
+                  <a href="{% url 'caixa:dashboard_caixa' %}"
+                     class="nav-link {% if menu_sub == 'dashboard_caixa' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Dashboard Caixa</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:abrir_caixa' %}"
+                     class="nav-link {% if menu_sub == 'abrir_caixa' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Abrir Caixa</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:fechar_caixa' %}"
+                     class="nav-link {% if menu_sub == 'fechar_caixa' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Fechar Caixa</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:relatorios' %}"
+                     class="nav-link {% if menu_sub == 'relatorios' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Relatórios</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:registrar_pagamento' %}"
+                     class="nav-link {% if menu_sub == 'registrar_pagamento' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Registrar Pagamento</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:registrar_saida' %}"
+                     class="nav-link {% if menu_sub == 'registrar_saida' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Registrar Saída</p>
+                  </a>
+                </li>
+              </ul>
+            </li>
+            <!-- Configurações -->
+            <li class="nav-item has-treeview {% if menu_app == 'configuracoes' %}menu-open{% endif %}">
+              <a href="#" class="nav-link {% if menu_app == 'configuracoes' %}active{% endif %}">
+                <i class="nav-icon fas fa-cogs"></i>
+                <p>
+                  Configurações
+                  <i class="right fas fa-angle-left"></i>
+                </p>
+              </a>
+              <ul class="nav nav-treeview">
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:painel' %}"
+                     class="nav-link {% if menu_sub == 'painel' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Painel Geral</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:empresa' %}"
+                     class="nav-link {% if menu_sub == 'empresa' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Empresa</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:configuracao_os' %}"
+                     class="nav-link {% if menu_sub == 'configuracao_os' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Ordem de Serviço</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:lista_usuarios' %}"
+                     class="nav-link {% if menu_sub == 'usuarios' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Usuários</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:backup_banco' %}"
+                     class="nav-link {% if menu_sub == 'backup' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Backup</p>
+                  </a>
+                </li>
+              </ul>
+            </li>
+
+          </ul>
+        </nav>
+      </div>
+    </aside>
+    {% endif %}
+
+    <!-- Content Wrapper -->
+    <div class="content-wrapper">
+      <section class="content-header">
+        <div class="container-fluid">{% block header %}{% endblock %}</div>
+      </section>
+      <section class="content">
+        <div class="container-fluid">{% block content %}{% endblock %}</div>
+      </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="main-footer bg-light">
+      <div class="container-fluid d-flex justify-content-between">
+        <span class="text-gray-dark">&copy; 2025 <a href="#" class="text-gray-dark">Alexandre Bentivoglio</a>. Todos os direitos reservados.</span>
+        <span class="text-gray-dark"><b>Versão</b> 1.0.0</span>
+      </div>
+    </footer>
+</div> <!-- fecha wrapper -->
+
+<!-- Scripts -->
+<script src="{% static 'adminlte/plugins/jquery/jquery.min.js' %}"></script>
+<script src="{% static 'adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'adminlte/dist/js/adminlte.min.js' %}"></script>
+
+<!-- Treeview -->
+<script>
+  $(document).ready(function () {
+    $('.has-treeview.menu-open').each(function(){
+      $(this).find('.nav-treeview').first().show();
+    });
+  });
+</script>
+
+{% if messages %}
+<!-- Modal de mensagens -->
+<div class="modal fade" id="messageModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header {% if messages.0.tags == 'error' %}bg-danger text-white{% elif messages.0.tags == 'success' %}bg-success text-white{% else %}bg-secondary text-white{% endif %}">
+        <h5 class="modal-title">
+          {% if messages.0.tags == 'error' %}Erro{% elif messages.0.tags == 'success' %}Sucesso{% else %}Aviso{% endif %}
+        </h5>
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+      </div>
+      <div class="modal-body">
+        {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-dismiss="modal">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  $(function(){ $('#messageModal').modal('show'); });
+</script>
+{% endif %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const input = document.getElementById("search-input");
+    const resultsBox = document.getElementById("search-results");
+    const buscarUrl = "{% url 'ordens:buscar_ordens' %}";
+    if (!input) return;
+
+    let controller = null;
+
+    input.addEventListener("keypress", function (e) {
+        if (e.key !== "Enter") return;
+        const query = input.value.trim();
+        if (!query) return;
+
+        if (controller) controller.abort();
+        if (window.AbortController) controller = new AbortController();
+
+        fetch(`${buscarUrl}?q=${encodeURIComponent(query)}`, { signal: controller?.signal })
+            .then(r => r.json())
+            .then(data => {
+                if (data.redirect) {
+                    window.location.href = data.redirect;
+                    return;
+                }
+
+                const resultados = data.resultados || [];
+                resultsBox.innerHTML = "";
+
+                if (resultados.length === 0) {
+                    resultsBox.innerHTML = "<div class='no-results'>Nenhum resultado</div>";
+                } else if (resultados.length === 1) {
+                    window.location.href = resultados[0].url;
+                } else {
+                    resultados.forEach(os => {
+                        const item = document.createElement("div");
+                        item.classList.add("result-item");
+                        item.innerHTML = `<a href="${os.url}">OS #${os.numero_os} - ${os.cliente} (${os.telefone || ''}${os.cpf ? ' | ' + os.cpf : ''})</a>`;
+                        resultsBox.appendChild(item);
+                    });
+                }
+            })
+            .catch(err => { if (err.name !== 'AbortError') console.error(err); });
+    });
+
+    document.addEventListener('click', function(evt) {
+      if (!document.querySelector('.search-container').contains(evt.target)) {
+        resultsBox.innerHTML = '';
+      }
+    });
+});
+</script>
+{% endblock %}
+</body>
+</html>

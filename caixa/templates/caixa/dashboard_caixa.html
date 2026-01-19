@@ -1,0 +1,162 @@
+{% extends 'core/base.html' %}
+{% load widget_tweaks %}
+
+{% block content %}
+<div class="content-header">
+    {% if caixa %}
+        <h1>Caixa do Dia {{ caixa.data }}</h1>
+    {% else %}
+        <h1>Nenhum caixa aberto</h1>
+    {% endif %}
+</div>
+
+{% if caixa %}
+<!-- Status do Caixa -->
+<div class="mb-3">
+    <div class="alert {% if caixa.aberto %}alert-success{% else %}alert-danger{% endif %}" role="alert">
+        Caixa atualmente: <strong>{% if caixa.aberto %}ABERTO{% else %}FECHADO{% endif %}</strong>
+    </div>
+</div>
+
+<!-- Resumo do Caixa -->
+<div class="row">
+    <div class="col-md-3">
+        <div class="small-box bg-info">
+            <div class="inner">
+                <h4>R$ {{ caixa.saldo_inicial|floatformat:2|default:"0.00" }}</h4>
+                <p>Saldo Inicial</p>
+            </div>
+            <div class="icon"><i class="fas fa-money-bill-wave"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="small-box bg-success">
+            <div class="inner">
+                <h4>R$ {{ total_entradas|floatformat:2|default:"0.00" }}</h4>
+                <p>Total Entradas</p>
+            </div>
+            <div class="icon"><i class="fas fa-arrow-down"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="small-box bg-danger">
+            <div class="inner">
+                <h4>R$ {{ total_saidas|floatformat:2|default:"0.00" }}</h4>
+                <p>Total Saídas</p>
+            </div>
+            <div class="icon"><i class="fas fa-arrow-up"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="small-box bg-warning">
+            <div class="inner">
+                <h4>R$ {{ saldo|floatformat:2|default:"0.00" }}</h4>
+                <p>Saldo Atual</p>
+            </div>
+            <div class="icon"><i class="fas fa-calculator"></i></div>
+        </div>
+    </div>
+</div>
+
+<!-- Pagamentos -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Pagamentos</h3>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
+                <tr>
+                    <th>OS</th>
+                    <th>Valor</th>
+                    <th>Método</th>
+                    <th>Data</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in pagamentos %}
+                <tr>
+                    <td>{{ p.ordem_servico|default:"Avulso" }}</td>
+                    <td>R$ {{ p.valor|floatformat:2|default:"0.00" }}</td>
+                    <td>{{ p.get_metodo_display }}</td>
+                    <td>{{ p.data|date:"d/m/Y H:i" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4">Nenhum pagamento</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Lançamentos Avulsos -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Lançamentos Avulsos</h3>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
+                <tr>
+                    <th>Descrição</th>
+                    <th>Valor</th>
+                    <th>Tipo</th>
+                    <th>Data</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in lancamentos %}
+                <tr>
+                    <td>{{ l.descricao }}</td>
+                    <td>R$ {{ l.valor|floatformat:2|default:"0.00" }}</td>
+                    <td>{{ l.get_tipo_display }}</td>
+                    <td>{{ l.data|date:"d/m/Y H:i" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4">Nenhum lançamento</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Ações do Caixa -->
+<div class="mt-3">
+    {% if not caixa.aberto %}
+        <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-success">
+            <i class="fas fa-play"></i> Abrir Caixa
+        </a>
+    {% else %}
+        <a href="{% url 'caixa:fechar_caixa' %}" class="btn btn-danger">
+            <i class="fas fa-stop"></i> Fechar Caixa
+        </a>
+        <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Registrar Pagamento
+        </a>
+        <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-warning">
+            <i class="fas fa-minus"></i> Registrar Saída
+        </a>
+    {% endif %}
+</div>
+
+<!-- Scripts extras -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const entradas = parseFloat("{{ total_entradas|default:0 }}");
+        const saidas = parseFloat("{{ total_saidas|default:0 }}");
+        const saldo = parseFloat("{{ saldo|default:0 }}");
+        console.log("Entradas:", entradas, "Saídas:", saidas, "Saldo:", saldo);
+    });
+</script>
+
+<!-- Chart.js (opcional) -->
+<!--
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<canvas id="caixaChart" width="400" height="150"></canvas>
+<script>
+const ctx = document.getElementById('caixaChart').getContext('2d');
+// Aqui você pode adicionar gráficos quando enviar arrays da view
+</script>
+-->
+{% endif %}
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends 'core/base.html' %}
+{% load widget_tweaks %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Fechar Caixa</h1>
+
+    {% if not caixa %}
+        <div class="alert alert-danger">
+            Nenhum caixa aberto.
+        </div>
+        <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-primary">Abrir Caixa</a>
+    {% else %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <p><strong>Saldo Inicial:</strong> {{ caixa.saldo_inicial|floatformat:2 }}R$</p>
+                <p><strong>Total Entradas:</strong> {{ total_entradas|floatformat:2 }}R$</p>
+                <p><strong>Total Saídas:</strong> {{ total_saidas|floatformat:2 }}R$</p>
+                <p><strong>Saldo Atual:</strong> {{ saldo|floatformat:2 }}R$</p>
+            </div>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">
+                <i class="fas fa-stop"></i> Fechar Caixa
+            </button>
+            <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-secondary">
+                Cancelar
+            </a>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

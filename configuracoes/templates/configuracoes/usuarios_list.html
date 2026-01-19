@@ -1,0 +1,41 @@
+{% extends "core/base.html" %}
+{% block title %}Lista de Usuários{% endblock %}
+
+{% block content %}
+<div class="card card-modern">
+  <div class="card-modern-header">
+    <i class="fas fa-users"></i> Lista de Usuários
+    <a href="{% url 'configuracoes:adicionar_usuario' %}" class="btn btn-success btn-sm float-right">
+      <i class="fas fa-plus"></i> Novo
+    </a>
+  </div>
+  <div class="card-modern-body table-responsive">
+    <table class="table table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Usuário</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Staff</th>
+          <th>Grupos</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td>{{ u.username }}</td>
+          <td>{{ u.email }}</td>
+          <td>{% if u.is_active %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Inativo</span>{% endif %}</td>
+          <td>{% if u.is_staff %}<span class="badge bg-info text-dark">Sim</span>{% else %}Não{% endif %}</td>
+          <td>{{ u.groups.all|join:", " }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center text-muted">Nenhum usuário cadastrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

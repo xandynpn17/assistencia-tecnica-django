@@ -1,0 +1,133 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if object %}Editar{% else %}Nova{% endif %} Ordem de Serviço{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card-modern {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        margin-bottom: 25px;
+        transition: transform 0.3s ease;
+        background: #ffffff;
+    }
+
+    .card-modern:hover {
+        transform: translateY(-3px);
+    }
+
+    .card-modern-header {
+        background: #2c3e50;
+        color: white;
+        border-radius: 10px 10px 0 0;
+        padding: 15px 20px;
+        font-weight: 600;
+        border: none;
+    }
+
+    .card-modern-body {
+        padding: 20px;
+        background: #ffffff;
+        border-radius: 0 0 10px 10px;
+        color: #2c3e50;
+    }
+
+    .alert-info {
+        background: linear-gradient(135deg, #d1ecf1, #bee5eb);
+        color: #0c5460;
+        border: none;
+        border-radius: 8px;
+        border-left: 4px solid #17a2b8;
+        padding: 15px 20px;
+    }
+
+    .btn-primary {
+        background: linear-gradient(45deg, #3a7bd5, #3498db);
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(45deg, #2c65c4, #2980b9);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-default {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        color: #6c757d;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .btn-default:hover {
+        background: #e9ecef;
+        color: #495057;
+    }
+
+    .page-title {
+        color: #2c3e50;
+        font-weight: 700;
+        margin-bottom: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block header %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="page-title">{% if object %}Editar{% else %}Nova{% endif %} Ordem de Serviço</h1>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+
+        <!-- Cliente fixo (sem card) -->
+        {% if cliente %}
+            <div class="alert alert-info mb-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong class="text-dark">Cliente:</strong> {{ cliente.nome }} <br>
+                        <small class="text-muted">
+                            CPF: {{ cliente.cpf }} | Telefone: {{ cliente.telefone }}
+                        </small>
+                    </div>
+                    <i class="fas fa-user-circle fa-2x text-info"></i>
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Card padrão para os dados da OS -->
+        <div class="card-modern">
+            <div class="card-modern-header">
+                <h3 class="card-title mb-0"><i class="fas fa-clipboard-list mr-2"></i>Dados da Ordem de Serviço</h3>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <div class="card-modern-body">
+                    {{ form|crispy }}
+                </div>
+                <div class="card-footer d-flex justify-content-between" style="background: #f8f9fa; border-radius: 0 0 10px 10px;">
+                    <a href="{% url 'ordens:lista_ordens' %}" class="btn btn-default">
+                        <i class="fas fa-times mr-2"></i> Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save mr-2"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

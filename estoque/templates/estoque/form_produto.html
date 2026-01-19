@@ -1,0 +1,91 @@
+{% extends "core/base.html" %}
+
+{% block title %}Estoque - {{ form.instance.pk|yesno:"Editar Produto,Novo Produto" }}{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">{{ form.instance.pk|yesno:"Editar Produto,Novo Produto" }}</h1>
+{% endblock %}
+
+{% block content %}
+<div class="card-modern">
+    <div class="card-modern-header">
+        {{ form.instance.pk|yesno:"Editar Produto,Novo Produto" }}
+    </div>
+    <div class="card-modern-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="row">
+                <div class="col-md-6">{{ form.nome.label_tag }} {{ form.nome }}</div>
+                <div class="col-md-3">{{ form.sku.label_tag }} {{ form.sku }}</div>
+                <div class="col-md-3">{{ form.ean.label_tag }} {{ form.ean }}</div>
+            </div>
+
+            <div class="row mt-2">
+                <div class="col-md-4">{{ form.categoria.label_tag }} {{ form.categoria }}</div>
+                <div class="col-md-4">{{ form.fornecedor.label_tag }} {{ form.fornecedor }}</div>
+                <div class="col-md-4">{{ form.data_entrada.label_tag }} {{ form.data_entrada }}</div>
+            </div>
+
+            <div class="row mt-2">
+                <div class="col-md-12">{{ form.descricao.label_tag }} {{ form.descricao }}</div>
+            </div>
+
+            <div class="form-check mb-3">
+                 <input type="checkbox" class="form-check-input" id="id_is_servico" name="is_servico"
+                        {% if form.is_servico.value %}checked{% endif %}>
+                        <label class="form-check-label" for="id_is_servico">Este item é um serviço (estoque infinito)</label>
+            </div>
+
+            <hr>
+
+            <!-- Custo, margem e impostos -->
+            <div class="row mt-2">
+                <div class="col-md-3">{{ form.custo_unitario.label_tag }} {{ form.custo_unitario }}</div>
+                <div class="col-md-3">{{ form.custo_operacional.label_tag }} {{ form.custo_operacional }}</div>
+                <div class="col-md-3">{{ form.margem_lucro.label_tag }} {{ form.margem_lucro }}</div>
+                <div class="col-md-3">{{ form.quantidade.label_tag }} {{ form.quantidade }}</div>
+            </div>
+
+            <div class="row mt-2">
+                <div class="col-md-3">{{ form.icms.label_tag }} {{ form.icms }}</div>
+                <div class="col-md-3">{{ form.ipi.label_tag }} {{ form.ipi }}</div>
+                <div class="col-md-3">{{ form.pis_cofins.label_tag }} {{ form.pis_cofins }}</div>
+                <div class="col-md-3">{{ form.preco_sugerido.label_tag }} {{ form.preco_sugerido }}</div>
+            </div>
+
+            <div class="row mt-2">
+                <div class="col-md-3">{{ form.preco_final.label_tag }} {{ form.preco_final }}<small class="text-muted">Pode ser alterado manualmente</small></div>
+                <div class="col-md-3 form-check mt-4">{{ form.ativo }} {{ form.ativo.label_tag }}</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary mt-3"><i class="fas fa-save"></i> Salvar</button>
+            <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-secondary mt-3">Cancelar</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function atualizarPrecoSugerido() {
+    let custo = parseFloat(document.getElementById("id_custo_unitario").value) || 0;
+    let custoOp = parseFloat(document.getElementById("id_custo_operacional").value) || 0;
+    let margem = parseFloat(document.getElementById("id_margem_lucro").value) || 0;
+    let icms = parseFloat(document.getElementById("id_icms").value) || 0;
+    let ipi = parseFloat(document.getElementById("id_ipi").value) || 0;
+    let pis = parseFloat(document.getElementById("id_pis_cofins").value) || 0;
+
+    let impostos_totais = (icms + ipi + pis)/100;
+    let preco = (custo + custoOp) * (1 + margem/100) * (1 + impostos_totais);
+    document.getElementById("id_preco_sugerido").value = preco.toFixed(2);
+}
+
+// Adiciona listener aos inputs
+["id_custo_unitario", "id_custo_operacional", "id_margem_lucro", "id_icms", "id_ipi", "id_pis_cofins"].forEach(function(id) {
+    document.getElementById(id).addEventListener("input", atualizarPrecoSugerido);
+});
+
+// Calcula ao carregar
+atualizarPrecoSugerido();
+</script>
+{% endblock %}

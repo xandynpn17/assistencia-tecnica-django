@@ -1,0 +1,772 @@
+python manage.py shell{% extends "core/base.html" %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    /* =================== Estilos Gerais =================== */
+    .card-modern { border: none; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); margin-bottom: 25px; transition: transform 0.3s ease; background: #ffffff; }
+    .card-modern:hover { transform: translateY(-3px); }
+    .card-modern-header { background: #2c3e50; color: white; border-radius: 10px 10px 0 0; padding: 15px 20px; font-weight: 600; border: none; }
+    .card-modern-body { padding: 20px; background: #ffffff; border-radius: 0 0 10px 10px; color: #2c3e50; }
+
+.list-group-inverted {
+    display: flex;
+    flex-direction: column-reverse;
+}
+
+
+</style>
+{% endblock %}
+
+{% block header %}
+<div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="page-title"><i class="fas fa-clipboard-check mr-2"></i>Ordem de Serviço #{{ ordem.numero_os }}
+            </h1>
+            <p class="text-muted"><i class="fas fa-user-circle mr-2"></i>Cliente: <strong>{{ ordem.cliente.nome }}</strong></p>
+        </div>
+        <p class="mb-0"><strong>Técnico:</strong> {{ ordem.tecnico_responsavel.username|default:"Não atribuído" }}</p>
+
+        <!-- Status e Abertura -->
+        <div class="d-flex justify-content-start align-items-center mb-3">
+          <p class="mr-4 mb-0">
+            <strong>Status:</strong>
+
+            {% if ordem.fechada %}
+              <span class="badge badge-danger">
+                <i class="fas fa-check-circle mr-1"></i> Fechada
+              </span>
+            {% elif ordem.status == 'em_andamento' %}
+              <span class="badge badge-warning">
+                <i class="fas fa-tools mr-1"></i> Em andamento
+              </span>
+            {% else %}
+              <span class="badge badge-success">
+                <i class="fas fa-hourglass-start mr-1"></i> Aberta
+              </span>
+            {% endif %}
+          </p>
+
+          <p class="mb-0">
+            <strong>Abertura:</strong> {{ ordem.data_abertura|date:"d/m/Y H:i" }}
+          </p>
+        </div>
+
+        <div>
+            {% if ordem.fechada %}
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-warning">
+                <i class="fas fa-lock mr-1"></i> Reabrir
+            </a>
+            {% else %}
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-danger">
+                <i class="fas fa-lock-open mr-1"></i> Fechar
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+    <!-- botao pdf -->
+<div class="dropdown">
+  <button class="btn btn-primary dropdown-toggle" type="button" data-toggle="dropdown" aria-expanded="false">
+    Imprimir
+  </button>
+  <ul class="dropdown-menu">
+    <li>
+      <a class="dropdown-item" href="{% url 'ordens:imprimir_ordem_servico' ordem.id %}" target="_blank">
+        Ordem de Serviço
+      </a>
+    </li>
+    <li>
+      <a class="dropdown-item" href="{% url 'ordens:imprimir_relatorio_tecnico' ordem.id %}" target="_blank">
+        Relatório Técnico
+      </a>
+    </li>
+    {% if orcamento %}
+    <li>
+      <a class="dropdown-item" href="{% url 'orcamentos:imprimir_orcamento' orcamento.id %}" target="_blank">
+        Orçamento
+      </a>
+    </li>
+    {% endif %}
+  </ul>
+</div>
+
+
+
+{% endblock %}
+
+{% block content %}
+
+
+
+
+    <!-- Nav Tabs -->
+    <ul class="nav nav-tabs" id="ordemTabs" role="tablist">
+        {% for tab in tabs %}
+        <li class="nav-item">
+            <a class="nav-link {% if active_tab == tab.id %}active{% endif %}" href="?tab={{ tab.id }}">
+                <i class="{{ tab.icon }} mr-2"></i> {{ tab.label }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+
+<div class="tab-content mt-4">
+
+    <!-- Aba Detalhes -->
+    <div class="tab-pane fade {% if active_tab == 'detalhes' %}show active{% endif %}" id="detalhes">
+        <div class="card-modern">
+            <!-- Header -->
+            <div class="card-modern-header">
+                <i class="fas fa-info-circle mr-2"></i> Detalhes do Equipamento
+            </div>
+
+            <!-- Card Body -->
+            <div class="card-modern-body">
+                <div class="row">
+                    <!-- Conteúdo principal (esquerda) -->
+                    <div class="col-md-8 d-flex flex-column gap-3">
+
+                        <!-- Caixa Defeito -->
+                        <div class="border rounded bg-light p-3 mb-3">
+                            <h6 class="font-weight-bold mb-2">Defeito Reclamado</h6>
+                            <p class="mb-0">{{ ordem.defeito|default:"-" }}</p>
+                        </div>
+
+                        <!-- Caixa Acessórios -->
+                        <div class="border rounded bg-light p-3 mb-3">
+                            <h6 class="font-weight-bold mb-2">Acessórios</h6>
+                            <p class="mb-0">{{ ordem.acessorios|default:"-" }}</p>
+                        </div>
+
+                        <!-- Caixa Peritagem -->
+                        <div class="border rounded bg-light p-3">
+                            <h6 class="font-weight-bold mb-2">Peritagem</h6>
+                            <p class="mb-0">
+                                {% if ordem.peritagem %}
+                                {{ ordem.peritagem }}
+                                {% else %}
+                                <span class="text-muted">Não informado</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Barra lateral (direita) -->
+                    <div class="col-md-4">
+                        <div class="border rounded bg-white p-3 h-100 d-flex flex-column">
+
+                            <!-- Dados do equipamento -->
+                            <div class="mb-3">
+                                <p class="mb-1"><strong>Tipo:</strong> {{ ordem.get_tipo_equipamento_display }}</p>
+                                <p class="mb-1"><strong>Marca:</strong> {{ ordem.marca_equipamento }}</p>
+                                <p class="mb-1"><strong>Modelo:</strong> {{ ordem.modelo_equipamento }}</p>
+                                <p class="mb-1"><strong>Nº Série:</strong> {{ ordem.numero_serie_equipamento|default:"-" }}</p>
+                            </div>
+
+                            <hr class="my-2">
+                            <!-- Técnico Responsável -->
+                            <div class="mb-3">
+                                <label class="font-weight-bold mb-1" for="tecnicoResponsavel">Técnico Responsável</label>
+                                <select id="tecnicoResponsavel"
+                                        class="form-control form-control-sm"
+                                        data-os-id="{{ ordem.id }}">
+                                    <option value="">-- Selecione --</option>
+                                    {% for user in tecnicos %}
+                                        <option value="{{ user.id }}" {% if ordem.tecnico_responsavel_id == user.id %}selected{% endif %}>
+                                            {{ user.username }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <div id="tecnico-feedback" class="small mt-1"></div>
+                            </div>
+
+                            <!-- Local de Armazenamento -->
+                            <div class="mb-3">
+                                <label class="font-weight-bold mb-1" for="localArmazenamento">Local de
+                                    Armazenamento</label>
+                                <input type="text" id="localArmazenamento"
+                                       class="form-control form-control-sm"
+                                       value="{{ ordem.local_armazenamento|default:'' }}"
+                                       data-os-id="{{ ordem.id }}"
+                                       placeholder="Digite o local...">
+                                <div id="local-feedback" class="small mt-1"></div>
+                            </div>
+
+                            <!-- Observações Internas -->
+                            <div>
+                                <label class="font-weight-bold mb-1" for="observacoes">Observações (internas)</label>
+                                <textarea id="observacoes"
+                                          class="form-control form-control-sm"
+                                          rows="3"
+                                          data-os-id="{{ ordem.id }}"
+                                          placeholder="Somente visível internamente...">{{ ordem.observacoes|default:"" }}</textarea>
+                                <div id="observacoes-feedback" class="small mt-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- fim row -->
+            </div> <!-- fim card-modern-body -->
+        </div> <!-- fim card-modern -->
+    </div> <!-- fim tab-pane detalhes -->
+
+    <!-- Linhas de Trabalho -->
+    <div class="tab-pane fade {% if active_tab == 'linhas' %}show active{% endif %}" id="linhas">
+            <div class="card-modern">
+                <div class="card-modern-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <!-- Botão de seta à esquerda -->
+                        <span id="toggleOrderBtn" style="cursor: pointer; font-size: 1.2rem; margin-right: 8px;">
+                            ↓
+                       </span>
+                        <!-- Título -->
+                        <span>  Histórico de Trabalho</span>
+                    </div>
+
+                    <!-- Botão adicionar linha à direita -->
+                    <span class="toggle-form-btn" data-toggle="modal" data-target="#modalAdicionarLinha"
+                          style="cursor: pointer;">
+                        <i class="fas fa-plus-circle mr-1"></i> Adicionar Linha
+                    </span>
+                </div>
+
+                <div class="card-modern-body">
+                    {% if linhas %}
+                    <div class="list-group mb-3 list-group-inverted" id="linhasList">
+                        {% for linha in linhas %}
+                        <div class="list-group-item">
+                            <span class="linha-status badge badge-primary">{{ linha.get_status_display }}</span>
+                            <small class="linha-data float-right">
+                                {{ linha.criado_em|date:"d/m/Y H:i" }}
+                                {% if linha.usuario %}- {{ linha.usuario.username }}{% endif %}
+                            </small>
+                            <p class="linha-descricao">{{ linha.descricao|default:"Sem descrição" }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center py-3">Nenhuma linha registrada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const toggleBtn = document.getElementById("toggleOrderBtn");
+            const linhasList = document.getElementById("linhasList");
+
+            toggleBtn.addEventListener("click", () => {
+                linhasList.classList.toggle("list-group-inverted");
+
+                // Alterna a seta: ↓ = descendente, ↑ = ascendente
+                if (linhasList.classList.contains("list-group-inverted")) {
+                    toggleBtn.textContent = "↓"; // ordem descendente
+                } else {
+                    toggleBtn.textContent = "↑"; // ordem ascendente
+                }
+            });
+        </script>
+        <script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const select = document.getElementById("tecnicoResponsavel");
+        const feedback = document.getElementById("tecnico-feedback");
+
+        if (select) {
+            select.addEventListener("change", () => {
+                const tecnicoId = select.value;
+                const osId = select.dataset.osId;
+
+                fetch(`/ordens/${osId}/atualizar_tecnico/`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": "{{ csrf_token }}",
+                    },
+                    body: JSON.stringify({ tecnico_id: tecnicoId })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    feedback.textContent = data.message;
+                    feedback.className = "small text-success";
+                })
+                .catch(() => {
+                    feedback.textContent = "Erro ao salvar.";
+                    feedback.className = "small text-danger";
+                });
+            });
+        }
+    });
+    </script>
+
+
+<!-- Serviços & Peças -->
+<div class="tab-pane fade {% if active_tab == 'servicos' %}show active{% endif %}" id="servicos">
+    <div class="card-modern">
+        <div class="card-modern-header">Serviços & Peças</div>
+        <div class="card-modern-body">
+            {% if itens %}
+            <div class="list-group mb-3">
+                {% for item in itens %}
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6>{{ item.nome }}</h6>
+                        <p>R$ {{ item.valor_unitario }} x {{ item.quantidade }} = R$ {{ item.total }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <p class="text-end fw-bold">Total OS: R$ {{ total_os }}</p>
+            {% else %}
+            <p class="text-muted text-center py-3">Nenhum serviço ou peça registrado.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Orçamento -->
+<div class="tab-pane fade {% if active_tab == 'orcamentos' %}show active{% endif %}" id="orcamentos">
+    <div class="card-modern flex-fill mt-3">
+
+        <!-- Cabeçalho -->
+        <div class="card-modern-header d-flex justify-content-between align-items-center">
+            <span>Orçamentos</span>
+            <div class="d-flex">
+                <button type="button" class="btn btn-primary btn-sm mr-2" data-toggle="modal"
+                        data-target="#modalAdicionarItem2">
+                    <i class="fas fa-plus"></i> Inserir Item
+                </button>
+            </div>
+        </div>
+
+        <!-- Formulário único para ações -->
+        <form id="formOrcamentoAcoes" method="post">
+            {% csrf_token %}
+            <input type="hidden" name="orcamento_id" value="{{ orcamento.id }}">
+
+            <!-- Botões de ação -->
+            <div class="d-flex justify-content-end mb-3 mt-2">
+                <button type="submit" formaction="{% url 'orcamentos:aceitar_orcamento' orcamento.id %}"
+                        class="btn btn-success btn-sm mr-2" onclick="return validarSelecao('aprovar');">
+                    <i class="fas fa-check"></i> Aprovar Selecionados
+                </button>
+
+                <button type="submit" formaction="{% url 'orcamentos:recusar_orcamento' orcamento.id %}"
+                        class="btn btn-danger btn-sm mr-2" onclick="return validarSelecao('recusar');">
+                    <i class="fas fa-times"></i> Recusar Selecionados
+                </button>
+
+                <button type="submit" formaction="{% url 'orcamentos:migrar_para_servicos' orcamento.id %}"
+                        class="btn btn-success btn-sm" onclick="return validarSelecao('migrar');">
+                    <i class="fas fa-arrow-down"></i> Migrar Selecionados
+                </button>
+            </div>
+
+            <!-- Corpo -->
+            <div class="card-modern-body">
+                <p><strong>Total:</strong> R$ {{ orcamento.valor_total|default:0|floatformat:2 }}</p>
+
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="checkAll"></th>
+                            <th>EAN / Serviço</th>
+                            <th>Nome</th>
+                            <th>Descrição</th>
+                            <th>Valor Unit.</th>
+                            <th>Qtd</th>
+                            <th>Total</th>
+                            <th>Origem</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in orcamento.itens.all %}
+                        <tr>
+                            <td><input type="checkbox" name="itens_selecionados" value="{{ item.id }}"></td>
+                            <td>{{ item.ean }}</td>
+                            <td>{{ item.nome }}</td>
+                            <td>{{ item.descricao }}</td>
+                            <td>{{ item.valor_unitario|floatformat:2 }}</td>
+                            <td>{{ item.quantidade }}</td>
+                            <td>{{ item.total|floatformat:2 }}</td>
+                            <td>{{ item.origem }}</td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-sm btn-info" onclick="editarItem({{ item.id }})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="submit"
+                                        formmethod="post"
+                                        formaction="{% url 'orcamentos:excluir_item' item.id %}"
+                                        class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Excluir este item?');">
+                                    {% csrf_token %}
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted">Nenhum item adicionado</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Script de validação e seleção -->
+<script>
+function validarSelecao(acao) {
+    const selecionados = document.querySelectorAll('input[name="itens_selecionados"]:checked');
+    if (selecionados.length === 0) {
+        alert(`Selecione ao menos um item antes de ${acao === 'migrar' ? 'migrar' : acao + ' o orçamento'}.`);
+        return false;
+    }
+    return confirm(`Tem certeza que deseja ${acao} os itens selecionados?`);
+}
+
+document.getElementById('checkAll').addEventListener('change', function() {
+    document.querySelectorAll('input[name="itens_selecionados"]').forEach(cb => cb.checked = this.checked);
+});
+</script>
+
+
+<!-- Modal Adicionar Item Orçamento -->
+<div class="modal fade" id="modalAdicionarItem2" tabindex="-1" role="dialog"
+     aria-labelledby="modalAdicionarItem2Label" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAdicionarItem2Label">
+                    <i class="fas fa-plus-circle mr-2"></i>Adicionar Item ao Orçamento
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+
+            <form method="post" action="{% url 'orcamentos:adicionar_item' orcamento.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+
+                    <!-- Campo de busca de produtos -->
+                    <div class="row mb-3">
+                        <div class="col-md-10">
+                            <input type="text" id="produto_busca" class="form-control"
+                                   placeholder="Buscar produto por nome ou EAN">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-primary btn-block" id="btnBuscarProduto">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Resultado da busca -->
+                    <div id="resultado_busca_produto" class="mt-2" style="max-height:200px; overflow-y:auto;">
+                        <!-- Produtos encontrados aparecerão aqui -->
+                    </div>
+
+                    <!-- Campos do formulário já existentes -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="id_ean2">EAN / Código</label>
+                            <input type="text" name="ean" id="id_ean2" class="form-control"
+                                   value="{{ item_form.ean.value|default_if_none:'' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_nome2">Nome</label>
+                            <input type="text" name="nome" id="id_nome2" class="form-control"
+                                   value="{{ item_form.nome.value|default_if_none:'' }}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_descricao2">Descrição</label>
+                        <textarea name="descricao" id="id_descricao2" rows="3" class="form-control">{{ item_form.descricao.value|default_if_none:'' }}</textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="id_valor_unitario2">Valor Unitário</label>
+                            <input type="number" step="0.01" name="valor_unitario" id="id_valor_unitario2"
+                                   class="form-control"
+                                   value="{{ item_form.valor_unitario.value|default_if_none:'' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="id_quantidade2">Quantidade</label>
+                            <input type="number" name="quantidade" id="id_quantidade2" class="form-control"
+                                   value="{{ item_form.quantidade.value|default_if_none:'' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="id_origem2">Origem</label>
+                            <select name="origem" id="id_origem2" class="form-control">
+                                <option value="orcamento" {% if item_form.origem.value == "orcamento" %}selected{% endif %}>Orçamento</option>
+                                <option value="servico" {% if item_form.origem.value == "servico" %}selected{% endif %}>Serviço</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success"><i class="fas fa-save mr-1"></i> Salvar Item
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal"><i
+                            class="fas fa-times mr-1"></i> Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+function editarItem(id) {
+    fetch(`/orcamentos/item/${id}/editar/`)
+        .then(res => res.json())
+        .then(data => {
+            // Preenche os campos do modal de adicionar item
+            document.querySelector('#modalAdicionarItem2 input[name="ean"]').value = data.ean || '';
+            document.querySelector('#modalAdicionarItem2 input[name="nome"]').value = data.nome || '';
+            document.querySelector('#modalAdicionarItem2 textarea[name="descricao"]').value = data.descricao || '';
+            document.querySelector('#modalAdicionarItem2 input[name="valor_unitario"]').value = data.valor_unitario || '';
+            document.querySelector('#modalAdicionarItem2 input[name="quantidade"]').value = data.quantidade || '';
+            document.querySelector('#modalAdicionarItem2 input[name="origem"]').value = data.origem || '';
+
+            // Altera a action do form para enviar para o editar_item
+            const form = document.querySelector('#modalAdicionarItem2 form');
+            form.action = `/orcamentos/item/${id}/editar/`;
+
+            // Abre o modal
+            $('#modalAdicionarItem2').modal('show');
+        })
+        .catch(err => alert('Erro ao carregar dados do item.'));
+}
+</script>
+
+
+
+<!-- Script de busca -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btnBuscar = document.getElementById('btnBuscarProduto');
+    const inputBusca = document.getElementById('produto_busca');
+    const resultado = document.getElementById('resultado_busca_produto');
+
+    btnBuscar.addEventListener('click', function() {
+        const query = inputBusca.value.trim();
+        if (!query) return;
+
+        fetch(`/estoque/buscar_produto/?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                resultado.innerHTML = '';
+                if (data.length === 0) {
+                    resultado.innerHTML = '<div class="text-muted">Nenhum produto encontrado</div>';
+                    return;
+                }
+
+                data.forEach(produto => {
+                    const div = document.createElement('div');
+                    div.classList.add('border', 'p-2', 'mb-1', 'cursor-pointer');
+                    div.style.cursor = 'pointer';
+                    div.textContent = `${produto.ean} - ${produto.nome} (R$ ${produto.preco})`;
+                    div.addEventListener('click', () => {
+                        document.getElementById('id_ean2').value = produto.ean;
+                        document.getElementById('id_nome2').value = produto.nome;
+                        document.getElementById('id_descricao2').value = produto.descricao || '';
+                        document.getElementById('id_valor_unitario2').value = produto.preco;
+                        resultado.innerHTML = '';
+                    });
+                    resultado.appendChild(div);
+                });
+            });
+    });
+});
+</script>
+
+    <!-- Relatório Técnico -->
+    <div class="tab-pane fade {% if active_tab == 'relatorio' %}show active{% endif %}" id="relatorio">
+        <div class="card-modern">
+            <div class="card-modern-header">
+                <i class="fas fa-file-alt mr-2"></i>Relatório Técnico
+            </div>
+            <div class="card-modern-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="relatorio">
+
+                    <div class="form-group">
+                        <label for="relatorio_tecnico">Descrição</label>
+                        <textarea name="relatorio_tecnico" id="relatorio_tecnico" rows="5" class="form-control">{{ ordem.relatorio_tecnico|default_if_none:"" }}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tipo_reparacao">Tipo de Reparação</label>
+                        <select name="tipo_reparacao" id="tipo_reparacao" class="form-control">
+                            <option value="">-- Selecione --</option>
+                            {% for key, value in tipos_reparacao %}
+                            <option value="{{ key }}" {% if ordem.tipo_reparacao == key %}selected{% endif %}>{{ value }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-success"><i class="fas fa-save mr-2"></i> Salvar Relatório
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+<!-- Modal Adicionar Linha -->
+<div class="modal fade" id="modalAdicionarLinha" tabindex="-1" role="dialog" aria-labelledby="modalAdicionarLinhaLabel"
+     aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAdicionarLinhaLabel"><i class="fas fa-plus-circle mr-2"></i> Adicionar
+                    Linha</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="formAdicionarLinha" method="post" action="{% url 'ordens:adicionar_linha' ordem.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    {{ linha_form.as_p }}
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success"><i class="fas fa-save mr-1"></i> Salvar</button>
+                </div>
+            </form>
+            <div id="linha-feedback" class="small mt-1"></div>
+
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        $('#modalAdicionarItem1, #modalAdicionarItem2').on('show.bs.modal', function (e) {
+            console.log('Modal abrir:', this.id);
+        });
+    });
+</script>
+<script>
+    $(document).ready(function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const activeTab = urlParams.get('tab') || 'detalhes';
+        $('#ordemTabs a[href="?tab=' + activeTab + '"]').tab('show');
+    });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const input = document.getElementById("localArmazenamento");
+    const feedback = document.getElementById("local-feedback");
+
+    if (input) {
+        input.addEventListener("blur", () => {
+            const valor = input.value.trim();
+            const osId = input.dataset.osId;
+
+            fetch(`/ordens/${osId}/atualizar_local/`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}", // Django exige o CSRF
+                },
+                body: JSON.stringify({ local: valor })
+            })
+            .then(res => res.json())
+            .then(data => {
+                feedback.textContent = data.message;
+                feedback.className = "small text-success";
+            })
+            .catch(() => {
+                feedback.textContent = "Erro ao salvar.";
+                feedback.className = "small text-danger";
+            });
+        });
+    }
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.getElementById("formAdicionarLinha");
+    const lista = document.getElementById("linhasList");
+    const feedback = document.getElementById("linha-feedback");
+
+    if (form) {
+        form.addEventListener("submit", function(e) {
+            e.preventDefault();
+            const formData = new FormData(form);
+
+            fetch(form.action, {
+                method: "POST",
+                headers: { "X-CSRFToken": formData.get("csrfmiddlewaretoken") },
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const div = document.createElement("div");
+                    div.classList.add("list-group-item");
+                    div.innerHTML = `
+                        <span class="linha-status badge badge-primary">${data.status}</span>
+                        <small class="linha-data float-right">${data.data} - ${data.usuario}</small>
+                        <p class="linha-descricao">${data.descricao}</p>
+                    `;
+                    lista.prepend(div);
+                    feedback.textContent = "Linha adicionada!";
+                    feedback.className = "small text-success";
+                    $("#modalAdicionarLinha").modal("hide");
+                    form.reset();
+                } else {
+                    feedback.textContent = "Erro ao adicionar.";
+                    feedback.className = "small text-danger";
+                }
+            });
+        });
+    }
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const textarea = document.getElementById("observacoes");
+    const feedback = document.getElementById("observacoes-feedback");
+
+    if (textarea) {
+        textarea.addEventListener("blur", () => {
+            const valor = textarea.value.trim();
+            const osId = textarea.dataset.osId;
+
+            fetch(`/ordens/${osId}/atualizar_observacoes/`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}",
+                },
+                body: JSON.stringify({ observacoes: valor })
+            })
+            .then(res => res.json())
+            .then(data => {
+                feedback.textContent = data.message;
+                feedback.className = "small text-success";
+            })
+            .catch(() => {
+                feedback.textContent = "Erro ao salvar.";
+                feedback.className = "small text-danger";
+            });
+        });
+    }
+});
+</script>
+
+
+{% endblock extra_js %}

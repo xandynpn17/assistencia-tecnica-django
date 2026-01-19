@@ -1,0 +1,54 @@
+{% extends 'core/base.html' %}
+{% block title %}Lista de Ordens de Serviço{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Ordens de Serviço</h3>
+                <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-success">
+                    Nova Ordem
+                </a>
+            </div>
+            <div class="card-body table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead>
+                        <tr>
+                            <th>OS</th>
+                            <th>Cliente</th>
+                            <th>Tipo Equipamento</th>
+                            <th>Marca</th>
+                            <th>Modelo</th>
+                            <th>Status</th>
+                            <th>Criada em</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for os in ordens %}
+                        <tr>
+                            <td>{{ os.numero_os }}</td>
+                            <td>{{ os.cliente.nome }}</td>
+                            <td>{{ os.tipo_equipamento|title }}</td>
+                            <td>{{ os.marca_equipamento }}</td>
+                            <td>{{ os.modelo_equipamento }}</td>
+                            <td>{{ os.get_status_display }}</td>
+                            <td>{{ os.data_abertura|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                <a href="{% url 'ordens:editar_ordem' os.id %}" class="btn btn-sm btn-warning">Editar</a>
+                                <a href="{% url 'ordens:detalhes_ordem' os.id %}" class="btn btn-sm btn-info">Detalhes</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center">Nenhuma ordem encontrada.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

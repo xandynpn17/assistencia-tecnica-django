@@ -1,0 +1,508 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}
+Dashboard - Assistência
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ===== ESTILOS DO DASHBOARD ===== */
+/* ===== ESTILOS DO DASHBOARD ===== */
+.dashboard-stats {
+    margin-bottom: 25px;
+}
+
+.stat-card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    margin-bottom: 20px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-left: 4px solid transparent;
+    height: 100%;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+}
+
+.stat-card-primary {
+    border-left-color: #2c5aa0;
+    background: linear-gradient(135deg, #3a7bd5, #2c65c4);
+    color: white;
+}
+
+.stat-card-info {
+    border-left-color: #1a73e8;
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+}
+
+.stat-card-secondary {
+    border-left-color: #5a6268;
+    background: linear-gradient(135deg, #6c757d, #5a6268);
+    color: white;
+}
+
+.stat-card-light {
+    border-left-color: #3a7bd5;
+    background: #ffffff;
+    color: #2c3e50;
+    border: 1px solid #dee2e6;
+}
+
+.stat-card-content {
+    padding: 20px;
+    position: relative;
+}
+
+.stat-card-icon {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-size: 40px;
+    opacity: 0.2;
+    color: inherit;
+}
+
+.stat-card-number {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    color: inherit;
+}
+
+.stat-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    opacity: 0.9;
+    color: inherit;
+    line-height: 1.5;      /* Evita corte das letras */
+}
+
+.stat-card-link {
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    opacity: 0.9;
+    text-decoration: none;
+}
+
+/* === CORREÇÃO DE LINKS NOS CARDS COLORIDOS === */
+.stat-card-primary a,
+.stat-card-info a {
+    color: #dfe9ff !important; /* azul claro */
+}
+
+.stat-card-secondary a {
+    color: #e0e0e0 !important; /* cinza claro */
+}
+
+.stat-card-light a {
+    color: #3498db !important; /* azul padrão */
+}
+
+.stat-card-primary a:hover,
+.stat-card-info a:hover,
+.stat-card-secondary a:hover,
+.stat-card-light a:hover {
+    color: #ffffff !important;
+    opacity: 1;
+    text-decoration: none;
+}
+
+/* ==== CARD MODERN ==== */
+.card-modern {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    margin-bottom: 25px;
+    transition: transform 0.3s ease;
+    background: #ffffff;
+}
+
+.card-modern:hover {
+    transform: translateY(-3px);
+}
+
+.card-modern-header {
+    background: #2c3e50;
+    color: white;
+    border-radius: 10px 10px 0 0;
+    padding: 15px 20px;
+    font-weight: 600;
+    border: none;
+    line-height: 1.5;      /* Corrige altura da linha */
+    display: flex;         /* Centraliza conteúdo */
+    align-items: center;   /* Centraliza verticalmente */
+    min-height: 50px;      /* Garante altura mínima */
+}
+
+.card-modern-body {
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 0 0 10px 10px;
+    color: #2c3e50;
+}
+
+/* ==== BUTTONS ==== */
+.btn-action {
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    border: none;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-action-primary {
+    background: linear-gradient(45deg, #3a7bd5, #3498db);
+    color: white;
+}
+
+.btn-action-primary:hover {
+    background: linear-gradient(45deg, #2c65c4, #2980b9);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-action-info {
+    background: linear-gradient(45deg, #5a6268, #6c757d);
+    color: white;
+}
+
+.btn-action-info:hover {
+    background: linear-gradient(45deg, #4e555b, #5a6268);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-action-secondary {
+    background: linear-gradient(45deg, #95a5a6, #7f8c8d);
+    color: white;
+}
+
+.btn-action-secondary:hover {
+    background: linear-gradient(45deg, #7f8c8d, #6c757d);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* ==== STATUS CARDS ==== */
+.status-card {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+    background: #ffffff;
+    border-left: 4px solid #3498db;
+    border: 1px solid #dee2e6;
+}
+
+.status-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12);
+}
+
+.status-card-body {
+    padding: 15px;
+    overflow: visible;
+    text-align: center;
+}
+
+.status-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 5px;
+    line-height: 1.4; /* Evita cortes */
+}
+
+.status-card-count {
+    font-size: 24px;
+    font-weight: 700;
+    color: #3498db;
+    margin-bottom: 10px;
+}
+
+/* ==== LISTS ==== */
+.list-group-modern {
+    background: #ffffff;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.list-group-modern .list-group-item {
+    border: none;
+    border-bottom: 1px solid #e9ecef;
+    padding: 15px;
+    transition: all 0.3s ease;
+    background: #ffffff;
+    color: #2c3e50;
+}
+
+.list-group-modern .list-group-item:last-child {
+    border-bottom: none;
+}
+
+.list-group-modern .list-group-item:hover {
+    background-color: #f8f9fa;
+    border-left: 3px solid #3498db;
+}
+
+/* ==== TITLES ==== */
+.page-title {
+    color: #2c3e50;
+    font-weight: 700;
+    margin-bottom: 5px;
+    line-height: 1.5;
+}
+
+.page-subtitle {
+    color: #6c757d;
+    margin-bottom: 25px;
+}
+
+/* ==== BUTTON OUTLINE ==== */
+.btn-outline-primary {
+    border-color: #3498db;
+    color: #3498db;
+    background: #ffffff;
+}
+
+.btn-outline-primary:hover {
+    background-color: #3498db;
+    border-color: #3498db;
+    color: white;
+}
+
+/* Melhorias de contraste */
+.text-dark {
+    color: #2c3e50 !important;
+    font-weight: 600;
+}
+
+.text-muted {
+    color: #6c757d !important;
+}
+
+.card-title {
+    color: #ffffff;
+    line-height: 1.4; /* Evita cortes */
+}
+
+/* Garantir que todo texto tenha contraste */
+body {
+    color: #2c3e50;
+    background-color: #f8f9fa;
+}
+
+.content-wrapper {
+    background-color: #f8f9fa;
+}
+
+</style>
+{% endblock %}
+
+{% block header %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Visão geral do sistema de assistência técnica</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Small Boxes -->
+<div class="row dashboard-stats">
+    <!-- Total Clientes -->
+    <div class="col-lg-3 col-md-6 col-sm-6 mb-4">
+        <div class="stat-card stat-card-primary">
+            <div class="stat-card-content">
+                <div class="stat-card-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="stat-card-number">{{ total_clientes|default:"0" }}</div>
+                <div class="stat-card-title">Total de Clientes</div>
+                <a href="{% url 'clientes:lista_clientes' %}" class="stat-card-link">
+                    Ver todos <i class="fas fa-arrow-circle-right ml-1"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Ordens -->
+    <div class="col-lg-3 col-md-6 col-sm-6 mb-4">
+        <div class="stat-card stat-card-info">
+            <div class="stat-card-content">
+                <div class="stat-card-icon">
+                    <i class="fas fa-tools"></i>
+                </div>
+                <div class="stat-card-number">{{ total_ordens|default:"0" }}</div>
+                <div class="stat-card-title">Total de Ordens</div>
+                <a href="{% url 'ordens:lista_ordens' %}" class="stat-card-link">
+                    Ver todas <i class="fas fa-arrow-circle-right ml-1"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ordens Abertas -->
+    <div class="col-lg-3 col-md-6 col-sm-6 mb-4">
+        <div class="stat-card stat-card-secondary">
+            <div class="stat-card-content">
+                <div class="stat-card-icon">
+                    <i class="fas fa-hourglass-start"></i>
+                </div>
+                <div class="stat-card-number">{{ total_ordens_abertas|default:"0" }}</div>
+                <div class="stat-card-title">Ordens Abertas</div>
+                <a href="{% url 'ordens:lista_ordens' %}?status=aberta" class="stat-card-link">
+                    Ver abertas <i class="fas fa-arrow-circle-right ml-1"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ordens Finalizadas -->
+    <div class="col-lg-3 col-md-6 col-sm-6 mb-4">
+        <div class="stat-card stat-card-light">
+            <div class="stat-card-content">
+                <div class="stat-card-icon">
+                    <i class="fas fa-check-circle text-primary"></i>
+                </div>
+                <div class="stat-card-number text-dark">{{ total_ordens_finalizadas|default:"0" }}</div>
+                <div class="stat-card-title text-dark">Ordens Finalizadas</div>
+                <a href="{% url 'ordens:lista_ordens' %}?status=finalizada" class="stat-card-link text-dark">
+                    Ver finalizadas <i class="fas fa-arrow-circle-right ml-1"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ações Rápidas -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card-modern">
+            <div class="card-modern-header">
+                <h3 class="card-title mb-0"><i class="fas fa-bolt mr-2"></i>Ações Rápidas</h3>
+            </div>
+            <div class="card-modern-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-action btn-action-primary">
+                            <i class="fas fa-plus-circle mr-2"></i> Criar Nova OS
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'ordens:lista_ordens' %}" class="btn btn-action btn-action-info">
+                            <i class="fas fa-list mr-2"></i> Consultar/Alterar OS
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'clientes:lista_clientes' %}" class="btn btn-action btn-action-secondary">
+                            <i class="fas fa-user-plus mr-2"></i> Novo Cliente
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status das Ordens -->
+{% for status, total in status_dict.items %}
+    {% if total > 0 and status != 'concluida' %}
+        <div class="col-md-6 mb-1">
+            <a href="{% url 'ordens:lista_ordens' %}?status={{ status }}" class="text-decoration-none">
+                <div class="d-flex justify-content-between align-items-center px-3 py-1 rounded shadow-sm"
+                     style="border-left: 5px solid
+                            {% if status == 'diagnosticar' %}#f39c12{% elif status == 'pendente_tecnico' %}#e74c3c
+                            {% elif status == 'pendente_marca' %}#d35400{% elif status == 'pendente_pecas' %}#8e44ad
+                            {% elif status == 'pendente_orcamento' %}#16a085{% elif status == 'orcamentado' %}#2980b9
+                            {% elif status == 'autorizado' %}#27ae60{% elif status == 'em_andamento' %}#3498db
+                            {% elif status == 'pronto_contactado' %}#2ecc71{% elif status == 'pronto_contactar' %}#1abc9c
+                            {% else %}#7f8c8d{% endif %};
+                            background-color: #ffffff;">
+                    <span class="font-weight-bold text-dark">{{ status|title }}</span>
+                    <span class="badge bg-secondary rounded-pill">{{ total }}</span>
+                </div>
+            </a>
+        </div>
+    {% endif %}
+{% endfor %}
+</div>
+
+<!-- Últimos Clientes e Ordens -->
+<div class="row">
+    <!-- Últimos Clientes -->
+    <div class="col-lg-6 mb-4">
+        <div class="card-modern">
+            <div class="card-modern-header">
+                <h3 class="card-title mb-0"><i class="fas fa-user-clock mr-2"></i>Últimos Clientes Cadastrados</h3>
+            </div>
+            <div class="card-modern-body">
+                {% if ultimos_clientes %}
+                <div class="list-group list-group-modern">
+                    {% for cliente in ultimos_clientes %}
+                    <a href="{% url 'clientes:detalhes_cliente' cliente.id %}" class="list-group-item list-group-item-action">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong class="text-dark">{{ cliente.nome }}</strong>
+                                <br>
+                                <small class="text-muted">{{ cliente.telefone }}</small>
+                            </div>
+                            <i class="fas fa-chevron-right text-muted"></i>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">Nenhum cliente cadastrado.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Últimas Ordens -->
+    <div class="col-lg-6 mb-4">
+        <div class="card-modern">
+            <div class="card-modern-header">
+                <h3 class="card-title mb-0"><i class="fas fa-history mr-2"></i>Últimas Ordens de Serviço</h3>
+            </div>
+            <div class="card-modern-body">
+                {% if ultimas_ordens %}
+                <div class="list-group list-group-modern">
+                    {% for ordem in ultimas_ordens %}
+                    <a href="{% url 'ordens:detalhes_ordem' ordem.id %}" class="list-group-item list-group-item-action">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong class="text-dark">OS #{{ ordem.id }}</strong> - {{ ordem.cliente.nome }}<br>
+                                <small class="text-muted">Status: {{ ordem.get_status_display }}</small>
+                            </div>
+                            <i class="fas fa-chevron-right text-muted"></i>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">Nenhuma ordem de serviço cadastrada.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

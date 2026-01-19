@@ -1,0 +1,85 @@
+{% extends "core/base.html" %}
+
+{% block title %}Estoque - Lista de Produtos{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Lista de Produtos</h1>
+{% endblock %}
+
+{% block content %}
+<div class="card-modern">
+    <div class="card-modern-header d-flex justify-content-between align-items-center">
+        Produtos cadastrados
+        <a href="{% url 'estoque:criar_produto' %}" class="btn btn-success btn-sm">
+            <i class="fas fa-plus"></i> Novo Produto
+        </a>
+    </div>
+    <div class="mb-3">
+        <a href="?tipo=todos" class="btn btn-sm {% if filtro == 'todos' %}btn-primary{% else %}btn-outline-primary{% endif %}">Todos</a>
+        <a href="?tipo=produtos" class="btn btn-sm {% if filtro == 'produtos' %}btn-primary{% else %}btn-outline-primary{% endif %}">Produtos</a>
+        <a href="?tipo=servicos" class="btn btn-sm {% if filtro == 'servicos' %}btn-primary{% else %}btn-outline-primary{% endif %}">Serviços</a>
+    </div>
+    <div class="card-modern-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>SKU</th>
+                <th>EAN</th>
+                <th>Categoria</th>
+                <th>Fornecedor</th>
+                <th>Preço</th>
+                <th>Qtd</th>
+                <th>Custo Total (R$)</th>
+                <th>Preço sem Margem (R$)</th>
+                <th>Lucro (R$)</th>
+                <th>Lucro (%)</th>
+                <th>Preço de Venda (R$)</th>
+                <th>Ativo</th>
+                <th>Ações</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for produto in produtos %}
+            <tr>
+                <td>{{ produto.id }}</td>
+                <td>{{ produto.nome }}</td>
+                <td>{{ produto.sku|default:"-" }}</td>
+                <td>{{ produto.ean|default:"-" }}</td>
+                <td>{{ produto.categoria|default:"-" }}</td>
+                <td>{{ produto.fornecedor|default:"-" }}</td>
+                <td>R$ {{ produto.preco|floatformat:2 }}</td>
+                <td>{{ produto.quantidade }}</td>
+                <td>R$ {{ produto.custo_total|floatformat:2 }}</td>
+                <td>R$ {{ produto.preco_sem_margem|floatformat:2 }}</td>
+                <td>R$ {{ produto.lucro_reais|floatformat:2 }}</td>
+                <td>{{ produto.lucro_percentual|floatformat:2 }}%</td>
+                <td>R$ {{ produto.preco_final|floatformat:2 }}</td>
+                <td>
+                    {% if produto.ativo %}
+                    <span class="badge badge-success">Sim</span>
+                    {% else %}
+                    <span class="badge badge-danger">Não</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'estoque:editar_produto' produto.id %}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-edit"></i>
+                    </a>
+                    <a href="{% url 'estoque:excluir_produto' produto.id %}" class="btn btn-sm btn-danger">
+                        <i class="fas fa-trash"></i>
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="15" class="text-center">Nenhum produto cadastrado.</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+
+        </table>
+    </div>
+</div>
+{% endblock %}

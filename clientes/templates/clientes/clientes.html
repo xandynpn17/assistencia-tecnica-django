@@ -1,0 +1,106 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Clientes - Assistência{% endblock %}
+
+{% block header %}
+<div class="row mb-2">
+    <div class="col-sm-6">
+        <h1>Clientes</h1>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- 🔍 Buscar cliente -->
+    <div class="col-12 mb-3">
+        <div class="card p-3">
+            <h5>Buscar Cliente</h5>
+            <input type="text" id="buscaCliente" class="form-control" placeholder="Digite telefone, CPF ou e-mail">
+            <small id="resultadoBusca" class="text-muted"></small>
+        </div>
+    </div>
+
+    <!-- ➕ Formulário de cadastro -->
+    <div class="col-12 mb-3" id="formCadastro" style="display:none;">
+        <div class="card p-3">
+            <h5>Novo Cliente</h5>
+            <form method="POST">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <button type="submit" class="btn btn-success">Cadastrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 📋 Lista de clientes -->
+    <div class="col-12">
+        <div class="card p-3">
+            <h5>Clientes Cadastrados</h5>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Telefone</th>
+                        <th>Email</th>
+                        <th>CPF</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cliente in clientes_procurados %}
+                    <tr>
+                        <td>{{ cliente.nome }}</td>
+                        <td>{{ cliente.telefone }}</td>
+                        <td>{{ cliente.email }}</td>
+                        <td>{{ cliente.cpf }}</td>
+                        <td>
+                            <a href="{% url 'clientes:detalhes_cliente' cliente.id %}" class="btn btn-info btn-sm">Detalhes</a>
+                            <a href="{% url 'clientes:editar_cliente' cliente.id %}" class="btn btn-warning btn-sm">Editar</a>
+                            <a href="{% url 'clientes:excluir_cliente' cliente.id %}" class="btn btn-danger btn-sm">Excluir</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center">Nenhum cliente cadastrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- AJAX script -->
+<script>
+document.getElementById("buscaCliente").addEventListener("keyup", function() {
+    let query = this.value.trim();
+    let resultado = document.getElementById("resultadoBusca");
+    let formCadastro = document.getElementById("formCadastro");
+
+    if (query.length < 3) {
+        resultado.textContent = "Digite pelo menos 3 caracteres.";
+        formCadastro.style.display = "none";
+        return;
+    }
+
+    fetch(`/clientes/buscar/?q=${query}`, {
+        headers: {"x-requested-with": "XMLHttpRequest"}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.existe) {
+            resultado.innerHTML = `<span class="text-success">Cliente encontrado: ${data.nome} (${data.telefone})</span>`;
+            formCadastro.style.display = "none";
+        } else {
+            resultado.innerHTML = `<span class="text-danger">Cliente não encontrado. Você pode cadastrá-lo abaixo.</span>`;
+            formCadastro.style.display = "block";
+        }
+    })
+    .catch(error => {
+        console.error("Erro na busca:", error);
+    });
+});
+</script>
+{% endblock %}

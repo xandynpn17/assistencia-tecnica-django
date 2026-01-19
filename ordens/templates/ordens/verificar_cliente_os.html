@@ -1,0 +1,208 @@
+{% extends 'core/base.html' %}
+{% block title %}Verificar Cliente{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    .content-wrapper {
+        padding: 20px;
+    }
+
+    .card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        margin-bottom: 25px;
+    }
+
+    .card-header {
+        background: linear-gradient(45deg, #3a7bd5, #00d2ff);
+        color: white;
+        border-radius: 10px 10px 0 0 !important;
+        padding: 15px 20px;
+        font-weight: 600;
+        border: none;
+    }
+
+    .card-body {
+        padding: 20px;
+    }
+
+    .form-control {
+        padding: 12px 15px;
+        border-radius: 8px;
+        border: 1px solid #ced4da;
+    }
+
+    .form-control:focus {
+        border-color: #3a7bd5;
+        box-shadow: 0 0 0 0.25rem rgba(58, 123, 213, 0.25);
+    }
+
+    .btn-primary {
+        background: linear-gradient(45deg, #3a7bd5, #00d2ff);
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(45deg, #2c65c4, #00b3eb);
+    }
+
+    .btn-success {
+        background: linear-gradient(45deg, #00b09b, #96c93d);
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .btn-success:hover {
+        background: linear-gradient(45deg, #009982, #85b52e);
+    }
+
+    .list-group-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        border-left: 4px solid transparent;
+        transition: all 0.3s;
+    }
+
+    .list-group-item:hover {
+        background-color: #f1f8ff;
+        border-left: 4px solid #3a7bd5;
+    }
+
+    .alert-warning {
+        background: linear-gradient(45deg, #fff3cd, #ffd89b);
+        color: #856404;
+        border: none;
+        border-radius: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container-fluid">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1>Verificar Cliente</h1>
+                <p class="text-muted">Busque por CPF para verificar se o cliente já está cadastrado</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+
+                <!-- Formulário de busca (sem formatação) -->
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="fas fa-search me-2"></i>Verificar Cliente</h3>
+                    </div>
+                    <form method="get">
+                        <div class="card-body">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Digite o telefone ou CPF</label>
+                                <input type="text" id="cpf_telefone_input" name="cpf_telefone" class="form-control" required
+                                       value="{{ cpf_telefone|default:'' }}" placeholder="Digite o CPF">
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-2"></i> Verificar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Lista de clientes encontrados -->
+                {% if clientes %}
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="fas fa-users me-2"></i>Clientes encontrados</h3>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group">
+                            {% for cliente in clientes %}
+                            <li class="list-group-item">
+                                <div>
+                                    <strong>{{ cliente.nome }}</strong> - {{ cliente.cpf }} - {{ cliente.telefone }}
+                                </div>
+                                <a href="{% url 'ordens:nova_ordem_cliente' cliente.id %}" class="btn btn-success">
+                                    <i class="fas fa-plus-circle me-1"></i> Criar OS
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+
+                        <div class="mt-4">
+                            <a href="?novo_cliente=1&cpf_telefone={{ cpf_telefone }}" class="btn btn-primary">
+                                <i class="fas fa-user-plus me-2"></i> Criar Novo Cliente
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                {% elif cpf_telefone %}
+                <div class="alert alert-warning mt-4 text-center">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Nenhum cliente encontrado.</strong>
+                    {% if not form %}
+                    <a href="?novo_cliente=1&cpf_telefone={{ cpf_telefone }}" class="fw-bold ms-2">Criar novo cliente</a>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Formulário para criar novo cliente (com formatação de CPF) -->
+                {% if form %}
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="fas fa-user-plus me-2"></i>Criar Novo Cliente</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            {% csrf_token %}
+                            {% for field in form %}
+                            <div class="form-group mb-3">
+                                <label class="form-label">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.errors %}
+                                <div class="text-danger">{{ field.errors }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i> Salvar Cliente e Criar OS
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/cleave.js@1.6.0/dist/cleave.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // CPF no formulário de novo cliente (com máscara)
+    const cpfFormInput = document.getElementById('id_cpf');
+    if (cpfFormInput) {
+        new Cleave(cpfFormInput, {
+            numericOnly: true,
+            blocks: [3, 3, 3, 2],
+            delimiters: ['.', '.', '-']
+        });
+    }
+});
+</script>
+{% endblock %}
