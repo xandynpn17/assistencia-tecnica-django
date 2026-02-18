@@ -2,125 +2,195 @@
 {% block title %}Painel de Configurações{% endblock %}
 
 {% block content %}
-
-<!-- Mensagens -->
-{% if messages %}
-  {% for message in messages %}
-    {% if "configuracoes" in message.tags %}
-      <div class="alert alert-{{ message.tags|default:'success' }} alert-dismissible fade show" role="alert">
-        <i class="fas fa-check-circle"></i> {{ message }}
-        <button type="button" class="close" data-dismiss="alert" aria-label="Fechar">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-    {% endif %}
-  {% endfor %}
-{% endif %}
-
-<h3 class="mb-4"><i class="fas fa-cogs text-primary"></i> Painel de Configurações</h3>
-
 <div class="row">
-
-  <!-- Empresa -->
-  <div class="col-lg-4 col-md-6 mb-4">
-    <div class="card shadow-sm h-100">
+  <!-- Seção: Configurações Principais -->
+  <div class="col-12 mb-4">
+    <div class="card">
       <div class="card-header bg-primary text-white">
-        <i class="fas fa-building"></i> Empresa
+        <h5 class="mb-0"><i class="fas fa-cogs mr-2"></i> Configurações Principais</h5>
       </div>
       <div class="card-body">
-        {% if empresa %}
-          <p><strong>Nome:</strong> {{ empresa.nome }}</p>
-          {% if empresa.logo %}
-            <img src="{{ empresa.logo.url }}" alt="Logo" class="img-fluid rounded mb-2" style="max-height: 120px;">
-          {% endif %}
-        {% else %}
-          <p class="text-muted">Nenhuma empresa cadastrada.</p>
-        {% endif %}
-      </div>
-      <div class="card-footer text-center">
-        <a href="{% url 'configuracoes:empresa' %}" class="btn btn-outline-light btn-sm w-100">
-          <i class="fas fa-edit"></i> Editar Empresa
-        </a>
-      </div>
-    </div>
-  </div>
+        <div class="row">
+          <!-- Dados da Empresa -->
+          <div class="col-md-4 mb-3">
+            <div class="card card-modern h-100 border">
+              <div class="card-modern-header bg-light">
+                <i class="fas fa-building text-primary"></i> Dados da Empresa
+              </div>
+              <div class="card-modern-body text-center py-4">
+                <i class="fas fa-building fa-3x text-muted mb-3"></i>
+                <p class="mb-3">Configure os dados da sua empresa.</p>
+                <a href="{% url 'configuracoes:empresa' %}" class="btn btn-primary">
+                  <i class="fas fa-edit mr-1"></i> Configurar
+                </a>
+              </div>
+            </div>
+          </div>
 
-  <!-- Ordem de Serviço -->
-  <div class="col-lg-4 col-md-6 mb-4">
-    <div class="card shadow-sm h-100">
-      <div class="card-header bg-info text-white">
-        <i class="fas fa-tools"></i> Ordem de Serviço
-      </div>
-      <div class="card-body">
-        <p>Configure o prefixo, numeração inicial e rodapé dos relatórios de OS.</p>
-      </div>
-      <div class="card-footer text-center">
-        <a href="{% url 'configuracoes:configuracao_os' %}" class="btn btn-outline-light btn-sm w-100">
-          <i class="fas fa-wrench"></i> Configurar OS
-        </a>
-      </div>
-    </div>
-  </div>
+          <!-- Configuração OS -->
+          <div class="col-md-4 mb-3">
+            <div class="card card-modern h-100 border">
+              <div class="card-modern-header bg-light">
+                <i class="fas fa-tools text-primary"></i> Ordem de Serviço
+              </div>
+              <div class="card-modern-body text-center py-4">
+                <i class="fas fa-file-invoice fa-3x text-muted mb-3"></i>
+                <p class="mb-3">Prefixo, numeração, rodapé de relatórios.</p>
+                <a href="{% url 'configuracoes:configuracao_os' %}" class="btn btn-primary">
+                  <i class="fas fa-cog mr-1"></i> Configurar
+                </a>
+              </div>
+            </div>
+          </div>
 
-  <!-- Usuários -->
-  <div class="col-lg-4 col-md-6 mb-4">
-    <div class="card shadow-sm h-100">
-      <div class="card-header bg-secondary text-white">
-        <i class="fas fa-users"></i> Usuários
-      </div>
-      <div class="card-body">
-        <p><strong>Total de usuários:</strong> {{ usuarios|length }}</p>
-      </div>
-      <div class="card-footer text-center">
-        <a href="{% url 'configuracoes:lista_usuarios' %}" class="btn btn-outline-light btn-sm w-100">
-          <i class="fas fa-user-cog"></i> Gerenciar Usuários
-        </a>
-      </div>
-    </div>
-  </div>
-
-  <!-- Fiscal / Alíquotas -->
-  <div class="col-lg-4 col-md-6 mb-4">
-    <div class="card shadow-sm h-100">
-      <div class="card-header bg-warning text-dark">
-        <i class="fas fa-percentage"></i> Fiscal / Alíquotas
-      </div>
-      <div class="card-body">
-        {% if aliquotas %}
-          <p><strong>Total de alíquotas:</strong> {{ aliquotas|length }}</p>
-        {% else %}
-          <p class="text-muted">Nenhuma alíquota configurada.</p>
-        {% endif %}
-      </div>
-      <div class="card-footer text-center">
-        <a href="{% url 'configuracoes:lista_aliquotas' %}" class="btn btn-outline-dark btn-sm w-100">
-          <i class="fas fa-cogs"></i> Gerenciar Alíquotas
-        </a>
-      </div>
-    </div>
-  </div>
-
-  <!-- Sistema / Backup -->
-  <div class="col-lg-4 col-md-6 mb-4">
-    <div class="card shadow-sm h-100">
-      <div class="card-header bg-dark text-white">
-        <i class="fas fa-database"></i> Sistema / Backup
-      </div>
-      <div class="card-body">
-        <p>Crie ou restaure cópias de segurança do sistema.</p>
-      </div>
-      <div class="card-footer">
-        <div class="d-flex flex-column gap-2">
-          <a href="{% url 'configuracoes:backup_banco' %}" class="btn btn-outline-light btn-sm mb-2">
-            <i class="fas fa-download"></i> Fazer Backup
-          </a>
-          <a href="{% url 'configuracoes:restore_banco' %}" class="btn btn-outline-light btn-sm">
-            <i class="fas fa-upload"></i> Restaurar Backup
-          </a>
+          <!-- Configuração Sistema -->
+          <div class="col-md-4 mb-3">
+            <div class="card card-modern h-100 border">
+              <div class="card-modern-header bg-light">
+                <i class="fas fa-sliders-h text-primary"></i> Sistema
+              </div>
+              <div class="card-modern-body text-center py-4">
+                <i class="fas fa-cogs fa-3x text-muted mb-3"></i>
+                <p class="mb-3">Estado/DDD padrão, campos obrigatórios, busca, CEP.</p>
+                <a href="{% url 'configuracoes:configuracao_sistema' %}" class="btn btn-primary">
+                  <i class="fas fa-sliders-h mr-1"></i> Configurar
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Seção: Gerenciamento -->
+  <div class="col-12 mb-4">
+    <div class="card">
+      <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0"><i class="fas fa-tasks mr-2"></i> Gerenciamento</h5>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <!-- Alíquotas -->
+          <div class="col-md-4 mb-3">
+            <div class="card card-modern h-100 border">
+              <div class="card-modern-header bg-light">
+                <i class="fas fa-percentage text-secondary"></i> Alíquotas
+              </div>
+              <div class="card-modern-body text-center py-4">
+                <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                <p class="mb-3">Gerencie as alíquotas de impostos.</p>
+                <a href="{% url 'configuracoes:lista_aliquotas' %}" class="btn btn-outline-secondary">
+                  <i class="fas fa-list mr-1"></i> Gerenciar
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Usuários -->
+          <div class="col-md-4 mb-3">
+            <div class="card card-modern h-100 border">
+              <div class="card-modern-header bg-light">
+                <i class="fas fa-users text-secondary"></i> Usuários
+              </div>
+              <div class="card-modern-body text-center py-4">
+                <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
+                <p class="mb-3">Gerencie usuários e permissões.</p>
+                <a href="{% url 'configuracoes:lista_usuarios' %}" class="btn btn-outline-secondary">
+                  <i class="fas fa-user-cog mr-1"></i> Gerenciar
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Backup -->
+          <div class="col-md-4 mb-3">
+            <div class="card card-modern h-100 border">
+              <div class="card-modern-header bg-light">
+                <i class="fas fa-database text-secondary"></i> Backup
+              </div>
+              <div class="card-modern-body text-center py-4">
+                <i class="fas fa-hdd fa-3x text-muted mb-3"></i>
+                <p class="mb-3">Backup e restauração do sistema.</p>
+                <a href="{% url 'configuracoes:backup_banco' %}" class="btn btn-outline-secondary">
+                  <i class="fas fa-download mr-1"></i> Acessar
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+
+<!-- Seção: Informações do Sistema -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="fas fa-info-circle mr-2"></i> Informações do Sistema</h5>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="alert alert-info">
+              <h6><i class="fas fa-lightbulb mr-2"></i> Dica:</h6>
+              <p class="mb-0">Configure primeiro os "Dados da Empresa" e depois as "Configurações do Sistema" para um funcionamento ideal.</p>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="alert alert-light">
+              <h6><i class="fas fa-clock mr-2"></i> Última Atualização:</h6>
+              <p class="mb-0">
+                {% if config_sistema %}
+                  Sistema: {{ config_sistema.data_atualizacao|date:"d/m/Y H:i" }}
+                {% else %}
+                  Não configurado
+                {% endif %}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+.card-modern {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    transition: transform 0.2s, box-shadow 0.2s;
+    height: 100%;
+}
+
+.card-modern:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+.card-modern-header {
+    background-color: #f8f9fa;
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.card-modern-header i {
+    margin-right: 10px;
+}
+
+.card-modern-body {
+    padding: 20px;
+}
+
+.btn-block {
+    width: 100%;
+}
+</style>
 {% endblock %}

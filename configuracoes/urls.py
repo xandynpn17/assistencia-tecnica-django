@@ -4,7 +4,6 @@ from . import views
 app_name = 'configuracoes'
 
 urlpatterns = [
-
     # Painel e outras rotas
     path('painel/', views.painel, name='painel'),
     path('empresa/', views.empresa_edit, name='empresa'),
@@ -20,4 +19,7 @@ urlpatterns = [
     path('restore/', views.restore_banco, name='restore_banco'),
     path('os/configuracao/', views.configuracao_os_edit, name='configuracao_os'),
 
+    # NOVA ROTA: Configurações do Sistema
+    path('sistema/configuracao/', views.configuracao_sistema_edit, name='configuracao_sistema'),
+    path('buscar-cep/', views.buscar_cep, name='buscar_cep'),
 ]

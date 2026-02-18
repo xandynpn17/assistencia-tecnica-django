@@ -30,42 +30,101 @@ from django.conf import settings
 import os
 from datetime import datetime
 import json
-
+from configuracoes.models import ConfiguracaoSistema
 
 
 # ===========================
-# Verificação de Cliente
+# Verificação de Cliente - CORRIGIDA
 # ===========================
 @login_required(login_url='configuracoes:login')
 def verificar_cliente_os(request):
     clientes = []
     cpf_telefone = request.GET.get("cpf_telefone", "").strip()
+    novo_cliente = request.GET.get("novo_cliente", False)
     form = None
+    mensagem_erro = None
+
+    # Obter configurações do sistema
+    config = ConfiguracaoSistema.get_configuracao()
+    busca_minimo = config.busca_minimo_caracteres
+
+    # Limpar apenas números para busca
     cpf_digits = re.sub(r'\D', '', cpf_telefone)
 
+    # VALIDAÇÃO: Mínimo de caracteres para busca
     if cpf_telefone:
-        clientes = Cliente.objects.filter(Q(cpf=cpf_digits) | Q(telefone=cpf_telefone))
-        if not clientes:
-            if len(cpf_digits) == 11:
-                form = ClienteForm(initial={"cpf": cpf_telefone})
-            else:
-                form = ClienteForm(initial={"telefone": cpf_telefone})
+        if len(cpf_digits) < busca_minimo:
+            mensagem_erro = f"Digite pelo menos {busca_minimo} números para buscar."
+        elif not cpf_digits.isdigit():
+            mensagem_erro = "Digite apenas números para busca."
 
+    # BUSCA: SÓ BUSCA SE NÃO HOUVER MENSAGEM DE ERRO
+    if cpf_digits and not mensagem_erro:
+        # Busca EXATA primeiro (documento completo ou telefone)
+        clientes = Cliente.objects.filter(
+            Q(documento=cpf_digits) |
+            Q(telefone__contains=cpf_digits)
+        ).order_by('nome')
+
+        # Se não encontrou, tenta busca parcial APENAS se tiver pelo menos o mínimo
+        if not clientes and len(cpf_digits) >= busca_minimo:
+            clientes = Cliente.objects.filter(
+                Q(documento__contains=cpf_digits) |
+                Q(telefone__contains=cpf_digits)
+            ).order_by('nome')[:10]
+
+    # Botão "Cadastrar Novo Cliente" ou quando busca não encontra cliente
+    # Botão "Cadastrar Novo Cliente" ou quando busca não encontra cliente
+    if novo_cliente or (not clientes and cpf_digits and not mensagem_erro):
+        initial_data = {}
+
+        # Detectar o que foi digitado
+        if len(cpf_digits) == 11 or len(cpf_digits) == 14:  # É CPF ou CNPJ
+            initial_data['documento'] = cpf_digits
+
+        elif len(cpf_digits) == 9:  # Número de 9 dígitos (como 982517380)
+            # É um número sem DDD, usar DDD padrão
+            initial_data['ddd'] = config.ddd_padrao
+            # O número será extraído pelo JavaScript
+
+        elif len(cpf_digits) in [10, 11]:  # Telefone com DDD
+            ddd = cpf_digits[:2]
+            ddd_choices = [str(dd[0]) for dd in ConfiguracaoSistema.DDD_BRASIL]
+
+            if ddd in ddd_choices:
+                initial_data['ddd'] = ddd
+            else:
+                initial_data['ddd'] = config.ddd_padrao
+
+        # Aplicar configurações padrão
+        initial_data['estado'] = config.estado_padrao
+
+        if not initial_data.get('ddd') and config.ddd_padrao:
+            initial_data['ddd'] = config.ddd_padrao
+
+        form = ClienteForm(initial=initial_data)
+
+    # Se enviou formulário de cadastro (POST)
     if request.method == "POST":
         form = ClienteForm(request.POST)
         if form.is_valid():
             cliente = form.save()
+            messages.success(request, "Cliente cadastrado com sucesso!")
             return redirect("ordens:nova_ordem_cliente", cliente.id)
+        else:
+            # Se houver erro no formulário, mostrar mensagem
+            messages.error(request, "Por favor, corrija os erros no formulário.")
 
     context = {
         "clientes": clientes,
         "cpf_telefone": cpf_telefone,
         "form": form,
+        "mensagem_erro": mensagem_erro,
+        "config": config,
         "menu_app": "ordens",
         "menu_sub": "verificar_cliente_os",
     }
     return render(request, "ordens/verificar_cliente_os.html", context)
-
 
 # ===========================
 # Selecionar Cliente

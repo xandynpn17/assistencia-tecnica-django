@@ -1,106 +1,166 @@
 {% extends 'core/base.html' %}
 {% load static %}
 
-{% block title %}Clientes - Assistência{% endblock %}
-
-{% block header %}
-<div class="row mb-2">
-    <div class="col-sm-6">
-        <h1>Clientes</h1>
-    </div>
-</div>
-{% endblock %}
+{% block title %}Gestão de Clientes{% endblock %}
 
 {% block content %}
-<div class="row">
-    <!-- 🔍 Buscar cliente -->
-    <div class="col-12 mb-3">
-        <div class="card p-3">
-            <h5>Buscar Cliente</h5>
-            <input type="text" id="buscaCliente" class="form-control" placeholder="Digite telefone, CPF ou e-mail">
-            <small id="resultadoBusca" class="text-muted"></small>
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1><i class="fas fa-users mr-1"></i> Gestão de Clientes</h1>
+                <small class="text-muted">Cadastro, edição e exclusão de clientes</small>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">Home</a></li>
+                    <li class="breadcrumb-item active">Clientes</li>
+                </ol>
+            </div>
         </div>
     </div>
+</section>
 
-    <!-- ➕ Formulário de cadastro -->
-    <div class="col-12 mb-3" id="formCadastro" style="display:none;">
-        <div class="card p-3">
-            <h5>Novo Cliente</h5>
-            <form method="POST">
-                {% csrf_token %}
-                {{ form.as_p }}
-                <button type="submit" class="btn btn-success">Cadastrar</button>
-            </form>
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Busca Simples -->
+            <div class="col-12 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <form method="GET" action="{% url 'clientes:lista_clientes' %}">
+                            <div class="input-group">
+                                <input type="text" name="query" class="form-control"
+                                       placeholder="Buscar cliente por nome, telefone, CPF, CNPJ ou número..."
+                                       value="{{ query|default:'' }}">
+                                <div class="input-group-append">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search"></i> Buscar
+                                    </button>
+                                    {% if query %}
+                                    <a href="{% url 'clientes:lista_clientes' %}" class="btn btn-secondary">
+                                        <i class="fas fa-times"></i> Limpar
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+<!-- Lista de Clientes -->
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">
+                            {% if query %}Resultados da Busca{% else %}Todos os Clientes{% endif %}
+                            <span class="badge badge-primary ml-2">{{ clientes|length }}</span>
+                        </h3>
+                        <div class="card-tools">
+                            <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-success btn-sm">
+                                <i class="fas fa-plus-circle"></i> Nova OS
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        {% if clientes %}
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Nº Cliente</th>
+                                        <th>Nome</th>
+                                        <th>Telefone</th>
+                                        <th>Email</th>
+                                        <th>CPF/CNPJ</th>
+                                        <th>Cadastrado em</th>
+                                        <th style="width: 90px" class="text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for cliente in clientes %}
+                                    <tr>
+                                        <td><span class="badge bg-primary">{{ cliente.numero_cliente }}</span></td>
+                                        <td><strong>{{ cliente.nome }}</strong></td>
+                                        <td>{{ cliente.telefone|default:"-" }}</td>
+                                        <td>{{ cliente.email|default:"-" }}</td>
+                                        <td>
+                                            {% if cliente.cpf %}
+                                                {{ cliente.cpf|slice:":3" }}.{{ cliente.cpf|slice:"3:6" }}.{{ cliente.cpf|slice:"6:9" }}-{{ cliente.cpf|slice:"9:" }}
+                                            {% elif cliente.cnpj %}
+                                                {{ cliente.cnpj|slice:":2" }}.{{ cliente.cnpj|slice:"2:5" }}.{{ cliente.cnpj|slice:"5:8" }}/{{ cliente.cnpj|slice:"8:12" }}-{{ cliente.cnpj|slice:"12:" }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ cliente.data_cadastro|date:"d/m/Y" }}</td>
+                                        <td class="text-center">
+                                            <div class="btn-group">
+                                                <a href="{% url 'clientes:detalhes_cliente' cliente.id %}"
+                                                   class="btn btn-info btn-xs" title="Detalhes">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="{% url 'clientes:editar_cliente' cliente.id %}"
+                                                   class="btn btn-warning btn-xs" title="Editar">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a href="{% url 'clientes:excluir_cliente' cliente.id %}"
+                                                   class="btn btn-danger btn-xs" title="Excluir">
+                                                    <i class="fas fa-trash"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% elif query %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Pesquise pelo CPF ou telefone</h5>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Pesquise pelo CPF ou telefone</h5>
+                            <p class="text-muted">Clique em "Nova OS" para começar</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+</section>
 
-    <!-- 📋 Lista de clientes -->
-    <div class="col-12">
-        <div class="card p-3">
-            <h5>Clientes Cadastrados</h5>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Nome</th>
-                        <th>Telefone</th>
-                        <th>Email</th>
-                        <th>CPF</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for cliente in clientes_procurados %}
-                    <tr>
-                        <td>{{ cliente.nome }}</td>
-                        <td>{{ cliente.telefone }}</td>
-                        <td>{{ cliente.email }}</td>
-                        <td>{{ cliente.cpf }}</td>
-                        <td>
-                            <a href="{% url 'clientes:detalhes_cliente' cliente.id %}" class="btn btn-info btn-sm">Detalhes</a>
-                            <a href="{% url 'clientes:editar_cliente' cliente.id %}" class="btn btn-warning btn-sm">Editar</a>
-                            <a href="{% url 'clientes:excluir_cliente' cliente.id %}" class="btn btn-danger btn-sm">Excluir</a>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="text-center">Nenhum cliente cadastrado.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- AJAX script -->
-<script>
-document.getElementById("buscaCliente").addEventListener("keyup", function() {
-    let query = this.value.trim();
-    let resultado = document.getElementById("resultadoBusca");
-    let formCadastro = document.getElementById("formCadastro");
-
-    if (query.length < 3) {
-        resultado.textContent = "Digite pelo menos 3 caracteres.";
-        formCadastro.style.display = "none";
-        return;
-    }
-
-    fetch(`/clientes/buscar/?q=${query}`, {
-        headers: {"x-requested-with": "XMLHttpRequest"}
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.existe) {
-            resultado.innerHTML = `<span class="text-success">Cliente encontrado: ${data.nome} (${data.telefone})</span>`;
-            formCadastro.style.display = "none";
-        } else {
-            resultado.innerHTML = `<span class="text-danger">Cliente não encontrado. Você pode cadastrá-lo abaixo.</span>`;
-            formCadastro.style.display = "block";
-        }
-    })
-    .catch(error => {
-        console.error("Erro na busca:", error);
-    });
-});
-</script>
+<style>
+.table th {
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    border-top: none;
+}
+.table td {
+    font-size: 0.9rem;
+    vertical-align: middle;
+}
+.btn-xs {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    border-radius: 0.2rem;
+}
+.badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.card-header .card-tools {
+    position: absolute;
+    right: 1rem;
+    top: 0.75rem;
+}
+</style>
 {% endblock %}

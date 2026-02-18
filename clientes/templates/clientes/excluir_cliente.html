@@ -1,18 +1,84 @@
 {% extends 'core/base.html' %}
 {% load static %}
 
+{% block title %}Excluir Cliente - {{ cliente.nome }}{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-    <h2>Excluir Cliente</h2>
-
-    <div class="alert alert-danger">
-        Tem certeza que deseja excluir o cliente <strong>{{ cliente.nome }}</strong>?
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-trash-alt mr-1"></i>
+                    Excluir Cliente
+                    <small class="text-muted">{{ cliente.numero_cliente }}</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'clientes:lista_clientes' %}">Clientes</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'clientes:detalhes_cliente' cliente.id %}">{{ cliente.nome|truncatechars:20 }}</a></li>
+                    <li class="breadcrumb-item active">Excluir</li>
+                </ol>
+            </div>
+        </div>
     </div>
+</section>
 
-    <form method="POST">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Sim, excluir</button>
-        <a href="{% url 'clientes:detalhes_cliente' cliente.id %}" class="btn btn-secondary">Cancelar</a>
-    </form>
-</div>
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+                <div class="card card-danger">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            Confirmar Exclusão
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-danger">
+                            <h5><i class="icon fas fa-ban"></i> Atenção!</h5>
+                            <p>Tem certeza que deseja excluir permanentemente o cliente <strong>{{ cliente.nome }}</strong>?</p>
+
+                            {% if ordens > 0 %}
+                            <div class="alert alert-warning mt-2">
+                                <i class="fas fa-exclamation-circle"></i>
+                                <strong>Atenção:</strong> Este cliente possui <strong>{{ ordens }} ordem(ns) de serviço</strong> vinculada(s).
+                                Ao excluir o cliente, estas ordens ficarão sem cliente associado.
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <dl class="row">
+                            <dt class="col-sm-3">Nº Cliente:</dt>
+                            <dd class="col-sm-9">{{ cliente.numero_cliente }}</dd>
+
+                            <dt class="col-sm-3">Nome:</dt>
+                            <dd class="col-sm-9">{{ cliente.nome }}</dd>
+
+                            <dt class="col-sm-3">Telefone:</dt>
+                            <dd class="col-sm-9">{{ cliente.telefone|default:"-" }}</dd>
+
+                            <dt class="col-sm-3">Cadastrado em:</dt>
+                            <dd class="col-sm-9">{{ cliente.data_cadastro|date:"d/m/Y H:i" }}</dd>
+                        </dl>
+                    </div>
+                    <div class="card-footer">
+                        <form method="POST">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash-alt mr-1"></i> Sim, Excluir Permanentemente
+                            </button>
+                            <a href="{% url 'clientes:detalhes_cliente' cliente.id %}" class="btn btn-secondary">
+                                <i class="fas fa-times mr-1"></i> Cancelar
+                            </a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 {% endblock %}

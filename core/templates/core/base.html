@@ -60,6 +60,12 @@
   .navbar .search-container { max-width: 320px; }
   </style>
   {% endblock %}
+{% block extra_head %}
+<!-- Meta tags extras -->
+{% if config.ddd_padrao %}
+<meta name="ddd-padrao" content="{{ config.ddd_padrao }}">
+{% endif %}
+{% endblock %}
 </head>
 <body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">

@@ -1,0 +1,114 @@
+{% extends "core/base.html" %}
+{% block title %}Configurações do Sistema{% endblock %}
+
+{% block content %}
+<div class="card card-modern">
+  <div class="card-modern-header">
+    <i class="fas fa-cogs"></i> Configurações do Sistema
+  </div>
+  <div class="card-modern-body">
+    <form method="post">
+      {% csrf_token %}
+      
+      <!-- Localização -->
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-map-marker-alt mr-2"></i> Localização Padrão</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="form-group">
+                <label>{{ form.estado_padrao.label }}</label>
+                {{ form.estado_padrao }}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-group">
+                <label>{{ form.ddd_padrao.label }}</label>
+                {{ form.ddd_padrao }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Busca -->
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-search mr-2"></i> Configurações de Busca</h5>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>{{ form.busca_minimo_caracteres.label }}</label>
+            {{ form.busca_minimo_caracteres }}
+            <small class="form-text text-muted">Mínimo de números para buscar clientes (recomendado: 7)</small>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Campos Cliente -->
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-user mr-2"></i> Campos Obrigatórios - Cliente</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            {% for field in form %}
+              {% if field.name|slice:"0:8" == "cliente_" %}
+              <div class="col-md-6">
+                <div class="form-check mb-3">
+                  {{ field }}
+                  <label class="form-check-label">{{ field.label }}</label>
+                </div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      
+      <!-- Campos Ordem -->
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-tools mr-2"></i> Campos Obrigatórios - Ordem</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            {% for field in form %}
+              {% if field.name|slice:"0:6" == "ordem_" %}
+              <div class="col-md-6">
+                <div class="form-check mb-3">
+                  {{ field }}
+                  <label class="form-check-label">{{ field.label }}</label>
+                </div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      
+      <!-- API CEP -->
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-map-marked-alt mr-2"></i> API CEP</h5>
+        </div>
+        <div class="card-body">
+          <div class="form-check mb-3">
+            {{ form.usar_api_cep }}
+            <label class="form-check-label">{{ form.usar_api_cep.label }}</label>
+          </div>
+          <div class="form-group">
+            <label>{{ form.api_cep_provedor.label }}</label>
+            {{ form.api_cep_provedor }}
+          </div>
+        </div>
+      </div>
+      
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+      <a href="{% url 'configuracoes:painel' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

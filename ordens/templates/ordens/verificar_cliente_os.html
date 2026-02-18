@@ -1,185 +1,467 @@
 {% extends 'core/base.html' %}
-{% block title %}Verificar Cliente{% endblock %}
+{% load static %}
 
-{% block extra_css %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<style>
-    .content-wrapper {
-        padding: 20px;
-    }
-
-    .card {
-        border: none;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-        margin-bottom: 25px;
-    }
-
-    .card-header {
-        background: linear-gradient(45deg, #3a7bd5, #00d2ff);
-        color: white;
-        border-radius: 10px 10px 0 0 !important;
-        padding: 15px 20px;
-        font-weight: 600;
-        border: none;
-    }
-
-    .card-body {
-        padding: 20px;
-    }
-
-    .form-control {
-        padding: 12px 15px;
-        border-radius: 8px;
-        border: 1px solid #ced4da;
-    }
-
-    .form-control:focus {
-        border-color: #3a7bd5;
-        box-shadow: 0 0 0 0.25rem rgba(58, 123, 213, 0.25);
-    }
-
-    .btn-primary {
-        background: linear-gradient(45deg, #3a7bd5, #00d2ff);
-        border: none;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-weight: 600;
-    }
-
-    .btn-primary:hover {
-        background: linear-gradient(45deg, #2c65c4, #00b3eb);
-    }
-
-    .btn-success {
-        background: linear-gradient(45deg, #00b09b, #96c93d);
-        border: none;
-        padding: 6px 12px;
-        border-radius: 6px;
-        font-size: 14px;
-    }
-
-    .btn-success:hover {
-        background: linear-gradient(45deg, #009982, #85b52e);
-    }
-
-    .list-group-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 15px 20px;
-        border-left: 4px solid transparent;
-        transition: all 0.3s;
-    }
-
-    .list-group-item:hover {
-        background-color: #f1f8ff;
-        border-left: 4px solid #3a7bd5;
-    }
-
-    .alert-warning {
-        background: linear-gradient(45deg, #fff3cd, #ffd89b);
-        color: #856404;
-        border: none;
-        border-radius: 8px;
-    }
-</style>
-{% endblock %}
+{% block title %}Verificar Cliente | Assistência Técnica{% endblock %}
 
 {% block content %}
-<div class="content-wrapper">
+<section class="content-header">
     <div class="container-fluid">
-        <div class="row mb-4">
-            <div class="col-12">
-                <h1>Verificar Cliente</h1>
-                <p class="text-muted">Busque por CPF para verificar se o cliente já está cadastrado</p>
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1><i class="fas fa-search mr-2"></i> Verificar Cliente</h1>
+                <small class="text-muted">Busque cliente por CPF, CNPJ ou telefone</small>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'ordens:lista_ordens' %}">Ordens</a></li>
+                    <li class="breadcrumb-item active">Verificar Cliente</li>
+                </ol>
             </div>
         </div>
+    </div>
+</section>
 
+<section class="content">
+    <div class="container-fluid">
         <div class="row">
-            <div class="col-md-8 offset-md-2">
-
-                <!-- Formulário de busca (sem formatação) -->
-                <div class="card card-primary">
+            <!-- Busca Simples -->
+            <div class="col-12 mb-3">
+                <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title mb-0"><i class="fas fa-search me-2"></i>Verificar Cliente</h3>
-                    </div>
-                    <form method="get">
-                        <div class="card-body">
-                            <div class="form-group mb-3">
-                                <label class="form-label">Digite o telefone ou CPF</label>
-                                <input type="text" id="cpf_telefone_input" name="cpf_telefone" class="form-control" required
-                                       value="{{ cpf_telefone|default:'' }}" placeholder="Digite o CPF">
-                            </div>
-                        </div>
-                        <div class="card-footer">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-search me-2"></i> Verificar
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Lista de clientes encontrados -->
-                {% if clientes %}
-                <div class="card mt-4">
-                    <div class="card-header">
-                        <h3 class="card-title mb-0"><i class="fas fa-users me-2"></i>Clientes encontrados</h3>
+                        <h3 class="card-title">
+                            <i class="fas fa-search mr-1"></i> Buscar Cliente
+                        </h3>
                     </div>
                     <div class="card-body">
-                        <ul class="list-group">
-                            {% for cliente in clientes %}
-                            <li class="list-group-item">
-                                <div>
-                                    <strong>{{ cliente.nome }}</strong> - {{ cliente.cpf }} - {{ cliente.telefone }}
+                        <form method="GET" action="{% url 'ordens:verificar_cliente_os' %}" id="buscaForm">
+                            <div class="input-group">
+                                <input type="text"
+                                       name="cpf_telefone"
+                                       class="form-control"
+                                       placeholder="Digite CPF (11 dígitos), CNPJ (14 dígitos) ou telefone..."
+                                       value="{{ cpf_telefone|default:'' }}"
+                                       required
+                                       id="campoBusca">
+                                <div class="input-group-append">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search"></i> Buscar
+                                    </button>
+                                    {% if cpf_telefone %}
+                                    <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-secondary">
+                                        <i class="fas fa-times"></i> Limpar
+                                    </a>
+                                    {% endif %}
                                 </div>
-                                <a href="{% url 'ordens:nova_ordem_cliente' cliente.id %}" class="btn btn-success">
-                                    <i class="fas fa-plus-circle me-1"></i> Criar OS
-                                </a>
-                            </li>
-                            {% endfor %}
-                        </ul>
+                            </div>
 
-                        <div class="mt-4">
-                            <a href="?novo_cliente=1&cpf_telefone={{ cpf_telefone }}" class="btn btn-primary">
-                                <i class="fas fa-user-plus me-2"></i> Criar Novo Cliente
+                            <small class="form-text text-muted mt-2">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Digite apenas números (mínimo {% if config_sistema %}{{ config_sistema.busca_minimo_caracteres }}{% else %}3{% endif %} dígitos)
+                            </small>
+
+                            <!-- Mensagens de erro -->
+                            {% if mensagem_erro %}
+                            <div class="alert alert-danger alert-dismissible fade show mt-2" role="alert">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                {{ mensagem_erro }}
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            {% endif %}
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seção de Resultados OU Cadastro -->
+            <div class="col-12">
+
+                {% if form %}
+
+                <!-- CADASTRO RÁPIDO -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-user-plus mr-1"></i> Cadastrar Novo Cliente
+                            <span class="badge badge-info ml-2">Novo</span>
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                                            <!-- Mensagem condicional - só aparece quando realmente é um novo cliente -->
+                    {% if not form.instance.pk and not form.errors %}
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        <strong>Cliente não encontrado:</strong> Cadastre um novo cliente com os dados abaixo.
+                    </div>
+                    {% endif %}
+
+                        <!-- Exibir erros do formulário -->
+                        {% if form.errors %}
+                        <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            <strong>Erros no formulário:</strong>
+                            <ul class="mb-0 mt-1">
+                                {% for field, errors in form.errors.items %}
+                                    {% for error in errors %}
+                                        <li><strong>{{ field|title }}:</strong> {{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                            </ul>
+                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        {% endif %}
+
+                        <form method="POST" id="clienteForm" action="{% url 'ordens:verificar_cliente_os' %}">
+                            {% csrf_token %}
+
+                            <!-- Campo oculto para manter o termo da busca -->
+                            <input type="hidden" name="cpf_telefone_busca" value="{{ cpf_telefone }}">
+
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label>Nome / Razão Social *</label>
+                                        {{ form.nome }}
+                                        {% if form.nome.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.nome.errors }}
+                                        </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">
+                                            Para pessoa física: nome completo. Para pessoa jurídica: razão social.
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label id="label-documento">CPF / CNPJ *</label>
+                                        {{ form.documento }}
+                                        {% if form.documento.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.documento.errors }}
+                                        </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">
+                                            Digite CPF (11 dígitos) ou CNPJ (14 dígitos). O tipo será detectado automaticamente.
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Telefone</label>
+                                        <div class="input-group">
+                                            <div class="input-group-prepend" style="width: 30%;">
+                                                {{ form.ddd }}
+                                            </div>
+                                            {{ form.telefone_numero }}
+                                        </div>
+                                        {% if form.telefone_numero.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.telefone_numero.errors }}
+                                        </div>
+                                        {% endif %}
+                                        <small id="telefone-display" class="form-text text-success mt-1" style="display: none;">
+                                            <i class="fas fa-check-circle"></i>
+                                            Telefone completo: <strong id="telefone-formatado"></strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                <i class="fab fa-whatsapp text-success"></i>
+                                                WhatsApp: <span id="whatsapp-link" class="text-primary"></span>
+                                            </small>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Email</label>
+                                        {{ form.email }}
+                                        {% if form.email.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.email.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>CEP</label>
+                                        <div class="input-group">
+                                            {{ form.codigo_postal }}
+                                            <div class="input-group-append">
+                                                <button type="button" class="btn btn-outline-secondary" id="btn-buscar-cep">
+                                                    <i class="fas fa-search"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {% if form.codigo_postal.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.codigo_postal.errors }}
+                                        </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">Digite o CEP e pressione Tab ou clique na lupa</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- NOVOS CAMPOS DE ENDEREÇO -->
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="form-group">
+                                        <label>Logradouro *</label>
+                                        {{ form.logradouro }}
+                                        {% if form.logradouro.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.logradouro.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>Número</label>
+                                        {{ form.numero }}
+                                        {% if form.numero.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.numero.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Complemento</label>
+                                        {{ form.complemento }}
+                                        {% if form.complemento.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.complemento.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Bairro *</label>
+                                        {{ form.bairro }}
+                                        {% if form.bairro.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.bairro.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Cidade *</label>
+                                        {{ form.cidade }}
+                                        {% if form.cidade.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.cidade.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Estado *</label>
+                                        {{ form.estado }}
+                                        {% if form.estado.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.estado.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Observações</label>
+                                {{ form.observacoes }}
+                                {% if form.observacoes.errors %}
+                                <div class="text-danger small">
+                                    {{ form.observacoes.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group mt-4">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-save mr-1"></i> Salvar Cliente e Criar OS
+                                </button>
+                                <button type="button" id="btn-limpar-formulario" class="btn btn-warning">
+                                    <i class="fas fa-broom mr-1"></i> Limpar Formulário
+                                </button>
+                                <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-secondary">
+                                    <i class="fas fa-times mr-1"></i> Cancelar
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                {% elif clientes %}
+                <!-- Clientes Encontrados -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-users mr-1"></i> Clientes Encontrados
+                            <span class="badge badge-primary ml-2">{{ clientes|length }}</span>
+                        </h3>
+                    </div>
+
+                    <div class="card-body p-0">
+                        {% if clientes|length > 0 %}
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Nº Cliente</th>
+                                        <th>Nome</th>
+                                        <th>Telefone</th>
+                                        <th>Documento</th>
+                                        <th>Tipo</th>
+                                        <th>Cadastrado em</th>
+                                        <th style="width: 100px" class="text-center">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for cliente in clientes %}
+                                    <tr>
+                                        <td><span class="badge bg-primary">{{ cliente.numero_cliente }}</span></td>
+                                        <td><strong>{{ cliente.nome }}</strong></td>
+                                        <td>
+                                            {% if cliente.telefone %}
+                                                <a href="https://wa.me/55{{ cliente.telefone|cut:' '|cut:'-'|cut:'('|cut:')' }}"
+                                                   target="_blank"
+                                                   class="text-success"
+                                                   title="Abrir WhatsApp">
+                                                    <i class="fab fa-whatsapp mr-1"></i>{{ cliente.telefone }}
+                                                </a>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if cliente.documento %}
+                                                <span class="documento-display" data-documento="{{ cliente.documento }}">
+                                                    {{ cliente.get_documento_formatado|default:cliente.documento }}
+                                                </span>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if cliente.get_tipo_cliente == 'pf' %}
+                                                <span class="badge badge-info">Pessoa Física</span>
+                                            {% elif cliente.get_tipo_cliente == 'pj' %}
+                                                <span class="badge badge-warning">Pessoa Jurídica</span>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ cliente.data_cadastro|date:"d/m/Y" }}</td>
+                                        <td class="text-center">
+                                            <a href="{% url 'ordens:nova_ordem_cliente' cliente.id %}"
+                                               class="btn btn-success btn-sm"
+                                               title="Criar Ordem de Serviço">
+                                                <i class="fas fa-plus-circle mr-1"></i> Criar OS
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <!-- Se a QuerySet existe mas está vazia -->
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-user-times fa-3x text-warning mb-3"></i>
+                            <h4 class="text-muted">Nenhum cliente encontrado com:</h4>
+                            <p class="lead mb-4">
+                                <code>"{{ cpf_telefone }}"</code>
+                            </p>
+                            <p class="text-muted mb-4">Deseja cadastrar um novo cliente?</p>
+
+                            <div class="d-flex justify-content-center gap-2">
+                                <a href="{% url 'ordens:verificar_cliente_os' %}?novo_cliente=true&cpf_telefone={{ cpf_telefone }}"
+                                   class="btn btn-primary">
+                                    <i class="fas fa-user-plus mr-1"></i> Sim, Cadastrar Novo Cliente
+                                </a>
+                                <a href="{% url 'ordens:verificar_cliente_os' %}"
+                                   class="btn btn-outline-secondary">
+                                    <i class="fas fa-redo mr-1"></i> Nova Busca
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if clientes|length > 0 %}
+                    <div class="card-footer text-center">
+                        <a href="{% url 'ordens:verificar_cliente_os' %}?novo_cliente=true&cpf_telefone={{ cpf_telefone }}"
+                           class="btn btn-primary">
+                            <i class="fas fa-user-plus mr-1"></i> Cadastrar Novo Cliente
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% elif cpf_telefone %}
+                <!-- Nenhum Cliente Encontrado (para quando clientes é None ou não existe) -->
+                <div class="card">
+                    <div class="card-header bg-warning">
+                        <h3 class="card-title">
+                            <i class="fas fa-exclamation-triangle mr-1"></i> Nenhum Cliente Encontrado
+                        </h3>
+                    </div>
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-user-times fa-3x text-warning mb-3"></i>
+                        <h4 class="text-muted">Nenhum cliente encontrado com:</h4>
+                        <p class="lead mb-4">
+                            <code>"{{ cpf_telefone }}"</code>
+                        </p>
+                        <p class="text-muted mb-4">Deseja cadastrar um novo cliente?</p>
+
+                        <div class="d-flex justify-content-center gap-2">
+                            <a href="{% url 'ordens:verificar_cliente_os' %}?novo_cliente=true&cpf_telefone={{ cpf_telefone }}"
+                               class="btn btn-primary">
+                                <i class="fas fa-user-plus mr-1"></i> Sim, Cadastrar Novo Cliente
+                            </a>
+                            <a href="{% url 'ordens:verificar_cliente_os' %}"
+                               class="btn btn-outline-secondary">
+                                <i class="fas fa-redo mr-1"></i> Nova Busca
                             </a>
                         </div>
                     </div>
                 </div>
 
-                {% elif cpf_telefone %}
-                <div class="alert alert-warning mt-4 text-center">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Nenhum cliente encontrado.</strong>
-                    {% if not form %}
-                    <a href="?novo_cliente=1&cpf_telefone={{ cpf_telefone }}" class="fw-bold ms-2">Criar novo cliente</a>
-                    {% endif %}
-                </div>
-                {% endif %}
-
-                <!-- Formulário para criar novo cliente (com formatação de CPF) -->
-                {% if form %}
-                <div class="card mt-4">
+                {% else %}
+                <!-- Estado Inicial (Sem Busca) -->
+                <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title mb-0"><i class="fas fa-user-plus me-2"></i>Criar Novo Cliente</h3>
+                        <h3 class="card-title">
+                            <i class="fas fa-search mr-1"></i> Instruções
+                        </h3>
                     </div>
-                    <div class="card-body">
-                        <form method="post">
-                            {% csrf_token %}
-                            {% for field in form %}
-                            <div class="form-group mb-3">
-                                <label class="form-label">{{ field.label }}</label>
-                                {{ field }}
-                                {% if field.errors %}
-                                <div class="text-danger">{{ field.errors }}</div>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save me-2"></i> Salvar Cliente e Criar OS
-                            </button>
-                        </form>
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted">Busque um cliente</h4>
+                        <p class="text-muted">Digite CPF (11 dígitos), CNPJ (14 dígitos) ou telefone na barra acima</p>
                     </div>
                 </div>
                 {% endif %}
@@ -187,22 +469,536 @@
             </div>
         </div>
     </div>
-</div>
-{% endblock %}
+</section>
 
-{% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/cleave.js@1.6.0/dist/cleave.min.js"></script>
+<style>
+/* Estilos para validação visual */
+.is-valid {
+    border-color: #28a745 !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    padding-right: 2.5rem;
+}
+
+.is-invalid {
+    border-color: #dc3545 !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    padding-right: 2.5rem;
+}
+
+/* Grupo de telefone */
+.input-group-prepend {
+    flex: 0 0 30% !important;
+    max-width: 30% !important;
+}
+
+.input-group-prepend .form-control {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-right: 0 !important;
+}
+
+.input-group .form-control:not(:first-child) {
+    border-left: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+}
+
+/* Botão CEP loading */
+#btn-buscar-cep:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+}
+
+/* Remover setinhas do número de telefone */
+#id_telefone::-webkit-inner-spin-button,
+#id_telefone::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+#id_telefone {
+    -moz-appearance: textfield;
+}
+
+/* Melhorar a visibilidade dos placeholders */
+::placeholder {
+    color: #6c757d !important;
+    opacity: 0.7 !important;
+}
+
+/* Estilos para feedback do CEP */
+.cep-invalid-feedback {
+    color: #dc3545;
+    font-size: 0.875em;
+    margin-top: 0.25rem;
+    display: none;
+}
+
+.cep-valid-feedback {
+    color: #28a745;
+    font-size: 0.875em;
+    margin-top: 0.25rem;
+    display: none;
+}
+
+/* Feedback visual para campo CEP */
+#id_codigo_postal.is-invalid {
+    border-color: #dc3545;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+#id_codigo_postal.is-valid {
+    border-color: #28a745;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+/* Botão limpar com hover */
+#btn-limpar-formulario:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+/* Animação para feedback */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.alert {
+    animation: fadeIn 0.3s ease;
+}
+</style>
+
+<!-- SCRIPT COMPLETO COM TODAS AS FUNÇÕES -->
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-    // CPF no formulário de novo cliente (com máscara)
-    const cpfFormInput = document.getElementById('id_cpf');
-    if (cpfFormInput) {
-        new Cleave(cpfFormInput, {
-            numericOnly: true,
-            blocks: [3, 3, 3, 2],
-            delimiters: ['.', '.', '-']
+// ============================================
+// SISTEMA DE CADASTRO DE CLIENTE - COMPLETO
+// ============================================
+
+window._isPageLoading = true;
+
+console.log('🚀 Sistema de cadastro carregado');
+
+// ============================================
+// CONFIGURAÇÕES
+// ============================================
+const CONFIG = {
+    DDD_PADRAO: '11',
+    DEBUG: true
+};
+
+// ============================================
+// UTILITÁRIOS
+// ============================================
+const Utils = {
+    log: function(...args) {
+        if (CONFIG.DEBUG) console.log('📝', ...args);
+    },
+
+    apenasNumeros: function(str) {
+        return str ? str.replace(/\D/g, '') : '';
+    },
+
+    mostrarFeedback: function(mensagem, tipo = 'success') {
+        const feedback = document.createElement('div');
+        feedback.className = `alert alert-${tipo} alert-dismissible fade show`;
+        feedback.style.cssText = `
+            position: fixed; top: 20px; right: 20px; z-index: 9999;
+            min-width: 300px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        `;
+        feedback.innerHTML = `
+            <i class="fas fa-${tipo === 'success' ? 'check' : 'info'}-circle mr-2"></i>
+            ${mensagem}
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+        `;
+        document.body.appendChild(feedback);
+        setTimeout(() => feedback.remove(), 3000);
+    }
+};
+
+// ============================================
+// FORMATADORES
+// ============================================
+const Formatadores = {
+    documento: function(input) {
+        let valor = Utils.apenasNumeros(input.value);
+        const maxDigits = valor.length > 11 ? 14 : 11;
+
+        if (valor.length > maxDigits) valor = valor.substring(0, maxDigits);
+
+        if (maxDigits === 11) { // CPF
+            if (valor.length > 9) {
+                input.value = valor.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+            } else if (valor.length > 6) {
+                input.value = valor.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+            } else if (valor.length > 3) {
+                input.value = valor.replace(/(\d{3})(\d{0,3})/, '$1.$2');
+            }
+        } else { // CNPJ
+            if (valor.length > 12) {
+                input.value = valor.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
+            } else if (valor.length > 8) {
+                input.value = valor.replace(/(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
+            } else if (valor.length > 5) {
+                input.value = valor.replace(/(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
+            } else if (valor.length > 2) {
+                input.value = valor.replace(/(\d{2})(\d{0,3})/, '$1.$2');
+            }
+        }
+        input.dataset.valorLimpo = valor;
+    },
+
+    telefone: function(input) {
+        let valor = Utils.apenasNumeros(input.value);
+        if (valor.length > 9) valor = valor.substring(0, 9);
+
+        if (valor.length > 4) {
+            if (valor.length <= 8) {
+                input.value = valor.replace(/(\d{4})(\d{0,4})/, '$1-$2');
+            } else {
+                input.value = valor.replace(/(\d{5})(\d{0,4})/, '$1-$2');
+            }
+        }
+        input.dataset.valorLimpo = valor;
+    },
+
+    cep: function(input) {
+        let valor = Utils.apenasNumeros(input.value);
+        if (valor.length > 8) valor = valor.substring(0, 8);
+        if (valor.length > 5) {
+            input.value = valor.replace(/(\d{5})(\d{0,3})/, '$1-$2');
+        }
+    }
+};
+
+// ============================================
+// FUNÇÃO CEP
+// ============================================
+async function buscarCEP() {
+    const cepInput = document.getElementById('id_codigo_postal');
+    if (!cepInput) return;
+
+    const cep = Utils.apenasNumeros(cepInput.value);
+    if (cep.length !== 8) {
+        alert('CEP deve ter 8 dígitos!');
+        cepInput.focus();
+        return;
+    }
+
+    const btnCep = document.getElementById('btn-buscar-cep');
+    const originalHtml = btnCep?.innerHTML;
+    if (btnCep) {
+        btnCep.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        btnCep.disabled = true;
+    }
+
+    try {
+        const response = await fetch(`/configuracoes/buscar-cep/?cep=${cep}`);
+        const data = await response.json();
+
+        if (data.erro || data.error) {
+            alert('CEP não encontrado!');
+            return;
+        }
+
+        if (data.logradouro) document.getElementById('id_logradouro').value = data.logradouro;
+        if (data.bairro) document.getElementById('id_bairro').value = data.bairro;
+        if (data.cidade) document.getElementById('id_cidade').value = data.cidade;
+        if (data.complemento) document.getElementById('id_complemento').value = data.complemento;
+        if (data.estado) {
+            const estado = document.getElementById('id_estado');
+            if (estado) estado.value = data.estado.toUpperCase();
+        }
+
+        cepInput.classList.add('is-valid');
+        cepInput.classList.remove('is-invalid');
+
+        setTimeout(() => {
+            document.getElementById('id_numero')?.focus();
+        }, 100);
+
+    } catch (error) {
+        alert('Erro ao buscar CEP');
+        cepInput.classList.add('is-invalid');
+    } finally {
+        if (btnCep) {
+            btnCep.innerHTML = originalHtml;
+            btnCep.disabled = false;
+        }
+    }
+}
+
+// ============================================
+// TELEFONE COMPLETO
+// ============================================
+function atualizarTelefoneCompleto() {
+    const ddd = document.getElementById('id_ddd')?.value || '';
+    const telefone = document.getElementById('id_telefone_numero');
+    if (!telefone) return;
+
+    const numero = telefone.dataset.valorLimpo || Utils.apenasNumeros(telefone.value);
+
+    if (ddd && numero && (numero.length === 8 || numero.length === 9)) {
+        const completo = ddd + numero;
+
+        // Criar campo oculto
+        let hidden = document.getElementById('telefone_completo');
+        if (!hidden) {
+            hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'telefone_completo';
+            hidden.id = 'telefone_completo';
+            telefone.parentNode.appendChild(hidden);
+        }
+        hidden.value = completo;
+
+        // Mostrar display
+        const display = document.getElementById('telefone-display');
+        const formatado = document.getElementById('telefone-formatado');
+        const whatsapp = document.getElementById('whatsapp-link');
+
+        if (display && formatado && whatsapp) {
+            let numFormat = numero;
+            if (numero.length === 8) numFormat = numero.replace(/(\d{4})(\d{4})/, '$1-$2');
+            else numFormat = numero.replace(/(\d{5})(\d{4})/, '$1-$2');
+
+            formatado.textContent = `(${ddd}) ${numFormat}`;
+            whatsapp.innerHTML = `<a href="https://wa.me/55${completo}" target="_blank">wa.me/55${completo}</a>`;
+            display.style.display = 'block';
+        }
+
+        telefone.classList.add('is-valid');
+        telefone.classList.remove('is-invalid');
+    }
+}
+
+// ============================================
+// LIMPEZA COMPLETA
+// ============================================
+// Função para obter o DDD padrão das configurações
+
+// Função principal de limpeza (sem mensagens)
+function executarLimpeza() {
+    const form = document.getElementById('clienteForm');
+    if (!form) return false;
+
+    console.log('🧹 Executando limpeza do formulário...');
+
+    form.reset();
+
+    const campos = [
+        'id_nome', 'id_documento', 'id_telefone_numero', 'id_codigo_postal',
+        'id_email', 'id_logradouro', 'id_numero', 'id_complemento',
+        'id_bairro', 'id_cidade', 'id_observacoes'
+    ];
+
+    campos.forEach(id => {
+        const campo = document.getElementById(id);
+        if (campo) {
+            campo.value = '';
+            campo.classList.remove('is-valid', 'is-invalid');
+            delete campo.dataset.valorLimpo;
+        }
+    });
+
+
+
+    const estado = document.getElementById('id_estado');
+    if (estado) estado.selectedIndex = 0;
+
+    // Limpar campo oculto
+    const hidden = document.getElementById('telefone_completo');
+    if (hidden) hidden.value = '';
+
+    // Esconder display
+    const display = document.getElementById('telefone-display');
+    if (display) display.style.display = 'none';
+
+    // Limpar TODAS as mensagens e validações
+    document.querySelectorAll('.alert').forEach(el => el.remove());
+    document.querySelectorAll('.invalid-feedback, .valid-feedback').forEach(el => el.remove());
+    document.querySelectorAll('.text-danger').forEach(el => el.remove());
+
+    return true;
+}
+
+// Função para limpeza MANUAL (com confirmação) - chamada pelo botão
+function limparFormularioManual() {
+    if (window._isPageLoading) {
+        window._isPageLoading = false;
+        return false;
+    }
+
+    if (!confirm('Tem certeza que deseja limpar todos os campos?')) return false;
+
+    const resultado = executarLimpeza();
+    if (resultado) {
+        Utils.mostrarFeedback('✅ Formulário limpo!');
+        document.getElementById('id_nome')?.focus();
+    }
+    return resultado;
+}
+
+// Função para limpeza SILENCIOSA (sem confirmação) - para uso automático
+function limparFormularioSilencioso() {
+    return executarLimpeza();
+}
+
+// ============================================
+// INICIALIZAÇÃO
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('✅ Inicializando sistema...');
+
+
+    // DETECTAR F5/REFRESH
+    const perfData = window.performance?.getEntriesByType?.('navigation')?.[0];
+    const isReload = perfData && perfData.type === 'reload';
+
+    if (isReload) {
+        console.log('🔄 F5 detectado - limpando tudo');
+        setTimeout(() => {
+            executarLimpeza();
+            window._isPageLoading = false;
+        }, 50);
+    } else {
+        setTimeout(() => {
+            // Verificar se veio de uma busca
+            const veioDaBusca = document.querySelector('input[name="cpf_telefone_busca"]')?.value;
+            const temMensagemErro = document.querySelector('.alert-danger') !== null;
+            const temMensagemSucesso = document.querySelector('.alert-success') !== null;
+
+            // Se NÃO veio da busca, limpar
+            if (!veioDaBusca && !temMensagemErro && !temMensagemSucesso) {
+                console.log('🔄 Limpando formulário no carregamento');
+                window._isAutoClean = true;
+                limparFormularioSilencioso();
+                window._isAutoClean = false;
+            }
+
+            window._isPageLoading = false;
+        }, 200);
+    }
+
+    // ===== DOCUMENTO =====
+    const docInput = document.getElementById('id_documento');
+    if (docInput) {
+        docInput.addEventListener('input', e => Formatadores.documento(e.target));
+        docInput.addEventListener('paste', e => {
+            e.preventDefault();
+            const pasted = (e.clipboardData || window.clipboardData).getData('text');
+            const cleaned = Utils.apenasNumeros(pasted).substring(0, 14);
+            e.target.value = cleaned;
+            Formatadores.documento(e.target);
         });
     }
+
+    // ===== TELEFONE =====
+    const telInput = document.getElementById('id_telefone_numero');
+    const dddSelect = document.getElementById('id_ddd');
+    if (telInput && dddSelect) {
+        telInput.addEventListener('input', e => {
+            Formatadores.telefone(e.target);
+            atualizarTelefoneCompleto();
+        });
+        dddSelect.addEventListener('change', atualizarTelefoneCompleto);
+    }
+
+    // ===== CEP =====
+    const cepInput = document.getElementById('id_codigo_postal');
+    const btnCep = document.getElementById('btn-buscar-cep');
+
+    if (cepInput) {
+        cepInput.addEventListener('input', e => Formatadores.cep(e.target));
+        cepInput.addEventListener('blur', function() {
+            const cepLimpo = Utils.apenasNumeros(this.value);
+            if (cepLimpo.length === 8) {
+                console.log('🔍 Buscando CEP ao sair do campo');
+                buscarCEP();
+            }
+        });
+        cepInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                buscarCEP();
+            }
+        });
+    }
+
+    if (btnCep) {
+        btnCep.addEventListener('click', e => {
+            e.preventDefault();
+            buscarCEP();
+        });
+    }
+
+    // ===== BOTÃO LIMPAR =====
+    const btnLimpar = document.getElementById('btn-limpar-formulario');
+    if (btnLimpar) {
+        btnLimpar.addEventListener('click', e => {
+            e.preventDefault();
+            limparFormularioManual();  // ← MUDANÇA IMPORTANTE: agora chama limparFormularioManual()
+        });
+    }
+
+    // ===== SUBMIT =====
+    const form = document.getElementById('clienteForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const doc = document.getElementById('id_documento');
+            if (doc?.dataset.valorLimpo) doc.value = doc.dataset.valorLimpo;
+
+            const cep = document.getElementById('id_codigo_postal');
+            if (cep) cep.value = Utils.apenasNumeros(cep.value);
+
+            atualizarTelefoneCompleto();
+        });
+    }
+
+    // ===== AUTOCOMPLETE =====
+    ['id_documento', 'id_telefone_numero', 'id_codigo_postal'].forEach(id => {
+        const campo = document.getElementById(id);
+        if (campo) campo.setAttribute('autocomplete', 'off');
+    });
+
+    console.log('✅ Sistema pronto!');
 });
+
+// ============================================
+// FUNÇÕES DE DEBUG
+// ============================================
+window.debugSistema = function() {
+    console.log('\n=== DEBUG SISTEMA ===');
+    console.log('📋 Form:', document.getElementById('clienteForm') ? '✅' : '❌');
+    console.log('🧹 Botão Limpar:', document.getElementById('btn-limpar-formulario') ? '✅' : '❌');
+    console.log('📍 Botão CEP:', document.getElementById('btn-buscar-cep') ? '✅' : '❌');
+    console.log('📞 Telefone:', document.getElementById('id_telefone_numero')?.value || 'vazio');
+    console.log('📮 CEP:', document.getElementById('id_codigo_postal')?.value || 'vazio');
+};
+
+window.testarCEP = function(cep = '01001000') {
+    const input = document.getElementById('id_codigo_postal');
+    if (input) {
+        input.value = cep;
+        buscarCEP();
+    }
+};
+
+console.log('✅ Sistema 100% carregado!');
+console.log('📝 Comandos: debugSistema(), testarCEP()');
 </script>
+
 {% endblock %}

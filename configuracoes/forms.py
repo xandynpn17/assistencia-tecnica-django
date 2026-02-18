@@ -1,7 +1,7 @@
 from django import forms
-from .models import Empresa, Aliquota, User  # usa seu User customizado
-from .models import ConfiguracaoOrdemServico
+from .models import Empresa, Aliquota, User, ConfiguracaoOrdemServico, ConfiguracaoSistema
 from django.contrib.auth.models import Group
+
 
 class EmpresaForm(forms.ModelForm):
     class Meta:
@@ -10,19 +10,21 @@ class EmpresaForm(forms.ModelForm):
         widgets = {
             'nome': forms.TextInput(attrs={'class': 'form-control'}),
             'cnpj': forms.TextInput(attrs={'class': 'form-control'}),
-            'endereco': forms.Textarea(attrs={'class': 'form-control', 'rows':3}),
+            'endereco': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'telefone': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
         }
 
+
 class AliquotaForm(forms.ModelForm):
     class Meta:
         model = Aliquota
-        fields = ["descricao", "aliquota"]  # os nomes que existem no models.py
+        fields = ["descricao", "aliquota"]
         widgets = {
             "descricao": forms.TextInput(attrs={"class": "form-control"}),
             "aliquota": forms.NumberInput(attrs={"class": "form-control"}),
         }
+
 
 class UserForm(forms.ModelForm):
     password = forms.CharField(widget=forms.PasswordInput, required=False, label="Senha")
@@ -41,7 +43,7 @@ class UserForm(forms.ModelForm):
         user = super().save(commit=False)
         password = self.cleaned_data.get('password')
         if password:
-            user.set_password(password)  # 🔐 salva com hash
+            user.set_password(password)
         if commit:
             user.save()
             self.save_m2m()
@@ -58,3 +60,33 @@ class ConfiguracaoOrdemServicoForm(forms.ModelForm):
             "gerar_numero_automatico": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "rodape_relatorio": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
+
+
+# NOVO FORMULÁRIO
+class ConfiguracaoSistemaForm(forms.ModelForm):
+    class Meta:
+        model = ConfiguracaoSistema
+        fields = [
+            'estado_padrao', 'ddd_padrao',
+            'cliente_cpf_obrigatorio', 'cliente_cnpj_obrigatorio',
+            'cliente_telefone_obrigatorio', 'cliente_email_obrigatorio',
+            'cliente_endereco_obrigatorio', 'cliente_cep_obrigatorio',
+            'ordem_equipamento_obrigatorio', 'ordem_marca_obrigatorio',
+            'ordem_modelo_obrigatorio', 'ordem_serial_obrigatorio',
+            'ordem_defeito_obrigatorio', 'ordem_observacoes_obrigatorio',
+            'usar_api_cep', 'api_cep_provedor',
+            'busca_minimo_caracteres'
+        ]
+        widgets = {
+            'estado_padrao': forms.Select(attrs={'class': 'form-control'}),
+            'ddd_padrao': forms.Select(attrs={'class': 'form-control'}),
+            'busca_minimo_caracteres': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 20}),
+            'api_cep_provedor': forms.Select(attrs={'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Adicionar classes aos campos booleanos
+        for field_name in self.fields:
+            if isinstance(self.fields[field_name], forms.BooleanField):
+                self.fields[field_name].widget.attrs.update({'class': 'form-check-input'})
