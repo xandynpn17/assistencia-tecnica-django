@@ -44,59 +44,67 @@ def verificar_cliente_os(request):
     form = None
     mensagem_erro = None
 
-    # Obter configurações do sistema
+    # Obter configuracoes do sistema
     config = ConfiguracaoSistema.get_configuracao()
     busca_minimo = config.busca_minimo_caracteres
 
-    # Limpar apenas números para busca
+    # Limpar apenas numeros para busca
     cpf_digits = re.sub(r'\D', '', cpf_telefone)
+    caracteres_invalidos = re.sub(r'[0-9.\-\/()\s+]', '', cpf_telefone)
 
-    # VALIDAÇÃO: Mínimo de caracteres para busca
+    def _formatar_numero_telefone(numero):
+        if len(numero) == 8:
+            return f"{numero[:4]}-{numero[4:]}"
+        if len(numero) == 9:
+            return f"{numero[:5]}-{numero[5:]}"
+        return numero
+
+    # Validacao: minimo de caracteres para busca
     if cpf_telefone:
-        if len(cpf_digits) < busca_minimo:
-            mensagem_erro = f"Digite pelo menos {busca_minimo} números para buscar."
-        elif not cpf_digits.isdigit():
-            mensagem_erro = "Digite apenas números para busca."
+        if caracteres_invalidos or not cpf_digits:
+            mensagem_erro = "Digite apenas numeros para busca."
+        elif len(cpf_digits) < busca_minimo:
+            mensagem_erro = f"Digite pelo menos {busca_minimo} numeros para buscar."
 
-    # BUSCA: SÓ BUSCA SE NÃO HOUVER MENSAGEM DE ERRO
+    # Busca so se nao houver mensagem de erro
     if cpf_digits and not mensagem_erro:
-        # Busca EXATA primeiro (documento completo ou telefone)
+        # Busca exata primeiro (documento completo ou telefone)
         clientes = Cliente.objects.filter(
             Q(documento=cpf_digits) |
             Q(telefone__contains=cpf_digits)
         ).order_by('nome')
 
-        # Se não encontrou, tenta busca parcial APENAS se tiver pelo menos o mínimo
+        # Se nao encontrou, tenta busca parcial com limite
         if not clientes and len(cpf_digits) >= busca_minimo:
             clientes = Cliente.objects.filter(
                 Q(documento__contains=cpf_digits) |
                 Q(telefone__contains=cpf_digits)
             ).order_by('nome')[:10]
 
-    # Botão "Cadastrar Novo Cliente" ou quando busca não encontra cliente
-    # Botão "Cadastrar Novo Cliente" ou quando busca não encontra cliente
+    # Botao "Cadastrar Novo Cliente" ou quando busca nao encontra cliente
     if novo_cliente or (not clientes and cpf_digits and not mensagem_erro):
         initial_data = {}
+        ddd_choices = {str(dd[0]) for dd in ConfiguracaoSistema.DDD_BRASIL}
+        tamanho = len(cpf_digits)
 
         # Detectar o que foi digitado
-        if len(cpf_digits) == 11 or len(cpf_digits) == 14:  # É CPF ou CNPJ
+        if tamanho == 14:  # CNPJ
             initial_data['documento'] = cpf_digits
 
-        elif len(cpf_digits) == 9:  # Número de 9 dígitos (como 982517380)
-            # É um número sem DDD, usar DDD padrão
-            initial_data['ddd'] = config.ddd_padrao
-            # O número será extraído pelo JavaScript
+        elif tamanho == 11:  # CPF
+            initial_data['documento'] = cpf_digits
 
-        elif len(cpf_digits) in [10, 11]:  # Telefone com DDD
+        elif tamanho == 10:  # Telefone com DDD (fixo)
             ddd = cpf_digits[:2]
-            ddd_choices = [str(dd[0]) for dd in ConfiguracaoSistema.DDD_BRASIL]
+            numero = cpf_digits[2:]
+            initial_data['ddd'] = ddd if ddd in ddd_choices else config.ddd_padrao
+            initial_data['telefone_numero'] = _formatar_numero_telefone(numero)
 
-            if ddd in ddd_choices:
-                initial_data['ddd'] = ddd
-            else:
-                initial_data['ddd'] = config.ddd_padrao
+        elif tamanho == 9:  # Numero sem DDD
+            initial_data['ddd'] = config.ddd_padrao
+            initial_data['telefone_numero'] = _formatar_numero_telefone(cpf_digits)
 
-        # Aplicar configurações padrão
+        # Aplicar configuracoes padrao
         initial_data['estado'] = config.estado_padrao
 
         if not initial_data.get('ddd') and config.ddd_padrao:
@@ -104,7 +112,7 @@ def verificar_cliente_os(request):
 
         form = ClienteForm(initial=initial_data)
 
-    # Se enviou formulário de cadastro (POST)
+    # Se enviou formulario de cadastro (POST)
     if request.method == "POST":
         form = ClienteForm(request.POST)
         if form.is_valid():
@@ -112,8 +120,7 @@ def verificar_cliente_os(request):
             messages.success(request, "Cliente cadastrado com sucesso!")
             return redirect("ordens:nova_ordem_cliente", cliente.id)
         else:
-            # Se houver erro no formulário, mostrar mensagem
-            messages.error(request, "Por favor, corrija os erros no formulário.")
+            messages.error(request, "Por favor, corrija os erros no formulario.")
 
     context = {
         "clientes": clientes,
