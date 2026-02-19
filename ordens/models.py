@@ -45,32 +45,6 @@ class OrdemServico(models.Model):
         ('pronto_contactar', 'Pronto Contactar'),
         ('concluida', 'Concluída'),
     ]
-    STATUS_TRANSITIONS = {
-        "diagnosticar": {
-            "pendente_tecnico", "pendente_marca", "pendente_pecas",
-            "pendente_orcamento", "orcamentado", "em_andamento", "recusado",
-        },
-        "pendente_tecnico": {
-            "diagnosticar", "pendente_marca", "pendente_pecas",
-            "pendente_orcamento", "orcamentado", "em_andamento", "recusado",
-        },
-        "pendente_marca": {
-            "diagnosticar", "pendente_tecnico", "pendente_pecas",
-            "pendente_orcamento", "orcamentado", "em_andamento", "recusado",
-        },
-        "pendente_pecas": {
-            "diagnosticar", "pendente_tecnico", "pendente_marca",
-            "pendente_orcamento", "orcamentado", "em_andamento", "autorizado", "recusado",
-        },
-        "pendente_orcamento": {"orcamentado", "recusado", "diagnosticar"},
-        "orcamentado": {"autorizado", "recusado", "pendente_orcamento", "diagnosticar"},
-        "autorizado": {"em_andamento", "pendente_pecas", "pendente_tecnico", "concluida"},
-        "recusado": {"diagnosticar", "concluida"},
-        "em_andamento": {"pendente_pecas", "pendente_tecnico", "pronto_contactar", "pronto_contactado", "concluida"},
-        "pronto_contactar": {"pronto_contactado", "concluida", "em_andamento"},
-        "pronto_contactado": {"concluida", "em_andamento"},
-        "concluida": {"em_andamento"},
-    }
 
     TIPO_REPARO_CHOICES = [
         ('Garantia', 'Garantia'),
@@ -202,9 +176,9 @@ class OrdemServico(models.Model):
         return {status for status, _ in cls.STATUS_CHOICES}
 
     def pode_transicionar_para(self, novo_status):
-        if novo_status == self.status:
-            return True
-        return novo_status in self.STATUS_TRANSITIONS.get(self.status, set())
+        # Fluxo livre entre status validos da OS.
+        # "criada" existe apenas na LinhaTrabalho, nao como status de OS.
+        return novo_status in self.status_validos()
 
     def transicionar_status(self, novo_status, usuario=None, motivo=""):
         if novo_status not in self.status_validos():

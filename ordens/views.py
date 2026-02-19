@@ -273,15 +273,21 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
         cliente_id = self.kwargs.get("cliente_id")
         form.instance.cliente_id = cliente_id
         form.instance.tecnico_responsavel = self.request.user
+        form.instance.status = "diagnosticar"
 
         response = super().form_valid(form)
 
-        # 🔹 Registrar automaticamente quem criou a OS
         LinhaTrabalho.objects.create(
             ordem=self.object,
             descricao="Ordem criada",
+            status="criada",
+            usuario=self.request.user,
+        )
+        LinhaTrabalho.objects.create(
+            ordem=self.object,
+            descricao="OS enviada para diagnostico inicial",
             status="diagnosticar",
-            usuario=self.request.user
+            usuario=self.request.user,
         )
         return response
 
@@ -890,3 +896,4 @@ def imprimir_relatorio_tecnico(request, pk):
 
     doc.build(story)
     return response
+

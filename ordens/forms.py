@@ -26,6 +26,15 @@ class OrdemServicoForm(forms.ModelForm):
         }
 
 class LinhaTrabalhoForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # "criada" e um status tecnico, registrado automaticamente na abertura da OS.
+        self.fields["status"].choices = [
+            (value, label)
+            for value, label in self.fields["status"].choices
+            if value != "criada"
+        ]
+
     class Meta:
         model = LinhaTrabalho
         fields = ["status", "descricao"]

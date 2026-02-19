@@ -4,6 +4,7 @@ from django.urls import reverse
 
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema
+from ordens.forms import LinhaTrabalhoForm
 from ordens.models import OrdemServico, LinhaTrabalho
 
 
@@ -202,9 +203,9 @@ class FluxoStatusOrdemServicoTests(TestCase):
         self.assertEqual(self.ordem.status, "pendente_pecas")
         self.assertEqual(LinhaTrabalho.objects.filter(ordem=self.ordem, status="pendente_pecas").count(), 1)
 
-    def test_transicao_invalida_dispara_erro(self):
+    def test_status_destino_invalido_dispara_erro(self):
         with self.assertRaises(ValueError):
-            self.ordem.transicionar_status("concluida", usuario=self.user, motivo="Tentativa direta")
+            self.ordem.transicionar_status("criada", usuario=self.user, motivo="Status nao permitido para OS")
 
     def test_conclusao_exige_relatorio_e_tipo_reparacao(self):
         self.ordem.status = "em_andamento"
@@ -226,3 +227,54 @@ class FluxoStatusOrdemServicoTests(TestCase):
         self.ordem.refresh_from_db()
         self.assertEqual(self.ordem.status, "em_andamento")
         self.assertFalse(self.ordem.fechada)
+
+
+class CriacaoOrdemServicoHistoricoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_criacao_os",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Criacao OS",
+            documento="39053344705",
+            telefone="11912345678",
+            estado="SP",
+        )
+
+    def test_criacao_os_registra_linha_criada_e_diagnosticar(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        response = self.client.post(
+            url,
+            {
+                "tipo_equipamento": "celular",
+                "marca_equipamento": "Marca A",
+                "modelo_equipamento": "Modelo B",
+                "numero_serie_equipamento": "SN-123",
+                "defeito": "Nao liga",
+                "acessorios": "Cabo",
+                "tipo_reparo": "Fora de Garantia",
+                "status": "concluida",
+                "peritagem": "Sem danos visiveis",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        ordem = OrdemServico.objects.latest("id")
+        self.assertEqual(ordem.status, "diagnosticar")
+
+        linhas = list(LinhaTrabalho.objects.filter(ordem=ordem).order_by("id"))
+        self.assertEqual(len(linhas), 2)
+        self.assertEqual(linhas[0].status, "criada")
+        self.assertEqual(linhas[0].descricao, "Ordem criada")
+        self.assertEqual(linhas[1].status, "diagnosticar")
+
+
+class LinhaTrabalhoFormTests(TestCase):
+    def test_status_criada_nao_aparece_para_selecao_manual(self):
+        form = LinhaTrabalhoForm()
+        valores = [valor for valor, _ in form.fields["status"].choices if valor]
+        self.assertNotIn("criada", valores)
