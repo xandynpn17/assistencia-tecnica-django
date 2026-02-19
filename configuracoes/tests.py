@@ -41,3 +41,24 @@ class PermissoesConfiguracoesTests(TestCase):
         self.client.force_login(self.admin)
         response = self.client.get(reverse("configuracoes:lista_usuarios"))
         self.assertEqual(response.status_code, 200)
+
+    def test_gerente_pode_abrir_cadastro_usuario(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:adicionar_usuario"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_gerente_nao_pode_criar_admin(self):
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("configuracoes:adicionar_usuario"),
+            {
+                "username": "novo_admin_por_gerente",
+                "email": "gerente@teste.com",
+                "password": "senha12345",
+                "is_active": "on",
+                "is_staff": "on",
+                "tipo_usuario": "adm",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Gerente nao pode criar usuario Administrador.")

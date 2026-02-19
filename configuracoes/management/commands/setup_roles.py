@@ -7,7 +7,7 @@ class Command(BaseCommand):
     help = "Cria grupos padrão e permissões básicas"
 
     def handle(self, *args, **options):
-        grupos = ["Administrador", "Gerente", "Atendente", "Cliente"]
+        grupos = ["Administrador", "Gerente", "Atendente"]
 
         for nome in grupos:
             grupo, created = Group.objects.get_or_create(name=nome)

@@ -96,16 +96,30 @@ def lista_usuarios(request):
     return render(request, 'configuracoes/usuarios_list.html', {'usuarios': usuarios})
 
 
-@role_required(ADM_ROLES)
+@role_required(MANAGER_ROLES)
 def adicionar_usuario(request):
     if request.method == 'POST':
         form = UserForm(request.POST)
         if form.is_valid():
-            user = form.save()
+            novo_tipo = form.cleaned_data.get("tipo_usuario")
+            if request.user.tipo_usuario == "gerente" and novo_tipo == "adm":
+                form.add_error("tipo_usuario", "Gerente nao pode criar usuario Administrador.")
+                return render(request, 'configuracoes/usuario_form.html', {'form': form})
+
+            form.save()
             messages.success(request, "Usuário adicionado com sucesso!")
+            if request.user.tipo_usuario == "gerente":
+                return redirect('configuracoes:painel')
             return redirect('configuracoes:lista_usuarios')
     else:
         form = UserForm()
+
+    if request.user.tipo_usuario == "gerente":
+        form.fields["tipo_usuario"].choices = [
+            choice for choice in form.fields["tipo_usuario"].choices if choice[0] != "adm"
+        ]
+        form.fields["is_staff"].initial = True
+
     return render(request, 'configuracoes/usuario_form.html', {'form': form})
 
 
@@ -252,3 +266,4 @@ def buscar_cep(request):
             return JsonResponse({'erro': f'Erro interno: {str(e)}'}, status=500)
 
     return JsonResponse({'erro': 'Método não permitido'}, status=405)
+

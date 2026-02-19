@@ -26,7 +26,6 @@ class User(AbstractUser):
         ('adm', 'Administrador'),
         ('gerente', 'Gerente'),
         ('atendente', 'Atendente'),
-        ('cliente', 'Cliente'),
     ]
 
     tipo_usuario = models.CharField(max_length=20, choices=TIPO_CHOICES, default='atendente')

@@ -116,6 +116,36 @@ def verificar_cliente_os(request):
     if request.method == "POST":
         form = ClienteForm(request.POST)
         if form.is_valid():
+            documento = form.cleaned_data.get("documento")
+            telefone = re.sub(r"\D", "", str(getattr(form.instance, "telefone", "") or ""))
+            email = (form.cleaned_data.get("email") or "").strip().lower()
+
+            clientes_duplicados = Cliente.objects.none()
+            if documento:
+                clientes_duplicados = clientes_duplicados | Cliente.objects.filter(documento=documento)
+            if telefone:
+                clientes_duplicados = clientes_duplicados | Cliente.objects.filter(telefone=telefone)
+            if email:
+                clientes_duplicados = clientes_duplicados | Cliente.objects.filter(email__iexact=email)
+            clientes_duplicados = clientes_duplicados.distinct().order_by("nome")
+
+            if clientes_duplicados.exists():
+                form.add_error(
+                    None,
+                    "Encontramos cliente(s) semelhante(s). Verifique antes de cadastrar duplicado."
+                )
+                context = {
+                    "clientes": clientes,
+                    "cpf_telefone": cpf_telefone,
+                    "form": form,
+                    "mensagem_erro": mensagem_erro,
+                    "config": config,
+                    "menu_app": "ordens",
+                    "menu_sub": "verificar_cliente_os",
+                    "clientes_duplicados": clientes_duplicados,
+                }
+                return render(request, "ordens/verificar_cliente_os.html", context)
+
             cliente = form.save()
             messages.success(request, "Cliente cadastrado com sucesso!")
             return redirect("ordens:nova_ordem_cliente", cliente.id)
@@ -130,6 +160,7 @@ def verificar_cliente_os(request):
         "config": config,
         "menu_app": "ordens",
         "menu_sub": "verificar_cliente_os",
+        "clientes_duplicados": Cliente.objects.none(),
     }
     return render(request, "ordens/verificar_cliente_os.html", context)
 
