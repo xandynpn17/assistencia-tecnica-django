@@ -23,6 +23,18 @@ class VerificarClienteOSViewTests(TestCase):
 
         self.url = reverse("ordens:verificar_cliente_os")
 
+    def test_usuario_tipo_cliente_sem_acesso(self):
+        user_model = get_user_model()
+        usuario_cliente = user_model.objects.create_user(
+            username="cliente_final",
+            password="senha-forte-123",
+            tipo_usuario="cliente",
+        )
+        self.client.force_login(usuario_cliente)
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 403)
+
     def test_busca_com_caracteres_invalidos_mostra_erro(self):
         response = self.client.get(self.url, {"cpf_telefone": "abc###"})
 

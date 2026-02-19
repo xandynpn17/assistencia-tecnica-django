@@ -1,6 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout, get_user_model
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .forms import (
     EmpresaForm, AliquotaForm, UserForm,
@@ -11,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 import requests
 import json
 from django.http import JsonResponse
+from .permissions import role_required, ADM_ROLES, MANAGER_ROLES, STAFF_ROLES
 
 User = get_user_model()
 
@@ -19,7 +19,7 @@ User = get_user_model()
 # Painel de Configurações
 # ---------------------------
 
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def painel(request):
     return render(request, 'configuracoes/painel.html')
 
@@ -27,7 +27,7 @@ def painel(request):
 # ---------------------------
 # Empresa / dados da empresa
 # ---------------------------
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def empresa_edit(request):
     empresa = Empresa.objects.first()
     if request.method == 'POST':
@@ -44,13 +44,13 @@ def empresa_edit(request):
 # ---------------------------
 # Alíquotas
 # ---------------------------
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def lista_aliquotas(request):
     aliquotas = Aliquota.objects.all()
     return render(request, 'configuracoes/aliquotas_list.html', {'aliquotas': aliquotas})
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def adicionar_aliquota(request):
     if request.method == 'POST':
         form = AliquotaForm(request.POST)
@@ -63,7 +63,7 @@ def adicionar_aliquota(request):
     return render(request, 'configuracoes/aliquota_form.html', {'form': form})
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def editar_aliquota(request, aliquota_id):
     aliquota = get_object_or_404(Aliquota, id=aliquota_id)
     if request.method == 'POST':
@@ -77,7 +77,7 @@ def editar_aliquota(request, aliquota_id):
     return render(request, 'configuracoes/aliquota_form.html', {'form': form})
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def excluir_aliquota(request, aliquota_id):
     aliquota = get_object_or_404(Aliquota, id=aliquota_id)
     if request.method == 'POST':
@@ -90,13 +90,13 @@ def excluir_aliquota(request, aliquota_id):
 # ---------------------------
 # Usuários
 # ---------------------------
-@login_required(login_url='configuracoes:login')
+@role_required(ADM_ROLES)
 def lista_usuarios(request):
     usuarios = User.objects.all()
     return render(request, 'configuracoes/usuarios_list.html', {'usuarios': usuarios})
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(ADM_ROLES)
 def adicionar_usuario(request):
     if request.method == 'POST':
         form = UserForm(request.POST)
@@ -109,7 +109,7 @@ def adicionar_usuario(request):
     return render(request, 'configuracoes/usuario_form.html', {'form': form})
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(ADM_ROLES)
 def editar_usuario(request, usuario_id):
     user = get_object_or_404(User, id=usuario_id)
     if request.method == 'POST':
@@ -123,7 +123,7 @@ def editar_usuario(request, usuario_id):
     return render(request, 'configuracoes/usuario_form.html', {'form': form})
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(ADM_ROLES)
 def excluir_usuario(request, usuario_id):
     user = get_object_or_404(User, id=usuario_id)
     if request.method == 'POST':
@@ -136,19 +136,19 @@ def excluir_usuario(request, usuario_id):
 # ---------------------------
 # Backup / Restore
 # ---------------------------
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def backup_banco(request):
     messages.info(request, "Backup do banco ainda não implementado.")
     return redirect('configuracoes:painel')
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def restore_banco(request):
     messages.info(request, "Restore do banco ainda não implementado.")
     return redirect('configuracoes:painel')
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def configuracao_os_edit(request):
     config = ConfiguracaoOrdemServico.objects.first()
     if request.method == 'POST':
@@ -163,7 +163,7 @@ def configuracao_os_edit(request):
 
 
 # NOVA VIEW: Configurações do Sistema
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def configuracao_sistema_edit(request):
     config = ConfiguracaoSistema.get_configuracao()
     if request.method == 'POST':
@@ -185,6 +185,7 @@ def configuracao_sistema_edit(request):
 #---------------------------
 #Busca cep
 #---------------------------
+@role_required(STAFF_ROLES)
 @csrf_exempt
 def buscar_cep(request):
     if request.method == 'GET':

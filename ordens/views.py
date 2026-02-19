@@ -3,7 +3,6 @@ from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import get_user_model
 User = get_user_model()
-from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView, DetailView
@@ -31,12 +30,13 @@ import os
 from datetime import datetime
 import json
 from configuracoes.models import ConfiguracaoSistema
+from configuracoes.permissions import role_required, STAFF_ROLES, RoleRequiredMixin
 
 
 # ===========================
 # Verificação de Cliente - CORRIGIDA
 # ===========================
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 def verificar_cliente_os(request):
     clientes = []
     cpf_telefone = request.GET.get("cpf_telefone", "").strip()
@@ -136,7 +136,7 @@ def verificar_cliente_os(request):
 # ===========================
 # Selecionar Cliente
 # ===========================
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 def selecionar_cliente_os(request):
     clientes = Cliente.objects.all()
     if request.method == "POST":
@@ -155,7 +155,7 @@ def selecionar_cliente_os(request):
 # ===========================
 # Lista de Ordens
 # ===========================
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 def lista_ordens(request):
     status = request.GET.get("status")
     ordens = OrdemServico.objects.all()
@@ -173,7 +173,7 @@ def lista_ordens(request):
 # ===========================
 # Fecho da Ordem
 # ===========================
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 def toggle_fechamento_os(request, pk):
     ordem = get_object_or_404(OrdemServico, id=pk)
     try:
@@ -197,7 +197,8 @@ def toggle_fechamento_os(request, pk):
 # ===========================
 # Criar Ordem de Serviço
 # ===========================
-class OrdemServicoCreateView(CreateView):
+class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
+    allowed_roles = STAFF_ROLES
     model = OrdemServico
     form_class = OrdemServicoForm
     template_name = "ordens/ordem_servico_form.html"
@@ -234,7 +235,8 @@ class OrdemServicoCreateView(CreateView):
 # ===========================
 # Listar Ordens
 # ===========================
-class OrdemServicoListView(ListView):
+class OrdemServicoListView(RoleRequiredMixin, ListView):
+    allowed_roles = STAFF_ROLES
     model = OrdemServico
     template_name = "ordens/ordem_servico_list.html"
     context_object_name = "ordens"
@@ -256,7 +258,8 @@ class OrdemServicoListView(ListView):
 # ===========================
 # Atualizar Ordem
 # ===========================
-class OrdemServicoUpdateView(UpdateView):
+class OrdemServicoUpdateView(RoleRequiredMixin, UpdateView):
+    allowed_roles = STAFF_ROLES
     model = OrdemServico
     form_class = OrdemServicoForm
     template_name = "ordens/ordem_servico_form.html"
@@ -272,7 +275,8 @@ class OrdemServicoUpdateView(UpdateView):
 # ===========================
 # Detalhes da Ordem
 # ===========================
-class DetalhesOrdemView(DetailView):
+class DetalhesOrdemView(RoleRequiredMixin, DetailView):
+    allowed_roles = STAFF_ROLES
     model = OrdemServico
     template_name = "ordens/ordem_servico_detalhes.html"
     context_object_name = "ordem"
@@ -390,7 +394,7 @@ class DetalhesOrdemView(DetailView):
 #============================
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 def migrar_orcamento(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
     orcamento = getattr(ordem, "orcamento", None)
@@ -426,6 +430,7 @@ def migrar_orcamento(request, pk):
     return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
 
+@role_required(STAFF_ROLES)
 def buscar_ordens(request):
     query = request.GET.get("q", "").strip()
     resultados = []
@@ -475,7 +480,7 @@ def buscar_ordens(request):
 # AJAX - Atualizar Local e Adicionar Linha
 # ===========================
 
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 @csrf_exempt
 def atualizar_local(request, os_id):
     """Atualiza o campo Local de Armazenamento da OS via AJAX"""
@@ -492,7 +497,7 @@ def atualizar_local(request, os_id):
     return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 def adicionar_linha(request, os_id):
     """Adiciona uma nova linha de trabalho via AJAX"""
     if request.method == "POST":
@@ -519,7 +524,7 @@ def adicionar_linha(request, os_id):
             return JsonResponse({"success": False, "message": "OS não encontrada."}, status=404)
     return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
 
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 @csrf_exempt
 def atualizar_observacoes(request, os_id):
     """Atualiza o campo Observações internas via AJAX"""
@@ -535,7 +540,7 @@ def atualizar_observacoes(request, os_id):
             return JsonResponse({"success": False, "message": "OS não encontrada."}, status=404)
     return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
 
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 @csrf_exempt
 def atualizar_tecnico(request, os_id):
     """Atualiza o técnico responsável pela OS via AJAX"""
@@ -573,7 +578,7 @@ def atualizar_tecnico(request, os_id):
 # ===========================
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 
 def imprimir_ordem_servico(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
@@ -708,6 +713,7 @@ def imprimir_ordem_servico(request, pk):
 #RT
 
 
+@role_required(STAFF_ROLES)
 def imprimir_relatorio_tecnico(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
 

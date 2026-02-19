@@ -1,15 +1,15 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import JsonResponse
 from ordens.models import OrdemServico
+from configuracoes.permissions import role_required, STAFF_ROLES, MANAGER_ROLES
 
 from .models import Cliente
 from .forms import ClienteForm
 from orcamentos.models import Orcamento
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 def lista_clientes(request):
     """Tela principal - apenas busca, não lista todos"""
     query = request.GET.get('query', '')
@@ -34,7 +34,7 @@ def lista_clientes(request):
     })
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 def buscar_cliente(request):
     """Busca cliente via AJAX para busca em tempo real"""
     query = request.GET.get("q", "").strip()
@@ -72,7 +72,7 @@ def buscar_cliente(request):
     return JsonResponse({"erro": "Requisição inválida"}, status=400)
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 def detalhes_cliente(request, pk):
     cliente = get_object_or_404(Cliente, pk=pk)
 
@@ -112,7 +112,7 @@ def detalhes_cliente(request, pk):
     })
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(STAFF_ROLES)
 def editar_cliente(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
 
@@ -130,7 +130,7 @@ def editar_cliente(request, cliente_id):
     })
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(MANAGER_ROLES)
 def excluir_cliente(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
     ordens = OrdemServico.objects.filter(cliente=cliente).count()
