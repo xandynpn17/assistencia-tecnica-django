@@ -141,6 +141,17 @@
 
                             <!-- Campo oculto para manter o termo da busca -->
                             <input type="hidden" name="cpf_telefone_busca" value="{{ cpf_telefone }}">
+                            {% if clientes_duplicados %}
+                            <div class="alert alert-secondary">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" value="1" id="forcar_duplicado" name="forcar_duplicado">
+                                    <label class="form-check-label" for="forcar_duplicado">
+                                        Forcar cadastro mesmo com duplicidade
+                                    </label>
+                                </div>
+                                <textarea class="form-control" rows="2" name="justificativa_duplicado" placeholder="Justificativa obrigatoria para auditoria"></textarea>
+                            </div>
+                            {% endif %}
 
                             <div class="row">
                                 <div class="col-md-12">

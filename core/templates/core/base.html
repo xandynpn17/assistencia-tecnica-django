@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}AssistÃƒÂªncia{% endblock %}</title>
+  <title>{% block title %}Assistencia{% endblock %}</title>
 
   <!-- Fonts & Icons -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
@@ -89,7 +89,7 @@
         </div>
       </li>
 
-      <!-- BotÃƒÂ£o Sair -->
+      <!-- Botao Sair -->
       <li class="nav-item ml-3">
         <a class="nav-link text-dark" href="{% url 'core:logout' %}">
           <i class="fas fa-sign-out-alt"></i> Sair
@@ -115,7 +115,7 @@
              class="brand-image-lg"
              style="max-height: 100px; width: auto;">
         {% else %}
-        <span class="brand-text font-weight-light">AssistÃƒÂªncia</span>
+        <span class="brand-text font-weight-light">Assistencia</span>
         {% endif %}
       </a>
 
@@ -142,12 +142,12 @@
               </a>
             </li>
 
-            <!-- Ordens de ServiÃƒÂ§o -->
+            <!-- Ordens de Servico -->
             <li class="nav-item has-treeview {% if menu_app == 'ordens' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'ordens' %}active{% endif %}">
                 <i class="nav-icon fas fa-tools"></i>
                 <p>
-                  Ordens de ServiÃƒÂ§o
+                  Ordens de Servico
                   <i class="right fas fa-angle-left"></i>
                 </p>
               </a>
@@ -238,7 +238,7 @@
                   <a href="{% url 'caixa:relatorios' %}"
                      class="nav-link {% if menu_sub == 'relatorios' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>RelatÃƒÂ³rios</p>
+                    <p>Relatorios</p>
                   </a>
                 </li>
                 <li class="nav-item">
@@ -252,18 +252,18 @@
                   <a href="{% url 'caixa:registrar_saida' %}"
                      class="nav-link {% if menu_sub == 'registrar_saida' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Registrar SaÃƒÂ­da</p>
+                    <p>Registrar Saida</p>
                   </a>
                 </li>
               </ul>
             </li>
-            <!-- ConfiguraÃ§Ãµes -->
-            {% if user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+            <!-- Configuracoes -->
+            {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
             <li class="nav-item has-treeview {% if menu_app == 'configuracoes' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'configuracoes' %}active{% endif %}">
                 <i class="nav-icon fas fa-cogs"></i>
                 <p>
-                  ConfiguraÃ§Ãµes
+                  Configuracoes
                   <i class="right fas fa-angle-left"></i>
                 </p>
               </a>
@@ -286,15 +286,15 @@
                   <a href="{% url 'configuracoes:configuracao_os' %}"
                      class="nav-link {% if menu_sub == 'configuracao_os' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Ordem de ServiÃ§o</p>
+                    <p>Ordem de Servico</p>
                   </a>
                 </li>
-                {% if user.tipo_usuario == 'adm' %}
+                {% if user.is_superuser or user.tipo_usuario == 'adm' %}
                 <li class="nav-item">
                   <a href="{% url 'configuracoes:lista_usuarios' %}"
                      class="nav-link {% if menu_sub == 'usuarios' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>UsuÃ¡rios</p>
+                    <p>Usuarios</p>
                   </a>
                 </li>
                 {% else %}
@@ -302,7 +302,7 @@
                   <a href="{% url 'configuracoes:adicionar_usuario' %}"
                      class="nav-link {% if menu_sub == 'usuarios' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Novo UsuÃ¡rio</p>
+                    <p>Novo Usuario</p>
                   </a>
                 </li>
                 {% endif %}
@@ -337,7 +337,7 @@
     <footer class="main-footer bg-light">
       <div class="container-fluid d-flex justify-content-between">
         <span class="text-gray-dark">&copy; 2025 <a href="#" class="text-gray-dark">Alexandre Bentivoglio</a>. Todos os direitos reservados.</span>
-        <span class="text-gray-dark"><b>VersÃƒÂ£o</b> 1.0.0</span>
+        <span class="text-gray-dark"><b>Versao</b> 1.0.0</span>
       </div>
     </footer>
 </div> <!-- fecha wrapper -->

@@ -45,6 +45,32 @@ class OrdemServico(models.Model):
         ('pronto_contactar', 'Pronto Contactar'),
         ('concluida', 'Concluída'),
     ]
+    STATUS_TRANSITIONS = {
+        "diagnosticar": {
+            "pendente_tecnico", "pendente_marca", "pendente_pecas",
+            "pendente_orcamento", "orcamentado", "em_andamento", "recusado",
+        },
+        "pendente_tecnico": {
+            "diagnosticar", "pendente_marca", "pendente_pecas",
+            "pendente_orcamento", "orcamentado", "em_andamento", "recusado",
+        },
+        "pendente_marca": {
+            "diagnosticar", "pendente_tecnico", "pendente_pecas",
+            "pendente_orcamento", "orcamentado", "em_andamento", "recusado",
+        },
+        "pendente_pecas": {
+            "diagnosticar", "pendente_tecnico", "pendente_marca",
+            "pendente_orcamento", "orcamentado", "em_andamento", "autorizado", "recusado",
+        },
+        "pendente_orcamento": {"orcamentado", "recusado", "diagnosticar"},
+        "orcamentado": {"autorizado", "recusado", "pendente_orcamento", "diagnosticar"},
+        "autorizado": {"em_andamento", "pendente_pecas", "pendente_tecnico", "concluida"},
+        "recusado": {"diagnosticar", "concluida"},
+        "em_andamento": {"pendente_pecas", "pendente_tecnico", "pronto_contactar", "pronto_contactado", "concluida"},
+        "pronto_contactar": {"pronto_contactado", "concluida", "em_andamento"},
+        "pronto_contactado": {"concluida", "em_andamento"},
+        "concluida": {"em_andamento"},
+    }
 
     TIPO_REPARO_CHOICES = [
         ('Garantia', 'Garantia'),
@@ -170,6 +196,52 @@ class OrdemServico(models.Model):
             self.fechada = False
 
         self.save()
+
+    @classmethod
+    def status_validos(cls):
+        return {status for status, _ in cls.STATUS_CHOICES}
+
+    def pode_transicionar_para(self, novo_status):
+        if novo_status == self.status:
+            return True
+        return novo_status in self.STATUS_TRANSITIONS.get(self.status, set())
+
+    def transicionar_status(self, novo_status, usuario=None, motivo=""):
+        if novo_status not in self.status_validos():
+            raise ValueError("Status de destino invalido.")
+
+        if not self.pode_transicionar_para(novo_status):
+            raise ValueError(
+                f"Transicao de status invalida: {self.status} -> {novo_status}."
+            )
+
+        status_anterior = self.status
+        if status_anterior == novo_status:
+            return
+
+        if novo_status == "concluida":
+            if not self.relatorio_tecnico or not self.tipo_reparacao:
+                raise ValueError(
+                    "Nao e possivel concluir sem relatorio tecnico e tipo de reparacao."
+                )
+            self.fechada = True
+            self.data_conclusao = timezone.now()
+        elif status_anterior == "concluida":
+            self.fechada = False
+            self.data_conclusao = None
+
+        self.status = novo_status
+        self.save(update_fields=["status", "fechada", "data_conclusao"])
+
+        detalhe = f" Status alterado de {status_anterior} para {novo_status}."
+        if motivo:
+            detalhe += f" Motivo: {motivo}"
+        LinhaTrabalho.objects.create(
+            ordem=self,
+            status=novo_status,
+            descricao=detalhe.strip(),
+            usuario=usuario,
+        )
 
 # ===========================
 # LINHA DE TRABALHO

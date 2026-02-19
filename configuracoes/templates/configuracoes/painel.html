@@ -1,17 +1,15 @@
 {% extends "core/base.html" %}
-{% block title %}Painel de ConfiguraÃ§Ãµes{% endblock %}
+{% block title %}Painel de Configuracoes{% endblock %}
 
 {% block content %}
 <div class="row">
-  <!-- SeÃ§Ã£o: ConfiguraÃ§Ãµes Principais -->
   <div class="col-12 mb-4">
     <div class="card">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="fas fa-cogs mr-2"></i> ConfiguraÃ§Ãµes Principais</h5>
+        <h5 class="mb-0"><i class="fas fa-cogs mr-2"></i> Configuracoes Principais</h5>
       </div>
       <div class="card-body">
         <div class="row">
-          <!-- Dados da Empresa -->
           <div class="col-md-4 mb-3">
             <div class="card card-modern h-100 border">
               <div class="card-modern-header bg-light">
@@ -27,15 +25,14 @@
             </div>
           </div>
 
-          <!-- ConfiguraÃ§Ã£o OS -->
           <div class="col-md-4 mb-3">
             <div class="card card-modern h-100 border">
               <div class="card-modern-header bg-light">
-                <i class="fas fa-tools text-primary"></i> Ordem de ServiÃ§o
+                <i class="fas fa-tools text-primary"></i> Ordem de Servico
               </div>
               <div class="card-modern-body text-center py-4">
                 <i class="fas fa-file-invoice fa-3x text-muted mb-3"></i>
-                <p class="mb-3">Prefixo, numeraÃ§Ã£o, rodapÃ© de relatÃ³rios.</p>
+                <p class="mb-3">Prefixo, numeracao e rodape de relatorios.</p>
                 <a href="{% url 'configuracoes:configuracao_os' %}" class="btn btn-primary">
                   <i class="fas fa-cog mr-1"></i> Configurar
                 </a>
@@ -43,7 +40,6 @@
             </div>
           </div>
 
-          <!-- ConfiguraÃ§Ã£o Sistema -->
           <div class="col-md-4 mb-3">
             <div class="card card-modern h-100 border">
               <div class="card-modern-header bg-light">
@@ -51,7 +47,7 @@
               </div>
               <div class="card-modern-body text-center py-4">
                 <i class="fas fa-cogs fa-3x text-muted mb-3"></i>
-                <p class="mb-3">Estado/DDD padrÃ£o, campos obrigatÃ³rios, busca, CEP.</p>
+                <p class="mb-3">Estado/DDD padrao, campos obrigatorios, busca e CEP.</p>
                 <a href="{% url 'configuracoes:configuracao_sistema' %}" class="btn btn-primary">
                   <i class="fas fa-sliders-h mr-1"></i> Configurar
                 </a>
@@ -63,7 +59,6 @@
     </div>
   </div>
 
-  <!-- SeÃ§Ã£o: Gerenciamento -->
   <div class="col-12 mb-4">
     <div class="card">
       <div class="card-header bg-secondary text-white">
@@ -71,15 +66,14 @@
       </div>
       <div class="card-body">
         <div class="row">
-          <!-- AlÃ­quotas -->
           <div class="col-md-4 mb-3">
             <div class="card card-modern h-100 border">
               <div class="card-modern-header bg-light">
-                <i class="fas fa-percentage text-secondary"></i> AlÃ­quotas
+                <i class="fas fa-percentage text-secondary"></i> Aliquotas
               </div>
               <div class="card-modern-body text-center py-4">
                 <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
-                <p class="mb-3">Gerencie as alÃ­quotas de impostos.</p>
+                <p class="mb-3">Gerencie as aliquotas de impostos.</p>
                 <a href="{% url 'configuracoes:lista_aliquotas' %}" class="btn btn-outline-secondary">
                   <i class="fas fa-list mr-1"></i> Gerenciar
                 </a>
@@ -87,30 +81,28 @@
             </div>
           </div>
 
-          <!-- UsuÃ¡rios -->
           <div class="col-md-4 mb-3">
             <div class="card card-modern h-100 border">
               <div class="card-modern-header bg-light">
-                <i class="fas fa-users text-secondary"></i> Usuários
+                <i class="fas fa-users text-secondary"></i> Usuarios
               </div>
               <div class="card-modern-body text-center py-4">
                 <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
-                {% if user.tipo_usuario == 'adm' %}
-                  <p class="mb-3">Gerencie usuários e permissões.</p>
+                {% if user.is_superuser or user.tipo_usuario == 'adm' %}
+                  <p class="mb-3">Gerencie usuarios e permissoes.</p>
                   <a href="{% url 'configuracoes:lista_usuarios' %}" class="btn btn-outline-secondary">
                     <i class="fas fa-user-cog mr-1"></i> Gerenciar
                   </a>
                 {% else %}
-                  <p class="mb-3">Cadastre novos usuários operacionais.</p>
+                  <p class="mb-3">Cadastre novos usuarios operacionais.</p>
                   <a href="{% url 'configuracoes:adicionar_usuario' %}" class="btn btn-outline-secondary">
-                    <i class="fas fa-user-plus mr-1"></i> Novo Usuário
+                    <i class="fas fa-user-plus mr-1"></i> Novo Usuario
                   </a>
                 {% endif %}
               </div>
             </div>
           </div>
 
-          <!-- Backup -->
           <div class="col-md-4 mb-3">
             <div class="card card-modern h-100 border">
               <div class="card-modern-header bg-light">
@@ -118,7 +110,7 @@
               </div>
               <div class="card-modern-body text-center py-4">
                 <i class="fas fa-hdd fa-3x text-muted mb-3"></i>
-                <p class="mb-3">Backup e restauraÃ§Ã£o do sistema.</p>
+                <p class="mb-3">Backup e restauracao do sistema.</p>
                 <a href="{% url 'configuracoes:backup_banco' %}" class="btn btn-outline-secondary">
                   <i class="fas fa-download mr-1"></i> Acessar
                 </a>
@@ -131,29 +123,28 @@
   </div>
 </div>
 
-<!-- SeÃ§Ã£o: InformaÃ§Ãµes do Sistema -->
 <div class="row">
   <div class="col-12">
     <div class="card">
       <div class="card-header bg-light">
-        <h5 class="mb-0"><i class="fas fa-info-circle mr-2"></i> InformaÃ§Ãµes do Sistema</h5>
+        <h5 class="mb-0"><i class="fas fa-info-circle mr-2"></i> Informacoes do Sistema</h5>
       </div>
       <div class="card-body">
         <div class="row">
           <div class="col-md-6">
             <div class="alert alert-info">
               <h6><i class="fas fa-lightbulb mr-2"></i> Dica:</h6>
-              <p class="mb-0">Configure primeiro os "Dados da Empresa" e depois as "ConfiguraÃ§Ãµes do Sistema" para um funcionamento ideal.</p>
+              <p class="mb-0">Configure primeiro os Dados da Empresa e depois as Configuracoes do Sistema.</p>
             </div>
           </div>
           <div class="col-md-6">
             <div class="alert alert-light">
-              <h6><i class="fas fa-clock mr-2"></i> Ãšltima AtualizaÃ§Ã£o:</h6>
+              <h6><i class="fas fa-clock mr-2"></i> Ultima Atualizacao:</h6>
               <p class="mb-0">
                 {% if config_sistema %}
                   Sistema: {{ config_sistema.data_atualizacao|date:"d/m/Y H:i" }}
                 {% else %}
-                  NÃ£o configurado
+                  Nao configurado
                 {% endif %}
               </p>
             </div>

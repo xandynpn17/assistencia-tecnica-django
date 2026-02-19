@@ -4,6 +4,7 @@ from django.urls import reverse
 
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema
+from ordens.models import OrdemServico, LinhaTrabalho
 
 
 class VerificarClienteOSViewTests(TestCase):
@@ -136,3 +137,92 @@ class VerificarClienteOSViewTests(TestCase):
             "Encontramos cliente(s) semelhante(s). Verifique antes de cadastrar duplicado.",
         )
         self.assertEqual(Cliente.objects.filter(email__iexact="duplicado@exemplo.com").count(), 1)
+
+    def test_cadastro_duplicado_forcado_com_justificativa(self):
+        Cliente.objects.create(
+            nome="Cliente Existente",
+            documento="52998224725",
+            telefone="11987654321",
+            email="duplicado2@exemplo.com",
+            estado="SP",
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "nome": "Cliente Novo Forcado",
+                "documento": "123.456.789-09",
+                "ddd": "11",
+                "telefone_numero": "99999-9999",
+                "email": "duplicado2@exemplo.com",
+                "estado": "SP",
+                "forcar_duplicado": "1",
+                "justificativa_duplicado": "Homonimo e cadastro validado por telefone.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Cliente.objects.filter(email__iexact="duplicado2@exemplo.com").count(), 2)
+        criado = Cliente.objects.order_by("-id").first()
+        self.assertIn("DUPLICADO FORCADO", criado.observacoes or "")
+
+
+class FluxoStatusOrdemServicoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="tecnico_status",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.cliente = Cliente.objects.create(
+            nome="Cliente OS",
+            documento="11144477735",
+            telefone="11999998888",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="MarcaX",
+            modelo_equipamento="ModeloY",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+
+    def test_transicao_valida_registra_linha(self):
+        self.ordem.transicionar_status(
+            "pendente_pecas",
+            usuario=self.user,
+            motivo="Aguardando componente",
+        )
+        self.ordem.refresh_from_db()
+
+        self.assertEqual(self.ordem.status, "pendente_pecas")
+        self.assertEqual(LinhaTrabalho.objects.filter(ordem=self.ordem, status="pendente_pecas").count(), 1)
+
+    def test_transicao_invalida_dispara_erro(self):
+        with self.assertRaises(ValueError):
+            self.ordem.transicionar_status("concluida", usuario=self.user, motivo="Tentativa direta")
+
+    def test_conclusao_exige_relatorio_e_tipo_reparacao(self):
+        self.ordem.status = "em_andamento"
+        self.ordem.save()
+        with self.assertRaises(ValueError):
+            self.ordem.transicionar_status("concluida", usuario=self.user, motivo="Sem laudo")
+
+    def test_reabertura_da_concluida_para_em_andamento(self):
+        self.ordem.status = "em_andamento"
+        self.ordem.relatorio_tecnico = "Laudo tecnico final"
+        self.ordem.tipo_reparacao = "substituicao"
+        self.ordem.save()
+        self.ordem.transicionar_status("concluida", usuario=self.user, motivo="Entrega")
+        self.ordem.refresh_from_db()
+        self.assertTrue(self.ordem.fechada)
+        self.assertIsNotNone(self.ordem.data_conclusao)
+
+        self.ordem.transicionar_status("em_andamento", usuario=self.user, motivo="Retorno")
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.status, "em_andamento")
+        self.assertFalse(self.ordem.fechada)

@@ -7,6 +7,8 @@ from django.db.models import Q, Sum
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView, DetailView
 from django.contrib import messages
+from django.utils import timezone
+from django.utils.timezone import localtime
 from .models import OrdemServico, LinhaTrabalho, ServicoPeca
 from .forms import OrdemServicoForm, LinhaTrabalhoForm, ServicoPecaForm
 from clientes.models import Cliente
@@ -119,6 +121,8 @@ def verificar_cliente_os(request):
             documento = form.cleaned_data.get("documento")
             telefone = re.sub(r"\D", "", str(getattr(form.instance, "telefone", "") or ""))
             email = (form.cleaned_data.get("email") or "").strip().lower()
+            forcar_duplicado = request.POST.get("forcar_duplicado") == "1"
+            justificativa_duplicado = (request.POST.get("justificativa_duplicado") or "").strip()
 
             clientes_duplicados = Cliente.objects.none()
             if documento:
@@ -129,7 +133,7 @@ def verificar_cliente_os(request):
                 clientes_duplicados = clientes_duplicados | Cliente.objects.filter(email__iexact=email)
             clientes_duplicados = clientes_duplicados.distinct().order_by("nome")
 
-            if clientes_duplicados.exists():
+            if clientes_duplicados.exists() and not forcar_duplicado:
                 form.add_error(
                     None,
                     "Encontramos cliente(s) semelhante(s). Verifique antes de cadastrar duplicado."
@@ -146,7 +150,37 @@ def verificar_cliente_os(request):
                 }
                 return render(request, "ordens/verificar_cliente_os.html", context)
 
+            if clientes_duplicados.exists() and len(justificativa_duplicado) < 5:
+                form.add_error(
+                    None,
+                    "Informe uma justificativa para forcar cadastro duplicado."
+                )
+                context = {
+                    "clientes": clientes,
+                    "cpf_telefone": cpf_telefone,
+                    "form": form,
+                    "mensagem_erro": mensagem_erro,
+                    "config": config,
+                    "menu_app": "ordens",
+                    "menu_sub": "verificar_cliente_os",
+                    "clientes_duplicados": clientes_duplicados,
+                }
+                return render(request, "ordens/verificar_cliente_os.html", context)
+
             cliente = form.save()
+            if clientes_duplicados.exists():
+                observacao_auditoria = (
+                    "[DUPLICADO FORCADO - "
+                    f"{timezone.now().strftime('%Y-%m-%d %H:%M')} - "
+                    f"{request.user.username}] "
+                    f"{justificativa_duplicado}"
+                )
+                if cliente.observacoes:
+                    cliente.observacoes = f"{cliente.observacoes}\n{observacao_auditoria}"
+                else:
+                    cliente.observacoes = observacao_auditoria
+                cliente.save(update_fields=["observacoes"])
+
             messages.success(request, "Cliente cadastrado com sucesso!")
             return redirect("ordens:nova_ordem_cliente", cliente.id)
         else:
@@ -366,8 +400,14 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 linha.save()
                 novo_status = request.POST.get("status")
                 if novo_status and novo_status != self.object.status:
-                    self.object.status = novo_status
-                    self.object.save()
+                    try:
+                        self.object.transicionar_status(
+                            novo_status,
+                            usuario=request.user,
+                            motivo=f"Linha de trabalho #{linha.id}",
+                        )
+                    except ValueError as exc:
+                        messages.error(request, str(exc))
             return redirect(f"{self.object.get_absolute_url()}?tab=linhas")
 
         # Serviços & Peças
@@ -386,20 +426,19 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 descricao=f"OS #{self.object.id} - {self.object.cliente.nome}",
                 valor=total_os,
             )
-            self.object.status = "concluida"
-            self.object.save()
-
-            # 🔹 Registrar a finalização
-            LinhaTrabalho.objects.create(
-                ordem=self.object,
-                descricao="Ordem finalizada e lançada no caixa",
-                status="concluida",
-                usuario=request.user
-            )
+            try:
+                self.object.transicionar_status(
+                    "concluida",
+                    usuario=request.user,
+                    motivo="Finalizacao e lancamento no caixa",
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
             messages.success(
                 request,
-                f"OS finalizada! Total registrado no Caixa: {total_os:.2f}€",
+                f"OS finalizada! Total registrado no Caixa: {total_os:.2f}",
             )
             return redirect(reverse("ordens:lista_ordens"))
 
