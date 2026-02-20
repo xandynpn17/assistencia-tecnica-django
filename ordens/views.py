@@ -7,13 +7,12 @@ from django.db.models import Q, Sum
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView, DetailView
 from django.contrib import messages
-from django.utils import timezone
 from django.utils.timezone import localtime
 from .models import OrdemServico, LinhaTrabalho, ServicoPeca
 from .forms import OrdemServicoForm, LinhaTrabalhoForm, ServicoPecaForm
 from clientes.models import Cliente
 from clientes.forms import ClienteForm
-from caixa.models import LancamentoCaixa
+from caixa.models import Pagamento
 from orcamentos.models import Orcamento
 from orcamentos.forms import OrcamentoForm, ItemOrcamentoForm
 from reportlab.lib.pagesizes import A4
@@ -29,16 +28,21 @@ from reportlab.lib.units import cm, mm
 from django.templatetags.static import static
 from django.conf import settings
 import os
+import logging
 from datetime import datetime
 import json
 from configuracoes.models import ConfiguracaoSistema
-from configuracoes.permissions import role_required, STAFF_ROLES, RoleRequiredMixin
+from configuracoes.permissions import role_required, ORDER_ROLES, RoleRequiredMixin
+from .utils import registrar_auditoria
+
+
+logger = logging.getLogger(__name__)
 
 
 # ===========================
 # Verificação de Cliente - CORRIGIDA
 # ===========================
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 def verificar_cliente_os(request):
     clientes = []
     cpf_telefone = request.GET.get("cpf_telefone", "").strip()
@@ -119,41 +123,12 @@ def verificar_cliente_os(request):
         form = ClienteForm(request.POST)
         if form.is_valid():
             documento = form.cleaned_data.get("documento")
-            telefone = re.sub(r"\D", "", str(getattr(form.instance, "telefone", "") or ""))
-            email = (form.cleaned_data.get("email") or "").strip().lower()
-            forcar_duplicado = request.POST.get("forcar_duplicado") == "1"
-            justificativa_duplicado = (request.POST.get("justificativa_duplicado") or "").strip()
+            clientes_duplicados = Cliente.objects.filter(documento=documento).order_by("nome") if documento else Cliente.objects.none()
 
-            clientes_duplicados = Cliente.objects.none()
-            if documento:
-                clientes_duplicados = clientes_duplicados | Cliente.objects.filter(documento=documento)
-            if telefone:
-                clientes_duplicados = clientes_duplicados | Cliente.objects.filter(telefone=telefone)
-            if email:
-                clientes_duplicados = clientes_duplicados | Cliente.objects.filter(email__iexact=email)
-            clientes_duplicados = clientes_duplicados.distinct().order_by("nome")
-
-            if clientes_duplicados.exists() and not forcar_duplicado:
+            if clientes_duplicados.exists():
                 form.add_error(
                     None,
-                    "Encontramos cliente(s) semelhante(s). Verifique antes de cadastrar duplicado."
-                )
-                context = {
-                    "clientes": clientes,
-                    "cpf_telefone": cpf_telefone,
-                    "form": form,
-                    "mensagem_erro": mensagem_erro,
-                    "config": config,
-                    "menu_app": "ordens",
-                    "menu_sub": "verificar_cliente_os",
-                    "clientes_duplicados": clientes_duplicados,
-                }
-                return render(request, "ordens/verificar_cliente_os.html", context)
-
-            if clientes_duplicados.exists() and len(justificativa_duplicado) < 5:
-                form.add_error(
-                    None,
-                    "Informe uma justificativa para forcar cadastro duplicado."
+                    "Ja existe cliente cadastrado com este CPF/CNPJ."
                 )
                 context = {
                     "clientes": clientes,
@@ -168,19 +143,12 @@ def verificar_cliente_os(request):
                 return render(request, "ordens/verificar_cliente_os.html", context)
 
             cliente = form.save()
-            if clientes_duplicados.exists():
-                observacao_auditoria = (
-                    "[DUPLICADO FORCADO - "
-                    f"{timezone.now().strftime('%Y-%m-%d %H:%M')} - "
-                    f"{request.user.username}] "
-                    f"{justificativa_duplicado}"
-                )
-                if cliente.observacoes:
-                    cliente.observacoes = f"{cliente.observacoes}\n{observacao_auditoria}"
-                else:
-                    cliente.observacoes = observacao_auditoria
-                cliente.save(update_fields=["observacoes"])
-
+            registrar_auditoria(
+                logger,
+                request,
+                "cliente_criado_em_verificacao_os",
+                extra={"cliente_id": cliente.id},
+            )
             messages.success(request, "Cliente cadastrado com sucesso!")
             return redirect("ordens:nova_ordem_cliente", cliente.id)
         else:
@@ -201,7 +169,7 @@ def verificar_cliente_os(request):
 # ===========================
 # Selecionar Cliente
 # ===========================
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 def selecionar_cliente_os(request):
     clientes = Cliente.objects.all()
     if request.method == "POST":
@@ -220,7 +188,7 @@ def selecionar_cliente_os(request):
 # ===========================
 # Lista de Ordens
 # ===========================
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 def lista_ordens(request):
     status = request.GET.get("status")
     ordens = OrdemServico.objects.all()
@@ -238,7 +206,7 @@ def lista_ordens(request):
 # ===========================
 # Fecho da Ordem
 # ===========================
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 def toggle_fechamento_os(request, pk):
     ordem = get_object_or_404(OrdemServico, id=pk)
     try:
@@ -250,8 +218,15 @@ def toggle_fechamento_os(request, pk):
             ordem=ordem,
             descricao=acao,
             status=ordem.status,
-            usuario=request.user
+            usuario=request.user,
+            tipo_evento="sistema",
         )
+        registrar_auditoria(logger, request, "fechamento_os_alterado", ordem=ordem, extra={"fechada": ordem.fechada})
+
+        if ordem.fechada and request.GET.get("ir_caixa") == "1":
+            total_os = sum(item.total() for item in ordem.servicos_pecas.all())
+            messages.success(request, "Ordem fechada. Redirecionando para registro de pagamento no Caixa.")
+            return redirect(f"{reverse('caixa:registrar_pagamento')}?os={ordem.id}&valor={total_os:.2f}")
 
         messages.success(request, "Ordem atualizada com sucesso!")
         return redirect(f"{ordem.get_absolute_url()}?tab=detalhes")
@@ -263,7 +238,7 @@ def toggle_fechamento_os(request, pk):
 # Criar Ordem de Serviço
 # ===========================
 class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
-    allowed_roles = STAFF_ROLES
+    allowed_roles = ORDER_ROLES
     model = OrdemServico
     form_class = OrdemServicoForm
     template_name = "ordens/ordem_servico_form.html"
@@ -275,21 +250,24 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
         form.instance.tecnico_responsavel = self.request.user
         form.instance.status = "diagnosticar"
 
-        response = super().form_valid(form)
+        super().form_valid(form)
 
         LinhaTrabalho.objects.create(
             ordem=self.object,
             descricao="Ordem criada",
             status="criada",
             usuario=self.request.user,
+            tipo_evento="automatico",
         )
         LinhaTrabalho.objects.create(
             ordem=self.object,
             descricao="OS enviada para diagnostico inicial",
             status="diagnosticar",
             usuario=self.request.user,
+            tipo_evento="automatico",
         )
-        return response
+        registrar_auditoria(logger, self.request, "os_criada", ordem=self.object)
+        return redirect("ordens:resumo_ordem", pk=self.object.pk)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -307,17 +285,48 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
 # Listar Ordens
 # ===========================
 class OrdemServicoListView(RoleRequiredMixin, ListView):
-    allowed_roles = STAFF_ROLES
+    allowed_roles = ORDER_ROLES
     model = OrdemServico
     template_name = "ordens/ordem_servico_list.html"
     context_object_name = "ordens"
+    paginate_by = 25
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related("cliente", "tecnico_responsavel").order_by("-data_abertura")
+        incluir_fechadas = self.request.GET.get("incluir_fechadas") == "1"
+        if not incluir_fechadas:
+            queryset = queryset.filter(fechada=False)
+
         status = self.request.GET.get("status")
         if status:
             queryset = queryset.filter(status=status)
+
+        q = (self.request.GET.get("q") or "").strip()
+        if q:
+            q_digits = re.sub(r"\D", "", q)
+            queryset = queryset.filter(
+                Q(numero_os__icontains=q)
+                | Q(cliente__nome__icontains=q)
+                | Q(cliente__documento__icontains=q_digits or q)
+                | Q(cliente__telefone__icontains=q_digits or q)
+            )
         return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["menu_app"] = "ordens"
+        context["menu_sub"] = "lista_ordens"
+        context["q"] = (self.request.GET.get("q") or "").strip()
+        context["status_filtro"] = self.request.GET.get("status", "")
+        context["incluir_fechadas"] = self.request.GET.get("incluir_fechadas") == "1"
+        return context
+
+
+class OrdemServicoResumoView(RoleRequiredMixin, DetailView):
+    allowed_roles = ORDER_ROLES
+    model = OrdemServico
+    template_name = "ordens/ordem_servico_resumo.html"
+    context_object_name = "ordem"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -330,7 +339,7 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
 # Atualizar Ordem
 # ===========================
 class OrdemServicoUpdateView(RoleRequiredMixin, UpdateView):
-    allowed_roles = STAFF_ROLES
+    allowed_roles = ORDER_ROLES
     model = OrdemServico
     form_class = OrdemServicoForm
     template_name = "ordens/ordem_servico_form.html"
@@ -347,7 +356,7 @@ class OrdemServicoUpdateView(RoleRequiredMixin, UpdateView):
 # Detalhes da Ordem
 # ===========================
 class DetalhesOrdemView(RoleRequiredMixin, DetailView):
-    allowed_roles = STAFF_ROLES
+    allowed_roles = ORDER_ROLES
     model = OrdemServico
     template_name = "ordens/ordem_servico_detalhes.html"
     context_object_name = "ordem"
@@ -362,7 +371,10 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             defaults={"cliente": ordem.cliente, "descricao": "Orçamento"}
         )
 
-        context["linhas"] = ordem.linhas_trabalho.order_by("criado_em")
+        context["linhas"] = ordem.linhas_trabalho.exclude(
+            tipo_evento="automatico",
+            descricao__startswith="Status alterado de",
+        ).order_by("criado_em")
         context["linha_form"] = LinhaTrabalhoForm()
         context["servico_form"] = ServicoPecaForm()
         context["orcamento_form"] = OrcamentoForm()
@@ -370,6 +382,16 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["item_form"] = ItemOrcamentoForm()
         context["itens"] = ordem.servicos_pecas.all()
         context["total_os"] = sum(item.total() for item in context["itens"])
+        pagamentos_os = Pagamento.objects.filter(ordem_servico=ordem).order_by("-data")
+        total_pago = sum((p.valor for p in pagamentos_os), Decimal("0.00"))
+        saldo_financeiro = max(Decimal("0.00"), context["total_os"] - total_pago)
+        referencias_pagamento = [ref for ref in pagamentos_os.values_list("referencia", flat=True) if ref]
+
+        context["pagamentos_os"] = pagamentos_os
+        context["total_pago_os"] = total_pago
+        context["saldo_financeiro_os"] = saldo_financeiro
+        context["os_pago"] = context["total_os"] > 0 and total_pago >= context["total_os"]
+        context["referencias_pagamento"] = referencias_pagamento
 
 
 #orçamento
@@ -395,6 +417,9 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         form_type = request.POST.get("form_type")
+        if self.object.fechada and form_type in {"linha", "servico_peca", "relatorio", "finalizar_caixa"}:
+            messages.error(request, "A OS esta fechada. Reabra para alterar dados.")
+            return redirect(f"{self.object.get_absolute_url()}?tab={request.GET.get('tab', 'detalhes')}")
 
         # Linha de trabalho
         if form_type == "linha":
@@ -403,17 +428,21 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 linha = linha_form.save(commit=False)
                 linha.ordem = self.object
                 linha.usuario = request.user
+                linha.tipo_evento = "manual"
                 linha.save()
-                novo_status = request.POST.get("status")
+                novo_status = OrdemServico.normalizar_status_os(request.POST.get("status"))
                 if novo_status and novo_status != self.object.status:
                     try:
-                        self.object.transicionar_status(
-                            novo_status,
-                            usuario=request.user,
-                            motivo=f"Linha de trabalho #{linha.id}",
-                        )
+                        self.object.aplicar_status_sem_historico(novo_status)
                     except ValueError as exc:
                         messages.error(request, str(exc))
+                registrar_auditoria(
+                    logger,
+                    request,
+                    "linha_trabalho_adicionada",
+                    ordem=self.object,
+                    extra={"linha_id": linha.id},
+                )
             return redirect(f"{self.object.get_absolute_url()}?tab=linhas")
 
         # Serviços & Peças
@@ -428,10 +457,6 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         # Finalizar OS e registrar no Caixa
         elif form_type == "finalizar_caixa":
             total_os = sum(item.total() for item in self.object.servicos_pecas.all())
-            LancamentoCaixa.objects.create(
-                descricao=f"OS #{self.object.id} - {self.object.cliente.nome}",
-                valor=total_os,
-            )
             try:
                 self.object.transicionar_status(
                     "concluida",
@@ -441,12 +466,21 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             except ValueError as exc:
                 messages.error(request, str(exc))
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+            registrar_auditoria(
+                logger,
+                request,
+                "os_concluida_no_caixa",
+                ordem=self.object,
+                extra={"total_os": f"{total_os:.2f}"},
+            )
 
             messages.success(
                 request,
-                f"OS finalizada! Total registrado no Caixa: {total_os:.2f}",
+                f"OS finalizada! Continue no Caixa para registrar o pagamento de {total_os:.2f}.",
             )
-            return redirect(reverse("ordens:lista_ordens"))
+            if request.POST.get("ir_caixa") == "1":
+                return redirect(f"{reverse('caixa:registrar_pagamento')}?os={self.object.id}&valor={total_os:.2f}")
+            return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
 
         # Relatório Técnico
@@ -460,8 +494,10 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 ordem=self.object,
                 descricao="Relatório técnico atualizado",
                 status=self.object.status,
-                usuario=request.user
+                usuario=request.user,
+                tipo_evento="manual",
             )
+            registrar_auditoria(logger, request, "relatorio_tecnico_atualizado", ordem=self.object)
             return redirect(f"{self.object.get_absolute_url()}?tab=relatorio")
 
 
@@ -470,10 +506,13 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 #============================
 
 
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 def migrar_orcamento(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
     orcamento = getattr(ordem, "orcamento", None)
+    if ordem.fechada:
+        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
     if request.method == "POST":
         if not orcamento or not orcamento.itens.exists():
@@ -497,7 +536,15 @@ def migrar_orcamento(request, pk):
             ordem=ordem,
             descricao=f"Itens do orçamento migrados ({count} itens)",
             status=ordem.status,
-            usuario=request.user
+            usuario=request.user,
+            tipo_evento="sistema",
+        )
+        registrar_auditoria(
+            logger,
+            request,
+            "orcamento_migrado_para_servicos",
+            ordem=ordem,
+            extra={"itens": count},
         )
 
         messages.success(request, f"{count} itens migrados para Serviços & Peças com sucesso.")
@@ -506,7 +553,7 @@ def migrar_orcamento(request, pk):
     return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
 
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 def buscar_ordens(request):
     query = request.GET.get("q", "").strip()
     resultados = []
@@ -556,7 +603,7 @@ def buscar_ordens(request):
 # AJAX - Atualizar Local e Adicionar Linha
 # ===========================
 
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 @csrf_exempt
 def atualizar_local(request, os_id):
     """Atualiza o campo Local de Armazenamento da OS via AJAX"""
@@ -565,6 +612,8 @@ def atualizar_local(request, os_id):
             data = json.loads(request.body)
             local = data.get("local", "")
             ordem = OrdemServico.objects.get(id=os_id)
+            if ordem.fechada:
+                return JsonResponse({"success": False, "message": "OS fechada. Reabra para alterar."}, status=400)
             ordem.local_armazenamento = local
             ordem.save()
             return JsonResponse({"success": True, "message": "Local atualizado com sucesso!"})
@@ -573,34 +622,53 @@ def atualizar_local(request, os_id):
     return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
 
 
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 def adicionar_linha(request, os_id):
     """Adiciona uma nova linha de trabalho via AJAX"""
     if request.method == "POST":
         try:
             ordem = OrdemServico.objects.get(id=os_id)
-            status = request.POST.get("status")
+            if ordem.fechada:
+                return JsonResponse({"success": False, "message": "OS fechada. Reabra para alterar."}, status=400)
+            status_linha = request.POST.get("status") or ordem.status
+            status_os = OrdemServico.normalizar_status_os(status_linha)
             descricao = request.POST.get("descricao")
 
             linha = LinhaTrabalho.objects.create(
                 ordem=ordem,
-                status=status,
+                status=status_linha,
                 descricao=descricao,
                 usuario=request.user,
+                tipo_evento="manual",
+            )
+            mensagem_aviso = ""
+            if status_os and status_os != ordem.status:
+                try:
+                    ordem.aplicar_status_sem_historico(status_os)
+                except ValueError as exc:
+                    mensagem_aviso = str(exc)
+            registrar_auditoria(
+                logger,
+                request,
+                "linha_trabalho_adicionada_ajax",
+                ordem=ordem,
+                extra={"linha_id": linha.id},
             )
 
             return JsonResponse({
                 "success": True,
                 "status": linha.get_status_display(),
+                "tipo_evento": linha.get_tipo_evento_display(),
                 "descricao": linha.descricao,
                 "usuario": linha.usuario.username if linha.usuario else "",
                 "data": localtime(linha.criado_em).strftime("%d/%m/%Y %H:%M"),
+                "warning": mensagem_aviso,
             })
         except OrdemServico.DoesNotExist:
             return JsonResponse({"success": False, "message": "OS não encontrada."}, status=404)
     return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
 
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 @csrf_exempt
 def atualizar_observacoes(request, os_id):
     """Atualiza o campo Observações internas via AJAX"""
@@ -609,6 +677,8 @@ def atualizar_observacoes(request, os_id):
             data = json.loads(request.body)
             obs = data.get("observacoes", "")
             ordem = OrdemServico.objects.get(id=os_id)
+            if ordem.fechada:
+                return JsonResponse({"success": False, "message": "OS fechada. Reabra para alterar."}, status=400)
             ordem.observacoes = obs
             ordem.save()
             return JsonResponse({"success": True, "message": "Observações internas salvas!"})
@@ -616,7 +686,7 @@ def atualizar_observacoes(request, os_id):
             return JsonResponse({"success": False, "message": "OS não encontrada."}, status=404)
     return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
 
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 @csrf_exempt
 def atualizar_tecnico(request, os_id):
     """Atualiza o técnico responsável pela OS via AJAX"""
@@ -625,6 +695,8 @@ def atualizar_tecnico(request, os_id):
             data = json.loads(request.body)
             tecnico_id = data.get("tecnico_id")
             ordem = OrdemServico.objects.get(id=os_id)
+            if ordem.fechada:
+                return JsonResponse({"success": False, "message": "OS fechada. Reabra para alterar."}, status=400)
 
             if tecnico_id:
                 from django.contrib.auth import get_user_model
@@ -638,13 +710,22 @@ def atualizar_tecnico(request, os_id):
                     ordem=ordem,
                     descricao=f"Técnico responsável alterado para {tecnico.username}",
                     status=ordem.status,
-                    usuario=request.user
+                    usuario=request.user,
+                    tipo_evento="manual",
+                )
+                registrar_auditoria(
+                    logger,
+                    request,
+                    "tecnico_os_atualizado",
+                    ordem=ordem,
+                    extra={"tecnico_id": tecnico.id, "tecnico_username": tecnico.username},
                 )
 
                 return JsonResponse({"success": True, "message": "Técnico atualizado com sucesso!"})
             else:
                 ordem.tecnico_responsavel = None
                 ordem.save()
+                registrar_auditoria(logger, request, "tecnico_os_removido", ordem=ordem)
                 return JsonResponse({"success": True, "message": "Técnico removido."})
         except OrdemServico.DoesNotExist:
             return JsonResponse({"success": False, "message": "OS não encontrada."}, status=404)
@@ -654,7 +735,7 @@ def atualizar_tecnico(request, os_id):
 # ===========================
 
 
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 
 def imprimir_ordem_servico(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
@@ -789,7 +870,7 @@ def imprimir_ordem_servico(request, pk):
 #RT
 
 
-@role_required(STAFF_ROLES)
+@role_required(ORDER_ROLES)
 def imprimir_relatorio_tecnico(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
 
@@ -896,4 +977,5 @@ def imprimir_relatorio_tecnico(request, pk):
 
     doc.build(story)
     return response
+
 

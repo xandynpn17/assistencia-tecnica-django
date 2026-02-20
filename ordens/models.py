@@ -33,13 +33,17 @@ class OrdemServico(models.Model):
 
     STATUS_CHOICES = [
         ('diagnosticar', 'Diagnosticar'),
+        ('bancada', 'Bancada'),
+        ('reparo', 'Reparo em andamento'),
         ('pendente_tecnico', 'Pendente Técnico'),
+        ('pendente_cliente', 'Pendente cliente'),
         ('pendente_marca', 'Pendente Marca'),
         ('pendente_pecas', 'Pendente Peças'),
         ('pendente_orcamento', 'Pendente Orçamento'),
         ('orcamentado', 'Orçamentado'),
         ('autorizado', 'Autorizado'),
         ('recusado', 'Recusado'),
+        ('devolucao', 'Devolução sem reparação'),
         ('em_andamento', 'Em Andamento'),
         ('pronto_contactado', 'Pronto Contactado'),
         ('pronto_contactar', 'Pronto Contactar'),
@@ -161,7 +165,8 @@ class OrdemServico(models.Model):
                 ordem=self,
                 status="concluida",
                 descricao="Ordem concluída.",
-                usuario=usuario
+                usuario=usuario,
+                tipo_evento="sistema",
             )
 
         else:
@@ -175,12 +180,17 @@ class OrdemServico(models.Model):
     def status_validos(cls):
         return {status for status, _ in cls.STATUS_CHOICES}
 
+    @classmethod
+    def normalizar_status_os(cls, status):
+        return status
+
     def pode_transicionar_para(self, novo_status):
         # Fluxo livre entre status validos da OS.
         # "criada" existe apenas na LinhaTrabalho, nao como status de OS.
         return novo_status in self.status_validos()
 
     def transicionar_status(self, novo_status, usuario=None, motivo=""):
+        novo_status = self.normalizar_status_os(novo_status)
         if novo_status not in self.status_validos():
             raise ValueError("Status de destino invalido.")
 
@@ -215,12 +225,41 @@ class OrdemServico(models.Model):
             status=novo_status,
             descricao=detalhe.strip(),
             usuario=usuario,
+            tipo_evento="automatico",
         )
+
+    def aplicar_status_sem_historico(self, novo_status):
+        novo_status = self.normalizar_status_os(novo_status)
+        if novo_status not in self.status_validos():
+            raise ValueError("Status de destino invalido.")
+
+        if self.status == novo_status:
+            return
+
+        if novo_status == "concluida":
+            if not self.relatorio_tecnico or not self.tipo_reparacao:
+                raise ValueError(
+                    "Nao e possivel concluir sem relatorio tecnico e tipo de reparacao."
+                )
+            self.fechada = True
+            self.data_conclusao = timezone.now()
+        elif self.status == "concluida":
+            self.fechada = False
+            self.data_conclusao = None
+
+        self.status = novo_status
+        self.save(update_fields=["status", "fechada", "data_conclusao"])
 
 # ===========================
 # LINHA DE TRABALHO
 # ===========================
 class LinhaTrabalho(models.Model):
+    TIPO_EVENTO_CHOICES = [
+        ("manual", "Manual"),
+        ("automatico", "Automatico"),
+        ("sistema", "Sistema"),
+    ]
+
     STATUS_CHOICES = [
         ("criada", "Ordem criada"),
         ("diagnosticar", "Diagnosticar"),
@@ -237,6 +276,7 @@ class LinhaTrabalho(models.Model):
 
     ordem = models.ForeignKey(OrdemServico, related_name="linhas_trabalho", on_delete=models.CASCADE)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="criada")
+    tipo_evento = models.CharField(max_length=12, choices=TIPO_EVENTO_CHOICES, default="manual")
     descricao = models.TextField(blank=True, null=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     usuario = models.ForeignKey(
