@@ -21,6 +21,11 @@
             <div class="d-none">
                 {{ form.ordem_servico|add_class:"form-control" }}
             </div>
+            {% elif venda %}
+            <div class="alert alert-info">
+                Finalizando pre-reserva de venda <strong>#{{ venda.id }}</strong>:
+                {{ venda.produto.nome }} | {{ venda.ponto_operacional.codigo }} | Qtd {{ venda.quantidade }}.
+            </div>
             {% else %}
             <div class="form-group">
                 <label for="{{ form.ordem_servico.id_for_label }}">Ordem de Servico (opcional)</label>
@@ -46,8 +51,12 @@
             <button type="submit" class="btn btn-success mt-2">
                 <i class="fas fa-plus-circle"></i> Registrar Pagamento
             </button>
-            <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-secondary mt-2">
+            <a href="{% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}{% url 'caixa:dashboard_caixa' %}{% else %}{% url 'caixa:registrar_pagamento' %}{% endif %}" class="btn btn-secondary mt-2">
+                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
                 Voltar
+                {% else %}
+                Continuar
+                {% endif %}
             </a>
         </form>
     {% endif %}

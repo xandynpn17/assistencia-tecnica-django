@@ -1,0 +1,74 @@
+﻿{% extends "core/base.html" %}
+
+{% block header %}<h1 class="m-0 text-dark">Nova Movimentacao de Estoque</h1>{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group">
+        <label>Buscar artigo (EAN, SKU ou descricao)</label>
+        <input type="text" id="filtroProduto" class="form-control" placeholder="Digite para filtrar o artigo">
+      </div>
+      <div class="form-group">
+        <label for="{{ form.produto.id_for_label }}">Artigo</label>
+        {{ form.produto }}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.tipo.id_for_label }}">Tipo</label>
+        {{ form.tipo }}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.quantidade.id_for_label }}">Quantidade</label>
+        {{ form.quantidade }}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.origem.id_for_label }}">Origem</label>
+        {{ form.origem }}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.destino.id_for_label }}">Destino</label>
+        {{ form.destino }}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.destino_ubicacao.id_for_label }}">Ubicacao destino</label>
+        {{ form.destino_ubicacao }}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.observacao.id_for_label }}">Observacao</label>
+        {{ form.observacao }}
+      </div>
+      <button class="btn btn-primary" type="submit">Salvar</button>
+      <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-secondary">Voltar</a>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const filtro = document.getElementById("filtroProduto");
+  const select = document.getElementById("id_produto");
+  if (!filtro || !select) return;
+  const options = Array.from(select.options).map(o => ({value: o.value, text: o.text}));
+  filtro.addEventListener("input", function () {
+    const q = filtro.value.toLowerCase().trim();
+    const atual = select.value;
+    select.innerHTML = "";
+    options.forEach(function (op) {
+      if (!q || op.text.toLowerCase().includes(q)) {
+        const el = document.createElement("option");
+        el.value = op.value;
+        el.textContent = op.text;
+        select.appendChild(el);
+      }
+    });
+    if (Array.from(select.options).some(o => o.value === atual)) {
+      select.value = atual;
+    }
+  });
+});
+</script>
+{% endblock %}

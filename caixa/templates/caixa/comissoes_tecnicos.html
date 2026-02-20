@@ -1,0 +1,79 @@
+﻿{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col-md-6"><div class="alert alert-warning">Comissoes pendentes: R$ {{ total_pendente|floatformat:2 }}</div></div>
+  <div class="col-md-6"><div class="alert alert-success">Comissoes pagas: R$ {{ total_pago|floatformat:2 }}</div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Nova Regra de Comissao</h3></div>
+  <div class="card-body">
+    <form method="post" class="row">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="regra">
+      <div class="col-md-3">{{ regra_form.usuario.label_tag }}{{ regra_form.usuario }}</div>
+      <div class="col-md-3">{{ regra_form.percentual_servico.label_tag }}{{ regra_form.percentual_servico }}</div>
+      <div class="col-md-3">{{ regra_form.percentual_peca.label_tag }}{{ regra_form.percentual_peca }}</div>
+      <div class="col-md-1">{{ regra_form.ativo.label_tag }}{{ regra_form.ativo }}</div>
+      <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary" type="submit">Salvar</button></div>
+    </form>
+    <form method="post" class="mt-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="recalcular">
+      <label class="mr-2"><input type="checkbox" name="considerar_pecas" value="1"> considerar pecas</label>
+      <button class="btn btn-outline-secondary btn-sm" type="submit">Recalcular comissoes</button>
+    </form>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Regras Ativas</h3></div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-bordered mb-0">
+      <thead><tr><th>Tecnico</th><th>% Servico</th><th>% Peca</th><th>Ativa</th></tr></thead>
+      <tbody>
+      {% for r in regras %}
+      <tr><td>{{ r.usuario }}</td><td>{{ r.percentual_servico }}</td><td>{{ r.percentual_peca }}</td><td>{{ r.ativo|yesno:"Sim,Nao" }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="text-center text-muted">Sem regras.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title">Comissoes</h3></div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-bordered mb-0">
+      <thead><tr><th>OS</th><th>Tecnico</th><th>Base Servico</th><th>Base Peca</th><th>Valor</th><th>Status</th><th>Referencia</th><th>Acoes</th></tr></thead>
+      <tbody>
+      {% for c in comissoes %}
+      <tr>
+        <td>{{ c.ordem_servico.numero_os }}</td>
+        <td>{{ c.tecnico }}</td>
+        <td>{{ c.base_servico|floatformat:2 }}</td>
+        <td>{{ c.base_peca|floatformat:2 }}</td>
+        <td>{{ c.valor_comissao|floatformat:2 }}</td>
+        <td>{{ c.get_status_display }}</td>
+        <td>{{ c.referencia_pagamento|default:'-' }}</td>
+        <td>
+          <form method="post" class="form-inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="status">
+            <input type="hidden" name="comissao_id" value="{{ c.id }}">
+            <select name="status" class="form-control form-control-sm mr-1">
+              <option value="pendente" {% if c.status == 'pendente' %}selected{% endif %}>Pendente</option>
+              <option value="paga" {% if c.status == 'paga' %}selected{% endif %}>Paga</option>
+              <option value="cancelada" {% if c.status == 'cancelada' %}selected{% endif %}>Cancelada</option>
+            </select>
+            <input type="text" name="referencia_pagamento" value="{{ c.referencia_pagamento }}" placeholder="ref" class="form-control form-control-sm mr-1">
+            <button class="btn btn-sm btn-primary" type="submit">Salvar</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}<tr><td colspan="8" class="text-center text-muted">Sem comissoes.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

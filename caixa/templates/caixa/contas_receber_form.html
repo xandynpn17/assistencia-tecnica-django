@@ -1,0 +1,24 @@
+{% extends 'core/base.html' %}
+{% load widget_tweaks %}
+
+{% block content %}
+<h3>Nova Conta a Receber</h3>
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      <div class="row">
+        {% for field in form %}
+        <div class="col-md-6 mb-3">
+          <label>{{ field.label }}</label>
+          {{ field|add_class:"form-control" }}
+          {% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+      <a href="{% url 'caixa:contas_receber' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

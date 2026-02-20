@@ -204,6 +204,29 @@
                     <p>Buscar Produto</p>
                   </a>
                 </li>
+                <li class="nav-item">
+                  <a href="{% url 'estoque:consulta_artigos' %}"
+                     class="nav-link {% if menu_sub == 'consulta_artigos' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Consulta de Artigos</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'estoque:movimentacoes' %}"
+                     class="nav-link {% if menu_sub == 'movimentacoes' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Movimentacoes</p>
+                  </a>
+                </li>
+                {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
+                <li class="nav-item">
+                  <a href="{% url 'estoque:pontos_operacionais' %}"
+                     class="nav-link {% if menu_sub == 'pontos_operacionais' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Pontos Operacionais</p>
+                  </a>
+                </li>
+                {% endif %}
               </ul>
             </li>
 
@@ -219,11 +242,13 @@
               </a>
               <ul class="nav nav-treeview">
                 <li class="nav-item">
+                  {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
                   <a href="{% url 'caixa:dashboard_caixa' %}"
                      class="nav-link {% if menu_sub == 'dashboard_caixa' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Dashboard Caixa</p>
                   </a>
+                  {% endif %}
                 </li>
                 <li class="nav-item">
                   <a href="{% url 'caixa:abrir_caixa' %}"
@@ -240,11 +265,13 @@
                   </a>
                 </li>
                 <li class="nav-item">
+                  {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
                   <a href="{% url 'caixa:relatorios' %}"
                      class="nav-link {% if menu_sub == 'relatorios' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Relatorios</p>
                   </a>
+                  {% endif %}
                 </li>
                 <li class="nav-item">
                   <a href="{% url 'caixa:registrar_pagamento' %}"
@@ -260,6 +287,50 @@
                     <p>Registrar Saida</p>
                   </a>
                 </li>
+                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+                <li class="nav-item">
+                  <a href="{% url 'caixa:contas_receber' %}"
+                     class="nav-link {% if menu_sub == 'contas_receber' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Contas a Receber</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:aging_receber' %}"
+                     class="nav-link {% if menu_sub == 'aging_receber' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Aging Receber</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:comissoes_tecnicos' %}"
+                     class="nav-link {% if menu_sub == 'comissoes_tecnicos' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Comissoes Tecnicos</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:dre' %}"
+                     class="nav-link {% if menu_sub == 'dre' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>DRE</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:fluxo_projetado' %}"
+                     class="nav-link {% if menu_sub == 'fluxo_projetado' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Fluxo Projetado</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:categorias_financeiras' %}"
+                     class="nav-link {% if menu_sub == 'categorias_financeiras' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Categorias Financeiras</p>
+                  </a>
+                </li>
+                {% endif %}
               </ul>
             </li>
             <!-- Configuracoes -->

@@ -1,0 +1,59 @@
+{% extends "core/base.html" %}
+
+{% block title %}Reservas de Clientes{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Reservas de Clientes</h1>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body border-bottom">
+    <form method="get" class="form-inline">
+      <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm mr-2" placeholder="Codigo, cliente, telefone, artigo">
+      <select name="status" class="form-control form-control-sm mr-2">
+        <option value="">Todos status</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if status_filtro == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+    </form>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Codigo</th><th>Cliente</th><th>Telefone</th><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Valido ate</th><th>Status</th><th>OS</th><th>Acao</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in reservas %}
+          <tr>
+            <td>{{ r.codigo_reserva }}</td>
+            <td>{{ r.nome_contato }}</td>
+            <td>{{ r.telefone_contato|default:"-" }}</td>
+            <td>{{ r.produto.nome }}</td>
+            <td>{% if r.ponto_operacional %}{{ r.ponto_operacional.codigo }}{% else %}-{% endif %}</td>
+            <td>{{ r.quantidade }}</td>
+            <td>{{ r.valido_ate|date:"d/m/Y" }}</td>
+            <td>{{ r.get_status_display }}</td>
+            <td>{% if r.ordem_servico %}{{ r.ordem_servico.numero_os }}{% else %}-{% endif %}</td>
+            <td>
+              <form method="post" action="{% url 'estoque:associar_reserva_ordem' r.codigo_reserva %}" class="form-inline">
+                {% csrf_token %}
+                <input type="number" name="ordem_id" class="form-control form-control-sm mr-1" placeholder="ID OS" style="width:90px;">
+                <button class="btn btn-sm btn-outline-primary" type="submit">Associar</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="10" class="text-center text-muted">Sem reservas encontradas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

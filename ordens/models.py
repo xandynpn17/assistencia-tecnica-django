@@ -1,3 +1,6 @@
+import random
+import string
+
 from django.db import models, transaction
 from django.utils import timezone
 from clientes.models import Cliente
@@ -14,6 +17,7 @@ from configuracoes.models import SequenciaOS, ConfiguracaoOrdemServico
 class OrdemServico(models.Model):
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='ordens')
     numero_os = models.CharField(max_length=10, unique=True, blank=True, editable=False)
+    codigo_portal = models.CharField(max_length=12, unique=True, blank=True, editable=False)
 
     TIPO_EQUIPAMENTO_CHOICES = [
         ('celular', 'Celular'),
@@ -118,6 +122,9 @@ class OrdemServico(models.Model):
         return reverse("ordens:detalhes_ordem", kwargs={"pk": self.pk})
 
     def save(self, *args, **kwargs):
+        if not self.codigo_portal:
+            self.codigo_portal = self.gerar_codigo_portal()
+
         if not self.numero_os:
             with transaction.atomic():
                 # Busca configuração principal
@@ -140,6 +147,13 @@ class OrdemServico(models.Model):
                 self.numero_os = f"{prefixo}-{novo_numero:04d}"
 
         super().save(*args, **kwargs)
+
+    @classmethod
+    def gerar_codigo_portal(cls):
+        while True:
+            codigo = "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
+            if not cls.objects.filter(codigo_portal=codigo).exists():
+                return codigo
 
     fechada = models.BooleanField(default=False)
 
@@ -312,3 +326,44 @@ class ServicoPeca(models.Model):
 
     def __str__(self):
         return f"{self.nome} ({self.tipo})"
+
+
+class NotificacaoCliente(models.Model):
+    TIPO_CHOICES = [
+        ("orcamento", "Orcamento"),
+        ("pronto", "Equipamento pronto"),
+        ("manual", "Manual"),
+    ]
+    CANAL_CHOICES = [
+        ("sistema", "Sistema"),
+        ("email", "Email"),
+        ("whatsapp", "WhatsApp"),
+    ]
+    STATUS_CHOICES = [
+        ("pendente", "Pendente"),
+        ("enviada", "Enviada"),
+        ("erro", "Erro"),
+    ]
+
+    ordem = models.ForeignKey(OrdemServico, related_name="notificacoes", on_delete=models.CASCADE)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="manual")
+    canal = models.CharField(max_length=20, choices=CANAL_CHOICES, default="sistema")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pendente")
+    destinatario = models.CharField(max_length=120, blank=True)
+    mensagem = models.TextField()
+    erro = models.CharField(max_length=255, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    enviado_em = models.DateTimeField(blank=True, null=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notificacoes_ordem",
+    )
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+
+    def __str__(self):
+        return f"Notif {self.get_tipo_display()} - {self.ordem.numero_os}"

@@ -1,10 +1,14 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from caixa.models import Pagamento
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema
+from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.forms import LinhaTrabalhoForm
 from ordens.models import OrdemServico, LinhaTrabalho, ServicoPeca
@@ -603,3 +607,110 @@ class LinhaTrabalhoAjaxAtualizaStatusTests(TestCase):
         self.ordem.refresh_from_db()
         self.assertEqual(self.ordem.status, "diagnosticar")
         self.assertTrue(LinhaTrabalho.objects.filter(ordem=self.ordem, status="concluida").exists())
+
+
+class PortalClienteTests(TestCase):
+    def setUp(self):
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Portal",
+            documento="11144477735",
+            telefone="11912345678",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca P",
+            modelo_equipamento="Modelo P",
+            defeito="Teste",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+
+    def test_portal_cliente_consulta_por_codigo(self):
+        response = self.client.get(
+            reverse("ordens:portal_cliente"),
+            {"codigo": self.ordem.codigo_portal},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.ordem.numero_os)
+
+    def test_portal_cliente_documento_invalido_bloqueia(self):
+        response = self.client.get(
+            reverse("ordens:portal_cliente"),
+            {"codigo": self.ordem.codigo_portal, "documento": "00000000000"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Documento nao confere")
+
+
+class OrdemEstoqueIntegracaoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_estoque_os",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Reserva OS",
+            documento="39053344705",
+            telefone="11988887777",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca E",
+            modelo_equipamento="Modelo E",
+            defeito="Teste",
+            tipo_reparo="Fora de Garantia",
+            status="em_andamento",
+            relatorio_tecnico="Relatorio pronto",
+            tipo_reparacao="substituicao",
+        )
+        self.ponto = PontoOperacional.objects.create(codigo="LOJA2", nome="Loja 2")
+        self.produto = Produto.objects.create(
+            nome="Display",
+            sku="DSP-01",
+            ean="7894561230001",
+            preco_final=100,
+            preco=100,
+            quantidade=5,
+            ponto_operacional=self.ponto,
+            ativo=True,
+        )
+        SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=self.ponto, quantidade=5)
+        self.reserva = ReservaEstoque.objects.create(
+            codigo_reserva="RES-OS0001",
+            produto=self.produto,
+            ponto_operacional=self.ponto,
+            quantidade=2,
+            nome_contato=self.cliente.nome,
+            valido_ate=timezone.localdate() + timedelta(days=2),
+            status="ativa",
+            ordem_servico=self.ordem,
+            usuario=self.user,
+        )
+
+    def test_fechamento_os_consume_reservas(self):
+        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 302)
+        self.reserva.refresh_from_db()
+        self.assertEqual(self.reserva.status, "convertida")
+        saldo = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto)
+        self.assertEqual(saldo.quantidade, 3)
+
+    def test_reabertura_os_devolve_reservas(self):
+        self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        self.ordem.refresh_from_db()
+        self.assertTrue(self.ordem.fechada)
+
+        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 302)
+        self.reserva.refresh_from_db()
+        self.assertEqual(self.reserva.status, "cancelada")
+        saldo = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto)
+        self.assertEqual(saldo.quantidade, 5)

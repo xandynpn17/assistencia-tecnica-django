@@ -1,4 +1,4 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 
 {% block title %}Estoque - Lista de Produtos{% endblock %}
 
@@ -10,76 +10,62 @@
 <div class="card-modern">
     <div class="card-modern-header d-flex justify-content-between align-items-center">
         Produtos cadastrados
-        <a href="{% url 'estoque:criar_produto' %}" class="btn btn-success btn-sm">
-            <i class="fas fa-plus"></i> Novo Produto
-        </a>
+        <div>
+            <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-info btn-sm"><i class="fas fa-exchange-alt"></i> Movimentacoes</a>
+            <a href="{% url 'estoque:criar_produto' %}" class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Novo Produto</a>
+        </div>
     </div>
-    <div class="mb-3">
-        <a href="?tipo=todos" class="btn btn-sm {% if filtro == 'todos' %}btn-primary{% else %}btn-outline-primary{% endif %}">Todos</a>
-        <a href="?tipo=produtos" class="btn btn-sm {% if filtro == 'produtos' %}btn-primary{% else %}btn-outline-primary{% endif %}">Produtos</a>
-        <a href="?tipo=servicos" class="btn btn-sm {% if filtro == 'servicos' %}btn-primary{% else %}btn-outline-primary{% endif %}">Serviços</a>
-    </div>
-    <div class="card-modern-body table-responsive p-0">
-        <table class="table table-hover text-nowrap">
-            <thead>
-            <tr>
-                <th>ID</th>
-                <th>Nome</th>
-                <th>SKU</th>
-                <th>EAN</th>
-                <th>Categoria</th>
-                <th>Fornecedor</th>
-                <th>Preço</th>
-                <th>Qtd</th>
-                <th>Custo Total (R$)</th>
-                <th>Preço sem Margem (R$)</th>
-                <th>Lucro (R$)</th>
-                <th>Lucro (%)</th>
-                <th>Preço de Venda (R$)</th>
-                <th>Ativo</th>
-                <th>Ações</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for produto in produtos %}
-            <tr>
-                <td>{{ produto.id }}</td>
-                <td>{{ produto.nome }}</td>
-                <td>{{ produto.sku|default:"-" }}</td>
-                <td>{{ produto.ean|default:"-" }}</td>
-                <td>{{ produto.categoria|default:"-" }}</td>
-                <td>{{ produto.fornecedor|default:"-" }}</td>
-                <td>R$ {{ produto.preco|floatformat:2 }}</td>
-                <td>{{ produto.quantidade }}</td>
-                <td>R$ {{ produto.custo_total|floatformat:2 }}</td>
-                <td>R$ {{ produto.preco_sem_margem|floatformat:2 }}</td>
-                <td>R$ {{ produto.lucro_reais|floatformat:2 }}</td>
-                <td>{{ produto.lucro_percentual|floatformat:2 }}%</td>
-                <td>R$ {{ produto.preco_final|floatformat:2 }}</td>
-                <td>
-                    {% if produto.ativo %}
-                    <span class="badge badge-success">Sim</span>
-                    {% else %}
-                    <span class="badge badge-danger">Não</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <a href="{% url 'estoque:editar_produto' produto.id %}" class="btn btn-sm btn-primary">
-                        <i class="fas fa-edit"></i>
-                    </a>
-                    <a href="{% url 'estoque:excluir_produto' produto.id %}" class="btn btn-sm btn-danger">
-                        <i class="fas fa-trash"></i>
-                    </a>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="15" class="text-center">Nenhum produto cadastrado.</td>
-            </tr>
-            {% endfor %}
-            </tbody>
+    <div class="card-modern-body">
+        <form method="get" class="form-inline mb-3">
+            <a href="?tipo=todos&ponto={{ ponto_filtro }}" class="btn btn-sm {% if filtro == 'todos' %}btn-primary{% else %}btn-outline-primary{% endif %} mr-1">Todos</a>
+            <a href="?tipo=produtos&ponto={{ ponto_filtro }}" class="btn btn-sm {% if filtro == 'produtos' %}btn-primary{% else %}btn-outline-primary{% endif %} mr-1">Produtos</a>
+            <a href="?tipo=servicos&ponto={{ ponto_filtro }}" class="btn btn-sm {% if filtro == 'servicos' %}btn-primary{% else %}btn-outline-primary{% endif %} mr-3">Servicos</a>
+            <label class="mr-2">Ponto:</label>
+            <select name="ponto" class="form-control form-control-sm mr-2">
+                <option value="">Todos</option>
+                {% for p in pontos %}
+                    <option value="{{ p.id }}" {% if ponto_filtro == p.id|stringformat:'s' %}selected{% endif %}>{{ p.codigo }} - {{ p.nome }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-secondary">Filtrar</button>
+        </form>
 
-        </table>
+        <div class="table-responsive p-0">
+            <table class="table table-hover text-nowrap">
+                <thead>
+                <tr>
+                    <th>ID</th><th>Nome</th><th>EAN</th><th>Categoria</th><th>Ponto</th><th>Preco</th><th>Qtd</th><th>Min</th><th>Ativo</th><th>Acoes</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for produto in produtos %}
+                <tr>
+                    <td>{{ produto.id }}</td>
+                    <td>{{ produto.nome }}</td>
+                    <td>{{ produto.ean|default:"-" }}</td>
+                    <td>{{ produto.categoria|default:"-" }}</td>
+                    <td>{% if produto.ponto_operacional %}{{ produto.ponto_operacional.codigo }} - {{ produto.ponto_operacional.nome }}{% else %}-{% endif %}</td>
+                    <td>R$ {{ produto.preco|floatformat:2 }}</td>
+                    <td>
+                        {% if produto.quantidade <= produto.estoque_minimo %}
+                            <span class="badge badge-warning">{{ produto.quantidade }}</span>
+                        {% else %}
+                            {{ produto.quantidade }}
+                        {% endif %}
+                    </td>
+                    <td>{{ produto.estoque_minimo }}</td>
+                    <td>{% if produto.ativo %}<span class="badge badge-success">Sim</span>{% else %}<span class="badge badge-danger">Nao</span>{% endif %}</td>
+                    <td>
+                        <a href="{% url 'estoque:editar_produto' produto.id %}" class="btn btn-sm btn-primary"><i class="fas fa-edit"></i></a>
+                        <a href="{% url 'estoque:excluir_produto' produto.id %}" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="10" class="text-center">Nenhum produto cadastrado.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}

@@ -3,6 +3,9 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from decimal import Decimal, InvalidOperation
+from datetime import timedelta
+import random
+import string
 
 from .models import Orcamento, ItemOrcamento
 from ordens.models import OrdemServico, ServicoPeca, LinhaTrabalho
@@ -16,7 +19,18 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.graphics.barcode import code128
 from datetime import datetime
-from django.db.models import Q
+from django.db.models import Q, Sum
+from django.utils import timezone
+
+from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
+from estoque.services import cancelar_reserva
+
+
+def _codigo_reserva():
+    while True:
+        codigo = "RES-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        if not ReservaEstoque.objects.filter(codigo_reserva=codigo).exists():
+            return codigo
 
 
 def _os_fechada(ordem):
@@ -83,20 +97,67 @@ def adicionar_item(request, orcamento_id):
     if request.method == "POST":
         nome = request.POST.get("nome", "")
         descricao = request.POST.get("descricao", "")
+        ean = request.POST.get("ean", "")
         quantidade = int(request.POST.get("quantidade", 1))
         valor_unitario_str = request.POST.get("valor_unitario", "0").replace(",", ".")
         try:
             valor_unitario = Decimal(valor_unitario_str)
         except InvalidOperation:
             valor_unitario = Decimal("0.00")
-        ItemOrcamento.objects.create(
+        item = ItemOrcamento.objects.create(
             orcamento=orcamento,
+            ean=ean,
             nome=nome,
             descricao=descricao,
             quantidade=quantidade,
             valor_unitario=valor_unitario,
             origem=request.POST.get("origem", "manual"),
         )
+
+        # Produto vindo do estoque gera pre-reserva automatica para evitar venda duplicada.
+        if item.origem == "estoque":
+            produto = None
+            if ean:
+                produto = Produto.objects.filter(ativo=True, ean=ean).first()
+            if not produto and nome:
+                produto = Produto.objects.filter(ativo=True, nome__iexact=nome).first()
+            if not produto and nome:
+                produto = Produto.objects.filter(ativo=True, nome__icontains=nome).order_by("id").first()
+
+            if produto:
+                ponto = produto.ponto_operacional or PontoOperacional.objects.filter(ativo=True).order_by("codigo").first()
+                if ponto:
+                    saldo, _ = SaldoEstoquePonto.objects.get_or_create(
+                        produto=produto,
+                        ponto_operacional=ponto,
+                        defaults={"quantidade": produto.quantidade if produto.quantidade else 0},
+                    )
+                    reservado = (
+                        ReservaEstoque.objects.filter(
+                            produto=produto,
+                            ponto_operacional=ponto,
+                            status="ativa",
+                            valido_ate__gte=timezone.localdate(),
+                        ).aggregate(total=Sum("quantidade"))["total"]
+                        or 0
+                    )
+                    if saldo.quantidade - int(reservado) >= quantidade:
+                        ReservaEstoque.objects.create(
+                            codigo_reserva=_codigo_reserva(),
+                            produto=produto,
+                            ponto_operacional=ponto,
+                            quantidade=quantidade,
+                            nome_contato=orcamento.cliente.nome,
+                            telefone_contato=orcamento.cliente.telefone or "",
+                            valido_ate=timezone.localdate() + timedelta(days=2),
+                            status="ativa",
+                            ordem_servico=orcamento.ordem_servico,
+                            item_orcamento=item,
+                            usuario=request.user,
+                        )
+                        messages.info(request, f"Pre-reserva criada para {produto.nome}.")
+                    else:
+                        messages.warning(request, f"Item {produto.nome} adicionado sem reserva por falta de saldo disponivel no ponto.")
         messages.success(request, "Item adicionado com sucesso!")
     return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
 
@@ -141,7 +202,13 @@ def excluir_item(request, item_id):
         messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
+        reservas_item = list(item.reservas_estoque.all())
         item.delete()
+        for reserva in reservas_item:
+            try:
+                cancelar_reserva(reserva, usuario=request.user, motivo="Item de orcamento excluido")
+            except ValueError:
+                pass
         messages.success(request, "Item excluído com sucesso!")
     return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 

@@ -23,7 +23,9 @@ urlpatterns = [
     path('<int:pk>/detalhes/', DetalhesOrdemView.as_view(), name='detalhes_ordem'),
     path('<int:pk>/resumo/', OrdemServicoResumoView.as_view(), name='resumo_ordem'),
     path('<int:pk>/toggle-fechamento/', views.toggle_fechamento_os, name='toggle_fechamento_os'),
+    path('<int:pk>/notificar/<str:tipo>/', views.notificar_cliente_ordem, name='notificar_cliente_ordem'),
     path("buscar-ordens/", views.buscar_ordens, name="buscar_ordens"),
+    path("portal/", views.portal_cliente, name="portal_cliente"),
 
 
     # =======================

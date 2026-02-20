@@ -1,62 +1,102 @@
-from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.db import models
-from django.contrib import messages
+from django.core.exceptions import PermissionDenied
+from django.db.models import Count
+from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
 from clientes.models import Cliente
-from ordens.models import OrdemServico
 from configuracoes.models import Empresa
+from configuracoes.permissions import ORDER_ROLES, has_role
+from ordens.models import OrdemServico
 
 
 # ---------------------
 # DASHBOARD
 # ---------------------
-@login_required(login_url='configuracoes:login')
+@login_required(login_url="configuracoes:login")
 def dashboard(request):
+    if not has_role(request.user, ORDER_ROLES):
+        raise PermissionDenied
+
+    tipo_usuario = getattr(request.user, "tipo_usuario", "")
+    is_managerial = request.user.is_superuser or tipo_usuario in {"adm", "gerente"}
+    is_operational = (tipo_usuario in {"atendente", "tecnico"}) and not is_managerial
+
     total_clientes = Cliente.objects.count()
     total_ordens = OrdemServico.objects.count()
-    empresa = Empresa.objects.first()
+    total_ordens_abertas = OrdemServico.objects.filter(fechada=False).count()
+    total_ordens_finalizadas = OrdemServico.objects.filter(fechada=True).count()
 
     status_counts = (
         OrdemServico.objects.filter(fechada=False)
         .values("status")
-        .annotate(total=models.Count("id"))
+        .annotate(total=Count("id"))
     )
     status_dict = {item["status"]: item["total"] for item in status_counts}
+    status_cards = [
+        {
+            "status": status,
+            "label": label,
+            "total": status_dict.get(status, 0),
+            "url": f"{reverse('ordens:lista_ordens')}?status={status}",
+        }
+        for status, label in OrdemServico.STATUS_CHOICES
+        if status != "concluida"
+    ]
 
-    status_cards = []
-    for status, label in OrdemServico.STATUS_CHOICES:
-        if status == "concluida":
-            continue
-        status_cards.append(
+    context = {
+        "empresa": Empresa.objects.first(),
+        "total_clientes": total_clientes,
+        "total_ordens": total_ordens,
+        "total_ordens_abertas": total_ordens_abertas,
+        "total_ordens_finalizadas": total_ordens_finalizadas,
+        "status_cards": status_cards,
+        "is_operational": is_operational,
+        "is_managerial": is_managerial,
+        "menu_app": "core",
+        "menu_sub": "dashboard",
+    }
+
+    if is_managerial:
+        today = timezone.localdate()
+        ordens_sem_tecnico = OrdemServico.objects.filter(
+            fechada=False, tecnico_responsavel__isnull=True
+        ).count()
+        ordens_prontas = OrdemServico.objects.filter(
+            fechada=False, status__in={"pronto_contactado", "pronto_contactar"}
+        ).count()
+        ordens_criticas = OrdemServico.objects.filter(
+            fechada=False,
+            status__in={"pendente_cliente", "pendente_tecnico", "pendente_pecas", "pendente_marca"},
+        ).count()
+        ordens_paradas = OrdemServico.objects.filter(
+            fechada=False, status__in={"pendente_cliente", "pendente_tecnico", "pendente_pecas", "pendente_marca"}
+        ).count()
+
+        ordens_recentes = (
+            OrdemServico.objects.select_related("cliente", "tecnico_responsavel")
+            .filter(fechada=False)
+            .order_by("-data_abertura")[:5]
+        )
+
+        context.update(
             {
-                "status": status,
-                "label": label,
-                "total": status_dict.get(status, 0),
-                "url": f"{reverse('ordens:lista_ordens')}?status={status}",
+                "gerencial_cards": {
+                    "abertas_total": total_ordens_abertas,
+                    "fechadas_total": total_ordens_finalizadas,
+                    "sem_tecnico": ordens_sem_tecnico,
+                    "prontas": ordens_prontas,
+                    "criticas": ordens_criticas,
+                    "paradas": ordens_paradas,
+                },
+                "ordens_recentes": ordens_recentes,
             }
         )
 
-    ultimos_clientes = Cliente.objects.all().order_by('-id')[:5]
-    ultimas_ordens = OrdemServico.objects.select_related('cliente').order_by('-id')[:5]
-
-    total_ordens_abertas = OrdemServico.objects.filter(fechada=False).count()
-    total_ordens_finalizadas = OrdemServico.objects.filter(fechada=True).count()
-
-    context = {
-        'total_clientes': total_clientes,
-        'total_ordens': total_ordens,
-        'total_ordens_abertas': total_ordens_abertas,
-        'total_ordens_finalizadas': total_ordens_finalizadas,
-        'status_cards': status_cards,
-        'ultimos_clientes': ultimos_clientes,
-        'ultimas_ordens': ultimas_ordens,
-        'menu_app': 'core',
-        'menu_sub': 'dashboard',
-    }
-    return render(request, 'core/dashboard.html', context)
+    return render(request, "core/dashboard.html", context)
 
 
 # ---------------------
@@ -73,21 +113,20 @@ def login_view(request):
         if user:
             login(request, user)
             return redirect("core:dashboard")
-        else:
-            messages.error(request, "Usuário ou senha inválidos.",extra_tags="login")
-            return render(request, "core/login.html")
+        messages.error(request, "Usuario ou senha invalidos.", extra_tags="login")
+        return render(request, "core/login.html")
     return render(request, "core/login.html")
 
 
-@login_required(login_url='configuracoes:login')
+@login_required(login_url="configuracoes:login")
 def logout_view(request):
     logout(request)
-    messages.info(request, "Você saiu do sistema com sucesso.", extra_tags="logout")
+    messages.info(request, "Voce saiu do sistema com sucesso.", extra_tags="logout")
     return redirect("core:login")
 
 
 # ---------------------
-# PÁGINA INICIAL / REDIRECIONAMENTO
+# PAGINA INICIAL / REDIRECIONAMENTO
 # ---------------------
 def home_redirect(request):
     if request.user.is_authenticated:
@@ -95,10 +134,10 @@ def home_redirect(request):
     return redirect("core:login")
 
 
-@login_required(login_url='configuracoes:login')
+@login_required(login_url="configuracoes:login")
 def painel(request):
     context = {
-        'user': request.user,
-        'tipo_usuario': request.user.get_tipo_display(),
+        "user": request.user,
+        "tipo_usuario": request.user.get_tipo_display(),
     }
-    return render(request, 'configuracoes/painel.html', context)
+    return render(request, "configuracoes/painel.html", context)

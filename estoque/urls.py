@@ -1,20 +1,30 @@
-from django.urls import path
+﻿from django.urls import path
 from . import views
 
 app_name = 'estoque'
 
 urlpatterns = [
-
-    # Página principal do estoque → lista de produtos
     path('', views.lista_produtos, name='lista_produtos'),
-
-    # Cadastro de novo produto
     path('novo/', views.criar_produto, name='criar_produto'),
-
-    # Buscar produtos (API JSON + página de busca)
     path('buscar/', views.buscar_produtos, name='buscar_produtos'),
-
     path('editar/<int:produto_id>/', views.editar_produto, name='editar_produto'),
     path('excluir/<int:produto_id>/', views.excluir_produto, name='excluir_produto'),
     path('buscar_produto/', views.buscar_produto, name='buscar_produto'),
+    path('movimentacoes/', views.listar_movimentacoes, name='movimentacoes'),
+    path('movimentacoes/nova/', views.registrar_movimentacao, name='registrar_movimentacao'),
+    path('pontos-operacionais/', views.pontos_operacionais, name='pontos_operacionais'),
+    path('consulta-artigos/', views.consulta_artigos, name='consulta_artigos'),
+    path('reservas-clientes/', views.reservas_clientes, name='reservas_clientes'),
+    path('reservas-clientes/<str:codigo_reserva>/associar-os/', views.associar_reserva_ordem, name='associar_reserva_ordem'),
+    path('api/consulta-artigos/', views.api_consulta_artigos, name='api_consulta_artigos'),
+    path('api/resumo-artigo/<int:produto_id>/', views.api_resumo_artigo, name='api_resumo_artigo'),
+    path('api/venda-rapida/', views.api_venda_rapida, name='api_venda_rapida'),
+    path('api/criar-reserva/', views.api_criar_reserva, name='api_criar_reserva'),
+    path('api/expirar-reservas/', views.api_expirar_reservas, name='api_expirar_reservas'),
+    path('api/reservas/<str:codigo_reserva>/converter/', views.api_converter_reserva, name='api_converter_reserva'),
+    path('api/reservas/<str:codigo_reserva>/cancelar/', views.api_cancelar_reserva, name='api_cancelar_reserva'),
+    path('api/inventario/iniciar/', views.api_inventario_iniciar, name='api_inventario_iniciar'),
+    path('api/inventario/<int:inventario_id>/item/', views.api_inventario_adicionar_item, name='api_inventario_adicionar_item'),
+    path('api/inventario/<int:inventario_id>/finalizar/', views.api_inventario_finalizar, name='api_inventario_finalizar'),
+    path('api/alertas-estoque/', views.api_alertas_estoque, name='api_alertas_estoque'),
 ]

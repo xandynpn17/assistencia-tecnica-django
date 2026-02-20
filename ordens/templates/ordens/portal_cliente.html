@@ -1,0 +1,51 @@
+﻿{% extends "core/base.html" %}
+
+{% block title %}Portal do Cliente{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Portal do Cliente</h1>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <form method="get" class="row">
+            <div class="col-md-4 mb-2">
+                <label>Codigo do Portal</label>
+                <input type="text" name="codigo" value="{{ codigo }}" class="form-control" required>
+            </div>
+            <div class="col-md-4 mb-2">
+                <label>Documento (opcional)</label>
+                <input type="text" name="documento" value="{{ documento }}" class="form-control">
+            </div>
+            <div class="col-md-4 mb-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary">Consultar</button>
+            </div>
+        </form>
+
+        {% if erro %}
+            <div class="alert alert-danger mt-3">{{ erro }}</div>
+        {% endif %}
+
+        {% if ordem %}
+            <hr>
+            <h5>OS {{ ordem.numero_os }}</h5>
+            <p><strong>Status:</strong> {{ ordem.get_status_display }}</p>
+            <p><strong>Equipamento:</strong> {{ ordem.get_tipo_equipamento_display }} - {{ ordem.marca_equipamento }} {{ ordem.modelo_equipamento }}</p>
+            <p><strong>Data de abertura:</strong> {{ ordem.data_abertura|date:"d/m/Y H:i" }}</p>
+
+            <h6 class="mt-3">Historico</h6>
+            <ul class="list-group">
+                {% for linha in ordem.linhas_trabalho.all %}
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>{{ linha.get_status_display }} - {{ linha.descricao|default:"Atualizacao" }}</span>
+                        <small>{{ linha.criado_em|date:"d/m/Y H:i" }}</small>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">Sem atualizacoes registradas.</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

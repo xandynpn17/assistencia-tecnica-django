@@ -1,0 +1,52 @@
+﻿{% extends "core/base.html" %}
+
+{% block header %}<h1 class="m-0 text-dark">Movimentacoes de Estoque</h1>{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Historico de movimentacoes</span>
+    <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm">Nova movimentacao</a>
+  </div>
+  <div class="card-body border-bottom">
+    <form method="get" class="form-inline">
+      <label class="mr-2">Tipo</label>
+      <select name="tipo" class="form-control form-control-sm mr-2">
+        <option value="">Todos</option>
+        {% for valor, label in tipos_mov %}
+          <option value="{{ valor }}" {% if tipo_filtro == valor %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <label class="mr-2">Ponto</label>
+      <select name="ponto" class="form-control form-control-sm mr-2">
+        <option value="">Todos</option>
+        {% for p in pontos %}
+          <option value="{{ p.id }}" {% if ponto_filtro == p.id|stringformat:'s' %}selected{% endif %}>{{ p.codigo }} - {{ p.nome }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+    </form>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-bordered mb-0">
+      <thead><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Qtd</th><th>Origem</th><th>Destino</th><th>Obs</th><th>Usuario</th></tr></thead>
+      <tbody>
+      {% for m in movimentacoes %}
+      <tr>
+        <td>{{ m.criado_em|date:"d/m/Y H:i" }}</td>
+        <td>{{ m.produto.nome }}</td>
+        <td>{{ m.get_tipo_display }}</td>
+        <td>{{ m.quantidade }}</td>
+        <td>{{ m.origem|default:"-" }}</td>
+        <td>{{ m.destino|default:"-" }}</td>
+        <td>{{ m.observacao|default:"-" }}</td>
+        <td>{{ m.usuario|default:"-" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" class="text-center text-muted">Sem movimentacoes.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

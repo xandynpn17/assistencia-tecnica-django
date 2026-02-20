@@ -1,0 +1,25 @@
+﻿{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header"><h3 class="card-title">Categorias Financeiras</h3></div>
+  <div class="card-body">
+    <form method="post" class="row">
+      {% csrf_token %}
+      <div class="col-md-4">{{ form.nome.label_tag }}{{ form.nome }}</div>
+      <div class="col-md-3">{{ form.tipo.label_tag }}{{ form.tipo }}</div>
+      <div class="col-md-2">{{ form.ativa.label_tag }}{{ form.ativa }}</div>
+      <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary" type="submit">Salvar</button></div>
+    </form>
+    <hr>
+    <table class="table table-sm table-bordered">
+      <thead><tr><th>Nome</th><th>Tipo</th><th>Ativa</th></tr></thead>
+      <tbody>
+      {% for c in categorias %}
+      <tr><td>{{ c.nome }}</td><td>{{ c.get_tipo_display }}</td><td>{{ c.ativa|yesno:"Sim,Nao" }}</td></tr>
+      {% empty %}<tr><td colspan="3" class="text-center text-muted">Sem categorias cadastradas.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

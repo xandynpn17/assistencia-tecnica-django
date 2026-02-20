@@ -25,6 +25,9 @@
                 <div class="col-md-4">{{ form.fornecedor.label_tag }} {{ form.fornecedor }}</div>
                 <div class="col-md-4">{{ form.data_entrada.label_tag }} {{ form.data_entrada }}</div>
             </div>
+            <div class="row mt-2">
+                <div class="col-md-4">{{ form.ponto_operacional.label_tag }} {{ form.ponto_operacional }}</div>
+            </div>
 
             <div class="row mt-2">
                 <div class="col-md-12">{{ form.descricao.label_tag }} {{ form.descricao }}</div>
@@ -45,12 +48,15 @@
                 <div class="col-md-3">{{ form.margem_lucro.label_tag }} {{ form.margem_lucro }}</div>
                 <div class="col-md-3">{{ form.quantidade.label_tag }} {{ form.quantidade }}</div>
             </div>
+            <div class="row mt-2">
+                <div class="col-md-3">{{ form.estoque_minimo.label_tag }} {{ form.estoque_minimo }}</div>
+            </div>
 
             <div class="row mt-2">
                 <div class="col-md-3">{{ form.icms.label_tag }} {{ form.icms }}</div>
                 <div class="col-md-3">{{ form.ipi.label_tag }} {{ form.ipi }}</div>
                 <div class="col-md-3">{{ form.pis_cofins.label_tag }} {{ form.pis_cofins }}</div>
-                <div class="col-md-3">{{ form.preco_sugerido.label_tag }} {{ form.preco_sugerido }}</div>
+                <div class="col-md-3"><label>Preco sugerido</label><input id="id_preco_sugerido" class="form-control" readonly></div>
             </div>
 
             <div class="row mt-2">

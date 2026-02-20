@@ -1,0 +1,12 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<h3>Aging de Contas a Receber</h3>
+<div class="row">
+  <div class="col-md-4"><div class="small-box bg-info"><div class="inner"><h4>R$ {{ buckets.a_vencer|floatformat:2 }}</h4><p>A Vencer</p></div></div></div>
+  <div class="col-md-4"><div class="small-box bg-warning"><div class="inner"><h4>R$ {{ buckets.vencidas_1_30|floatformat:2 }}</h4><p>Vencidas 1-30</p></div></div></div>
+  <div class="col-md-4"><div class="small-box bg-warning"><div class="inner"><h4>R$ {{ buckets.vencidas_31_60|floatformat:2 }}</h4><p>Vencidas 31-60</p></div></div></div>
+  <div class="col-md-6"><div class="small-box bg-danger"><div class="inner"><h4>R$ {{ buckets.vencidas_61_90|floatformat:2 }}</h4><p>Vencidas 61-90</p></div></div></div>
+  <div class="col-md-6"><div class="small-box bg-danger"><div class="inner"><h4>R$ {{ buckets.vencidas_90_plus|floatformat:2 }}</h4><p>Vencidas +90</p></div></div></div>
+</div>
+{% endblock %}

@@ -6,15 +6,24 @@ from clientes.models import Cliente
 from ordens.models import OrdemServico
 
 
-class DashboardFluxoStatusTests(TestCase):
+class DashboardTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
-        self.user = user_model.objects.create_user(
-            username="dashboard_user",
+        self.atendente = user_model.objects.create_user(
+            username="dashboard_atendente",
             password="senha-forte-123",
+            tipo_usuario="atendente",
         )
-        self.client.force_login(self.user)
-
+        self.gerente = user_model.objects.create_user(
+            username="dashboard_gerente",
+            password="senha-forte-123",
+            tipo_usuario="gerente",
+        )
+        self.superuser = user_model.objects.create_superuser(
+            username="dashboard_root",
+            password="senha-forte-123",
+            email="root@teste.com",
+        )
         self.cliente = Cliente.objects.create(
             nome="Cliente Dashboard",
             documento="52998224725",
@@ -34,35 +43,52 @@ class DashboardFluxoStatusTests(TestCase):
             fechada=fechada,
         )
 
-    def test_dashboard_exibe_link_para_lista_filtrada_por_status(self):
-        self._criar_ordem(status="diagnosticar", fechada=False)
+    def test_dashboard_operacional_exibe_acoes_rapidas_e_status(self):
+        self.client.force_login(self.atendente)
+        self._criar_ordem(status="bancada", fechada=False)
 
         response = self.client.get(reverse("core:dashboard"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response,
-            f'href="{reverse("ordens:lista_ordens")}?status=diagnosticar"',
-        )
 
-    def test_dashboard_conta_status_apenas_de_ordens_abertas(self):
-        self._criar_ordem(status="diagnosticar", fechada=False)
-        self._criar_ordem(status="diagnosticar", fechada=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["is_operational"])
+        self.assertContains(response, "Abrir Nova Ordem")
+        self.assertContains(response, "Registrar Pagamento")
+        self.assertContains(response, "Consultar Stock")
+        self.assertContains(response, "Ordens por Status (Abertas)")
+
+    def test_dashboard_gerencial_exibe_status_e_acesso_caixa(self):
+        self.client.force_login(self.gerente)
+        self._criar_ordem(status="pronto_contactado", fechada=False)
 
         response = self.client.get(reverse("core:dashboard"))
+
         self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["is_operational"])
+        self.assertTrue(response.context["is_managerial"])
+        self.assertContains(response, "Teclas Rapidas")
+        self.assertContains(response, "Dashboard Caixa")
+        self.assertContains(response, "Ordens por Status (Abertas)")
+        self.assertContains(response, "Ultimas 5 Ordens Abertas")
+        self.assertNotContains(response, "Faturamento Total")
+        self.assertNotContains(response, "A Receber")
+        self.assertNotContains(response, "Periodo de Analise")
 
-        status_cards = response.context["status_cards"]
-        diagnosticar = next(card for card in status_cards if card["status"] == "diagnosticar")
-        self.assertEqual(diagnosticar["total"], 1)
+    def test_dashboard_gerencial_limita_ultimas_ordens_abertas(self):
+        self.client.force_login(self.gerente)
+        for _ in range(7):
+            self._criar_ordem(status="diagnosticar", fechada=False)
+        self._criar_ordem(status="concluida", fechada=True)
 
-    def test_lista_filtrada_por_status_retorna_apenas_abertas_daquele_status(self):
-        ordem_aberta = self._criar_ordem(status="diagnosticar", fechada=False)
-        self._criar_ordem(status="diagnosticar", fechada=True)
-        self._criar_ordem(status="pendente_pecas", fechada=False)
+        response = self.client.get(reverse("core:dashboard"))
 
-        response = self.client.get(reverse("ordens:lista_ordens"), {"status": "diagnosticar"})
         self.assertEqual(response.status_code, 200)
+        ordens_recentes = list(response.context["ordens_recentes"])
+        self.assertEqual(len(ordens_recentes), 5)
+        self.assertTrue(all(not ordem.fechada for ordem in ordens_recentes))
 
-        ordens = list(response.context["ordens"])
-        self.assertEqual(len(ordens), 1)
-        self.assertEqual(ordens[0].id, ordem_aberta.id)
+    def test_superuser_recebe_dashboard_gerencial(self):
+        self.client.force_login(self.superuser)
+        response = self.client.get(reverse("core:dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["is_managerial"])
+        self.assertFalse(response.context["is_operational"])

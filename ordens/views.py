@@ -9,7 +9,7 @@ from django.views.generic import CreateView, ListView, UpdateView, DetailView
 from django.contrib import messages
 from django.utils.timezone import localtime
 from .models import OrdemServico, LinhaTrabalho, ServicoPeca
-from .forms import OrdemServicoForm, LinhaTrabalhoForm, ServicoPecaForm
+from .forms import LinhaTrabalhoForm, NotificacaoClienteForm, OrdemServicoForm, ServicoPecaForm
 from clientes.models import Cliente
 from clientes.forms import ClienteForm
 from caixa.models import Pagamento
@@ -34,9 +34,31 @@ import json
 from configuracoes.models import ConfiguracaoSistema
 from configuracoes.permissions import role_required, ORDER_ROLES, RoleRequiredMixin
 from .utils import registrar_auditoria
+from .models import NotificacaoCliente
+from estoque.services import consumir_reservas_ordem, devolver_reservas_ordem
 
 
 logger = logging.getLogger(__name__)
+
+
+def _registrar_notificacao(ordem, *, tipo, canal, mensagem, usuario=None):
+    destinatario = ""
+    if canal == "email":
+        destinatario = ordem.cliente.email or ""
+    elif canal == "whatsapp":
+        destinatario = ordem.cliente.telefone or ""
+
+    status = "enviada" if canal == "sistema" else "pendente"
+    notif = NotificacaoCliente.objects.create(
+        ordem=ordem,
+        tipo=tipo,
+        canal=canal,
+        mensagem=mensagem,
+        destinatario=destinatario,
+        status=status,
+        usuario=usuario,
+    )
+    return notif
 
 
 # ===========================
@@ -212,6 +234,11 @@ def toggle_fechamento_os(request, pk):
     try:
         ordem.atualizar_status_fechamento(fechar=not ordem.fechada, usuario=request.user)
         acao = "Ordem fechada" if ordem.fechada else "Ordem reaberta"
+        reservas_processadas = 0
+        if ordem.fechada:
+            reservas_processadas = consumir_reservas_ordem(ordem, usuario=request.user)
+        else:
+            reservas_processadas = devolver_reservas_ordem(ordem, usuario=request.user)
 
         # 🔹 Registrar no histórico quem fechou/reabriu
         LinhaTrabalho.objects.create(
@@ -228,7 +255,10 @@ def toggle_fechamento_os(request, pk):
             messages.success(request, "Ordem fechada. Redirecionando para registro de pagamento no Caixa.")
             return redirect(f"{reverse('caixa:registrar_pagamento')}?os={ordem.id}&valor={total_os:.2f}")
 
-        messages.success(request, "Ordem atualizada com sucesso!")
+        if reservas_processadas:
+            messages.success(request, f"Ordem atualizada com sucesso! Reservas processadas: {reservas_processadas}.")
+        else:
+            messages.success(request, "Ordem atualizada com sucesso!")
         return redirect(f"{ordem.get_absolute_url()}?tab=detalhes")
     except ValueError as e:
         messages.error(request, str(e))
@@ -400,6 +430,14 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             defaults={"cliente": ordem.cliente},
         )
         context["item_form"] = ItemOrcamentoForm()
+        context["notificacao_form"] = NotificacaoClienteForm(
+            initial={
+                "tipo": "manual",
+                "canal": "sistema",
+                "mensagem": f"Atualizacao da OS {ordem.numero_os}.",
+            }
+        )
+        context["notificacoes"] = ordem.notificacoes.all()[:10]
         # Tabs
         tab = self.request.GET.get("tab", "detalhes")
         context["active_tab"] = tab
@@ -408,6 +446,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             {"id": "linhas", "label": "Linhas de Trabalho", "icon": "bi bi-list-task"},
             {"id": "servicos", "label": "Serviços & Peças", "icon": "bi bi-bag"},
             {"id": "orcamentos", "label": "Orçamentos", "icon": "bi bi-cash-stack"},
+            {"id": "notificacoes", "label": "Notificacoes", "icon": "bi bi-bell"},
             {"id": "relatorio", "label": "Relatório Técnico", "icon": "bi bi-tools"},
         ]
         context["menu_app"] = "ordens"
@@ -466,12 +505,13 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             except ValueError as exc:
                 messages.error(request, str(exc))
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+            reservas_processadas = consumir_reservas_ordem(self.object, usuario=request.user)
             registrar_auditoria(
                 logger,
                 request,
                 "os_concluida_no_caixa",
                 ordem=self.object,
-                extra={"total_os": f"{total_os:.2f}"},
+                extra={"total_os": f"{total_os:.2f}", "reservas_processadas": reservas_processadas},
             )
 
             messages.success(
@@ -481,6 +521,23 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             if request.POST.get("ir_caixa") == "1":
                 return redirect(f"{reverse('caixa:registrar_pagamento')}?os={self.object.id}&valor={total_os:.2f}")
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+
+        elif form_type == "notificacao":
+            notif_form = NotificacaoClienteForm(request.POST)
+            if notif_form.is_valid():
+                notif = notif_form.save(commit=False)
+                notif.ordem = self.object
+                notif.usuario = request.user
+                if notif.canal == "email":
+                    notif.destinatario = self.object.cliente.email or ""
+                elif notif.canal == "whatsapp":
+                    notif.destinatario = self.object.cliente.telefone or ""
+                notif.status = "enviada" if notif.canal == "sistema" else "pendente"
+                notif.save()
+                messages.success(request, "Notificacao registrada com sucesso.")
+            else:
+                messages.error(request, "Nao foi possivel registrar a notificacao.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=notificacoes")
 
 
         # Relatório Técnico
@@ -597,6 +654,53 @@ def buscar_ordens(request):
     ]
 
     return JsonResponse({"resultados": data})
+
+
+def _mensagem_padrao_notificacao(ordem, tipo):
+    if tipo == "orcamento":
+        return (
+            f"Ola, {ordem.cliente.nome}. Seu orcamento da OS {ordem.numero_os} esta disponivel. "
+            f"Codigo de acompanhamento: {ordem.codigo_portal}."
+        )
+    if tipo == "pronto":
+        return (
+            f"Ola, {ordem.cliente.nome}. Seu equipamento da OS {ordem.numero_os} esta pronto para retirada. "
+            f"Codigo de acompanhamento: {ordem.codigo_portal}."
+        )
+    return f"Atualizacao da OS {ordem.numero_os}. Codigo de acompanhamento: {ordem.codigo_portal}."
+
+
+@role_required(ORDER_ROLES)
+def notificar_cliente_ordem(request, pk, tipo):
+    ordem = get_object_or_404(OrdemServico, pk=pk)
+    canal = request.POST.get("canal", "sistema")
+    mensagem = request.POST.get("mensagem") or _mensagem_padrao_notificacao(ordem, tipo)
+    _registrar_notificacao(ordem, tipo=tipo, canal=canal, mensagem=mensagem, usuario=request.user)
+    messages.success(request, "Notificacao registrada.")
+    return redirect(f"{ordem.get_absolute_url()}?tab=notificacoes")
+
+
+def portal_cliente(request):
+    codigo = (request.GET.get("codigo") or "").strip().upper()
+    documento = re.sub(r"\D", "", request.GET.get("documento", ""))
+    ordem = None
+    erro = ""
+
+    if codigo:
+        ordem = OrdemServico.objects.select_related("cliente").filter(codigo_portal=codigo).first()
+        if not ordem:
+            erro = "Codigo nao encontrado."
+        elif documento and ordem.cliente.documento != documento:
+            ordem = None
+            erro = "Documento nao confere com o codigo informado."
+
+    context = {
+        "ordem": ordem,
+        "erro": erro,
+        "codigo": codigo,
+        "documento": documento,
+    }
+    return render(request, "ordens/portal_cliente.html", context)
 
 
 # ===========================

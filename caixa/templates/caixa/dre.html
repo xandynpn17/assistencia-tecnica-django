@@ -1,0 +1,29 @@
+﻿{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="form-inline">
+      <label class="mr-2">Periodo</label>
+      <select name="periodo" class="form-control mr-2">
+        <option value="7" {% if periodo == '7' %}selected{% endif %}>7 dias</option>
+        <option value="30" {% if periodo == '30' %}selected{% endif %}>30 dias</option>
+        <option value="90" {% if periodo == '90' %}selected{% endif %}>90 dias</option>
+      </select>
+      <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title">DRE Simplificado</h3></div>
+  <div class="card-body p-0">
+    <table class="table mb-0">
+      <tr><th>Receita Bruta</th><td>R$ {{ receita_bruta|floatformat:2 }}</td></tr>
+      <tr><th>Despesas Operacionais</th><td>R$ {{ despesas_operacionais|floatformat:2 }}</td></tr>
+      <tr><th>Resultado Operacional</th><td><strong>R$ {{ resultado_operacional|floatformat:2 }}</strong></td></tr>
+      <tr><th>Margem</th><td>{{ margem|floatformat:2 }}%</td></tr>
+    </table>
+  </div>
+</div>
+{% endblock %}
