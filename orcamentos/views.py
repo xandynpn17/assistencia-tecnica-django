@@ -19,12 +19,19 @@ from datetime import datetime
 from django.db.models import Q
 
 
+def _os_fechada(ordem):
+    return bool(getattr(ordem, "fechada", False))
+
+
 # ==========================
 # Criar e editar orçamento
 # ==========================
 @login_required(login_url='configuracoes:login')
 def criar_orcamento(request, ordem_id):
     ordem = get_object_or_404(OrdemServico, id=ordem_id)
+    if _os_fechada(ordem):
+        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     orcamento, _ = Orcamento.objects.get_or_create(
         ordem_servico=ordem,
         defaults={"cliente": ordem.cliente},
@@ -39,6 +46,9 @@ def criar_orcamento(request, ordem_id):
 @login_required(login_url='configuracoes:login')
 def editar_orcamento(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
+    if _os_fechada(orcamento.ordem_servico):
+        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+        return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         orcamento.descricao = request.POST.get("descricao", orcamento.descricao)
         orcamento.save()
@@ -50,6 +60,9 @@ def editar_orcamento(request, orcamento_id):
 def excluir_orcamento(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
     ordem = orcamento.ordem_servico
+    if _os_fechada(ordem):
+        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         orcamento.delete()
         messages.success(request, "Orçamento excluído com sucesso!")
@@ -64,6 +77,9 @@ def excluir_orcamento(request, orcamento_id):
 @login_required(login_url='configuracoes:login')
 def adicionar_item(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
+    if _os_fechada(orcamento.ordem_servico):
+        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+        return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         nome = request.POST.get("nome", "")
         descricao = request.POST.get("descricao", "")
@@ -87,6 +103,12 @@ def adicionar_item(request, orcamento_id):
 @login_required(login_url='configuracoes:login')
 def editar_item(request, item_id):
     item = get_object_or_404(ItemOrcamento, id=item_id)
+    if _os_fechada(item.orcamento.ordem_servico):
+        if request.method == "POST":
+            messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+            return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
+        from django.http import JsonResponse
+        return JsonResponse({"erro": "OS fechada. Reabra para alterar."}, status=400)
     if request.method == "POST":
         item.nome = request.POST.get("nome", item.nome)
         item.descricao = request.POST.get("descricao", item.descricao)
@@ -115,6 +137,9 @@ def editar_item(request, item_id):
 def excluir_item(request, item_id):
     item = get_object_or_404(ItemOrcamento, id=item_id)
     ordem = item.orcamento.ordem_servico
+    if _os_fechada(ordem):
+        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         item.delete()
         messages.success(request, "Item excluído com sucesso!")
@@ -127,6 +152,9 @@ def excluir_item(request, item_id):
 def aceitar_itens_orcamento(request, orcamento_id):
     if request.method == "POST":
         orc = get_object_or_404(Orcamento, id=orcamento_id)
+        if _os_fechada(orc.ordem_servico):
+            messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+            return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
         itens_ids = request.POST.getlist("itens_selecionados")
         if not itens_ids:
             messages.warning(request, "Selecione ao menos um item para aprovar.")
@@ -156,6 +184,9 @@ def aceitar_itens_orcamento(request, orcamento_id):
 def recusar_itens_orcamento(request, orcamento_id):
     if request.method == "POST":
         orc = get_object_or_404(Orcamento, id=orcamento_id)
+        if _os_fechada(orc.ordem_servico):
+            messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+            return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
         itens_ids = request.POST.getlist("itens_selecionados")
         if not itens_ids:
             messages.warning(request, "Selecione ao menos um item para recusar.")
@@ -210,6 +241,9 @@ def buscar_produtos(request):
 def migrar_para_servicos(request, orcamento_id):
     orc = get_object_or_404(Orcamento, id=orcamento_id)
     ordem = orc.ordem_servico
+    if _os_fechada(ordem):
+        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         itens_ids = request.POST.getlist("itens_selecionados")
         itens = orc.itens.filter(id__in=itens_ids)

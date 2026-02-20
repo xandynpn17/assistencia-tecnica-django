@@ -1,16 +1,44 @@
 {% extends 'core/base.html' %}
-{% block title %}Lista de Ordens de Serviço{% endblock %}
+{% block title %}Lista de Ordens de Servico{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
         <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Ordens de Serviço</h3>
-                <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-success">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Ordens de Servico</h3>
+                <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-success btn-sm">
                     Nova Ordem
                 </a>
             </div>
+
+            <div class="card-body border-bottom">
+                <form method="get" class="form-row align-items-end">
+                    <div class="col-md-5 mb-2">
+                        <label>Busca</label>
+                        <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="OS, cliente, documento ou telefone">
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <label>Status</label>
+                        <select class="form-control" name="status">
+                            <option value="">Todos</option>
+                            {% for key, label in view.model.STATUS_CHOICES %}
+                            <option value="{{ key }}" {% if status_filtro == key %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <div class="form-check mt-4">
+                            <input class="form-check-input" type="checkbox" id="incluir_fechadas" name="incluir_fechadas" value="1" {% if incluir_fechadas %}checked{% endif %}>
+                            <label class="form-check-label" for="incluir_fechadas">Incluir fechadas</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+                    </div>
+                </form>
+            </div>
+
             <div class="card-body table-responsive">
                 <table class="table table-bordered table-hover">
                     <thead>
@@ -22,7 +50,7 @@
                             <th>Modelo</th>
                             <th>Status</th>
                             <th>Criada em</th>
-                            <th>Ações</th>
+                            <th>Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -47,6 +75,26 @@
                         {% endfor %}
                     </tbody>
                 </table>
+
+                {% if is_paginated %}
+                <nav aria-label="Paginacao de ordens">
+                    <ul class="pagination pagination-sm mt-3 mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?q={{ q }}&status={{ status_filtro }}{% if incluir_fechadas %}&incluir_fechadas=1{% endif %}&page={{ page_obj.previous_page_number }}">Anterior</a>
+                        </li>
+                        {% endif %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                        </li>
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?q={{ q }}&status={{ status_filtro }}{% if incluir_fechadas %}&incluir_fechadas=1{% endif %}&page={{ page_obj.next_page_number }}">Proxima</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
             </div>
         </div>
     </div>

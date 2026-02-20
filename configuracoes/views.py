@@ -9,10 +9,19 @@ from .models import Empresa, Aliquota, ConfiguracaoOrdemServico, ConfiguracaoSis
 from django.views.decorators.csrf import csrf_exempt
 import requests
 import json
+import logging
 from django.http import JsonResponse
 from .permissions import role_required, ADM_ROLES, MANAGER_ROLES, STAFF_ROLES
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
+
+def _request_ip(request):
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
 
 
 # ---------------------------
@@ -107,6 +116,15 @@ def adicionar_usuario(request):
                 return render(request, 'configuracoes/usuario_form.html', {'form': form})
 
             form.save()
+            logger.info(
+                "auditoria_operacional",
+                extra={
+                    "acao": "usuario_criado",
+                    "usuario": request.user.username,
+                    "ip": _request_ip(request),
+                    "tipo_usuario_novo": novo_tipo,
+                },
+            )
             messages.success(request, "Usuário adicionado com sucesso!")
             if request.user.tipo_usuario == "gerente":
                 return redirect('configuracoes:painel')
@@ -152,6 +170,14 @@ def excluir_usuario(request, usuario_id):
 # ---------------------------
 @role_required(MANAGER_ROLES)
 def backup_banco(request):
+    logger.info(
+        "auditoria_operacional",
+        extra={
+            "acao": "backup_solicitado",
+            "usuario": request.user.username,
+            "ip": _request_ip(request),
+        },
+    )
     messages.info(request, "Backup do banco ainda não implementado.")
     return redirect('configuracoes:painel')
 

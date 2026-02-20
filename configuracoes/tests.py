@@ -21,6 +21,11 @@ class PermissoesConfiguracoesTests(TestCase):
             password="senha123",
             tipo_usuario="adm",
         )
+        self.tecnico = user_model.objects.create_user(
+            username="tecnico",
+            password="senha123",
+            tipo_usuario="tecnico",
+        )
 
     def test_painel_bloqueia_atendente(self):
         self.client.force_login(self.atendente)
@@ -62,3 +67,38 @@ class PermissoesConfiguracoesTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Gerente nao pode criar usuario Administrador.")
+
+    def test_backup_permite_gerente(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:backup_banco"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_backup_bloqueia_atendente(self):
+        self.client.force_login(self.atendente)
+        response = self.client.get(reverse("configuracoes:backup_banco"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_tecnico_pode_abrir_lista_ordens(self):
+        self.client.force_login(self.tecnico)
+        response = self.client.get(reverse("ordens:lista_ordens"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_tecnico_pode_consultar_estoque(self):
+        self.client.force_login(self.tecnico)
+        response = self.client.get(reverse("estoque:lista_produtos"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_tecnico_nao_pode_criar_produto(self):
+        self.client.force_login(self.tecnico)
+        response = self.client.get(reverse("estoque:criar_produto"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_tecnico_nao_pode_acessar_caixa(self):
+        self.client.force_login(self.tecnico)
+        response = self.client.get(reverse("caixa:dashboard_caixa"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_tecnico_nao_pode_acessar_clientes(self):
+        self.client.force_login(self.tecnico)
+        response = self.client.get(reverse("clientes:lista_clientes"))
+        self.assertEqual(response.status_code, 403)

@@ -4,10 +4,10 @@ from .models import Produto
 from .forms import ProdutoForm
 from django.db.models import Q
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from configuracoes.permissions import role_required, STOCK_VIEW_ROLES, STOCK_MANAGE_ROLES
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(STOCK_VIEW_ROLES)
 def buscar_produtos(request):
     termo = request.GET.get('q', '').strip()
     produtos = []
@@ -24,7 +24,7 @@ def buscar_produtos(request):
     }
     return render(request, 'estoque/buscar_produtos.html', context)
 
-@login_required(login_url='configuracoes:login')
+@role_required(STOCK_VIEW_ROLES)
 def lista_produtos(request):
     filtro = request.GET.get("tipo", "todos")
 
@@ -44,7 +44,7 @@ def lista_produtos(request):
     return render(request, 'estoque/lista_produtos.html', context)
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(STOCK_MANAGE_ROLES)
 def criar_produto(request):
     # Busca o último produto para pegar valores padrão
     ultimo = Produto.objects.order_by('-id').first()
@@ -73,7 +73,7 @@ def criar_produto(request):
     }
     return render(request, 'estoque/form_produto.html', context)
 
-@login_required(login_url='configuracoes:login')
+@role_required(STOCK_MANAGE_ROLES)
 def editar_produto(request, produto_id):
     produto = get_object_or_404(Produto, id=produto_id)
     if request.method == "POST":
@@ -87,7 +87,7 @@ def editar_produto(request, produto_id):
 
     return render(request, 'estoque/form_produto.html', {'form': form})
 
-@login_required(login_url='configuracoes:login')
+@role_required(STOCK_MANAGE_ROLES)
 def excluir_produto(request, produto_id):
     produto = get_object_or_404(Produto, id=produto_id)
     if request.method == "POST":
@@ -97,7 +97,7 @@ def excluir_produto(request, produto_id):
     return render(request, 'estoque/confirm_delete.html', {'produto': produto})
 
 
-@login_required(login_url='configuracoes:login')
+@role_required(STOCK_VIEW_ROLES)
 def buscar_produto(request):
     q = request.GET.get('q', '').strip()
     produtos = Produto.objects.filter(nome__icontains=q) | Produto.objects.filter(ean__icontains=q)

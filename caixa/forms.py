@@ -4,7 +4,7 @@ from .models import Pagamento, LancamentoCaixa
 class PagamentoForm(forms.ModelForm):
     class Meta:
         model = Pagamento
-        fields = ["ordem_servico", "valor", "metodo"]
+        fields = ["ordem_servico", "valor", "metodo", "referencia"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import OrdemServicoCreateView, OrdemServicoListView, OrdemServicoUpdateView, DetalhesOrdemView
+from .views import OrdemServicoCreateView, OrdemServicoListView, OrdemServicoUpdateView, DetalhesOrdemView, OrdemServicoResumoView
 from orcamentos import views as orc_views
 
 
@@ -21,6 +21,7 @@ urlpatterns = [
     path('', OrdemServicoListView.as_view(), name='lista_ordens'),
     path('<int:pk>/editar/', OrdemServicoUpdateView.as_view(), name='editar_ordem'),
     path('<int:pk>/detalhes/', DetalhesOrdemView.as_view(), name='detalhes_ordem'),
+    path('<int:pk>/resumo/', OrdemServicoResumoView.as_view(), name='resumo_ordem'),
     path('<int:pk>/toggle-fechamento/', views.toggle_fechamento_os, name='toggle_fechamento_os'),
     path("buscar-ordens/", views.buscar_ordens, name="buscar_ordens"),
 

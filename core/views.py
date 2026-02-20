@@ -3,6 +3,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.db import models
 from django.contrib import messages
+from django.urls import reverse
 
 from clientes.models import Cliente
 from ordens.models import OrdemServico
@@ -18,29 +19,38 @@ def dashboard(request):
     total_ordens = OrdemServico.objects.count()
     empresa = Empresa.objects.first()
 
-    status_counts = OrdemServico.objects.values("status").annotate(total=models.Count("id"))
+    status_counts = (
+        OrdemServico.objects.filter(fechada=False)
+        .values("status")
+        .annotate(total=models.Count("id"))
+    )
     status_dict = {item["status"]: item["total"] for item in status_counts}
 
-    # Garantir que todas as chaves de status existam
-    for status in [
-        'diagnosticar', 'pendente_tecnico', 'pendente_marca', 'pendente_pecas',
-        'pendente_orcamento', 'orcamentado', 'autorizado', 'em_andamento',
-        'pronto_contactado', 'pronto_contactar', 'concluida'
-    ]:
-        status_dict.setdefault(status, 0)
+    status_cards = []
+    for status, label in OrdemServico.STATUS_CHOICES:
+        if status == "concluida":
+            continue
+        status_cards.append(
+            {
+                "status": status,
+                "label": label,
+                "total": status_dict.get(status, 0),
+                "url": f"{reverse('ordens:lista_ordens')}?status={status}",
+            }
+        )
 
     ultimos_clientes = Cliente.objects.all().order_by('-id')[:5]
     ultimas_ordens = OrdemServico.objects.select_related('cliente').order_by('-id')[:5]
 
-    total_ordens_abertas = OrdemServico.objects.exclude(status='concluida').count()
-    total_ordens_finalizadas = OrdemServico.objects.filter(status='concluida').count()
+    total_ordens_abertas = OrdemServico.objects.filter(fechada=False).count()
+    total_ordens_finalizadas = OrdemServico.objects.filter(fechada=True).count()
 
     context = {
         'total_clientes': total_clientes,
         'total_ordens': total_ordens,
         'total_ordens_abertas': total_ordens_abertas,
         'total_ordens_finalizadas': total_ordens_finalizadas,
-        'status_dict': status_dict,
+        'status_cards': status_cards,
         'ultimos_clientes': ultimos_clientes,
         'ultimas_ordens': ultimas_ordens,
         'menu_app': 'core',

@@ -1,4 +1,4 @@
-python manage.py shell{% extends "core/base.html" %}
+{% extends "core/base.html" %}
 {% load static %}
 
 {% block extra_css %}
@@ -58,9 +58,16 @@ python manage.py shell{% extends "core/base.html" %}
             <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-warning">
                 <i class="fas fa-lock mr-1"></i> Reabrir
             </a>
+            <a href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ total_os|floatformat:2 }}"
+               class="btn btn-success ml-2">
+                <i class="fas fa-cash-register mr-1"></i> Registrar no Caixa
+            </a>
             {% else %}
             <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-danger">
                 <i class="fas fa-lock-open mr-1"></i> Fechar
+            </a>
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-success ml-2">
+                <i class="fas fa-cash-register mr-1"></i> Fechar e Ir para Caixa
             </a>
             {% endif %}
         </div>
@@ -113,6 +120,11 @@ python manage.py shell{% extends "core/base.html" %}
     </ul>
 
 <div class="tab-content mt-4">
+    {% if ordem.fechada %}
+    <div class="alert alert-warning">
+        OS fechada: para adicionar linhas ou alterar orcamento/itens, reabra a ordem.
+    </div>
+    {% endif %}
 
     <!-- Aba Detalhes -->
     <div class="tab-pane fade {% if active_tab == 'detalhes' %}show active{% endif %}" id="detalhes">
@@ -225,10 +237,14 @@ python manage.py shell{% extends "core/base.html" %}
                     </div>
 
                     <!-- Botão adicionar linha à direita -->
+                    {% if not ordem.fechada %}
                     <span class="toggle-form-btn" data-toggle="modal" data-target="#modalAdicionarLinha"
                           style="cursor: pointer;">
                         <i class="fas fa-plus-circle mr-1"></i> Adicionar Linha
                     </span>
+                    {% else %}
+                    <span class="text-muted"><i class="fas fa-lock mr-1"></i> Adicao bloqueada</span>
+                    {% endif %}
                 </div>
 
                 <div class="card-modern-body">
@@ -237,6 +253,7 @@ python manage.py shell{% extends "core/base.html" %}
                         {% for linha in linhas %}
                         <div class="list-group-item">
                             <span class="linha-status badge badge-primary">{{ linha.get_status_display }}</span>
+                            <span class="badge badge-light border ml-1">{{ linha.get_tipo_evento_display }}</span>
                             <small class="linha-data float-right">
                                 {{ linha.criado_em|date:"d/m/Y H:i" }}
                                 {% if linha.usuario %}- {{ linha.usuario.username }}{% endif %}
@@ -305,6 +322,46 @@ python manage.py shell{% extends "core/base.html" %}
     <div class="card-modern">
         <div class="card-modern-header">Serviços & Peças</div>
         <div class="card-modern-body">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="border rounded p-2 bg-light">
+                        <small class="text-muted">Valor total OS</small>
+                        <div><strong>R$ {{ total_os|floatformat:2 }}</strong></div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-2 bg-light">
+                        <small class="text-muted">Valor pago</small>
+                        <div><strong>R$ {{ total_pago_os|floatformat:2 }}</strong></div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-2 bg-light">
+                        <small class="text-muted">Saldo</small>
+                        <div><strong>R$ {{ saldo_financeiro_os|floatformat:2 }}</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert {% if os_pago %}alert-success{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Pago?</strong> {% if os_pago %}Sim{% else %}Não{% endif %}
+                    <br>
+                    <small>
+                        <strong>Referências:</strong>
+                        {% if referencias_pagamento %}
+                            {{ referencias_pagamento|join:", " }}
+                        {% else %}
+                            Nenhuma referência registrada
+                        {% endif %}
+                    </small>
+                </div>
+                <a class="btn btn-sm btn-primary"
+                   href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ saldo_financeiro_os|floatformat:2 }}">
+                    Registrar pagamento
+                </a>
+            </div>
+
             {% if itens %}
             <div class="list-group mb-3">
                 {% for item in itens %}
@@ -332,10 +389,14 @@ python manage.py shell{% extends "core/base.html" %}
         <div class="card-modern-header d-flex justify-content-between align-items-center">
             <span>Orçamentos</span>
             <div class="d-flex">
+                {% if not ordem.fechada %}
                 <button type="button" class="btn btn-primary btn-sm mr-2" data-toggle="modal"
                         data-target="#modalAdicionarItem2">
                     <i class="fas fa-plus"></i> Inserir Item
                 </button>
+                {% else %}
+                <span class="text-light"><i class="fas fa-lock mr-1"></i> Edicao bloqueada</span>
+                {% endif %}
             </div>
         </div>
 
@@ -346,6 +407,7 @@ python manage.py shell{% extends "core/base.html" %}
 
             <!-- Botões de ação -->
             <div class="d-flex justify-content-end mb-3 mt-2">
+                {% if not ordem.fechada %}
                 <button type="submit" formaction="{% url 'orcamentos:aceitar_orcamento' orcamento.id %}"
                         class="btn btn-success btn-sm mr-2" onclick="return validarSelecao('aprovar');">
                     <i class="fas fa-check"></i> Aprovar Selecionados
@@ -360,6 +422,9 @@ python manage.py shell{% extends "core/base.html" %}
                         class="btn btn-success btn-sm" onclick="return validarSelecao('migrar');">
                     <i class="fas fa-arrow-down"></i> Migrar Selecionados
                 </button>
+                {% else %}
+                <span class="text-muted"><i class="fas fa-lock mr-1"></i> Acoes bloqueadas com OS fechada</span>
+                {% endif %}
             </div>
 
             <!-- Corpo -->
@@ -392,6 +457,7 @@ python manage.py shell{% extends "core/base.html" %}
                             <td>{{ item.total|floatformat:2 }}</td>
                             <td>{{ item.origem }}</td>
                             <td class="text-center">
+                                {% if not ordem.fechada %}
                                 <button type="button" class="btn btn-sm btn-info" onclick="editarItem({{ item.id }})">
                                     <i class="fas fa-edit"></i>
                                 </button>
@@ -403,6 +469,9 @@ python manage.py shell{% extends "core/base.html" %}
                                     {% csrf_token %}
                                     <i class="fas fa-trash"></i>
                                 </button>
+                                {% else %}
+                                <span class="badge badge-secondary">Bloqueado</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}
@@ -719,6 +788,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     div.classList.add("list-group-item");
                     div.innerHTML = `
                         <span class="linha-status badge badge-primary">${data.status}</span>
+                        <span class="badge badge-light border ml-1">${data.tipo_evento}</span>
                         <small class="linha-data float-right">${data.data} - ${data.usuario}</small>
                         <p class="linha-descricao">${data.descricao}</p>
                     `;
@@ -770,3 +840,4 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 {% endblock extra_js %}
+

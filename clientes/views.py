@@ -1,12 +1,22 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q
 from django.http import JsonResponse
+import logging
 from ordens.models import OrdemServico
 from configuracoes.permissions import role_required, STAFF_ROLES, MANAGER_ROLES
 
 from .models import Cliente
 from .forms import ClienteForm
 from orcamentos.models import Orcamento
+
+logger = logging.getLogger(__name__)
+
+
+def _request_ip(request):
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
 
 
 @role_required(STAFF_ROLES)
@@ -136,6 +146,17 @@ def excluir_cliente(request, cliente_id):
     ordens = OrdemServico.objects.filter(cliente=cliente).count()
 
     if request.method == 'POST':
+        logger.info(
+            "auditoria_operacional",
+            extra={
+                "acao": "cliente_excluido",
+                "usuario": request.user.username,
+                "ip": _request_ip(request),
+                "cliente_id": cliente.id,
+                "documento": cliente.documento,
+                "ordens_vinculadas": ordens,
+            },
+        )
         cliente.delete()
         return redirect('clientes:lista_clientes')
 

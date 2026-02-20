@@ -7,6 +7,10 @@ from django.core.exceptions import PermissionDenied
 ADM_ROLES = {"adm"}
 MANAGER_ROLES = {"adm", "gerente"}
 STAFF_ROLES = {"adm", "gerente", "atendente"}
+ORDER_ROLES = {"adm", "gerente", "atendente", "tecnico"}
+STOCK_VIEW_ROLES = {"adm", "gerente", "atendente", "tecnico"}
+STOCK_MANAGE_ROLES = {"adm", "gerente", "atendente"}
+CAIXA_ROLES = {"adm", "gerente", "atendente"}
 
 
 def has_role(user, allowed_roles):

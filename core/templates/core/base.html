@@ -134,6 +134,7 @@
             </li>
 
             <!-- Clientes -->
+            {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
             <li class="nav-item">
               <a href="{% url 'clientes:lista_clientes' %}"
                  class="nav-link {% if menu_app == 'clientes' %}active{% endif %}">
@@ -141,6 +142,7 @@
                 <p>Clientes</p>
               </a>
             </li>
+            {% endif %}
 
             <!-- Ordens de Servico -->
             <li class="nav-item has-treeview {% if menu_app == 'ordens' %}menu-open{% endif %}">
@@ -186,6 +188,7 @@
                     <p>Listar Produtos</p>
                   </a>
                 </li>
+                {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
                 <li class="nav-item">
                   <a href="{% url 'estoque:criar_produto' %}"
                      class="nav-link {% if menu_sub == 'criar_produto' %}active{% endif %}">
@@ -193,6 +196,7 @@
                     <p>Adicionar Produto</p>
                   </a>
                 </li>
+                {% endif %}
                 <li class="nav-item">
                   <a href="{% url 'estoque:buscar_produtos' %}"
                      class="nav-link {% if menu_sub == 'buscar_produtos' %}active{% endif %}">
@@ -204,6 +208,7 @@
             </li>
 
             <!-- Caixa -->
+            {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
             <li class="nav-item has-treeview {% if menu_app == 'caixa' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'caixa' %}active{% endif %}">
                 <i class="nav-icon fas fa-cash-register"></i>
@@ -315,6 +320,7 @@
                 </li>
               </ul>
             </li>
+            {% endif %}
             {% endif %}
 
           </ul>
