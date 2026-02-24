@@ -1,0 +1,121 @@
+{% extends "core/base.html" %}
+
+{% block title %}Garantias do Fabricante{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-header"><h5 class="mb-0">Garantias a Faturar</h5></div>
+  <div class="card-body">
+    <form method="get" class="form-row align-items-end">
+      <div class="form-group col-md-3">
+        <label>Status</label>
+        <select name="status" class="form-control">
+          <option value="">Todos</option>
+          <option value="pendente" {% if status_filtro == 'pendente' %}selected{% endif %}>Pendente</option>
+          <option value="enviado" {% if status_filtro == 'enviado' %}selected{% endif %}>Enviado</option>
+          <option value="pago" {% if status_filtro == 'pago' %}selected{% endif %}>Pago</option>
+        </select>
+      </div>
+      <div class="form-group col-md-4">
+        <label>Fornecedor</label>
+        <select name="fornecedor" class="form-control">
+          <option value="">Todos</option>
+          {% for f in fornecedores %}
+          <option value="{{ f.id }}" {% if fornecedor_filtro == f.id|stringformat:"s" %}selected{% endif %}>{{ f.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group col-md-2">
+        <label>Mes</label>
+        <input type="number" min="1" max="12" name="mes" class="form-control" value="{{ competencia_mes }}">
+      </div>
+      <div class="form-group col-md-2">
+        <label>Ano</label>
+        <input type="number" min="2020" max="2100" name="ano" class="form-control" value="{{ competencia_ano }}">
+      </div>
+      <div class="form-group col-md-2">
+        <button class="btn btn-primary btn-block" type="submit">Filtrar</button>
+      </div>
+      <div class="form-group col-md-2">
+        <a class="btn btn-outline-secondary btn-block"
+           href="?status={{ status_filtro }}&fornecedor={{ fornecedor_filtro }}&mes={{ competencia_mes }}&ano={{ competencia_ano }}&export=csv">
+           Exportar CSV
+        </a>
+      </div>
+    </form>
+
+    <div class="row mt-2 mb-3">
+      <div class="col-md-4"><div class="alert alert-warning mb-0">Pendente: <strong>R$ {{ resumo.pendente|floatformat:2 }}</strong></div></div>
+      <div class="col-md-4"><div class="alert alert-info mb-0">Enviado: <strong>R$ {{ resumo.enviado|floatformat:2 }}</strong></div></div>
+      <div class="col-md-4"><div class="alert alert-success mb-0">Pago: <strong>R$ {{ resumo.pago|floatformat:2 }}</strong></div></div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered">
+        <thead>
+          <tr>
+            <th>OS</th><th>Fornecedor</th><th>Marca</th><th>Valor Fabricante</th><th>Comissao Prevista</th><th>Status</th><th>Referencia</th><th>Acao</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in garantias %}
+          <tr>
+            <td>{{ a.ordem_servico.numero_os }}</td>
+            <td>{{ a.fornecedor.nome|default:"-" }}</td>
+            <td>{{ a.marca.nome|default:"-" }}</td>
+            <td>R$ {{ a.valor_previsto_fabricante|floatformat:2 }}</td>
+            <td>R$ {{ a.comissao_prevista_tecnica|floatformat:2 }}</td>
+            <td>{{ a.get_status_faturamento_display }}</td>
+            <td>{{ a.referencia_faturamento|default:"-" }}</td>
+            <td>
+              <form method="post" class="form-inline">
+                {% csrf_token %}
+                <input type="hidden" name="auditoria_id" value="{{ a.id }}">
+                <select name="status_faturamento" class="form-control form-control-sm mr-1">
+                  <option value="pendente" {% if a.status_faturamento == 'pendente' %}selected{% endif %}>Pendente</option>
+                  <option value="enviado" {% if a.status_faturamento == 'enviado' %}selected{% endif %}>Enviado</option>
+                  <option value="pago" {% if a.status_faturamento == 'pago' %}selected{% endif %}>Pago</option>
+                </select>
+                <input type="text" name="referencia_faturamento" value="{{ a.referencia_faturamento }}" class="form-control form-control-sm mr-1" placeholder="Ref">
+                <button class="btn btn-sm btn-outline-primary" type="submit">Salvar</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center text-muted">Sem registros de garantia.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <hr>
+    <h6 class="mb-2">Resumo mensal por marca e fornecedor</h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered">
+        <thead>
+          <tr>
+            <th>Fornecedor</th>
+            <th>Marca</th>
+            <th>Valor Pago</th>
+            <th>Mao de Obra Tecnico</th>
+            <th>Margem</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in resumo_marca_fornecedor %}
+          <tr>
+            <td>{{ r.fornecedor__nome|default:"-" }}</td>
+            <td>{{ r.marca__nome|default:"-" }}</td>
+            <td>R$ {{ r.total_valor_pago|default:0|floatformat:2 }}</td>
+            <td>R$ {{ r.total_mao_tecnico|default:0|floatformat:2 }}</td>
+            <td>R$ {{ r.margem|default:0|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center text-muted">Sem dados para a competencia filtrada.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Regras de Premio por Meta (Pagina dedicada)</h3></div>
+  <div class="card-body">
+    <form method="post" class="row">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="regra_premio">
+      <div class="col-md-3">{{ regra_premio_form.nome.label_tag }}{{ regra_premio_form.nome }}</div>
+      <div class="col-md-2">{{ regra_premio_form.metrica.label_tag }}{{ regra_premio_form.metrica }}</div>
+      <div class="col-md-2">{{ regra_premio_form.meta_alvo.label_tag }}{{ regra_premio_form.meta_alvo }}</div>
+      <div class="col-md-2">{{ regra_premio_form.publico.label_tag }}{{ regra_premio_form.publico }}</div>
+      <div class="col-md-1">{{ regra_premio_form.ativo.label_tag }}{{ regra_premio_form.ativo }}</div>
+      <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary" type="submit">Salvar regra</button></div>
+    </form>
+
+    <form method="post" class="row mt-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="faixa_premio">
+      <div class="col-md-3">{{ faixa_premio_form.regra.label_tag }}{{ faixa_premio_form.regra }}</div>
+      <div class="col-md-2">{{ faixa_premio_form.meta_minima.label_tag }}{{ faixa_premio_form.meta_minima }}</div>
+      <div class="col-md-2">{{ faixa_premio_form.meta_maxima.label_tag }}{{ faixa_premio_form.meta_maxima }}</div>
+      <div class="col-md-2">{{ faixa_premio_form.premio_valor.label_tag }}{{ faixa_premio_form.premio_valor }}</div>
+      <div class="col-md-1">{{ faixa_premio_form.ordem.label_tag }}{{ faixa_premio_form.ordem }}</div>
+      <div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-primary" type="submit">Salvar faixa</button></div>
+    </form>
+
+    <form method="post" class="mt-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="recalcular_premios">
+      <button class="btn btn-dark btn-sm" type="submit">Recalcular premios da competencia atual</button>
+    </form>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Regras e Faixas</h3></div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-bordered mb-0">
+      <thead><tr><th>Regra</th><th>Metrica</th><th>Meta</th><th>Publico</th><th>Faixas</th><th>Ativa</th></tr></thead>
+      <tbody>
+      {% for r in regras_premios %}
+      <tr>
+        <td>{{ r.nome }}</td>
+        <td>{{ r.get_metrica_display }}</td>
+        <td>R$ {{ r.meta_alvo|floatformat:2 }}</td>
+        <td>{{ r.get_publico_display }}</td>
+        <td>
+          {% for f in r.faixas.all %}
+            <div>{{ f.meta_minima|floatformat:2 }} - {% if f.meta_maxima %}{{ f.meta_maxima|floatformat:2 }}{% else %}sem teto{% endif %} => R$ {{ f.premio_valor|floatformat:2 }}</div>
+          {% empty %}
+            <span class="text-muted">Sem faixas</span>
+          {% endfor %}
+        </td>
+        <td>{{ r.ativo|yesno:"Sim,Nao" }}</td>
+      </tr>
+      {% empty %}<tr><td colspan="6" class="text-center text-muted">Sem regras cadastradas.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title">Premios por Competencia</h3></div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-bordered mb-0">
+      <thead><tr><th>Competencia</th><th>Colaborador</th><th>Regra</th><th>Metrica</th><th>Atingimento</th><th>Premio</th><th>Faixa</th></tr></thead>
+      <tbody>
+      {% for p in premios_competencia %}
+      <tr>
+        <td>{{ p.competencia|date:"m/Y" }}</td>
+        <td>{{ p.colaborador }}</td>
+        <td>{{ p.regra.nome }}</td>
+        <td>R$ {{ p.valor_metrica|floatformat:2 }}</td>
+        <td>{{ p.percentual_atingimento|floatformat:2 }}%</td>
+        <td>R$ {{ p.premio_valor|floatformat:2 }}</td>
+        <td>{% if p.faixa %}{{ p.faixa.meta_minima|floatformat:2 }} - {% if p.faixa.meta_maxima %}{{ p.faixa.meta_maxima|floatformat:2 }}{% else %}sem teto{% endif %}{% else %}-{% endif %}</td>
+      </tr>
+      {% empty %}<tr><td colspan="7" class="text-center text-muted">Sem premios calculados.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

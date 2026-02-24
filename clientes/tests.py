@@ -34,3 +34,15 @@ class PermissoesClientesTests(TestCase):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("clientes:excluir_cliente", args=[self.cliente.id]))
         self.assertEqual(response.status_code, 200)
+
+    def test_busca_cliente_por_cpf_formatado(self):
+        self.client.force_login(self.atendente)
+        response = self.client.get(reverse("clientes:lista_clientes"), {"query": "529.982.247-25"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.cliente.nome)
+
+    def test_busca_cliente_inexistente_exibe_botao_cadastro(self):
+        self.client.force_login(self.atendente)
+        response = self.client.get(reverse("clientes:lista_clientes"), {"query": "00000000000"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Cadastrar novo cliente")

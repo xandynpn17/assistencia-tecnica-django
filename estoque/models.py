@@ -170,6 +170,8 @@ class VendaRapidaEstoque(models.Model):
     valor_unitario = models.DecimalField(max_digits=10, decimal_places=2)
     valor_total = models.DecimalField(max_digits=12, decimal_places=2)
     funcionario_numero = models.CharField(max_length=30)
+    cesto_codigo = models.CharField(max_length=24, blank=True, db_index=True)
+    guia_pagamento = models.CharField(max_length=24, blank=True, db_index=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pre_reserva")
     pagamento = models.ForeignKey("caixa.Pagamento", on_delete=models.SET_NULL, null=True, blank=True)
     usuario = models.ForeignKey("configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True)

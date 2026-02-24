@@ -60,6 +60,14 @@ class ItemOrcamento(models.Model):
     quantidade = models.PositiveIntegerField(default=1)
     origem = models.CharField(max_length=10, choices=ORIGEM_CHOICES, default='manual')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pendente')  # ← campo novo
+    tecnico_responsavel = models.ForeignKey(
+        "configuracoes.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_orcamento_responsavel",
+        limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
+    )
 
     def total(self):
         return self.valor_unitario * self.quantidade

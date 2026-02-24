@@ -81,6 +81,13 @@ class OrdemServico(models.Model):
     # ===========================
     tipo_equipamento = models.CharField(max_length=20, choices=TIPO_EQUIPAMENTO_CHOICES)
     marca_equipamento = models.CharField(max_length=50)
+    marca_garantia = models.ForeignKey(
+        "configuracoes.MarcaGarantia",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ordens_servico",
+    )
     modelo_equipamento = models.CharField(max_length=50)
     numero_serie_equipamento = models.CharField(max_length=50, blank=True)
     local_armazenamento = models.CharField(max_length=200, blank=True)
@@ -95,6 +102,9 @@ class OrdemServico(models.Model):
     data_abertura = models.DateTimeField(auto_now_add=True)
     data_conclusao = models.DateTimeField(blank=True, null=True)
     peritagem = models.TextField(blank=True, null=False)
+    data_compra = models.DateField(blank=True, null=True)
+    numero_nota_fiscal = models.CharField(max_length=60, blank=True)
+    notas_internas = models.TextField(blank=True)
 
     # ===========================
     # RELATÓRIO TÉCNICO
@@ -110,8 +120,8 @@ class OrdemServico(models.Model):
         null=True,
         blank=True,
         related_name="ordens_responsaveis",
-        limit_choices_to={'tipo_usuario': 'atendente'},  # ou 'gerente'/'adm' se preferir
-        verbose_name="Técnico responsável"
+        limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
+        verbose_name="Tecnico responsavel"
     )
 
     def __str__(self):

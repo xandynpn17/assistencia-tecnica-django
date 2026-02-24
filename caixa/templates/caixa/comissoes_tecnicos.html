@@ -5,6 +5,10 @@
   <div class="col-md-6"><div class="alert alert-warning">Comissoes pendentes: R$ {{ total_pendente|floatformat:2 }}</div></div>
   <div class="col-md-6"><div class="alert alert-success">Comissoes pagas: R$ {{ total_pago|floatformat:2 }}</div></div>
 </div>
+<div class="row mb-3">
+  <div class="col-md-6"><div class="alert alert-warning">Comissoes por item pendentes: R$ {{ total_pendente_itens|floatformat:2 }}</div></div>
+  <div class="col-md-6"><div class="alert alert-success">Comissoes por item pagas: R$ {{ total_pago_itens|floatformat:2 }}</div></div>
+</div>
 
 <div class="card mb-3">
   <div class="card-header"><h3 class="card-title">Nova Regra de Comissao</h3></div>
@@ -22,8 +26,19 @@
       {% csrf_token %}
       <input type="hidden" name="action" value="recalcular">
       <label class="mr-2"><input type="checkbox" name="considerar_pecas" value="1"> considerar pecas</label>
-      <button class="btn btn-outline-secondary btn-sm" type="submit">Recalcular comissoes</button>
+      <button class="btn btn-outline-secondary btn-sm" type="submit">Recalcular comissoes por OS</button>
     </form>
+    <form method="post" class="mt-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="recalcular_itens_antecipado">
+      <button class="btn btn-outline-primary btn-sm" type="submit">Recalcular comissao por item (antecipado)</button>
+    </form>
+    <form method="post" class="mt-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="recalcular_itens_fechamento">
+      <button class="btn btn-outline-dark btn-sm" type="submit">Recalcular comissao por item (no fechamento)</button>
+    </form>
+    <a href="{% url 'caixa:premios_meta' %}" class="btn btn-sm btn-info mt-3">Ir para pagina de Premios e Metas</a>
   </div>
 </div>
 
@@ -42,7 +57,7 @@
 </div>
 
 <div class="card">
-  <div class="card-header"><h3 class="card-title">Comissoes</h3></div>
+  <div class="card-header"><h3 class="card-title">Comissoes por OS</h3></div>
   <div class="card-body p-0">
     <table class="table table-sm table-bordered mb-0">
       <thead><tr><th>OS</th><th>Tecnico</th><th>Base Servico</th><th>Base Peca</th><th>Valor</th><th>Status</th><th>Referencia</th><th>Acoes</th></tr></thead>
@@ -73,6 +88,50 @@
       </tr>
       {% empty %}<tr><td colspan="8" class="text-center text-muted">Sem comissoes.</td></tr>{% endfor %}
       </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header"><h3 class="card-title">Comissoes por Item de Orcamento</h3></div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-bordered mb-0">
+      <thead><tr><th>Nº OS</th><th>Servico/Item</th><th>Valor Servico</th><th>Comissao</th><th>Tecnico</th><th>Modo</th><th>Status</th><th>Referencia</th><th>Acoes</th></tr></thead>
+      <tbody>
+      {% for ci in comissoes_itens %}
+      <tr>
+        <td>{{ ci.ordem_servico.numero_os }}</td>
+        <td>{{ ci.item_orcamento.nome }}</td>
+        <td>R$ {{ ci.base_calculo|floatformat:2 }}</td>
+        <td>R$ {{ ci.valor_comissao|floatformat:2 }}</td>
+        <td>{{ ci.tecnico }}</td>
+        <td>{{ ci.get_modo_pagamento_display }}</td>
+        <td>{{ ci.get_status_display }}</td>
+        <td>{{ ci.referencia_pagamento|default:'-' }}</td>
+        <td>
+          <form method="post" class="form-inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="status_item">
+            <input type="hidden" name="comissao_item_id" value="{{ ci.id }}">
+            <select name="status" class="form-control form-control-sm mr-1">
+              <option value="pendente" {% if ci.status == 'pendente' %}selected{% endif %}>Pendente</option>
+              <option value="paga" {% if ci.status == 'paga' %}selected{% endif %}>Paga</option>
+              <option value="cancelada" {% if ci.status == 'cancelada' %}selected{% endif %}>Cancelada</option>
+            </select>
+            <input type="text" name="referencia_pagamento" value="{{ ci.referencia_pagamento }}" placeholder="ref" class="form-control form-control-sm mr-1">
+            <button class="btn btn-sm btn-primary" type="submit">Salvar</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}<tr><td colspan="9" class="text-center text-muted">Sem comissoes por item.</td></tr>{% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th colspan="3" class="text-right">Valor total</th>
+          <th>R$ {{ total_comissoes_itens|floatformat:2 }}</th>
+          <th colspan="5">-</th>
+        </tr>
+      </tfoot>
     </table>
   </div>
 </div>

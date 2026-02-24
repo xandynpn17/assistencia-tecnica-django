@@ -21,27 +21,32 @@ def _request_ip(request):
 
 @role_required(STAFF_ROLES)
 def lista_clientes(request):
-    """Tela principal - apenas busca, não lista todos"""
-    query = request.GET.get('query', '')
+    """Tela principal - apenas busca, nao lista todos"""
+    query = request.GET.get("query", "").strip()
     clientes = []
 
-    # SE HOUVER BUSCA, PROCURA
     if query:
+        query_digits = "".join(filter(str.isdigit, query))
         clientes = Cliente.objects.filter(
-            Q(nome__icontains=query) |
-            Q(telefone__icontains=query) |
-            Q(email__icontains=query) |
-            Q(cpf__icontains=query) |
-            Q(cnpj__icontains=query) |
-            Q(numero_cliente__icontains=query)
-        ).order_by('nome')[:20]  # Limita a 20 resultados
-    # SE NÃO HOUVER BUSCA, MOSTRA APENAS UMA MENSAGEM
+            Q(nome__icontains=query)
+            | Q(telefone__icontains=query)
+            | Q(telefone__icontains=query_digits)
+            | Q(email__icontains=query)
+            | Q(documento__icontains=query_digits or query)
+            | Q(cpf__icontains=query_digits or query)
+            | Q(cnpj__icontains=query_digits or query)
+            | Q(numero_cliente__icontains=query)
+        ).order_by("nome")[:20]
 
-    return render(request, 'clientes/clientes.html', {
-        'clientes': clientes,
-        'query': query,
-        'houve_busca': bool(query),
-    })
+    return render(
+        request,
+        "clientes/clientes.html",
+        {
+            "clientes": clientes,
+            "query": query,
+            "houve_busca": bool(query),
+        },
+    )
 
 
 @role_required(STAFF_ROLES)
@@ -51,93 +56,98 @@ def buscar_cliente(request):
     cliente = None
 
     if query:
-        # Limpa formatação para CPF/CNPJ
-        query_limpa = ''.join(filter(str.isdigit, query))
+        query_limpa = "".join(filter(str.isdigit, query))
 
-        # Tenta encontrar o cliente
         cliente = Cliente.objects.filter(
-            Q(cpf__icontains=query_limpa) |
-            Q(cnpj__icontains=query_limpa) |
-            Q(telefone__icontains=query) |
-            Q(email__icontains=query) |
-            Q(numero_cliente__icontains=query) |
-            Q(nome__icontains=query)
+            Q(documento__icontains=query_limpa)
+            | Q(cpf__icontains=query_limpa)
+            | Q(cnpj__icontains=query_limpa)
+            | Q(telefone__icontains=query)
+            | Q(telefone__icontains=query_limpa)
+            | Q(email__icontains=query)
+            | Q(numero_cliente__icontains=query)
+            | Q(nome__icontains=query)
         ).first()
 
-    # Responde apenas a requisições AJAX
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
         if cliente:
-            return JsonResponse({
-                "existe": True,
-                "id": cliente.id,
-                "nome": cliente.nome,
-                "telefone": cliente.telefone or "",
-                "email": cliente.email or "",
-                "numero_cliente": cliente.numero_cliente or "",
-                "cpf": cliente.get_documento() or ""
-            })
-        else:
-            return JsonResponse({"existe": False})
+            return JsonResponse(
+                {
+                    "existe": True,
+                    "id": cliente.id,
+                    "nome": cliente.nome,
+                    "telefone": cliente.telefone or "",
+                    "email": cliente.email or "",
+                    "numero_cliente": cliente.numero_cliente or "",
+                    "cpf": cliente.documento or "",
+                }
+            )
+        return JsonResponse({"existe": False})
 
-    return JsonResponse({"erro": "Requisição inválida"}, status=400)
+    return JsonResponse({"erro": "Requisicao invalida"}, status=400)
 
 
 @role_required(STAFF_ROLES)
 def detalhes_cliente(request, pk):
     cliente = get_object_or_404(Cliente, pk=pk)
 
-    # Ordens de serviço
-    ordens = OrdemServico.objects.filter(cliente=cliente).order_by('-data_abertura')
+    ordens = OrdemServico.objects.filter(cliente=cliente).order_by("-data_abertura")
 
-    # Orçamentos (se existir)
     try:
-        orcamentos = Orcamento.objects.filter(cliente=cliente).order_by('-data_criacao')
-    except:
+        orcamentos = Orcamento.objects.filter(cliente=cliente).order_by("-data_criacao")
+    except Exception:
         orcamentos = []
 
-    # Estatísticas
     total_ordens = ordens.count()
-    ordens_ativas = ordens.filter(status__in=['aberta', 'em_andamento']).count()
-    ordens_concluidas = ordens.filter(status='concluida').count()
+    ordens_ativas = ordens.filter(status__in=["aberta", "em_andamento"]).count()
+    ordens_concluidas = ordens.filter(status="concluida").count()
 
-    # Valor total
     total_gasto = 0
     for ordem in ordens:
         try:
-            if hasattr(ordem, 'total'):
+            if hasattr(ordem, "total"):
                 total_gasto += ordem.total
-            elif hasattr(ordem, 'valor_total'):
+            elif hasattr(ordem, "valor_total"):
                 total_gasto += ordem.valor_total
-        except:
+        except Exception:
             pass
 
-    return render(request, 'clientes/detalhes_cliente.html', {
-        'cliente': cliente,
-        'ordens': ordens,
-        'orcamentos': orcamentos,
-        'total_ordens': total_ordens,
-        'ordens_ativas': ordens_ativas,
-        'ordens_concluidas': ordens_concluidas,
-        'total_gasto': total_gasto,
-    })
+    return render(
+        request,
+        "clientes/detalhes_cliente.html",
+        {
+            "cliente": cliente,
+            "ordens": ordens,
+            "orcamentos": orcamentos,
+            "total_ordens": total_ordens,
+            "ordens_ativas": ordens_ativas,
+            "ordens_concluidas": ordens_concluidas,
+            "total_gasto": total_gasto,
+        },
+    )
 
 
 @role_required(STAFF_ROLES)
 def editar_cliente(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
 
-    if request.method == 'POST':
+    if request.method == "POST":
         form = ClienteForm(request.POST, instance=cliente)
         if form.is_valid():
             form.save()
-            return redirect('clientes:detalhes_cliente', pk=cliente.id)
+            return redirect("clientes:detalhes_cliente", pk=cliente.id)
     else:
         form = ClienteForm(instance=cliente)
 
-    return render(request, 'clientes/editar_cliente.html', {
-        'form': form,
-        'cliente': cliente
-    })
+    return render(
+        request,
+        "clientes/editar_cliente.html",
+        {
+            "form": form,
+            "cliente": cliente,
+            "menu_app": "clientes",
+        },
+    )
 
 
 @role_required(MANAGER_ROLES)
@@ -145,7 +155,7 @@ def excluir_cliente(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
     ordens = OrdemServico.objects.filter(cliente=cliente).count()
 
-    if request.method == 'POST':
+    if request.method == "POST":
         logger.info(
             "auditoria_operacional",
             extra={
@@ -158,9 +168,13 @@ def excluir_cliente(request, cliente_id):
             },
         )
         cliente.delete()
-        return redirect('clientes:lista_clientes')
+        return redirect("clientes:lista_clientes")
 
-    return render(request, 'clientes/excluir_cliente.html', {
-        'cliente': cliente,
-        'ordens': ordens
-    })
+    return render(
+        request,
+        "clientes/excluir_cliente.html",
+        {
+            "cliente": cliente,
+            "ordens": ordens,
+        },
+    )

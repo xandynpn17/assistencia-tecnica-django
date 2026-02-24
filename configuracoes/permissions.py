@@ -13,6 +13,7 @@ STOCK_MANAGE_ROLES = {"adm", "gerente", "atendente"}
 CAIXA_FINANCIAL_ROLES = {"adm", "gerente"}
 CAIXA_OPERATIONAL_ROLES = {"adm", "gerente", "atendente"}
 CAIXA_ROLES = CAIXA_OPERATIONAL_ROLES
+PERFORMANCE_VIEW_ROLES = {"adm", "gerente", "atendente", "tecnico"}
 
 
 def has_role(user, allowed_roles):

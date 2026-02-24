@@ -218,6 +218,29 @@
                     <p>Movimentacoes</p>
                   </a>
                 </li>
+                <li class="nav-item">
+                  <a href="{% url 'estoque:reservas_clientes' %}"
+                     class="nav-link {% if menu_sub == 'reservas_clientes' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Reservas Clientes</p>
+                  </a>
+                </li>
+                {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
+                <li class="nav-item">
+                  <a href="{% url 'estoque:transferir_estoque' %}"
+                     class="nav-link {% if menu_sub == 'transferir_estoque' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Transpasse</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'estoque:relatorio_divergencias' %}"
+                     class="nav-link {% if menu_sub == 'relatorio_divergencias' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Divergencias</p>
+                  </a>
+                </li>
+                {% endif %}
                 {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
                 <li class="nav-item">
                   <a href="{% url 'estoque:pontos_operacionais' %}"
@@ -231,6 +254,13 @@
             </li>
 
             <!-- Caixa -->
+            <li class="nav-item">
+              <a href="{% url 'caixa:meu_desempenho' %}"
+                 class="nav-link {% if menu_sub == 'meu_desempenho' %}active{% endif %}">
+                <i class="nav-icon fas fa-trophy"></i>
+                <p>Premios e Comissoes</p>
+              </a>
+            </li>
             {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
             <li class="nav-item has-treeview {% if menu_app == 'caixa' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'caixa' %}active{% endif %}">
@@ -296,6 +326,13 @@
                   </a>
                 </li>
                 <li class="nav-item">
+                  <a href="{% url 'caixa:garantias_fabricante' %}"
+                     class="nav-link {% if menu_sub == 'garantias_fabricante' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Garantias Fabricante</p>
+                  </a>
+                </li>
+                <li class="nav-item">
                   <a href="{% url 'caixa:aging_receber' %}"
                      class="nav-link {% if menu_sub == 'aging_receber' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
@@ -307,6 +344,13 @@
                      class="nav-link {% if menu_sub == 'comissoes_tecnicos' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Comissoes Tecnicos</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:premios_meta' %}"
+                     class="nav-link {% if menu_sub == 'premios_meta' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Premios e Metas</p>
                   </a>
                 </li>
                 <li class="nav-item">
@@ -363,6 +407,13 @@
                      class="nav-link {% if menu_sub == 'configuracao_os' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Ordem de Servico</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:marcas_fornecedores' %}"
+                     class="nav-link {% if menu_sub == 'marcas_fornecedores' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Marcas e Fornecedores</p>
                   </a>
                 </li>
                 {% if user.is_superuser or user.tipo_usuario == 'adm' %}

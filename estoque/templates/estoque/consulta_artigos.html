@@ -21,6 +21,7 @@
   .artigo-meta { font-size: 12px; color: #6b7280; }
   #estoquePontosTable tbody tr { cursor: pointer; }
   #estoquePontosTable tbody tr.selected { background: #eaf2fb; }
+  .cesto-total { font-size: 1.1rem; font-weight: 700; }
 </style>
 {% endblock %}
 
@@ -40,6 +41,11 @@
       </div>
     </div>
     <div id="artigoBuscaResultados" class="list-group"></div>
+    <div class="d-flex justify-content-between mt-2">
+      <button class="btn btn-sm btn-outline-secondary" id="artigoPrevBtn" type="button">Anterior</button>
+      <small class="text-muted" id="artigoPaginaInfo"></small>
+      <button class="btn btn-sm btn-outline-secondary" id="artigoNextBtn" type="button">Proxima</button>
+    </div>
   </div>
 </div>
 
@@ -62,8 +68,8 @@
         <p id="modalDescricao" class="text-muted"></p>
 
         <ul class="nav nav-tabs" id="artigoTabs" role="tablist">
-          <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tabEstoque">Estoque por Ponto</a></li>
-          <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tabVenda">Venda</a></li>
+          <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tabEstoque">Stock por Ponto</a></li>
+          <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tabCesto">Cesto e Guia</a></li>
           <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tabReserva">Reservas</a></li>
         </ul>
 
@@ -73,27 +79,22 @@
               <thead><tr><th>Ponto operacional</th><th>Stock</th></tr></thead>
               <tbody></tbody>
             </table>
-            <small class="text-muted">Clique na linha de PO3 ou PO2 para selecionar ponto de venda.</small>
+            <small class="text-muted">Clique na linha de PO3 ou PO2 com stock para adicionar ao cesto.</small>
           </div>
 
-          <div class="tab-pane fade" id="tabVenda">
-            <div class="row">
-              <div class="col-md-2 mb-2">
-                <label>Qtd</label>
-                <input class="form-control" type="number" id="vendaQuantidade" min="1" value="1">
-              </div>
-              <div class="col-md-3 mb-2">
-                <label>Funcionario</label>
-                <input class="form-control" type="text" id="vendaFuncionario" placeholder="Numero">
-              </div>
-              <div class="col-md-7 mb-2">
-                <label>Ponto selecionado para pre-reserva</label>
-                <input class="form-control" type="text" id="vendaPontoSelecionado" readonly>
-              </div>
+          <div class="tab-pane fade" id="tabCesto">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div><strong>Cesto:</strong> <span id="cestoCodigo">-</span></div>
+              <div class="cesto-total">Total: R$ <span id="cestoTotal">0.00</span></div>
             </div>
-            <input type="hidden" id="vendaPontoId">
-            <button class="btn btn-primary" type="button" id="confirmarVendaBtn">Criar pre-reserva de venda</button>
-            <div id="vendaFeedback" class="small mt-2"></div>
+            <div class="table-responsive">
+              <table class="table table-sm table-striped" id="cestoTable">
+                <thead><tr><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Vendedor</th><th>Total</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <button class="btn btn-primary" type="button" id="finalizarCestoBtn">Finalizar cesto e gerar guia</button>
+            <div id="cestoFeedback" class="small mt-2"></div>
           </div>
 
           <div class="tab-pane fade" id="tabReserva">
@@ -118,6 +119,43 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="vendedorModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Adicionar ao Cesto</h5>
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="addPontoId">
+        <div class="form-group">
+          <label>Ponto selecionado</label>
+          <input type="text" class="form-control" id="addPontoNome" readonly>
+        </div>
+        <div class="form-group">
+          <label>Tecnico</label>
+          <select class="form-control" id="addTecnicoSelect">
+            <option value="">Selecione um tecnico</option>
+            {% for tecnico in tecnicos_disponiveis %}
+            <option value="{{ tecnico.numero_vendedor|default:'' }}" {% if tecnico.numero_vendedor == numero_vendedor_padrao %}selected{% endif %}>
+              {{ tecnico.username }}{% if tecnico.numero_vendedor %} - Vendedor {{ tecnico.numero_vendedor }}{% else %} - sem numero de vendedor{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quantidade</label>
+          <input type="number" class="form-control" id="addQuantidade" min="1" value="1">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="confirmarAdicionarCestoBtn">Adicionar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -127,7 +165,17 @@ document.addEventListener("DOMContentLoaded", function () {
   const buscarBtn = document.getElementById("artigoBuscaBtn");
   const buscarInput = document.getElementById("artigoBuscaInput");
   const resultados = document.getElementById("artigoBuscaResultados");
+  const prevBtn = document.getElementById("artigoPrevBtn");
+  const nextBtn = document.getElementById("artigoNextBtn");
+  const pageInfo = document.getElementById("artigoPaginaInfo");
   const modal = $("#artigoResumoModal");
+  const vendedorModal = $("#vendedorModal");
+  const vendedorPadrao = "{{ numero_vendedor_padrao|default:''|escapejs }}";
+  let paginaAtual = 1;
+  let hasPrev = false;
+  let hasNext = false;
+  let debounceTimer = null;
+  let cestoCodigoAtual = "";
 
   function getCsrf() {
     const name = "csrftoken=";
@@ -165,6 +213,37 @@ document.addEventListener("DOMContentLoaded", function () {
     return c === "PO3" || c === "PO2";
   }
 
+  function abrirModalAdicionar(ponto) {
+    document.getElementById("addPontoId").value = String(ponto.id);
+    document.getElementById("addPontoNome").value = `${ponto.codigo} - ${ponto.nome} (disp: ${ponto.disponivel})`;
+    const tecnicoSelect = document.getElementById("addTecnicoSelect");
+    if (vendedorPadrao) { tecnicoSelect.value = vendedorPadrao; }
+    document.getElementById("addQuantidade").value = "1";
+    vendedorModal.modal("show");
+  }
+
+  function renderCesto(data) {
+    const body = document.querySelector("#cestoTable tbody");
+    body.innerHTML = "";
+    (data.itens || []).forEach(item => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${item.produto}</td><td>${item.ponto}</td><td>${item.quantidade}</td><td>${item.vendedor}</td><td>R$ ${Number(item.valor_total).toFixed(2)}</td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById("cestoCodigo").textContent = data.cesto_codigo || "-";
+    document.getElementById("cestoTotal").textContent = Number(data.total || 0).toFixed(2);
+  }
+
+  function carregarCesto() {
+    if (!cestoCodigoAtual) {
+      renderCesto({ cesto_codigo: "", total: 0, itens: [] });
+      return;
+    }
+    fetch(`{% url 'estoque:api_cesto_resumo' 'DUMMY' %}`.replace("DUMMY", encodeURIComponent(cestoCodigoAtual)))
+      .then(r => r.json())
+      .then(data => renderCesto(data));
+  }
+
   function carregarResumo(produtoId) {
     fetch(`{% url 'estoque:api_resumo_artigo' 0 %}`.replace("/0/", `/${produtoId}/`))
       .then(r => r.json())
@@ -179,11 +258,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const tbody = document.querySelector("#estoquePontosTable tbody");
         tbody.innerHTML = "";
-        const vendaPontoId = document.getElementById("vendaPontoId");
-        const vendaPontoSelecionado = document.getElementById("vendaPontoSelecionado");
         const reservaSelect = document.getElementById("reservaPontoId");
-        vendaPontoId.value = "";
-        vendaPontoSelecionado.value = "Selecione uma linha de stock (PO3 ou PO2)";
         reservaSelect.innerHTML = "";
 
         data.estoque_pontos.forEach(p => {
@@ -193,11 +268,7 @@ document.addEventListener("DOMContentLoaded", function () {
             tbody.querySelectorAll("tr").forEach(row => row.classList.remove("selected"));
             tr.classList.add("selected");
             if (pontoPodeVender(p.codigo) && Number(p.disponivel) > 0) {
-              vendaPontoId.value = String(p.id);
-              vendaPontoSelecionado.value = `${p.codigo} - ${p.nome} (disponivel: ${p.disponivel})`;
-            } else {
-              vendaPontoId.value = "";
-              vendaPontoSelecionado.value = `Ponto ${p.codigo} sem venda direta`;
+              abrirModalAdicionar(p);
             }
           });
           tbody.appendChild(tr);
@@ -218,29 +289,41 @@ document.addEventListener("DOMContentLoaded", function () {
           reservasBody.appendChild(tr);
         });
 
+        carregarCesto();
         modal.modal("show");
       });
   }
 
-  function buscarArtigos() {
+  function buscarArtigos(page = 1) {
     const q = (buscarInput.value || "").trim();
-    fetch(`{% url 'estoque:api_consulta_artigos' %}?q=${encodeURIComponent(q)}`)
+    fetch(`{% url 'estoque:api_consulta_artigos' %}?q=${encodeURIComponent(q)}&page=${page}`)
       .then(r => r.json())
-      .then(data => renderResultados(data.resultados || []));
+      .then(data => {
+        paginaAtual = data.page || 1;
+        hasPrev = !!data.has_prev;
+        hasNext = !!data.has_next;
+        pageInfo.textContent = `Pagina ${paginaAtual}`;
+        prevBtn.disabled = !hasPrev;
+        nextBtn.disabled = !hasNext;
+        renderResultados(data.resultados || []);
+      });
   }
 
-  function confirmarVenda() {
-    const payload = new URLSearchParams();
-    payload.append("produto_id", document.getElementById("modalProdutoId").value);
-    payload.append("ponto_id", document.getElementById("vendaPontoId").value);
-    payload.append("quantidade", document.getElementById("vendaQuantidade").value);
-    payload.append("funcionario_numero", document.getElementById("vendaFuncionario").value);
-    if (!document.getElementById("vendaPontoId").value) {
-      const fb = document.getElementById("vendaFeedback");
+  function adicionarCesto() {
+    const vendedorNumero = document.getElementById("addTecnicoSelect").value;
+    if (!vendedorNumero) {
+      const fb = document.getElementById("cestoFeedback");
       fb.className = "small text-danger";
-      fb.textContent = "Selecione um ponto PO3 ou PO2 com stock disponivel.";
+      fb.textContent = "Selecione um tecnico com numero de vendedor cadastrado.";
       return;
     }
+
+    const payload = new URLSearchParams();
+    payload.append("produto_id", document.getElementById("modalProdutoId").value);
+    payload.append("ponto_id", document.getElementById("addPontoId").value);
+    payload.append("quantidade", document.getElementById("addQuantidade").value);
+    payload.append("funcionario_numero", vendedorNumero);
+    payload.append("cesto_codigo", cestoCodigoAtual);
 
     fetch(`{% url 'estoque:api_venda_rapida' %}`, {
       method: "POST",
@@ -249,15 +332,47 @@ document.addEventListener("DOMContentLoaded", function () {
     })
       .then(r => r.json())
       .then(data => {
-        const fb = document.getElementById("vendaFeedback");
+        const fb = document.getElementById("cestoFeedback");
         if (data.ok) {
+          cestoCodigoAtual = data.cesto_codigo;
           fb.className = "small text-success";
-          fb.innerHTML = `Pre-reserva #${data.venda_id} criada. Valor: R$ ${Number(data.valor_total).toFixed(2)}. <a href="${data.redirect_caixa}">Finalizar no caixa</a>`;
+          fb.textContent = `Item adicionado ao cesto ${cestoCodigoAtual}.`;
+          vendedorModal.modal("hide");
+          carregarCesto();
           carregarResumo(document.getElementById("modalProdutoId").value);
           buscarArtigos();
+          $('#artigoTabs a[href="#tabCesto"]').tab('show');
         } else {
           fb.className = "small text-danger";
-          fb.textContent = data.erro || "Erro ao registrar venda.";
+          fb.textContent = data.erro || "Erro ao adicionar item.";
+        }
+      });
+  }
+
+  function finalizarCesto() {
+    if (!cestoCodigoAtual) {
+      const fb = document.getElementById("cestoFeedback");
+      fb.className = "small text-danger";
+      fb.textContent = "Adicione itens antes de finalizar o cesto.";
+      return;
+    }
+
+    const payload = new URLSearchParams();
+    payload.append("cesto_codigo", cestoCodigoAtual);
+    fetch(`{% url 'estoque:api_cesto_finalizar' %}`, {
+      method: "POST",
+      headers: {"X-CSRFToken": getCsrf(), "Content-Type": "application/x-www-form-urlencoded"},
+      body: payload.toString(),
+    })
+      .then(r => r.json())
+      .then(data => {
+        const fb = document.getElementById("cestoFeedback");
+        if (data.ok) {
+          fb.className = "small text-success";
+          fb.innerHTML = `Guia ${data.guia} gerada. Total R$ ${Number(data.total).toFixed(2)}. <a href="${data.redirect_caixa}">Ir para caixa</a> | <a href="${data.imprimir_url}" target="_blank">Imprimir guia</a>`;
+        } else {
+          fb.className = "small text-danger";
+          fb.textContent = data.erro || "Erro ao finalizar cesto.";
         }
       });
   }
@@ -290,10 +405,19 @@ document.addEventListener("DOMContentLoaded", function () {
       });
   }
 
-  buscarBtn?.addEventListener("click", buscarArtigos);
-  buscarInput?.addEventListener("keypress", (e) => { if (e.key === "Enter") { e.preventDefault(); buscarArtigos(); } });
-  document.getElementById("confirmarVendaBtn")?.addEventListener("click", confirmarVenda);
+  buscarBtn?.addEventListener("click", () => buscarArtigos(1));
+  buscarInput?.addEventListener("keypress", (e) => { if (e.key === "Enter") { e.preventDefault(); buscarArtigos(1); } });
+  buscarInput?.addEventListener("input", () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => buscarArtigos(1), 350);
+  });
+  prevBtn?.addEventListener("click", () => { if (hasPrev) buscarArtigos(paginaAtual - 1); });
+  nextBtn?.addEventListener("click", () => { if (hasNext) buscarArtigos(paginaAtual + 1); });
+  document.getElementById("confirmarAdicionarCestoBtn")?.addEventListener("click", adicionarCesto);
+  document.getElementById("finalizarCestoBtn")?.addEventListener("click", finalizarCesto);
   document.getElementById("confirmarReservaBtn")?.addEventListener("click", confirmarReserva);
+
+  buscarArtigos(1);
 });
 </script>
 {% endblock %}

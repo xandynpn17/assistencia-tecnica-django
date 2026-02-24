@@ -1,5 +1,7 @@
 from django.db import models, transaction
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import RegexValidator
+from django.utils import timezone
 
 
 class Empresa(models.Model):
@@ -12,6 +14,129 @@ class Empresa(models.Model):
 
     def __str__(self):
         return self.nome
+
+
+class FornecedorGarantia(models.Model):
+    MODALIDADE_PAGAMENTO_CHOICES = [
+        ("transferencia_bancaria", "Transferencia bancaria"),
+        ("pix", "PIX"),
+        ("boleto", "Boleto"),
+        ("cartao_credito", "Cartao de credito"),
+        ("cartao_debito", "Cartao de debito"),
+        ("dinheiro", "Dinheiro"),
+        ("outro", "Outro"),
+    ]
+
+    nome = models.CharField(max_length=120, unique=True)
+    cnpj = models.CharField(max_length=18, blank=True)
+    inscricao_estadual = models.CharField(max_length=30, blank=True)
+    razao_social = models.CharField(max_length=160, blank=True)
+    contato = models.CharField(max_length=120, blank=True)
+    telefone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
+    detalhes = models.TextField(blank=True)
+    contrato = models.TextField(blank=True)
+    modalidade_pagamento = models.CharField(
+        max_length=40,
+        choices=MODALIDADE_PAGAMENTO_CHOICES,
+        default="transferencia_bancaria",
+    )
+    prazo_pagamento_dias = models.PositiveIntegerField(default=30)
+    documento_anexo = models.FileField(upload_to="fornecedores/documentos/", blank=True, null=True)
+    comprovante_pagamento_anexo = models.FileField(upload_to="fornecedores/comprovantes/", blank=True, null=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
+class MarcaGarantia(models.Model):
+    nome = models.CharField(max_length=80, unique=True)
+    fornecedor = models.ForeignKey(
+        FornecedorGarantia,
+        on_delete=models.PROTECT,
+        related_name="marcas",
+        null=True,
+        blank=True,
+    )
+    parceira_garantia = models.BooleanField(default=False)
+    procedimentos = models.TextField(blank=True)
+    valor_mao_obra_garantia = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return f"{self.nome} - R$ {self.valor_mao_obra_garantia}"
+
+
+class RegraGarantiaMarca(models.Model):
+    TIPO_PRODUTO_CHOICES = [
+        ("celular", "Celular"),
+        ("notebook", "Notebook"),
+        ("tablet", "Tablet"),
+        ("computador", "Computador"),
+        ("secador", "Secador"),
+        ("alisador", "Alisador"),
+        ("modelador", "Modelador"),
+        ("escova", "Escova"),
+        ("ventilador", "Ventilador"),
+        ("climatizador", "Climatizador"),
+        ("aspirador", "Aspirador"),
+        ("cafeteira", "Cafeteira"),
+        ("outros", "Outros"),
+    ]
+
+    MODALIDADE_CHOICES = [
+        ("faturado", "Faturado"),
+        ("boleto", "Boleto"),
+        ("pix", "PIX"),
+        ("credito_loja", "Credito em conta loja"),
+        ("outro", "Outro"),
+    ]
+
+    marca = models.ForeignKey(MarcaGarantia, on_delete=models.CASCADE, related_name="regras_garantia")
+    tipo_produto = models.CharField(max_length=30, choices=TIPO_PRODUTO_CHOICES)
+    valor_mao_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Valor pago")
+    valor_mao_obra_tecnico = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Mao de obra tecnico")
+    modalidade_pagamento = models.CharField(max_length=30, choices=MODALIDADE_CHOICES, default="faturado")
+    prazo_pagamento_dias = models.PositiveIntegerField(default=30)
+    inicio_vigencia = models.DateField(default=timezone.localdate)
+    fim_vigencia = models.DateField(null=True, blank=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["marca__nome", "tipo_produto", "-inicio_vigencia"]
+        unique_together = [("marca", "tipo_produto", "modalidade_pagamento", "inicio_vigencia")]
+
+    def __str__(self):
+        return f"{self.marca.nome} / {self.get_tipo_produto_display()} - R$ {self.valor_mao_obra}"
+
+    def vigente_em(self, data_ref):
+        if self.inicio_vigencia and data_ref < self.inicio_vigencia:
+            return False
+        if self.fim_vigencia and data_ref > self.fim_vigencia:
+            return False
+        return self.ativo
+
+    @classmethod
+    def buscar_regra_vigente(cls, marca, tipo_produto, data_ref=None):
+        data_ref = data_ref or timezone.localdate()
+        return (
+            cls.objects.filter(
+                marca=marca,
+                tipo_produto=tipo_produto,
+                ativo=True,
+                inicio_vigencia__lte=data_ref,
+            )
+            .filter(models.Q(fim_vigencia__isnull=True) | models.Q(fim_vigencia__gte=data_ref))
+            .order_by("-inicio_vigencia", "-id")
+            .first()
+        )
 
 
 class ModuloSistema(models.Model):
@@ -32,6 +157,18 @@ class User(AbstractUser):
     tipo_usuario = models.CharField(max_length=20, choices=TIPO_CHOICES, default='atendente')
     empresa = models.ForeignKey(Empresa, on_delete=models.SET_NULL, null=True, blank=True)
     telefone = models.CharField(max_length=20, blank=True)
+    numero_vendedor = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        unique=True,
+        validators=[
+            RegexValidator(
+                regex=r'^\d{2,10}$',
+                message='Numero de vendedor deve conter apenas digitos (minimo 2).',
+            )
+        ],
+    )
 
     def __str__(self):
         return f"{self.username} ({self.get_tipo_usuario_display()})"

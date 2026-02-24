@@ -1,15 +1,15 @@
 {% extends 'core/base.html' %}
 {% load static %}
 
-{% block title %}Gestão de Clientes{% endblock %}
+{% block title %}Gestao de Clientes{% endblock %}
 
 {% block content %}
 <section class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1><i class="fas fa-users mr-1"></i> Gestão de Clientes</h1>
-                <small class="text-muted">Cadastro, edição e exclusão de clientes</small>
+                <h1><i class="fas fa-users mr-1"></i> Gestao de Clientes</h1>
+                <small class="text-muted">Cadastro, edicao e exclusao de clientes</small>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
@@ -24,14 +24,13 @@
 <section class="content">
     <div class="container-fluid">
         <div class="row">
-            <!-- Busca Simples -->
             <div class="col-12 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <form method="GET" action="{% url 'clientes:lista_clientes' %}">
                             <div class="input-group">
                                 <input type="text" name="query" class="form-control"
-                                       placeholder="Buscar cliente por nome, telefone, CPF, CNPJ ou número..."
+                                       placeholder="Buscar cliente por nome, telefone, CPF, CNPJ ou numero..."
                                        value="{{ query|default:'' }}">
                                 <div class="input-group-append">
                                     <button type="submit" class="btn btn-primary">
@@ -49,19 +48,13 @@
                 </div>
             </div>
 
-<!-- Lista de Clientes -->
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title mb-0">
-                            {% if query %}Resultados da Busca{% else %}Todos os Clientes{% endif %}
+                            {% if query %}Resultados da Busca{% else %}Clientes{% endif %}
                             <span class="badge badge-primary ml-2">{{ clientes|length }}</span>
                         </h3>
-                        <div class="card-tools">
-                            <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-success btn-sm">
-                                <i class="fas fa-plus-circle"></i> Nova OS
-                            </a>
-                        </div>
                     </div>
 
                     <div class="card-body p-0">
@@ -70,13 +63,13 @@
                             <table class="table table-hover mb-0">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th>Nº Cliente</th>
+                                        <th>N Cliente</th>
                                         <th>Nome</th>
                                         <th>Telefone</th>
                                         <th>Email</th>
-                                        <th>CPF/CNPJ</th>
+                                        <th>Documento</th>
                                         <th>Cadastrado em</th>
-                                        <th style="width: 90px" class="text-center">Ações</th>
+                                        <th style="width: 90px" class="text-center">Acoes</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -86,28 +79,17 @@
                                         <td><strong>{{ cliente.nome }}</strong></td>
                                         <td>{{ cliente.telefone|default:"-" }}</td>
                                         <td>{{ cliente.email|default:"-" }}</td>
-                                        <td>
-                                            {% if cliente.cpf %}
-                                                {{ cliente.cpf|slice:":3" }}.{{ cliente.cpf|slice:"3:6" }}.{{ cliente.cpf|slice:"6:9" }}-{{ cliente.cpf|slice:"9:" }}
-                                            {% elif cliente.cnpj %}
-                                                {{ cliente.cnpj|slice:":2" }}.{{ cliente.cnpj|slice:"2:5" }}.{{ cliente.cnpj|slice:"5:8" }}/{{ cliente.cnpj|slice:"8:12" }}-{{ cliente.cnpj|slice:"12:" }}
-                                            {% else %}
-                                                -
-                                            {% endif %}
-                                        </td>
+                                        <td>{{ cliente.get_documento_formatado|default:"-" }}</td>
                                         <td>{{ cliente.data_cadastro|date:"d/m/Y" }}</td>
                                         <td class="text-center">
                                             <div class="btn-group">
-                                                <a href="{% url 'clientes:detalhes_cliente' cliente.id %}"
-                                                   class="btn btn-info btn-xs" title="Detalhes">
+                                                <a href="{% url 'clientes:detalhes_cliente' cliente.id %}" class="btn btn-info btn-xs" title="Detalhes">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
-                                                <a href="{% url 'clientes:editar_cliente' cliente.id %}"
-                                                   class="btn btn-warning btn-xs" title="Editar">
+                                                <a href="{% url 'clientes:editar_cliente' cliente.id %}" class="btn btn-warning btn-xs" title="Editar">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
-                                                <a href="{% url 'clientes:excluir_cliente' cliente.id %}"
-                                                   class="btn btn-danger btn-xs" title="Excluir">
+                                                <a href="{% url 'clientes:excluir_cliente' cliente.id %}" class="btn btn-danger btn-xs" title="Excluir">
                                                     <i class="fas fa-trash"></i>
                                                 </a>
                                             </div>
@@ -120,13 +102,17 @@
                         {% elif query %}
                         <div class="text-center py-5">
                             <i class="fas fa-search fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">Pesquise pelo CPF ou telefone</h5>
+                            <h5 class="text-muted">Cliente nao encontrado</h5>
+                            <p class="text-muted">Cadastre um novo cliente para continuar.</p>
+                            <a href="{% url 'ordens:verificar_cliente_os' %}?cpf_telefone={{ query|urlencode }}&novo_cliente=true" class="btn btn-primary btn-sm">
+                                <i class="fas fa-user-plus"></i> Cadastrar novo cliente
+                            </a>
                         </div>
                         {% else %}
                         <div class="text-center py-5">
                             <i class="fas fa-users fa-3x text-muted mb-3"></i>
                             <h5 class="text-muted">Pesquise pelo CPF ou telefone</h5>
-                            <p class="text-muted">Clique em "Nova OS" para começar</p>
+                            <p class="text-muted">Use nome, documento, telefone ou numero de cliente.</p>
                         </div>
                         {% endif %}
                     </div>
@@ -156,11 +142,6 @@
 .badge {
     font-size: 0.75rem;
     font-weight: 600;
-}
-.card-header .card-tools {
-    position: absolute;
-    right: 1rem;
-    top: 0.75rem;
 }
 </style>
 {% endblock %}

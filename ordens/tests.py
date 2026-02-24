@@ -6,8 +6,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from caixa.models import Pagamento
+from caixa.models import AuditoriaGarantia
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema
+from configuracoes.models import FornecedorGarantia, MarcaGarantia
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.forms import LinhaTrabalhoForm
@@ -314,6 +316,58 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
         self.assertContains(response, ordem.marca_equipamento)
         self.assertContains(response, ordem.modelo_equipamento)
 
+    def test_criacao_os_com_marca_outros_preenche_marca_manual(self):
+        fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor Marca")
+        MarcaGarantia.objects.create(
+            nome="Marca Conhecida",
+            fornecedor=fornecedor,
+            valor_mao_obra_garantia="0.00",
+            parceira_garantia=True,
+            ativo=True,
+        )
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        response = self.client.post(
+            url,
+            {
+                "tipo_equipamento": "celular",
+                "marca_catalogo": "__outros__",
+                "marca_manual": "Marca Nova",
+                "marca_equipamento": "",
+                "modelo_equipamento": "Modelo C",
+                "numero_serie_equipamento": "SN-321",
+                "defeito": "Nao liga",
+                "acessorios": "",
+                "tipo_reparo": "Garantia",
+                "numero_nota_fiscal": "NF-12345",
+                "status": "diagnosticar",
+                "peritagem": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        ordem = OrdemServico.objects.latest("id")
+        self.assertEqual(ordem.marca_equipamento, "Marca Nova")
+
+    def test_criacao_os_garantia_sem_nota_fiscal_exibe_erro(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        response = self.client.post(
+            url,
+            {
+                "tipo_equipamento": "celular",
+                "marca_catalogo": "__outros__",
+                "marca_manual": "Marca Sem Nota",
+                "marca_equipamento": "",
+                "modelo_equipamento": "Modelo D",
+                "numero_serie_equipamento": "SN-654",
+                "defeito": "Sem video",
+                "acessorios": "",
+                "tipo_reparo": "Garantia",
+                "status": "diagnosticar",
+                "peritagem": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "informe o numero da nota fiscal")
+
 
 class LinhaTrabalhoFormTests(TestCase):
     def test_status_criada_nao_aparece_para_selecao_manual(self):
@@ -441,6 +495,32 @@ class IntegracaoFluxoOSCaixaTests(TestCase):
         self.assertIn(reverse("caixa:registrar_pagamento"), response.url)
         self.assertIn(f"os={ordem.id}", response.url)
 
+    def test_fechar_os_garantia_cria_auditoria_financeira(self):
+        fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor G")
+        marca = MarcaGarantia.objects.create(
+            nome="Marca G",
+            fornecedor=fornecedor,
+            valor_mao_obra_garantia="150.00",
+            parceira_garantia=True,
+            ativo=True,
+        )
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca G",
+            marca_garantia=marca,
+            modelo_equipamento="Modelo G",
+            numero_serie_equipamento="SN-003",
+            defeito="Nao liga",
+            tipo_reparo="Garantia",
+            status="em_andamento",
+            relatorio_tecnico="Laudo ok",
+            tipo_reparacao="substituicao",
+        )
+        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[ordem.id]))
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(AuditoriaGarantia.objects.filter(ordem_servico=ordem).exists())
+
     def test_box_financeiro_em_servicos_exibe_referencias_e_status_pago(self):
         ordem = OrdemServico.objects.create(
             cliente=self.cliente,
@@ -471,6 +551,52 @@ class IntegracaoFluxoOSCaixaTests(TestCase):
         self.assertContains(response, "Pago?")
         self.assertContains(response, "Sim")
         self.assertContains(response, "TALAO-001")
+
+    def test_detalhes_ordem_lista_tecnicos_no_select_responsavel(self):
+        tecnico = get_user_model().objects.create_user(
+            username="tecnico_select_os",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+        )
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca T",
+            modelo_equipamento="Modelo Z",
+            numero_serie_equipamento="SN-TEC",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+        response = self.client.get(reverse("ordens:detalhes_ordem", args=[ordem.id]) + "?tab=detalhes")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, tecnico.username)
+
+    def test_editar_os_permite_apenas_numero_serie_e_registra_linha(self):
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Fixa",
+            modelo_equipamento="Modelo Fixo",
+            numero_serie_equipamento="SN-OLD",
+            defeito="Defeito original",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+        response = self.client.post(
+            reverse("ordens:editar_ordem", args=[ordem.id]),
+            {"numero_serie_equipamento": "SN-NEW"},
+        )
+        self.assertEqual(response.status_code, 302)
+        ordem.refresh_from_db()
+        self.assertEqual(ordem.numero_serie_equipamento, "SN-NEW")
+        self.assertEqual(ordem.defeito, "Defeito original")
+        self.assertTrue(
+            LinhaTrabalho.objects.filter(
+                ordem=ordem,
+                descricao__icontains="Numero de serie alterado",
+            ).exists()
+        )
 
 
 class OrdemFechadaBloqueioEdicaoTests(TestCase):

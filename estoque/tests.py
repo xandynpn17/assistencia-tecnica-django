@@ -61,12 +61,25 @@ class ConsultaArtigosTests(TestCase):
                 "produto_id": self.produto.id,
                 "ponto_id": self.ponto_avaria.id,
                 "quantidade": 1,
-                "funcionario_numero": "F123",
+                "funcionario_numero": "12",
                 "metodo": "pix",
             },
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("Venda permitida", response.json()["erro"])
+
+    def test_venda_exige_numero_vendedor_com_2_digitos(self):
+        response = self.client.post(
+            reverse("estoque:api_venda_rapida"),
+            {
+                "produto_id": self.produto.id,
+                "ponto_id": self.ponto_loja.id,
+                "quantidade": 1,
+                "funcionario_numero": "9",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Numero de vendedor invalido", response.json()["erro"])
 
     def test_cria_reserva_com_codigo(self):
         response = self.client.post(
@@ -197,16 +210,35 @@ class ConsultaArtigosTests(TestCase):
                 "produto_id": self.produto.id,
                 "ponto_id": self.ponto_loja.id,
                 "quantidade": 1,
-                "funcionario_numero": "F123",
+                "funcionario_numero": "12",
             },
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertTrue(data["ok"])
         venda_id = data["venda_id"]
+        self.assertTrue(data["cesto_codigo"].startswith("CES-"))
         from estoque.models import VendaRapidaEstoque
 
         venda = VendaRapidaEstoque.objects.get(id=venda_id)
         self.assertEqual(venda.status, "pre_reserva")
         saldo_final = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_loja).quantidade
         self.assertEqual(saldo_final, saldo_inicial)
+
+    def test_finalizar_cesto_gera_guia(self):
+        response_item = self.client.post(
+            reverse("estoque:api_venda_rapida"),
+            {
+                "produto_id": self.produto.id,
+                "ponto_id": self.ponto_loja.id,
+                "quantidade": 1,
+                "funcionario_numero": "12",
+            },
+        )
+        self.assertEqual(response_item.status_code, 200)
+        cesto_codigo = response_item.json()["cesto_codigo"]
+        response_guia = self.client.post(reverse("estoque:api_cesto_finalizar"), {"cesto_codigo": cesto_codigo})
+        self.assertEqual(response_guia.status_code, 200)
+        data = response_guia.json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["guia"].startswith("GUIA-"))

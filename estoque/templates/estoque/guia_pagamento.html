@@ -1,0 +1,50 @@
+{% extends "core/base.html" %}
+
+{% block title %}Guia {{ guia_codigo }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="mb-0">Guia de Pagamento {{ guia_codigo }}</h5>
+    <div>
+      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">Imprimir</button>
+      <a href="{% url 'caixa:registrar_pagamento' %}?guia={{ guia_codigo }}" class="btn btn-primary btn-sm">Enviar para Caixa</a>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm table-striped">
+        <thead>
+          <tr>
+            <th>Produto</th>
+            <th>Ponto</th>
+            <th>Qtd</th>
+            <th>Tecnico</th>
+            <th>Vendedor</th>
+            <th>Valor Unit.</th>
+            <th>Total</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for venda in vendas %}
+          <tr>
+            <td>{{ venda.produto.nome }}</td>
+            <td>{{ venda.ponto_operacional.codigo }}</td>
+            <td>{{ venda.quantidade }}</td>
+            <td>{{ venda.tecnico_nome }}</td>
+            <td>{{ venda.funcionario_numero }}</td>
+            <td>R$ {{ venda.valor_unitario }}</td>
+            <td>R$ {{ venda.valor_total }}</td>
+            <td>{{ venda.get_status_display }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="text-right">
+      <h4 class="mb-0">Total: R$ {{ total }}</h4>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,217 @@
+{% extends "core/base.html" %}
+
+{% block title %}Marcas e Fornecedores{% endblock %}
+
+{% block extra_css %}
+<style>
+  .card-modern { border: none; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); margin-bottom: 20px; }
+  .card-modern-header { background: #2c3e50; color: #fff; padding: 14px 18px; border-radius: 10px 10px 0 0; font-weight: 600; }
+  .card-modern-body { padding: 18px; }
+  .tabs-clean .nav-link { border-radius: 8px; margin-right: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card-modern">
+  <div class="card-modern-header">Cadastro e Consulta de Marcas / Fornecedores</div>
+  <div class="card-modern-body">
+    <ul class="nav nav-tabs tabs-clean mb-3" id="tabs-cad" role="tablist">
+      <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tab-fornecedor-cad">Cadastrar Fornecedor</a></li>
+      <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fornecedor-cons">Consultar Fornecedores</a></li>
+      <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-marca-cad">Cadastrar Marca</a></li>
+      <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-marca-cons">Consultar Marcas/Regras</a></li>
+    </ul>
+
+    <div class="tab-content">
+      <div class="tab-pane fade show active" id="tab-fornecedor-cad">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="{% if edit_fornecedor_id %}fornecedor_edit{% else %}fornecedor{% endif %}">
+          {% if edit_fornecedor_id %}
+          <input type="hidden" name="fornecedor_id" value="{{ edit_fornecedor_id }}">
+          {% endif %}
+          <div class="row">
+            <div class="col-md-4">{{ fornecedor_form.nome.label_tag }}{{ fornecedor_form.nome }}</div>
+            <div class="col-md-4">{{ fornecedor_form.razao_social.label_tag }}{{ fornecedor_form.razao_social }}</div>
+            <div class="col-md-4">{{ fornecedor_form.cnpj.label_tag }}{{ fornecedor_form.cnpj }}</div>
+            <div class="col-md-4">{{ fornecedor_form.inscricao_estadual.label_tag }}{{ fornecedor_form.inscricao_estadual }}</div>
+            <div class="col-md-4">{{ fornecedor_form.contato.label_tag }}{{ fornecedor_form.contato }}</div>
+            <div class="col-md-4">{{ fornecedor_form.telefone.label_tag }}{{ fornecedor_form.telefone }}</div>
+            <div class="col-md-4">{{ fornecedor_form.email.label_tag }}{{ fornecedor_form.email }}</div>
+            <div class="col-md-4">{{ fornecedor_form.modalidade_pagamento.label_tag }}{{ fornecedor_form.modalidade_pagamento }}</div>
+            <div class="col-md-4">{{ fornecedor_form.prazo_pagamento_dias.label_tag }}{{ fornecedor_form.prazo_pagamento_dias }}</div>
+            <div class="col-md-6">{{ fornecedor_form.documento_anexo.label_tag }}{{ fornecedor_form.documento_anexo }}</div>
+            <div class="col-md-6">{{ fornecedor_form.comprovante_pagamento_anexo.label_tag }}{{ fornecedor_form.comprovante_pagamento_anexo }}</div>
+            <div class="col-md-6">{{ fornecedor_form.detalhes.label_tag }}{{ fornecedor_form.detalhes }}</div>
+            <div class="col-md-6">{{ fornecedor_form.contrato.label_tag }}{{ fornecedor_form.contrato }}</div>
+            <div class="col-md-2 mt-2">{{ fornecedor_form.ativo.label_tag }}<br>{{ fornecedor_form.ativo }}</div>
+          </div>
+          <button class="btn btn-primary mt-3" type="submit">{% if edit_fornecedor_id %}Atualizar fornecedor{% else %}Salvar fornecedor{% endif %}</button>
+          {% if edit_fornecedor_id %}
+          <a class="btn btn-outline-secondary mt-3 ml-2" href="{% url 'configuracoes:marcas_fornecedores' %}#tab-fornecedor-cad">Cancelar edicao</a>
+          {% endif %}
+        </form>
+      </div>
+
+      <div class="tab-pane fade" id="tab-fornecedor-cons">
+        <form method="get" class="form-inline mb-2">
+          <input class="form-control mr-2" type="text" name="qf" value="{{ busca_fornecedor }}" placeholder="Buscar fornecedor">
+          <button class="btn btn-outline-primary" type="submit">Buscar</button>
+        </form>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>Nome</th><th>CNPJ</th><th>IE</th><th>Modalidade</th><th>Prazo</th><th>Documento</th><th>Comprovante</th><th>Ativo</th><th>Acoes</th></tr></thead>
+            <tbody>
+              {% for f in fornecedores %}
+              <tr>
+                <td>{{ f.nome }}</td>
+                <td>{{ f.cnpj|default:"-" }}</td>
+                <td>{{ f.inscricao_estadual|default:"-" }}</td>
+                <td>{{ f.get_modalidade_pagamento_display }}</td>
+                <td>{{ f.prazo_pagamento_dias }} dias</td>
+                <td>{% if f.documento_anexo %}<a href="{{ f.documento_anexo.url }}" target="_blank">Ver</a>{% else %}-{% endif %}</td>
+                <td>{% if f.comprovante_pagamento_anexo %}<a href="{{ f.comprovante_pagamento_anexo.url }}" target="_blank">Ver</a>{% else %}-{% endif %}</td>
+                <td>{{ f.ativo|yesno:"Sim,Nao" }}</td>
+                <td class="text-nowrap">
+                  <a class="btn btn-sm btn-outline-primary" href="?edit_fornecedor={{ f.id }}#tab-fornecedor-cad">Editar</a>
+                  <form method="post" class="d-inline" onsubmit="return confirm('Excluir fornecedor?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="fornecedor_delete">
+                    <input type="hidden" name="fornecedor_id" value="{{ f.id }}">
+                    <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="9" class="text-center text-muted">Sem fornecedores.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if fornecedores.has_other_pages %}
+        <nav>
+          <ul class="pagination pagination-sm">
+            {% if fornecedores.has_previous %}
+            <li class="page-item"><a class="page-link" href="?qf={{ busca_fornecedor }}&page_f={{ fornecedores.previous_page_number }}#tab-fornecedor-cons">Anterior</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Pagina {{ fornecedores.number }} de {{ fornecedores.paginator.num_pages }}</span></li>
+            {% if fornecedores.has_next %}
+            <li class="page-item"><a class="page-link" href="?qf={{ busca_fornecedor }}&page_f={{ fornecedores.next_page_number }}#tab-fornecedor-cons">Proxima</a></li>
+            {% endif %}
+          </ul>
+        </nav>
+        {% endif %}
+      </div>
+
+      <div class="tab-pane fade" id="tab-marca-cad">
+        <div class="row">
+          <div class="col-md-6">
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="form_type" value="{% if edit_marca_id %}marca_edit{% else %}marca{% endif %}">
+              {% if edit_marca_id %}
+              <input type="hidden" name="marca_id" value="{{ edit_marca_id }}">
+              {% endif %}
+              {{ marca_form.as_p }}
+              <button class="btn btn-success" type="submit">{% if edit_marca_id %}Atualizar marca{% else %}Salvar marca{% endif %}</button>
+              {% if edit_marca_id %}
+              <a class="btn btn-outline-secondary ml-2" href="{% url 'configuracoes:marcas_fornecedores' %}#tab-marca-cad">Cancelar edicao</a>
+              {% endif %}
+            </form>
+          </div>
+          <div class="col-md-6">
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="form_type" value="regra">
+              {{ regra_form.as_p }}
+              <button class="btn btn-info" type="submit">Salvar regra por tipo</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="tab-marca-cons">
+        <form method="get" class="form-inline mb-2">
+          <input class="form-control mr-2" type="text" name="qm" value="{{ busca_marca }}" placeholder="Buscar marca">
+          <button class="btn btn-outline-primary" type="submit">Buscar</button>
+        </form>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>Marca</th><th>Fornecedor</th><th>Parceira Garantia</th><th>Procedimentos</th><th>Mao de obra base</th><th>Ativa</th><th>Acoes</th></tr></thead>
+            <tbody>
+              {% for m in marcas %}
+              <tr>
+                <td>{{ m.nome }}</td>
+                <td>{{ m.fornecedor.nome|default:"-" }}</td>
+                <td>{{ m.parceira_garantia|yesno:"Sim,Nao" }}</td>
+                <td>{{ m.procedimentos|default:"-"|truncatechars:120 }}</td>
+                <td>R$ {{ m.valor_mao_obra_garantia|floatformat:2 }}</td>
+                <td>{{ m.ativo|yesno:"Sim,Nao" }}</td>
+                <td class="text-nowrap">
+                  <a class="btn btn-sm btn-outline-primary" href="?edit_marca={{ m.id }}#tab-marca-cad">Editar</a>
+                  <form method="post" class="d-inline" onsubmit="return confirm('Excluir marca?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="marca_delete">
+                    <input type="hidden" name="marca_id" value="{{ m.id }}">
+                    <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="7" class="text-center text-muted">Sem marcas.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if marcas.has_other_pages %}
+        <nav>
+          <ul class="pagination pagination-sm">
+            {% if marcas.has_previous %}
+            <li class="page-item"><a class="page-link" href="?qm={{ busca_marca }}&page_m={{ marcas.previous_page_number }}#tab-marca-cons">Anterior</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Pagina {{ marcas.number }} de {{ marcas.paginator.num_pages }}</span></li>
+            {% if marcas.has_next %}
+            <li class="page-item"><a class="page-link" href="?qm={{ busca_marca }}&page_m={{ marcas.next_page_number }}#tab-marca-cons">Proxima</a></li>
+            {% endif %}
+          </ul>
+        </nav>
+        {% endif %}
+
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>Marca</th><th>Equipamento</th><th>Valor pago</th><th>Mao de obra tecnico</th><th>Modalidade</th><th>Prazo</th><th>Vigencia</th></tr></thead>
+            <tbody>
+              {% for r in regras %}
+              <tr>
+                <td>{{ r.marca.nome }}</td>
+                <td>{{ r.get_tipo_produto_display }}</td>
+                <td>R$ {{ r.valor_mao_obra|floatformat:2 }}</td>
+                <td>R$ {{ r.valor_mao_obra_tecnico|floatformat:2 }}</td>
+                <td>{{ r.get_modalidade_pagamento_display }}</td>
+                <td>{{ r.prazo_pagamento_dias }} dias</td>
+                <td>{{ r.inicio_vigencia|date:"d/m/Y" }}{% if r.fim_vigencia %} ate {{ r.fim_vigencia|date:"d/m/Y" }}{% else %} (sem fim){% endif %}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="7" class="text-center text-muted">Sem regras.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.location.hash) {
+    const link = document.querySelector(`a[href='${window.location.hash}']`);
+    if (link) {
+      $(link).tab('show');
+    }
+  }
+});
+</script>
+{% endblock %}

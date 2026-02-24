@@ -18,8 +18,18 @@
             <div class="alert alert-info">
                 Pagamento vinculado automaticamente a OS <strong>{{ ordem.numero_os }}</strong> ({{ ordem.cliente.nome }}).
             </div>
+            {% if garantia_sugerida %}
+            <div class="alert alert-warning">
+                OS de garantia detectada. Valor sugerido de mao de obra da marca: <strong>R$ {{ garantia_sugerida|floatformat:2 }}</strong>.
+            </div>
+            {% endif %}
             <div class="d-none">
                 {{ form.ordem_servico|add_class:"form-control" }}
+            </div>
+            {% elif guia_codigo and vendas_guia %}
+            <div class="alert alert-info">
+                Finalizando guia <strong>{{ guia_codigo }}</strong> com {{ vendas_guia|length }} item(ns) em pre-reserva.
+                <a href="{% url 'estoque:guia_pagamento' guia_codigo %}" target="_blank">Visualizar/Imprimir guia</a>
             </div>
             {% elif venda %}
             <div class="alert alert-info">

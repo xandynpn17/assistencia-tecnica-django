@@ -1,0 +1,54 @@
+{% extends "core/base.html" %}
+
+{% block title %}Divergencias de Estoque{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Divergencias de Estoque</h1>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">Pre-reservas antigas</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          {% for v in pre_reservas_antigas %}
+            <li>#{{ v.id }} - {{ v.produto.nome }} ({{ v.quantidade }})</li>
+          {% empty %}
+            <li class="text-muted">Sem pendencias</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">Reservas vencidas ativas</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          {% for r in reservas_vencidas_ativas %}
+            <li>{{ r.codigo_reserva }} - {{ r.produto.nome }}</li>
+          {% empty %}
+            <li class="text-muted">Sem pendencias</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">Abaixo do minimo</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          {% for p in produtos_abaixo %}
+            <li>{{ p.nome }}: {{ p.quantidade }} / min {{ p.estoque_minimo }}</li>
+          {% empty %}
+            <li class="text-muted">Sem pendencias</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

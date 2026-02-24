@@ -21,6 +21,7 @@ class Pagamento(models.Model):
         ("dinheiro", "Dinheiro"),
         ("credito", "Cartao de Credito"),
         ("debito", "Cartao de Debito"),
+        ("garantia_fabricante", "Garantia Fabricante"),
         ("loja", "Custo da Loja"),
     ]
 
@@ -151,6 +152,7 @@ class RegraComissaoTecnico(models.Model):
     usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="regra_comissao")
     percentual_servico = models.DecimalField(max_digits=5, decimal_places=2, default=10)
     percentual_peca = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    comissionar_garantia = models.BooleanField(default=False)
     ativo = models.BooleanField(default=True)
 
     class Meta:
@@ -187,6 +189,98 @@ class ComissaoTecnico(models.Model):
         return f"Comissao {self.tecnico} - OS {self.ordem_servico.numero_os} - {self.valor_comissao}"
 
 
+class ComissaoItemOrcamento(models.Model):
+    STATUS_CHOICES = [
+        ("pendente", "Pendente"),
+        ("paga", "Paga"),
+        ("cancelada", "Cancelada"),
+    ]
+    MODO_CHOICES = [
+        ("antecipado", "Antecipado"),
+        ("fechamento", "No fechamento"),
+    ]
+
+    item_orcamento = models.ForeignKey("orcamentos.ItemOrcamento", on_delete=models.CASCADE, related_name="comissoes")
+    ordem_servico = models.ForeignKey("ordens.OrdemServico", on_delete=models.CASCADE, related_name="comissoes_itens")
+    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="comissoes_itens_tecnico")
+    regra = models.ForeignKey(RegraComissaoTecnico, on_delete=models.SET_NULL, null=True, blank=True)
+    modo_pagamento = models.CharField(max_length=20, choices=MODO_CHOICES, default="fechamento")
+    base_calculo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    percentual_aplicado = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    valor_comissao = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pendente")
+    referencia_pagamento = models.CharField(max_length=80, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        unique_together = [("item_orcamento", "modo_pagamento")]
+
+    def __str__(self):
+        return f"Comissao item #{self.item_orcamento_id} - {self.tecnico} - {self.valor_comissao}"
+
+
+class RegraPremioMeta(models.Model):
+    METRICA_CHOICES = [
+        ("margem_loja", "Margem da loja"),
+        ("faturamento_loja", "Faturamento da loja"),
+    ]
+    PUBLICO_CHOICES = [
+        ("tecnico", "Tecnicos"),
+        ("atendente", "Atendentes"),
+        ("todos_operacionais", "Todos operacionais"),
+    ]
+
+    nome = models.CharField(max_length=120)
+    metrica = models.CharField(max_length=30, choices=METRICA_CHOICES, default="margem_loja")
+    meta_alvo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    publico = models.CharField(max_length=30, choices=PUBLICO_CHOICES, default="tecnico")
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return f"{self.nome} ({self.get_metrica_display()})"
+
+
+class FaixaPremioMeta(models.Model):
+    regra = models.ForeignKey(RegraPremioMeta, on_delete=models.CASCADE, related_name="faixas")
+    meta_minima = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    meta_maxima = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    premio_valor = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    ordem = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ["ordem", "meta_minima"]
+
+    def __str__(self):
+        teto = self.meta_maxima if self.meta_maxima is not None else "sem teto"
+        return f"{self.regra.nome}: {self.meta_minima} ate {teto} => {self.premio_valor}"
+
+
+class PremioColaboradorCompetencia(models.Model):
+    colaborador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="premios_competencia")
+    regra = models.ForeignKey(RegraPremioMeta, on_delete=models.CASCADE, related_name="premios_competencia")
+    faixa = models.ForeignKey(FaixaPremioMeta, on_delete=models.SET_NULL, null=True, blank=True, related_name="premios")
+    competencia = models.DateField()
+    valor_metrica = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    percentual_atingimento = models.DecimalField(max_digits=7, decimal_places=2, default=0)
+    premio_valor = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    observacao = models.CharField(max_length=180, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-competencia", "-id"]
+        unique_together = [("colaborador", "regra", "competencia")]
+
+    def __str__(self):
+        return f"{self.colaborador} - {self.regra.nome} - {self.competencia:%m/%Y}"
+
+
 class DespesaRecorrente(models.Model):
     nome = models.CharField(max_length=120)
     valor_mensal = models.DecimalField(max_digits=12, decimal_places=2)
@@ -199,3 +293,29 @@ class DespesaRecorrente(models.Model):
 
     def __str__(self):
         return f"{self.nome} - {self.valor_mensal}"
+
+
+class AuditoriaGarantia(models.Model):
+    STATUS_FATURAMENTO = [
+        ("pendente", "Pendente"),
+        ("enviado", "Enviado"),
+        ("pago", "Pago"),
+    ]
+
+    ordem_servico = models.OneToOneField("ordens.OrdemServico", on_delete=models.CASCADE, related_name="auditoria_garantia")
+    fornecedor = models.ForeignKey("configuracoes.FornecedorGarantia", on_delete=models.SET_NULL, null=True, blank=True)
+    marca = models.ForeignKey("configuracoes.MarcaGarantia", on_delete=models.SET_NULL, null=True, blank=True)
+    regra_garantia = models.ForeignKey("configuracoes.RegraGarantiaMarca", on_delete=models.SET_NULL, null=True, blank=True)
+    valor_previsto_fabricante = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    comissao_prevista_tecnica = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    status_faturamento = models.CharField(max_length=20, choices=STATUS_FATURAMENTO, default="pendente")
+    referencia_faturamento = models.CharField(max_length=80, blank=True)
+    observacoes = models.TextField(blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-atualizado_em", "-id"]
+
+    def __str__(self):
+        return f"Auditoria garantia {self.ordem_servico.numero_os} - {self.get_status_faturamento_display()}"

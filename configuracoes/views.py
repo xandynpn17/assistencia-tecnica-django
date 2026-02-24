@@ -1,11 +1,22 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib import messages
+from django.core.paginator import Paginator
+from django.db.models.deletion import ProtectedError
 from .forms import (
     EmpresaForm, AliquotaForm, UserForm,
-    ConfiguracaoOrdemServicoForm, ConfiguracaoSistemaForm
+    ConfiguracaoOrdemServicoForm, ConfiguracaoSistemaForm,
+    FornecedorGarantiaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm
 )
-from .models import Empresa, Aliquota, ConfiguracaoOrdemServico, ConfiguracaoSistema  #
+from .models import (
+    Aliquota,
+    ConfiguracaoOrdemServico,
+    ConfiguracaoSistema,
+    Empresa,
+    FornecedorGarantia,
+    MarcaGarantia,
+    RegraGarantiaMarca,
+)
 from django.views.decorators.csrf import csrf_exempt
 import requests
 import json
@@ -221,6 +232,117 @@ def configuracao_sistema_edit(request):
         'ddd_brasil': ConfiguracaoSistema.DDD_BRASIL,
     }
     return render(request, 'configuracoes/configuracao_sistema_form.html', context)
+
+
+@role_required(MANAGER_ROLES)
+def marcas_fornecedores(request):
+    busca_fornecedor = (request.GET.get("qf") or "").strip()
+    busca_marca = (request.GET.get("qm") or "").strip()
+    edit_fornecedor_id = (request.GET.get("edit_fornecedor") or "").strip()
+    edit_marca_id = (request.GET.get("edit_marca") or "").strip()
+
+    if request.method == "POST":
+        form_type = request.POST.get("form_type")
+        if form_type == "fornecedor":
+            fornecedor_form = FornecedorGarantiaForm(request.POST, request.FILES)
+            marca_form = MarcaGarantiaForm()
+            regra_form = RegraGarantiaMarcaForm()
+            if fornecedor_form.is_valid():
+                fornecedor_form.save()
+                messages.success(request, "Fornecedor salvo com sucesso.")
+                return redirect("configuracoes:marcas_fornecedores")
+        elif form_type == "fornecedor_edit":
+            fornecedor = get_object_or_404(FornecedorGarantia, id=request.POST.get("fornecedor_id"))
+            fornecedor_form = FornecedorGarantiaForm(request.POST, request.FILES, instance=fornecedor)
+            marca_form = MarcaGarantiaForm()
+            regra_form = RegraGarantiaMarcaForm()
+            if fornecedor_form.is_valid():
+                fornecedor_form.save()
+                messages.success(request, "Fornecedor atualizado com sucesso.")
+                return redirect("configuracoes:marcas_fornecedores")
+        elif form_type == "fornecedor_delete":
+            fornecedor = get_object_or_404(FornecedorGarantia, id=request.POST.get("fornecedor_id"))
+            try:
+                fornecedor.delete()
+                messages.success(request, "Fornecedor excluido com sucesso.")
+            except ProtectedError:
+                messages.error(request, "Fornecedor vinculado a marcas. Remova os vinculos antes de excluir.")
+            return redirect("configuracoes:marcas_fornecedores")
+        elif form_type == "marca":
+            marca_form = MarcaGarantiaForm(request.POST)
+            fornecedor_form = FornecedorGarantiaForm()
+            regra_form = RegraGarantiaMarcaForm()
+            if marca_form.is_valid():
+                marca_form.save()
+                messages.success(request, "Marca de garantia salva com sucesso.")
+                return redirect("configuracoes:marcas_fornecedores")
+        elif form_type == "marca_edit":
+            marca = get_object_or_404(MarcaGarantia, id=request.POST.get("marca_id"))
+            marca_form = MarcaGarantiaForm(request.POST, instance=marca)
+            fornecedor_form = FornecedorGarantiaForm()
+            regra_form = RegraGarantiaMarcaForm()
+            if marca_form.is_valid():
+                marca_form.save()
+                messages.success(request, "Marca atualizada com sucesso.")
+                return redirect("configuracoes:marcas_fornecedores")
+        elif form_type == "marca_delete":
+            marca = get_object_or_404(MarcaGarantia, id=request.POST.get("marca_id"))
+            marca.delete()
+            messages.success(request, "Marca excluida com sucesso.")
+            return redirect("configuracoes:marcas_fornecedores")
+        else:
+            regra_form = RegraGarantiaMarcaForm(request.POST)
+            fornecedor_form = FornecedorGarantiaForm()
+            marca_form = MarcaGarantiaForm()
+            if regra_form.is_valid():
+                regra_form.save()
+                messages.success(request, "Regra de garantia salva com sucesso.")
+                return redirect("configuracoes:marcas_fornecedores")
+    else:
+        if edit_fornecedor_id.isdigit():
+            fornecedor_obj = FornecedorGarantia.objects.filter(id=int(edit_fornecedor_id)).first()
+            fornecedor_form = FornecedorGarantiaForm(instance=fornecedor_obj)
+        else:
+            fornecedor_form = FornecedorGarantiaForm()
+
+        if edit_marca_id.isdigit():
+            marca_obj = MarcaGarantia.objects.filter(id=int(edit_marca_id)).first()
+            marca_form = MarcaGarantiaForm(instance=marca_obj)
+        else:
+            marca_form = MarcaGarantiaForm()
+        regra_form = RegraGarantiaMarcaForm()
+
+    fornecedores_qs = (
+        FornecedorGarantia.objects.filter(nome__icontains=busca_fornecedor)
+        if busca_fornecedor
+        else FornecedorGarantia.objects.all()
+    )
+    marcas_qs = (
+        MarcaGarantia.objects.select_related("fornecedor").filter(nome__icontains=busca_marca)
+        if busca_marca
+        else MarcaGarantia.objects.select_related("fornecedor").all()
+    )
+    fornecedores_page = Paginator(fornecedores_qs.order_by("nome"), 10).get_page(request.GET.get("page_f"))
+    marcas_page = Paginator(marcas_qs.order_by("nome"), 10).get_page(request.GET.get("page_m"))
+
+    return render(
+        request,
+        "configuracoes/marcas_fornecedores.html",
+        {
+            "fornecedor_form": fornecedor_form,
+            "marca_form": marca_form,
+            "regra_form": regra_form,
+            "fornecedores": fornecedores_page,
+            "marcas": marcas_page,
+            "regras": RegraGarantiaMarca.objects.select_related("marca", "marca__fornecedor").all(),
+            "busca_fornecedor": busca_fornecedor,
+            "busca_marca": busca_marca,
+            "edit_fornecedor_id": int(edit_fornecedor_id) if edit_fornecedor_id.isdigit() else None,
+            "edit_marca_id": int(edit_marca_id) if edit_marca_id.isdigit() else None,
+            "menu_app": "configuracoes",
+            "menu_sub": "marcas_fornecedores",
+        },
+    )
 
 #---------------------------
 #Busca cep

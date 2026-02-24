@@ -18,6 +18,7 @@ urlpatterns = [
     path('backup/', views.backup_banco, name='backup_banco'),
     path('restore/', views.restore_banco, name='restore_banco'),
     path('os/configuracao/', views.configuracao_os_edit, name='configuracao_os'),
+    path('marcas-fornecedores/', views.marcas_fornecedores, name='marcas_fornecedores'),
 
     # NOVA ROTA: Configurações do Sistema
     path('sistema/configuracao/', views.configuracao_sistema_edit, name='configuracao_sistema'),

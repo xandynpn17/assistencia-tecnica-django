@@ -27,7 +27,7 @@ class ItemOrcamentoForm(forms.ModelForm):
     """
     class Meta:
         model = ItemOrcamento
-        fields = ['ean', 'nome', 'descricao', 'valor_unitario', 'quantidade', 'origem']
+        fields = ['ean', 'nome', 'descricao', 'valor_unitario', 'quantidade', 'origem', 'tecnico_responsavel']
         widgets = {
             'ean': forms.TextInput(attrs={
                 'placeholder': 'Código EAN ou serviço',
@@ -52,7 +52,15 @@ class ItemOrcamentoForm(forms.ModelForm):
                 'class': 'form-control'
             }),
             'origem': forms.Select(attrs={'class': 'form-control'}),
+            'tecnico_responsavel': forms.Select(attrs={'class': 'form-control'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["tecnico_responsavel"].queryset = self.fields["tecnico_responsavel"].queryset.filter(
+            is_active=True,
+            tipo_usuario="tecnico",
+        ).order_by("username")
 
     def clean(self):
         """

@@ -1,25 +1,19 @@
 {% extends 'core/base.html' %}
 {% load static %}
 
-{% block title %}Editar {{ cliente.nome }} - Assistência{% endblock %}
+{% block title %}Editar {{ cliente.nome }}{% endblock %}
 
 {% block content %}
-<!-- Content Header -->
 <section class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1>
-                    <i class="fas fa-edit mr-1"></i>
-                    Editar Cliente
-                    <small class="text-muted">{{ cliente.numero_cliente }}</small>
-                </h1>
+                <h1><i class="fas fa-user-edit mr-1"></i> Editar Cliente</h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
                     <li class="breadcrumb-item"><a href="{% url 'core:home' %}">Home</a></li>
                     <li class="breadcrumb-item"><a href="{% url 'clientes:lista_clientes' %}">Clientes</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'clientes:detalhes_cliente' cliente.id %}">{{ cliente.nome|truncatechars:20 }}</a></li>
                     <li class="breadcrumb-item active">Editar</li>
                 </ol>
             </div>
@@ -27,85 +21,106 @@
     </div>
 </section>
 
-<!-- Main content -->
 <section class="content">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-md-8 offset-md-2">
+            <div class="col-md-10 offset-md-1">
                 <div class="card card-warning">
                     <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-user-edit mr-1"></i>
-                            Editar Informações
-                        </h3>
+                        <h3 class="card-title">Dados do Cliente</h3>
                     </div>
-
                     <div class="card-body">
-                        <form method="POST" id="clienteForm">
+                        <form method="post" novalidate>
                             {% csrf_token %}
 
+                            {% if form.non_field_errors %}
+                            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                            {% endif %}
+
                             <div class="row">
-                                <div class="col-md-3">
-                                    <div class="form-group">
-                                        <label>Tipo de Cliente *</label>
-                                        {{ form.tipo_cliente }}
-                                    </div>
+                                <div class="col-md-8 form-group">
+                                    <label for="id_nome">Nome / Razao Social</label>
+                                    {{ form.nome }}
+                                    {{ form.nome.errors }}
                                 </div>
-                                <div class="col-md-9">
-                                    <div class="form-group">
-                                        <label>Nome / Razão Social *</label>
-                                        {{ form.nome }}
-                                    </div>
+                                <div class="col-md-4 form-group">
+                                    <label for="id_documento">CPF / CNPJ</label>
+                                    {{ form.documento }}
+                                    {{ form.documento.errors }}
                                 </div>
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label id="label-documento">CPF *</label>
-                                        {{ form.cpf }}
-                                        {{ form.cnpj }}
-                                    </div>
+                                <div class="col-md-2 form-group">
+                                    <label for="id_ddd">DDD</label>
+                                    {{ form.ddd }}
+                                    {{ form.ddd.errors }}
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Telefone</label>
-                                        {{ form.telefone }}
-                                    </div>
+                                <div class="col-md-4 form-group">
+                                    <label for="id_telefone_numero">Telefone</label>
+                                    {{ form.telefone_numero }}
+                                    {{ form.telefone_numero.errors }}
+                                </div>
+                                <div class="col-md-6 form-group">
+                                    <label for="id_email">Email</label>
+                                    {{ form.email }}
+                                    {{ form.email.errors }}
                                 </div>
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Email</label>
-                                        {{ form.email }}
-                                    </div>
+                                <div class="col-md-3 form-group">
+                                    <label for="id_codigo_postal">CEP</label>
+                                    {{ form.codigo_postal }}
+                                    {{ form.codigo_postal.errors }}
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>CEP</label>
-                                        {{ form.codigo_postal }}
-                                    </div>
+                                <div class="col-md-6 form-group">
+                                    <label for="id_logradouro">Logradouro</label>
+                                    {{ form.logradouro }}
+                                    {{ form.logradouro.errors }}
+                                </div>
+                                <div class="col-md-3 form-group">
+                                    <label for="id_numero">Numero</label>
+                                    {{ form.numero }}
+                                    {{ form.numero.errors }}
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-4 form-group">
+                                    <label for="id_complemento">Complemento</label>
+                                    {{ form.complemento }}
+                                    {{ form.complemento.errors }}
+                                </div>
+                                <div class="col-md-4 form-group">
+                                    <label for="id_bairro">Bairro</label>
+                                    {{ form.bairro }}
+                                    {{ form.bairro.errors }}
+                                </div>
+                                <div class="col-md-3 form-group">
+                                    <label for="id_cidade">Cidade</label>
+                                    {{ form.cidade }}
+                                    {{ form.cidade.errors }}
+                                </div>
+                                <div class="col-md-1 form-group">
+                                    <label for="id_estado">UF</label>
+                                    {{ form.estado }}
+                                    {{ form.estado.errors }}
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label>Endereço</label>
-                                {{ form.endereco }}
+                                <label for="id_observacoes">Observacoes</label>
+                                {{ form.observacoes }}
+                                {{ form.observacoes.errors }}
                             </div>
 
-                            <div class="form-group">
-                                <label>Observações</label>
-                                <textarea name="observacoes" class="form-control" rows="3">{{ cliente.observacoes|default:'' }}</textarea>
-                            </div>
-
-                            <div class="form-group mt-4">
+                            <div class="mt-3">
                                 <button type="submit" class="btn btn-warning">
-                                    <i class="fas fa-save mr-1"></i> Salvar Alterações
+                                    <i class="fas fa-save mr-1"></i> Salvar alteracoes
                                 </button>
                                 <a href="{% url 'clientes:detalhes_cliente' cliente.id %}" class="btn btn-secondary">
-                                    <i class="fas fa-times mr-1"></i> Cancelar
+                                    Cancelar
                                 </a>
                             </div>
                         </form>
@@ -115,31 +130,4 @@
         </div>
     </div>
 </section>
-
-{% block javascript %}
-<script>
-function toggleDocumento() {
-    const tipo = document.getElementById('id_tipo_cliente').value;
-    const labelDocumento = document.getElementById('label-documento');
-
-    if (tipo === 'pf') {
-        document.getElementById('id_cpf').style.display = 'block';
-        document.getElementById('id_cnpj').style.display = 'none';
-        labelDocumento.textContent = 'CPF *';
-    } else {
-        document.getElementById('id_cpf').style.display = 'none';
-        document.getElementById('id_cnpj').style.display = 'block';
-        labelDocumento.textContent = 'CNPJ *';
-    }
-}
-
-// Inicializar ao carregar a página
-document.addEventListener('DOMContentLoaded', function() {
-    toggleDocumento();
-
-    // Adicionar evento de mudança no select
-    document.getElementById('id_tipo_cliente').addEventListener('change', toggleDocumento);
-});
-</script>
-{% endblock %}
 {% endblock %}

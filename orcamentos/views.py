@@ -2,6 +2,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user_model
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta
 import random
@@ -35,6 +36,17 @@ def _codigo_reserva():
 
 def _os_fechada(ordem):
     return bool(getattr(ordem, "fechada", False))
+
+
+def _detectar_produto_estoque(ean, nome):
+    produto = None
+    if ean:
+        produto = Produto.objects.filter(ativo=True, ean=ean).first()
+    if not produto and nome:
+        produto = Produto.objects.filter(ativo=True, nome__iexact=nome).first()
+    if not produto and nome:
+        produto = Produto.objects.filter(ativo=True, nome__icontains=nome).order_by("id").first()
+    return produto
 
 
 # ==========================
@@ -104,6 +116,19 @@ def adicionar_item(request, orcamento_id):
             valor_unitario = Decimal(valor_unitario_str)
         except InvalidOperation:
             valor_unitario = Decimal("0.00")
+
+        tecnico = None
+        tecnico_id = request.POST.get("tecnico_responsavel")
+        if tecnico_id:
+            tecnico = get_user_model().objects.filter(
+                id=tecnico_id,
+                is_active=True,
+                tipo_usuario="tecnico",
+            ).first()
+
+        produto = _detectar_produto_estoque(ean=ean, nome=nome)
+        origem = "estoque" if produto else "manual"
+
         item = ItemOrcamento.objects.create(
             orcamento=orcamento,
             ean=ean,
@@ -111,19 +136,12 @@ def adicionar_item(request, orcamento_id):
             descricao=descricao,
             quantidade=quantidade,
             valor_unitario=valor_unitario,
-            origem=request.POST.get("origem", "manual"),
+            origem=origem,
+            tecnico_responsavel=tecnico,
         )
 
-        # Produto vindo do estoque gera pre-reserva automatica para evitar venda duplicada.
+        # Produto identificado por EAN/nome gera pre-reserva automatica para evitar venda duplicada.
         if item.origem == "estoque":
-            produto = None
-            if ean:
-                produto = Produto.objects.filter(ativo=True, ean=ean).first()
-            if not produto and nome:
-                produto = Produto.objects.filter(ativo=True, nome__iexact=nome).first()
-            if not produto and nome:
-                produto = Produto.objects.filter(ativo=True, nome__icontains=nome).order_by("id").first()
-
             if produto:
                 ponto = produto.ponto_operacional or PontoOperacional.objects.filter(ativo=True).order_by("codigo").first()
                 if ponto:
@@ -171,6 +189,7 @@ def editar_item(request, item_id):
         from django.http import JsonResponse
         return JsonResponse({"erro": "OS fechada. Reabra para alterar."}, status=400)
     if request.method == "POST":
+        item.ean = request.POST.get("ean", item.ean)
         item.nome = request.POST.get("nome", item.nome)
         item.descricao = request.POST.get("descricao", item.descricao)
         item.quantidade = int(request.POST.get("quantidade", item.quantidade))
@@ -179,7 +198,16 @@ def editar_item(request, item_id):
             item.valor_unitario = Decimal(valor_str)
         except InvalidOperation:
             pass
-        item.origem = request.POST.get("origem", item.origem)
+        item.origem = "estoque" if _detectar_produto_estoque(item.ean, item.nome) else "manual"
+        tecnico_id = request.POST.get("tecnico_responsavel")
+        if tecnico_id:
+            item.tecnico_responsavel = get_user_model().objects.filter(
+                id=tecnico_id,
+                is_active=True,
+                tipo_usuario="tecnico",
+            ).first()
+        else:
+            item.tecnico_responsavel = None
         item.save()
         messages.success(request, "Item atualizado com sucesso!")
         return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
@@ -187,11 +215,13 @@ def editar_item(request, item_id):
     from django.http import JsonResponse
     return JsonResponse({
         "id": item.id,
+        "ean": item.ean or "",
         "nome": item.nome,
         "descricao": item.descricao,
         "quantidade": item.quantidade,
         "valor_unitario": str(item.valor_unitario),
         "origem": item.origem,
+        "tecnico_responsavel": item.tecnico_responsavel_id,
     })
 
 @login_required(login_url='configuracoes:login')

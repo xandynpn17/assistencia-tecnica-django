@@ -19,13 +19,19 @@
       </select>
       <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
     </form>
+    {% if can_manage %}
+      <form method="post" action="{% url 'estoque:expirar_reservas_web' %}" class="mt-2">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline-warning">Expirar vencidas</button>
+      </form>
+    {% endif %}
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-sm table-hover mb-0">
         <thead>
           <tr>
-            <th>Codigo</th><th>Cliente</th><th>Telefone</th><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Valido ate</th><th>Status</th><th>OS</th><th>Acao</th>
+            <th>Codigo</th><th>Cliente</th><th>Telefone</th><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Valido ate</th><th>Status</th><th>OS</th><th>Acoes</th>
           </tr>
         </thead>
         <tbody>
@@ -41,11 +47,21 @@
             <td>{{ r.get_status_display }}</td>
             <td>{% if r.ordem_servico %}{{ r.ordem_servico.numero_os }}{% else %}-{% endif %}</td>
             <td>
-              <form method="post" action="{% url 'estoque:associar_reserva_ordem' r.codigo_reserva %}" class="form-inline">
+              <form method="post" action="{% url 'estoque:associar_reserva_ordem' r.codigo_reserva %}" class="form-inline mb-1">
                 {% csrf_token %}
                 <input type="number" name="ordem_id" class="form-control form-control-sm mr-1" placeholder="ID OS" style="width:90px;">
                 <button class="btn btn-sm btn-outline-primary" type="submit">Associar</button>
               </form>
+              {% if can_manage %}
+                <form method="post" action="{% url 'estoque:converter_reserva_web' r.codigo_reserva %}" class="d-inline">
+                  {% csrf_token %}
+                  <button class="btn btn-sm btn-outline-success" type="submit">Converter</button>
+                </form>
+                <form method="post" action="{% url 'estoque:cancelar_reserva_web' r.codigo_reserva %}" class="d-inline">
+                  {% csrf_token %}
+                  <button class="btn btn-sm btn-outline-danger" type="submit">Cancelar</button>
+                </form>
+              {% endif %}
             </td>
           </tr>
           {% empty %}

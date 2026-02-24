@@ -1,12 +1,16 @@
 from django import forms
 
 from .models import (
+    ComissaoItemOrcamento,
     ComissaoTecnico,
     DespesaRecorrente,
     CategoriaFinanceira,
     ContaReceber,
     LancamentoCaixa,
     Pagamento,
+    FaixaPremioMeta,
+    PremioColaboradorCompetencia,
+    RegraPremioMeta,
     RegraComissaoTecnico,
 )
 
@@ -70,7 +74,7 @@ class CategoriaFinanceiraForm(forms.ModelForm):
 class RegraComissaoTecnicoForm(forms.ModelForm):
     class Meta:
         model = RegraComissaoTecnico
-        fields = ["usuario", "percentual_servico", "percentual_peca", "ativo"]
+        fields = ["usuario", "percentual_servico", "percentual_peca", "comissionar_garantia", "ativo"]
 
 
 class ComissaoTecnicoForm(forms.ModelForm):
@@ -79,7 +83,31 @@ class ComissaoTecnicoForm(forms.ModelForm):
         fields = ["status", "referencia_pagamento"]
 
 
+class ComissaoItemOrcamentoForm(forms.ModelForm):
+    class Meta:
+        model = ComissaoItemOrcamento
+        fields = ["status", "referencia_pagamento"]
+
+
 class DespesaRecorrenteForm(forms.ModelForm):
     class Meta:
         model = DespesaRecorrente
         fields = ["nome", "valor_mensal", "dia_vencimento", "ativo", "ponto_operacional"]
+
+
+class RegraPremioMetaForm(forms.ModelForm):
+    class Meta:
+        model = RegraPremioMeta
+        fields = ["nome", "metrica", "meta_alvo", "publico", "ativo"]
+
+
+class FaixaPremioMetaForm(forms.ModelForm):
+    class Meta:
+        model = FaixaPremioMeta
+        fields = ["regra", "meta_minima", "meta_maxima", "premio_valor", "ordem"]
+
+
+class PremioColaboradorCompetenciaForm(forms.ModelForm):
+    class Meta:
+        model = PremioColaboradorCompetencia
+        fields = ["observacao"]

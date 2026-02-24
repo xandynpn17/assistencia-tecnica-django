@@ -1,89 +1,27 @@
 {% extends 'core/base.html' %}
 {% load static %}
-{% load crispy_forms_tags %}
 
-{% block title %}{% if object %}Editar{% else %}Nova{% endif %} Ordem de Serviço{% endblock %}
+{% block title %}{% if object %}Editar{% else %}Nova{% endif %} Ordem de Servico{% endblock %}
 
 {% block extra_css %}
 <style>
-    .card-modern {
-        border: none;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-        margin-bottom: 25px;
-        transition: transform 0.3s ease;
-        background: #ffffff;
-    }
-
-    .card-modern:hover {
-        transform: translateY(-3px);
-    }
-
-    .card-modern-header {
-        background: #2c3e50;
-        color: white;
-        border-radius: 10px 10px 0 0;
-        padding: 15px 20px;
-        font-weight: 600;
-        border: none;
-    }
-
-    .card-modern-body {
-        padding: 20px;
-        background: #ffffff;
-        border-radius: 0 0 10px 10px;
-        color: #2c3e50;
-    }
-
-    .alert-info {
-        background: linear-gradient(135deg, #d1ecf1, #bee5eb);
-        color: #0c5460;
-        border: none;
-        border-radius: 8px;
-        border-left: 4px solid #17a2b8;
-        padding: 15px 20px;
-    }
-
-    .btn-primary {
-        background: linear-gradient(45deg, #3a7bd5, #3498db);
-        border: none;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-weight: 600;
-    }
-
-    .btn-primary:hover {
-        background: linear-gradient(45deg, #2c65c4, #2980b9);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    .btn-default {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        color: #6c757d;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-weight: 600;
-    }
-
-    .btn-default:hover {
-        background: #e9ecef;
-        color: #495057;
-    }
-
-    .page-title {
-        color: #2c3e50;
-        font-weight: 700;
-        margin-bottom: 5px;
-    }
+    .card-modern { border: none; border-radius: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); margin-bottom: 25px; background: #ffffff; }
+    .card-modern-header { background: #2c3e50; color: white; border-radius: 10px 10px 0 0; padding: 14px 18px; font-weight: 600; }
+    .card-modern-body { padding: 20px; }
+    .wizard-actions-top { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
+    .wizard-step { display: none; }
+    .wizard-step.active { display: block; }
+    .section-title { font-size: 0.95rem; font-weight: 700; color: #2c3e50; margin-bottom: 10px; border-left: 3px solid #3498db; padding-left: 8px; }
+    .brand-note { border: 1px dashed #ced4da; border-radius: 8px; padding: 10px 12px; background: #f8f9fa; min-height: 58px; }
+    .brand-note strong { display: block; margin-bottom: 4px; }
+    .brand-note-garantia { border-color: #e0a800; background: #fff3cd; }
 </style>
 {% endblock %}
 
 {% block header %}
-<div class="row mb-4">
+<div class="row mb-3">
     <div class="col-12">
-        <h1 class="page-title">{% if object %}Editar{% else %}Nova{% endif %} Ordem de Serviço</h1>
+        <h1 class="page-title">{% if object %}Editar{% else %}Nova{% endif %} Ordem de Servico</h1>
     </div>
 </div>
 {% endblock %}
@@ -91,43 +29,217 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-
-        <!-- Cliente fixo (sem card) -->
         {% if cliente %}
-            <div class="alert alert-info mb-4">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong class="text-dark">Cliente:</strong> {{ cliente.nome }} <br>
-                        <small class="text-muted">
-                            CPF: {{ cliente.cpf }} | Telefone: {{ cliente.telefone }}
-                        </small>
-                    </div>
-                    <i class="fas fa-user-circle fa-2x text-info"></i>
+        <div class="alert alert-info mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong class="text-dark">Cliente:</strong> {{ cliente.nome }}<br>
+                    <small class="text-muted">Documento: {{ cliente.documento|default:"-" }} | Telefone: {{ cliente.telefone|default:"-" }}</small>
                 </div>
+                <i class="fas fa-user-circle fa-2x text-info"></i>
             </div>
+        </div>
         {% endif %}
 
-        <!-- Card padrão para os dados da OS -->
         <div class="card-modern">
-            <div class="card-modern-header">
-                <h3 class="card-title mb-0"><i class="fas fa-clipboard-list mr-2"></i>Dados da Ordem de Serviço</h3>
+            <div class="card-modern-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-clipboard-list mr-2"></i>Preenchimento da Ordem</span>
+                <small id="wizard-step-label">Pagina 1 de 2</small>
             </div>
-            <form method="post">
+            <form method="post" novalidate id="ordem-form">
                 {% csrf_token %}
+                <input type="hidden" name="wizard_step" id="id_wizard_step" value="{{ request.POST.wizard_step|default:'1' }}">
                 <div class="card-modern-body">
-                    {{ form|crispy }}
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    <div class="wizard-actions-top">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-prev" style="display:none;">Voltar</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-next">Avancar</button>
+                    </div>
+
+                    <div class="wizard-step active" id="step-1">
+                        <div class="section-title">Equipamento</div>
+                        <div class="row">
+                            <div class="col-md-4 form-group">{{ form.tipo_equipamento.label_tag }}{{ form.tipo_equipamento }}{{ form.tipo_equipamento.errors }}</div>
+                            <div class="col-md-4 form-group">{{ form.modelo_equipamento.label_tag }}{{ form.modelo_equipamento }}{{ form.modelo_equipamento.errors }}</div>
+                            <div class="col-md-4 form-group">{{ form.numero_serie_equipamento.label_tag }}{{ form.numero_serie_equipamento }}{{ form.numero_serie_equipamento.errors }}</div>
+                        </div>
+                        <div class="row align-items-end">
+                            <div class="col-md-5 form-group">
+                                {{ form.marca_catalogo.label_tag }}
+                                {{ form.marca_catalogo }}
+                                {{ form.marca_catalogo.errors }}
+                            </div>
+                            <div class="col-md-4 form-group" id="marca-manual-wrap" style="display:none;">
+                                {{ form.marca_manual.label_tag }}
+                                {{ form.marca_manual }}
+                                {{ form.marca_manual.errors }}
+                            </div>
+                        </div>
+                        {{ form.marca_equipamento.as_hidden }}
+                        {{ form.marca_equipamento.errors }}
+                        <div class="row">
+                            <div class="col-md-8 form-group">{{ form.peritagem.label_tag }}{{ form.peritagem }}{{ form.peritagem.errors }}</div>
+                            <div class="col-md-4">
+                                <div class="brand-note" id="brand-note-box">
+                                    <strong>Detalhes da marca</strong>
+                                    <span id="brand-note-text" class="text-muted">Selecione uma marca para visualizar procedimentos.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-step" id="step-2">
+                        <div class="section-title">Dados de Reparacao e Atendimento</div>
+                        <div class="row">
+                            <div class="col-md-4 form-group">{{ form.tipo_reparo.label_tag }}{{ form.tipo_reparo }}{{ form.tipo_reparo.errors }}</div>
+                            <div class="col-md-4 form-group">{{ form.data_compra.label_tag }}{{ form.data_compra }}{{ form.data_compra.errors }}</div>
+                            <div class="col-md-4 form-group">{{ form.numero_nota_fiscal.label_tag }}{{ form.numero_nota_fiscal }}{{ form.numero_nota_fiscal.errors }}</div>
+                            <div class="col-md-8 form-group">{{ form.defeito.label_tag }}{{ form.defeito }}{{ form.defeito.errors }}</div>
+                            <div class="col-md-4 form-group">{{ form.acessorios.label_tag }}{{ form.acessorios }}{{ form.acessorios.errors }}</div>
+                            <div class="col-md-12 form-group">{{ form.notas_internas.label_tag }}{{ form.notas_internas }}{{ form.notas_internas.errors }}</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-footer d-flex justify-content-between" style="background: #f8f9fa; border-radius: 0 0 10px 10px;">
-                    <a href="{% url 'ordens:lista_ordens' %}" class="btn btn-default">
-                        <i class="fas fa-times mr-2"></i> Cancelar
-                    </a>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save mr-2"></i> Salvar
-                    </button>
+                <div class="card-footer d-flex justify-content-between" style="background:#f8f9fa; border-radius:0 0 10px 10px;">
+                    <a href="{% url 'ordens:lista_ordens' %}" class="btn btn-default"><i class="fas fa-times mr-2"></i>Cancelar</a>
+                    <button type="submit" class="btn btn-success" id="btn-save" style="display:none;"><i class="fas fa-save mr-2"></i>Salvar</button>
                 </div>
             </form>
         </div>
-
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const marcaSelect = document.getElementById("id_marca_catalogo");
+    const manualWrap = document.getElementById("marca-manual-wrap");
+    const manualInput = document.getElementById("id_marca_manual");
+    const marcaEquipamento = document.getElementById("id_marca_equipamento");
+    const noteText = document.getElementById("brand-note-text");
+    const noteBox = document.getElementById("brand-note-box");
+    const tipoReparo = document.getElementById("id_tipo_reparo");
+    const marcasInfo = {{ marcas_info_json|default:'{}'|safe }};
+
+    const steps = [document.getElementById("step-1"), document.getElementById("step-2")];
+    const btnPrev = document.getElementById("btn-prev");
+    const btnNext = document.getElementById("btn-next");
+    const btnSave = document.getElementById("btn-save");
+    const stepLabel = document.getElementById("wizard-step-label");
+    const wizardStepInput = document.getElementById("id_wizard_step");
+    let currentStep = 0;
+
+    const requiredStep1 = ["id_tipo_equipamento", "id_modelo_equipamento", "id_marca_catalogo"];
+
+    function showStep(idx) {
+        currentStep = idx;
+        if (wizardStepInput) {
+            wizardStepInput.value = String(idx + 1);
+        }
+        steps.forEach((s, i) => s.classList.toggle("active", i === idx));
+        btnPrev.style.display = idx === 0 ? "none" : "inline-block";
+        btnNext.style.display = idx === steps.length - 1 ? "none" : "inline-block";
+        btnSave.style.display = idx === steps.length - 1 ? "inline-block" : "none";
+        stepLabel.textContent = `Pagina ${idx + 1} de ${steps.length}`;
+    }
+
+    function validateStep1() {
+        for (const id of requiredStep1) {
+            const el = document.getElementById(id);
+            if (id === "id_marca_catalogo") {
+                continue;
+            }
+            if (!el || !el.value || !String(el.value).trim()) {
+                el && el.focus();
+                return false;
+            }
+        }
+        const marcaCatalogoVal = marcaSelect ? (marcaSelect.value || "").trim() : "";
+        const marcaManualVal = manualInput ? (manualInput.value || "").trim() : "";
+        if (!marcaCatalogoVal && !marcaManualVal) {
+            marcaSelect && marcaSelect.focus();
+            return false;
+        }
+        if (marcaCatalogoVal === "__outros__" && !marcaManualVal) {
+            if (!manualInput || !manualInput.value || !String(manualInput.value).trim()) {
+                manualInput && manualInput.focus();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function isGarantia() {
+        return tipoReparo && tipoReparo.value === "Garantia";
+    }
+
+    function syncGarantiaUI() {
+        const garantia = isGarantia();
+        if (noteBox) {
+            noteBox.classList.toggle("brand-note-garantia", garantia);
+        }
+    }
+
+    btnNext.addEventListener("click", function () {
+        if (currentStep === 0 && !validateStep1()) {
+            alert("Preencha os campos obrigatorios da pagina 1 antes de avancar.");
+            return;
+        }
+        showStep(Math.min(currentStep + 1, steps.length - 1));
+    });
+
+    btnPrev.addEventListener("click", function () {
+        showStep(Math.max(currentStep - 1, 0));
+    });
+
+    function syncBrandUI() {
+        if (!marcaSelect) return;
+        const val = marcaSelect.value || "";
+        const isOutros = val === "__outros__";
+        const semSelecao = !val;
+        manualWrap.style.display = (isOutros || semSelecao) ? "block" : "none";
+        if (!isOutros && !semSelecao && manualInput) manualInput.value = "";
+
+        if (val && !isOutros) {
+            const selectedText = marcaSelect.options[marcaSelect.selectedIndex].text;
+            if (marcaEquipamento && !marcaEquipamento.value.trim()) {
+                marcaEquipamento.value = selectedText;
+            }
+        }
+
+        if (isOutros) {
+            noteText.textContent = "Marca manual selecionada. Preencha o campo de marca.";
+        } else if (val && marcasInfo[val]) {
+            noteText.textContent = marcasInfo[val];
+        } else {
+            noteText.textContent = "Selecione uma marca para visualizar procedimentos.";
+        }
+        syncGarantiaUI();
+    }
+
+    if (marcaSelect) {
+        marcaSelect.addEventListener("change", syncBrandUI);
+    }
+    if (tipoReparo) {
+        tipoReparo.addEventListener("change", syncGarantiaUI);
+    }
+    syncBrandUI();
+    syncGarantiaUI();
+
+    function stepHasErrors(stepElement) {
+        return !!(stepElement && stepElement.querySelector(".errorlist, .is-invalid"));
+    }
+
+    const postedStep = parseInt((wizardStepInput && wizardStepInput.value) || "1", 10);
+    if (postedStep === 2 || stepHasErrors(steps[1])) {
+        showStep(1);
+    } else {
+        showStep(0);
+    }
+});
+</script>
 {% endblock %}

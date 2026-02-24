@@ -1,0 +1,75 @@
+{% extends 'core/base.html' %}
+
+{% block extra_css %}
+<style>
+.race-track { position: relative; background: #f3f6f9; border-radius: 10px; height: 44px; overflow: hidden; border: 1px solid #d8e1ea; }
+.race-progress { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #17a2b8, #28a745); }
+.race-icons { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; justify-content: space-between; font-size: 18px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col-md-6"><div class="alert alert-info">Competencia: {{ competencia|date:"m/Y" }}</div></div>
+  <div class="col-md-3"><div class="alert alert-success">Premios: R$ {{ total_premios|floatformat:2 }}</div></div>
+  <div class="col-md-3"><div class="alert alert-warning">Comissoes: R$ {{ total_comissao_itens|floatformat:2 }}</div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Corrida de Atingimento</h3></div>
+  <div class="card-body">
+    {% for c in corrida %}
+    <div class="mb-3">
+      <div class="d-flex justify-content-between">
+        <strong>{{ c.regra }}</strong>
+        <small>{{ c.metrica }} | premio: R$ {{ c.premio|floatformat:2 }}</small>
+      </div>
+      <div class="race-track mt-1">
+        <div class="race-progress" style="width: {{ c.progress|floatformat:2 }}%;"></div>
+        <div class="race-icons"><span><i class="fas fa-flag-checkered"></i></span><span><i class="fas fa-trophy"></i></span></div>
+      </div>
+      <small>Atingimento: {{ c.percentual|floatformat:2 }}% | Meta: R$ {{ c.meta_alvo|floatformat:2 }} | Atual: R$ {{ c.valor_metrica|floatformat:2 }}</small>
+    </div>
+    {% empty %}
+    <p class="text-muted mb-0">Sem dados de premio para esta competencia.</p>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title">Comissoes por Servico/Item</h3></div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-bordered mb-0">
+      <thead>
+        <tr>
+          <th>Nº OS</th>
+          <th>Servico/Item</th>
+          <th>Valor Servico</th>
+          <th>Comissao</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in comissoes_itens %}
+      <tr>
+        <td>{{ c.ordem_servico.numero_os }}</td>
+        <td>{{ c.item_orcamento.nome }}</td>
+        <td>R$ {{ c.base_calculo|floatformat:2 }}</td>
+        <td>R$ {{ c.valor_comissao|floatformat:2 }}</td>
+        <td>{{ c.get_status_display }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-center text-muted">Sem comissoes calculadas.</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th colspan="3" class="text-right">Valor Total</th>
+          <th>R$ {{ total_comissao_itens|floatformat:2 }}</th>
+          <th>-</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}
