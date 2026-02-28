@@ -26,6 +26,12 @@
     <div class="col-md-6"><div class="small-box bg-secondary"><div class="inner"><h4>R$ {{ a_receber_total|floatformat:2 }}</h4><p>Contas a Receber</p></div><div class="icon"><i class="fas fa-file-invoice-dollar"></i></div></div></div>
     <div class="col-md-6"><div class="small-box bg-dark"><div class="inner"><h4>R$ {{ vencidas_total|floatformat:2 }}</h4><p>Recebiveis Vencidos</p></div><div class="icon"><i class="fas fa-exclamation-triangle"></i></div></div></div>
 </div>
+<div class="row">
+    <div class="col-md-3"><div class="small-box bg-primary"><div class="inner"><h4>R$ {{ receita_cliente|floatformat:2 }}</h4><p>Receita Cliente</p></div></div></div>
+    <div class="col-md-3"><div class="small-box bg-indigo"><div class="inner"><h4>R$ {{ receita_garantia|floatformat:2 }}</h4><p>Receita Garantia</p></div></div></div>
+    <div class="col-md-3"><div class="small-box bg-light"><div class="inner"><h4>R$ {{ a_receber_cliente|floatformat:2 }}</h4><p>A Receber Cliente</p></div></div></div>
+    <div class="col-md-3"><div class="small-box bg-light"><div class="inner"><h4>R$ {{ a_receber_garantia|floatformat:2 }}</h4><p>A Receber Garantia</p></div></div></div>
+</div>
 
 <div class="card">
     <div class="card-header"><h3 class="card-title">Pagamentos</h3></div>

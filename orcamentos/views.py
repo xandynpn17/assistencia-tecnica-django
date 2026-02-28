@@ -25,6 +25,7 @@ from django.utils import timezone
 
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from estoque.services import cancelar_reserva
+from ordens.services.os_policy_service import OSAccessPolicyService
 
 
 def _codigo_reserva():
@@ -34,19 +35,20 @@ def _codigo_reserva():
             return codigo
 
 
-def _os_fechada(ordem):
-    return bool(getattr(ordem, "fechada", False))
-
-
 def _detectar_produto_estoque(ean, nome):
-    produto = None
-    if ean:
-        produto = Produto.objects.filter(ativo=True, ean=ean).first()
-    if not produto and nome:
-        produto = Produto.objects.filter(ativo=True, nome__iexact=nome).first()
-    if not produto and nome:
-        produto = Produto.objects.filter(ativo=True, nome__icontains=nome).order_by("id").first()
-    return produto
+    ean_limpo = "".join(ch for ch in (ean or "") if ch.isdigit())
+    if not ean_limpo:
+        return None
+    return Produto.objects.filter(ativo=True, ean=ean_limpo).first()
+
+
+def _garantir_ordem_editavel(request, ordem, form_type):
+    try:
+        OSAccessPolicyService.ensure_can_edit(ordem, form_type, usuario=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return False
+    return True
 
 
 # ==========================
@@ -55,8 +57,7 @@ def _detectar_produto_estoque(ean, nome):
 @login_required(login_url='configuracoes:login')
 def criar_orcamento(request, ordem_id):
     ordem = get_object_or_404(OrdemServico, id=ordem_id)
-    if _os_fechada(ordem):
-        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+    if not _garantir_ordem_editavel(request, ordem, "orcamento"):
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     orcamento, _ = Orcamento.objects.get_or_create(
         ordem_servico=ordem,
@@ -72,8 +73,7 @@ def criar_orcamento(request, ordem_id):
 @login_required(login_url='configuracoes:login')
 def editar_orcamento(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
-    if _os_fechada(orcamento.ordem_servico):
-        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+    if not _garantir_ordem_editavel(request, orcamento.ordem_servico, "orcamento"):
         return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         orcamento.descricao = request.POST.get("descricao", orcamento.descricao)
@@ -86,8 +86,7 @@ def editar_orcamento(request, orcamento_id):
 def excluir_orcamento(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
     ordem = orcamento.ordem_servico
-    if _os_fechada(ordem):
-        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+    if not _garantir_ordem_editavel(request, ordem, "orcamento"):
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         orcamento.delete()
@@ -103,8 +102,7 @@ def excluir_orcamento(request, orcamento_id):
 @login_required(login_url='configuracoes:login')
 def adicionar_item(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
-    if _os_fechada(orcamento.ordem_servico):
-        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+    if not _garantir_ordem_editavel(request, orcamento.ordem_servico, "orcamento_item"):
         return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         nome = request.POST.get("nome", "")
@@ -131,7 +129,7 @@ def adicionar_item(request, orcamento_id):
 
         item = ItemOrcamento.objects.create(
             orcamento=orcamento,
-            ean=ean,
+            ean=(produto.ean if produto else ean),
             nome=nome,
             descricao=descricao,
             quantidade=quantidade,
@@ -182,23 +180,23 @@ def adicionar_item(request, orcamento_id):
 @login_required(login_url='configuracoes:login')
 def editar_item(request, item_id):
     item = get_object_or_404(ItemOrcamento, id=item_id)
-    if _os_fechada(item.orcamento.ordem_servico):
+    if not _garantir_ordem_editavel(request, item.orcamento.ordem_servico, "orcamento_item"):
         if request.method == "POST":
-            messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
             return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
         from django.http import JsonResponse
-        return JsonResponse({"erro": "OS fechada. Reabra para alterar."}, status=400)
+        return JsonResponse({"erro": "OS bloqueada para edicao de orcamento."}, status=400)
     if request.method == "POST":
         item.ean = request.POST.get("ean", item.ean)
         item.nome = request.POST.get("nome", item.nome)
-        item.descricao = request.POST.get("descricao", item.descricao)
+        # Descricao nao deve ser alterada apos insercao para manter rastreabilidade.
         item.quantidade = int(request.POST.get("quantidade", item.quantidade))
         valor_str = request.POST.get("valor_unitario", str(item.valor_unitario)).replace(",", ".")
         try:
             item.valor_unitario = Decimal(valor_str)
         except InvalidOperation:
             pass
-        item.origem = "estoque" if _detectar_produto_estoque(item.ean, item.nome) else "manual"
+        produto = _detectar_produto_estoque(item.ean, item.nome)
+        item.origem = "estoque" if produto else "manual"
         tecnico_id = request.POST.get("tecnico_responsavel")
         if tecnico_id:
             item.tecnico_responsavel = get_user_model().objects.filter(
@@ -228,8 +226,7 @@ def editar_item(request, item_id):
 def excluir_item(request, item_id):
     item = get_object_or_404(ItemOrcamento, id=item_id)
     ordem = item.orcamento.ordem_servico
-    if _os_fechada(ordem):
-        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+    if not _garantir_ordem_editavel(request, ordem, "orcamento_item"):
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         reservas_item = list(item.reservas_estoque.all())
@@ -249,8 +246,7 @@ def excluir_item(request, item_id):
 def aceitar_itens_orcamento(request, orcamento_id):
     if request.method == "POST":
         orc = get_object_or_404(Orcamento, id=orcamento_id)
-        if _os_fechada(orc.ordem_servico):
-            messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+        if not _garantir_ordem_editavel(request, orc.ordem_servico, "orcamento_item"):
             return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
         itens_ids = request.POST.getlist("itens_selecionados")
         if not itens_ids:
@@ -281,8 +277,7 @@ def aceitar_itens_orcamento(request, orcamento_id):
 def recusar_itens_orcamento(request, orcamento_id):
     if request.method == "POST":
         orc = get_object_or_404(Orcamento, id=orcamento_id)
-        if _os_fechada(orc.ordem_servico):
-            messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+        if not _garantir_ordem_editavel(request, orc.ordem_servico, "orcamento_item"):
             return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
         itens_ids = request.POST.getlist("itens_selecionados")
         if not itens_ids:
@@ -338,8 +333,7 @@ def buscar_produtos(request):
 def migrar_para_servicos(request, orcamento_id):
     orc = get_object_or_404(Orcamento, id=orcamento_id)
     ordem = orc.ordem_servico
-    if _os_fechada(ordem):
-        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+    if not _garantir_ordem_editavel(request, ordem, "orcamento_item"):
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         itens_ids = request.POST.getlist("itens_selecionados")
@@ -371,114 +365,119 @@ def migrar_para_servicos(request, orcamento_id):
 def imprimir_orcamento(request, pk):
     orcamento = get_object_or_404(Orcamento, pk=pk)
     ordem = orcamento.ordem_servico
-
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="orcamento_{orcamento.id}.pdf"'
-
-    doc = SimpleDocTemplate(response, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm)
-    frame_width = A4[0] - 2*cm
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=A4,
+        leftMargin=1.2 * cm,
+        rightMargin=1.2 * cm,
+        topMargin=1.2 * cm,
+        bottomMargin=1.2 * cm,
+    )
+    usable_w = A4[0] - (2.4 * cm)
 
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="CenterBold", alignment=1, fontSize=11, leading=14, spaceAfter=6))
-    styles.add(ParagraphStyle(name="Label", fontSize=9, leading=11, spaceAfter=3))
-    styles.add(ParagraphStyle(name="Small", fontSize=8, leading=10))
+    styles.add(ParagraphStyle(name="OrcTitle", fontName="Helvetica-Bold", fontSize=15, leading=18, textColor=colors.HexColor("#1f2d3d")))
+    styles.add(ParagraphStyle(name="OrcMeta", fontName="Helvetica", fontSize=8.5, leading=11, textColor=colors.HexColor("#555555")))
+    styles.add(ParagraphStyle(name="OrcLabel", fontName="Helvetica-Bold", fontSize=8.5, leading=10, textColor=colors.HexColor("#4b5563")))
+    styles.add(ParagraphStyle(name="OrcValue", fontName="Helvetica", fontSize=9, leading=12))
+    styles.add(ParagraphStyle(name="OrcSection", fontName="Helvetica-Bold", fontSize=10.5, leading=13, textColor=colors.white))
+    styles.add(ParagraphStyle(name="OrcText", fontName="Helvetica", fontSize=9, leading=12))
 
-    story = []
+    def _draw_footer(canv, _doc):
+        canv.saveState()
+        canv.setStrokeColor(colors.HexColor("#d1d5db"))
+        canv.line(doc.leftMargin, doc.bottomMargin - 0.25 * cm, A4[0] - doc.rightMargin, doc.bottomMargin - 0.25 * cm)
+        canv.setFont("Helvetica", 8)
+        canv.setFillColor(colors.HexColor("#6b7280"))
+        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"Orcamento {orcamento.id} - OS {ordem.numero_os}")
+        canv.drawRightString(A4[0] - doc.rightMargin, doc.bottomMargin - 0.6 * cm, f"Pagina {canv.getPageNumber()}")
+        canv.restoreState()
 
-    # === Cabeçalho ===
+    def _section(texto):
+        t = Table([[Paragraph(texto, styles["OrcSection"])]], colWidths=[usable_w])
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#2f3b4a")), ("LEFTPADDING", (0, 0), (-1, -1), 8), ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
+        return t
+
+    def _info(rows):
+        t = Table(rows, colWidths=[4.1 * cm, usable_w - 4.1 * cm])
+        t.setStyle(TableStyle([
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#f8fafc"), colors.white]),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e5e7eb")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        return t
+
     try:
         logo_path = os.path.join(settings.BASE_DIR, "core/static/adminlte/img/abtech_logo.png")
-        logo = Image(logo_path, width=3.5*cm, height=2.5*cm)
-    except:
-        logo = Paragraph("<b>ABTECH</b>", styles["CenterBold"])
+        logo = Image(logo_path, width=3.0 * cm, height=2.0 * cm)
+    except Exception:
+        logo = Paragraph("<b>ASSISTENCIA TECNICA</b>", styles["OrcMeta"])
 
-    barcode = code128.Code128(str(orcamento.id), barHeight=12*mm, barWidth=0.45*mm)
-    cabecalho = [
-        [logo,
-         Paragraph(f"<b>ORÇAMENTO Nº {orcamento.id}</b><br/>"
-                   f"Data: {orcamento.data_criacao.strftime('%d/%m/%Y')}<br/>"
-                   f"Status: {orcamento.get_status_display()}", styles["Small"])]
+    header_right = [
+        Paragraph("ORCAMENTO", styles["OrcTitle"]),
+        Paragraph(f"<b>Nº Orcamento:</b> {orcamento.id}", styles["OrcMeta"]),
+        Paragraph(f"<b>OS:</b> {ordem.numero_os}", styles["OrcMeta"]),
+        Paragraph(f"<b>Data:</b> {orcamento.data_criacao.strftime('%d/%m/%Y')}", styles["OrcMeta"]),
+        Paragraph(f"<b>Status:</b> {orcamento.get_status_display()}", styles["OrcMeta"]),
     ]
-    tabela_cabecalho = Table(cabecalho, colWidths=[7*cm, frame_width-7*cm])
-    tabela_cabecalho.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "TOP")]))
-    story.append(tabela_cabecalho)
-    story.append(Spacer(1, 8))
+    header = Table([[logo, header_right]], colWidths=[3.4 * cm, usable_w - 3.4 * cm])
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
 
-    # === Dados do Cliente ===
-    dados_cliente = [
-        [Paragraph("<b>Cliente</b>", styles["Label"]), Paragraph(orcamento.cliente.nome, styles["Small"])],
-        [Paragraph("Telefone", styles["Label"]), Paragraph(orcamento.cliente.telefone or "-", styles["Small"])],
-        [Paragraph("Email", styles["Label"]), Paragraph(orcamento.cliente.email or "-", styles["Small"])],
+    story = [
+        header,
+        Spacer(1, 0.35 * cm),
+        _section("Dados do Cliente"),
+        _info([
+            [Paragraph("Nome", styles["OrcLabel"]), Paragraph(orcamento.cliente.nome or "-", styles["OrcValue"])],
+            [Paragraph("Telefone", styles["OrcLabel"]), Paragraph(orcamento.cliente.telefone or "-", styles["OrcValue"])],
+            [Paragraph("Email", styles["OrcLabel"]), Paragraph(orcamento.cliente.email or "-", styles["OrcValue"])],
+        ]),
+        Spacer(1, 0.28 * cm),
+        _section("Equipamento"),
+        _info([
+            [Paragraph("Tipo", styles["OrcLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["OrcValue"])],
+            [Paragraph("Marca", styles["OrcLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["OrcValue"])],
+            [Paragraph("Modelo", styles["OrcLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["OrcValue"])],
+            [Paragraph("Numero de Serie", styles["OrcLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["OrcValue"])],
+            [Paragraph("Defeito", styles["OrcLabel"]), Paragraph(ordem.defeito or "-", styles["OrcValue"])],
+            [Paragraph("Peritagem", styles["OrcLabel"]), Paragraph(ordem.peritagem or "-", styles["OrcValue"])],
+        ]),
+        Spacer(1, 0.28 * cm),
+        _section("Itens do Orcamento"),
     ]
-    tabela_cliente = Table(dados_cliente, colWidths=[4*cm, frame_width-4*cm])
-    tabela_cliente.setStyle(TableStyle([
-        ("BOX", (0,0), (-1,-1), 0.5, colors.black),
-        ("INNERGRID", (0,0), (-1,-1), 0.25, colors.grey),
-        ("VALIGN", (0,0), (-1,-1), "TOP"),
-    ]))
-    story.append(Paragraph("<b>Dados do Cliente</b>", styles["CenterBold"]))
-    story.append(tabela_cliente)
-    story.append(Spacer(1, 10))
 
-    # === Dados do Equipamento ===
-    dados_equip = [
-        ["Tipo", ordem.get_tipo_equipamento_display()],
-        ["Marca", ordem.marca_equipamento],
-        ["Modelo", ordem.modelo_equipamento],
-        ["Nº Série", ordem.numero_serie_equipamento or "-"],
-    ]
-    tabela_equip = Table(dados_equip, colWidths=[4*cm, frame_width-4*cm])
-    tabela_equip.setStyle(TableStyle([
-        ("BOX", (0,0), (-1,-1), 0.5, colors.black),
-        ("INNERGRID", (0,0), (-1,-1), 0.25, colors.grey),
-        ("VALIGN", (0,0), (-1,-1), "TOP"),
-    ]))
-    story.append(Paragraph("<b>Dados do Equipamento</b>", styles["CenterBold"]))
-    story.append(tabela_equip)
-    story.append(Spacer(1, 10))
-
-    # === Defeito e Peritagem ===
-    story.append(Paragraph("<b>Defeito Informado:</b>", styles["Label"]))
-    story.append(Paragraph(ordem.defeito or "-", styles["Small"]))
-    story.append(Spacer(1, 4))
-    story.append(Paragraph("<b>Peritagem:</b>", styles["Label"]))
-    story.append(Paragraph(ordem.peritagem or "-", styles["Small"]))
-    story.append(Spacer(1, 10))
-
-    # === Itens ===
-    dados_itens = [[
-        Paragraph("<b>Item</b>", styles["Label"]),
-        Paragraph("<b>Qtd</b>", styles["Label"]),
-        Paragraph("<b>Unitário</b>", styles["Label"]),
-        Paragraph("<b>Total</b>", styles["Label"])
+    linhas = [[
+        Paragraph("<b>Item</b>", styles["OrcLabel"]),
+        Paragraph("<b>Qtd</b>", styles["OrcLabel"]),
+        Paragraph("<b>Unitario</b>", styles["OrcLabel"]),
+        Paragraph("<b>Total</b>", styles["OrcLabel"]),
     ]]
-
     for item in orcamento.itens.all():
-        dados_itens.append([
-            Paragraph(item.nome, styles["Small"]),
-            Paragraph(str(item.quantidade), styles["Small"]),
-            Paragraph(f"€ {item.valor_unitario:.2f}", styles["Small"]),
-            Paragraph(f"€ {item.total():.2f}", styles["Small"]),
+        linhas.append([
+            Paragraph(item.nome, styles["OrcValue"]),
+            Paragraph(str(item.quantidade), styles["OrcValue"]),
+            Paragraph(f"R$ {item.valor_unitario:.2f}", styles["OrcValue"]),
+            Paragraph(f"R$ {item.total():.2f}", styles["OrcValue"]),
         ])
-
-    tabela_itens = Table(dados_itens, colWidths=[8*cm, 2.5*cm, 3*cm, 3*cm])
+    tabela_itens = Table(linhas, colWidths=[8.5 * cm, 1.9 * cm, 2.7 * cm, 2.7 * cm])
     tabela_itens.setStyle(TableStyle([
-        ("BOX", (0,0), (-1,-1), 0.5, colors.black),
-        ("INNERGRID", (0,0), (-1,-1), 0.25, colors.grey),
-        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef2f7")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e5e7eb")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
-    story.append(Paragraph("<b>Itens do Orçamento</b>", styles["CenterBold"]))
-    story.append(tabela_itens)
-    story.append(Spacer(1, 8))
+    story.extend([
+        tabela_itens,
+        Spacer(1, 0.25 * cm),
+        Paragraph(f"<b>Total do Orcamento: R$ {orcamento.total():.2f}</b>", styles["OrcTitle"]),
+        Spacer(1, 0.45 * cm),
+        Paragraph("Assinatura do Cliente: ____________________________________________", styles["OrcText"]),
+        Spacer(1, 0.15 * cm),
+        Paragraph("Declaro estar ciente dos valores e autorizo o servico descrito neste orcamento.", styles["OrcMeta"]),
+    ])
 
-    # === Total ===
-    story.append(Paragraph(f"<b>Total: € {orcamento.total():.2f}</b>", styles["CenterBold"]))
-    story.append(Spacer(1, 20))
-
-    # === Assinatura ===
-    story.append(Paragraph("<b>Assinatura do Cliente:</b> ___________________________", styles["Small"]))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph("Declaro estar ciente dos valores e autorizar o serviço.", styles["Small"]))
-
-    doc.build(story)
+    doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
     return response

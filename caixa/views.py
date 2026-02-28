@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import csv
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Sum
 from django.http import HttpResponse
@@ -411,6 +412,21 @@ def dashboard_caixa(request):
     contas_abertas = ContaReceber.objects.filter(status__in=["aberta", "parcial", "vencida"])
     a_receber_total = contas_abertas.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     vencidas_total = contas_abertas.filter(vencimento__lt=timezone.localdate()).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    a_receber_garantia = (
+        contas_abertas.filter(descricao__icontains="Garantia fabricante").aggregate(total=Sum("valor_aberto"))["total"]
+        or Decimal("0.00")
+    )
+    a_receber_cliente = max(Decimal("0.00"), a_receber_total - a_receber_garantia)
+    receita_garantia = (
+        pagamentos.filter(metodo="garantia_fabricante").aggregate(total=Sum("valor"))["total"]
+        if caixa
+        else Decimal("0.00")
+    ) or Decimal("0.00")
+    receita_cliente = (
+        pagamentos.exclude(metodo="garantia_fabricante").aggregate(total=Sum("valor"))["total"]
+        if caixa
+        else Decimal("0.00")
+    ) or Decimal("0.00")
 
     return render(
         request,
@@ -423,6 +439,10 @@ def dashboard_caixa(request):
             "total_saidas": total_saidas,
             "saldo": saldo,
             "a_receber_total": a_receber_total,
+            "a_receber_cliente": a_receber_cliente,
+            "a_receber_garantia": a_receber_garantia,
+            "receita_cliente": receita_cliente,
+            "receita_garantia": receita_garantia,
             "vencidas_total": vencidas_total,
             "menu_app": "caixa",
             "menu_sub": "dashboard_caixa",
@@ -600,24 +620,6 @@ def registrar_pagamento(request):
                         produto=venda.produto,
                         ponto_operacional=venda.ponto_operacional,
                     )
-                    if saldo.quantidade < venda.quantidade:
-                        messages.error(
-                            request,
-                            "Saldo insuficiente para concluir a pre-reserva. Ajuste o stock antes de finalizar.",
-                        )
-                        return render(
-                            request,
-                            "caixa/registrar_pagamento.html",
-                            {
-                                "form": form,
-                                "ordem": ordem,
-                                "item": item,
-                                "venda": venda,
-                                "caixa": caixa,
-                                "menu_app": "caixa",
-                                "menu_sub": "registrar_pagamento",
-                            },
-                        )
                     saldo.quantidade -= venda.quantidade
                     saldo.save(update_fields=["quantidade"])
                     recalcular_total_produto(venda.produto)
@@ -639,32 +641,6 @@ def registrar_pagamento(request):
 
                     for item_guia in vendas_guia:
                         saldo, _ = SaldoEstoquePonto.objects.get_or_create(
-                            produto=item_guia.produto,
-                            ponto_operacional=item_guia.ponto_operacional,
-                        )
-                        if saldo.quantidade < item_guia.quantidade:
-                            messages.error(
-                                request,
-                                f"Saldo insuficiente para {item_guia.produto.nome} no ponto {item_guia.ponto_operacional.codigo}.",
-                            )
-                            return render(
-                                request,
-                                "caixa/registrar_pagamento.html",
-                                {
-                                    "form": form,
-                                    "ordem": ordem,
-                                    "item": item,
-                                    "venda": venda,
-                                    "vendas_guia": vendas_guia,
-                                    "guia_codigo": guia_codigo,
-                                    "caixa": caixa,
-                                    "menu_app": "caixa",
-                                    "menu_sub": "registrar_pagamento",
-                                },
-                            )
-
-                    for item_guia in vendas_guia:
-                        saldo = SaldoEstoquePonto.objects.get(
                             produto=item_guia.produto,
                             ponto_operacional=item_guia.ponto_operacional,
                         )
@@ -1004,13 +980,57 @@ def comissoes_tecnicos(request):
 
     regra_form = RegraComissaoTecnicoForm()
     regras = RegraComissaoTecnico.objects.select_related("usuario").all()
-    comissoes = ComissaoTecnico.objects.select_related("ordem_servico", "tecnico").all()[:200]
-    total_pendente = ComissaoTecnico.objects.filter(status="pendente").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
-    total_pago = ComissaoTecnico.objects.filter(status="paga").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
-    comissoes_itens = ComissaoItemOrcamento.objects.select_related("item_orcamento", "ordem_servico", "tecnico").all()[:300]
-    total_pendente_itens = ComissaoItemOrcamento.objects.filter(status="pendente").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
-    total_pago_itens = ComissaoItemOrcamento.objects.filter(status="paga").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
-    total_comissoes_itens = ComissaoItemOrcamento.objects.aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+
+    tecnico_id = (request.GET.get("tecnico") or "").strip()
+    data_inicio_raw = (request.GET.get("data_inicio") or "").strip()
+    data_fim_raw = (request.GET.get("data_fim") or "").strip()
+    data_inicio = None
+    data_fim = None
+    try:
+        if data_inicio_raw:
+            data_inicio = date.fromisoformat(data_inicio_raw)
+    except ValueError:
+        data_inicio = None
+    try:
+        if data_fim_raw:
+            data_fim = date.fromisoformat(data_fim_raw)
+    except ValueError:
+        data_fim = None
+
+    comissoes_qs = ComissaoTecnico.objects.select_related("ordem_servico", "tecnico").all()
+    comissoes_itens_qs = ComissaoItemOrcamento.objects.select_related("item_orcamento", "ordem_servico", "tecnico").all()
+    if tecnico_id and tecnico_id.isdigit():
+        comissoes_qs = comissoes_qs.filter(tecnico_id=int(tecnico_id))
+        comissoes_itens_qs = comissoes_itens_qs.filter(tecnico_id=int(tecnico_id))
+    if data_inicio:
+        comissoes_qs = comissoes_qs.filter(criado_em__date__gte=data_inicio)
+        comissoes_itens_qs = comissoes_itens_qs.filter(criado_em__date__gte=data_inicio)
+    if data_fim:
+        comissoes_qs = comissoes_qs.filter(criado_em__date__lte=data_fim)
+        comissoes_itens_qs = comissoes_itens_qs.filter(criado_em__date__lte=data_fim)
+
+    comissoes = comissoes_qs.order_by("-criado_em")[:300]
+    comissoes_itens = comissoes_itens_qs.order_by("-criado_em")[:500]
+    total_pendente = comissoes_qs.filter(status="pendente").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+    total_pago = comissoes_qs.filter(status="paga").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+    total_pendente_itens = comissoes_itens_qs.filter(status="pendente").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+    total_pago_itens = comissoes_itens_qs.filter(status="paga").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+    total_comissoes_itens = comissoes_itens_qs.aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+    resumo_os = (
+        comissoes_qs.values("tecnico__username")
+        .annotate(total=Sum("valor_comissao"))
+        .order_by("tecnico__username")
+    )
+    resumo_itens = (
+        comissoes_itens_qs.values("tecnico__username")
+        .annotate(total=Sum("valor_comissao"))
+        .order_by("tecnico__username")
+    )
+    tecnicos = (
+        get_user_model()
+        .objects.filter(is_active=True, tipo_usuario="tecnico")
+        .order_by("username")
+    )
     return render(
         request,
         "caixa/comissoes_tecnicos.html",
@@ -1024,6 +1044,12 @@ def comissoes_tecnicos(request):
             "total_pendente_itens": total_pendente_itens,
             "total_pago_itens": total_pago_itens,
             "total_comissoes_itens": total_comissoes_itens,
+            "tecnicos": tecnicos,
+            "tecnico_filtro": tecnico_id,
+            "data_inicio": data_inicio_raw,
+            "data_fim": data_fim_raw,
+            "resumo_os": resumo_os,
+            "resumo_itens": resumo_itens,
             "menu_app": "caixa",
             "menu_sub": "comissoes_tecnicos",
         },
@@ -1224,6 +1250,16 @@ def relatorios(request):
 @role_required(CAIXA_FINANCIAL_ROLES)
 def garantias_fabricante(request):
     if request.method == "POST":
+        if request.POST.get("action") == "sincronizar":
+            total_sync = 0
+            ordens_garantia = OrdemServico.objects.filter(tipo_reparo="Garantia", fechada=True).order_by("-id")
+            for ordem in ordens_garantia:
+                auditoria = _upsert_auditoria_garantia_ordem(ordem)
+                if auditoria:
+                    total_sync += 1
+            messages.success(request, f"Sincronizacao concluida. Garantias processadas: {total_sync}.")
+            return redirect("caixa:garantias_fabricante")
+
         auditoria = get_object_or_404(AuditoriaGarantia, id=request.POST.get("auditoria_id"))
         novo_status = (request.POST.get("status_faturamento") or "").strip()
         if novo_status in {"pendente", "enviado", "pago"}:
@@ -1307,6 +1343,11 @@ def garantias_fabricante(request):
         "enviado": garantias.filter(status_faturamento="enviado").aggregate(total=Sum("valor_previsto_fabricante"))["total"] or Decimal("0.00"),
         "pago": garantias.filter(status_faturamento="pago").aggregate(total=Sum("valor_previsto_fabricante"))["total"] or Decimal("0.00"),
     }
+    contas_garantia_abertas = ContaReceber.objects.filter(
+        descricao__icontains="Garantia fabricante",
+        status__in=["aberta", "parcial", "vencida"],
+    )
+    resumo["contas_abertas"] = contas_garantia_abertas.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     return render(
         request,
         "caixa/garantias_fabricante.html",

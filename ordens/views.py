@@ -1,15 +1,26 @@
 ﻿import re
 from decimal import Decimal
+from urllib.parse import quote
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import get_user_model
 User = get_user_model()
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView, DetailView
 from django.contrib import messages
+from django.utils import timezone
 from django.utils.timezone import localtime
-from .models import OrdemServico, LinhaTrabalho, ServicoPeca
-from .forms import LinhaTrabalhoForm, NotificacaoClienteForm, OrdemServicoForm, OrdemSerieForm, ServicoPecaForm
+from .models import (
+    OrdemServico,
+    LinhaTrabalho,
+    ServicoPeca,
+    NotificacaoCliente,
+    PedidoCompra,
+    PedidoCompraLinha,
+    PedidoCompraFoto,
+    OrdemAlerta,
+)
+from .forms import LinhaTrabalhoForm, OrdemServicoForm, OrdemSerieForm, ServicoPecaForm
 from clientes.models import Cliente
 from clientes.forms import ClienteForm
 from caixa.models import Pagamento
@@ -19,8 +30,8 @@ from orcamentos.models import Orcamento
 from orcamentos.forms import OrcamentoForm, ItemOrcamentoForm
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse, JsonResponse
+from django.core.mail import send_mail
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, Frame, PageTemplate, NextPageTemplate, PageBreak, FrameBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
@@ -31,19 +42,80 @@ from django.templatetags.static import static
 from django.conf import settings
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
-from configuracoes.models import ConfiguracaoSistema, MarcaGarantia
+from configuracoes.models import ConfiguracaoSistema, Empresa, MarcaGarantia, ModeloMensagem
 from configuracoes.permissions import role_required, ORDER_ROLES, RoleRequiredMixin
 from .utils import registrar_auditoria
-from .models import NotificacaoCliente
 from estoque.services import consumir_reservas_ordem, devolver_reservas_ordem
+from ordens.services.confirmacao_service import ConfirmacaoOSService
+from ordens.services.log_os_service import LogOSService
+from ordens.services.os_policy_service import OSAccessPolicyService
 
 
 logger = logging.getLogger(__name__)
 
 
-def _registrar_notificacao(ordem, *, tipo, canal, mensagem, usuario=None):
+def _aplicar_busca_ordens(queryset, termo_busca):
+    termo = (termo_busca or "").strip()
+    if not termo:
+        return queryset
+
+    termo_lower = termo.lower()
+    digits = re.sub(r"\D", "", termo)
+
+    # Prefixos opcionais (compatibilidade com busca antiga)
+    if termo_lower.startswith("tel:"):
+        tel = re.sub(r"\D", "", termo_lower.replace("tel:", "").strip())
+        if not tel:
+            return queryset.none()
+        return queryset.filter(cliente__telefone__icontains=tel)
+
+    if termo_lower.startswith("cpf:"):
+        cpf = re.sub(r"\D", "", termo_lower.replace("cpf:", "").strip())
+        if not cpf:
+            return queryset.none()
+        return queryset.filter(cliente__documento__icontains=cpf)
+
+    if termo_lower.startswith("id:"):
+        cliente_id = termo_lower.replace("id:", "").strip()
+        return queryset.filter(cliente__id=cliente_id)
+
+    if termo_lower.startswith("sn:"):
+        serial = termo[3:].strip()
+        if not serial:
+            return queryset.none()
+        return queryset.filter(numero_serie_equipamento__icontains=serial)
+
+    # Busca automática sem prefixo:
+    # - nome cliente
+    # - número da OS (com ou sem "OS")
+    # - cpf/cnpj
+    # - telefone
+    # - número de série
+    filtro = (
+        Q(cliente__nome__icontains=termo)
+        | Q(numero_os__icontains=termo)
+        | Q(numero_serie_equipamento__icontains=termo)
+    )
+    if digits:
+        filtro |= (
+            Q(numero_os__icontains=digits)
+            | Q(cliente__documento__icontains=digits)
+            | Q(cliente__telefone__icontains=digits)
+        )
+
+    return queryset.filter(filtro)
+
+
+def _request_ip(request):
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
+
+
+def _registrar_notificacao(ordem, *, tipo, canal, mensagem, usuario=None, assunto=""):
     destinatario = ""
     if canal == "email":
         destinatario = ordem.cliente.email or ""
@@ -55,12 +127,158 @@ def _registrar_notificacao(ordem, *, tipo, canal, mensagem, usuario=None):
         ordem=ordem,
         tipo=tipo,
         canal=canal,
+        assunto=assunto or "",
         mensagem=mensagem,
         destinatario=destinatario,
         status=status,
         usuario=usuario,
     )
     return notif
+
+
+def _enviar_notificacao(notif):
+    if notif.canal == "sistema":
+        notif.status = "enviada"
+        notif.enviado_em = timezone.now()
+        notif.erro = ""
+        notif.save(update_fields=["status", "enviado_em", "erro"])
+        return {"enviada": True, "url": ""}
+
+    if notif.canal == "email":
+        if not notif.destinatario:
+            notif.status = "erro"
+            notif.erro = "Cliente sem email cadastrado."
+            notif.save(update_fields=["status", "erro"])
+            return {"enviada": False, "url": ""}
+        try:
+            send_mail(
+                subject=notif.assunto or f"Atualizacao da OS {notif.ordem.numero_os}",
+                message=notif.mensagem,
+                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@assistencia.local"),
+                recipient_list=[notif.destinatario],
+                fail_silently=False,
+            )
+            notif.status = "enviada"
+            notif.enviado_em = timezone.now()
+            notif.erro = ""
+            notif.save(update_fields=["status", "enviado_em", "erro"])
+            return {"enviada": True, "url": ""}
+        except Exception as exc:
+            notif.status = "erro"
+            notif.erro = str(exc)[:255]
+            notif.save(update_fields=["status", "erro"])
+            return {"enviada": False, "url": ""}
+
+    if notif.canal == "whatsapp":
+        telefone = re.sub(r"\D", "", notif.destinatario or "")
+        if not telefone:
+            notif.status = "erro"
+            notif.erro = "Cliente sem telefone cadastrado."
+            notif.save(update_fields=["status", "erro"])
+            return {"enviada": False, "url": ""}
+        texto = quote(notif.mensagem)
+        url = f"https://wa.me/55{telefone}?text={texto}"
+        app_url = f"whatsapp://send?phone=55{telefone}&text={texto}"
+        notif.status = "enviada"
+        notif.enviado_em = timezone.now()
+        notif.erro = ""
+        notif.save(update_fields=["status", "enviado_em", "erro"])
+        return {"enviada": True, "url": url, "app_url": app_url}
+
+    return {"enviada": False, "url": ""}
+
+
+def _contexto_variaveis_mensagem(ordem):
+    config = ConfiguracaoSistema.get_configuracao()
+    empresa = Empresa.objects.first()
+    orcamento = Orcamento.objects.filter(ordem_servico=ordem).order_by("-id").first()
+    linha_pronto = (
+        LinhaTrabalho.objects.filter(ordem=ordem, status="pronto_contactado")
+        .order_by("-criado_em")
+        .first()
+    )
+    dias_parado = 0
+    if linha_pronto:
+        dias_parado = max((timezone.now() - linha_pronto.criado_em).days, 0)
+    prazo_diag = "48h"
+    prazo_reparo = "3 dias uteis"
+
+    return {
+        "nome_cliente": ordem.cliente.nome or "",
+        "cliente_nome": ordem.cliente.nome or "",
+        "numero_os": ordem.numero_os or "",
+        "equipamento": ordem.get_tipo_equipamento_display() or "",
+        "modelo": ordem.modelo_equipamento or "",
+        "defeito": ordem.defeito or "",
+        "valor_orcamento": f"{(orcamento.valor_total if orcamento else Decimal('0.00')):.2f}",
+        "prazo_reparo": prazo_reparo,
+        "prazo_diagnostico": prazo_diag,
+        "valor_diagnostico": "0.00",
+        "servico_realizado": ordem.relatorio_tecnico or "",
+        "valor_final": f"{(orcamento.valor_total if orcamento else Decimal('0.00')):.2f}",
+        "garantia": "90 dias",
+        "endereco_loja": (empresa.endereco if empresa and empresa.endereco else ""),
+        "horario_funcionamento": "Comercial",
+        "dias_parado": str(dias_parado),
+        "data_limite": (timezone.localdate() + timedelta(days=7)).strftime("%d/%m/%Y"),
+        "motivo_nao_reparo": ordem.relatorio_tecnico or "",
+        "codigo_portal": ordem.codigo_portal or "",
+        "condicoes": (config.condicoes_orcamento or "").strip(),
+    }
+
+
+def _mensagem_confirmacao_inicial(ordem, request):
+    link_pdf = request.build_absolute_uri(reverse("ordens:imprimir_ordem_servico", kwargs={"pk": ordem.pk}))
+    link_assinatura = request.build_absolute_uri(reverse("confirmar_os_publico", kwargs={"token": ordem.token_confirmacao}))
+    nome = ordem.cliente.nome or "Cliente"
+    return (
+        f"Ola {nome}, sua OS {ordem.numero_os} foi registrada com sucesso.\n\n"
+        f"PDF da ordem: {link_pdf}\n"
+        f"Confirmacao/assinatura digital: {link_assinatura}\n\n"
+        "Se nao conseguir assinar pelo link, podemos imprimir para assinatura presencial."
+    )
+
+
+def _render_template_mensagem(texto, contexto):
+    saida = (texto or "")
+    saida = (
+        saida.replace("\\u000A", "\n")
+        .replace("\\n", "\n")
+        .replace("\\r", "\r")
+    )
+    saida = re.sub(
+        r"\\u([0-9a-fA-F]{4})",
+        lambda m: chr(int(m.group(1), 16)),
+        saida,
+    )
+    for chave, valor in contexto.items():
+        saida = saida.replace("{" + chave + "}", str(valor))
+    return saida
+
+
+def _registrar_pendente_cliente_envio_orcamento(ordem, usuario, canal):
+    try:
+        ordem.aplicar_status_sem_historico("pendente_cliente")
+    except ValueError:
+        pass
+    canal_txt = "email" if canal == "email" else "WhatsApp"
+    LinhaTrabalho.objects.create(
+        ordem=ordem,
+        status="pendente_cliente",
+        descricao=f"Orcamento enviado por {canal_txt}. Aguardando retorno do cliente.",
+        usuario=usuario,
+        tipo_evento="manual",
+    )
+
+
+def _log_os(ordem, tipo_evento, descricao, usuario=None, dados_extras=None):
+    LogOSService.registrar(
+        ordem=ordem,
+        tipo_evento=tipo_evento,
+        descricao=descricao,
+        usuario=usuario,
+        dados_extras=dados_extras or {},
+    )
 
 
 # ===========================
@@ -227,6 +445,129 @@ def lista_ordens(request):
     return render(request, "ordens/lista_ordens.html", context)
 
 
+@role_required(ORDER_ROLES)
+def dashboard_pedidos_compra(request):
+    status_filtro = (request.GET.get("status") or "").strip()
+    buscar = (request.GET.get("q") or "").strip()
+    tecnico_id = (request.GET.get("tecnico") or "").strip()
+    os_filtro = (request.GET.get("os") or "").strip()
+
+    pedidos = (
+        PedidoCompra.objects.select_related("ordem", "ordem__cliente", "ordem__tecnico_responsavel", "criado_por")
+        .order_by("-criado_em")
+    )
+
+    if status_filtro:
+        pedidos = pedidos.filter(status=status_filtro)
+    else:
+        pedidos = pedidos.exclude(status="fechado")
+
+    if buscar:
+        pedidos = pedidos.filter(
+            Q(numero_oc__icontains=buscar)
+            | Q(titulo__icontains=buscar)
+            | Q(ordem__numero_os__icontains=buscar)
+            | Q(ordem__cliente__nome__icontains=buscar)
+        )
+    if os_filtro:
+        pedidos = pedidos.filter(ordem__numero_os__icontains=os_filtro)
+    if tecnico_id.isdigit():
+        pedidos = pedidos.filter(ordem__tecnico_responsavel_id=int(tecnico_id))
+
+    base_counts = dict(
+        PedidoCompra.objects.values("status").annotate(total=Count("id")).values_list("status", "total")
+    )
+    status_cards = []
+    for codigo, rotulo in PedidoCompra.STATUS_CHOICES:
+        status_cards.append(
+            {
+                "codigo": codigo,
+                "rotulo": rotulo,
+                "total": base_counts.get(codigo, 0),
+                "ativo": codigo == status_filtro,
+            }
+        )
+
+    context = {
+        "pedidos": pedidos[:200],
+        "status_cards": status_cards,
+        "status_filtro": status_filtro,
+        "q": buscar,
+        "os_filtro": os_filtro,
+        "tecnico_filtro": tecnico_id,
+        "tecnicos": User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username"),
+        "menu_app": "ordens",
+        "menu_sub": "dashboard_pedidos",
+    }
+    return render(request, "ordens/pedidos_dashboard.html", context)
+
+
+@role_required(ORDER_ROLES)
+def toggle_fechamento_pedido_compra(request, pedido_id):
+    pedido = get_object_or_404(PedidoCompra.objects.select_related("ordem"), id=pedido_id)
+    ordem = pedido.ordem
+    if request.method != "POST":
+        return redirect("ordens:dashboard_pedidos")
+
+    if pedido.status == "fechado":
+        pedido.status = "contactar"
+        pedido.save(update_fields=["status"])
+        PedidoCompraLinha.objects.create(
+            pedido=pedido,
+            status="contactar",
+            descricao="Pedido reaberto.",
+            usuario=request.user,
+        )
+        LinhaTrabalho.objects.create(
+            ordem=ordem,
+            status=ordem.status,
+            descricao=f"Pedido {pedido.numero_oc or pedido.id} reaberto.",
+            usuario=request.user,
+            tipo_evento="manual",
+        )
+        messages.success(request, "Pedido reaberto.")
+        _log_os(
+            ordem,
+            "edicao_critica",
+            f"Pedido {pedido.numero_oc or pedido.id} reaberto.",
+            usuario=request.user,
+            dados_extras={"pedido_id": pedido.id, "status": pedido.status},
+        )
+    else:
+        pedido.status = "fechado"
+        pedido.save(update_fields=["status"])
+        PedidoCompraLinha.objects.create(
+            pedido=pedido,
+            status="fechado",
+            descricao="Pedido fechado.",
+            usuario=request.user,
+        )
+        LinhaTrabalho.objects.create(
+            ordem=ordem,
+            status=ordem.status,
+            descricao=f"Pedido {pedido.numero_oc or pedido.id} fechado.",
+            usuario=request.user,
+            tipo_evento="manual",
+        )
+        messages.success(request, "Pedido fechado.")
+        _log_os(
+            ordem,
+            "cancelamento",
+            f"Pedido {pedido.numero_oc or pedido.id} fechado.",
+            usuario=request.user,
+            dados_extras={"pedido_id": pedido.id, "status": pedido.status},
+        )
+
+    registrar_auditoria(
+        logger,
+        request,
+        "pedido_compra_toggle_fechamento",
+        ordem=ordem,
+        extra={"pedido_id": pedido.id, "status": pedido.status},
+    )
+    return redirect("ordens:dashboard_pedidos")
+
+
 # ===========================
 # Fecho da Ordem
 # ===========================
@@ -259,6 +600,13 @@ def toggle_fechamento_os(request, pk):
 
         if ordem.fechada and ordem.tipo_reparo == "Garantia":
             _upsert_auditoria_garantia_ordem(ordem)
+        _log_os(
+            ordem,
+            "alteracao_status",
+            f"{acao}.",
+            usuario=request.user,
+            dados_extras={"status": ordem.status, "fechada": ordem.fechada},
+        )
 
         if reservas_processadas:
             messages.success(request, f"Ordem atualizada com sucesso! Reservas processadas: {reservas_processadas}.")
@@ -301,6 +649,47 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
             usuario=self.request.user,
             tipo_evento="automatico",
         )
+        _log_os(
+            self.object,
+            "alteracao_status",
+            "OS criada e enviada para diagnostico inicial.",
+            usuario=self.request.user,
+            dados_extras={"status": self.object.status},
+        )
+        if self.object.cliente.telefone:
+            mensagem_confirmacao = _mensagem_confirmacao_inicial(self.object, self.request)
+            notif = _registrar_notificacao(
+                self.object,
+                tipo="manual",
+                canal="whatsapp",
+                mensagem=mensagem_confirmacao,
+                usuario=self.request.user,
+                assunto="",
+            )
+            resultado = _enviar_notificacao(notif)
+            if resultado.get("enviada"):
+                LinhaTrabalho.objects.create(
+                    ordem=self.object,
+                    status=self.object.status,
+                    descricao="Link de confirmacao da OS enviado por WhatsApp apos abertura.",
+                    usuario=self.request.user,
+                    tipo_evento="automatico",
+                )
+                _log_os(
+                    self.object,
+                    "confirmacao",
+                    "Link de confirmacao enviado por WhatsApp apos abertura.",
+                    usuario=self.request.user,
+                    dados_extras={"canal": "whatsapp", "automatico": True},
+                )
+                wa = quote(resultado.get("url", ""), safe="")
+                wa_app = quote(resultado.get("app_url", ""), safe="")
+                registrar_auditoria(logger, self.request, "os_criada", ordem=self.object)
+                messages.success(self.request, "OS criada e WhatsApp de confirmacao preparado.")
+                return redirect(f"{reverse('ordens:resumo_ordem', kwargs={'pk': self.object.pk})}?wa={wa}&wa_app={wa_app}")
+            messages.warning(self.request, "OS criada, mas o WhatsApp automatico falhou. Use o reenvio no resumo.")
+        else:
+            messages.warning(self.request, "OS criada sem telefone do cliente. Envie a confirmacao manualmente.")
         registrar_auditoria(logger, self.request, "os_criada", ordem=self.object)
         return redirect("ordens:resumo_ordem", pk=self.object.pk)
 
@@ -341,13 +730,7 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
 
         q = (self.request.GET.get("q") or "").strip()
         if q:
-            q_digits = re.sub(r"\D", "", q)
-            queryset = queryset.filter(
-                Q(numero_os__icontains=q)
-                | Q(cliente__nome__icontains=q)
-                | Q(cliente__documento__icontains=q_digits or q)
-                | Q(cliente__telefone__icontains=q_digits or q)
-            )
+            queryset = _aplicar_busca_ordens(queryset, q)
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -466,35 +849,71 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             defaults={"cliente": ordem.cliente},
         )
         context["item_form"] = ItemOrcamentoForm()
-        context["notificacao_form"] = NotificacaoClienteForm(
-            initial={
-                "tipo": "manual",
-                "canal": "sistema",
-                "mensagem": f"Atualizacao da OS {ordem.numero_os}.",
-            }
+        vars_msg = _contexto_variaveis_mensagem(ordem)
+        modelos_ativos = ModeloMensagem.objects.filter(ativo=True).order_by("nome")
+        modelos_payload = []
+        for m in modelos_ativos:
+            modelos_payload.append(
+                {
+                    "id": m.id,
+                    "nome": m.nome,
+                    "tipo": m.tipo,
+                    "assunto": _render_template_mensagem(m.assunto or "", vars_msg),
+                    "corpo": _render_template_mensagem(m.corpo or "", vars_msg),
+                }
+            )
+        context["modelos_mensagem_payload"] = modelos_payload
+        context["pedidos_compra"] = ordem.pedidos_compra.prefetch_related("linhas", "fotos").all()
+        context["pedido_status_choices"] = PedidoCompra.STATUS_CHOICES
+        context["alertas_ativos"] = ordem.alertas.filter(ativo=True)
+        context["alertas_encerrados"] = ordem.alertas.filter(ativo=False)[:30]
+        context["tem_alertas"] = ordem.alertas.exists()
+        context["logs_confirmacao"] = ordem.logs_confirmacao.select_related("usuario_responsavel").all()[:15]
+        context["logs_os"] = ordem.logs_os.select_related("usuario_responsavel").all()[:50]
+        context["pode_ver_logs"] = bool(
+            self.request.user.is_superuser
+            or getattr(self.request.user, "tipo_usuario", "") in {"adm", "gerente"}
         )
-        context["notificacoes"] = ordem.notificacoes.all()[:10]
+        context["url_confirmacao_publica"] = self.request.build_absolute_uri(
+            reverse("confirmar_os_publico", kwargs={"token": ordem.token_confirmacao})
+        )
         # Tabs
         tab = self.request.GET.get("tab", "detalhes")
         context["active_tab"] = tab
-        context["tabs"] = [
+        tabs = [
             {"id": "detalhes", "label": "Detalhes", "icon": "bi bi-info-circle"},
             {"id": "linhas", "label": "Linhas de Trabalho", "icon": "bi bi-list-task"},
             {"id": "servicos", "label": "Serviços & Peças", "icon": "bi bi-bag"},
             {"id": "orcamentos", "label": "Orçamentos", "icon": "bi bi-cash-stack"},
-            {"id": "notificacoes", "label": "Notificacoes", "icon": "bi bi-bell"},
             {"id": "relatorio", "label": "Relatório Técnico", "icon": "bi bi-tools"},
         ]
+        if context["pedidos_compra"].exists() or tab == "pedidos":
+            tabs.insert(3, {"id": "pedidos", "label": "R$ Pedidos", "icon": "bi bi-cart"})
+        if context["tem_alertas"]:
+            tabs.append({"id": "alertas", "label": "Alertas", "icon": "bi bi-exclamation-triangle"})
+        if context["pode_ver_logs"] and (context["logs_os"] or context["logs_confirmacao"] or tab == "logs"):
+            tabs.append({"id": "logs", "label": "Logs", "icon": "bi bi-journal-text"})
+        context["tabs"] = tabs
         context["tecnicos"] = User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username")
         context["menu_app"] = "ordens"
         context["menu_sub"] = "lista_ordens"
+        # Normaliza textos com "\n" escapado para exibicao no template.
+        for alerta in context["alertas_ativos"]:
+            alerta.mensagem = (alerta.mensagem or "").replace("\\n", "\n")
+        for alerta in context["alertas_encerrados"]:
+            alerta.mensagem = (alerta.mensagem or "").replace("\\n", "\n")
+        for log in context["logs_os"]:
+            log.descricao = (log.descricao or "").replace("\\n", "\n")
+        context["relatorio_tecnico_display"] = (ordem.relatorio_tecnico or "").replace("\\n", "\n")
         return context
 
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         form_type = request.POST.get("form_type")
-        if self.object.fechada and form_type in {"linha", "servico_peca", "relatorio", "finalizar_caixa"}:
-            messages.error(request, "A OS esta fechada. Reabra para alterar dados.")
+        try:
+            OSAccessPolicyService.ensure_can_edit(self.object, form_type, usuario=request.user)
+        except ValueError as exc:
+            messages.error(request, str(exc))
             return redirect(f"{self.object.get_absolute_url()}?tab={request.GET.get('tab', 'detalhes')}")
 
         # Linha de trabalho
@@ -510,6 +929,13 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 if novo_status and novo_status != self.object.status:
                     try:
                         self.object.aplicar_status_sem_historico(novo_status)
+                        _log_os(
+                            self.object,
+                            "alteracao_status",
+                            f"Status alterado para {novo_status} por linha de trabalho.",
+                            usuario=request.user,
+                            dados_extras={"form_type": "linha", "novo_status": novo_status},
+                        )
                     except ValueError as exc:
                         messages.error(request, str(exc))
                 registrar_auditoria(
@@ -528,6 +954,13 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 item = servico_form.save(commit=False)
                 item.ordem = self.object
                 item.save()
+                _log_os(
+                    self.object,
+                    "edicao_critica",
+                    f"Servico/Peca adicionado: {item.nome}.",
+                    usuario=request.user,
+                    dados_extras={"item_id": item.id, "tipo": item.tipo},
+                )
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
         # Finalizar OS e registrar no Caixa
@@ -543,6 +976,13 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 messages.error(request, str(exc))
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
             reservas_processadas = consumir_reservas_ordem(self.object, usuario=request.user)
+            _log_os(
+                self.object,
+                "alteracao_status",
+                "OS finalizada pelo fluxo de caixa.",
+                usuario=request.user,
+                dados_extras={"status": self.object.status, "reservas_processadas": reservas_processadas},
+            )
             registrar_auditoria(
                 logger,
                 request,
@@ -559,22 +999,236 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 return redirect(f"{reverse('caixa:registrar_pagamento')}?os={self.object.id}&valor={total_os:.2f}")
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
-        elif form_type == "notificacao":
-            notif_form = NotificacaoClienteForm(request.POST)
-            if notif_form.is_valid():
-                notif = notif_form.save(commit=False)
-                notif.ordem = self.object
-                notif.usuario = request.user
-                if notif.canal == "email":
-                    notif.destinatario = self.object.cliente.email or ""
-                elif notif.canal == "whatsapp":
-                    notif.destinatario = self.object.cliente.telefone or ""
-                notif.status = "enviada" if notif.canal == "sistema" else "pendente"
-                notif.save()
-                messages.success(request, "Notificacao registrada com sucesso.")
+        elif form_type == "enviar_mensagem_modelo":
+            canal = (request.POST.get("canal") or "").strip()
+            modelo_id = request.POST.get("modelo_id")
+            assunto = (request.POST.get("assunto") or "").strip()
+            mensagem = (request.POST.get("mensagem") or "").strip()
+            if canal not in {"email", "whatsapp"}:
+                messages.error(request, "Canal de envio invalido.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
+            if not modelo_id:
+                messages.error(request, "Selecione um modelo de mensagem.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
+            modelo = get_object_or_404(ModeloMensagem, id=modelo_id, ativo=True)
+            if canal == "email" and not assunto:
+                messages.error(request, "Assunto e obrigatorio para envio por email.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
+            if not mensagem:
+                messages.error(request, "Mensagem nao pode ficar vazia.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
+
+            notif = _registrar_notificacao(
+                self.object,
+                tipo="manual",
+                canal=canal,
+                assunto=assunto,
+                mensagem=mensagem,
+                usuario=request.user,
+            )
+            resultado = _enviar_notificacao(notif)
+            if resultado.get("enviada"):
+                LinhaTrabalho.objects.create(
+                    ordem=self.object,
+                    status=self.object.status,
+                    descricao=f"Notificacao enviada ({canal.upper()}) com modelo '{modelo.nome}'.",
+                    usuario=request.user,
+                    tipo_evento="manual",
+                )
+                _log_os(
+                    self.object,
+                    "confirmacao",
+                    f"Mensagem enviada ao cliente via {canal} (modelo {modelo.nome}).",
+                    usuario=request.user,
+                    dados_extras={"canal": canal, "modelo_id": modelo.id, "notificacao_id": notif.id},
+                )
+                if resultado.get("url"):
+                    messages.success(request, "WhatsApp preparado em nova aba mantendo voce no sistema.")
+                    wa = quote(resultado.get("url", ""), safe="")
+                    wa_app = quote(resultado.get("app_url", ""), safe="")
+                    return redirect(f"{self.object.get_absolute_url()}?tab=detalhes&wa={wa}&wa_app={wa_app}")
+                messages.success(request, "Mensagem enviada com sucesso.")
             else:
-                messages.error(request, "Nao foi possivel registrar a notificacao.")
-            return redirect(f"{self.object.get_absolute_url()}?tab=notificacoes")
+                messages.error(request, f"Falha ao enviar mensagem: {notif.erro or 'erro desconhecido'}")
+            return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
+
+        elif form_type == "pedido_compra":
+            titulo = (request.POST.get("titulo") or "").strip()
+            tipo_peca = (request.POST.get("tipo_peca") or "").strip()
+            descricao = (request.POST.get("descricao") or "").strip()
+            status_inicial = request.POST.get("status_inicial") or "contactar"
+            status_validos = {valor for valor, _ in PedidoCompra.STATUS_CHOICES}
+            if not titulo:
+                messages.error(request, "Informe um titulo para o pedido.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
+            if status_inicial not in status_validos:
+                status_inicial = "contactar"
+
+            pedido = PedidoCompra.objects.create(
+                ordem=self.object,
+                titulo=titulo,
+                tipo_peca=tipo_peca,
+                descricao=descricao,
+                status=status_inicial,
+                criado_por=request.user,
+            )
+            for foto in request.FILES.getlist("fotos"):
+                PedidoCompraFoto.objects.create(
+                    pedido=pedido,
+                    imagem=foto,
+                )
+            PedidoCompraLinha.objects.create(
+                pedido=pedido,
+                status=status_inicial,
+                descricao="Pedido criado.",
+                usuario=request.user,
+            )
+            LinhaTrabalho.objects.create(
+                ordem=self.object,
+                status=self.object.status,
+                descricao=f"Pedido de compra #{pedido.id} criado ({pedido.get_status_display()}).",
+                usuario=request.user,
+                tipo_evento="manual",
+            )
+            registrar_auditoria(
+                logger,
+                request,
+                "pedido_compra_criado",
+                ordem=self.object,
+                extra={"pedido_id": pedido.id, "status": status_inicial},
+            )
+            _log_os(
+                self.object,
+                "edicao_critica",
+                f"Pedido de compra criado: {pedido.numero_oc or pedido.id}.",
+                usuario=request.user,
+                dados_extras={"pedido_id": pedido.id, "status": status_inicial},
+            )
+            messages.success(request, "Pedido de compra criado.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
+
+        elif form_type == "pedido_compra_linha":
+            pedido_id = request.POST.get("pedido_id")
+            status_linha = request.POST.get("status") or "contactar"
+            descricao = (request.POST.get("descricao") or "").strip()
+            pedido = get_object_or_404(PedidoCompra, id=pedido_id, ordem=self.object)
+            status_validos = {valor for valor, _ in PedidoCompra.STATUS_CHOICES}
+            if status_linha not in status_validos:
+                messages.error(request, "Status de pedido invalido.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
+
+            PedidoCompraLinha.objects.create(
+                pedido=pedido,
+                status=status_linha,
+                descricao=descricao,
+                usuario=request.user,
+            )
+            pedido.status = status_linha
+            pedido.save(update_fields=["status"])
+            registrar_auditoria(
+                logger,
+                request,
+                "pedido_compra_linha_adicionada",
+                ordem=self.object,
+                extra={"pedido_id": pedido.id, "status": status_linha},
+            )
+            _log_os(
+                self.object,
+                "edicao_critica",
+                f"Pedido {pedido.numero_oc or pedido.id} atualizado para {status_linha}.",
+                usuario=request.user,
+                dados_extras={"pedido_id": pedido.id, "status": status_linha},
+            )
+            messages.success(request, f"Pedido #{pedido.id} atualizado.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
+
+        elif form_type == "alerta":
+            mensagem = (request.POST.get("mensagem") or "").strip()
+            if not mensagem:
+                messages.error(request, "Informe a mensagem do alerta.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
+
+            alerta = OrdemAlerta.objects.create(
+                ordem=self.object,
+                mensagem=mensagem,
+                criado_por=request.user,
+            )
+            LinhaTrabalho.objects.create(
+                ordem=self.object,
+                status=self.object.status,
+                descricao=f"Alerta criado: {mensagem}",
+                usuario=request.user,
+                tipo_evento="manual",
+            )
+            registrar_auditoria(
+                logger,
+                request,
+                "alerta_ordem_criado",
+                ordem=self.object,
+                extra={"alerta_id": alerta.id},
+            )
+            _log_os(
+                self.object,
+                "edicao_critica",
+                "Alerta criado na OS.",
+                usuario=request.user,
+                dados_extras={"alerta_id": alerta.id},
+            )
+            messages.success(request, "Alerta adicionado.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=alertas")
+
+        elif form_type == "encerrar_alerta":
+            alerta_id = request.POST.get("alerta_id")
+            alerta = get_object_or_404(OrdemAlerta, id=alerta_id, ordem=self.object)
+            if alerta.ativo:
+                alerta.ativo = False
+                alerta.encerrado_em = timezone.now()
+                alerta.encerrado_por = request.user
+                alerta.save(update_fields=["ativo", "encerrado_em", "encerrado_por"])
+                LinhaTrabalho.objects.create(
+                    ordem=self.object,
+                    status=self.object.status,
+                    descricao=f"Alerta encerrado: {alerta.mensagem}",
+                    usuario=request.user,
+                    tipo_evento="manual",
+                )
+                registrar_auditoria(
+                    logger,
+                    request,
+                    "alerta_ordem_encerrado",
+                    ordem=self.object,
+                    extra={"alerta_id": alerta.id},
+                )
+                _log_os(
+                    self.object,
+                    "cancelamento",
+                    "Alerta encerrado na OS.",
+                    usuario=request.user,
+                    dados_extras={"alerta_id": alerta.id},
+                )
+            return redirect(f"{self.object.get_absolute_url()}?tab=alertas")
+
+        elif form_type == "confirmacao_impresso":
+            tipo_conf = request.POST.get("tipo_confirmacao", "impresso")
+            assinatura = request.FILES.get("assinatura_imagem")
+            try:
+                ConfirmacaoOSService.confirmar_presencial_ou_impresso(
+                    self.object,
+                    usuario=request.user,
+                    tipo_confirmacao=tipo_conf,
+                    assinatura_imagem=assinatura,
+                )
+                _log_os(
+                    self.object,
+                    "confirmacao",
+                    f"Confirmacao registrada via {tipo_conf}.",
+                    usuario=request.user,
+                    dados_extras={"tipo_confirmacao": tipo_conf},
+                )
+                messages.success(request, "Confirmacao da OS registrada com sucesso.")
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
 
 
         # Relatório Técnico
@@ -582,6 +1236,13 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             self.object.relatorio_tecnico = request.POST.get("relatorio_tecnico", "")
             self.object.tipo_reparacao = request.POST.get("tipo_reparacao", "")
             self.object.save()
+            _log_os(
+                self.object,
+                "edicao_critica",
+                "Relatorio tecnico atualizado.",
+                usuario=request.user,
+                dados_extras={"tipo_reparacao": self.object.tipo_reparacao or ""},
+            )
 
             # ðŸ”¹ Registrar quem atualizou o relatÃ³rio
             LinhaTrabalho.objects.create(
@@ -640,6 +1301,13 @@ def migrar_orcamento(request, pk):
             ordem=ordem,
             extra={"itens": count},
         )
+        _log_os(
+            ordem,
+            "edicao_critica",
+            f"Orcamento migrado para servicos/pecas ({count} itens).",
+            usuario=request.user,
+            dados_extras={"itens": count},
+        )
 
         messages.success(request, f"{count} itens migrados para Serviços & Peças com sucesso.")
         return redirect(f"{ordem.get_absolute_url()}?tab=servicos")
@@ -650,92 +1318,179 @@ def migrar_orcamento(request, pk):
 @role_required(ORDER_ROLES)
 def buscar_ordens(request):
     query = request.GET.get("q", "").strip()
-    resultados = []
+    resultados = OrdemServico.objects.none()
 
     if query:
-        if query.startswith("tel:"):
-            telefone = query.replace("tel:", "").strip()
-            resultados = OrdemServico.objects.filter(cliente__telefone__icontains=telefone)
+        resultados = _aplicar_busca_ordens(
+            OrdemServico.objects.select_related("cliente").all(),
+            query,
+        ).order_by("-data_abertura")
 
-        elif query.startswith("id:"):
-            cliente_id = query.replace("id:", "").strip()
-            resultados = OrdemServico.objects.filter(cliente__id=cliente_id)
-
-        elif query.startswith("sn:"):
-            serial = query.replace("sn:", "").strip()
-            resultados = OrdemServico.objects.filter(equipamento__serial_number__icontains=serial)
-
-        elif query.startswith("cpf:"):  # â† NOVO
-            cpf = query.replace("cpf:", "").strip()
-            resultados = OrdemServico.objects.filter(cliente__cpf__icontains=cpf)
-
-        else:
-            resultados = OrdemServico.objects.filter(numero_os__icontains=query)
-
-    # Redirecionamento se apenas 1 resultado
-    if resultados.count() == 1:
-        ordem = resultados.first()
-        return JsonResponse({"redirect": f"/ordens/{ordem.pk}/detalhes/"})
-
-    # Lista de resultados
     data = [
         {
             "id": ordem.pk,
             "numero_os": ordem.numero_os,
             "cliente": ordem.cliente.nome,
             "telefone": ordem.cliente.telefone,
-            "cpf": getattr(ordem.cliente, 'cpf', ''),  # Inclui CPF nos dados
+            "cpf": ordem.cliente.documento or "",
             "url": f"/ordens/{ordem.pk}/detalhes/"
         }
-        for ordem in resultados
+        for ordem in resultados[:30]
     ]
 
     return JsonResponse({"resultados": data})
 
 
-def _mensagem_padrao_notificacao(ordem, tipo):
+def _mensagem_padrao_notificacao(ordem, tipo, canal="sistema"):
+    config = ConfiguracaoSistema.get_configuracao()
+    base = _contexto_variaveis_mensagem(ordem)
     if tipo == "orcamento":
-        return (
-            f"Ola, {ordem.cliente.nome}. Seu orcamento da OS {ordem.numero_os} esta disponivel. "
-            f"Codigo de acompanhamento: {ordem.codigo_portal}."
-        )
-    if tipo == "pronto":
-        return (
-            f"Ola, {ordem.cliente.nome}. Seu equipamento da OS {ordem.numero_os} esta pronto para retirada. "
-            f"Codigo de acompanhamento: {ordem.codigo_portal}."
-        )
-    return f"Atualizacao da OS {ordem.numero_os}. Codigo de acompanhamento: {ordem.codigo_portal}."
+        if canal == "email":
+            template = config.mensagem_orcamento_email or "Orcamento OS {numero_os}: {valor_orcamento}."
+        else:
+            template = config.mensagem_orcamento_whatsapp or "Orcamento OS {numero_os}: {valor_orcamento}."
+    elif tipo == "pronto":
+        if canal == "email":
+            template = config.mensagem_pronto_email or "OS {numero_os} pronta para retirada."
+        else:
+            template = config.mensagem_pronto_whatsapp or "OS {numero_os} pronta para retirada."
+    else:
+        template = "Atualizacao da OS {numero_os}. Codigo de acompanhamento: {codigo_portal}."
+    return _render_template_mensagem(template, base)
 
 
 @role_required(ORDER_ROLES)
 def notificar_cliente_ordem(request, pk, tipo):
     ordem = get_object_or_404(OrdemServico, pk=pk)
     canal = request.POST.get("canal", "sistema")
-    mensagem = request.POST.get("mensagem") or _mensagem_padrao_notificacao(ordem, tipo)
-    _registrar_notificacao(ordem, tipo=tipo, canal=canal, mensagem=mensagem, usuario=request.user)
-    messages.success(request, "Notificacao registrada.")
-    return redirect(f"{ordem.get_absolute_url()}?tab=notificacoes")
+    mensagem = request.POST.get("mensagem") or _mensagem_padrao_notificacao(ordem, tipo, canal=canal)
+    mensagem = _render_template_mensagem(mensagem, _contexto_variaveis_mensagem(ordem))
+    notif = _registrar_notificacao(ordem, tipo=tipo, canal=canal, mensagem=mensagem, usuario=request.user)
+    resultado = _enviar_notificacao(notif)
+    if resultado.get("enviada"):
+        _log_os(
+            ordem,
+            "confirmacao" if tipo in {"orcamento", "pronto"} else "edicao_critica",
+            f"Notificacao enviada ao cliente via {canal}.",
+            usuario=request.user,
+            dados_extras={"tipo": tipo, "canal": canal, "notificacao_id": notif.id},
+        )
+        if tipo == "orcamento" and canal in {"email", "whatsapp"}:
+            _registrar_pendente_cliente_envio_orcamento(ordem, request.user, canal)
+        if resultado.get("url"):
+            messages.success(request, "WhatsApp preparado em nova aba mantendo voce no sistema.")
+            wa = quote(resultado.get("url", ""), safe="")
+            wa_app = quote(resultado.get("app_url", ""), safe="")
+            return redirect(f"{ordem.get_absolute_url()}?tab=detalhes&wa={wa}&wa_app={wa_app}")
+        messages.success(request, "Notificacao enviada com sucesso.")
+    else:
+        messages.error(request, f"Falha ao enviar notificacao: {notif.erro or 'erro desconhecido'}")
+    return redirect(f"{ordem.get_absolute_url()}?tab=detalhes")
+
+
+@role_required(ORDER_ROLES)
+def reenviar_confirmacao_whatsapp(request, pk):
+    ordem = get_object_or_404(OrdemServico, pk=pk)
+    if not ordem.cliente.telefone:
+        messages.error(request, "Cliente sem telefone cadastrado.")
+        return redirect("ordens:resumo_ordem", pk=ordem.pk)
+
+    mensagem_confirmacao = _mensagem_confirmacao_inicial(ordem, request)
+    notif = _registrar_notificacao(
+        ordem,
+        tipo="manual",
+        canal="whatsapp",
+        mensagem=mensagem_confirmacao,
+        usuario=request.user,
+        assunto="",
+    )
+    resultado = _enviar_notificacao(notif)
+    if resultado.get("enviada"):
+        LinhaTrabalho.objects.create(
+            ordem=ordem,
+            status=ordem.status,
+            descricao="Link de confirmacao da OS reenviado por WhatsApp.",
+            usuario=request.user,
+            tipo_evento="manual",
+        )
+        wa = quote(resultado.get("url", ""), safe="")
+        wa_app = quote(resultado.get("app_url", ""), safe="")
+        messages.success(request, "WhatsApp de confirmacao preparado.")
+        _log_os(
+            ordem,
+            "confirmacao",
+            "Link de confirmacao reenviado por WhatsApp.",
+            usuario=request.user,
+            dados_extras={"canal": "whatsapp", "notificacao_id": notif.id},
+        )
+        return redirect(f"{reverse('ordens:resumo_ordem', kwargs={'pk': ordem.pk})}?wa={wa}&wa_app={wa_app}")
+
+    messages.error(request, f"Falha ao preparar WhatsApp: {notif.erro or 'erro desconhecido'}")
+    return redirect("ordens:resumo_ordem", pk=ordem.pk)
+
+
+def confirmar_ordem_token_publico(request, token):
+    ordem = get_object_or_404(OrdemServico, token_confirmacao=token)
+    ja_confirmada = ordem.confirmado
+    if request.method == "POST":
+        if ja_confirmada:
+            messages.info(request, "Esta OS ja foi confirmada anteriormente.")
+            return redirect(reverse("confirmar_os_publico", kwargs={"token": token}))
+        try:
+            ConfirmacaoOSService.confirmar_por_link(ordem, ip_origem=_request_ip(request))
+            _log_os(
+                ordem,
+                "confirmacao",
+                "Confirmacao realizada por link publico.",
+                usuario=None,
+                dados_extras={"ip": _request_ip(request)},
+            )
+            messages.success(request, "Confirmacao realizada com sucesso.")
+            return redirect(reverse("confirmar_os_publico", kwargs={"token": token}))
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect(reverse("confirmar_os_publico", kwargs={"token": token}))
+
+    return render(
+        request,
+        "ordens/confirmar_ordem_publica.html",
+        {
+            "ordem": ordem,
+            "ja_confirmada": ja_confirmada,
+        },
+    )
+
+
+@role_required(ORDER_ROLES)
+def imprimir_confirmacao_os(request, pk):
+    ordem = get_object_or_404(OrdemServico, pk=pk)
+    return render(request, "ordens/ordem_confirmacao_impressa.html", {"ordem": ordem})
 
 
 def portal_cliente(request):
     codigo = (request.GET.get("codigo") or "").strip().upper()
-    documento = re.sub(r"\D", "", request.GET.get("documento", ""))
+    cpf = re.sub(r"\D", "", request.GET.get("cpf", ""))
     ordem = None
     erro = ""
 
     if codigo:
-        ordem = OrdemServico.objects.select_related("cliente").filter(codigo_portal=codigo).first()
-        if not ordem:
-            erro = "Codigo nao encontrado."
-        elif documento and ordem.cliente.documento != documento:
-            ordem = None
-            erro = "Documento nao confere com o codigo informado."
+        if not cpf:
+            erro = "Informe o CPF do titular para consultar."
+        elif len(cpf) != 11:
+            erro = "CPF invalido. Informe 11 digitos."
+        else:
+            ordem = OrdemServico.objects.select_related("cliente").filter(codigo_portal=codigo).first()
+            if not ordem:
+                erro = "Codigo nao encontrado."
+            elif (ordem.cliente.documento or "") != cpf:
+                ordem = None
+                erro = "CPF nao confere com o codigo informado."
 
     context = {
         "ordem": ordem,
         "erro": erro,
         "codigo": codigo,
-        "documento": documento,
+        "cpf": cpf,
     }
     return render(request, "ordens/portal_cliente.html", context)
 
@@ -745,7 +1500,6 @@ def portal_cliente(request):
 # ===========================
 
 @role_required(ORDER_ROLES)
-@csrf_exempt
 def atualizar_local(request, os_id):
     """Atualiza o campo Local de Armazenamento da OS via AJAX"""
     if request.method == "POST":
@@ -753,10 +1507,19 @@ def atualizar_local(request, os_id):
             data = json.loads(request.body)
             local = data.get("local", "")
             ordem = OrdemServico.objects.get(id=os_id)
-            if ordem.fechada:
-                return JsonResponse({"success": False, "message": "OS fechada. Reabra para alterar."}, status=400)
+            try:
+                OSAccessPolicyService.ensure_can_edit(ordem, "edicao_local", usuario=request.user)
+            except ValueError as exc:
+                return JsonResponse({"success": False, "message": str(exc)}, status=400)
             ordem.local_armazenamento = local
             ordem.save()
+            _log_os(
+                ordem,
+                "edicao_critica",
+                "Local de armazenamento atualizado.",
+                usuario=request.user,
+                dados_extras={"local_armazenamento": local},
+            )
             return JsonResponse({"success": True, "message": "Local atualizado com sucesso!"})
         except User.DoesNotExist:
             return JsonResponse({"success": False, "message": "Tecnico nao encontrado."}, status=404)
@@ -771,8 +1534,10 @@ def adicionar_linha(request, os_id):
     if request.method == "POST":
         try:
             ordem = OrdemServico.objects.get(id=os_id)
-            if ordem.fechada:
-                return JsonResponse({"success": False, "message": "OS fechada. Reabra para alterar."}, status=400)
+            try:
+                OSAccessPolicyService.ensure_can_edit(ordem, "linha", usuario=request.user)
+            except ValueError as exc:
+                return JsonResponse({"success": False, "message": str(exc)}, status=400)
             status_linha = request.POST.get("status") or ordem.status
             status_os = OrdemServico.normalizar_status_os(status_linha)
             descricao = request.POST.get("descricao")
@@ -812,7 +1577,6 @@ def adicionar_linha(request, os_id):
     return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
 
 @role_required(ORDER_ROLES)
-@csrf_exempt
 def atualizar_observacoes(request, os_id):
     """Atualiza o campo Notas internas via AJAX"""
     if request.method == "POST":
@@ -820,17 +1584,25 @@ def atualizar_observacoes(request, os_id):
             data = json.loads(request.body)
             obs = data.get("observacoes", "")
             ordem = OrdemServico.objects.get(id=os_id)
-            if ordem.fechada:
-                return JsonResponse({"success": False, "message": "OS fechada. Reabra para alterar."}, status=400)
+            try:
+                OSAccessPolicyService.ensure_can_edit(ordem, "edicao_observacoes", usuario=request.user)
+            except ValueError as exc:
+                return JsonResponse({"success": False, "message": str(exc)}, status=400)
             ordem.notas_internas = obs
             ordem.save(update_fields=["notas_internas"])
+            _log_os(
+                ordem,
+                "edicao_critica",
+                "Notas internas atualizadas.",
+                usuario=request.user,
+                dados_extras={"notas_internas_len": len(obs or "")},
+            )
             return JsonResponse({"success": True, "message": "Notas internas salvas!"})
         except OrdemServico.DoesNotExist:
             return JsonResponse({"success": False, "message": "OS não encontrada."}, status=404)
     return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
 
 @role_required(ORDER_ROLES)
-@csrf_exempt
 def atualizar_tecnico(request, os_id):
     """Atualiza o técnico responsável pela OS via AJAX"""
     if request.method == "POST":
@@ -838,8 +1610,10 @@ def atualizar_tecnico(request, os_id):
             data = json.loads(request.body)
             tecnico_id = data.get("tecnico_id")
             ordem = OrdemServico.objects.get(id=os_id)
-            if ordem.fechada:
-                return JsonResponse({"success": False, "message": "OS fechada. Reabra para alterar."}, status=400)
+            try:
+                OSAccessPolicyService.ensure_can_edit(ordem, "edicao_tecnico", usuario=request.user)
+            except ValueError as exc:
+                return JsonResponse({"success": False, "message": str(exc)}, status=400)
 
             if tecnico_id:
                 from django.contrib.auth import get_user_model
@@ -847,6 +1621,13 @@ def atualizar_tecnico(request, os_id):
                 tecnico = User.objects.get(id=tecnico_id, is_active=True, tipo_usuario="tecnico")
                 ordem.tecnico_responsavel = tecnico
                 ordem.save()
+                _log_os(
+                    ordem,
+                    "edicao_critica",
+                    f"Tecnico responsavel alterado para {tecnico.username}.",
+                    usuario=request.user,
+                    dados_extras={"tecnico_id": tecnico.id},
+                )
 
                 # ðŸ”¹ Registrar a mudança no histórico
                 LinhaTrabalho.objects.create(
@@ -868,6 +1649,13 @@ def atualizar_tecnico(request, os_id):
             else:
                 ordem.tecnico_responsavel = None
                 ordem.save()
+                _log_os(
+                    ordem,
+                    "edicao_critica",
+                    "Tecnico responsavel removido.",
+                    usuario=request.user,
+                    dados_extras={},
+                )
                 registrar_auditoria(logger, request, "tecnico_os_removido", ordem=ordem)
                 return JsonResponse({"success": True, "message": "Técnico removido."})
         except OrdemServico.DoesNotExist:
@@ -881,15 +1669,152 @@ def atualizar_tecnico(request, os_id):
 @role_required(ORDER_ROLES)
 def imprimir_ordem_servico(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
-
+    empresa = Empresa.objects.first()
+    config = ConfiguracaoSistema.get_configuracao()
+    termos_os = (config.termos_ordem_servico or "").strip()
+    termos_os = termos_os.replace("___ dias", "60 dias")
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="ordem_servico_{ordem.numero_os}.pdf"'
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=A4,
+        leftMargin=1.2 * cm,
+        rightMargin=1.2 * cm,
+        topMargin=1.2 * cm,
+        bottomMargin=1.2 * cm,
+    )
+    usable_w = A4[0] - (2.4 * cm)
+
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="PdfTitle", fontName="Helvetica-Bold", fontSize=15, leading=18, textColor=colors.HexColor("#1f2d3d")))
+    styles.add(ParagraphStyle(name="PdfMeta", fontName="Helvetica", fontSize=8.5, leading=11, textColor=colors.HexColor("#555555")))
+    styles.add(ParagraphStyle(name="PdfLabel", fontName="Helvetica-Bold", fontSize=8.5, leading=10, textColor=colors.HexColor("#4b5563")))
+    styles.add(ParagraphStyle(name="PdfValue", fontName="Helvetica", fontSize=9, leading=12))
+    styles.add(ParagraphStyle(name="PdfSection", fontName="Helvetica-Bold", fontSize=10.5, leading=13, textColor=colors.white))
+    styles.add(ParagraphStyle(name="PdfText", fontName="Helvetica", fontSize=9, leading=12))
+
+    def _draw_footer(canv, _doc):
+        canv.saveState()
+        canv.setStrokeColor(colors.HexColor("#d1d5db"))
+        canv.line(doc.leftMargin, doc.bottomMargin - 0.25 * cm, A4[0] - doc.rightMargin, doc.bottomMargin - 0.25 * cm)
+        canv.setFont("Helvetica", 8)
+        canv.setFillColor(colors.HexColor("#6b7280"))
+        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"OS {ordem.numero_os}")
+        canv.drawRightString(A4[0] - doc.rightMargin, doc.bottomMargin - 0.6 * cm, f"Pagina {canv.getPageNumber()}")
+        canv.restoreState()
+
+    def _header_block():
+        try:
+            logo_path = os.path.join(settings.BASE_DIR, "core/static/adminlte/img/abtech_logo.png")
+            logo = Image(logo_path, width=3.0 * cm, height=2.0 * cm)
+        except Exception:
+            logo = Paragraph("<b>ASSISTENCIA TECNICA</b>", styles["PdfMeta"])
+        right = [
+            Paragraph("ORDEM DE SERVICO", styles["PdfTitle"]),
+            Paragraph(f"<b>Nº OS:</b> {ordem.numero_os}", styles["PdfMeta"]),
+            Paragraph(f"<b>Abertura:</b> {ordem.data_abertura.strftime('%d/%m/%Y %H:%M')}", styles["PdfMeta"]),
+            Paragraph(f"<b>Status:</b> {ordem.get_status_display()}", styles["PdfMeta"]),
+        ]
+        if empresa:
+            if empresa.nome:
+                right.append(Paragraph(f"<b>Empresa:</b> {empresa.nome}", styles["PdfMeta"]))
+            if empresa.cnpj:
+                right.append(Paragraph(f"<b>CNPJ:</b> {empresa.cnpj}", styles["PdfMeta"]))
+            if empresa.endereco:
+                right.append(Paragraph(f"<b>Endereco:</b> {empresa.endereco}", styles["PdfMeta"]))
+            if empresa.telefone:
+                right.append(Paragraph(f"<b>Telefone:</b> {empresa.telefone}", styles["PdfMeta"]))
+        head = Table([[logo, right]], colWidths=[3.4 * cm, usable_w - 3.4 * cm])
+        head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        return head
+
+    def _section_title(texto):
+        t = Table([[Paragraph(texto, styles["PdfSection"])]], colWidths=[usable_w])
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#2f3b4a")), ("LEFTPADDING", (0, 0), (-1, -1), 8), ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
+        return t
+
+    def _kv_table(rows):
+        table = Table(rows, colWidths=[4.1 * cm, usable_w - 4.1 * cm])
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#f8fafc"), colors.white]),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e5e7eb")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        return table
+
+    confirmacao_txt = "Pendente"
+    if ordem.confirmado and ordem.data_confirmacao:
+        confirmacao_txt = f"{ordem.get_tipo_confirmacao_display()} em {ordem.data_confirmacao.strftime('%d/%m/%Y %H:%M')}"
+
+    termos_itens = []
+    for parte in re.split(r"\.\s+", termos_os or ""):
+        item = (parte or "").strip()
+        if not item:
+            continue
+        if not item.endswith("."):
+            item += "."
+        termos_itens.append(item)
+
+    story = [
+        _header_block(),
+        Spacer(1, 0.4 * cm),
+        _section_title("Dados do Cliente"),
+        _kv_table([
+            [Paragraph("Nome", styles["PdfLabel"]), Paragraph(ordem.cliente.nome or "-", styles["PdfValue"])],
+            [Paragraph("Telefone", styles["PdfLabel"]), Paragraph(ordem.cliente.telefone or "-", styles["PdfValue"])],
+            [Paragraph("Documento", styles["PdfLabel"]), Paragraph(ordem.cliente.get_documento_formatado() or ordem.cliente.documento or "-", styles["PdfValue"])],
+            [Paragraph("Email", styles["PdfLabel"]), Paragraph(ordem.cliente.email or "-", styles["PdfValue"])],
+        ]),
+        Spacer(1, 0.28 * cm),
+        _section_title("Dados do Equipamento"),
+        _kv_table([
+            [Paragraph("Tipo", styles["PdfLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["PdfValue"])],
+            [Paragraph("Marca", styles["PdfLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["PdfValue"])],
+            [Paragraph("Modelo", styles["PdfLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["PdfValue"])],
+            [Paragraph("Numero de Serie", styles["PdfLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["PdfValue"])],
+            [Paragraph("Defeito Informado", styles["PdfLabel"]), Paragraph(ordem.defeito or "-", styles["PdfValue"])],
+            [Paragraph("Tipo de Reparo", styles["PdfLabel"]), Paragraph(ordem.tipo_reparo or "-", styles["PdfValue"])],
+            [Paragraph("Confirmacao", styles["PdfLabel"]), Paragraph(confirmacao_txt, styles["PdfValue"])],
+        ]),
+        Spacer(1, 0.28 * cm),
+        _section_title("Termos e Condicoes"),
+    ]
+    for item in termos_itens or ["-"]:
+        story.append(Paragraph(item, styles["PdfText"], bulletText="•"))
+    story.extend([
+        Spacer(1, 0.22 * cm),
+        _section_title("Termos e Assinaturas"),
+        Paragraph("Ao assinar, o cliente confirma os dados da OS e autoriza os procedimentos tecnicos e comerciais aplicaveis.", styles["PdfText"]),
+        Spacer(1, 0.4 * cm),
+        Table(
+            [["Assinatura do Cliente: ______________________________", "Assinatura da Assistencia: ______________________________"]],
+            colWidths=[usable_w / 2.0, usable_w / 2.0],
+        ),
+    ])
+
+    doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
+    return response
+
+
+@role_required(ORDER_ROLES)
+def imprimir_ordem_servico_impressao(request, pk):
+    ordem = get_object_or_404(OrdemServico, pk=pk)
+    empresa = Empresa.objects.first()
+    config = ConfiguracaoSistema.get_configuracao()
+    termos_os = (config.termos_ordem_servico or "").strip()
+    termos_os = termos_os.replace("___ dias", "60 dias")
+
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="ordem_servico_impressao_{ordem.numero_os}.pdf"'
 
     width, height = A4
-    margin = 1.5 * cm
+    margin = 1.2 * cm
     half_height = (height - 2 * margin) / 2
     frame_width = width - 2 * margin
-
     doc = SimpleDocTemplate(
         response,
         pagesize=A4,
@@ -900,105 +1825,158 @@ def imprimir_ordem_servico(request, pk):
     )
 
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="CenterBold", alignment=1, fontSize=12, leading=14))
-    styles.add(ParagraphStyle(name="Small", fontSize=9, leading=11))
-    styles.add(ParagraphStyle(name="Label", fontSize=10, leading=12))
-    styles.add(ParagraphStyle(name="Assinatura", alignment=1, fontSize=10, leading=12))
+    styles.add(ParagraphStyle(name="PrintTitle", fontName="Helvetica-Bold", fontSize=11, leading=13, textColor=colors.HexColor("#1f2d3d")))
+    styles.add(ParagraphStyle(name="PrintSmall", fontName="Helvetica", fontSize=8.2, leading=10, textColor=colors.HexColor("#374151")))
+    styles.add(ParagraphStyle(name="PrintLabel", fontName="Helvetica-Bold", fontSize=8.2, leading=10, textColor=colors.HexColor("#4b5563")))
+    styles.add(ParagraphStyle(name="PrintSection", fontName="Helvetica-Bold", fontSize=8.6, leading=10.2, textColor=colors.white))
 
-    def _draw_guides(canvas, _doc):
-        canvas.saveState()
-        canvas.setStrokeColor(colors.grey)
-        canvas.setLineWidth(0.6)
-        canvas.setDash(4, 4)
+    def _draw_cut(canv, _doc):
+        canv.saveState()
         y = margin + half_height
-        canvas.line(margin, y, width - margin, y)
-        canvas.setFont("Helvetica", 8)
-        canvas.drawCentredString(width / 2.0, y - 6, "- Corte aqui / Cut here -")
-        canvas.restoreState()
+        canv.setStrokeColor(colors.HexColor("#9ca3af"))
+        canv.setDash(3, 2)
+        canv.line(margin, y, width - margin, y)
+        canv.setDash()
+        canv.setFont("Helvetica", 7)
+        canv.setFillColor(colors.HexColor("#6b7280"))
+        canv.drawCentredString(width / 2.0, y - 7, "Corte aqui")
+        canv.restoreState()
 
     frame_top = Frame(margin, margin + half_height, frame_width, half_height, id="top")
     frame_bottom = Frame(margin, margin, frame_width, half_height, id="bottom")
-    template = PageTemplate(id="main", frames=[frame_top, frame_bottom], onPage=_draw_guides)
+    template = PageTemplate(id="main", frames=[frame_top, frame_bottom], onPage=_draw_cut)
     doc.addPageTemplates([template])
 
-    def build_via(rotulo):
-        flows = []
+    def _bloco_via(rotulo):
+        empresa_linhas = []
+        if empresa:
+            if empresa.nome:
+                empresa_linhas.append(empresa.nome)
+            if empresa.cnpj:
+                empresa_linhas.append(f"CNPJ: {empresa.cnpj}")
+            if empresa.endereco:
+                empresa_linhas.append(empresa.endereco)
+            if empresa.telefone:
+                empresa_linhas.append(f"Tel: {empresa.telefone}")
+        empresa_txt = " | ".join(empresa_linhas)
         try:
             logo_path = os.path.join(settings.BASE_DIR, "core/static/adminlte/img/abtech_logo.png")
-            logo = Image(logo_path, width=3.5 * cm, height=2.5 * cm)
+            logo = Image(logo_path, width=2.6 * cm, height=1.6 * cm)
         except Exception:
-            logger.exception("Falha ao carregar logo para PDF da OS", extra={"ordem_id": ordem.id})
-            logo = Paragraph("<b>ABTECH</b>", styles["CenterBold"])
+            logo = Paragraph("<b>LOGO</b>", styles["PrintSmall"])
 
-        barcode = code128.Code128(ordem.numero_os, barHeight=12 * mm, barWidth=0.45 * mm)
-        os_num = Paragraph(f"<b>Nº OS: {ordem.numero_os}</b>", styles["Small"])
-
-        tabela_cabecalho = Table([[logo, [barcode, os_num]]], colWidths=[frame_width * 0.6, frame_width * 0.4])
-        tabela_cabecalho.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
-        flows.append(tabela_cabecalho)
-        flows.append(Spacer(1, 4))
-        flows.append(Paragraph(f"<b>{rotulo}</b>", styles["CenterBold"]))
-        flows.append(Spacer(1, 4))
-
-        col_w = [4.0 * cm, frame_width - 4.0 * cm]
-        dados = [
-            [Paragraph("<b>Cliente</b>", styles["Label"]), Paragraph(ordem.cliente.nome, styles["Small"])],
-            [Paragraph("Telefone", styles["Label"]), Paragraph(ordem.cliente.telefone or "-", styles["Small"])],
-            [Paragraph("Email", styles["Label"]), Paragraph(ordem.cliente.email or "-", styles["Small"])],
-            [Paragraph("Equipamento", styles["Label"]), Paragraph(ordem.get_tipo_equipamento_display(), styles["Small"])],
-            [Paragraph("Marca", styles["Label"]), Paragraph(ordem.marca_equipamento or "-", styles["Small"])],
-            [Paragraph("Modelo", styles["Label"]), Paragraph(ordem.modelo_equipamento or "-", styles["Small"])],
-            [Paragraph("Nº Série", styles["Label"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["Small"])],
-            [Paragraph("Defeito informado", styles["Label"]), Paragraph(ordem.defeito or "-", styles["Small"])],
-            [Paragraph("Tipo de reparação", styles["Label"]), Paragraph(ordem.get_tipo_reparacao_display() or "-", styles["Small"])],
-        ]
-        tabela_dados = Table(dados, colWidths=col_w, hAlign="LEFT")
-        tabela_dados.setStyle(
+        head = Paragraph(f"{rotulo} - ORDEM DE SERVICO Nº {ordem.numero_os}", styles["PrintTitle"])
+        head_empresa = Paragraph(empresa_txt, styles["PrintSmall"]) if empresa_txt else Spacer(1, 0.01 * cm)
+        head_box = Table([[logo, [head, head_empresa]]], colWidths=[2.9 * cm, frame_width - 2.9 * cm])
+        head_box.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        barra_cliente = Table([[Paragraph("DADOS DO CLIENTE", styles["PrintSection"])]], colWidths=[frame_width])
+        barra_cliente.setStyle(
             TableStyle(
                 [
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("BOX", (0, 0), (-1, -1), 0.5, colors.black),
-                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#4b5563")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
                 ]
             )
         )
-        flows.append(tabela_dados)
-        flows.append(Spacer(1, 6))
-        return flows
-
-    def build_termos_e_assinaturas():
-        flows = []
-        flows.append(Paragraph("<b>Termos e Condições</b>", styles["Label"]))
-        flows.append(Spacer(1, 2))
-        termos = [
-            "Consertos em Garantia (Fabricante): O cliente concorda que a assistência técnica executará os procedimentos necessários de acordo com os padrões de qualidade estabelecidos pela marca.",
-            "A garantia poderá ser invalidada em casos de mau uso, quedas, umidade, surtos elétricos, violação de lacre, intervenção de terceiros, oxidação ou danos físicos.",
-            "Garantia de 90 dias aplica-se apenas aos serviços e peças trocadas, conforme legislação vigente.",
-            "Serviços fora da garantia requerem aprovação do orçamento antes da execução.",
+        dados_cliente = [
+            [Paragraph("Cliente", styles["PrintLabel"]), Paragraph(ordem.cliente.nome or "-", styles["PrintSmall"])],
+            [Paragraph("Telefone", styles["PrintLabel"]), Paragraph(ordem.cliente.telefone or "-", styles["PrintSmall"])],
+            [Paragraph("Documento", styles["PrintLabel"]), Paragraph(ordem.cliente.get_documento_formatado() or ordem.cliente.documento or "-", styles["PrintSmall"])],
         ]
-        for texto in termos:
-            flows.append(Paragraph(f"- {texto}", styles["Small"]))
-        flows.append(Spacer(1, 6))
-        flows.append(Paragraph("Ao assinar, o cliente concorda com os termos e condições expostos acima.", styles["Small"]))
-        flows.append(Spacer(1, 6))
-        tabela_assinaturas = Table(
-            [["Assinatura do Cliente: ____________________", "Assinatura da Assistência: ____________________"]],
-            colWidths=[frame_width / 2.0] * 2,
+        tabela_cliente = Table(dados_cliente, colWidths=[3.5 * cm, frame_width - 3.5 * cm])
+        tabela_cliente.setStyle(TableStyle([
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#f8fafc"), colors.white]),
+            ("BOX", (0, 0), (-1, -1), 0.45, colors.HexColor("#9ca3af")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d1d5db")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ]))
+
+        barra_equip = Table([[Paragraph("DADOS DO EQUIPAMENTO", styles["PrintSection"])]], colWidths=[frame_width])
+        barra_equip.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#4b5563")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
         )
-        tabela_assinaturas.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
-        flows.append(tabela_assinaturas)
-        flows.append(Spacer(1, 4))
-        return flows
+        dados_equip = [
+            [Paragraph("Equipamento", styles["PrintLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["PrintSmall"])],
+            [Paragraph("Marca/Modelo", styles["PrintLabel"]), Paragraph(f"{ordem.marca_equipamento or '-'} / {ordem.modelo_equipamento or '-'}", styles["PrintSmall"])],
+            [Paragraph("Numero de Serie", styles["PrintLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["PrintSmall"])],
+            [Paragraph("Defeito Relatado", styles["PrintLabel"]), Paragraph(ordem.defeito or "-", styles["PrintSmall"])],
+            [Paragraph("Peritagem", styles["PrintLabel"]), Paragraph(ordem.peritagem or "-", styles["PrintSmall"])],
+            [Paragraph("Data de Abertura", styles["PrintLabel"]), Paragraph(ordem.data_abertura.strftime("%d/%m/%Y %H:%M"), styles["PrintSmall"])],
+        ]
+        tabela_equip = Table(dados_equip, colWidths=[3.5 * cm, frame_width - 3.5 * cm])
+        tabela_equip.setStyle(TableStyle([
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#f8fafc"), colors.white]),
+            ("BOX", (0, 0), (-1, -1), 0.45, colors.HexColor("#9ca3af")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d1d5db")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        assin = Table(
+            [["Assinatura Cliente: ____________________________", "Assinatura Assistencia: ____________________________"]],
+            colWidths=[frame_width / 2.0, frame_width / 2.0],
+        )
+        assin.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 8)]))
+        return [
+            head_box,
+            Spacer(1, 0.08 * cm),
+            barra_cliente,
+            tabela_cliente,
+            Spacer(1, 0.08 * cm),
+            barra_equip,
+            tabela_equip,
+            Spacer(1, 0.15 * cm),
+            assin,
+        ]
+
+    def _bloco_termos(rotulo):
+        titulo = Paragraph(f"{rotulo} - TERMOS E CONDICOES", styles["PrintTitle"])
+        barra = Table([[Paragraph("TERMOS CONTRATUAIS", styles["PrintSection"])]], colWidths=[frame_width])
+        barra.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#4b5563")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        termos_lista = []
+        for parte in re.split(r"\.\s+", termos_os or ""):
+            item = (parte or "").strip()
+            if not item:
+                continue
+            if not item.endswith("."):
+                item += "."
+            termos_lista.append(item)
+        assinatura = Paragraph("Declaro estar ciente e de acordo com os termos acima.", styles["PrintSmall"])
+        bloco = [titulo, Spacer(1, 0.07 * cm), barra, Spacer(1, 0.08 * cm)]
+        for item in termos_lista or ["-"]:
+            bloco.append(Paragraph(item, styles["PrintSmall"], bulletText="•"))
+        bloco.extend([Spacer(1, 0.15 * cm), assinatura])
+        return bloco
 
     story = []
-    story.extend(build_via("ORIGINAL"))
+    story.extend(_bloco_via("ORIGINAL"))
     story.append(FrameBreak())
-    story.extend(build_via("DUPLICADO"))
+    story.extend(_bloco_via("DUPLICADO"))
     story.append(NextPageTemplate("main"))
     story.append(PageBreak())
-    story.extend(build_termos_e_assinaturas())
+    story.extend(_bloco_termos("ORIGINAL"))
     story.append(FrameBreak())
-    story.extend(build_termos_e_assinaturas())
+    story.extend(_bloco_termos("DUPLICADO"))
 
     doc.build(story)
     return response
@@ -1007,69 +1985,121 @@ def imprimir_ordem_servico(request, pk):
 @role_required(ORDER_ROLES)
 def imprimir_relatorio_tecnico(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
-
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="relatorio_tecnico_{ordem.numero_os}.pdf"'
-
-    doc = SimpleDocTemplate(response, pagesize=A4, topMargin=1.5 * cm, bottomMargin=1.5 * cm)
-    frame_width = A4[0] - 2 * cm
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=A4,
+        leftMargin=1.2 * cm,
+        rightMargin=1.2 * cm,
+        topMargin=1.2 * cm,
+        bottomMargin=1.2 * cm,
+    )
+    usable_w = A4[0] - (2.4 * cm)
 
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="CenterBold", alignment=1, fontSize=11, leading=14, spaceAfter=6))
-    styles.add(ParagraphStyle(name="Label", fontSize=9, leading=11, spaceAfter=3))
-    styles.add(ParagraphStyle(name="Small", fontSize=8, leading=10))
+    styles.add(ParagraphStyle(name="RtTitle", fontName="Helvetica-Bold", fontSize=15, leading=18, textColor=colors.HexColor("#1f2d3d")))
+    styles.add(ParagraphStyle(name="RtMeta", fontName="Helvetica", fontSize=8.5, leading=11, textColor=colors.HexColor("#555555")))
+    styles.add(ParagraphStyle(name="RtLabel", fontName="Helvetica-Bold", fontSize=8.5, leading=10, textColor=colors.HexColor("#4b5563")))
+    styles.add(ParagraphStyle(name="RtValue", fontName="Helvetica", fontSize=9, leading=12))
+    styles.add(ParagraphStyle(name="RtSection", fontName="Helvetica-Bold", fontSize=10.5, leading=13, textColor=colors.white))
+    styles.add(ParagraphStyle(name="RtText", fontName="Helvetica", fontSize=9, leading=12))
 
-    story = []
+    def _draw_footer(canv, _doc):
+        canv.saveState()
+        canv.setStrokeColor(colors.HexColor("#d1d5db"))
+        canv.line(doc.leftMargin, doc.bottomMargin - 0.25 * cm, A4[0] - doc.rightMargin, doc.bottomMargin - 0.25 * cm)
+        canv.setFont("Helvetica", 8)
+        canv.setFillColor(colors.HexColor("#6b7280"))
+        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"Relatorio Tecnico - OS {ordem.numero_os}")
+        canv.drawRightString(A4[0] - doc.rightMargin, doc.bottomMargin - 0.6 * cm, f"Pagina {canv.getPageNumber()}")
+        canv.restoreState()
+
+    def _title_bar(texto):
+        t = Table([[Paragraph(texto, styles["RtSection"])]], colWidths=[usable_w])
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#2f3b4a")), ("LEFTPADDING", (0, 0), (-1, -1), 8), ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
+        return t
+
+    def _info_table(rows):
+        t = Table(rows, colWidths=[4.1 * cm, usable_w - 4.1 * cm])
+        t.setStyle(TableStyle([
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#f8fafc"), colors.white]),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e5e7eb")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        return t
+
     try:
         logo_path = os.path.join(settings.BASE_DIR, "core/static/adminlte/img/abtech_logo.png")
-        logo = Image(logo_path, width=3.5 * cm, height=2.5 * cm)
+        logo = Image(logo_path, width=3.0 * cm, height=2.0 * cm)
     except Exception:
-        logger.exception("Falha ao carregar logo para relatório técnico", extra={"ordem_id": ordem.id})
-        logo = Paragraph("<b>ABTECH</b>", styles["CenterBold"])
+        logo = Paragraph("<b>ASSISTENCIA TECNICA</b>", styles["RtMeta"])
 
-    barcode = code128.Code128(str(ordem.id), barHeight=12 * mm, barWidth=0.45 * mm)
-    cabecalho = [[logo, Paragraph(f"<b>RELATÓRIO TÉCNICO</b><br/>Nº OS: {ordem.numero_os}<br/>Data: {ordem.data_conclusao.strftime('%d/%m/%Y') if ordem.data_conclusao else '-'}", styles["Small"])]]
-    tabela_cabecalho = Table(cabecalho, colWidths=[7 * cm, frame_width - 7 * cm])
-    tabela_cabecalho.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
-    story.append(tabela_cabecalho)
-    story.append(Spacer(1, 8))
-
-    dados_cliente = [
-        [Paragraph("<b>Cliente</b>", styles["Label"]), Paragraph(ordem.cliente.nome, styles["Small"])],
-        [Paragraph("Telefone", styles["Label"]), Paragraph(ordem.cliente.telefone or "-", styles["Small"])],
-        [Paragraph("Email", styles["Label"]), Paragraph(ordem.cliente.email or "-", styles["Small"])],
+    header_right = [
+        Paragraph("RELATORIO TECNICO", styles["RtTitle"]),
+        Paragraph(f"<b>Nº OS:</b> {ordem.numero_os}", styles["RtMeta"]),
+        Paragraph(f"<b>Emissao:</b> {(ordem.data_conclusao or datetime.now()).strftime('%d/%m/%Y')}", styles["RtMeta"]),
     ]
-    tabela_cliente = Table(dados_cliente, colWidths=[4 * cm, frame_width - 4 * cm])
-    tabela_cliente.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, colors.black), ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey)]))
-    story.append(Paragraph("<b>Dados do Cliente</b>", styles["CenterBold"]))
-    story.append(tabela_cliente)
-    story.append(Spacer(1, 10))
+    header = Table([[logo, header_right]], colWidths=[3.4 * cm, usable_w - 3.4 * cm])
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
 
-    dados_equip = [["Tipo", ordem.get_tipo_equipamento_display()], ["Marca", ordem.marca_equipamento], ["Modelo", ordem.modelo_equipamento], ["Nº Série", ordem.numero_serie_equipamento or "-"]]
-    tabela_equip = Table(dados_equip, colWidths=[4 * cm, frame_width - 4 * cm])
-    tabela_equip.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, colors.black), ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey)]))
-    story.append(Paragraph("<b>Dados do Equipamento</b>", styles["CenterBold"]))
-    story.append(tabela_equip)
-    story.append(Spacer(1, 10))
+    story = [header, Spacer(1, 0.35 * cm)]
+    story.extend([
+        _title_bar("Dados do Cliente"),
+        _info_table([
+            [Paragraph("Nome", styles["RtLabel"]), Paragraph(ordem.cliente.nome or "-", styles["RtValue"])],
+            [Paragraph("Telefone", styles["RtLabel"]), Paragraph(ordem.cliente.telefone or "-", styles["RtValue"])],
+            [Paragraph("Email", styles["RtLabel"]), Paragraph(ordem.cliente.email or "-", styles["RtValue"])],
+        ]),
+        Spacer(1, 0.28 * cm),
+        _title_bar("Dados do Equipamento"),
+        _info_table([
+            [Paragraph("Tipo", styles["RtLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["RtValue"])],
+            [Paragraph("Marca", styles["RtLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["RtValue"])],
+            [Paragraph("Modelo", styles["RtLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["RtValue"])],
+            [Paragraph("Numero de Serie", styles["RtLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["RtValue"])],
+            [Paragraph("Tipo de Reparacao", styles["RtLabel"]), Paragraph(ordem.get_tipo_reparacao_display() or "-", styles["RtValue"])],
+        ]),
+        Spacer(1, 0.28 * cm),
+        _title_bar("Diagnostico e Relatorio"),
+        Paragraph(ordem.relatorio_tecnico or "-", styles["RtText"]),
+        Spacer(1, 0.25 * cm),
+    ])
 
-    servicos_pecas = ServicoPeca.objects.filter(ordem=ordem)
-    if servicos_pecas.exists():
-        dados_itens = [[Paragraph("<b>Tipo</b>", styles["Label"]), Paragraph("<b>Descrição</b>", styles["Label"]), Paragraph("<b>Qtd</b>", styles["Label"]), Paragraph("<b>Valor Unitário</b>", styles["Label"]), Paragraph("<b>Total</b>", styles["Label"])]]
-        for sp in servicos_pecas:
-            dados_itens.append([Paragraph(sp.get_tipo_display(), styles["Small"]), Paragraph(sp.nome, styles["Small"]), Paragraph(str(sp.quantidade), styles["Small"]), Paragraph(f"R$ {sp.valor_unitario:.2f}", styles["Small"]), Paragraph(f"R$ {sp.total():.2f}", styles["Small"])])
-        tabela_itens = Table(dados_itens, colWidths=[2.5 * cm, 7 * cm, 1.5 * cm, 3 * cm, 3 * cm])
-        tabela_itens.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, colors.black), ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey)]))
-        story.append(Paragraph("<b>Serviços e Peças</b>", styles["CenterBold"]))
-        story.append(tabela_itens)
-        story.append(Spacer(1, 10))
+    itens = ServicoPeca.objects.filter(ordem=ordem)
+    if itens.exists():
+        story.append(_title_bar("Servicos e Pecas"))
+        linhas = [[
+            Paragraph("<b>Tipo</b>", styles["RtLabel"]),
+            Paragraph("<b>Descricao</b>", styles["RtLabel"]),
+            Paragraph("<b>Qtd</b>", styles["RtLabel"]),
+            Paragraph("<b>Unit.</b>", styles["RtLabel"]),
+            Paragraph("<b>Total</b>", styles["RtLabel"]),
+        ]]
+        for item in itens:
+            linhas.append([
+                Paragraph(item.get_tipo_display(), styles["RtValue"]),
+                Paragraph(item.nome, styles["RtValue"]),
+                Paragraph(str(item.quantidade), styles["RtValue"]),
+                Paragraph(f"R$ {item.valor_unitario:.2f}", styles["RtValue"]),
+                Paragraph(f"R$ {item.total():.2f}", styles["RtValue"]),
+            ])
+        t_itens = Table(linhas, colWidths=[2.2 * cm, 8.0 * cm, 1.3 * cm, 2.2 * cm, 2.2 * cm])
+        t_itens.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef2f7")),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e5e7eb")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        story.extend([t_itens, Spacer(1, 0.35 * cm)])
 
-    story.append(Paragraph("<b>Relatório Técnico</b>", styles["CenterBold"]))
-    story.append(Paragraph(ordem.relatorio_tecnico or "-", styles["Small"]))
-    story.append(Spacer(1, 20))
-    story.append(Paragraph("<b>Assinatura do Técnico:</b> ___________________________", styles["Small"]))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(f"Emitido em {ordem.data_conclusao.strftime('%d/%m/%Y') if ordem.data_conclusao else datetime.now().strftime('%d/%m/%Y')}", styles["Small"]))
+    story.extend([
+        Paragraph("Assinatura do Tecnico: _________________________________", styles["RtText"]),
+        Spacer(1, 0.15 * cm),
+        Paragraph(f"Documento emitido em {(ordem.data_conclusao or datetime.now()).strftime('%d/%m/%Y')}.", styles["RtMeta"]),
+    ])
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
     return response
 

@@ -51,4 +51,34 @@
     </div>
   </div>
 </div>
+<div class="row mt-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Saldos negativos por ponto</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          {% for s in negativos_ponto %}
+            <li>{{ s.ponto_operacional.codigo }} - {{ s.produto.nome }}: {{ s.quantidade }}</li>
+          {% empty %}
+            <li class="text-muted">Sem pendencias</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Transferencias para PO2 sem ubicacao</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          {% for m in mov_po2_sem_ubicacao %}
+            <li>{{ m.produto.nome }} - qtd {{ m.quantidade }} em {{ m.criado_em|date:"d/m/Y H:i" }}</li>
+          {% empty %}
+            <li class="text-muted">Sem pendencias</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

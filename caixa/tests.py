@@ -243,6 +243,39 @@ class CaixaPermissoesTests(TestCase):
         saldo = SaldoEstoquePonto.objects.get(produto=produto, ponto_operacional=ponto)
         self.assertEqual(saldo.quantidade, 7)
 
+    def test_finalizar_guia_permita_saldo_negativo(self):
+        self.client.force_login(self.atendente)
+        ponto = PontoOperacional.objects.create(codigo="PO3X", nome="Loja Aux")
+        produto = Produto.objects.create(
+            nome="Fonte Y",
+            ean="7899991110099",
+            preco_final=Decimal("30.00"),
+            preco=Decimal("30.00"),
+            quantidade=0,
+            ponto_operacional=ponto,
+            ativo=True,
+        )
+        SaldoEstoquePonto.objects.create(produto=produto, ponto_operacional=ponto, quantidade=0)
+        venda = VendaRapidaEstoque.objects.create(
+            produto=produto,
+            ponto_operacional=ponto,
+            quantidade=2,
+            valor_unitario=Decimal("30.00"),
+            valor_total=Decimal("60.00"),
+            funcionario_numero="12",
+            status="pre_reserva",
+            usuario=self.atendente,
+        )
+        response = self.client.post(
+            reverse("caixa:registrar_pagamento") + f"?venda={venda.id}",
+            {"valor": "60.00", "metodo": "pix", "referencia": "PDV-NEG"},
+        )
+        self.assertEqual(response.status_code, 302)
+        venda.refresh_from_db()
+        self.assertEqual(venda.status, "vendida")
+        saldo = SaldoEstoquePonto.objects.get(produto=produto, ponto_operacional=ponto)
+        self.assertEqual(saldo.quantidade, -2)
+
     def test_recalcular_comissao_item_antecipado(self):
         self.client.force_login(self.gerente)
         tecnico = get_user_model().objects.create_user(
@@ -585,3 +618,29 @@ class CaixaPermissoesTests(TestCase):
         response = self.client.post(reverse("caixa:comissoes_tecnicos"), {"action": "recalcular_itens_antecipado"})
         self.assertEqual(response.status_code, 302)
         self.assertFalse(ComissaoItemOrcamento.objects.exists())
+
+    def test_garantias_fabricante_sincroniza_os_fechadas(self):
+        self.client.force_login(self.gerente)
+        fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor Sync")
+        marca = MarcaGarantia.objects.create(
+            nome="Marca Sync",
+            fornecedor=fornecedor,
+            valor_mao_obra_garantia=Decimal("150.00"),
+            parceira_garantia=True,
+            ativo=True,
+        )
+        ordem_sync = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Sync",
+            marca_garantia=marca,
+            modelo_equipamento="Modelo Sync",
+            defeito="Teste",
+            tipo_reparo="Garantia",
+            status="concluida",
+            fechada=True,
+        )
+        AuditoriaGarantia.objects.filter(ordem_servico=ordem_sync).delete()
+        response = self.client.post(reverse("caixa:garantias_fabricante"), {"action": "sincronizar"})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(AuditoriaGarantia.objects.filter(ordem_servico=ordem_sync).exists())

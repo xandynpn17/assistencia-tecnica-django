@@ -1,0 +1,108 @@
+{% extends "core/base.html" %}
+
+{% block title %}Dashboard de Pedidos{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="form-row align-items-end">
+      <div class="col-md-3">
+        <label for="q">Buscar</label>
+        <input type="text" id="q" name="q" value="{{ q }}" class="form-control" placeholder="OC, OS, cliente ou titulo">
+      </div>
+      <div class="col-md-2">
+        <label for="os">OS</label>
+        <input type="text" id="os" name="os" value="{{ os_filtro }}" class="form-control" placeholder="Numero OS">
+      </div>
+      <div class="col-md-2">
+        <label for="tecnico">Tecnico</label>
+        <select id="tecnico" name="tecnico" class="form-control">
+          <option value="">Todos</option>
+          {% for tecnico in tecnicos %}
+          <option value="{{ tecnico.id }}" {% if tecnico_filtro == tecnico.id|stringformat:"s" %}selected{% endif %}>{{ tecnico.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="status">Status</label>
+        <select id="status" name="status" class="form-control">
+          <option value="">Todos abertos</option>
+          {% for item in status_cards %}
+          <option value="{{ item.codigo }}" {% if status_filtro == item.codigo %}selected{% endif %}>{{ item.rotulo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-1">
+        <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+      </div>
+      <div class="col-md-2">
+        <a href="{% url 'ordens:dashboard_pedidos' %}" class="btn btn-outline-secondary btn-block">Limpar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row mb-3">
+  {% for item in status_cards %}
+  <div class="col-md-3 col-sm-6 mb-2">
+    <a href="{% url 'ordens:dashboard_pedidos' %}?status={{ item.codigo }}" class="text-decoration-none">
+      <div class="small-box {% if item.ativo %}bg-primary{% else %}bg-light{% endif %}">
+        <div class="inner">
+          <h4>{{ item.total }}</h4>
+          <p class="{% if item.ativo %}text-white{% else %}text-dark{% endif %} mb-0">{{ item.rotulo }}</p>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <strong>Pedidos de Compra</strong>
+  </div>
+  <div class="card-body table-responsive p-0">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr>
+          <th>OC</th>
+          <th>OS</th>
+          <th>Cliente</th>
+          <th>Titulo</th>
+          <th>Tecnico</th>
+          <th>Status</th>
+          <th>Criado em</th>
+          <th class="text-right">Acao</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pedido in pedidos %}
+        <tr>
+          <td>{{ pedido.numero_oc|default:"-" }}</td>
+          <td><a href="{% url 'ordens:detalhes_ordem' pedido.ordem.id %}?tab=pedidos">{{ pedido.ordem.numero_os }}</a></td>
+          <td>{{ pedido.ordem.cliente.nome }}</td>
+          <td>{{ pedido.titulo }}</td>
+          <td>{% if pedido.ordem.tecnico_responsavel %}{{ pedido.ordem.tecnico_responsavel.username }}{% else %}-{% endif %}</td>
+          <td>{{ pedido.get_status_display }}</td>
+          <td>{{ pedido.criado_em|date:"d/m/Y H:i" }}</td>
+          <td class="text-right">
+            <form method="post" action="{% url 'ordens:toggle_fechamento_pedido' pedido.id %}" class="d-inline">
+              {% csrf_token %}
+              {% if pedido.status == "fechado" %}
+              <button type="submit" class="btn btn-sm btn-outline-warning">Reabrir</button>
+              {% else %}
+              <button type="submit" class="btn btn-sm btn-outline-success">Fechar</button>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="text-center text-muted py-4">Nenhum pedido encontrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -49,6 +49,18 @@
       <div class="col-md-4"><div class="alert alert-info mb-0">Enviado: <strong>R$ {{ resumo.enviado|floatformat:2 }}</strong></div></div>
       <div class="col-md-4"><div class="alert alert-success mb-0">Pago: <strong>R$ {{ resumo.pago|floatformat:2 }}</strong></div></div>
     </div>
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <div class="alert alert-secondary mb-0">Contas em aberto (garantia): <strong>R$ {{ resumo.contas_abertas|floatformat:2 }}</strong></div>
+      </div>
+      <div class="col-md-6 text-right">
+        <form method="post" class="d-inline">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="sincronizar">
+          <button type="submit" class="btn btn-outline-primary">Sincronizar garantias fechadas</button>
+        </form>
+      </div>
+    </div>
 
     <div class="table-responsive">
       <table class="table table-sm table-bordered">

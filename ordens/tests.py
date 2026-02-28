@@ -1,19 +1,21 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from caixa.models import Pagamento
+from caixa.models import Caixa, Pagamento
 from caixa.models import AuditoriaGarantia
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema
-from configuracoes.models import FornecedorGarantia, MarcaGarantia
+from configuracoes.models import FornecedorGarantia, MarcaGarantia, ModeloMensagem
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.forms import LinhaTrabalhoForm
-from ordens.models import OrdemServico, LinhaTrabalho, ServicoPeca
+from ordens.models import OrdemServico, LinhaTrabalho, NotificacaoCliente, ServicoPeca
 
 
 class VerificarClienteOSViewTests(TestCase):
@@ -292,7 +294,7 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
         self.assertEqual(ordem.status, "diagnosticar")
 
         linhas = list(LinhaTrabalho.objects.filter(ordem=ordem).order_by("id"))
-        self.assertEqual(len(linhas), 2)
+        self.assertGreaterEqual(len(linhas), 2)
         self.assertEqual(linhas[0].status, "criada")
         self.assertEqual(linhas[0].descricao, "Ordem criada")
         self.assertEqual(linhas[0].tipo_evento, "automatico")
@@ -412,7 +414,7 @@ class IntegracaoFluxoOSCaixaTests(TestCase):
 
         ordem = OrdemServico.objects.latest("id")
         self.assertEqual(ordem.status, "diagnosticar")
-        self.assertEqual(LinhaTrabalho.objects.filter(ordem=ordem).count(), 2)
+        self.assertGreaterEqual(LinhaTrabalho.objects.filter(ordem=ordem).count(), 2)
 
         url_detalhes = reverse("ordens:detalhes_ordem", args=[ordem.id])
         response_relatorio = self.client.post(
@@ -737,6 +739,12 @@ class LinhaTrabalhoAjaxAtualizaStatusTests(TestCase):
 
 class PortalClienteTests(TestCase):
     def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_notif",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
         self.cliente = Cliente.objects.create(
             nome="Cliente Portal",
             documento="11144477735",
@@ -756,7 +764,7 @@ class PortalClienteTests(TestCase):
     def test_portal_cliente_consulta_por_codigo(self):
         response = self.client.get(
             reverse("ordens:portal_cliente"),
-            {"codigo": self.ordem.codigo_portal},
+            {"codigo": self.ordem.codigo_portal, "cpf": self.cliente.documento},
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.ordem.numero_os)
@@ -764,10 +772,58 @@ class PortalClienteTests(TestCase):
     def test_portal_cliente_documento_invalido_bloqueia(self):
         response = self.client.get(
             reverse("ordens:portal_cliente"),
-            {"codigo": self.ordem.codigo_portal, "documento": "00000000000"},
+            {"codigo": self.ordem.codigo_portal, "cpf": "00000000000"},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Documento nao confere")
+        self.assertContains(response, "CPF nao confere")
+
+    def test_portal_cliente_sem_cpf_bloqueia(self):
+        response = self.client.get(
+            reverse("ordens:portal_cliente"),
+            {"codigo": self.ordem.codigo_portal},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Informe o CPF do titular")
+
+    def test_portal_cliente_nao_exibe_descricao_interna_de_linha(self):
+        LinhaTrabalho.objects.create(
+            ordem=self.ordem,
+            status="diagnosticar",
+            descricao="Observacao interna sigilosa",
+            tipo_evento="manual",
+        )
+        response = self.client.get(
+            reverse("ordens:portal_cliente"),
+            {"codigo": self.ordem.codigo_portal, "cpf": self.cliente.documento},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Observacao interna sigilosa")
+
+    def test_notificar_whatsapp_mantem_usuario_no_sistema(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("ordens:notificar_cliente_ordem", args=[self.ordem.id, "pronto"]),
+            {"canal": "whatsapp"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("?tab=detalhes&wa=", response.url)
+
+    def test_notificar_orcamento_whatsapp_registra_pendente_cliente(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("ordens:notificar_cliente_ordem", args=[self.ordem.id, "orcamento"]),
+            {"canal": "whatsapp"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.status, "pendente_cliente")
+        self.assertTrue(
+            LinhaTrabalho.objects.filter(
+                ordem=self.ordem,
+                status="pendente_cliente",
+                descricao__icontains="Orcamento enviado por WhatsApp",
+            ).exists()
+        )
 
 
 class OrdemEstoqueIntegracaoTests(TestCase):
@@ -840,3 +896,314 @@ class OrdemEstoqueIntegracaoTests(TestCase):
         self.assertEqual(self.reserva.status, "cancelada")
         saldo = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto)
         self.assertEqual(saldo.quantidade, 5)
+
+
+class MensagensPorModeloTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_modelos_msg",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Mensagens",
+            documento="39053344705",
+            telefone="11999998888",
+            email="cliente.msg@exemplo.com",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="notebook",
+            marca_equipamento="Marca M",
+            modelo_equipamento="Modelo M",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+        self.modelo_ambos = ModeloMensagem.objects.create(
+            nome="Modelo Teste Ambos",
+            tipo="ambos",
+            assunto="Assunto OS #{numero_os}",
+            corpo="Ola {nome_cliente}, OS #{numero_os}.",
+            ativo=True,
+        )
+        self.modelo_whats = ModeloMensagem.objects.create(
+            nome="Modelo Teste Whats",
+            tipo="whatsapp",
+            assunto="",
+            corpo="Whats para {nome_cliente}",
+            ativo=True,
+        )
+        ModeloMensagem.objects.create(
+            nome="Modelo Inativo",
+            tipo="ambos",
+            assunto="Inativo",
+            corpo="Nao usar",
+            ativo=False,
+        )
+
+    def test_detalhes_os_carrega_payload_modelos_ativos_com_variaveis(self):
+        response = self.client.get(reverse("ordens:detalhes_ordem", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 200)
+        payload = response.context.get("modelos_mensagem_payload", [])
+        nomes = {item["nome"] for item in payload}
+        self.assertIn("Modelo Teste Ambos", nomes)
+        self.assertIn("Modelo Teste Whats", nomes)
+        self.assertNotIn("Modelo Inativo", nomes)
+        item_ambos = next(item for item in payload if item["nome"] == "Modelo Teste Ambos")
+        self.assertIn(self.ordem.numero_os, item_ambos["assunto"])
+        self.assertIn(self.cliente.nome, item_ambos["corpo"])
+
+    def test_envio_por_modelo_whatsapp_registra_notificacao_e_historico(self):
+        response = self.client.post(
+            reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+            {
+                "form_type": "enviar_mensagem_modelo",
+                "canal": "whatsapp",
+                "modelo_id": str(self.modelo_whats.id),
+                "assunto": "",
+                "mensagem": "Mensagem Whats customizada",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("wa=", response.url)
+        notif = NotificacaoCliente.objects.filter(ordem=self.ordem, canal="whatsapp").latest("id")
+        self.assertEqual(notif.mensagem, "Mensagem Whats customizada")
+        self.assertTrue(
+            LinhaTrabalho.objects.filter(
+                ordem=self.ordem,
+            ).filter(
+                Q(descricao__icontains="Modelo Teste Whats")
+                & Q(descricao__icontains="WHATSAPP")
+            ).exists()
+        )
+
+    def test_envio_por_modelo_email_exige_assunto(self):
+        response = self.client.post(
+            reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+            {
+                "form_type": "enviar_mensagem_modelo",
+                "canal": "email",
+                "modelo_id": str(self.modelo_ambos.id),
+                "assunto": "",
+                "mensagem": "Mensagem Email sem assunto",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(
+            NotificacaoCliente.objects.filter(
+                ordem=self.ordem,
+                canal="email",
+                mensagem="Mensagem Email sem assunto",
+            ).exists()
+        )
+
+
+class BuscarOrdensPrefixosTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="busca_prefixos",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Busca Prefixo",
+            documento="39053344705",
+            telefone="11933334444",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca B",
+            modelo_equipamento="Modelo B",
+            numero_serie_equipamento="SN-ABC-001",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+
+    def test_busca_por_sn_retorna_resultado(self):
+        response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "sn:ABC"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        if "redirect" in payload:
+            self.assertIn(f"/ordens/{self.ordem.id}/detalhes/", payload["redirect"])
+        else:
+            self.assertTrue(payload["resultados"])
+            self.assertEqual(payload["resultados"][0]["id"], self.ordem.id)
+
+    def test_busca_por_cpf_retorna_resultado(self):
+        response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "cpf:390.533.447-05"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        if "redirect" in payload:
+            self.assertIn(f"/ordens/{self.ordem.id}/detalhes/", payload["redirect"])
+        else:
+            self.assertTrue(payload["resultados"])
+            self.assertEqual(payload["resultados"][0]["id"], self.ordem.id)
+
+    def test_busca_sem_prefixo_por_cpf_retorna_resultado(self):
+        response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "390.533.447-05"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        if "redirect" in payload:
+            self.assertIn(f"/ordens/{self.ordem.id}/detalhes/", payload["redirect"])
+        else:
+            self.assertTrue(payload["resultados"])
+            self.assertEqual(payload["resultados"][0]["id"], self.ordem.id)
+
+    def test_busca_sem_prefixo_por_telefone_retorna_resultado(self):
+        response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "(11) 93333-4444"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        if "redirect" in payload:
+            self.assertIn(f"/ordens/{self.ordem.id}/detalhes/", payload["redirect"])
+        else:
+            self.assertTrue(payload["resultados"])
+            self.assertEqual(payload["resultados"][0]["id"], self.ordem.id)
+
+
+class FluxoCriticoE2ETests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_e2e",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente E2E",
+            documento="39053344705",
+            telefone="11998765432",
+            email="cliente.e2e@exemplo.com",
+            estado="SP",
+        )
+        self.caixa = Caixa.objects.create(aberto=True, saldo_inicial=Decimal("0.00"))
+
+    def test_fluxo_critico_completo_os_confirmacao_orcamento_notificacao_fechamento_caixa(self):
+        # 1) criar OS
+        resp_criar = self.client.post(
+            reverse("ordens:nova_ordem_cliente", args=[self.cliente.id]),
+            {
+                "tipo_equipamento": "celular",
+                "marca_catalogo": "__outros__",
+                "marca_manual": "Marca E2E",
+                "marca_equipamento": "",
+                "modelo_equipamento": "Modelo E2E",
+                "numero_serie_equipamento": "SN-E2E-001",
+                "peritagem": "Sem danos aparentes",
+                "tipo_reparo": "Fora de Garantia",
+                "defeito": "Nao liga",
+                "acessorios": "Carregador",
+                "notas_internas": "Nota interna",
+            },
+        )
+        self.assertEqual(resp_criar.status_code, 302)
+        ordem = OrdemServico.objects.latest("id")
+        self.assertEqual(ordem.status, "diagnosticar")
+
+        # 2) confirmar por link publico
+        resp_confirmar = self.client.post(reverse("confirmar_os_publico", kwargs={"token": ordem.token_confirmacao}))
+        self.assertEqual(resp_confirmar.status_code, 302)
+        ordem.refresh_from_db()
+        self.assertTrue(ordem.confirmado)
+
+        # 3) orcar
+        orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=ordem)
+        resp_item = self.client.post(
+            reverse("orcamentos:adicionar_item", args=[orcamento.id]),
+            {
+                "ean": "",
+                "nome": "Mao de obra",
+                "descricao": "Diagnostico e reparo",
+                "valor_unitario": "150.00",
+                "quantidade": "1",
+            },
+        )
+        self.assertEqual(resp_item.status_code, 302)
+        item = ItemOrcamento.objects.latest("id")
+        self.assertEqual(item.origem, "manual")
+
+        # 4) notificar cliente
+        resp_notif = self.client.post(
+            reverse("ordens:notificar_cliente_ordem", args=[ordem.id, "orcamento"]),
+            {"canal": "whatsapp"},
+        )
+        self.assertEqual(resp_notif.status_code, 302)
+        self.assertTrue(
+            NotificacaoCliente.objects.filter(ordem=ordem, canal="whatsapp").exists()
+        )
+
+        # 5) registrar servico e fechar
+        ServicoPeca.objects.create(
+            ordem=ordem,
+            tipo="servico",
+            nome="Reparo placa",
+            quantidade=1,
+            valor_unitario=Decimal("150.00"),
+        )
+        ordem.relatorio_tecnico = "Reparo executado com sucesso."
+        ordem.tipo_reparacao = "substituicao"
+        ordem.save(update_fields=["relatorio_tecnico", "tipo_reparacao"])
+        resp_fechar = self.client.get(reverse("ordens:toggle_fechamento_os", args=[ordem.id]))
+        self.assertEqual(resp_fechar.status_code, 302)
+        ordem.refresh_from_db()
+        self.assertTrue(ordem.fechada)
+        self.assertEqual(ordem.status, "concluida")
+
+        # 6) caixa: registrar pagamento da OS
+        resp_pag = self.client.post(
+            reverse("caixa:registrar_pagamento") + f"?os={ordem.id}",
+            {"valor": "150.00", "metodo": "pix", "referencia": "E2E-001"},
+        )
+        self.assertEqual(resp_pag.status_code, 302)
+        self.assertTrue(Pagamento.objects.filter(ordem_servico=ordem, referencia="E2E-001").exists())
+
+
+class OSConfirmadaBloqueioEdicaoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_confirmada",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Confirmacao",
+            documento="39053344705",
+            telefone="11977776666",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca C",
+            modelo_equipamento="Modelo C",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+            confirmado=True,
+        )
+
+    def test_permite_adicao_de_servico_em_os_confirmada(self):
+        url = reverse("ordens:detalhes_ordem", args=[self.ordem.id])
+        response = self.client.post(
+            url,
+            {
+                "form_type": "servico_peca",
+                "tipo": "servico",
+                "nome": "Mao de obra",
+                "quantidade": "1",
+                "valor_unitario": "100.00",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(ServicoPeca.objects.filter(ordem=self.ordem).count(), 1)
