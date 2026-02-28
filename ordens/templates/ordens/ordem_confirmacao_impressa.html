@@ -1,0 +1,38 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>OS {{ ordem.numero_os }} - Assinatura</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 28px; }
+    h1, h2 { margin: 0 0 10px 0; }
+    .box { border: 1px solid #ddd; padding: 12px; margin-bottom: 12px; }
+    .assinatura { border-top: 1px solid #000; margin-top: 50px; width: 320px; padding-top: 8px; }
+    .small { font-size: 12px; color: #444; }
+    @media print { .noprint { display:none; } }
+  </style>
+</head>
+<body>
+  <div class="noprint" style="margin-bottom: 12px;">
+    <button onclick="window.print()">Imprimir</button>
+  </div>
+
+  <h1>Ordem de Servico {{ ordem.numero_os }}</h1>
+  <p class="small">Codigo interno: {{ ordem.id }} | Token: {{ ordem.token_confirmacao }}</p>
+
+  <div class="box">
+    <h2>Dados da OS</h2>
+    <p><strong>Cliente:</strong> {{ ordem.cliente.nome }}</p>
+    <p><strong>Equipamento:</strong> {{ ordem.get_tipo_equipamento_display }} - {{ ordem.marca_equipamento }} {{ ordem.modelo_equipamento }}</p>
+    <p><strong>Defeito relatado:</strong> {{ ordem.defeito }}</p>
+    <p><strong>Data de abertura:</strong> {{ ordem.data_abertura|date:"d/m/Y H:i" }}</p>
+  </div>
+
+  <div class="box">
+    <h2>Termo de responsabilidade</h2>
+    <p>Declaro que li e estou de acordo com os termos da Ordem de Servico, autorizando os procedimentos tecnicos necessarios e ciente das condicoes comerciais aplicaveis.</p>
+  </div>
+
+  <div class="assinatura">Assinatura do cliente</div>
+</body>
+</html>

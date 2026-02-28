@@ -57,6 +57,17 @@
       padding: 6px 10px;
       color: #888;
   }
+  .search-feedback {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #dc3545;
+      min-height: 16px;
+      opacity: 0;
+      transition: opacity .2s ease;
+  }
+  .search-feedback.show {
+      opacity: 1;
+  }
   .navbar .search-container { max-width: 320px; }
   </style>
   {% endblock %}
@@ -84,8 +95,9 @@
       <li class="nav-item">
         <div class="search-container">
           <input type="text" id="search-input" class="form-control form-control-sm"
-                 placeholder="Pesquisar OS, tel:, id:, sn:" autocomplete="off">
+                 placeholder="Pesquisar por OS, CPF, telefone, cliente ou serie" autocomplete="off">
           <div id="search-results" class="search-results"></div>
+          <div id="search-feedback" class="search-feedback"></div>
         </div>
       </li>
 
@@ -168,6 +180,13 @@
                     <p>Listar Ordens</p>
                   </a>
                 </li>
+                <li class="nav-item">
+                  <a href="{% url 'ordens:dashboard_pedidos' %}"
+                     class="nav-link {% if menu_sub == 'dashboard_pedidos' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Pedidos por Status</p>
+                  </a>
+                </li>
               </ul>
             </li>
 
@@ -234,6 +253,20 @@
                   </a>
                 </li>
                 <li class="nav-item">
+                  <a href="{% url 'estoque:reposicao_estoque' %}"
+                     class="nav-link {% if menu_sub == 'reposicao_estoque' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Reposicao Inteligente</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'estoque:indicadores_estoque' %}"
+                     class="nav-link {% if menu_sub == 'indicadores_estoque' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Indicadores</p>
+                  </a>
+                </li>
+                <li class="nav-item">
                   <a href="{% url 'estoque:relatorio_divergencias' %}"
                      class="nav-link {% if menu_sub == 'relatorio_divergencias' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
@@ -247,6 +280,13 @@
                      class="nav-link {% if menu_sub == 'pontos_operacionais' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Pontos Operacionais</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'estoque:ubicacoes_estoque' %}"
+                     class="nav-link {% if menu_sub == 'ubicacoes_estoque' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Ubicacoes</p>
                   </a>
                 </li>
                 {% endif %}
@@ -416,6 +456,13 @@
                     <p>Marcas e Fornecedores</p>
                   </a>
                 </li>
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:modelos_mensagem' %}"
+                     class="nav-link {% if menu_sub == 'modelos_mensagem' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Modelos de Mensagens</p>
+                  </a>
+                </li>
                 {% if user.is_superuser or user.tipo_usuario == 'adm' %}
                 <li class="nav-item">
                   <a href="{% url 'configuracoes:lista_usuarios' %}"
@@ -509,20 +556,39 @@
 </script>
 {% endif %}
 
-{% block extra_js %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const input = document.getElementById("search-input");
     const resultsBox = document.getElementById("search-results");
+    const feedback = document.getElementById("search-feedback");
+    const searchContainer = document.querySelector(".search-container");
     const buscarUrl = "{% url 'ordens:buscar_ordens' %}";
-    if (!input) return;
+    if (!input || !resultsBox || !searchContainer) return;
 
     let controller = null;
+    let feedbackTimer = null;
 
-    input.addEventListener("keypress", function (e) {
-        if (e.key !== "Enter") return;
+    function limparFeedback() {
+        if (!feedback) return;
+        feedback.classList.remove("show");
+        feedback.textContent = "";
+    }
+
+    function mostrarFeedback(msg) {
+        if (!feedback) return;
+        feedback.textContent = msg;
+        feedback.classList.add("show");
+        if (feedbackTimer) clearTimeout(feedbackTimer);
+        feedbackTimer = setTimeout(limparFeedback, 2400);
+    }
+
+    function executarBusca() {
         const query = input.value.trim();
-        if (!query) return;
+        if (!query) {
+            resultsBox.innerHTML = "";
+            limparFeedback();
+            return;
+        }
 
         if (controller) controller.abort();
         if (window.AbortController) controller = new AbortController();
@@ -530,38 +596,47 @@ document.addEventListener("DOMContentLoaded", function () {
         fetch(`${buscarUrl}?q=${encodeURIComponent(query)}`, { signal: controller?.signal })
             .then(r => r.json())
             .then(data => {
-                if (data.redirect) {
-                    window.location.href = data.redirect;
-                    return;
-                }
-
                 const resultados = data.resultados || [];
                 resultsBox.innerHTML = "";
 
+                // Com um unico resultado, abre direto.
+                if (resultados.length === 1) {
+                    window.location.href = resultados[0].url;
+                    return;
+                }
+
                 if (resultados.length === 0) {
                     resultsBox.innerHTML = "<div class='no-results'>Nenhum resultado</div>";
-                } else if (resultados.length === 1) {
-                    window.location.href = resultados[0].url;
+                    mostrarFeedback("Nao foram encontradas ordens para essa busca.");
                 } else {
+                    limparFeedback();
                     resultados.forEach(os => {
                         const item = document.createElement("div");
                         item.classList.add("result-item");
-                        item.innerHTML = `<a href="${os.url}">OS #${os.numero_os} - ${os.cliente} (${os.telefone || ''}${os.cpf ? ' | ' + os.cpf : ''})</a>`;
+                        item.innerHTML = `<a href="${os.url}">#${os.numero_os}</a>`;
                         resultsBox.appendChild(item);
                     });
                 }
             })
             .catch(err => { if (err.name !== 'AbortError') console.error(err); });
+    }
+
+    input.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        e.stopPropagation();
+        executarBusca();
     });
 
     document.addEventListener('click', function(evt) {
-      if (!document.querySelector('.search-container').contains(evt.target)) {
+      if (!searchContainer.contains(evt.target)) {
         resultsBox.innerHTML = '';
+        limparFeedback();
       }
     });
 });
 </script>
-{% endblock %}
+{% block extra_js %}{% endblock %}
 </body>
 </html>
 

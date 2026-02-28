@@ -23,9 +23,14 @@ urlpatterns = [
     path('<int:pk>/detalhes/', DetalhesOrdemView.as_view(), name='detalhes_ordem'),
     path('<int:pk>/resumo/', OrdemServicoResumoView.as_view(), name='resumo_ordem'),
     path('<int:pk>/toggle-fechamento/', views.toggle_fechamento_os, name='toggle_fechamento_os'),
+    path('<int:pk>/imprimir-confirmacao/', views.imprimir_confirmacao_os, name='imprimir_confirmacao_os'),
+    path('<int:pk>/reenviar-confirmacao-whatsapp/', views.reenviar_confirmacao_whatsapp, name='reenviar_confirmacao_whatsapp'),
     path('<int:pk>/notificar/<str:tipo>/', views.notificar_cliente_ordem, name='notificar_cliente_ordem'),
     path("buscar-ordens/", views.buscar_ordens, name="buscar_ordens"),
+    path("pedidos/dashboard/", views.dashboard_pedidos_compra, name="dashboard_pedidos"),
+    path("pedidos/<int:pedido_id>/toggle-fechamento/", views.toggle_fechamento_pedido_compra, name="toggle_fechamento_pedido"),
     path("portal/", views.portal_cliente, name="portal_cliente"),
+    path("confirmar/<uuid:token>/", views.confirmar_ordem_token_publico, name="confirmar_ordem_token_publico"),
 
 
     # =======================
@@ -58,5 +63,6 @@ urlpatterns = [
 
     #PDF
     path("<int:pk>/imprimir/", views.imprimir_ordem_servico, name="imprimir_ordem_servico"),
+    path("<int:pk>/imprimir-fisico/", views.imprimir_ordem_servico_impressao, name="imprimir_ordem_servico_impressao"),
     path('imprimir_relatorio/<int:pk>/', views.imprimir_relatorio_tecnico, name='imprimir_relatorio_tecnico'),
 ]

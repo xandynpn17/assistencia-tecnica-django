@@ -49,8 +49,19 @@
           <input type="number" name="quantidade" min="1" class="form-control" required>
         </div>
         <div class="form-group col-md-2">
-          <label>Ubicacao destino</label>
-          <input type="text" name="destino_ubicacao" class="form-control">
+          <label>Ubicacao (cadastro)</label>
+          <select name="destino_ubicacao_id" id="destino_ubicacao_id" class="form-control">
+            <option value="">Selecione</option>
+            {% for u in ubicacoes %}
+              <option value="{{ u.id }}" data-po="{{ u.ponto_operacional_id }}">{{ u.ponto_operacional.codigo }} - {{ u.codigo }}{% if u.descricao %} ({{ u.descricao }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group col-md-6">
+          <label>Ubicacao destino (manual)</label>
+          <input type="text" name="destino_ubicacao" class="form-control" placeholder="Ex.: Corredor A / Prat. 2">
         </div>
       </div>
       <button type="submit" class="btn btn-success">Registrar transpasse</button>
@@ -58,4 +69,32 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const destinoSelect = document.querySelector("select[name='destino_id']");
+  const ubicacaoSelect = document.getElementById("destino_ubicacao_id");
+  if (!destinoSelect || !ubicacaoSelect) return;
+
+  function filtrarUbicacoes() {
+    const destinoId = destinoSelect.value;
+    Array.from(ubicacaoSelect.options).forEach((opt) => {
+      if (!opt.value) {
+        opt.hidden = false;
+        return;
+      }
+      const po = opt.getAttribute("data-po");
+      opt.hidden = !!destinoId && po !== destinoId;
+    });
+    if (ubicacaoSelect.selectedOptions[0] && ubicacaoSelect.selectedOptions[0].hidden) {
+      ubicacaoSelect.value = "";
+    }
+  }
+
+  destinoSelect.addEventListener("change", filtrarUbicacoes);
+  filtrarUbicacoes();
+});
+</script>
 {% endblock %}

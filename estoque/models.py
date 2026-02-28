@@ -1,4 +1,5 @@
-﻿from django.core.validators import MaxValueValidator, MinValueValidator
+﻿from decimal import Decimal
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -15,7 +16,31 @@ class PontoOperacional(models.Model):
         return f"{self.codigo} - {self.nome}"
 
 
+class UbicacaoEstoque(models.Model):
+    ponto_operacional = models.ForeignKey(
+        PontoOperacional,
+        on_delete=models.CASCADE,
+        related_name="ubicacoes",
+    )
+    codigo = models.CharField(max_length=30)
+    descricao = models.CharField(max_length=120, blank=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["ponto_operacional__codigo", "codigo"]
+        unique_together = [("ponto_operacional", "codigo")]
+
+    def __str__(self):
+        base = f"{self.ponto_operacional.codigo} - {self.codigo}"
+        return f"{base} ({self.descricao})" if self.descricao else base
+
+
 class Produto(models.Model):
+    TIPO_ITEM_CHOICES = [
+        ("produto", "Produto"),
+        ("servico", "Servico"),
+    ]
+
     nome = models.CharField(max_length=100)
     sku = models.CharField(max_length=50, blank=True, null=True)
     ean = models.CharField(max_length=50, blank=True, null=True, unique=True)
@@ -29,6 +54,12 @@ class Produto(models.Model):
     icms = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
     ipi = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
     pis_cofins = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    pis = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    cofins = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    taxa_cartao = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    tipo_item = models.CharField(max_length=20, choices=TIPO_ITEM_CHOICES, default="produto")
+    usar_aliquota_manual = models.BooleanField(default=False)
+    aliquota_manual = models.DecimalField(max_digits=6, decimal_places=3, default=0, blank=True)
     preco_sugerido = models.DecimalField(max_digits=10, decimal_places=2, editable=False, default=0)
     preco_final = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
 
@@ -63,8 +94,47 @@ class Produto(models.Model):
 
         self.ean = str(self.ean).zfill(13)[:13]
 
-        impostos_totais = (self.icms + self.ipi + self.pis_cofins) / 100
-        self.preco_sugerido = (self.custo_unitario + self.custo_operacional) * (1 + self.margem_lucro / 100) * (1 + impostos_totais)
+        # Sincroniza legado com o novo tipo de item.
+        if self.tipo_item == "servico":
+            self.is_servico = True
+        elif self.tipo_item == "produto":
+            self.is_servico = False
+        elif self.is_servico:
+            self.tipo_item = "servico"
+        else:
+            self.tipo_item = "produto"
+
+        custo_total = (self.custo_unitario or 0) + (self.custo_operacional or 0)
+
+        aliquota_percent = Decimal("0")
+        if self.usar_aliquota_manual:
+            aliquota_percent = Decimal(str(self.aliquota_manual or 0))
+        else:
+            try:
+                from configuracoes.models import Empresa
+
+                empresa = Empresa.objects.first()
+            except Exception:
+                empresa = None
+
+            if empresa:
+                regime = (empresa.regime_tributario or "simples")
+                modo = (empresa.modo_tributario or "basico")
+                if regime == "simples" and modo == "basico":
+                    aliquota_percent = Decimal(str(empresa.aliquota_servico if self.tipo_item == "servico" else empresa.aliquota_comercio))
+                else:
+                    aliquota_percent = Decimal(str((empresa.icms or 0) + (empresa.ipi or 0) + (empresa.pis or 0) + (empresa.cofins or 0)))
+            else:
+                # fallback legado
+                aliquota_percent = Decimal(str((self.icms or 0) + (self.ipi or 0) + (self.pis or 0) + (self.cofins or 0) or (self.pis_cofins or 0)))
+
+        taxa_cartao_percent = Decimal(str(self.taxa_cartao or 0))
+        margem_percent = Decimal(str(self.margem_lucro or 0))
+        fator = Decimal("1") - (aliquota_percent / Decimal("100")) - (taxa_cartao_percent / Decimal("100")) - (margem_percent / Decimal("100"))
+        if fator <= Decimal("0"):
+            self.preco_sugerido = custo_total
+        else:
+            self.preco_sugerido = custo_total / fator
 
         if not self.preco_final or self.preco_final <= 0:
             self.preco_final = self.preco_sugerido
@@ -271,3 +341,5 @@ class ItemInventarioEstoque(models.Model):
 
     def __str__(self):
         return f"{self.produto.nome} ({self.ajuste:+d})"
+
+

@@ -13,7 +13,42 @@
     display: flex;
     flex-direction: column-reverse;
 }
-
+.kpi-chip { border: 1px solid #e9ecef; border-radius: 8px; padding: 8px 12px; background: #fafbfc; }
+.alerta-fixo {
+    border-left: 4px solid #dc3545;
+}
+.fab-menu {
+    position: fixed;
+    right: 28px;
+    bottom: 32px;
+    z-index: 1100;
+}
+.fab-main {
+    width: 58px;
+    height: 58px;
+    border-radius: 999px;
+    border: none;
+    background: #2c3e50;
+    color: #fff;
+    font-size: 20px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+.fab-options {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 10px 0;
+    display: none;
+}
+.fab-menu:hover .fab-options {
+    display: block;
+}
+.fab-options li {
+    margin-bottom: 8px;
+}
+.fab-options .btn {
+    min-width: 210px;
+    text-align: left;
+}
 
 </style>
 {% endblock %}
@@ -22,12 +57,15 @@
 <div class="row mb-4">
     <div class="col-12 d-flex justify-content-between align-items-center">
         <div>
-            <h1 class="page-title"><i class="fas fa-clipboard-check mr-2"></i>Ordem de Servico #{{ ordem.numero_os }}
+            <h1 class="page-title"><i class="fas fa-clipboard-check mr-2"></i>#{{ ordem.numero_os }}
             </h1>
-            <p class="text-muted"><i class="fas fa-user-circle mr-2"></i>Cliente: <strong>{{ ordem.cliente.nome }}</strong></p>
+            <p class="text-muted mb-1">
+                <button class="btn btn-link p-0 mr-2 align-baseline" data-toggle="modal" data-target="#modalClienteResumo" title="Ver dados do cliente">
+                    <i class="fas fa-user-circle"></i>
+                </button>
+                Cliente: <strong>{{ ordem.cliente.nome }}</strong>
+            </p>
         </div>
-        <p class="mb-0"><strong>Tecnico:</strong> {{ ordem.tecnico_responsavel.username|default:"Nao atribuido" }}</p>
-
         <!-- Status e Abertura -->
         <div class="d-flex justify-content-start align-items-center mb-3">
           <p class="mr-4 mb-0">
@@ -53,54 +91,84 @@
           </p>
         </div>
 
-        <div>
+        <div class="d-flex align-items-center">
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-print mr-1"></i> Imprimir
+              </button>
+              <ul class="dropdown-menu dropdown-menu-right">
+                <li>
+                  <a class="dropdown-item" href="{% url 'ordens:imprimir_ordem_servico_impressao' ordem.id %}" target="_blank">
+                    Ordem de Servico (Impressao)
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{% url 'ordens:imprimir_ordem_servico' ordem.id %}" target="_blank">
+                    Ordem de Servico (Digital)
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{% url 'ordens:imprimir_relatorio_tecnico' ordem.id %}" target="_blank">
+                    Relatorio Tecnico
+                  </a>
+                </li>
+                {% if orcamento %}
+                <li>
+                  <a class="dropdown-item" href="{% url 'orcamentos:imprimir_orcamento' orcamento.id %}" target="_blank">
+                    Orcamento
+                  </a>
+                </li>
+                {% endif %}
+              </ul>
+            </div>
             {% if ordem.fechada %}
-            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-warning">
-                <i class="fas fa-lock mr-1"></i> Reabrir
-            </a>
             <a href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ total_os|floatformat:2 }}"
-               class="btn btn-success ml-2">
+               class="btn btn-success btn-sm ml-2">
                 <i class="fas fa-cash-register mr-1"></i> Registrar no Caixa
             </a>
-            {% else %}
-            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-danger">
-                <i class="fas fa-lock-open mr-1"></i> Fechar
+            {% endif %}
+            {% if not ordem.confirmado %}
+            <button type="button" class="btn btn-outline-primary btn-sm ml-2" data-toggle="modal" data-target="#modalConfirmacaoImpresso">
+                <i class="fas fa-file-signature mr-1"></i> Registrar confirmacao presencial/impresso
+            </button>
+            {% endif %}
+            {% if ordem.fechada %}
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-warning btn-sm ml-2">
+                <i class="fas fa-lock mr-1"></i> Reabrir
             </a>
-            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-success ml-2">
-                <i class="fas fa-cash-register mr-1"></i> Fechar e Ir para Caixa
+            {% else %}
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-danger btn-sm ml-2">
+                <i class="fas fa-lock-open mr-1"></i> Fechar
             </a>
             {% endif %}
         </div>
     </div>
 </div>
-    <!-- botao pdf -->
-<div class="dropdown">
-  <button class="btn btn-primary dropdown-toggle" type="button" data-toggle="dropdown" aria-expanded="false">
-    Imprimir
-  </button>
-  <ul class="dropdown-menu">
-    <li>
-      <a class="dropdown-item" href="{% url 'ordens:imprimir_ordem_servico' ordem.id %}" target="_blank">
-        Ordem de Servico
-      </a>
-    </li>
-    <li>
-      <a class="dropdown-item" href="{% url 'ordens:imprimir_relatorio_tecnico' ordem.id %}" target="_blank">
-        Relatorio Tecnico
-      </a>
-    </li>
-    {% if orcamento %}
-    <li>
-      <a class="dropdown-item" href="{% url 'orcamentos:imprimir_orcamento' orcamento.id %}" target="_blank">
-        Orcamento
-      </a>
-    </li>
-    {% endif %}
-  </ul>
+
+<div class="modal fade" id="modalClienteResumo" tabindex="-1" role="dialog" aria-labelledby="modalClienteResumoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalClienteResumoLabel">Dados do Cliente</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1"><strong>Nome:</strong> {{ ordem.cliente.nome }}</p>
+        <p class="mb-1"><strong>Email:</strong> {{ ordem.cliente.email|default:"-" }}</p>
+        <p class="mb-0"><strong>Telefone:</strong> {{ ordem.cliente.telefone|default:"-" }}</p>
+        {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+        <div class="mt-3">
+          <a href="{% url 'clientes:detalhes_cliente' ordem.cliente.id %}" class="btn btn-sm btn-primary">
+            <i class="fas fa-id-card mr-1"></i> Abrir ficha detalhada
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 </div>
-
-
-
 {% endblock %}
 
 {% block content %}
@@ -124,6 +192,45 @@
     <div class="alert alert-warning">
         OS fechada: para adicionar linhas ou alterar orcamento/itens, reabra a ordem.
     </div>
+    {% endif %}
+    {% for alerta in alertas_ativos %}
+    <div class="alert alert-danger alerta-fixo d-flex justify-content-between align-items-center">
+        <div>
+            <strong>ALERTA:</strong> {{ alerta.mensagem|linebreaksbr }}
+            <div class="small">Criado em {{ alerta.criado_em|date:"d/m/Y H:i" }}</div>
+        </div>
+        <form method="post" class="mb-0">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="encerrar_alerta">
+            <input type="hidden" name="alerta_id" value="{{ alerta.id }}">
+            <button type="submit" class="btn btn-sm btn-light">Fechar alerta</button>
+        </form>
+    </div>
+    {% endfor %}
+    {% if request.GET.wa %}
+    <div class="alert alert-info">
+        Janela de envio WhatsApp preparada. Caso nao abra automaticamente,
+        <a href="{{ request.GET.wa }}" target="_blank" rel="noopener">clique aqui</a>.
+    </div>
+    <script>
+      (function() {
+        const waApp = "{{ request.GET.wa_app|default:''|escapejs }}";
+        const waWeb = "{{ request.GET.wa|default:''|escapejs }}";
+        const key = "wa_opened_" + window.location.pathname + "|" + waWeb + "|" + waApp;
+        const alreadyOpened = sessionStorage.getItem(key) === "1";
+        if (!alreadyOpened) {
+          if (waApp) { window.open(waApp, "_blank", "noopener"); }
+          if (waWeb) { setTimeout(function(){ window.open(waWeb, "_blank", "noopener"); }, 350); }
+          sessionStorage.setItem(key, "1");
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete("wa");
+        url.searchParams.delete("wa_app");
+        if (url.toString() !== window.location.href) {
+          window.history.replaceState({}, document.title, url.toString());
+        }
+      })();
+    </script>
     {% endif %}
 
     <!-- Aba Detalhes -->
@@ -276,7 +383,7 @@
             toggleBtn.addEventListener("click", () => {
                 linhasList.classList.toggle("list-group-inverted");
 
-                // Alterna a seta: ↓ = descendente, ↑ = ascendente
+                // Alterna a seta: descendente/ascendente
                 if (linhasList.classList.contains("list-group-inverted")) {
                     toggleBtn.textContent = "↓"; // ordem descendente
                 } else {
@@ -396,6 +503,94 @@
     </div>
 </div>
 
+<!-- Pedidos -->
+<div class="tab-pane fade {% if active_tab == 'pedidos' %}show active{% endif %}" id="pedidos">
+    <div class="card-modern">
+        <div class="card-modern-header d-flex justify-content-between align-items-center">
+            <span>R$ Pedidos</span>
+            {% if not ordem.fechada %}
+            <button class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarPedido">
+                <i class="fas fa-plus mr-1"></i>Novo pedido
+            </button>
+            {% else %}
+            <span class="text-light"><i class="fas fa-lock mr-1"></i>OS fechada</span>
+            {% endif %}
+        </div>
+        <div class="card-modern-body">
+            {% if pedidos_compra %}
+                {% for pedido in pedidos_compra %}
+                <div class="border rounded p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">{{ pedido.numero_oc|default:"OC sem numero" }} - {{ pedido.titulo }}</h6>
+                            <div class="small text-muted">
+                                Status atual: <strong>{{ pedido.get_status_display }}</strong> |
+                                Criado em {{ pedido.criado_em|date:"d/m/Y H:i" }}
+                            </div>
+                            {% if pedido.tipo_peca %}
+                            <div class="small"><strong>Tipo de peca:</strong> {{ pedido.tipo_peca }}</div>
+                            {% endif %}
+                            {% if pedido.descricao %}
+                            <div class="mt-1">{{ pedido.descricao }}</div>
+                            {% endif %}
+                            {% if pedido.fotos.all %}
+                            <div class="mt-2 d-flex flex-wrap">
+                                {% for foto in pedido.fotos.all %}
+                                <a href="{{ foto.imagem.url }}" target="_blank" class="mr-2 mb-2">
+                                    <img src="{{ foto.imagem.url }}" alt="Foto pedido" style="width:72px;height:72px;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
+                                </a>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <h6>Linhas do pedido</h6>
+                        <div class="list-group mb-3">
+                            {% for linha in pedido.linhas.all %}
+                            <div class="list-group-item">
+                                <span class="badge badge-primary">{{ linha.get_status_display }}</span>
+                                <small class="float-right">{{ linha.criado_em|date:"d/m/Y H:i" }}{% if linha.usuario %} - {{ linha.usuario.username }}{% endif %}</small>
+                                <div class="mt-1">{{ linha.descricao|default:"-" }}</div>
+                            </div>
+                            {% empty %}
+                            <div class="list-group-item text-muted">Sem atualizacoes.</div>
+                            {% endfor %}
+                        </div>
+
+                        {% if not ordem.fechada %}
+                        <form method="post" class="border rounded p-3 bg-light">
+                            {% csrf_token %}
+                            <input type="hidden" name="form_type" value="pedido_compra_linha">
+                            <input type="hidden" name="pedido_id" value="{{ pedido.id }}">
+                            <div class="form-row">
+                                <div class="col-md-4">
+                                    <label>Status</label>
+                                    <select name="status" class="form-control form-control-sm" required>
+                                        {% for value, label in pedido_status_choices %}
+                                        <option value="{{ value }}" {% if pedido.status == value %}selected{% endif %}>{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-8">
+                                    <label>Observacao</label>
+                                    <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Detalhe da atualizacao">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-primary mt-2">Adicionar linha</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <p class="text-muted mb-0">Nenhum pedido de compra criado para esta OS.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
 <!-- Orcamento -->
 <div class="tab-pane fade {% if active_tab == 'orcamentos' %}show active{% endif %}" id="orcamentos">
     <div class="card-modern flex-fill mt-3">
@@ -405,10 +600,6 @@
             <span>Orcamentos</span>
             <div class="d-flex">
                 {% if not ordem.fechada %}
-                <button type="button" class="btn btn-outline-light btn-sm mr-2" data-toggle="modal"
-                        data-target="#modalEditarOrcamento">
-                    <i class="fas fa-edit"></i> Editar descricao
-                </button>
                 <button type="button" class="btn btn-primary btn-sm mr-2" data-toggle="modal"
                         data-target="#modalAdicionarItem2">
                     <i class="fas fa-plus"></i> Inserir Item
@@ -735,94 +926,52 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-
-<div class="modal fade" id="modalEditarOrcamento" tabindex="-1" role="dialog" aria-labelledby="modalEditarOrcamentoLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <form method="post" action="{% url 'orcamentos:editar_orcamento' orcamento.id %}">
-                {% csrf_token %}
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalEditarOrcamentoLabel">Editar descricao do orcamento</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-group mb-0">
-                        <label for="id_orcamento_descricao">Descricao</label>
-                        <textarea class="form-control" id="id_orcamento_descricao" name="descricao" rows="4">{{ orcamento.descricao }}</textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar descricao</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-    <!-- Relatorio Tecnico -->
-        <!-- Notificacoes -->
-    <div class="tab-pane fade {% if active_tab == 'notificacoes' %}show active{% endif %}" id="notificacoes">
+    <div class="tab-pane fade {% if active_tab == 'alertas' %}show active{% endif %}" id="alertas">
         <div class="card-modern">
-            <div class="card-modern-header">Notificacoes ao Cliente</div>
+            <div class="card-modern-header">Alertas da OS</div>
             <div class="card-modern-body">
-                <div class="mb-3 d-flex flex-wrap">
-                    <form method="post" action="{% url 'ordens:notificar_cliente_ordem' ordem.id 'orcamento' %}" class="mr-2 mb-2">
+                <h6 class="text-danger">Alertas ativos</h6>
+                {% for alerta in alertas_ativos %}
+                <div class="alert alert-danger alerta-fixo d-flex justify-content-between align-items-center">
+                    <div>
+                        {{ alerta.mensagem|linebreaksbr }}
+                        <div class="small">Criado em {{ alerta.criado_em|date:"d/m/Y H:i" }}</div>
+                    </div>
+                    <form method="post" class="mb-0">
                         {% csrf_token %}
-                        <input type="hidden" name="canal" value="sistema">
-                        <button class="btn btn-outline-primary btn-sm" type="submit">Registrar envio de orcamento</button>
-                    </form>
-                    <form method="post" action="{% url 'ordens:notificar_cliente_ordem' ordem.id 'pronto' %}" class="mr-2 mb-2">
-                        {% csrf_token %}
-                        <input type="hidden" name="canal" value="sistema">
-                        <button class="btn btn-outline-success btn-sm" type="submit">Registrar aviso de pronto</button>
+                        <input type="hidden" name="form_type" value="encerrar_alerta">
+                        <input type="hidden" name="alerta_id" value="{{ alerta.id }}">
+                        <button type="submit" class="btn btn-sm btn-light">Encerrar</button>
                     </form>
                 </div>
-
-                <form method="post">
-                    {% csrf_token %}
-                    <input type="hidden" name="form_type" value="notificacao">
-                    <div class="row">
-                        <div class="col-md-3">{{ notificacao_form.tipo.label_tag }}{{ notificacao_form.tipo }}</div>
-                        <div class="col-md-3">{{ notificacao_form.canal.label_tag }}{{ notificacao_form.canal }}</div>
-                        <div class="col-md-6">{{ notificacao_form.mensagem.label_tag }}{{ notificacao_form.mensagem }}</div>
-                    </div>
-                    <button type="submit" class="btn btn-primary mt-2">Registrar notificacao manual</button>
-                </form>
+                {% empty %}
+                <p class="text-muted">Nenhum alerta ativo.</p>
+                {% endfor %}
 
                 <hr>
-                <h6>Historico recente</h6>
+                <h6>Historico de alertas encerrados</h6>
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered">
                         <thead>
                             <tr>
-                                <th>Data</th>
-                                <th>Tipo</th>
-                                <th>Canal</th>
-                                <th>Status</th>
-                                <th>Destino</th>
                                 <th>Mensagem</th>
+                                <th>Criado</th>
+                                <th>Encerrado</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for n in notificacoes %}
+                            {% for alerta in alertas_encerrados %}
                             <tr>
-                                <td>{{ n.criado_em|date:"d/m/Y H:i" }}</td>
-                                <td>{{ n.get_tipo_display }}</td>
-                                <td>{{ n.get_canal_display }}</td>
-                                <td>{{ n.get_status_display }}</td>
-                                <td>{{ n.destinatario|default:"-" }}</td>
-                                <td>{{ n.mensagem }}</td>
+                                <td>{{ alerta.mensagem|linebreaksbr }}</td>
+                                <td>{{ alerta.criado_em|date:"d/m/Y H:i" }}</td>
+                                <td>{{ alerta.encerrado_em|date:"d/m/Y H:i" }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="6" class="text-center text-muted">Nenhuma notificacao registrada.</td></tr>
+                            <tr><td colspan="3" class="text-center text-muted">Sem alertas encerrados.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                <p class="mb-0"><strong>Codigo portal:</strong> {{ ordem.codigo_portal }}</p>
             </div>
         </div>
     </div>
@@ -838,7 +987,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     <div class="form-group">
                         <label for="relatorio_tecnico">Descricao</label>
-                        <textarea name="relatorio_tecnico" id="relatorio_tecnico" rows="5" class="form-control">{{ ordem.relatorio_tecnico|default_if_none:"" }}</textarea>
+                        <textarea name="relatorio_tecnico" id="relatorio_tecnico" rows="5" class="form-control">{{ relatorio_tecnico_display|default_if_none:"" }}</textarea>
                     </div>
 
                     <div class="form-group">
@@ -885,6 +1034,217 @@ document.addEventListener('DOMContentLoaded', function() {
 
         </div>
     </div>
+{% if pode_ver_logs %}
+<div class="tab-pane fade {% if active_tab == 'logs' %}show active{% endif %}" id="logs">
+    <div class="card-modern">
+        <div class="card-modern-header">
+            <i class="fas fa-clipboard-list mr-2"></i>Logs da OS
+        </div>
+        <div class="card-modern-body">
+            {% if logs_os %}
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Evento</th>
+                            <th>Descricao</th>
+                            <th>Usuario</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs_os %}
+                        <tr>
+                            <td>{{ log.data_evento|date:"d/m/Y H:i" }}</td>
+                            <td>{{ log.get_tipo_evento_display|default:log.tipo_evento }}</td>
+                            <td>{{ log.descricao|linebreaksbr }}</td>
+                            <td>{% if log.usuario_responsavel %}{{ log.usuario_responsavel.username }}{% else %}-{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">Sem logs operacionais.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+</div>
+
+<div class="modal fade" id="modalConfirmacaoImpresso" tabindex="-1" role="dialog" aria-labelledby="modalConfirmacaoImpressoLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmacaoImpressoLabel">Registrar confirmacao de OS</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="confirmacao_impresso">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="tipo_confirmacao">Tipo de confirmacao</label>
+                        <select class="form-control" id="tipo_confirmacao" name="tipo_confirmacao">
+                            <option value="impresso">Impresso</option>
+                            <option value="presencial_assinatura">Presencial com assinatura</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="assinatura_imagem">Upload da assinatura (opcional)</label>
+                        <input type="file" class="form-control-file" id="assinatura_imagem" name="assinatura_imagem" accept="image/*">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Confirmar OS</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAdicionarPedido" tabindex="-1" role="dialog" aria-labelledby="modalAdicionarPedidoLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAdicionarPedidoLabel">Novo Pedido de Compra</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="pedido_compra">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="pedido_titulo">Titulo</label>
+                        <input type="text" name="titulo" id="pedido_titulo" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pedido_tipo_peca">Tipo de peca</label>
+                        <input type="text" name="tipo_peca" id="pedido_tipo_peca" class="form-control" placeholder="Ex: Placa principal, display, motor">
+                    </div>
+                    <div class="form-group">
+                        <label for="pedido_descricao">Descricao</label>
+                        <textarea name="descricao" id="pedido_descricao" class="form-control" rows="3" placeholder="Detalhes do item a encomendar"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="pedido_status_inicial">Status inicial</label>
+                        <select name="status_inicial" id="pedido_status_inicial" class="form-control">
+                            {% for value, label in pedido_status_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="pedido_fotos">Fotos</label>
+                        <input type="file" name="fotos" id="pedido_fotos" class="form-control-file" accept="image/*" multiple>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Criar pedido</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAdicionarAlerta" tabindex="-1" role="dialog" aria-labelledby="modalAdicionarAlertaLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalAdicionarAlertaLabel">Adicionar Alerta</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="alerta">
+                <div class="modal-body">
+                    <label for="alerta_mensagem">Mensagem do alerta</label>
+                    <textarea id="alerta_mensagem" name="mensagem" class="form-control" rows="3" required></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-danger">Salvar alerta</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalEnviarMensagem" tabindex="-1" role="dialog" aria-labelledby="modalEnviarMensagemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEnviarMensagemLabel">Enviar mensagem ao cliente</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form method="post" id="formEnviarMensagemModelo">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="enviar_mensagem_modelo">
+                <input type="hidden" name="canal" id="msg_canal" value="">
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="col-md-6">
+                            <label for="msg_modelo_id">Modelo de mensagem</label>
+                            <select id="msg_modelo_id" name="modelo_id" class="form-control" required>
+                                <option value="">-- Selecione --</option>
+                                {% for m in modelos_mensagem_payload %}
+                                <option value="{{ m.id }}" data-tipo="{{ m.tipo }}" data-assunto="{{ m.assunto|escapejs }}" data-corpo="{{ m.corpo|escapejs }}">{{ m.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="msg_assunto">Assunto (Email)</label>
+                            <input type="text" id="msg_assunto" name="assunto" class="form-control">
+                        </div>
+                    </div>
+                    <div class="form-group mt-3 mb-0">
+                        <label for="msg_mensagem">Mensagem</label>
+                        <textarea id="msg_mensagem" name="mensagem" class="form-control" rows="8" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Enviar</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="fab-menu">
+    <ul class="fab-options">
+        <li>
+            <button type="button" class="btn btn-light border" data-toggle="modal" data-target="#modalAdicionarPedido">
+                <i class="fas fa-shopping-cart mr-2"></i>PEDIDO DE COMPRA
+            </button>
+        </li>
+        <li>
+            <button type="button" class="btn btn-light border w-100 text-left btn-abrir-envio" data-canal="whatsapp" data-toggle="modal" data-target="#modalEnviarMensagem">
+                <i class="fab fa-whatsapp mr-2"></i>ENVIAR WHATSAPP
+            </button>
+        </li>
+        <li>
+            <button type="button" class="btn btn-light border w-100 text-left btn-abrir-envio" data-canal="email" data-toggle="modal" data-target="#modalEnviarMensagem">
+                <i class="fas fa-envelope mr-2"></i>ENVIAR EMAIL
+            </button>
+        </li>
+        <li>
+            <button type="button" class="btn btn-light border" data-toggle="modal" data-target="#modalAdicionarAlerta">
+                <i class="fas fa-exclamation-circle text-danger mr-2"></i>ADICIONAR ALERTA
+            </button>
+        </li>
+    </ul>
+    <button type="button" class="fab-main" title="Acoes rapidas">
+        <i class="fas fa-ellipsis-h"></i>
+    </button>
 </div>
 {% endblock content %}
 
@@ -1008,7 +1368,67 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const botoes = document.querySelectorAll(".btn-abrir-envio");
+    const canalInput = document.getElementById("msg_canal");
+    const selectModelo = document.getElementById("msg_modelo_id");
+    const assuntoInput = document.getElementById("msg_assunto");
+    const mensagemInput = document.getElementById("msg_mensagem");
+
+    function normalizarTextoModelo(texto) {
+        if (!texto) return "";
+        return texto
+            .replace(/\\u([0-9a-fA-F]{4})/g, function(_, hex) {
+                return String.fromCharCode(parseInt(hex, 16));
+            })
+            .replace(/\\n/g, "\n")
+            .replace(/\\r/g, "\r");
+    }
+
+    function filtrarModelos(canal) {
+        if (!selectModelo) return;
+        Array.from(selectModelo.options).forEach(function(opt) {
+            if (!opt.value) {
+                opt.hidden = false;
+                return;
+            }
+            const tipo = opt.getAttribute("data-tipo");
+            opt.hidden = !(tipo === "ambos" || tipo === canal);
+        });
+        selectModelo.value = "";
+        if (assuntoInput) assuntoInput.value = "";
+        if (mensagemInput) mensagemInput.value = "";
+        if (assuntoInput) assuntoInput.disabled = canal !== "email";
+    }
+
+    if (selectModelo) {
+        selectModelo.addEventListener("change", function() {
+            const opt = selectModelo.options[selectModelo.selectedIndex];
+            if (!opt || !opt.value) {
+                if (assuntoInput) assuntoInput.value = "";
+                if (mensagemInput) mensagemInput.value = "";
+                return;
+            }
+            if (assuntoInput) assuntoInput.value = normalizarTextoModelo(opt.getAttribute("data-assunto") || "");
+            if (mensagemInput) mensagemInput.value = normalizarTextoModelo(opt.getAttribute("data-corpo") || "");
+        });
+    }
+
+    botoes.forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            const canal = btn.getAttribute("data-canal");
+            if (canalInput) canalInput.value = canal;
+            filtrarModelos(canal);
+        });
+    });
+});
+</script>
 {% endblock extra_js %}
+
+
+
+
 
 
 

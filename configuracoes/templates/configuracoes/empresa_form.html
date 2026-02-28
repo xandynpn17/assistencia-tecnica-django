@@ -9,10 +9,71 @@
   <div class="card-modern-body">
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
-      {{ form.as_p }}
+      <div class="row">
+        <div class="col-md-6">{{ form.nome.label_tag }} {{ form.nome }}</div>
+        <div class="col-md-3">{{ form.cnpj.label_tag }} {{ form.cnpj }}</div>
+        <div class="col-md-3">{{ form.telefone.label_tag }} {{ form.telefone }}</div>
+      </div>
+      <div class="row mt-2">
+        <div class="col-md-6">{{ form.email.label_tag }} {{ form.email }}</div>
+        <div class="col-md-6">{{ form.logo.label_tag }} {{ form.logo }}</div>
+      </div>
+      <div class="row mt-2">
+        <div class="col-md-12">{{ form.endereco.label_tag }} {{ form.endereco }}</div>
+      </div>
+
+      <hr>
+      <h5>Configuracao Tributaria</h5>
+      <div class="row">
+        <div class="col-md-4">{{ form.regime_tributario.label_tag }} {{ form.regime_tributario }}</div>
+        <div class="col-md-4">{{ form.anexo_simples.label_tag }} {{ form.anexo_simples }}</div>
+        <div class="col-md-4">{{ form.modo_tributario.label_tag }} {{ form.modo_tributario }}</div>
+      </div>
+
+      <div id="bloco-basico" class="mt-3">
+        <div class="row">
+          <div class="col-md-4">{{ form.aliquota_comercio.label_tag }} {{ form.aliquota_comercio }}</div>
+          <div class="col-md-4">{{ form.aliquota_servico.label_tag }} {{ form.aliquota_servico }}</div>
+        </div>
+      </div>
+
+      <div id="bloco-avancado" class="mt-3">
+        <div class="row">
+          <div class="col-md-3">{{ form.icms.label_tag }} {{ form.icms }}</div>
+          <div class="col-md-3">{{ form.ipi.label_tag }} {{ form.ipi }}</div>
+          <div class="col-md-3">{{ form.pis.label_tag }} {{ form.pis }}</div>
+          <div class="col-md-3">{{ form.cofins.label_tag }} {{ form.cofins }}</div>
+        </div>
+      </div>
+
       <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
       <a href="{% url 'configuracoes:painel' %}" class="btn btn-secondary">Cancelar</a>
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const regime = document.getElementById("id_regime_tributario");
+  const modo = document.getElementById("id_modo_tributario");
+  const blocoBasico = document.getElementById("bloco-basico");
+  const blocoAvancado = document.getElementById("bloco-avancado");
+  const anexo = document.getElementById("id_anexo_simples");
+
+  function atualizarVisibilidade() {
+    const regimeVal = (regime?.value || "simples");
+    const modoVal = (modo?.value || "basico");
+    const simplesBasico = regimeVal === "simples" && modoVal === "basico";
+    if (blocoBasico) blocoBasico.style.display = simplesBasico ? "block" : "none";
+    if (blocoAvancado) blocoAvancado.style.display = simplesBasico ? "none" : "block";
+    if (anexo) anexo.closest(".col-md-4").style.display = regimeVal === "simples" ? "block" : "none";
+  }
+
+  regime?.addEventListener("change", atualizarVisibilidade);
+  modo?.addEventListener("change", atualizarVisibilidade);
+  atualizarVisibilidade();
+});
+</script>
 {% endblock %}

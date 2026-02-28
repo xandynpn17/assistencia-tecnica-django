@@ -5,12 +5,50 @@ from django.utils import timezone
 
 
 class Empresa(models.Model):
+    REGIME_TRIBUTARIO_CHOICES = [
+        ("simples", "Simples Nacional"),
+        ("presun", "Lucro Presumido"),
+        ("real", "Lucro Real"),
+    ]
+    ANEXO_SIMPLES_CHOICES = [
+        ("I", "Anexo I"),
+        ("II", "Anexo II"),
+        ("III", "Anexo III"),
+        ("IV", "Anexo IV"),
+        ("V", "Anexo V"),
+    ]
+    MODO_TRIBUTARIO_CHOICES = [
+        ("basico", "Modo Basico"),
+        ("avancado", "Modo Avancado"),
+    ]
+
     nome = models.CharField(max_length=200)
     cnpj = models.CharField(max_length=18, blank=True)
     endereco = models.TextField(blank=True)
     telefone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     logo = models.ImageField(upload_to="logos/", blank=True, null=True)
+    regime_tributario = models.CharField(
+        max_length=10,
+        choices=REGIME_TRIBUTARIO_CHOICES,
+        default="simples",
+    )
+    anexo_simples = models.CharField(
+        max_length=4,
+        choices=ANEXO_SIMPLES_CHOICES,
+        blank=True,
+    )
+    modo_tributario = models.CharField(
+        max_length=10,
+        choices=MODO_TRIBUTARIO_CHOICES,
+        default="basico",
+    )
+    aliquota_comercio = models.DecimalField(max_digits=6, decimal_places=3, default=0)
+    aliquota_servico = models.DecimalField(max_digits=6, decimal_places=3, default=0)
+    icms = models.DecimalField(max_digits=6, decimal_places=3, default=0)
+    ipi = models.DecimalField(max_digits=6, decimal_places=3, default=0)
+    pis = models.DecimalField(max_digits=6, decimal_places=3, default=0)
+    cofins = models.DecimalField(max_digits=6, decimal_places=3, default=0)
 
     def __str__(self):
         return self.nome
@@ -334,6 +372,40 @@ class ConfiguracaoSistema(models.Model):
         default=3,
         verbose_name='Mínimo de caracteres para busca'
     )
+    mensagem_orcamento_email = models.TextField(
+        blank=True,
+        default="Ola {cliente_nome}, seu orcamento da OS {numero_os} esta disponivel. Valor: {valor_orcamento}. Condicoes: {condicoes}. Codigo: {codigo_portal}.",
+    )
+    mensagem_orcamento_whatsapp = models.TextField(
+        blank=True,
+        default="Ola {cliente_nome}! Orcamento da OS {numero_os}: {valor_orcamento}. Condicoes: {condicoes}. Codigo de acompanhamento: {codigo_portal}.",
+    )
+    mensagem_pronto_email = models.TextField(
+        blank=True,
+        default="Ola {cliente_nome}, seu equipamento da OS {numero_os} esta pronto para retirada. Codigo: {codigo_portal}.",
+    )
+    mensagem_pronto_whatsapp = models.TextField(
+        blank=True,
+        default="Ola {cliente_nome}! Seu equipamento da OS {numero_os} esta pronto para retirada. Codigo: {codigo_portal}.",
+    )
+    condicoes_orcamento = models.TextField(
+        blank=True,
+        default="Validade de 7 dias. Valores sujeitos a aprovacao do cliente.",
+    )
+    termos_ordem_servico = models.TextField(
+        blank=True,
+        default=(
+            "O equipamento descrito nesta OS sera submetido a analise tecnica e eventual reparo mediante aprovacao do orcamento. "
+            "O prazo informado e estimado e podera variar conforme complexidade do reparo ou disponibilidade de pecas. "
+            "Poderao ser utilizadas pecas originais ou compativeis. Pecas substituidas somente serao devolvidas mediante solicitacao previa. "
+            "Garantia de 90 dias, limitada ao servico executado. Perde-se a garantia em caso de violacao do lacre, intervencao de terceiros, "
+            "mau uso, queda ou contato com liquido. Apos comunicacao de conclusao, o equipamento devera ser retirado em ate ___ dias. "
+            "Apos 90 dias sem retirada, podera ser considerado abandonado. Ao assinar esta OS, o cliente declara estar ciente e de acordo com os termos acima, "
+            "autorizando a abertura do equipamento para diagnostico e reparo. O cliente declara estar ciente de que equipamentos com desgaste, danos previos "
+            "ou vicios ocultos poderao apresentar agravamento de falhas durante o reparo, nao sendo a assistencia responsavel por defeitos decorrentes de condicoes preexistentes."
+        ),
+        verbose_name="Termos e condicoes da Ordem de Servico",
+    )
 
     data_atualizacao = models.DateTimeField(auto_now=True)
 
@@ -353,3 +425,30 @@ class ConfiguracaoSistema(models.Model):
 
     def __str__(self):
         return f"Configurações do Sistema (ID: {self.pk})"
+
+class ModeloMensagem(models.Model):
+    TIPO_CHOICES = [
+        ("email", "Email"),
+        ("whatsapp", "WhatsApp"),
+        ("ambos", "Ambos"),
+    ]
+
+    nome = models.CharField(max_length=120, unique=True)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="ambos")
+    assunto = models.CharField(max_length=180, blank=True)
+    corpo = models.TextField()
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.tipo in {"email", "ambos"} and not (self.assunto or "").strip():
+            raise ValidationError({"assunto": "Assunto e obrigatorio para modelos com Email."})
+
+    def __str__(self):
+        return self.nome

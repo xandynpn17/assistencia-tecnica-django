@@ -1,0 +1,30 @@
+﻿{% extends "core/base.html" %}
+
+{% block title %}Confirmacao de Ordem de Servico{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header bg-primary text-white">
+    <h5 class="mb-0">Confirmacao da OS {{ ordem.numero_os }}</h5>
+  </div>
+  <div class="card-body">
+    <p><strong>Cliente:</strong> {{ ordem.cliente.nome }}</p>
+    <p><strong>Equipamento:</strong> {{ ordem.get_tipo_equipamento_display }} - {{ ordem.marca_equipamento }} {{ ordem.modelo_equipamento }}</p>
+    <p><strong>Defeito relatado:</strong> {{ ordem.defeito }}</p>
+    <hr>
+    <h6>Termo de responsabilidade</h6>
+    <p class="mb-3">Declaro que li e aceito os termos da Ordem de Servico e autorizo o procedimento tecnico conforme condicoes informadas.</p>
+
+    {% if ja_confirmada %}
+      <div class="alert alert-success">
+        Esta OS ja foi confirmada em {{ ordem.data_confirmacao|date:"d/m/Y H:i" }}.
+      </div>
+    {% else %}
+      <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success">Confirmo e aceito</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

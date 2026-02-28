@@ -6,6 +6,7 @@ from .models import (
     Empresa,
     FornecedorGarantia,
     MarcaGarantia,
+    ModeloMensagem,
     RegraGarantiaMarca,
     User,
 )
@@ -15,13 +16,27 @@ from django.contrib.auth.models import Group
 class EmpresaForm(forms.ModelForm):
     class Meta:
         model = Empresa
-        fields = ['nome', 'cnpj', 'endereco', 'telefone', 'email', 'logo']
+        fields = [
+            'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logo',
+            'regime_tributario', 'anexo_simples', 'modo_tributario',
+            'aliquota_comercio', 'aliquota_servico',
+            'icms', 'ipi', 'pis', 'cofins',
+        ]
         widgets = {
             'nome': forms.TextInput(attrs={'class': 'form-control'}),
             'cnpj': forms.TextInput(attrs={'class': 'form-control'}),
             'endereco': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'telefone': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'regime_tributario': forms.Select(attrs={'class': 'form-control'}),
+            'anexo_simples': forms.Select(attrs={'class': 'form-control'}),
+            'modo_tributario': forms.Select(attrs={'class': 'form-control'}),
+            'aliquota_comercio': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
+            'aliquota_servico': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
+            'icms': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
+            'ipi': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
+            'pis': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
+            'cofins': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
         }
 
 
@@ -96,13 +111,25 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'ordem_modelo_obrigatorio', 'ordem_serial_obrigatorio',
             'ordem_defeito_obrigatorio', 'ordem_observacoes_obrigatorio',
             'usar_api_cep', 'api_cep_provedor',
-            'busca_minimo_caracteres'
+            'busca_minimo_caracteres',
+            'mensagem_orcamento_email',
+            'mensagem_orcamento_whatsapp',
+            'mensagem_pronto_email',
+            'mensagem_pronto_whatsapp',
+            'condicoes_orcamento',
+            'termos_ordem_servico',
         ]
         widgets = {
             'estado_padrao': forms.Select(attrs={'class': 'form-control'}),
             'ddd_padrao': forms.Select(attrs={'class': 'form-control'}),
             'busca_minimo_caracteres': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 20}),
             'api_cep_provedor': forms.Select(attrs={'class': 'form-control'}),
+            'mensagem_orcamento_email': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'mensagem_orcamento_whatsapp': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'mensagem_pronto_email': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'mensagem_pronto_whatsapp': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'condicoes_orcamento': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'termos_ordem_servico': forms.Textarea(attrs={'class': 'form-control', 'rows': 8}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -214,3 +241,14 @@ class RegraGarantiaMarcaForm(forms.ModelForm):
         if inicio and fim and fim < inicio:
             self.add_error("fim_vigencia", "Fim da vigencia nao pode ser anterior ao inicio.")
         return cleaned_data
+
+class ModeloMensagemForm(forms.ModelForm):
+    class Meta:
+        model = ModeloMensagem
+        fields = ["nome", "tipo", "assunto", "corpo", "ativo"]
+        widgets = {
+            "nome": forms.TextInput(attrs={"class": "form-control"}),
+            "tipo": forms.Select(attrs={"class": "form-control"}),
+            "assunto": forms.TextInput(attrs={"class": "form-control"}),
+            "corpo": forms.Textarea(attrs={"class": "form-control", "rows": 5}),
+        }

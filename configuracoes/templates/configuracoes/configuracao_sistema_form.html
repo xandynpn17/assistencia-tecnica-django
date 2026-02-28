@@ -105,6 +105,42 @@
           </div>
         </div>
       </div>
+
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens Padrao</h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted">Variaveis disponiveis: <code>{cliente_nome}</code>, <code>{numero_os}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>.</p>
+          <div class="row">
+            <div class="col-md-6 form-group">
+              <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orcamento (Email)" }}</label>
+              {{ form.mensagem_orcamento_email }}
+            </div>
+            <div class="col-md-6 form-group">
+              <label>{{ form.mensagem_orcamento_whatsapp.label|default:"Mensagem Orcamento (WhatsApp)" }}</label>
+              {{ form.mensagem_orcamento_whatsapp }}
+            </div>
+            <div class="col-md-6 form-group">
+              <label>{{ form.mensagem_pronto_email.label|default:"Mensagem Pronto (Email)" }}</label>
+              {{ form.mensagem_pronto_email }}
+            </div>
+            <div class="col-md-6 form-group">
+              <label>{{ form.mensagem_pronto_whatsapp.label|default:"Mensagem Pronto (WhatsApp)" }}</label>
+              {{ form.mensagem_pronto_whatsapp }}
+            </div>
+            <div class="col-md-12 form-group">
+              <label>{{ form.condicoes_orcamento.label|default:"Condicoes do Orcamento" }}</label>
+              {{ form.condicoes_orcamento }}
+            </div>
+            <div class="col-md-12 form-group">
+              <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Servico" }}</label>
+              {{ form.termos_ordem_servico }}
+              <small class="form-text text-muted">Usado nos PDFs de OS (digital e impressao).</small>
+            </div>
+          </div>
+        </div>
+      </div>
       
       <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
       <a href="{% url 'configuracoes:painel' %}" class="btn btn-secondary">Cancelar</a>

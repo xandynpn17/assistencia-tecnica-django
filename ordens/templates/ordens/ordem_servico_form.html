@@ -15,6 +15,8 @@
     .brand-note { border: 1px dashed #ced4da; border-radius: 8px; padding: 10px 12px; background: #f8f9fa; min-height: 58px; }
     .brand-note strong { display: block; margin-bottom: 4px; }
     .brand-note-garantia { border-color: #e0a800; background: #fff3cd; }
+    .form-grid .form-group label { font-weight: 600; font-size: .9rem; }
+    .surface-soft { border: 1px solid #eef1f4; border-radius: 10px; padding: 14px; background: #fbfcfd; }
 </style>
 {% endblock %}
 
@@ -61,28 +63,30 @@
 
                     <div class="wizard-step active" id="step-1">
                         <div class="section-title">Equipamento</div>
-                        <div class="row">
-                            <div class="col-md-4 form-group">{{ form.tipo_equipamento.label_tag }}{{ form.tipo_equipamento }}{{ form.tipo_equipamento.errors }}</div>
-                            <div class="col-md-4 form-group">{{ form.modelo_equipamento.label_tag }}{{ form.modelo_equipamento }}{{ form.modelo_equipamento.errors }}</div>
-                            <div class="col-md-4 form-group">{{ form.numero_serie_equipamento.label_tag }}{{ form.numero_serie_equipamento }}{{ form.numero_serie_equipamento.errors }}</div>
-                        </div>
-                        <div class="row align-items-end">
-                            <div class="col-md-5 form-group">
-                                {{ form.marca_catalogo.label_tag }}
-                                {{ form.marca_catalogo }}
-                                {{ form.marca_catalogo.errors }}
+                        <div class="surface-soft mb-3">
+                            <div class="row form-grid">
+                                <div class="col-lg-3 col-md-4 form-group">{{ form.tipo_equipamento.label_tag }}{{ form.tipo_equipamento }}{{ form.tipo_equipamento.errors }}</div>
+                                <div class="col-lg-4 col-md-4 form-group">{{ form.modelo_equipamento.label_tag }}{{ form.modelo_equipamento }}{{ form.modelo_equipamento.errors }}</div>
+                                <div class="col-lg-3 col-md-4 form-group">{{ form.numero_serie_equipamento.label_tag }}{{ form.numero_serie_equipamento }}{{ form.numero_serie_equipamento.errors }}</div>
+                                <div class="col-lg-2 col-md-12 form-group">
+                                    {{ form.marca_catalogo.label_tag }}
+                                    {{ form.marca_catalogo }}
+                                    {{ form.marca_catalogo.errors }}
+                                </div>
                             </div>
-                            <div class="col-md-4 form-group" id="marca-manual-wrap" style="display:none;">
-                                {{ form.marca_manual.label_tag }}
-                                {{ form.marca_manual }}
-                                {{ form.marca_manual.errors }}
+                            <div class="row form-grid">
+                                <div class="col-md-6 form-group" id="marca-manual-wrap" style="display:none;">
+                                    {{ form.marca_manual.label_tag }}
+                                    {{ form.marca_manual }}
+                                    {{ form.marca_manual.errors }}
+                                </div>
                             </div>
                         </div>
                         {{ form.marca_equipamento.as_hidden }}
                         {{ form.marca_equipamento.errors }}
-                        <div class="row">
-                            <div class="col-md-8 form-group">{{ form.peritagem.label_tag }}{{ form.peritagem }}{{ form.peritagem.errors }}</div>
-                            <div class="col-md-4">
+                        <div class="row form-grid">
+                            <div class="col-md-7 form-group">{{ form.peritagem.label_tag }}{{ form.peritagem }}{{ form.peritagem.errors }}</div>
+                            <div class="col-md-5">
                                 <div class="brand-note" id="brand-note-box">
                                     <strong>Detalhes da marca</strong>
                                     <span id="brand-note-text" class="text-muted">Selecione uma marca para visualizar procedimentos.</span>
@@ -93,13 +97,15 @@
 
                     <div class="wizard-step" id="step-2">
                         <div class="section-title">Dados de Reparacao e Atendimento</div>
-                        <div class="row">
-                            <div class="col-md-4 form-group">{{ form.tipo_reparo.label_tag }}{{ form.tipo_reparo }}{{ form.tipo_reparo.errors }}</div>
-                            <div class="col-md-4 form-group">{{ form.data_compra.label_tag }}{{ form.data_compra }}{{ form.data_compra.errors }}</div>
-                            <div class="col-md-4 form-group">{{ form.numero_nota_fiscal.label_tag }}{{ form.numero_nota_fiscal }}{{ form.numero_nota_fiscal.errors }}</div>
-                            <div class="col-md-8 form-group">{{ form.defeito.label_tag }}{{ form.defeito }}{{ form.defeito.errors }}</div>
-                            <div class="col-md-4 form-group">{{ form.acessorios.label_tag }}{{ form.acessorios }}{{ form.acessorios.errors }}</div>
-                            <div class="col-md-12 form-group">{{ form.notas_internas.label_tag }}{{ form.notas_internas }}{{ form.notas_internas.errors }}</div>
+                        <div class="surface-soft">
+                            <div class="row form-grid">
+                                <div class="col-md-4 form-group">{{ form.tipo_reparo.label_tag }}{{ form.tipo_reparo }}{{ form.tipo_reparo.errors }}</div>
+                                <div class="col-md-4 form-group">{{ form.data_compra.label_tag }}{{ form.data_compra }}{{ form.data_compra.errors }}</div>
+                                <div class="col-md-4 form-group">{{ form.numero_nota_fiscal.label_tag }}{{ form.numero_nota_fiscal }}{{ form.numero_nota_fiscal.errors }}</div>
+                                <div class="col-md-8 form-group">{{ form.defeito.label_tag }}{{ form.defeito }}{{ form.defeito.errors }}</div>
+                                <div class="col-md-4 form-group">{{ form.acessorios.label_tag }}{{ form.acessorios }}{{ form.acessorios.errors }}</div>
+                                <div class="col-md-12 form-group">{{ form.notas_internas.label_tag }}{{ form.notas_internas }}{{ form.notas_internas.errors }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -55,6 +55,13 @@
                             {% if query %}Resultados da Busca{% else %}Clientes{% endif %}
                             <span class="badge badge-primary ml-2">{{ clientes|length }}</span>
                         </h3>
+                        {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+                        <div class="card-tools">
+                            <a href="{% url 'clientes:unificar_clientes' %}" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-object-group"></i> Unificar cadastros
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
 
                     <div class="card-body p-0">
@@ -89,9 +96,11 @@
                                                 <a href="{% url 'clientes:editar_cliente' cliente.id %}" class="btn btn-warning btn-xs" title="Editar">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
+                                                {% if user.is_superuser or user.tipo_usuario == 'gerente' %}
                                                 <a href="{% url 'clientes:excluir_cliente' cliente.id %}" class="btn btn-danger btn-xs" title="Excluir">
                                                     <i class="fas fa-trash"></i>
                                                 </a>
+                                                {% endif %}
                                             </div>
                                         </td>
                                     </tr>

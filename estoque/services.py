@@ -25,10 +25,10 @@ def recalcular_total_produto(produto):
     produto.save(update_fields=["quantidade"])
 
 
-def ajustar_saldo(produto, ponto_operacional, delta):
+def ajustar_saldo(produto, ponto_operacional, delta, allow_negative=False):
     saldo, _ = SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=ponto_operacional)
     novo_valor = int(saldo.quantidade) + int(delta)
-    if novo_valor < 0:
+    if (not allow_negative) and novo_valor < 0:
         raise ValueError("Saldo ficaria negativo para este ponto operacional.")
     saldo.quantidade = novo_valor
     saldo.save(update_fields=["quantidade"])

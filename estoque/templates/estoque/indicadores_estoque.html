@@ -1,0 +1,79 @@
+{% extends "core/base.html" %}
+
+{% block title %}Indicadores de Estoque{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Indicadores de Estoque</h1>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-2">
+    <div class="small-box bg-info">
+      <div class="inner"><h3>{{ kpis.total_itens }}</h3><p>Itens Ativos</p></div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="small-box bg-danger">
+      <div class="inner"><h3>{{ kpis.ruptura }}</h3><p>Ruptura</p></div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="small-box bg-warning">
+      <div class="inner"><h3>{{ kpis.abaixo_minimo }}</h3><p>Abaixo Minimo</p></div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="small-box bg-secondary">
+      <div class="inner"><h3>{{ kpis.parados_60 }}</h3><p>Parados 60d</p></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="small-box bg-success">
+      <div class="inner"><h3>R$ {{ kpis.valor_estoque|floatformat:2 }}</h3><p>Valor Estoque (positivo)</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>Top Saidas (30 dias)</strong></div>
+      <div class="card-body table-responsive">
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>Produto</th><th>Unidades</th></tr></thead>
+          <tbody>
+            {% for item in top_saidas %}
+            <tr><td>{{ item.produto }}</td><td>{{ item.unidades }}</td></tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-center text-muted">Sem dados de saida.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>Saldos Negativos por Ponto</strong></div>
+      <div class="card-body table-responsive">
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>Ponto</th><th>Produto</th><th>Quantidade</th></tr></thead>
+          <tbody>
+            {% for s in negativos_ponto %}
+            <tr>
+              <td>{{ s.ponto_operacional.codigo }}</td>
+              <td>{{ s.produto.nome }}</td>
+              <td class="text-danger">{{ s.quantidade }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-center text-muted">Sem saldos negativos.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

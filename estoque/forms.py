@@ -1,7 +1,7 @@
 ﻿from django import forms
 from django.utils import timezone
 
-from .models import MovimentacaoEstoque, PontoOperacional, Produto
+from .models import MovimentacaoEstoque, PontoOperacional, Produto, UbicacaoEstoque
 
 
 class ProdutoForm(forms.ModelForm):
@@ -12,13 +12,19 @@ class ProdutoForm(forms.ModelForm):
             "sku",
             "ean",
             "descricao",
+            "tipo_item",
             "categoria",
             "fornecedor",
             "custo_unitario",
             "custo_operacional",
             "margem_lucro",
+            "taxa_cartao",
+            "usar_aliquota_manual",
+            "aliquota_manual",
             "icms",
             "ipi",
+            "pis",
+            "cofins",
             "pis_cofins",
             "preco_final",
             "quantidade",
@@ -33,13 +39,19 @@ class ProdutoForm(forms.ModelForm):
             "sku": forms.TextInput(attrs={"class": "form-control"}),
             "ean": forms.TextInput(attrs={"class": "form-control", "placeholder": "Se vazio, gera automatico (13 digitos)"}),
             "descricao": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "tipo_item": forms.Select(attrs={"class": "form-control"}),
             "categoria": forms.TextInput(attrs={"class": "form-control"}),
             "fornecedor": forms.TextInput(attrs={"class": "form-control"}),
             "custo_unitario": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "custo_operacional": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "margem_lucro": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "taxa_cartao": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "usar_aliquota_manual": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "aliquota_manual": forms.NumberInput(attrs={"class": "form-control", "step": "0.001"}),
             "icms": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "ipi": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "pis": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "cofins": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "pis_cofins": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "preco_final": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "quantidade": forms.NumberInput(attrs={"class": "form-control"}),
@@ -57,6 +69,15 @@ class ProdutoForm(forms.ModelForm):
 
     def clean_data_entrada(self):
         return self.cleaned_data.get("data_entrada") or timezone.now().date()
+
+    def clean(self):
+        cleaned = super().clean()
+        tipo_item = cleaned.get("tipo_item")
+        if tipo_item == "servico":
+            cleaned["is_servico"] = True
+        elif tipo_item == "produto":
+            cleaned["is_servico"] = False
+        return cleaned
 
 
 class MovimentacaoEstoqueForm(forms.ModelForm):
@@ -106,3 +127,15 @@ class PontoOperacionalForm(forms.ModelForm):
     class Meta:
         model = PontoOperacional
         fields = ["codigo", "nome", "ativo"]
+
+
+class UbicacaoEstoqueForm(forms.ModelForm):
+    class Meta:
+        model = UbicacaoEstoque
+        fields = ["ponto_operacional", "codigo", "descricao", "ativo"]
+        widgets = {
+            "ponto_operacional": forms.Select(attrs={"class": "form-control"}),
+            "codigo": forms.TextInput(attrs={"class": "form-control"}),
+            "descricao": forms.TextInput(attrs={"class": "form-control"}),
+            "ativo": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }

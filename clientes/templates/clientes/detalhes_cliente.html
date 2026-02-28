@@ -4,7 +4,6 @@
 {% block title %}{{ cliente.nome }} - Detalhes{% endblock %}
 
 {% block content %}
-<!-- Content Header -->
 <section class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
@@ -24,44 +23,20 @@
             </div>
         </div>
     </div>
-    <div class="card-footer">
-        <a href="{% url 'clientes:editar_cliente' cliente.id %}" class="btn btn-warning btn-sm">
-            <i class="fas fa-edit"></i> Editar
-        </a>
-        <a href="{% url 'clientes:excluir_cliente' cliente.id %}" class="btn btn-danger btn-sm">
-            <i class="fas fa-trash"></i> Excluir
-        </a>
-        <!-- BOTÃO VOLTAR CORRETO: -->
-        <a href="{% url 'clientes:lista_clientes' %}" class="btn btn-secondary btn-sm">
-            <i class="fas fa-arrow-left"></i> Voltar para Lista
-        </a>
-    </div>
 </section>
 
-<!-- Main content -->
 <section class="content">
     <div class="container-fluid">
         <div class="row">
-            <!-- Informações do Cliente -->
             <div class="col-md-4">
                 <div class="card card-primary">
                     <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-id-card mr-1"></i>
-                            Informações do Cliente
-                        </h3>
-                        <div class="card-tools">
-                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                                <i class="fas fa-minus"></i>
-                            </button>
-                        </div>
+                        <h3 class="card-title"><i class="fas fa-id-card mr-1"></i>Informacoes do Cliente</h3>
                     </div>
                     <div class="card-body">
                         <dl class="row mb-0">
-                            <dt class="col-sm-5">Nº Cliente:</dt>
-                            <dd class="col-sm-7">
-                                <span class="badge bg-primary">{{ cliente.numero_cliente }}</span>
-                            </dd>
+                            <dt class="col-sm-5">N Cliente:</dt>
+                            <dd class="col-sm-7"><span class="badge bg-primary">{{ cliente.numero_cliente }}</span></dd>
 
                             <dt class="col-sm-5">Nome:</dt>
                             <dd class="col-sm-7">{{ cliente.nome }}</dd>
@@ -73,21 +48,21 @@
                                 {% elif cliente.cnpj %}
                                     {{ cliente.cnpj|slice:":2" }}.{{ cliente.cnpj|slice:"2:5" }}.{{ cliente.cnpj|slice:"5:8" }}/{{ cliente.cnpj|slice:"8:12" }}-{{ cliente.cnpj|slice:"12:" }}
                                 {% else %}
-                                    <span class="text-muted">Não informado</span>
+                                    <span class="text-muted">Nao informado</span>
                                 {% endif %}
                             </dd>
 
                             <dt class="col-sm-5">Telefone:</dt>
-                            <dd class="col-sm-7">{{ cliente.telefone|default:"<span class='text-muted'>Não informado</span>"|safe }}</dd>
+                            <dd class="col-sm-7">{{ cliente.telefone|default:"-" }}</dd>
 
                             <dt class="col-sm-5">Email:</dt>
-                            <dd class="col-sm-7">{{ cliente.email|default:"<span class='text-muted'>Não informado</span>"|safe }}</dd>
+                            <dd class="col-sm-7">{{ cliente.email|default:"-" }}</dd>
 
-                            <dt class="col-sm-5">Endereço:</dt>
-                            <dd class="col-sm-7">{{ cliente.endereco|default:"<span class='text-muted'>Não informado</span>"|safe }}</dd>
+                            <dt class="col-sm-5">Endereco:</dt>
+                            <dd class="col-sm-7">{{ cliente.endereco|default:"-" }}</dd>
 
                             <dt class="col-sm-5">CEP:</dt>
-                            <dd class="col-sm-7">{{ cliente.codigo_postal|default:"<span class='text-muted'>Não informado</span>"|safe }}</dd>
+                            <dd class="col-sm-7">{{ cliente.codigo_postal|default:"-" }}</dd>
 
                             <dt class="col-sm-5">Cadastrado em:</dt>
                             <dd class="col-sm-7">{{ cliente.data_cadastro|date:"d/m/Y H:i" }}</dd>
@@ -97,22 +72,20 @@
                         <a href="{% url 'clientes:editar_cliente' cliente.id %}" class="btn btn-warning btn-sm">
                             <i class="fas fa-edit"></i> Editar
                         </a>
+                        {% if user.is_superuser or user.tipo_usuario == 'gerente' %}
                         <a href="{% url 'clientes:excluir_cliente' cliente.id %}" class="btn btn-danger btn-sm">
                             <i class="fas fa-trash"></i> Excluir
                         </a>
-                        <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-secondary btn-sm">
+                        {% endif %}
+                        <a href="{% url 'clientes:lista_clientes' %}" class="btn btn-secondary btn-sm">
                             <i class="fas fa-arrow-left"></i> Voltar
                         </a>
                     </div>
                 </div>
 
-                <!-- Estatísticas -->
                 <div class="card card-info mt-3">
                     <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-chart-bar mr-1"></i>
-                            Estatísticas
-                        </h3>
+                        <h3 class="card-title"><i class="fas fa-chart-bar mr-1"></i>Estatisticas</h3>
                     </div>
                     <div class="card-body text-center">
                         <div class="row">
@@ -129,7 +102,7 @@
                                 <div class="info-box bg-gradient-success">
                                     <span class="info-box-icon"><i class="fas fa-check-circle"></i></span>
                                     <div class="info-box-content">
-                                        <span class="info-box-text">Concluídas</span>
+                                        <span class="info-box-text">Concluidas</span>
                                         <span class="info-box-number">{{ ordens_concluidas }}</span>
                                     </div>
                                 </div>
@@ -145,89 +118,62 @@
                             </div>
                         </div>
                         <div class="mt-3">
-                            <h4>Total Gasto</h4>
+                            <h5>Total Gasto</h5>
                             <h2 class="text-success">R$ {{ total_gasto|floatformat:2 }}</h2>
+                        </div>
+                        <div class="mt-3">
+                            <h6 class="mb-1">Tempo medio de retirada</h6>
+                            <strong>{{ tempo_medio_retirada }}</strong>
+                            <div class="small text-muted">De pronto contactado ate concluida</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Histórico de Ordens de Serviço -->
             <div class="col-md-8">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-history mr-1"></i>
-                            Histórico de Ordens de Serviço
-                            <span class="badge badge-primary ml-2">{{ total_ordens }}</span>
-                        </h3>
+                        <h3 class="card-title"><i class="fas fa-bolt mr-1"></i>Ordens Ativas <span class="badge badge-warning ml-2">{{ ordens_ativas }}</span></h3>
                         <div class="card-tools">
                             <a href="{% url 'ordens:nova_ordem_cliente' cliente.id %}" class="btn btn-success btn-sm">
                                 <i class="fas fa-plus-circle"></i> Nova OS
                             </a>
                         </div>
                     </div>
-
                     <div class="card-body p-0">
-                        {% if ordens %}
+                        {% if ordens_ativas_lista %}
                         <div class="table-responsive">
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
-                                        <th>Nº OS</th>
+                                        <th>N OS</th>
                                         <th>Data</th>
                                         <th>Equipamento</th>
                                         <th>Status</th>
-                                        <th>Valor</th>
-                                        <th style="width: 100px">Ações</th>
+                                        <th>Valor pago</th>
+                                        <th style="width: 100px">Acoes</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for ordem in ordens %}
+                                    {% for ordem in ordens_ativas_lista %}
                                     <tr>
-                                        <td>
-                                            <strong>#{{ ordem.numero_os }}</strong>
-                                        </td>
+                                        <td><strong>#{{ ordem.numero_os }}</strong></td>
                                         <td>{{ ordem.data_abertura|date:"d/m/Y" }}</td>
                                         <td>
                                             {{ ordem.get_tipo_equipamento_display }}
-                                            {% if ordem.marca_equipamento %}
-                                                <br><small class="text-muted">{{ ordem.marca_equipamento }}</small>
-                                            {% endif %}
+                                            {% if ordem.marca_equipamento %}<br><small class="text-muted">{{ ordem.marca_equipamento }}</small>{% endif %}
                                         </td>
+                                        <td><span class="badge bg-info">{{ ordem.get_status_display }}</span></td>
                                         <td>
-                                            {% if ordem.status == 'aberta' %}
-                                                <span class="badge bg-warning">Aberta</span>
-                                            {% elif ordem.status == 'em_andamento' %}
-                                                <span class="badge bg-info">Em Andamento</span>
-                                            {% elif ordem.status == 'concluida' %}
-                                                <span class="badge bg-success">Concluída</span>
-                                            {% elif ordem.status == 'cancelada' %}
-                                                <span class="badge bg-danger">Cancelada</span>
+                                            {% if ordem.total_pago > 0 %}
+                                            <strong class="text-success">R$ {{ ordem.total_pago|floatformat:2 }}</strong>
                                             {% else %}
-                                                <span class="badge bg-secondary">{{ ordem.status }}</span>
+                                            <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                         <td>
-                                            {% with total=ordem.total %}
-                                                {% if total > 0 %}
-                                                    <strong class="text-success">R$ {{ total|floatformat:2 }}</strong>
-                                                {% else %}
-                                                    <span class="text-muted">-</span>
-                                                {% endif %}
-                                            {% endwith %}
-                                        </td>
-                                        <td>
-                                            <a href="{% url 'ordens:detalhes_ordem' ordem.id %}"
-                                               class="btn btn-info btn-sm" title="Ver OS">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            {% if not ordem.fechada %}
-                                            <a href="{% url 'ordens:editar_ordem' ordem.id %}"
-                                               class="btn btn-warning btn-sm" title="Editar">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            {% endif %}
+                                            <a href="{% url 'ordens:detalhes_ordem' ordem.id %}" class="btn btn-info btn-sm" title="Ver OS"><i class="fas fa-eye"></i></a>
+                                            <a href="{% url 'ordens:editar_ordem' ordem.id %}" class="btn btn-warning btn-sm" title="Editar"><i class="fas fa-edit"></i></a>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -235,67 +181,59 @@
                             </table>
                         </div>
                         {% else %}
-                        <div class="text-center py-5">
-                            <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
-                            <h4 class="text-muted">Nenhuma ordem de serviço</h4>
-                            <p class="text-muted">Este cliente ainda não possui ordens de serviço cadastradas.</p>
-                            <a href="{% url 'ordens:nova_ordem_cliente' cliente.id %}" class="btn btn-success">
-                                <i class="fas fa-plus-circle mr-1"></i> Criar Primeira OS
-                            </a>
-                        </div>
+                        <div class="text-center py-4 text-muted">Nenhuma ordem ativa.</div>
                         {% endif %}
                     </div>
                 </div>
 
-                <!-- Gráfico simples de atividade -->
-                {% if ordens %}
                 <div class="card mt-3">
                     <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-chart-line mr-1"></i>
-                            Atividade do Cliente
-                        </h3>
+                        <h3 class="card-title"><i class="fas fa-history mr-1"></i>Historico de Ordens Finalizadas <span class="badge badge-success ml-2">{{ ordens_concluidas }}</span></h3>
                     </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h5>Status das Ordens</h5>
-                                <div class="progress-group">
-                                    Concluídas
-                                    <span class="float-right"><b>{{ ordens_concluidas }}</b>/{{ total_ordens }}</span>
-                                    <div class="progress progress-sm">
-                                        <div class="progress-bar bg-success"
-                                             style="width: {% widthratio ordens_concluidas total_ordens 100 %}%"></div>
-                                    </div>
-                                </div>
-                                <div class="progress-group">
-                                    Em Andamento
-                                    <span class="float-right"><b>{{ ordens_ativas }}</b>/{{ total_ordens }}</span>
-                                    <div class="progress progress-sm">
-                                        <div class="progress-bar bg-warning"
-                                             style="width: {% widthratio ordens_ativas total_ordens 100 %}%"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <h5>Últimas 6 OS</h5>
-                                <ul class="list-unstyled">
-                                    {% for ordem in ordens|slice:":6" %}
-                                    <li class="mb-2">
-                                        <i class="fas fa-{% if ordem.status == 'concluida' %}check-circle text-success{% else %}clock text-warning{% endif %} mr-2"></i>
-                                        OS #{{ ordem.numero_os }} -
-                                        {{ ordem.data_abertura|date:"d/m" }} -
-                                        <span class="badge badge-{% if ordem.status == 'concluida' %}success{% else %}warning{% endif %}">
-                                            {{ ordem.get_status_display }}
-                                        </span>
-                                    </li>
+                    <div class="card-body p-0">
+                        {% if ordens_concluidas_lista %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>N OS</th>
+                                        <th>Data</th>
+                                        <th>Equipamento</th>
+                                        <th>Status</th>
+                                        <th>Valor pago</th>
+                                        <th style="width: 80px">Acoes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ordem in ordens_concluidas_lista %}
+                                    <tr>
+                                        <td><strong>#{{ ordem.numero_os }}</strong></td>
+                                        <td>{{ ordem.data_abertura|date:"d/m/Y" }}</td>
+                                        <td>
+                                            {{ ordem.get_tipo_equipamento_display }}
+                                            {% if ordem.marca_equipamento %}<br><small class="text-muted">{{ ordem.marca_equipamento }}</small>{% endif %}
+                                        </td>
+                                        <td><span class="badge bg-success">{{ ordem.get_status_display }}</span></td>
+                                        <td>
+                                            {% if ordem.total_pago > 0 %}
+                                            <strong class="text-success">R$ {{ ordem.total_pago|floatformat:2 }}</strong>
+                                            {% else %}
+                                            <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="{% url 'ordens:detalhes_ordem' ordem.id %}" class="btn btn-info btn-sm" title="Ver OS"><i class="fas fa-eye"></i></a>
+                                        </td>
+                                    </tr>
                                     {% endfor %}
-                                </ul>
-                            </div>
+                                </tbody>
+                            </table>
                         </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">Nenhuma ordem finalizada.</div>
+                        {% endif %}
                     </div>
                 </div>
-                {% endif %}
             </div>
         </div>
     </div>

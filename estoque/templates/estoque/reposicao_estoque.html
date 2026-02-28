@@ -1,0 +1,56 @@
+{% extends "core/base.html" %}
+
+{% block title %}Reposicao Inteligente{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Reposicao Inteligente (PO2 -> PO3)</h1>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body table-responsive">
+    <table class="table table-sm table-bordered">
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th>Saldo {{ po3.codigo }}</th>
+          <th>Minimo</th>
+          <th>Saldo {{ po2.codigo }}</th>
+          <th>Sugestao</th>
+          <th>Repor Agora</th>
+          <th>Faltante Compra</th>
+          <th>Acao</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in linhas %}
+        <tr>
+          <td>{{ l.produto.nome }}</td>
+          <td>{{ l.saldo_po3 }}</td>
+          <td>{{ l.minimo }}</td>
+          <td>{{ l.saldo_po2 }}</td>
+          <td>{{ l.sugestao }}</td>
+          <td>{{ l.pode_repor }}</td>
+          <td>{{ l.faltante_compra }}</td>
+          <td>
+            {% if l.pode_repor > 0 %}
+            <form method="post" class="form-inline mb-0">
+              {% csrf_token %}
+              <input type="hidden" name="produto_id" value="{{ l.produto.id }}">
+              <input type="number" name="quantidade" min="1" max="{{ l.pode_repor }}" value="{{ l.pode_repor }}" class="form-control form-control-sm mr-2" style="width:90px;">
+              <button type="submit" class="btn btn-sm btn-primary">Repor</button>
+            </form>
+            {% else %}
+            <span class="text-muted">Sem saldo PO2</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted">Sem itens para reposicao no momento.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+

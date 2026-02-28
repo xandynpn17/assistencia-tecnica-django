@@ -6,7 +6,8 @@ from django.db.models.deletion import ProtectedError
 from .forms import (
     EmpresaForm, AliquotaForm, UserForm,
     ConfiguracaoOrdemServicoForm, ConfiguracaoSistemaForm,
-    FornecedorGarantiaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm
+    FornecedorGarantiaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm,
+    ModeloMensagemForm,
 )
 from .models import (
     Aliquota,
@@ -15,6 +16,7 @@ from .models import (
     Empresa,
     FornecedorGarantia,
     MarcaGarantia,
+    ModeloMensagem,
     RegraGarantiaMarca,
 )
 from django.views.decorators.csrf import csrf_exempt
@@ -42,6 +44,53 @@ def _request_ip(request):
 @role_required(MANAGER_ROLES)
 def painel(request):
     return render(request, 'configuracoes/painel.html')
+
+
+@role_required(MANAGER_ROLES)
+def modelos_mensagem(request):
+    editar_id = request.GET.get("edit")
+    instancia = None
+    if editar_id and editar_id.isdigit():
+        instancia = ModeloMensagem.objects.filter(id=int(editar_id)).first()
+
+    if request.method == "POST":
+        form_type = request.POST.get("form_type")
+        if form_type == "delete":
+            modelo = get_object_or_404(ModeloMensagem, id=request.POST.get("modelo_id"))
+            modelo.delete()
+            messages.success(request, "Modelo removido com sucesso.")
+            return redirect("configuracoes:modelos_mensagem")
+
+        if form_type == "toggle":
+            modelo = get_object_or_404(ModeloMensagem, id=request.POST.get("modelo_id"))
+            modelo.ativo = not modelo.ativo
+            modelo.save(update_fields=["ativo"])
+            messages.success(request, "Modelo atualizado.")
+            return redirect("configuracoes:modelos_mensagem")
+
+        model_id = request.POST.get("modelo_id")
+        if model_id:
+            instancia = get_object_or_404(ModeloMensagem, id=model_id)
+        form = ModeloMensagemForm(request.POST, instance=instancia)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Modelo salvo com sucesso.")
+            return redirect("configuracoes:modelos_mensagem")
+    else:
+        form = ModeloMensagemForm(instance=instancia)
+
+    modelos = ModeloMensagem.objects.all().order_by("nome")
+    return render(
+        request,
+        "configuracoes/modelos_mensagem.html",
+        {
+            "form": form,
+            "modelos": modelos,
+            "edit_modelo_id": instancia.id if instancia else None,
+            "menu_app": "configuracoes",
+            "menu_sub": "modelos_mensagem",
+        },
+    )
 
 
 # ---------------------------
@@ -217,14 +266,22 @@ def configuracao_os_edit(request):
 @role_required(MANAGER_ROLES)
 def configuracao_sistema_edit(request):
     config = ConfiguracaoSistema.get_configuracao()
+    pode_editar_termos_os = bool(request.user.is_superuser or getattr(request.user, "tipo_usuario", "") == "adm")
     if request.method == 'POST':
         form = ConfiguracaoSistemaForm(request.POST, instance=config)
+        if not pode_editar_termos_os and "termos_ordem_servico" in form.fields:
+            form.fields["termos_ordem_servico"].disabled = True
         if form.is_valid():
-            form.save()
+            obj = form.save(commit=False)
+            if not pode_editar_termos_os:
+                obj.termos_ordem_servico = config.termos_ordem_servico
+            obj.save()
             messages.success(request, "Configurações do sistema salvas com sucesso!")
             return redirect('configuracoes:painel')
     else:
         form = ConfiguracaoSistemaForm(instance=config)
+        if not pode_editar_termos_os and "termos_ordem_servico" in form.fields:
+            form.fields["termos_ordem_servico"].disabled = True
 
     context = {
         'form': form,

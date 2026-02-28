@@ -3,6 +3,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from core.views import home_redirect
+from ordens.views import confirmar_ordem_token_publico
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -23,6 +24,7 @@ urlpatterns = [
     path('estoque/', include('estoque.urls')),
     path('caixa/', include('caixa.urls')),
     path('configuracoes/', include('configuracoes.urls')),
+    path('os/confirmar/<uuid:token>/', confirmar_ordem_token_publico, name='confirmar_os_publico'),
 ]
 
 if settings.DEBUG:

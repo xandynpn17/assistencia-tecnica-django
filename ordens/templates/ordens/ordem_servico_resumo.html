@@ -7,7 +7,13 @@
   <div class="col-12 col-lg-10">
     <div class="card">
       <div class="card-header bg-success text-white">
-        <h5 class="mb-0">Ordem criada com sucesso: {{ ordem.numero_os }}</h5>
+        <h5 class="mb-0">
+          {% if ordem.fechada %}
+          Ordem finalizada: {{ ordem.numero_os }}
+          {% else %}
+          Ordem criada com sucesso: {{ ordem.numero_os }}
+          {% endif %}
+        </h5>
       </div>
       <div class="card-body">
         <div class="row">
@@ -25,12 +31,30 @@
             <p class="mb-1"><strong>Serie:</strong> {{ ordem.numero_serie_equipamento|default:"-" }}</p>
           </div>
         </div>
+        <hr>
+        <div class="row">
+          <div class="col-12">
+            <h6 class="text-muted">Confirmacao do cliente</h6>
+            <p class="mb-2">Envie o link de assinatura digital. Se houver falha, use a versao para assinatura impressa.</p>
+            <div class="d-flex flex-wrap gap-2">
+              <a class="btn btn-success mr-2 mb-2" href="{% url 'ordens:reenviar_confirmacao_whatsapp' ordem.id %}">
+                Enviar WhatsApp de Confirmacao
+              </a>
+              <a class="btn btn-outline-primary mr-2 mb-2" href="{% url 'confirmar_os_publico' ordem.token_confirmacao %}" target="_blank">
+                Abrir Link de Assinatura
+              </a>
+              <a class="btn btn-outline-secondary mr-2 mb-2" href="{% url 'ordens:imprimir_confirmacao_os' ordem.id %}" target="_blank">
+                Imprimir para Assinatura Manual
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="card-footer d-flex flex-wrap gap-2">
         <a class="btn btn-primary mr-2 mb-2" href="{% url 'ordens:detalhes_ordem' ordem.id %}">
           Abrir Detalhes da OS
         </a>
-        <a class="btn btn-outline-primary mr-2 mb-2" href="{% url 'ordens:imprimir_ordem_servico' ordem.id %}" target="_blank">
+        <a class="btn btn-outline-primary mr-2 mb-2" href="{% url 'ordens:imprimir_ordem_servico_impressao' ordem.id %}" target="_blank">
           Imprimir OS
         </a>
         <a class="btn btn-outline-secondary mr-2 mb-2" href="{% url 'ordens:verificar_cliente_os' %}">
@@ -41,3 +65,28 @@
   </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+{% if request.GET.wa or request.GET.wa_app %}
+<script>
+  (function () {
+    const waApp = "{{ request.GET.wa_app|default:''|escapejs }}";
+    const waWeb = "{{ request.GET.wa|default:''|escapejs }}";
+    const key = "wa_opened_" + window.location.pathname + "|" + waWeb + "|" + waApp;
+    const alreadyOpened = sessionStorage.getItem(key) === "1";
+    if (!alreadyOpened) {
+      if (waApp) { window.open(waApp, "_blank", "noopener"); }
+      if (waWeb) { setTimeout(function(){ window.open(waWeb, "_blank", "noopener"); }, 350); }
+      sessionStorage.setItem(key, "1");
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("wa");
+    url.searchParams.delete("wa_app");
+    if (url.toString() !== window.location.href) {
+      window.history.replaceState({}, document.title, url.toString());
+    }
+  })();
+</script>
+{% endif %}
+{% endblock extra_js %}

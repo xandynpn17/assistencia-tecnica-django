@@ -1,0 +1,69 @@
+{% extends "core/base.html" %}
+
+{% block title %}Ubicacoes de Estoque{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Ubicacoes / Localizacoes</h1>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header"><strong>Nova Ubicacao</strong></div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="form-group">
+            <label>Ponto operacional</label>
+            {{ form.ponto_operacional }}
+          </div>
+          <div class="form-group">
+            <label>Codigo</label>
+            {{ form.codigo }}
+          </div>
+          <div class="form-group">
+            <label>Descricao</label>
+            {{ form.descricao }}
+          </div>
+          <div class="form-group form-check">
+            {{ form.ativo }}
+            <label class="form-check-label">Ativo</label>
+          </div>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header"><strong>Ubicacoes cadastradas</strong></div>
+      <div class="card-body table-responsive">
+        <table class="table table-sm table-bordered">
+          <thead>
+            <tr>
+              <th>Ponto</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Ativo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in ubicacoes %}
+            <tr>
+              <td>{{ u.ponto_operacional.codigo }} - {{ u.ponto_operacional.nome }}</td>
+              <td>{{ u.codigo }}</td>
+              <td>{{ u.descricao|default:"-" }}</td>
+              <td>{% if u.ativo %}Sim{% else %}Nao{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted">Sem ubicacoes cadastradas.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

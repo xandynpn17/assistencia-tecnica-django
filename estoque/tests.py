@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from caixa.models import Caixa
+from configuracoes.models import Empresa
 from estoque.forms import MovimentacaoEstoqueForm
 from estoque.models import MovimentacaoEstoque, PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 
@@ -43,6 +44,13 @@ class ConsultaArtigosTests(TestCase):
         SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=self.ponto_loja, quantidade=8)
         SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=self.ponto_avaria, quantidade=2)
         Caixa.objects.create(aberto=True, saldo_inicial=0)
+        Empresa.objects.create(
+            nome="Empresa Teste",
+            regime_tributario="simples",
+            modo_tributario="basico",
+            aliquota_comercio=6,
+            aliquota_servico=8,
+        )
 
     def test_pagina_consulta_artigos(self):
         response = self.client.get(reverse("estoque:consulta_artigos"))
@@ -242,3 +250,86 @@ class ConsultaArtigosTests(TestCase):
         data = response_guia.json()
         self.assertTrue(data["ok"])
         self.assertTrue(data["guia"].startswith("GUIA-"))
+
+    def test_preco_sugerido_simples_comercio(self):
+        p = Produto.objects.create(
+            nome="Mouse USB",
+            ean="7891110002223",
+            custo_unitario=Decimal("100.00"),
+            custo_operacional=Decimal("0.00"),
+            margem_lucro=Decimal("20.00"),
+            taxa_cartao=Decimal("2.00"),
+            tipo_item="produto",
+            preco_final=Decimal("0.00"),
+            ativo=True,
+            ponto_operacional=self.ponto_loja,
+        )
+        # 100 / (1 - 0.06 - 0.02 - 0.20) = 138.888...
+        self.assertAlmostEqual(float(p.preco_sugerido), 138.89, places=2)
+
+    def test_preco_sugerido_override_manual(self):
+        p = Produto.objects.create(
+            nome="Servico Labor",
+            ean="7891110002224",
+            custo_unitario=Decimal("100.00"),
+            custo_operacional=Decimal("0.00"),
+            margem_lucro=Decimal("10.00"),
+            taxa_cartao=Decimal("0.00"),
+            tipo_item="servico",
+            usar_aliquota_manual=True,
+            aliquota_manual=Decimal("5.00"),
+            preco_final=Decimal("0.00"),
+            ativo=True,
+            ponto_operacional=self.ponto_loja,
+        )
+        # 100 / (1 - 0.05 - 0.10) = 117.647...
+        self.assertAlmostEqual(float(p.preco_sugerido), 117.65, places=2)
+
+    def test_venda_rapida_permite_pre_reserva_com_saldo_insuficiente(self):
+        saldo = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_loja)
+        saldo.quantidade = 0
+        saldo.save(update_fields=["quantidade"])
+        self.produto.quantidade = 0
+        self.produto.save(update_fields=["quantidade"])
+
+        response = self.client.post(
+            reverse("estoque:api_venda_rapida"),
+            {
+                "produto_id": self.produto.id,
+                "ponto_id": self.ponto_loja.id,
+                "quantidade": 3,
+                "funcionario_numero": "12",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+
+    def test_reposicao_inteligente_tela(self):
+        po2 = PontoOperacional.objects.create(codigo="PO2", nome="Armazem")
+        SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=po2, quantidade=5)
+        self.produto.estoque_minimo = 10
+        self.produto.save(update_fields=["estoque_minimo"])
+        response = self.client.get(reverse("estoque:reposicao_estoque"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Reposicao Inteligente")
+
+    def test_reposicao_inteligente_post_transfere_po2_para_po3(self):
+        po2 = PontoOperacional.objects.create(codigo="PO2", nome="Armazem")
+        SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=po2, quantidade=7)
+        saldo_loja = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_loja)
+        saldo_loja.quantidade = 1
+        saldo_loja.save(update_fields=["quantidade"])
+        response = self.client.post(
+            reverse("estoque:reposicao_estoque"),
+            {"produto_id": self.produto.id, "quantidade": 3},
+        )
+        self.assertEqual(response.status_code, 302)
+        s2 = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=po2)
+        s3 = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_loja)
+        self.assertEqual(s2.quantidade, 4)
+        self.assertEqual(s3.quantidade, 4)
+
+    def test_indicadores_estoque_tela(self):
+        response = self.client.get(reverse("estoque:indicadores_estoque"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Indicadores de Estoque")

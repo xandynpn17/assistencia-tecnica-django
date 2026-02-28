@@ -1,0 +1,76 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Unificar Clientes{% endblock %}
+
+{% block content %}
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6"><h1>Unificar Cadastros de Clientes</h1></div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'clientes:lista_clientes' %}">Clientes</a></li>
+                    <li class="breadcrumb-item active">Unificar</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="get" class="form-inline">
+                    <input type="text" name="query" value="{{ query }}" class="form-control mr-2" style="min-width:340px" placeholder="Buscar por nome, documento, telefone, email ou numero cliente">
+                    <button type="submit" class="btn btn-primary">Buscar</button>
+                </form>
+            </div>
+        </div>
+
+        {% if erro %}
+        <div class="alert alert-danger">{{ erro }}</div>
+        {% endif %}
+
+        {% if candidatos %}
+        <div class="card">
+            <div class="card-header"><strong>Selecionar principal e duplicado</strong></div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label>Cliente principal (permanece)</label>
+                            <select name="principal_id" class="form-control" required>
+                                <option value="">-- Selecione --</option>
+                                {% for c in candidatos %}
+                                <option value="{{ c.id }}">{{ c.numero_cliente }} - {{ c.nome }} - {{ c.get_documento_formatado|default:"-" }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Cliente duplicado (sera removido)</label>
+                            <select name="duplicado_id" class="form-control" required>
+                                <option value="">-- Selecione --</option>
+                                {% for c in candidatos %}
+                                <option value="{{ c.id }}">{{ c.numero_cliente }} - {{ c.nome }} - {{ c.get_documento_formatado|default:"-" }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning py-2 mb-3">
+                        OS e Orcamentos do duplicado serao transferidos para o principal.
+                    </div>
+                    <button type="submit" class="btn btn-danger" onclick="return confirm('Confirmar unificacao? Esta acao remove o cliente duplicado.');">
+                        Unificar cadastros
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% elif query %}
+        <div class="alert alert-info">Nenhum cliente encontrado para o filtro informado.</div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

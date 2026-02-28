@@ -71,7 +71,14 @@
                             <div class="row">
                                 <div class="col-md-3 form-group">
                                     <label for="id_codigo_postal">CEP</label>
-                                    {{ form.codigo_postal }}
+                                    <div class="input-group">
+                                        {{ form.codigo_postal }}
+                                        <div class="input-group-append">
+                                            <button type="button" class="btn btn-outline-secondary" id="btn-buscar-cep">
+                                                <i class="fas fa-search"></i>
+                                            </button>
+                                        </div>
+                                    </div>
                                     {{ form.codigo_postal.errors }}
                                 </div>
                                 <div class="col-md-6 form-group">
@@ -130,4 +137,56 @@
         </div>
     </div>
 </section>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const cepInput = document.getElementById("id_codigo_postal");
+    const btnBuscarCep = document.getElementById("btn-buscar-cep");
+    if (!cepInput || !btnBuscarCep) return;
+
+    function limparCamposEndereco() {
+        const ids = ["id_logradouro", "id_bairro", "id_cidade"];
+        ids.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.value = "";
+        });
+    }
+
+    function preencherEndereco(data) {
+        const logradouro = document.getElementById("id_logradouro");
+        const bairro = document.getElementById("id_bairro");
+        const cidade = document.getElementById("id_cidade");
+        const estado = document.getElementById("id_estado");
+
+        if (logradouro) logradouro.value = data.logradouro || "";
+        if (bairro) bairro.value = data.bairro || "";
+        if (cidade) cidade.value = data.localidade || "";
+        if (estado && data.uf) estado.value = data.uf;
+    }
+
+    function buscarCep() {
+        const cep = (cepInput.value || "").replace(/\D/g, "");
+        if (cep.length !== 8) {
+            alert("CEP invalido. Informe 8 digitos.");
+            return;
+        }
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
+            .then((resp) => resp.json())
+            .then((data) => {
+                if (data.erro) {
+                    limparCamposEndereco();
+                    alert("CEP nao encontrado.");
+                    return;
+                }
+                preencherEndereco(data);
+            })
+            .catch(() => alert("Erro ao consultar CEP."));
+    }
+
+    btnBuscarCep.addEventListener("click", buscarCep);
+    cepInput.addEventListener("blur", function () {
+        if ((cepInput.value || "").replace(/\D/g, "").length === 8) buscarCep();
+    });
+});
+</script>
 {% endblock %}
