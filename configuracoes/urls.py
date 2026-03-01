@@ -20,6 +20,7 @@ urlpatterns = [
     path('os/configuracao/', views.configuracao_os_edit, name='configuracao_os'),
     path('marcas-fornecedores/', views.marcas_fornecedores, name='marcas_fornecedores'),
     path('modelos-mensagem/', views.modelos_mensagem, name='modelos_mensagem'),
+    path('tipos-equipamento/', views.tipos_equipamento, name='tipos_equipamento'),
 
     # NOVA ROTA: Configurações do Sistema
     path('sistema/configuracao/', views.configuracao_sistema_edit, name='configuracao_sistema'),

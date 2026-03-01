@@ -80,7 +80,7 @@ class OrdemServico(models.Model):
     # ===========================
     # CAMPOS DO EQUIPAMENTO
     # ===========================
-    tipo_equipamento = models.CharField(max_length=20, choices=TIPO_EQUIPAMENTO_CHOICES)
+    tipo_equipamento = models.CharField(max_length=40)
     marca_equipamento = models.CharField(max_length=50)
     marca_garantia = models.ForeignKey(
         "configuracoes.MarcaGarantia",
@@ -127,6 +127,23 @@ class OrdemServico(models.Model):
 
     def __str__(self):
         return f"{self.numero_os} - {self.cliente.nome} - {self.marca_equipamento} {self.modelo_equipamento}"
+
+    def get_tipo_equipamento_display(self):
+        valor = (self.tipo_equipamento or "").strip()
+        if not valor:
+            return "-"
+        for codigo, rotulo in self.TIPO_EQUIPAMENTO_CHOICES:
+            if codigo == valor:
+                return rotulo
+        try:
+            from configuracoes.models import TipoEquipamentoConfig
+
+            item = TipoEquipamentoConfig.objects.filter(codigo=valor).first()
+            if item:
+                return item.nome
+        except Exception:
+            pass
+        return valor.replace("_", " ").title()
 
     def get_absolute_url(self):
         from django.urls import reverse
@@ -577,3 +594,29 @@ class LogOS(models.Model):
 
     def __str__(self):
         return f"{self.ordem_servico.numero_os} - {self.tipo_evento}"
+
+
+class OrdemArquivo(models.Model):
+    ordem = models.ForeignKey(OrdemServico, on_delete=models.CASCADE, related_name="arquivos")
+    arquivo = models.FileField(upload_to="ordens/arquivos/")
+    descricao = models.CharField(max_length=160, blank=True)
+    incluir_relatorio = models.BooleanField(default=False)
+    enviado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="arquivos_os_enviados",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+
+    @property
+    def eh_imagem(self):
+        nome = (self.arquivo.name or "").lower()
+        return nome.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"))
+
+    def __str__(self):
+        return f"{self.ordem.numero_os} - {self.arquivo.name}"

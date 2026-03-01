@@ -19,6 +19,7 @@ from .models import (
     PedidoCompraLinha,
     PedidoCompraFoto,
     OrdemAlerta,
+    OrdemArquivo,
 )
 from .forms import LinhaTrabalhoForm, OrdemServicoForm, OrdemSerieForm, ServicoPecaForm
 from clientes.models import Cliente
@@ -865,6 +866,10 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["modelos_mensagem_payload"] = modelos_payload
         context["pedidos_compra"] = ordem.pedidos_compra.prefetch_related("linhas", "fotos").all()
         context["pedido_status_choices"] = PedidoCompra.STATUS_CHOICES
+        context["arquivos_os"] = ordem.arquivos.select_related("enviado_por").all()
+        fotos_count = sum(1 for a in context["arquivos_os"] if a.eh_imagem)
+        context["fotos_count"] = fotos_count
+        context["pode_incluir_fotos_relatorio"] = fotos_count > 3
         context["alertas_ativos"] = ordem.alertas.filter(ativo=True)
         context["alertas_encerrados"] = ordem.alertas.filter(ativo=False)[:30]
         context["tem_alertas"] = ordem.alertas.exists()
@@ -889,6 +894,8 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         ]
         if context["pedidos_compra"].exists() or tab == "pedidos":
             tabs.insert(3, {"id": "pedidos", "label": "R$ Pedidos", "icon": "bi bi-cart"})
+        if context["arquivos_os"] or tab == "arquivos":
+            tabs.append({"id": "arquivos", "label": "Arquivos", "icon": "bi bi-paperclip"})
         if context["tem_alertas"]:
             tabs.append({"id": "alertas", "label": "Alertas", "icon": "bi bi-exclamation-triangle"})
         if context["pode_ver_logs"] and (context["logs_os"] or context["logs_confirmacao"] or tab == "logs"):
@@ -1176,6 +1183,51 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             )
             messages.success(request, "Alerta adicionado.")
             return redirect(f"{self.object.get_absolute_url()}?tab=alertas")
+
+        elif form_type == "arquivo":
+            try:
+                OSAccessPolicyService.ensure_can_edit(self.object, "linha", usuario=request.user)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect(f"{self.object.get_absolute_url()}?tab=arquivos")
+
+            descricao = (request.POST.get("descricao") or "").strip()
+            incluir_relatorio = request.POST.get("incluir_relatorio") == "1"
+            arquivos = request.FILES.getlist("arquivos")
+            if not arquivos:
+                messages.error(request, "Selecione ao menos um arquivo.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=arquivos")
+
+            extensoes_imagem = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
+            fotos_existentes = sum(1 for a in self.object.arquivos.all() if a.eh_imagem)
+            novas_fotos = sum(1 for a in arquivos if str(getattr(a, "name", "")).lower().endswith(extensoes_imagem))
+            total_fotos = fotos_existentes + novas_fotos
+            if incluir_relatorio and total_fotos <= 3:
+                incluir_relatorio = False
+                messages.warning(
+                    request,
+                    "Inclusao no relatorio tecnico habilita com 4 ou mais fotos. Arquivos anexados sem marcacao.",
+                )
+
+            criados = 0
+            for arquivo in arquivos:
+                OrdemArquivo.objects.create(
+                    ordem=self.object,
+                    arquivo=arquivo,
+                    descricao=descricao,
+                    incluir_relatorio=incluir_relatorio,
+                    enviado_por=request.user,
+                )
+                criados += 1
+            _log_os(
+                self.object,
+                "edicao_critica",
+                f"{criados} arquivo(s) anexado(s) na OS.",
+                usuario=request.user,
+                dados_extras={"quantidade": criados, "incluir_relatorio": incluir_relatorio},
+            )
+            messages.success(request, f"{criados} arquivo(s) anexado(s) com sucesso.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=arquivos")
 
         elif form_type == "encerrar_alerta":
             alerta_id = request.POST.get("alerta_id")
@@ -2093,6 +2145,42 @@ def imprimir_relatorio_tecnico(request, pk):
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ]))
         story.extend([t_itens, Spacer(1, 0.35 * cm)])
+
+    arquivos_relatorio = list(
+        ordem.arquivos.filter(incluir_relatorio=True).order_by("-criado_em")
+    )
+    fotos_total = sum(1 for a in ordem.arquivos.all() if a.eh_imagem)
+    fotos_relatorio = [a for a in arquivos_relatorio if a.eh_imagem]
+    if fotos_total > 3 and fotos_relatorio:
+        story.extend([_title_bar("Fotos Anexadas da OS"), Spacer(1, 0.12 * cm)])
+        linhas_foto = []
+        linha = []
+        for arquivo in fotos_relatorio[:8]:
+            try:
+                img = Image(arquivo.arquivo.path, width=6.8 * cm, height=5.1 * cm)
+                img.hAlign = "LEFT"
+                celula = [img, Spacer(1, 0.06 * cm), Paragraph(arquivo.descricao or "Foto da OS", styles["RtMeta"])]
+                linha.append(celula)
+            except Exception:
+                continue
+            if len(linha) == 2:
+                linhas_foto.append(linha)
+                linha = []
+        if linha:
+            linha.append("")
+            linhas_foto.append(linha)
+        if linhas_foto:
+            tabela_fotos = Table(linhas_foto, colWidths=[usable_w / 2.0, usable_w / 2.0])
+            tabela_fotos.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BOX", (0, 0), (-1, -1), 0.25, colors.HexColor("#e5e7eb")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e5e7eb")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]))
+            story.extend([tabela_fotos, Spacer(1, 0.3 * cm)])
 
     story.extend([
         Paragraph("Assinatura do Tecnico: _________________________________", styles["RtText"]),

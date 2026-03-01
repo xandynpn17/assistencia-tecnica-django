@@ -8,6 +8,7 @@ from .models import (
     MarcaGarantia,
     ModeloMensagem,
     RegraGarantiaMarca,
+    TipoEquipamentoConfig,
     User,
 )
 from django.contrib.auth.models import Group
@@ -251,4 +252,15 @@ class ModeloMensagemForm(forms.ModelForm):
             "tipo": forms.Select(attrs={"class": "form-control"}),
             "assunto": forms.TextInput(attrs={"class": "form-control"}),
             "corpo": forms.Textarea(attrs={"class": "form-control", "rows": 5}),
+        }
+
+
+class TipoEquipamentoConfigForm(forms.ModelForm):
+    class Meta:
+        model = TipoEquipamentoConfig
+        fields = ["nome", "codigo", "ordem", "ativo"]
+        widgets = {
+            "nome": forms.TextInput(attrs={"class": "form-control"}),
+            "codigo": forms.TextInput(attrs={"class": "form-control"}),
+            "ordem": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
         }

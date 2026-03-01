@@ -8,7 +8,7 @@ from .forms import (
     ConfiguracaoOrdemServicoForm, ConfiguracaoSistemaForm,
     FornecedorGarantiaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm,
     ModeloMensagemForm,
-)
+    )
 from .models import (
     Aliquota,
     ConfiguracaoOrdemServico,
@@ -18,7 +18,9 @@ from .models import (
     MarcaGarantia,
     ModeloMensagem,
     RegraGarantiaMarca,
+    TipoEquipamentoConfig,
 )
+from .forms import TipoEquipamentoConfigForm
 from django.views.decorators.csrf import csrf_exempt
 import requests
 import json
@@ -89,6 +91,51 @@ def modelos_mensagem(request):
             "edit_modelo_id": instancia.id if instancia else None,
             "menu_app": "configuracoes",
             "menu_sub": "modelos_mensagem",
+        },
+    )
+
+
+@role_required(MANAGER_ROLES)
+def tipos_equipamento(request):
+    editar_id = (request.GET.get("edit") or "").strip()
+    instancia = None
+    if editar_id.isdigit():
+        instancia = TipoEquipamentoConfig.objects.filter(id=int(editar_id)).first()
+
+    if request.method == "POST":
+        form_type = request.POST.get("form_type")
+        if form_type == "delete":
+            item = get_object_or_404(TipoEquipamentoConfig, id=request.POST.get("item_id"))
+            item.delete()
+            messages.success(request, "Tipo de equipamento removido.")
+            return redirect("configuracoes:tipos_equipamento")
+        if form_type == "toggle":
+            item = get_object_or_404(TipoEquipamentoConfig, id=request.POST.get("item_id"))
+            item.ativo = not item.ativo
+            item.save(update_fields=["ativo"])
+            messages.success(request, "Tipo de equipamento atualizado.")
+            return redirect("configuracoes:tipos_equipamento")
+
+        item_id = request.POST.get("item_id")
+        if item_id:
+            instancia = get_object_or_404(TipoEquipamentoConfig, id=item_id)
+        form = TipoEquipamentoConfigForm(request.POST, instance=instancia)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Tipo de equipamento salvo.")
+            return redirect("configuracoes:tipos_equipamento")
+    else:
+        form = TipoEquipamentoConfigForm(instance=instancia)
+
+    return render(
+        request,
+        "configuracoes/tipos_equipamento.html",
+        {
+            "form": form,
+            "itens": TipoEquipamentoConfig.objects.all(),
+            "edit_item_id": instancia.id if instancia else None,
+            "menu_app": "configuracoes",
+            "menu_sub": "tipos_equipamento",
         },
     )
 

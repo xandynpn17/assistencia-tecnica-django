@@ -6,7 +6,7 @@
 <div class="row">
   <div class="col-12 col-lg-10">
     <div class="card">
-      <div class="card-header bg-success text-white">
+      <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
           {% if ordem.fechada %}
           Ordem finalizada: {{ ordem.numero_os }}
@@ -14,13 +14,15 @@
           Ordem criada com sucesso: {{ ordem.numero_os }}
           {% endif %}
         </h5>
+        <span class="badge badge-light text-dark">Status: {{ ordem.get_status_display }}</span>
       </div>
       <div class="card-body">
         <div class="row">
-          <div class="col-md-6 mb-3">
+          <div class="col-md-6 mb-3 pr-md-4 border-right">
             <h6 class="text-muted">Cliente</h6>
             <p class="mb-1"><strong>Nome:</strong> {{ ordem.cliente.nome }}</p>
             <p class="mb-1"><strong>Telefone:</strong> {{ ordem.cliente.telefone|default:"-" }}</p>
+            <p class="mb-1"><strong>Email:</strong> {{ ordem.cliente.email|default:"-" }}</p>
             <p class="mb-1"><strong>CPF/CNPJ:</strong> {{ ordem.cliente.get_documento_formatado|default:ordem.cliente.documento|default:"-" }}</p>
           </div>
           <div class="col-md-6 mb-3">
@@ -29,24 +31,33 @@
             <p class="mb-1"><strong>Marca:</strong> {{ ordem.marca_equipamento }}</p>
             <p class="mb-1"><strong>Modelo:</strong> {{ ordem.modelo_equipamento }}</p>
             <p class="mb-1"><strong>Serie:</strong> {{ ordem.numero_serie_equipamento|default:"-" }}</p>
+            <p class="mb-0"><strong>Peritagem:</strong> {{ ordem.peritagem|default:"-" }}</p>
           </div>
         </div>
         <hr>
         <div class="row">
-          <div class="col-12">
-            <h6 class="text-muted">Confirmacao do cliente</h6>
-            <p class="mb-2">Envie o link de assinatura digital. Se houver falha, use a versao para assinatura impressa.</p>
-            <div class="d-flex flex-wrap gap-2">
-              <a class="btn btn-success mr-2 mb-2" href="{% url 'ordens:reenviar_confirmacao_whatsapp' ordem.id %}">
-                Enviar WhatsApp de Confirmacao
+          <div class="col-md-8 mb-2">
+            <h6 class="text-muted mb-2">Validacao da OS</h6>
+            <p class="mb-2">Fluxo recomendado: enviar link de assinatura via WhatsApp. Em falha, use impressao e assinatura manual.</p>
+            <div class="d-flex flex-wrap">
+              <a class="btn btn-success mr-2 mb-2" href="{% url 'ordens:reenviar_confirmacao_whatsapp' ordem.id %}" title="Envia PDF + link por WhatsApp">
+                WhatsApp com Link
               </a>
-              <a class="btn btn-outline-primary mr-2 mb-2" href="{% url 'confirmar_os_publico' ordem.token_confirmacao %}" target="_blank">
-                Abrir Link de Assinatura
+              <a class="btn btn-outline-primary mr-2 mb-2" href="{% url 'confirmar_os_publico' ordem.token_confirmacao %}" target="_blank" rel="noopener">
+                Abrir Link
               </a>
-              <a class="btn btn-outline-secondary mr-2 mb-2" href="{% url 'ordens:imprimir_confirmacao_os' ordem.id %}" target="_blank">
-                Imprimir para Assinatura Manual
+              <a class="btn btn-outline-secondary mr-2 mb-2" href="{% url 'ordens:imprimir_confirmacao_os' ordem.id %}" target="_blank" rel="noopener">
+                Imprimir Assinatura Manual
               </a>
             </div>
+          </div>
+          <div class="col-md-4 mb-2">
+            <h6 class="text-muted mb-2">Regra sugerida</h6>
+            <ul class="mb-0 pl-3">
+              <li>Digital como padrao.</li>
+              <li>Impresso apenas fallback.</li>
+              <li>Sempre registrar confirmacao no historico.</li>
+            </ul>
           </div>
         </div>
       </div>

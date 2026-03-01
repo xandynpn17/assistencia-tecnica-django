@@ -2,6 +2,7 @@ from django.db import models, transaction
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
 from django.utils import timezone
+from django.utils.text import slugify
 
 
 class Empresa(models.Model):
@@ -49,6 +50,27 @@ class Empresa(models.Model):
     ipi = models.DecimalField(max_digits=6, decimal_places=3, default=0)
     pis = models.DecimalField(max_digits=6, decimal_places=3, default=0)
     cofins = models.DecimalField(max_digits=6, decimal_places=3, default=0)
+
+    def __str__(self):
+        return self.nome
+
+
+class TipoEquipamentoConfig(models.Model):
+    codigo = models.CharField(max_length=40, unique=True)
+    nome = models.CharField(max_length=80, unique=True)
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["ordem", "nome"]
+
+    def save(self, *args, **kwargs):
+        if not self.codigo and self.nome:
+            self.codigo = slugify(self.nome).replace("-", "_")[:40]
+        if not self.codigo:
+            self.codigo = f"equip_{self.pk or ''}".strip("_")
+        self.codigo = self.codigo.lower()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.nome

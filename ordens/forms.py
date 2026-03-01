@@ -1,5 +1,5 @@
 from django import forms
-from configuracoes.models import MarcaGarantia
+from configuracoes.models import MarcaGarantia, TipoEquipamentoConfig
 from orcamentos.models import Orcamento
 
 from .models import LinhaTrabalho, NotificacaoCliente, OrdemServico, ServicoPeca
@@ -20,6 +20,13 @@ class OrdemServicoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        tipos_cfg = list(TipoEquipamentoConfig.objects.filter(ativo=True).order_by("ordem", "nome"))
+        tipos_base = list(OrdemServico.TIPO_EQUIPAMENTO_CHOICES)
+        if tipos_cfg:
+            self.fields["tipo_equipamento"].choices = [(t.codigo, t.nome) for t in tipos_cfg]
+        else:
+            self.fields["tipo_equipamento"].choices = tipos_base
+
         marcas = list(MarcaGarantia.objects.filter(ativo=True).order_by("nome"))
         self._marcas_map = {str(m.id): m for m in marcas}
         self.fields["marca_catalogo"].choices = [

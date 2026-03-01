@@ -1,0 +1,84 @@
+{% extends "core/base.html" %}
+
+{% block title %}Tipos de Equipamento{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h5 class="mb-0">Tipos de Equipamento</h5>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-5">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="item_id" value="{{ edit_item_id|default:'' }}">
+          <div class="form-group">
+            <label>Nome</label>
+            {{ form.nome }}
+          </div>
+          <div class="form-group">
+            <label>Codigo (interno)</label>
+            {{ form.codigo }}
+          </div>
+          <div class="form-group">
+            <label>Ordem</label>
+            {{ form.ordem }}
+          </div>
+          <div class="form-group form-check">
+            {{ form.ativo }} <label class="form-check-label">{{ form.ativo.label }}</label>
+          </div>
+          <button class="btn btn-primary" type="submit">{% if edit_item_id %}Atualizar{% else %}Salvar{% endif %}</button>
+          {% if edit_item_id %}
+          <a class="btn btn-outline-secondary" href="{% url 'configuracoes:tipos_equipamento' %}">Cancelar</a>
+          {% endif %}
+        </form>
+      </div>
+      <div class="col-md-7">
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Codigo</th>
+                <th>Ordem</th>
+                <th>Ativo</th>
+                <th>Acoes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in itens %}
+              <tr>
+                <td>{{ item.nome }}</td>
+                <td>{{ item.codigo }}</td>
+                <td>{{ item.ordem }}</td>
+                <td>{{ item.ativo|yesno:"Sim,Nao" }}</td>
+                <td class="text-nowrap">
+                  <a class="btn btn-sm btn-outline-primary" href="?edit={{ item.id }}">Editar</a>
+                  <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="toggle">
+                    <input type="hidden" name="item_id" value="{{ item.id }}">
+                    <button class="btn btn-sm btn-outline-warning" type="submit">
+                      {% if item.ativo %}Desativar{% else %}Ativar{% endif %}
+                    </button>
+                  </form>
+                  <form method="post" class="d-inline" onsubmit="return confirm('Remover tipo de equipamento?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="delete">
+                    <input type="hidden" name="item_id" value="{{ item.id }}">
+                    <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" class="text-center text-muted">Sem tipos cadastrados.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

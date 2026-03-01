@@ -926,6 +926,58 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+<div class="tab-pane fade {% if active_tab == 'arquivos' %}show active{% endif %}" id="arquivos">
+    <div class="card-modern">
+        <div class="card-modern-header d-flex justify-content-between align-items-center">
+            <span>Anexos da OS</span>
+            {% if not ordem.fechada %}
+            <button class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarArquivo">
+                <i class="fas fa-paperclip mr-1"></i>Anexar arquivos
+            </button>
+            {% else %}
+            <span class="text-light"><i class="fas fa-lock mr-1"></i>Edicao bloqueada</span>
+            {% endif %}
+        </div>
+        <div class="card-modern-body">
+            <div class="mb-2">
+                <span class="badge badge-info">Fotos: {{ fotos_count }}</span>
+                {% if pode_incluir_fotos_relatorio %}
+                <span class="badge badge-success">Ja e possivel incluir fotos no relatorio tecnico</span>
+                {% else %}
+                <span class="badge badge-secondary">Anexe mais fotos (minimo 4) para habilitar inclusao no relatorio</span>
+                {% endif %}
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Arquivo</th>
+                            <th>Descricao</th>
+                            <th>Tipo</th>
+                            <th>Incluir no Relatorio</th>
+                            <th>Enviado por</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for a in arquivos_os %}
+                        <tr>
+                            <td><a href="{{ a.arquivo.url }}" target="_blank">{{ a.arquivo.name|default:"arquivo" }}</a></td>
+                            <td>{{ a.descricao|default:"-" }}</td>
+                            <td>{% if a.eh_imagem %}Imagem{% else %}Documento{% endif %}</td>
+                            <td>{% if a.incluir_relatorio %}Sim{% else %}Nao{% endif %}</td>
+                            <td>{% if a.enviado_por %}{{ a.enviado_por.username }}{% else %}-{% endif %}</td>
+                            <td>{{ a.criado_em|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted">Sem arquivos anexados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
     <div class="tab-pane fade {% if active_tab == 'alertas' %}show active{% endif %}" id="alertas">
         <div class="card-modern">
             <div class="card-modern-header">Alertas da OS</div>
@@ -1007,6 +1059,43 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         </div>
     </div>
+    {% if pode_ver_logs %}
+    <div class="tab-pane fade {% if active_tab == 'logs' %}show active{% endif %}" id="logs">
+        <div class="card-modern">
+            <div class="card-modern-header">
+                <i class="fas fa-clipboard-list mr-2"></i>Logs da OS
+            </div>
+            <div class="card-modern-body">
+                {% if logs_os %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Evento</th>
+                                <th>Descricao</th>
+                                <th>Usuario</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs_os %}
+                            <tr>
+                                <td>{{ log.data_evento|date:"d/m/Y H:i" }}</td>
+                                <td>{{ log.get_tipo_evento_display|default:log.tipo_evento }}</td>
+                                <td>{{ log.descricao|linebreaksbr }}</td>
+                                <td>{% if log.usuario_responsavel %}{{ log.usuario_responsavel.username }}{% else %}-{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Sem logs operacionais.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 </div>
 <!-- Modal Adicionar Linha -->
@@ -1034,43 +1123,48 @@ document.addEventListener('DOMContentLoaded', function() {
 
         </div>
     </div>
-{% if pode_ver_logs %}
-<div class="tab-pane fade {% if active_tab == 'logs' %}show active{% endif %}" id="logs">
-    <div class="card-modern">
-        <div class="card-modern-header">
-            <i class="fas fa-clipboard-list mr-2"></i>Logs da OS
-        </div>
-        <div class="card-modern-body">
-            {% if logs_os %}
-            <div class="table-responsive">
-                <table class="table table-sm table-bordered">
-                    <thead>
-                        <tr>
-                            <th>Data</th>
-                            <th>Evento</th>
-                            <th>Descricao</th>
-                            <th>Usuario</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for log in logs_os %}
-                        <tr>
-                            <td>{{ log.data_evento|date:"d/m/Y H:i" }}</td>
-                            <td>{{ log.get_tipo_evento_display|default:log.tipo_evento }}</td>
-                            <td>{{ log.descricao|linebreaksbr }}</td>
-                            <td>{% if log.usuario_responsavel %}{{ log.usuario_responsavel.username }}{% else %}-{% endif %}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+ </div>
+<div class="modal fade" id="modalAdicionarArquivo" tabindex="-1" role="dialog" aria-labelledby="modalAdicionarArquivoLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAdicionarArquivoLabel">Anexar arquivos da OS</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
-            {% else %}
-            <p class="text-muted mb-0">Sem logs operacionais.</p>
-            {% endif %}
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="arquivo">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="arquivos_upload">Fotos / PDFs</label>
+                        <input type="file" id="arquivos_upload" name="arquivos" class="form-control-file" multiple required>
+                        <small class="form-text text-muted">Suporta imagens e documentos. Pode enviar mais de um arquivo.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="descricao_arquivo">Descricao (opcional)</label>
+                        <input type="text" id="descricao_arquivo" name="descricao" class="form-control" maxlength="160" placeholder="Ex: fotos do defeito / nota fiscal">
+                    </div>
+                    <div class="form-group mb-0">
+                        {% if pode_incluir_fotos_relatorio %}
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="incluir_relatorio" name="incluir_relatorio" value="1">
+                            <label class="custom-control-label" for="incluir_relatorio">Incluir no relatório técnico</label>
+                        </div>
+                        {% else %}
+                        <div class="text-muted">
+                            Opcao de incluir no relatorio habilita com 4 ou mais fotos na OS.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Salvar anexos</button>
+                </div>
+            </form>
         </div>
     </div>
-</div>
-{% endif %}
 </div>
 
 <div class="modal fade" id="modalConfirmacaoImpresso" tabindex="-1" role="dialog" aria-labelledby="modalConfirmacaoImpressoLabel" aria-hidden="true">

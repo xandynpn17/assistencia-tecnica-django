@@ -122,6 +122,7 @@
 {% block extra_js %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    const ordemForm = document.getElementById("ordem-form");
     const marcaSelect = document.getElementById("id_marca_catalogo");
     const manualWrap = document.getElementById("marca-manual-wrap");
     const manualInput = document.getElementById("id_marca_manual");
@@ -245,6 +246,18 @@ document.addEventListener("DOMContentLoaded", function () {
         showStep(1);
     } else {
         showStep(0);
+    }
+
+    // Evita avanço/submissão acidental ao pressionar Enter durante o preenchimento.
+    if (ordemForm) {
+        ordemForm.addEventListener("keydown", function (event) {
+            if (event.key !== "Enter") return;
+            const tag = (event.target && event.target.tagName || "").toLowerCase();
+            const type = (event.target && event.target.type || "").toLowerCase();
+            if (tag === "textarea") return;
+            if (type === "submit" || type === "button") return;
+            event.preventDefault();
+        });
     }
 });
 </script>

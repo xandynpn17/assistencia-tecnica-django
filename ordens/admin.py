@@ -1,8 +1,8 @@
 ﻿from django.contrib import admin
 
-from .models import LinhaTrabalho, LogConfirmacaoOS, LogOS, NotificacaoCliente, OrdemServico
+from .models import LinhaTrabalho, LogConfirmacaoOS, LogOS, NotificacaoCliente, OrdemArquivo, OrdemServico
 
-for model in (OrdemServico, LinhaTrabalho, NotificacaoCliente, LogConfirmacaoOS, LogOS):
+for model in (OrdemServico, LinhaTrabalho, NotificacaoCliente, LogConfirmacaoOS, LogOS, OrdemArquivo):
     try:
         admin.site.unregister(model)
     except admin.sites.NotRegistered:
@@ -69,3 +69,10 @@ class LogOSAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(OrdemArquivo)
+class OrdemArquivoAdmin(admin.ModelAdmin):
+    list_display = ("ordem", "descricao", "incluir_relatorio", "enviado_por", "criado_em")
+    list_filter = ("incluir_relatorio", "criado_em")
+    search_fields = ("ordem__numero_os", "descricao", "arquivo")
