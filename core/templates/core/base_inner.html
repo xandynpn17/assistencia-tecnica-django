@@ -1,6 +1,6 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -130,6 +130,24 @@
 <script src="{% static 'adminlte/plugins/jquery/jquery.min.js' %}"></script>
 <script src="{% static 'adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
 <script src="{% static 'adminlte/dist/js/adminlte.min.js' %}"></script>
+<script src="{% static 'js/system_messages.js' %}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.documentElement.setAttribute("lang", "pt-BR");
+    const ignorarTipos = new Set(["password", "email", "number", "date", "datetime-local", "time", "month", "week", "url", "tel", "hidden"]);
+    document.querySelectorAll("textarea, input, [contenteditable='true']").forEach(function (el) {
+        if (el.hasAttribute("data-no-spellcheck")) return;
+        const tipo = (el.getAttribute("type") || "text").toLowerCase();
+        if (el.tagName === "INPUT" && ignorarTipos.has(tipo)) return;
+        el.setAttribute("lang", "pt-BR");
+        el.setAttribute("spellcheck", "true");
+        el.setAttribute("autocorrect", "off");
+    });
+});
+</script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>
+
+
+

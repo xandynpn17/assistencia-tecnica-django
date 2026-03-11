@@ -13,20 +13,23 @@
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="item_id" value="{{ edit_item_id|default:'' }}">
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger py-2">
+            {{ form.non_field_errors }}
+          </div>
+          {% endif %}
           <div class="form-group">
             <label>Nome</label>
             {{ form.nome }}
-          </div>
-          <div class="form-group">
-            <label>Codigo (interno)</label>
-            {{ form.codigo }}
-          </div>
-          <div class="form-group">
-            <label>Ordem</label>
-            {{ form.ordem }}
+            {% for err in form.nome.errors %}
+            <div class="text-danger small">{{ err }}</div>
+            {% endfor %}
           </div>
           <div class="form-group form-check">
             {{ form.ativo }} <label class="form-check-label">{{ form.ativo.label }}</label>
+            {% for err in form.ativo.errors %}
+            <div class="text-danger small">{{ err }}</div>
+            {% endfor %}
           </div>
           <button class="btn btn-primary" type="submit">{% if edit_item_id %}Atualizar{% else %}Salvar{% endif %}</button>
           {% if edit_item_id %}
@@ -40,8 +43,6 @@
             <thead>
               <tr>
                 <th>Nome</th>
-                <th>Codigo</th>
-                <th>Ordem</th>
                 <th>Ativo</th>
                 <th>Acoes</th>
               </tr>
@@ -50,9 +51,7 @@
               {% for item in itens %}
               <tr>
                 <td>{{ item.nome }}</td>
-                <td>{{ item.codigo }}</td>
-                <td>{{ item.ordem }}</td>
-                <td>{{ item.ativo|yesno:"Sim,Nao" }}</td>
+                <td>{{ item.ativo|yesno:"Sim,Não" }}</td>
                 <td class="text-nowrap">
                   <a class="btn btn-sm btn-outline-primary" href="?edit={{ item.id }}">Editar</a>
                   <form method="post" class="d-inline">
@@ -63,7 +62,7 @@
                       {% if item.ativo %}Desativar{% else %}Ativar{% endif %}
                     </button>
                   </form>
-                  <form method="post" class="d-inline" onsubmit="return confirm('Remover tipo de equipamento?');">
+                  <form method="post" class="d-inline" onsubmit="return window.AppMessages.confirmSync('Remover tipo de equipamento?');">
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="delete">
                     <input type="hidden" name="item_id" value="{{ item.id }}">
@@ -72,7 +71,7 @@
                 </td>
               </tr>
               {% empty %}
-              <tr><td colspan="5" class="text-center text-muted">Sem tipos cadastrados.</td></tr>
+              <tr><td colspan="3" class="text-center text-muted">Sem tipos cadastrados.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -82,3 +81,4 @@
   </div>
 </div>
 {% endblock %}
+

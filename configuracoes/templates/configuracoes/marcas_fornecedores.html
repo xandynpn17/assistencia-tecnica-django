@@ -37,6 +37,8 @@
             <div class="col-md-4">{{ fornecedor_form.inscricao_estadual.label_tag }}{{ fornecedor_form.inscricao_estadual }}</div>
             <div class="col-md-4">{{ fornecedor_form.contato.label_tag }}{{ fornecedor_form.contato }}</div>
             <div class="col-md-4">{{ fornecedor_form.telefone.label_tag }}{{ fornecedor_form.telefone }}</div>
+            <div class="col-md-8">{{ fornecedor_form.endereco.label_tag }}{{ fornecedor_form.endereco }}</div>
+            <div class="col-md-4">{{ fornecedor_form.cep.label_tag }}{{ fornecedor_form.cep }}</div>
             <div class="col-md-4">{{ fornecedor_form.email.label_tag }}{{ fornecedor_form.email }}</div>
             <div class="col-md-4">{{ fornecedor_form.modalidade_pagamento.label_tag }}{{ fornecedor_form.modalidade_pagamento }}</div>
             <div class="col-md-4">{{ fornecedor_form.prazo_pagamento_dias.label_tag }}{{ fornecedor_form.prazo_pagamento_dias }}</div>
@@ -60,21 +62,30 @@
         </form>
         <div class="table-responsive">
           <table class="table table-sm table-bordered">
-            <thead><tr><th>Nome</th><th>CNPJ</th><th>IE</th><th>Modalidade</th><th>Prazo</th><th>Documento</th><th>Comprovante</th><th>Ativo</th><th>Acoes</th></tr></thead>
+            <thead><tr><th>Nome</th><th>CNPJ</th><th>IE</th><th>Contato</th><th>Telefone</th><th>Endereco</th><th>Modalidade</th><th>Prazo</th><th>Documento</th><th>Comprovante</th><th>Ativo</th><th>Acoes</th></tr></thead>
             <tbody>
               {% for f in fornecedores %}
               <tr>
                 <td>{{ f.nome }}</td>
                 <td>{{ f.cnpj|default:"-" }}</td>
                 <td>{{ f.inscricao_estadual|default:"-" }}</td>
+                <td>{{ f.contato|default:"-" }}</td>
+                <td>{{ f.telefone|default:"-" }}</td>
+                <td>
+                  {% if f.endereco or f.cep %}
+                  {{ f.endereco|default:"-" }}{% if f.cep %} - CEP {{ f.cep }}{% endif %}
+                  {% else %}
+                  -
+                  {% endif %}
+                </td>
                 <td>{{ f.get_modalidade_pagamento_display }}</td>
                 <td>{{ f.prazo_pagamento_dias }} dias</td>
                 <td>{% if f.documento_anexo %}<a href="{{ f.documento_anexo.url }}" target="_blank">Ver</a>{% else %}-{% endif %}</td>
                 <td>{% if f.comprovante_pagamento_anexo %}<a href="{{ f.comprovante_pagamento_anexo.url }}" target="_blank">Ver</a>{% else %}-{% endif %}</td>
-                <td>{{ f.ativo|yesno:"Sim,Nao" }}</td>
+                <td>{{ f.ativo|yesno:"Sim,Não" }}</td>
                 <td class="text-nowrap">
                   <a class="btn btn-sm btn-outline-primary" href="?edit_fornecedor={{ f.id }}#tab-fornecedor-cad">Editar</a>
-                  <form method="post" class="d-inline" onsubmit="return confirm('Excluir fornecedor?');">
+                  <form method="post" class="d-inline" onsubmit="return window.AppMessages.confirmSync('Excluir fornecedor?');">
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="fornecedor_delete">
                     <input type="hidden" name="fornecedor_id" value="{{ f.id }}">
@@ -83,7 +94,7 @@
                 </td>
               </tr>
               {% empty %}
-              <tr><td colspan="9" class="text-center text-muted">Sem fornecedores.</td></tr>
+              <tr><td colspan="12" class="text-center text-muted">Sem fornecedores.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -104,30 +115,101 @@
       </div>
 
       <div class="tab-pane fade" id="tab-marca-cad">
-        <div class="row">
-          <div class="col-md-6">
+        <div class="row mb-3">
+          <div class="col-md-12">
             <form method="post">
               {% csrf_token %}
               <input type="hidden" name="form_type" value="{% if edit_marca_id %}marca_edit{% else %}marca{% endif %}">
               {% if edit_marca_id %}
               <input type="hidden" name="marca_id" value="{{ edit_marca_id }}">
               {% endif %}
-              {{ marca_form.as_p }}
-              <button class="btn btn-success" type="submit">{% if edit_marca_id %}Atualizar marca{% else %}Salvar marca{% endif %}</button>
+              <div class="row">
+                <div class="col-md-4">{{ marca_form.nome.label_tag }}{{ marca_form.nome }}</div>
+                <div class="col-md-4">{{ marca_form.fornecedor.label_tag }}{{ marca_form.fornecedor }}</div>
+                <div class="col-md-8">{{ marca_form.procedimentos.label_tag }}{{ marca_form.procedimentos }}</div>
+                <div class="col-md-2">{{ marca_form.parceira_garantia.label_tag }}<br>{{ marca_form.parceira_garantia }}</div>
+                <div class="col-md-2">{{ marca_form.ativo.label_tag }}<br>{{ marca_form.ativo }}</div>
+              </div>
+              <button class="btn btn-success mt-3" type="submit">{% if edit_marca_id %}Atualizar marca{% else %}Salvar marca{% endif %}</button>
               {% if edit_marca_id %}
-              <a class="btn btn-outline-secondary ml-2" href="{% url 'configuracoes:marcas_fornecedores' %}#tab-marca-cad">Cancelar edicao</a>
+              <a class="btn btn-outline-secondary mt-3 ml-2" href="{% url 'configuracoes:marcas_fornecedores' %}#tab-marca-cad">Nova marca</a>
               {% endif %}
             </form>
           </div>
-          <div class="col-md-6">
-            <form method="post">
-              {% csrf_token %}
-              <input type="hidden" name="form_type" value="regra">
-              {{ regra_form.as_p }}
-              <button class="btn btn-info" type="submit">Salvar regra por tipo</button>
-            </form>
-          </div>
         </div>
+
+        {% if edit_marca_id and marca_em_edicao %}
+        <hr>
+        <h6 class="mb-3">Itens de mao de obra da marca: {{ marca_em_edicao.nome }}</h6>
+        <form method="post" class="mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="{% if edit_regra_id %}regra_edit{% else %}regra_add{% endif %}">
+          <input type="hidden" name="marca_id" value="{{ edit_marca_id }}">
+          {% if edit_regra_id %}
+          <input type="hidden" name="regra_id" value="{{ edit_regra_id }}">
+          {% endif %}
+          <div class="row">
+            <div class="col-md-4">{{ regra_form.tipo_produto.label_tag }}{{ regra_form.tipo_produto }}</div>
+            <div class="col-md-2">{{ regra_form.valor_mao_obra.label_tag }}{{ regra_form.valor_mao_obra }}</div>
+            <div class="col-md-2">{{ regra_form.valor_mao_obra_tecnico.label_tag }}{{ regra_form.valor_mao_obra_tecnico }}</div>
+            <div class="col-md-2">{{ regra_form.modalidade_pagamento.label_tag }}{{ regra_form.modalidade_pagamento }}</div>
+            <div class="col-md-2">{{ regra_form.prazo_pagamento_dias.label_tag }}{{ regra_form.prazo_pagamento_dias }}</div>
+            <div class="col-md-3">{{ regra_form.inicio_vigencia.label_tag }}{{ regra_form.inicio_vigencia }}</div>
+            <div class="col-md-3">{{ regra_form.fim_vigencia.label_tag }}{{ regra_form.fim_vigencia }}</div>
+            <div class="col-md-2">{{ regra_form.ativo.label_tag }}<br>{{ regra_form.ativo }}</div>
+          </div>
+          <button class="btn btn-info mt-3" type="submit">{% if edit_regra_id %}Atualizar item{% else %}Adicionar item{% endif %}</button>
+          {% if edit_regra_id %}
+          <a class="btn btn-outline-secondary mt-3 ml-2" href="?edit_marca={{ edit_marca_id }}#tab-marca-cad">Cancelar edicao do item</a>
+          {% endif %}
+        </form>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th>Tipo equipamento</th>
+                <th>Valor mao de obra (marca)</th>
+                <th>Repasse tecnico</th>
+                <th>Modalidade</th>
+                <th>Prazo</th>
+                <th>Vigencia</th>
+                <th>Ativo</th>
+                <th>Acoes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in regras_marca %}
+              <tr>
+                <td>{{ r.tipo_produto_label }}</td>
+                <td>R$ {{ r.valor_mao_obra|floatformat:2 }}</td>
+                <td>R$ {{ r.valor_mao_obra_tecnico|floatformat:2 }}</td>
+                <td>{{ r.get_modalidade_pagamento_display }}</td>
+                <td>{{ r.prazo_pagamento_dias }} dias</td>
+                <td>{{ r.inicio_vigencia|date:"d/m/Y" }}{% if r.fim_vigencia %} ate {{ r.fim_vigencia|date:"d/m/Y" }}{% else %} (sem fim){% endif %}</td>
+                <td>{{ r.ativo|yesno:"Sim,Não" }}</td>
+                <td class="text-nowrap">
+                  <a class="btn btn-sm btn-outline-primary" href="?edit_marca={{ edit_marca_id }}&edit_regra={{ r.id }}#tab-marca-cad">Editar</a>
+                  <form method="post" class="d-inline" onsubmit="return window.AppMessages.confirmSync('Remover item de mao de obra?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="regra_delete">
+                    <input type="hidden" name="marca_id" value="{{ edit_marca_id }}">
+                    <input type="hidden" name="regra_id" value="{{ r.id }}">
+                    <button class="btn btn-sm btn-outline-danger" type="submit">Remover</button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="8" class="text-center text-muted">Nenhum item cadastrado para esta marca.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info mb-0">
+          Salve a marca primeiro. Depois sera liberada a tabela para cadastrar os itens de mao de obra por tipo de equipamento.
+        </div>
+        {% endif %}
       </div>
 
       <div class="tab-pane fade" id="tab-marca-cons">
@@ -137,19 +219,18 @@
         </form>
         <div class="table-responsive mb-3">
           <table class="table table-sm table-bordered">
-            <thead><tr><th>Marca</th><th>Fornecedor</th><th>Parceira Garantia</th><th>Procedimentos</th><th>Mao de obra base</th><th>Ativa</th><th>Acoes</th></tr></thead>
+            <thead><tr><th>Marca</th><th>Fornecedor</th><th>Parceira Garantia</th><th>Procedimentos</th><th>Ativa</th><th>Acoes</th></tr></thead>
             <tbody>
               {% for m in marcas %}
               <tr>
                 <td>{{ m.nome }}</td>
                 <td>{{ m.fornecedor.nome|default:"-" }}</td>
-                <td>{{ m.parceira_garantia|yesno:"Sim,Nao" }}</td>
+                <td>{{ m.parceira_garantia|yesno:"Sim,Não" }}</td>
                 <td>{{ m.procedimentos|default:"-"|truncatechars:120 }}</td>
-                <td>R$ {{ m.valor_mao_obra_garantia|floatformat:2 }}</td>
-                <td>{{ m.ativo|yesno:"Sim,Nao" }}</td>
+                <td>{{ m.ativo|yesno:"Sim,Não" }}</td>
                 <td class="text-nowrap">
                   <a class="btn btn-sm btn-outline-primary" href="?edit_marca={{ m.id }}#tab-marca-cad">Editar</a>
-                  <form method="post" class="d-inline" onsubmit="return confirm('Excluir marca?');">
+                  <form method="post" class="d-inline" onsubmit="return window.AppMessages.confirmSync('Excluir marca?');">
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="marca_delete">
                     <input type="hidden" name="marca_id" value="{{ m.id }}">
@@ -158,7 +239,7 @@
                 </td>
               </tr>
               {% empty %}
-              <tr><td colspan="7" class="text-center text-muted">Sem marcas.</td></tr>
+              <tr><td colspan="6" class="text-center text-muted">Sem marcas.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -184,7 +265,7 @@
               {% for r in regras %}
               <tr>
                 <td>{{ r.marca.nome }}</td>
-                <td>{{ r.get_tipo_produto_display }}</td>
+                <td>{{ r.tipo_produto_label }}</td>
                 <td>R$ {{ r.valor_mao_obra|floatformat:2 }}</td>
                 <td>R$ {{ r.valor_mao_obra_tecnico|floatformat:2 }}</td>
                 <td>{{ r.get_modalidade_pagamento_display }}</td>
@@ -213,5 +294,45 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 });
+
+function maskDigits(value, max) {
+  const digits = (value || "").replace(/\D/g, "");
+  return max ? digits.slice(0, max) : digits;
+}
+
+function maskCnpj(value) {
+  let v = maskDigits(value, 14);
+  v = v.replace(/^(\d{2})(\d)/, "$1.$2");
+  v = v.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3");
+  v = v.replace(/\.(\d{3})(\d)/, ".$1/$2");
+  v = v.replace(/(\d{4})(\d)/, "$1-$2");
+  return v;
+}
+
+function maskPhone(value) {
+  const v = maskDigits(value, 11);
+  if (v.length <= 10) {
+    return v.replace(/^(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)/, "$1-$2");
+  }
+  return v.replace(/^(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
+}
+
+function maskCep(value) {
+  return maskDigits(value, 8).replace(/^(\d{5})(\d)/, "$1-$2");
+}
+
+document.addEventListener("input", function (event) {
+  const el = event.target;
+  if (el.name === "cnpj") {
+    el.value = maskCnpj(el.value);
+  }
+  if (el.name === "telefone") {
+    el.value = maskPhone(el.value);
+  }
+  if (el.name === "cep") {
+    el.value = maskCep(el.value);
+  }
+});
 </script>
 {% endblock %}
+

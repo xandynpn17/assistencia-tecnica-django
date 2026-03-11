@@ -1,4 +1,4 @@
-﻿{% extends "core/base.html" %}
+{% extends "core/base.html" %}
 {% load static %}
 
 {% block extra_css %}
@@ -48,6 +48,67 @@
 .fab-options .btn {
     min-width: 210px;
     text-align: left;
+}
+.detalhes-footer-meta {
+    border-top: none;
+    margin-top: 10px;
+    padding-top: 10px;
+}
+.detalhes-footer-meta .meta-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.detalhes-footer-meta .meta-stacked {
+    display: block;
+}
+.detalhes-footer-meta .meta-label {
+    font-size: 0.82rem;
+    color: #6c757d;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+.observacoes-wrap {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.observacoes-wrap textarea {
+    flex: 0 0 auto;
+    min-height: 120px;
+    max-height: 140px;
+}
+.bloco-detalhe {
+    display: flex;
+    flex-direction: column;
+}
+.bloco-detalhe-conteudo {
+    margin-bottom: 0;
+    overflow: auto;
+    line-height: 1.35;
+}
+.bloco-defeito .bloco-detalhe-conteudo {
+    height: 170px;
+}
+.bloco-acessorios,
+.bloco-peritagem {
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+}
+.bloco-acessorios h6,
+.bloco-peritagem h6 {
+    margin-bottom: 0.35rem !important;
+}
+.bloco-acessorios .bloco-detalhe-conteudo {
+    height: 2.2em;
+}
+.bloco-peritagem .bloco-detalhe-conteudo {
+    height: auto;
+}
+.bloco-peritagem {
+    flex: 1 1 auto;
+    margin-bottom: 0 !important;
 }
 
 </style>
@@ -172,6 +233,7 @@
 {% endblock %}
 
 {% block content %}
+<div id="page-system-messages" class="mb-3"></div>
 
 
 
@@ -209,7 +271,7 @@
     {% endfor %}
     {% if request.GET.wa %}
     <div class="alert alert-info">
-        Janela de envio WhatsApp preparada. Caso nao abra automaticamente,
+        Janela de envio WhatsApp preparada. Caso não abra automaticamente,
         <a href="{{ request.GET.wa }}" target="_blank" rel="noopener">clique aqui</a>.
     </div>
     <script>
@@ -219,8 +281,8 @@
         const key = "wa_opened_" + window.location.pathname + "|" + waWeb + "|" + waApp;
         const alreadyOpened = sessionStorage.getItem(key) === "1";
         if (!alreadyOpened) {
-          if (waApp) { window.open(waApp, "_blank", "noopener"); }
-          if (waWeb) { setTimeout(function(){ window.open(waWeb, "_blank", "noopener"); }, 350); }
+          const target = waWeb || waApp;
+          if (target) { window.open(target, "_blank", "noopener"); }
           sessionStorage.setItem(key, "1");
         }
         const url = new URL(window.location.href);
@@ -243,30 +305,30 @@
 
             <!-- Card Body -->
             <div class="card-modern-body">
-                <div class="row">
+                <div class="row align-items-stretch">
                     <!-- Conteudo principal (esquerda) -->
-                    <div class="col-md-8 d-flex flex-column gap-3">
+                    <div class="col-md-8 d-flex flex-column h-100" id="detalhesColunaEsquerda">
 
                         <!-- Caixa Defeito -->
-                        <div class="border rounded bg-light p-3 mb-3">
+                        <div class="border rounded bg-light p-3 mb-3 bloco-detalhe bloco-defeito">
                             <h6 class="font-weight-bold mb-2">Defeito Reclamado</h6>
-                            <p class="mb-0">{{ ordem.defeito|default:"-" }}</p>
+                            <p class="bloco-detalhe-conteudo">{{ ordem.defeito|default:"-" }}</p>
                         </div>
 
                         <!-- Caixa Acessorios -->
-                        <div class="border rounded bg-light p-3 mb-3">
+                        <div class="border rounded bg-light p-3 mb-3 bloco-detalhe bloco-acessorios">
                             <h6 class="font-weight-bold mb-2">Acessorios</h6>
-                            <p class="mb-0">{{ ordem.acessorios|default:"-" }}</p>
+                            <p class="bloco-detalhe-conteudo">{{ ordem.acessorios|default:"-" }}</p>
                         </div>
 
                         <!-- Caixa Peritagem -->
-                        <div class="border rounded bg-light p-3">
+                        <div class="border rounded bg-light p-3 bloco-detalhe bloco-peritagem" id="blocoPeritagem">
                             <h6 class="font-weight-bold mb-2">Peritagem</h6>
-                            <p class="mb-0">
+                            <p class="bloco-detalhe-conteudo">
                                 {% if ordem.peritagem %}
                                 {{ ordem.peritagem }}
                                 {% else %}
-                                <span class="text-muted">Nao informado</span>
+                                <span class="text-muted">Não informado</span>
                                 {% endif %}
                             </p>
                         </div>
@@ -274,54 +336,78 @@
 
                     <!-- Barra lateral (direita) -->
                     <div class="col-md-4">
-                        <div class="border rounded bg-white p-3 h-100 d-flex flex-column">
+                        <div class="border rounded bg-white p-3 h-100 d-flex flex-column" id="painelDetalhesLateral">
 
                             <!-- Dados do equipamento -->
                             <div class="mb-3">
                                 <p class="mb-1"><strong>Tipo:</strong> {{ ordem.get_tipo_equipamento_display }}</p>
                                 <p class="mb-1"><strong>Marca:</strong> {{ ordem.marca_equipamento }}</p>
                                 <p class="mb-1"><strong>Modelo:</strong> {{ ordem.modelo_equipamento }}</p>
-                                <p class="mb-1"><strong>Nº Serie:</strong> {{ ordem.numero_serie_equipamento|default:"-" }}</p>
-                            </div>
-
-                            <hr class="my-2">
-                            <!-- Tecnico Responsavel -->
-                            <div class="mb-3">
-                                <label class="font-weight-bold mb-1" for="tecnicoResponsavel">Tecnico Responsavel</label>
-                                <select id="tecnicoResponsavel"
-                                        class="form-control form-control-sm"
-                                        data-os-id="{{ ordem.id }}">
-                                    <option value="">-- Selecione --</option>
-                                    {% for user in tecnicos %}
-                                        <option value="{{ user.id }}" {% if ordem.tecnico_responsavel_id == user.id %}selected{% endif %}>
-                                            {{ user.username }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                                <div id="tecnico-feedback" class="small mt-1"></div>
-                            </div>
-
-                            <!-- Local de Armazenamento -->
-                            <div class="mb-3">
-                                <label class="font-weight-bold mb-1" for="localArmazenamento">Local de
-                                    Armazenamento</label>
-                                <input type="text" id="localArmazenamento"
-                                       class="form-control form-control-sm"
-                                       value="{{ ordem.local_armazenamento|default:'' }}"
-                                       data-os-id="{{ ordem.id }}"
-                                       placeholder="Digite o local...">
-                                <div id="local-feedback" class="small mt-1"></div>
+                                <p class="mb-1">
+                                    <strong>Nº Serie:</strong>
+                                    <span id="serie-view"
+                                          class="{% if pode_editar_serie %}text-primary{% endif %}"
+                                          {% if pode_editar_serie %}style="cursor:pointer;" title="Duplo clique para editar"{% endif %}>
+                                        {{ ordem.numero_serie_equipamento|default:"-" }}
+                                    </span>
+                                    {% if pode_editar_serie %}
+                                    <span id="serie-editor" class="d-none ml-2">
+                                        <input type="text" id="serie-input" class="form-control form-control-sm d-inline-block" style="width:220px;" value="{{ ordem.numero_serie_equipamento|default:'' }}">
+                                        <button type="button" id="serie-save" class="btn btn-sm btn-success ml-1">Salvar</button>
+                                        <button type="button" id="serie-cancel" class="btn btn-sm btn-outline-secondary ml-1">Cancelar</button>
+                                    </span>
+                                    {% endif %}
+                                </p>
+                                <div id="serie-feedback" class="small"></div>
+                                <p class="mb-1 mt-2">
+                                    <strong>Processo anterior:</strong>
+                                    {% if processo_anterior_sn %}
+                                        <a href="{% url 'ordens:detalhes_ordem' processo_anterior_sn.id %}">#{{ processo_anterior_sn.numero_os }}</a>
+                                    {% endif %}
+                                </p>
                             </div>
 
                             <!-- Observacoes Internas -->
-                            <div>
+                            <div class="observacoes-wrap">
                                 <label class="font-weight-bold mb-1" for="observacoes">Observacoes (internas)</label>
                                 <textarea id="observacoes"
                                           class="form-control form-control-sm"
-                                          rows="3"
+                                          rows="5"
                                           data-os-id="{{ ordem.id }}"
                                           placeholder="Somente visivel internamente...">{{ ordem.notas_internas|default:"" }}</textarea>
                                 <div id="observacoes-feedback" class="small mt-1"></div>
+                            </div>
+
+                            <div class="detalhes-footer-meta">
+                                <div class="mb-2">
+                                    <div class="meta-stacked">
+                                        <label class="meta-label" for="tecnicoResponsavel">Tecnico responsavel:</label>
+                                        <select id="tecnicoResponsavel"
+                                                class="form-control form-control-sm"
+                                                style="height: 31px;"
+                                                data-os-id="{{ ordem.id }}">
+                                            <option value="">-- Selecione --</option>
+                                            {% for user in tecnicos %}
+                                                <option value="{{ user.id }}" {% if ordem.tecnico_responsavel_id == user.id %}selected{% endif %}>
+                                                    {{ user.username }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div id="tecnico-feedback" class="small mt-1"></div>
+                                </div>
+                                <div>
+                                    <div class="meta-stacked">
+                                        <label class="meta-label" for="localArmazenamento">Local de armazenamento:</label>
+                                        <input type="text" id="localArmazenamento"
+                                               class="form-control form-control-sm"
+                                               style="height: 31px;"
+                                               value="{{ ordem.local_armazenamento|default:'' }}"
+                                               data-os-id="{{ ordem.id }}"
+                                               placeholder="Local...">
+                                    </div>
+                                    <div id="local-feedback" class="small mt-1"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -356,7 +442,7 @@
 
                 <div class="card-modern-body">
                     {% if linhas %}
-                    <div class="list-group mb-3 list-group-inverted" id="linhasList">
+                    <div class="list-group mb-3" id="linhasList">
                         {% for linha in linhas %}
                         <div class="list-group-item">
                             <span class="linha-status badge badge-primary">{{ linha.get_status_display }}</span>
@@ -365,7 +451,9 @@
                                 {{ linha.criado_em|date:"d/m/Y H:i" }}
                                 {% if linha.usuario %}- {{ linha.usuario.username }}{% endif %}
                             </small>
-                            <p class="linha-descricao">{{ linha.descricao|default:"Sem Descricao" }}</p>
+                            {% if linha.descricao %}
+                            <p class="linha-descricao">{{ linha.descricao }}</p>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
@@ -380,16 +468,16 @@
             const toggleBtn = document.getElementById("toggleOrderBtn");
             const linhasList = document.getElementById("linhasList");
 
-            toggleBtn.addEventListener("click", () => {
-                linhasList.classList.toggle("list-group-inverted");
-
-                // Alterna a seta: descendente/ascendente
-                if (linhasList.classList.contains("list-group-inverted")) {
-                    toggleBtn.textContent = "↓"; // ordem descendente
-                } else {
-                    toggleBtn.textContent = "↑"; // ordem ascendente
-                }
-            });
+            if (toggleBtn && linhasList) {
+                toggleBtn.addEventListener("click", () => {
+                    linhasList.classList.toggle("list-group-inverted");
+                    if (linhasList.classList.contains("list-group-inverted")) {
+                        toggleBtn.textContent = "↓";
+                    } else {
+                        toggleBtn.textContent = "↑";
+                    }
+                });
+            }
         </script>
         <script>
     document.addEventListener("DOMContentLoaded", () => {
@@ -411,8 +499,13 @@
                 })
                 .then(res => res.json())
                 .then(data => {
-                    feedback.textContent = data.message;
-                    feedback.className = "small text-success";
+                    if (data && data.success === false) {
+                        feedback.textContent = data.message || "Erro ao salvar.";
+                        feedback.className = "small text-danger";
+                        return;
+                    }
+                    feedback.textContent = "";
+                    feedback.className = "small";
                 })
                 .catch(() => {
                     feedback.textContent = "Erro ao salvar.";
@@ -427,7 +520,21 @@
 <!-- Servicos & Pecas -->
 <div class="tab-pane fade {% if active_tab == 'servicos' %}show active{% endif %}" id="servicos">
     <div class="card-modern">
-        <div class="card-modern-header">Servicos & Pecas</div>
+        <div class="card-modern-header d-flex justify-content-between align-items-center">
+            <span>Servicos & Pecas</span>
+            {% if not ordem.fechada %}
+            <div class="d-flex">
+                <button type="button" class="btn btn-sm btn-light mr-2" data-toggle="modal" data-target="#modalAdicionarServicoPeca">
+                    <i class="fas fa-barcode mr-1"></i>Adicionar EAN/Produto
+                </button>
+                <button type="button" class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarTalao">
+                    <i class="fas fa-receipt mr-1"></i>Adicionar Taloes
+                </button>
+            </div>
+            {% else %}
+            <span class="text-light"><i class="fas fa-lock mr-1"></i>Edicao bloqueada</span>
+            {% endif %}
+        </div>
         <div class="card-modern-body">
             <div class="row mb-3">
                 <div class="col-md-4">
@@ -452,7 +559,7 @@
 
             <div class="alert {% if os_pago %}alert-success{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center">
                 <div>
-                    <strong>Pago?</strong> {% if os_pago %}Sim{% else %}Nao{% endif %}
+                    <strong>Pago?</strong> {% if os_pago %}Sim{% else %}Não{% endif %}
                     <br>
                     <small>
                         <strong>Referencias:</strong>
@@ -488,10 +595,24 @@
             <div class="list-group mb-3">
                 {% for item in itens %}
                 <div class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6>{{ item.nome }}</h6>
-                        <p>R$ {{ item.valor_unitario }} x {{ item.quantidade }} = R$ {{ item.total }}</p>
+                    <div class="w-100">
+                        <h6>{{ item.nome }} <span class="badge badge-light border">{{ item.get_tipo_display }}</span></h6>
+                        <p class="mb-1">R$ {{ item.valor_unitario }} x {{ item.quantidade }} = R$ {{ item.total }}</p>
+                        <small class="text-muted">Responsavel: {{ item.tecnico_responsavel.username|default:"-" }}</small>
+                        {% if item.garantia_dias %}
+                        <br><small class="text-muted">Garantia da peca: {{ item.garantia_dias }} dias</small>
+                        {% endif %}
                     </div>
+                    {% if not ordem.fechada %}
+                    <form method="post" class="ml-2 mb-0" onsubmit="return window.AppMessages.confirmSync('Excluir este item de Serviços e Peças?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="excluir_servico_peca">
+                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir item">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </form>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -499,9 +620,261 @@
             {% else %}
             <p class="text-muted text-center py-3">Nenhum Servico ou Peca registrado.</p>
             {% endif %}
+
+            <hr>
+            <h6 class="mb-2">Taloes da OS</h6>
+            {% if taloes_os %}
+            <div class="d-flex flex-wrap">
+                {% for talao in taloes_os %}
+                    <a href="#" class="badge badge-light border mr-2 mb-2 p-2"
+                       data-toggle="modal"
+                       data-target="#modalTalao{{ talao.id }}">
+                        {{ talao.numero }}
+                    </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">Nenhum talao registrado.</p>
+            {% endif %}
         </div>
     </div>
 </div>
+
+{% for talao in taloes_os %}
+<div class="modal fade" id="modalTalao{{ talao.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Talao {{ talao.numero }}</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="border rounded p-3 bg-light">
+                    <h6 class="mb-2">RECIBO</h6>
+                    <p class="mb-1"><strong>Talão:</strong> {{ talao.numero }}</p>
+                    <p class="mb-1"><strong>Data:</strong> {{ talao.criado_em|date:"d/m/Y H:i" }}</p>
+                    <p class="mb-1"><strong>OS:</strong> {{ ordem.numero_os }}</p>
+                    <p class="mb-1"><strong>Cliente:</strong> {{ ordem.cliente.nome }}</p>
+                    <p class="mb-1"><strong>Tipo:</strong> {{ talao.get_origem_display }}</p>
+                    <p class="mb-1"><strong>Produto/Serviço:</strong> {{ talao.item_referencia|default:"-" }}</p>
+                    <p class="mb-2"><strong>Valor:</strong> {% if talao.valor %}R$ {{ talao.valor|floatformat:2 }}{% else %}-{% endif %}</p>
+                    <hr>
+                    <p class="mb-1"><strong>Empresa:</strong> {{ empresa_talao.nome|default:"-" }}</p>
+                    <p class="mb-1"><strong>CNPJ:</strong> {{ empresa_talao.cnpj|default:"-" }}</p>
+                    <p class="mb-1"><strong>Telefone:</strong> {{ empresa_talao.telefone|default:"-" }}</p>
+                    <p class="mb-0"><strong>Endereço:</strong> {{ empresa_talao.endereco|default:"-" }}</p>
+                </div>
+                {% if talao.criado_por %}<p class="mt-2 mb-2"><strong>Usuario:</strong> {{ talao.criado_por.username }}</p>{% endif %}
+                {% if talao.descricao %}
+                <p class="mb-2"><strong>Descricao:</strong><br>{{ talao.descricao|linebreaksbr }}</p>
+                {% endif %}
+                {% if talao.imagem %}
+                <a href="{{ talao.imagem.url }}" target="_blank">
+                    <img src="{{ talao.imagem.url }}" alt="Imagem talao" style="max-width:100%;height:auto;border-radius:8px;border:1px solid #ddd;">
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<div class="modal fade" id="modalAdicionarServicoPeca" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-plus-circle mr-2"></i>Adicionar Servico/Peca</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="servico_peca">
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-10">
+                            <input type="text" id="sp_produto_busca" class="form-control" placeholder="Buscar por EAN ou nome do produto">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" id="sp_btn_buscar" class="btn btn-primary btn-block"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+                    <div id="sp_resultado_busca" class="mb-3" style="max-height:180px;overflow-y:auto;"></div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label>Tipo</label>
+                            <select name="tipo" class="form-control" id="sp_tipo">
+                                <option value="peca">Peca</option>
+                                <option value="servico">Servico</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-8">
+                            <label>Nome</label>
+                            <input type="text" name="nome" id="sp_nome" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Descricao</label>
+                        <textarea name="descricao" id="sp_descricao" rows="2" class="form-control"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label>Quantidade</label>
+                            <input type="number" name="quantidade" id="sp_quantidade" class="form-control" min="1" value="1" required>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Valor unitario</label>
+                            <input type="number" step="0.01" name="valor_unitario" id="sp_valor" class="form-control" required>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Garantia (dias)</label>
+                            <input type="number" name="garantia_dias" id="sp_garantia" class="form-control" min="0" value="">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label>Responsavel da comissao</label>
+                            <select name="tecnico_responsavel" class="form-control">
+                                <option value="">-- Selecione --</option>
+                                {% for user in tecnicos %}
+                                <option value="{{ user.id }}" {% if ordem.tecnico_responsavel_id == user.id %}selected{% endif %}>{{ user.username }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success">Salvar</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAdicionarTalao" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-receipt mr-2"></i>Adicionar Talao</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="adicionar_talao">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Numero do talao</label>
+                        <input type="text" name="numero_talao" class="form-control" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Valor</label>
+                            <input type="number" step="0.01" min="0" name="valor_talao" class="form-control">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Produto/Servico</label>
+                            <input type="text" name="item_talao" class="form-control" placeholder="Ex: Mao de obra">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Descricao</label>
+                        <textarea name="descricao_talao" rows="3" class="form-control"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Imagem (opcional)</label>
+                        <input type="file" name="imagem_talao" class="form-control-file" accept="image/*">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success">Salvar talao</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const btnBuscar = document.getElementById('sp_btn_buscar');
+    const inputBusca = document.getElementById('sp_produto_busca');
+    const resultado = document.getElementById('sp_resultado_busca');
+    const modal = $('#modalAdicionarServicoPeca');
+    const modeloOS = '{{ ordem.modelo_equipamento|default:""|escapejs }}';
+    const defeitoOS = '{{ ordem.defeito|default:""|escapejs }}';
+    const tipoEquipamentoOS = '{{ ordem.tipo_equipamento|default:""|escapejs }}';
+
+    if (!btnBuscar) return;
+
+    function aplicarProdutoNoFormulario(produto) {
+        document.getElementById('sp_tipo').value = 'peca';
+        document.getElementById('sp_nome').value = produto.nome || '';
+        document.getElementById('sp_descricao').value = produto.descricao || '';
+        document.getElementById('sp_valor').value = produto.preco || '';
+        document.getElementById('sp_garantia').value = produto.garantia_peca_dias || '';
+        document.getElementById('sp_quantidade').value = 1;
+        resultado.innerHTML = '';
+    }
+
+    function renderResultados(data) {
+        resultado.innerHTML = '';
+        if (!data || data.length === 0) {
+            resultado.innerHTML = '<div class="text-muted">Nenhum produto encontrado.</div>';
+            return;
+        }
+        data.forEach((produto) => {
+            const row = document.createElement('div');
+            row.className = 'border rounded p-2 mb-1';
+            row.style.cursor = 'pointer';
+            const motivos = (produto.motivos || []).join(' | ');
+            const historico = Number(produto.frequencia_historica || 0);
+            const score = Number(produto.score || 0);
+            row.innerHTML = `
+                <div><strong>${produto.ean || '-'} - ${produto.nome}</strong> (R$ ${produto.preco})</div>
+                <small class="text-muted">SKU: ${produto.sku || '-'} | Estoque: ${produto.quantidade ?? '-'}</small>
+                ${historico > 0 || score > 0 ? `<br><small class="text-info">Ranking: ${score} | Historico: ${historico}x ${motivos ? `| ${motivos}` : ''}</small>` : ''}
+            `;
+            row.addEventListener('click', function () {
+                aplicarProdutoNoFormulario(produto);
+            });
+            resultado.appendChild(row);
+        });
+    }
+
+    function buscarComRanking() {
+        const q = (inputBusca.value || '').trim();
+        const servicoAtual = (document.getElementById('sp_nome')?.value || '').trim();
+        const params = new URLSearchParams({
+            q: q,
+            modelo: modeloOS,
+            servico: servicoAtual,
+            defeito: defeitoOS,
+            tipo_equipamento: tipoEquipamentoOS,
+        });
+        return fetch(`{% url 'estoque:api_sugerir_pecas_os' %}?${params.toString()}`)
+            .then(r => r.json())
+            .then(data => renderResultados(data.resultados || []))
+            .catch(() => {
+                resultado.innerHTML = '<div class="text-danger">Erro ao carregar sugestoes automáticas.</div>';
+            });
+    }
+
+    btnBuscar.addEventListener('click', function () {
+        buscarComRanking();
+    });
+
+    inputBusca.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            buscarComRanking();
+        }
+    });
+
+    modal.on('shown.bs.modal', function () {
+        buscarComRanking();
+    });
+});
+</script>
 
 <!-- Pedidos -->
 <div class="tab-pane fade {% if active_tab == 'pedidos' %}show active{% endif %}" id="pedidos">
@@ -634,7 +1007,7 @@
                 </button>
                 <button type="submit" formaction="{% url 'orcamentos:excluir_orcamento' orcamento.id %}"
                         class="btn btn-outline-danger btn-sm ml-2"
-                        onclick="return confirm('Excluir este orcamento e todos os itens?');">
+                        onclick="return window.AppMessages.confirmSync('Excluir este orcamento e todos os itens?');">
                     <i class="fas fa-trash"></i> Excluir Orcamento
                 </button>
                 {% else %}
@@ -657,8 +1030,9 @@
                             <th>Valor Unit.</th>
                             <th>Qtd</th>
                             <th>Total</th>
+                            <th>Tipo</th>
                             <th>Origem</th>
-                            <th>Tecnico</th>
+                            <th>Responsavel</th>
                             <th>Acoes</th>
                         </tr>
                     </thead>
@@ -672,6 +1046,7 @@
                             <td>{{ item.valor_unitario|floatformat:2 }}</td>
                             <td>{{ item.quantidade }}</td>
                             <td>{{ item.total|floatformat:2 }}</td>
+                            <td>{{ item.get_tipo_item_display|default:"Servico" }}</td>
                             <td>{{ item.origem }}</td>
                             <td>{{ item.tecnico_responsavel.username|default:"-" }}</td>
                             <td class="text-center">
@@ -683,7 +1058,7 @@
                                         formmethod="post"
                                         formaction="{% url 'orcamentos:excluir_item' item.id %}"
                                         class="btn btn-sm btn-danger"
-                                        onclick="return confirm('Excluir este item?');">
+                                        onclick="return window.AppMessages.confirmSync('Excluir este item?');">
                                     {% csrf_token %}
                                     <i class="fas fa-trash"></i>
                                 </button>
@@ -694,7 +1069,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="10" class="text-center text-muted">Nenhum item adicionado</td>
+                            <td colspan="11" class="text-center text-muted">Nenhum item adicionado</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -706,13 +1081,32 @@
 
 <!-- Script de validacao e selecao -->
 <script>
+function mostrarMensagemPagina(mensagem, tipo = 'warning') {
+    const container = document.getElementById('page-system-messages');
+    if (!container) return;
+    const nivel = tipo === 'error' ? 'danger' : tipo;
+    const icone = nivel === 'danger'
+        ? 'exclamation-triangle'
+        : nivel === 'success'
+            ? 'check-circle'
+            : 'info-circle';
+    container.innerHTML = `
+        <div class="alert alert-${nivel} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${icone} mr-2"></i>${mensagem}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Fechar">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+    `;
+}
+
 function validarSelecao(acao) {
     const selecionados = document.querySelectorAll('input[name="itens_selecionados"]:checked');
     if (selecionados.length === 0) {
-        alert(`Selecione ao menos um item antes de ${acao === 'migrar' ? 'migrar' : acao + ' o Orcamento'}.`);
+        mostrarMensagemPagina(`Selecione ao menos um item antes de ${acao === 'migrar' ? 'migrar' : acao + ' o Orcamento'}.`, 'warning');
         return false;
     }
-    return confirm(`Tem certeza que deseja ${acao} os itens selecionados?`);
+    return window.AppMessages.confirmSync(`Tem certeza que deseja ${acao} os itens selecionados?`);
 }
 
 document.getElementById('checkAll').addEventListener('change', function() {
@@ -789,6 +1183,14 @@ document.getElementById('checkAll').addEventListener('change', function() {
                                    value="{{ item_form.quantidade.value|default_if_none:'' }}">
                         </div>
                         <div class="col-md-4 mb-3">
+                            <label for="id_tipo_item2">Tipo do Item</label>
+                            <select name="tipo_item" id="id_tipo_item2" class="form-control" required>
+                                <option value="" selected>Selecione</option>
+                                <option value="servico">Serviço</option>
+                                <option value="peca">Peça</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
                             <label>Origem</label>
                             <div>
                                 <span id="id_origem_badge" class="badge badge-secondary">Manual</span>
@@ -797,7 +1199,7 @@ document.getElementById('checkAll').addEventListener('change', function() {
                             <input type="hidden" name="origem" id="id_origem2" value="manual">
                         </div>
                         <div class="col-md-8 mb-3">
-                            <label for="id_tecnico_responsavel2">Tecnico Responsavel</label>
+                            <label for="id_tecnico_responsavel2">Responsavel da Comissao</label>
                             <select name="tecnico_responsavel" id="id_tecnico_responsavel2" class="form-control">
                                 <option value="">-- Selecione --</option>
                                 {% for user in tecnicos %}
@@ -833,6 +1235,7 @@ function editarItem(id) {
             document.querySelector('#modalAdicionarItem2 textarea[name="descricao"]').value = data.descricao || '';
             document.querySelector('#modalAdicionarItem2 input[name="valor_unitario"]').value = data.valor_unitario || '';
             document.querySelector('#modalAdicionarItem2 input[name="quantidade"]').value = data.quantidade || '';
+            document.querySelector('#modalAdicionarItem2 select[name="tipo_item"]').value = data.tipo_item || '';
             document.querySelector('#modalAdicionarItem2 input[name="origem"]').value = data.origem || 'manual';
             document.querySelector('#modalAdicionarItem2 select[name="tecnico_responsavel"]').value = data.tecnico_responsavel || '';
             atualizarOrigemBadge(data.origem || 'manual');
@@ -845,7 +1248,7 @@ function editarItem(id) {
             // Abre o modal
             $('#modalAdicionarItem2').modal('show');
         })
-        .catch(err => alert('Erro ao carregar dados do item.'));
+        .catch(() => mostrarMensagemPagina('Erro ao carregar dados do item.', 'danger'));
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -853,8 +1256,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!formItemOrcamento) return;
         formItemOrcamento.action = actionAdicionarItem;
         formItemOrcamento.reset();
+        const tipoItem = document.getElementById('id_tipo_item2');
+        if (tipoItem) tipoItem.value = '';
         atualizarOrigemBadge('manual');
     });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('open_modal') === 'adicionar_item' && urlParams.get('tab') === 'orcamentos') {
+        $('#modalAdicionarItem2').modal('show');
+        urlParams.delete('open_modal');
+        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+        window.history.replaceState({}, document.title, newUrl.endsWith('?') ? window.location.pathname : newUrl);
+    }
 });
 </script>
 
@@ -890,6 +1303,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         document.getElementById('id_nome2').value = produto.nome;
                         document.getElementById('id_descricao2').value = produto.descricao || '';
                         document.getElementById('id_valor_unitario2').value = produto.preco;
+                        document.getElementById('id_tipo_item2').value = 'peca';
                         document.getElementById('id_origem2').value = 'estoque';
                         atualizarOrigemBadge('estoque');
                         resultado.innerHTML = '';
@@ -907,6 +1321,10 @@ function atualizarOrigemBadge(origem) {
     if (!badge || !origemInput) return;
     const isEstoque = origem === 'estoque';
     origemInput.value = isEstoque ? 'estoque' : 'manual';
+    const tipoItem = document.getElementById('id_tipo_item2');
+    if (tipoItem && isEstoque) {
+        tipoItem.value = 'peca';
+    }
     badge.className = isEstoque ? 'badge badge-primary' : 'badge badge-secondary';
     badge.textContent = isEstoque ? 'Estoque (auto)' : 'Manual';
 }
@@ -965,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <td><a href="{{ a.arquivo.url }}" target="_blank">{{ a.arquivo.name|default:"arquivo" }}</a></td>
                             <td>{{ a.descricao|default:"-" }}</td>
                             <td>{% if a.eh_imagem %}Imagem{% else %}Documento{% endif %}</td>
-                            <td>{% if a.incluir_relatorio %}Sim{% else %}Nao{% endif %}</td>
+                            <td>{% if a.incluir_relatorio %}Sim{% else %}Não{% endif %}</td>
                             <td>{% if a.enviado_por %}{{ a.enviado_por.username }}{% else %}-{% endif %}</td>
                             <td>{{ a.criado_em|date:"d/m/Y H:i" }}</td>
                         </tr>
@@ -1377,8 +1795,13 @@ document.addEventListener("DOMContentLoaded", () => {
             })
             .then(res => res.json())
             .then(data => {
-                feedback.textContent = data.message;
-                feedback.className = "small text-success";
+                if (data && data.success === false) {
+                    feedback.textContent = data.message || "Erro ao salvar.";
+                    feedback.className = "small text-danger";
+                    return;
+                }
+                feedback.textContent = "";
+                feedback.className = "small";
             })
             .catch(() => {
                 feedback.textContent = "Erro ao salvar.";
@@ -1518,7 +1941,101 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 });
 </script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const view = document.getElementById("serie-view");
+    const editor = document.getElementById("serie-editor");
+    const input = document.getElementById("serie-input");
+    const btnSave = document.getElementById("serie-save");
+    const btnCancel = document.getElementById("serie-cancel");
+    const feedback = document.getElementById("serie-feedback");
+
+    if (!view || !editor || !input || !btnSave || !btnCancel) {
+        return;
+    }
+
+    const csrfToken = "{{ csrf_token }}";
+    const endpoint = "{% url 'ordens:atualizar_numero_serie' ordem.id %}";
+    const original = () => (view.textContent || "").trim();
+
+    function abrirEditor() {
+        input.value = original() === "-" ? "" : original();
+        view.classList.add("d-none");
+        editor.classList.remove("d-none");
+        input.focus();
+        input.select();
+    }
+
+    function fecharEditor() {
+        editor.classList.add("d-none");
+        view.classList.remove("d-none");
+    }
+
+    function setFeedback(msg, ok) {
+        if (!feedback) return;
+        feedback.textContent = msg || "";
+        feedback.className = ok ? "small text-success" : "small text-danger";
+    }
+
+    view.addEventListener("dblclick", abrirEditor);
+    btnCancel.addEventListener("click", fecharEditor);
+    input.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+            fecharEditor();
+        }
+        if (event.key === "Enter") {
+            event.preventDefault();
+            btnSave.click();
+        }
+    });
+
+    btnSave.addEventListener("click", function () {
+        fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken,
+            },
+            body: JSON.stringify({ numero_serie: input.value.trim() }),
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                if (!data.success) {
+                    setFeedback(data.message || "Erro ao atualizar numero de serie.", false);
+                    return;
+                }
+                view.textContent = data.numero_serie && data.numero_serie.length ? data.numero_serie : "-";
+                setFeedback(data.message || "Numero de serie atualizado.", true);
+                fecharEditor();
+            })
+            .catch(() => {
+                setFeedback("Erro ao atualizar numero de serie.", false);
+            });
+    });
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const colunaEsquerda = document.getElementById("detalhesColunaEsquerda");
+    const painelLateral = document.getElementById("painelDetalhesLateral");
+
+    function ajustarAlturaDetalhes() {
+        if (!colunaEsquerda || !painelLateral) return;
+        colunaEsquerda.style.minHeight = "";
+        if (window.innerWidth < 768) return;
+        const alturaLateral = painelLateral.getBoundingClientRect().height;
+        if (alturaLateral > 0) {
+            colunaEsquerda.style.minHeight = `${Math.ceil(alturaLateral)}px`;
+        }
+    }
+
+    ajustarAlturaDetalhes();
+    window.addEventListener("resize", ajustarAlturaDetalhes);
+    setTimeout(ajustarAlturaDetalhes, 150);
+});
+</script>
 {% endblock extra_js %}
+
 
 
 

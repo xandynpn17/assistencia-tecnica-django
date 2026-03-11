@@ -1,13 +1,11 @@
-// ============================================
+﻿// ============================================
 // SISTEMA DE CADASTRO DE CLIENTE - COMPLETO
 // ============================================
 
 window._isPageLoading = true;
 
-console.log('🚀 Sistema de cadastro carregado');
 
 // ============================================
-// CONFIGURAÇÕES
 // ============================================
 const CONFIG = {
     DDD_PADRAO: '11',
@@ -15,31 +13,51 @@ const CONFIG = {
 };
 
 // ============================================
-// UTILITÁRIOS
 // ============================================
 const Utils = {
     log: function(...args) {
-        if (CONFIG.DEBUG) console.log('📝', ...args);
     },
 
     apenasNumeros: function(str) {
         return str ? str.replace(/\D/g, '') : '';
     },
 
+    obterContainerMensagem: function() {
+        let container = document.getElementById('js-system-messages');
+        if (container) return container;
+        const form = document.getElementById('clienteForm');
+        if (!form) return null;
+        container = document.createElement('div');
+        container.id = 'js-system-messages';
+        container.className = 'mb-3';
+        form.prepend(container);
+        return container;
+    },
+
+    limparMensagens: function() {
+        const container = this.obterContainerMensagem();
+        if (container) container.innerHTML = '';
+    },
+
     mostrarFeedback: function(mensagem, tipo = 'success') {
-        const feedback = document.createElement('div');
-        feedback.className = `alert alert-${tipo} alert-dismissible fade show`;
-        feedback.style.cssText = `
-            position: fixed; top: 20px; right: 20px; z-index: 9999;
-            min-width: 300px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        const container = this.obterContainerMensagem();
+        if (!container) return;
+        const nivel = tipo === 'error' ? 'danger' : tipo;
+        const icone = nivel === 'success'
+            ? 'check-circle'
+            : nivel === 'warning'
+                ? 'exclamation-triangle'
+                : nivel === 'danger'
+                    ? 'times-circle'
+                    : 'info-circle';
+        container.innerHTML = `
+            <div class="alert alert-${nivel} alert-dismissible fade show js-system-alert" role="alert">
+                <i class="fas fa-${icone} mr-2"></i>${mensagem}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
         `;
-        feedback.innerHTML = `
-            <i class="fas fa-${tipo === 'success' ? 'check' : 'info'}-circle mr-2"></i>
-            ${mensagem}
-            <button type="button" class="close" data-dismiss="alert">&times;</button>
-        `;
-        document.body.appendChild(feedback);
-        setTimeout(() => feedback.remove(), 3000);
     }
 };
 
@@ -99,7 +117,6 @@ const Formatadores = {
 };
 
 // ============================================
-// FUNÇÃO CEP
 // ============================================
 async function buscarCEP() {
     const cepInput = document.getElementById('id_codigo_postal');
@@ -107,7 +124,7 @@ async function buscarCEP() {
 
     const cep = Utils.apenasNumeros(cepInput.value);
     if (cep.length !== 8) {
-        alert('CEP deve ter 8 dígitos!');
+        Utils.mostrarFeedback('CEP deve ter 8 digitos.', 'warning');
         cepInput.focus();
         return;
     }
@@ -120,12 +137,24 @@ async function buscarCEP() {
     }
 
     try {
-        const response = await fetch(`/configuracoes/buscar-cep/?cep=${cep}`);
-        const data = await response.json();
+        const response = await fetch(`/configuracoes/buscar-cep/?cep=${cep}`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        const data = contentType.includes('application/json') ? await response.json() : {};
+
+        if (!response.ok) {
+            let mensagem = data.erro || data.error || 'Falha ao consultar CEP.';
+            if (response.status === 400) mensagem = data.erro || 'CEP invalido.';
+            if (response.status === 403) mensagem = 'Seu perfil nao tem permissao para buscar CEP.';
+            if (response.status === 404) mensagem = data.erro || 'CEP nao encontrado.';
+            if (response.status === 502) mensagem = data.erro || 'Servico de CEP indisponivel no momento.';
+            if (response.status >= 500) mensagem = data.erro || 'Erro interno ao consultar CEP.';
+            throw new Error(mensagem);
+        }
 
         if (data.erro || data.error) {
-            alert('CEP não encontrado!');
-            return;
+            throw new Error(data.erro || data.error);
         }
 
         if (data.logradouro) document.getElementById('id_logradouro').value = data.logradouro;
@@ -145,8 +174,9 @@ async function buscarCEP() {
         }, 100);
 
     } catch (error) {
-        alert('Erro ao buscar CEP');
+        Utils.mostrarFeedback(error?.message || 'Erro ao buscar CEP.', 'danger');
         cepInput.classList.add('is-invalid');
+        cepInput.classList.remove('is-valid');
     } finally {
         if (btnCep) {
             btnCep.innerHTML = originalHtml;
@@ -202,14 +232,11 @@ function atualizarTelefoneCompleto() {
 // ============================================
 // LIMPEZA COMPLETA
 // ============================================
-// Função para obter o DDD padrão das configurações
 
-// Função principal de limpeza (sem mensagens)
 function executarLimpeza() {
     const form = document.getElementById('clienteForm');
     if (!form) return false;
 
-    console.log('🧹 Executando limpeza do formulário...');
 
     form.reset();
 
@@ -241,41 +268,36 @@ function executarLimpeza() {
     const display = document.getElementById('telefone-display');
     if (display) display.style.display = 'none';
 
-    // Limpar TODAS as mensagens e validações
-    document.querySelectorAll('.alert').forEach(el => el.remove());
+    Utils.limparMensagens();
     document.querySelectorAll('.invalid-feedback, .valid-feedback').forEach(el => el.remove());
     document.querySelectorAll('.text-danger').forEach(el => el.remove());
 
     return true;
 }
 
-// Função para limpeza MANUAL (com confirmação) - chamada pelo botão
 function limparFormularioManual() {
     if (window._isPageLoading) {
         window._isPageLoading = false;
         return false;
     }
 
-    if (!confirm('Tem certeza que deseja limpar todos os campos?')) return false;
+    if (!window.AppMessages.confirmSync('Tem certeza que deseja limpar todos os campos?')) return false;
 
     const resultado = executarLimpeza();
     if (resultado) {
-        Utils.mostrarFeedback('✅ Formulário limpo!');
+        Utils.mostrarFeedback('Formulário limpo!');
         document.getElementById('id_nome')?.focus();
     }
     return resultado;
 }
 
-// Função para limpeza SILENCIOSA (sem confirmação) - para uso automático
 function limparFormularioSilencioso() {
     return executarLimpeza();
 }
 
 // ============================================
-// INICIALIZAÇÃO
 // ============================================
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('✅ Inicializando sistema...');
 
 
     // DETECTAR F5/REFRESH
@@ -283,7 +305,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const isReload = perfData && perfData.type === 'reload';
 
     if (isReload) {
-        console.log('🔄 F5 detectado - limpando tudo');
         setTimeout(() => {
             executarLimpeza();
             window._isPageLoading = false;
@@ -295,9 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const temMensagemErro = document.querySelector('.alert-danger') !== null;
             const temMensagemSucesso = document.querySelector('.alert-success') !== null;
 
-            // Se NÃO veio da busca, limpar
             if (!veioDaBusca && !temMensagemErro && !temMensagemSucesso) {
-                console.log('🔄 Limpando formulário no carregamento');
                 window._isAutoClean = true;
                 limparFormularioSilencioso();
                 window._isAutoClean = false;
@@ -340,7 +359,6 @@ document.addEventListener('DOMContentLoaded', function() {
         cepInput.addEventListener('blur', function() {
             const cepLimpo = Utils.apenasNumeros(this.value);
             if (cepLimpo.length === 8) {
-                console.log('🔍 Buscando CEP ao sair do campo');
                 buscarCEP();
             }
         });
@@ -359,12 +377,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // ===== BOTÃO LIMPAR =====
     const btnLimpar = document.getElementById('btn-limpar-formulario');
     if (btnLimpar) {
         btnLimpar.addEventListener('click', e => {
             e.preventDefault();
-            limparFormularioManual();  // ← MUDANÇA IMPORTANTE: agora chama limparFormularioManual()
         });
     }
 
@@ -388,19 +404,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (campo) campo.setAttribute('autocomplete', 'off');
     });
 
-    console.log('✅ Sistema pronto!');
 });
 
 // ============================================
-// FUNÇÕES DE DEBUG
 // ============================================
 window.debugSistema = function() {
     console.log('\n=== DEBUG SISTEMA ===');
-    console.log('📋 Form:', document.getElementById('clienteForm') ? '✅' : '❌');
-    console.log('🧹 Botão Limpar:', document.getElementById('btn-limpar-formulario') ? '✅' : '❌');
-    console.log('📍 Botão CEP:', document.getElementById('btn-buscar-cep') ? '✅' : '❌');
-    console.log('📞 Telefone:', document.getElementById('id_telefone_numero')?.value || 'vazio');
-    console.log('📮 CEP:', document.getElementById('id_codigo_postal')?.value || 'vazio');
 };
 
 window.testarCEP = function(cep = '01001000') {
@@ -411,5 +420,5 @@ window.testarCEP = function(cep = '01001000') {
     }
 };
 
-console.log('✅ Sistema 100% carregado!');
-console.log('📝 Comandos: debugSistema(), testarCEP()');
+
+

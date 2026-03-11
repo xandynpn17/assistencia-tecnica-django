@@ -1,9 +1,10 @@
 {% extends 'core/base.html' %}
 {% load static %}
 
-{% block title %}{% if object %}Editar{% else %}Nova{% endif %} Ordem de Servico{% endblock %}
+{% block title %}{% if object %}Editar{% else %}Nova{% endif %} Ordem de Serviço{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{% static 'adminlte/plugins/select2/css/select2.min.css' %}">
 <style>
     .card-modern { border: none; border-radius: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); margin-bottom: 25px; background: #ffffff; }
     .card-modern-header { background: #2c3e50; color: white; border-radius: 10px 10px 0 0; padding: 14px 18px; font-weight: 600; }
@@ -17,13 +18,16 @@
     .brand-note-garantia { border-color: #e0a800; background: #fff3cd; }
     .form-grid .form-group label { font-weight: 600; font-size: .9rem; }
     .surface-soft { border: 1px solid #eef1f4; border-radius: 10px; padding: 14px; background: #fbfcfd; }
+    .select2-container .select2-selection--single { height: 38px; border: 1px solid #ced4da; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 36px; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height: 36px; }
 </style>
 {% endblock %}
 
 {% block header %}
 <div class="row mb-3">
     <div class="col-12">
-        <h1 class="page-title">{% if object %}Editar{% else %}Nova{% endif %} Ordem de Servico</h1>
+        <h1 class="page-title">{% if object %}Editar{% else %}Nova{% endif %} Ordem de Serviço</h1>
     </div>
 </div>
 {% endblock %}
@@ -46,7 +50,7 @@
         <div class="card-modern">
             <div class="card-modern-header d-flex justify-content-between align-items-center">
                 <span><i class="fas fa-clipboard-list mr-2"></i>Preenchimento da Ordem</span>
-                <small id="wizard-step-label">Pagina 1 de 2</small>
+                <small id="wizard-step-label">Página 1 de 2</small>
             </div>
             <form method="post" novalidate id="ordem-form">
                 {% csrf_token %}
@@ -55,48 +59,49 @@
                     {% if form.non_field_errors %}
                     <div class="alert alert-danger">{{ form.non_field_errors }}</div>
                     {% endif %}
+                    <div id="wizard-feedback"></div>
 
                     <div class="wizard-actions-top">
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-prev" style="display:none;">Voltar</button>
-                        <button type="button" class="btn btn-primary btn-sm" id="btn-next">Avancar</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-next">Avançar</button>
                     </div>
 
                     <div class="wizard-step active" id="step-1">
                         <div class="section-title">Equipamento</div>
                         <div class="surface-soft mb-3">
                             <div class="row form-grid">
-                                <div class="col-lg-3 col-md-4 form-group">{{ form.tipo_equipamento.label_tag }}{{ form.tipo_equipamento }}{{ form.tipo_equipamento.errors }}</div>
-                                <div class="col-lg-4 col-md-4 form-group">{{ form.modelo_equipamento.label_tag }}{{ form.modelo_equipamento }}{{ form.modelo_equipamento.errors }}</div>
-                                <div class="col-lg-3 col-md-4 form-group">{{ form.numero_serie_equipamento.label_tag }}{{ form.numero_serie_equipamento }}{{ form.numero_serie_equipamento.errors }}</div>
-                                <div class="col-lg-2 col-md-12 form-group">
-                                    {{ form.marca_catalogo.label_tag }}
-                                    {{ form.marca_catalogo }}
-                                    {{ form.marca_catalogo.errors }}
+                                <div class="col-lg-8">
+                                    <div class="row form-grid align-items-end">
+                                        <div class="col-md-6 form-group">{{ form.tipo_equipamento.label_tag }}{{ form.tipo_equipamento }}{{ form.tipo_equipamento.errors }}</div>
+                                        <div class="col-md-6 form-group">
+                                            {{ form.marca_catalogo.label_tag }}
+                                            {{ form.marca_catalogo }}
+                                            {{ form.marca_catalogo.errors }}
+                                        </div>
+                                        <div class="col-md-6 form-group" id="marca-manual-wrap" style="display:none;">
+                                            {{ form.marca_manual.label_tag }}
+                                            {{ form.marca_manual }}
+                                            {{ form.marca_manual.errors }}
+                                        </div>
+                                        <div class="col-md-6 form-group">{{ form.modelo_equipamento.label_tag }}{{ form.modelo_equipamento }}{{ form.modelo_equipamento.errors }}</div>
+                                        <div class="col-md-6 form-group">{{ form.numero_serie_equipamento.label_tag }}{{ form.numero_serie_equipamento }}{{ form.numero_serie_equipamento.errors }}</div>
+                                        <div class="col-md-12 form-group">{{ form.peritagem.label_tag }}{{ form.peritagem }}{{ form.peritagem.errors }}</div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="row form-grid">
-                                <div class="col-md-6 form-group" id="marca-manual-wrap" style="display:none;">
-                                    {{ form.marca_manual.label_tag }}
-                                    {{ form.marca_manual }}
-                                    {{ form.marca_manual.errors }}
+                                <div class="col-lg-4 form-group">
+                                    <div class="brand-note h-100" id="brand-note-box">
+                                        <strong>Detalhes da marca</strong>
+                                        <span id="brand-note-text" class="text-muted">Selecione uma marca para visualizar procedimentos.</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         {{ form.marca_equipamento.as_hidden }}
                         {{ form.marca_equipamento.errors }}
-                        <div class="row form-grid">
-                            <div class="col-md-7 form-group">{{ form.peritagem.label_tag }}{{ form.peritagem }}{{ form.peritagem.errors }}</div>
-                            <div class="col-md-5">
-                                <div class="brand-note" id="brand-note-box">
-                                    <strong>Detalhes da marca</strong>
-                                    <span id="brand-note-text" class="text-muted">Selecione uma marca para visualizar procedimentos.</span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="wizard-step" id="step-2">
-                        <div class="section-title">Dados de Reparacao e Atendimento</div>
+                        <div class="section-title">Dados de Reparação e Atendimento</div>
                         <div class="surface-soft">
                             <div class="row form-grid">
                                 <div class="col-md-4 form-group">{{ form.tipo_reparo.label_tag }}{{ form.tipo_reparo }}{{ form.tipo_reparo.errors }}</div>
@@ -130,6 +135,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const noteText = document.getElementById("brand-note-text");
     const noteBox = document.getElementById("brand-note-box");
     const tipoReparo = document.getElementById("id_tipo_reparo");
+    const dataCompra = document.getElementById("id_data_compra");
+    const numeroNotaFiscal = document.getElementById("id_numero_nota_fiscal");
     const marcasInfo = {{ marcas_info_json|default:'{}'|safe }};
 
     const steps = [document.getElementById("step-1"), document.getElementById("step-2")];
@@ -138,11 +145,31 @@ document.addEventListener("DOMContentLoaded", function () {
     const btnSave = document.getElementById("btn-save");
     const stepLabel = document.getElementById("wizard-step-label");
     const wizardStepInput = document.getElementById("id_wizard_step");
+    const wizardFeedback = document.getElementById("wizard-feedback");
     let currentStep = 0;
 
-    const requiredStep1 = ["id_tipo_equipamento", "id_modelo_equipamento", "id_marca_catalogo"];
+    const requiredStep1 = ["id_tipo_equipamento", "id_modelo_equipamento"];
+
+    function mostrarMensagemWizard(mensagem, tipo) {
+        if (!wizardFeedback) return;
+        const nivel = tipo || "warning";
+        wizardFeedback.innerHTML = `
+            <div class="alert alert-${nivel} alert-dismissible fade show" role="alert">
+                ${mensagem}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        `;
+    }
+
+    function limparMensagemWizard() {
+        if (!wizardFeedback) return;
+        wizardFeedback.innerHTML = "";
+    }
 
     function showStep(idx) {
+        limparMensagemWizard();
         currentStep = idx;
         if (wizardStepInput) {
             wizardStepInput.value = String(idx + 1);
@@ -151,7 +178,7 @@ document.addEventListener("DOMContentLoaded", function () {
         btnPrev.style.display = idx === 0 ? "none" : "inline-block";
         btnNext.style.display = idx === steps.length - 1 ? "none" : "inline-block";
         btnSave.style.display = idx === steps.length - 1 ? "inline-block" : "none";
-        stepLabel.textContent = `Pagina ${idx + 1} de ${steps.length}`;
+        stepLabel.textContent = `Página ${idx + 1} de ${steps.length}`;
     }
 
     function validateStep1() {
@@ -167,15 +194,13 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         const marcaCatalogoVal = marcaSelect ? (marcaSelect.value || "").trim() : "";
         const marcaManualVal = manualInput ? (manualInput.value || "").trim() : "";
-        if (!marcaCatalogoVal && !marcaManualVal) {
+        if (!marcaCatalogoVal) {
             marcaSelect && marcaSelect.focus();
             return false;
         }
         if (marcaCatalogoVal === "__outros__" && !marcaManualVal) {
-            if (!manualInput || !manualInput.value || !String(manualInput.value).trim()) {
-                manualInput && manualInput.focus();
-                return false;
-            }
+            manualInput && manualInput.focus();
+            return false;
         }
         return true;
     }
@@ -189,11 +214,17 @@ document.addEventListener("DOMContentLoaded", function () {
         if (noteBox) {
             noteBox.classList.toggle("brand-note-garantia", garantia);
         }
+        if (dataCompra) {
+            dataCompra.required = garantia;
+        }
+        if (numeroNotaFiscal) {
+            numeroNotaFiscal.required = garantia;
+        }
     }
 
     btnNext.addEventListener("click", function () {
         if (currentStep === 0 && !validateStep1()) {
-            alert("Preencha os campos obrigatorios da pagina 1 antes de avancar.");
+            mostrarMensagemWizard("Preencha os campos obrigatorios da pagina 1 antes de avancar.", "warning");
             return;
         }
         showStep(Math.min(currentStep + 1, steps.length - 1));
@@ -207,15 +238,16 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!marcaSelect) return;
         const val = marcaSelect.value || "";
         const isOutros = val === "__outros__";
-        const semSelecao = !val;
-        manualWrap.style.display = (isOutros || semSelecao) ? "block" : "none";
-        if (!isOutros && !semSelecao && manualInput) manualInput.value = "";
+        manualWrap.style.display = isOutros ? "block" : "none";
+        if (!isOutros && manualInput) manualInput.value = "";
 
         if (val && !isOutros) {
             const selectedText = marcaSelect.options[marcaSelect.selectedIndex].text;
-            if (marcaEquipamento && !marcaEquipamento.value.trim()) {
+            if (marcaEquipamento) {
                 marcaEquipamento.value = selectedText;
             }
+        } else if (!val && marcaEquipamento) {
+            marcaEquipamento.value = "";
         }
 
         if (isOutros) {
@@ -230,6 +262,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (marcaSelect) {
         marcaSelect.addEventListener("change", syncBrandUI);
+    }
+    if (manualInput) {
+        manualInput.addEventListener("input", function () {
+            if (marcaSelect && marcaSelect.value === "__outros__" && marcaEquipamento) {
+                marcaEquipamento.value = manualInput.value || "";
+            }
+        });
     }
     if (tipoReparo) {
         tipoReparo.addEventListener("change", syncGarantiaUI);
@@ -257,6 +296,35 @@ document.addEventListener("DOMContentLoaded", function () {
             if (tag === "textarea") return;
             if (type === "submit" || type === "button") return;
             event.preventDefault();
+        });
+        ordemForm.addEventListener("submit", function (event) {
+            if (!isGarantia()) return;
+            const semDataCompra = !dataCompra || !String(dataCompra.value || "").trim();
+            const semNota = !numeroNotaFiscal || !String(numeroNotaFiscal.value || "").trim();
+            if (semDataCompra || semNota) {
+                event.preventDefault();
+                showStep(1);
+                mostrarMensagemWizard("Para OS de garantia, informe a data da compra e o numero da nota fiscal.", "danger");
+                if (semDataCompra && dataCompra) {
+                    dataCompra.focus();
+                } else if (semNota && numeroNotaFiscal) {
+                    numeroNotaFiscal.focus();
+                }
+            }
+        });
+    }
+});
+</script>
+<script src="{% static 'adminlte/plugins/select2/js/select2.full.min.js' %}"></script>
+<script>
+$(function () {
+    const $tipo = $("#id_tipo_equipamento");
+    if ($tipo.length) {
+        $tipo.select2({
+            width: "100%",
+            placeholder: "---------",
+            allowClear: true,
+            minimumResultsForSearch: 0
         });
     }
 });

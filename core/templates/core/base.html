@@ -1,10 +1,10 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Assistencia{% endblock %}</title>
+  <title>{% block title %}Assistência{% endblock %}</title>
 
   <!-- Fonts & Icons -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
@@ -71,6 +71,38 @@
   .navbar .search-container { max-width: 320px; }
   </style>
   {% endblock %}
+  <style>
+  .main-sidebar {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+  }
+  .main-sidebar .brand-link {
+      flex: 0 0 auto;
+  }
+  .main-sidebar .sidebar {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-bottom: 12px;
+  }
+  .sidebar-footer-profile {
+      flex: 0 0 auto;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 10px 12px;
+      background: rgba(0, 0, 0, 0.12);
+      color: #d8dde3;
+  }
+  .sidebar-footer-profile .name {
+      font-weight: 600;
+      color: #ffffff;
+      line-height: 1.1;
+  }
+  .sidebar-footer-profile .role {
+      font-size: 12px;
+      opacity: .9;
+  }
+  </style>
 {% block extra_head %}
 <!-- Meta tags extras -->
 {% if config.ddd_padrao %}
@@ -95,7 +127,7 @@
       <li class="nav-item">
         <div class="search-container">
           <input type="text" id="search-input" class="form-control form-control-sm"
-                 placeholder="Pesquisar por OS, CPF, telefone, cliente ou serie" autocomplete="off">
+                 placeholder="Pesquisar por OS, CPF, telefone, cliente ou série" autocomplete="off">
           <div id="search-results" class="search-results"></div>
           <div id="search-feedback" class="search-feedback"></div>
         </div>
@@ -127,7 +159,7 @@
              class="brand-image-lg"
              style="max-height: 100px; width: auto;">
         {% else %}
-        <span class="brand-text font-weight-light">Assistencia</span>
+        <span class="brand-text font-weight-light">Assistência</span>
         {% endif %}
       </a>
 
@@ -156,12 +188,12 @@
             </li>
             {% endif %}
 
-            <!-- Ordens de Servico -->
+            <!-- Ordens de Serviço -->
             <li class="nav-item has-treeview {% if menu_app == 'ordens' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'ordens' %}active{% endif %}">
                 <i class="nav-icon fas fa-tools"></i>
                 <p>
-                  Ordens de Servico
+                  Ordens de Serviço
                   <i class="right fas fa-angle-left"></i>
                 </p>
               </a>
@@ -216,13 +248,6 @@
                   </a>
                 </li>
                 {% endif %}
-                <li class="nav-item">
-                  <a href="{% url 'estoque:buscar_produtos' %}"
-                     class="nav-link {% if menu_sub == 'buscar_produtos' %}active{% endif %}">
-                    <i class="far fa-circle nav-icon"></i>
-                    <p>Buscar Produto</p>
-                  </a>
-                </li>
                 <li class="nav-item">
                   <a href="{% url 'estoque:consulta_artigos' %}"
                      class="nav-link {% if menu_sub == 'consulta_artigos' %}active{% endif %}">
@@ -298,7 +323,7 @@
               <a href="{% url 'caixa:meu_desempenho' %}"
                  class="nav-link {% if menu_sub == 'meu_desempenho' %}active{% endif %}">
                 <i class="nav-icon fas fa-trophy"></i>
-                <p>Premios e Comissoes</p>
+                <p>Prêmios e Comissões</p>
               </a>
             </li>
             {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
@@ -339,7 +364,7 @@
                   <a href="{% url 'caixa:relatorios' %}"
                      class="nav-link {% if menu_sub == 'relatorios' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Relatorios</p>
+                    <p>Relatórios</p>
                   </a>
                   {% endif %}
                 </li>
@@ -383,14 +408,14 @@
                   <a href="{% url 'caixa:comissoes_tecnicos' %}"
                      class="nav-link {% if menu_sub == 'comissoes_tecnicos' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Comissoes Tecnicos</p>
+                    <p>Administrar Comissões</p>
                   </a>
                 </li>
                 <li class="nav-item">
                   <a href="{% url 'caixa:premios_meta' %}"
                      class="nav-link {% if menu_sub == 'premios_meta' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Premios e Metas</p>
+                    <p>Prêmios e Metas</p>
                   </a>
                 </li>
                 <li class="nav-item">
@@ -417,13 +442,13 @@
                 {% endif %}
               </ul>
             </li>
-            <!-- Configuracoes -->
+            <!-- Configurações -->
             {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
             <li class="nav-item has-treeview {% if menu_app == 'configuracoes' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'configuracoes' %}active{% endif %}">
                 <i class="nav-icon fas fa-cogs"></i>
                 <p>
-                  Configuracoes
+                  Configurações
                   <i class="right fas fa-angle-left"></i>
                 </p>
               </a>
@@ -446,7 +471,7 @@
                   <a href="{% url 'configuracoes:configuracao_os' %}"
                      class="nav-link {% if menu_sub == 'configuracao_os' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Ordem de Servico</p>
+                    <p>Ordem de Serviço</p>
                   </a>
                 </li>
                 <li class="nav-item">
@@ -468,7 +493,7 @@
                   <a href="{% url 'configuracoes:lista_usuarios' %}"
                      class="nav-link {% if menu_sub == 'usuarios' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Usuarios</p>
+                    <p>Usuários</p>
                   </a>
                 </li>
                 {% else %}
@@ -476,7 +501,7 @@
                   <a href="{% url 'configuracoes:adicionar_usuario' %}"
                      class="nav-link {% if menu_sub == 'usuarios' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Novo Usuario</p>
+                    <p>Novo Usuário</p>
                   </a>
                 </li>
                 {% endif %}
@@ -495,6 +520,13 @@
           </ul>
         </nav>
       </div>
+      <div class="sidebar-footer-profile d-flex align-items-center">
+        <i class="fas fa-user-circle fa-lg mr-2"></i>
+        <div>
+          <div class="name">{{ user.get_full_name|default:user.username|default:"Usuário" }}</div>
+          <div class="role">{% if user.is_superuser %}Superuser{% else %}{{ user.get_tipo_usuario_display|default:"Usuário" }}{% endif %}</div>
+        </div>
+      </div>
     </aside>
     {% endif %}
 
@@ -512,7 +544,7 @@
     <footer class="main-footer bg-light">
       <div class="container-fluid d-flex justify-content-between">
         <span class="text-gray-dark">&copy; 2025 <a href="#" class="text-gray-dark">Alexandre Bentivoglio</a>. Todos os direitos reservados.</span>
-        <span class="text-gray-dark"><b>Versao</b> 1.0.0</span>
+        <span class="text-gray-dark"><b>Versão</b> 1.0.0</span>
       </div>
     </footer>
 </div> <!-- fecha wrapper -->
@@ -521,6 +553,7 @@
 <script src="{% static 'adminlte/plugins/jquery/jquery.min.js' %}"></script>
 <script src="{% static 'adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
 <script src="{% static 'adminlte/dist/js/adminlte.min.js' %}"></script>
+<script src="{% static 'js/system_messages.js' %}"></script>
 
 <!-- Treeview -->
 <script>
@@ -555,6 +588,22 @@
   $(function(){ $('#messageModal').modal('show'); });
 </script>
 {% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    // Corretor ortográfico nativo do navegador (PT-BR), sem substituição automática.
+    document.documentElement.setAttribute("lang", "pt-BR");
+    const ignorarTipos = new Set(["password", "email", "number", "date", "datetime-local", "time", "month", "week", "url", "tel", "hidden"]);
+    document.querySelectorAll("textarea, input, [contenteditable='true']").forEach(function (el) {
+        if (el.hasAttribute("data-no-spellcheck")) return;
+        const tipo = (el.getAttribute("type") || "text").toLowerCase();
+        if (el.tagName === "INPUT" && ignorarTipos.has(tipo)) return;
+        el.setAttribute("lang", "pt-BR");
+        el.setAttribute("spellcheck", "true");
+        el.setAttribute("autocorrect", "off");
+    });
+});
+</script>
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
@@ -607,7 +656,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 if (resultados.length === 0) {
                     resultsBox.innerHTML = "<div class='no-results'>Nenhum resultado</div>";
-                    mostrarFeedback("Nao foram encontradas ordens para essa busca.");
+                    mostrarFeedback("Não foram encontradas ordens para essa busca.");
                 } else {
                     limparFeedback();
                     resultados.forEach(os => {
@@ -639,4 +688,8 @@ document.addEventListener("DOMContentLoaded", function () {
 {% block extra_js %}{% endblock %}
 </body>
 </html>
+
+
+
+
 

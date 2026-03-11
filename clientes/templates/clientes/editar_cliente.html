@@ -36,6 +36,7 @@
                             {% if form.non_field_errors %}
                             <div class="alert alert-danger">{{ form.non_field_errors }}</div>
                             {% endif %}
+                            <div id="cliente-system-messages" class="mb-3"></div>
 
                             <div class="row">
                                 <div class="col-md-8 form-group">
@@ -142,7 +143,30 @@
 document.addEventListener("DOMContentLoaded", function () {
     const cepInput = document.getElementById("id_codigo_postal");
     const btnBuscarCep = document.getElementById("btn-buscar-cep");
+    const mensagens = document.getElementById("cliente-system-messages");
     if (!cepInput || !btnBuscarCep) return;
+
+    function mostrarMensagem(mensagem, tipo = "warning") {
+        if (!mensagens) return;
+        const nivel = tipo === "error" ? "danger" : tipo;
+        const icone = nivel === "danger"
+            ? "exclamation-triangle"
+            : nivel === "success"
+                ? "check-circle"
+                : "info-circle";
+        mensagens.innerHTML = `
+            <div class="alert alert-${nivel} alert-dismissible fade show" role="alert">
+                <i class="fas fa-${icone} mr-2"></i>${mensagem}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        `;
+    }
+
+    function limparMensagem() {
+        if (mensagens) mensagens.innerHTML = "";
+    }
 
     function limparCamposEndereco() {
         const ids = ["id_logradouro", "id_bairro", "id_cidade"];
@@ -167,20 +191,21 @@ document.addEventListener("DOMContentLoaded", function () {
     function buscarCep() {
         const cep = (cepInput.value || "").replace(/\D/g, "");
         if (cep.length !== 8) {
-            alert("CEP invalido. Informe 8 digitos.");
+            mostrarMensagem("CEP invalido. Informe 8 digitos.", "warning");
             return;
         }
+        limparMensagem();
         fetch(`https://viacep.com.br/ws/${cep}/json/`)
             .then((resp) => resp.json())
             .then((data) => {
                 if (data.erro) {
                     limparCamposEndereco();
-                    alert("CEP nao encontrado.");
+                    mostrarMensagem("CEP nao encontrado.", "warning");
                     return;
                 }
                 preencherEndereco(data);
             })
-            .catch(() => alert("Erro ao consultar CEP."));
+            .catch(() => mostrarMensagem("Erro ao consultar CEP.", "danger"));
     }
 
     btnBuscarCep.addEventListener("click", buscarCep);
@@ -190,3 +215,4 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 {% endblock %}
+

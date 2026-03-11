@@ -1,0 +1,86 @@
+﻿{% extends 'core/base.html' %}
+{% load widget_tweaks %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">Conta a Pagar #{{ conta.id }}</h3>
+  <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="row">
+  <div class="col-md-7">
+    <div class="card mb-3">
+      <div class="card-body">
+        <p><strong>Fornecedor:</strong> {{ conta.fornecedor|default:"-" }}</p>
+        <p><strong>Descricao:</strong> {{ conta.descricao }}</p>
+        <p><strong>Centro de Custo:</strong> {{ conta.centro_custo.nome|default:"-" }}</p>
+        <p><strong>Status:</strong> {{ conta.get_status_display }}</p>
+        <p><strong>Vencimento:</strong> {{ conta.vencimento|date:"d/m/Y" }}</p>
+        <p><strong>Valor Total:</strong> R$ {{ conta.valor_total|floatformat:2 }}</p>
+        <p><strong>Valor Pago:</strong> R$ {{ conta.valor_pago|floatformat:2 }}</p>
+        <p><strong>Valor em Aberto:</strong> R$ {{ conta.valor_aberto|floatformat:2 }}</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><strong>Historico de Pagamentos</strong></div>
+      <div class="card-body table-responsive p-0">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Valor</th>
+              <th>Forma</th>
+              <th>Referencia</th>
+              <th>Usuario</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in pagamentos %}
+            <tr>
+              <td>{{ p.data|date:"d/m/Y H:i" }}</td>
+              <td>R$ {{ p.valor|floatformat:2 }}</td>
+              <td>{{ p.forma_pagamento.nome|default:"-" }}</td>
+              <td>{{ p.referencia|default:"-" }}</td>
+              <td>{{ p.usuario.username|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center">Sem pagamentos.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-5">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Registrar Pagamento</strong></div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="pagar">
+          {% for field in form %}
+          <div class="mb-2">
+            <label>{{ field.label }}</label>
+            {{ field|add_class:"form-control" }}
+            {% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}
+          </div>
+          {% endfor %}
+          <button type="submit" class="btn btn-success">Registrar</button>
+        </form>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <form method="post" onsubmit="return window.AppMessages.confirmSync('Deseja cancelar esta conta?');">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="cancelar">
+          <button type="submit" class="btn btn-outline-danger btn-block">Cancelar conta</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

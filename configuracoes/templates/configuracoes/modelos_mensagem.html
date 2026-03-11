@@ -63,7 +63,7 @@
             <tr>
               <td>{{ m.nome }}</td>
               <td>{{ m.get_tipo_display }}</td>
-              <td>{% if m.ativo %}<span class="badge badge-success">Sim</span>{% else %}<span class="badge badge-secondary">Nao</span>{% endif %}</td>
+              <td>{% if m.ativo %}<span class="badge badge-success">Sim</span>{% else %}<span class="badge badge-secondary">Não</span>{% endif %}</td>
               <td>
                 <a class="btn btn-sm btn-outline-primary" href="{% url 'configuracoes:modelos_mensagem' %}?edit={{ m.id }}">Editar</a>
                 <form method="post" class="d-inline">
@@ -72,7 +72,7 @@
                   <input type="hidden" name="modelo_id" value="{{ m.id }}">
                   <button class="btn btn-sm btn-outline-secondary" type="submit">Ativar/Desativar</button>
                 </form>
-                <form method="post" class="d-inline" onsubmit="return confirm('Excluir modelo?');">
+                <form method="post" class="d-inline" onsubmit="return window.AppMessages.confirmSync('Excluir modelo?');">
                   {% csrf_token %}
                   <input type="hidden" name="form_type" value="delete">
                   <input type="hidden" name="modelo_id" value="{{ m.id }}">
@@ -90,3 +90,4 @@
   </div>
 </div>
 {% endblock %}
+

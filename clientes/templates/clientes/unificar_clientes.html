@@ -1,4 +1,4 @@
-{% extends 'core/base.html' %}
+﻿{% extends 'core/base.html' %}
 
 {% block title %}Unificar Clientes{% endblock %}
 
@@ -62,7 +62,7 @@
                     <div class="alert alert-warning py-2 mb-3">
                         OS e Orcamentos do duplicado serao transferidos para o principal.
                     </div>
-                    <button type="submit" class="btn btn-danger" onclick="return confirm('Confirmar unificacao? Esta acao remove o cliente duplicado.');">
+                    <button type="submit" class="btn btn-danger" onclick="return window.AppMessages.confirmSync('Confirmar unificacao? Esta acao remove o cliente duplicado.');">
                         Unificar cadastros
                     </button>
                 </form>
@@ -74,3 +74,4 @@
     </div>
 </section>
 {% endblock %}
+
