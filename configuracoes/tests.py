@@ -1,8 +1,20 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.test.utils import override_settings
+from django.utils import timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import csv
+import gzip
 from configuracoes.models import FornecedorGarantia, MarcaGarantia
-from configuracoes.forms import MarcaGarantiaForm
+from configuracoes.forms import MarcaGarantiaForm, RegraGarantiaMarcaForm
+from django.conf import settings
+from clientes.models import Cliente
+from estoque.models import CategoriaProduto, Produto
+from configuracoes.models import RegraGarantiaMarca, TipoEquipamentoConfig
 
 
 class PermissoesConfiguracoesTests(TestCase):
@@ -39,10 +51,10 @@ class PermissoesConfiguracoesTests(TestCase):
         response = self.client.get(reverse("configuracoes:painel"))
         self.assertEqual(response.status_code, 200)
 
-    def test_lista_usuarios_bloqueia_gerente(self):
+    def test_lista_usuarios_permitem_gerente(self):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:lista_usuarios"))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
 
     def test_lista_usuarios_permitem_admin(self):
         self.client.force_login(self.admin)
@@ -61,20 +73,46 @@ class PermissoesConfiguracoesTests(TestCase):
             {
                 "username": "novo_admin_por_gerente",
                 "email": "gerente@teste.com",
-                "password": "senha12345",
+                "password": "Senha@123",
                 "numero_vendedor": "22",
+                "tipo_vinculo": "FUNCIONARIO",
+                "percentual_comissao_servico": "0",
+                "percentual_comissao_peca": "0",
                 "is_active": "on",
                 "is_staff": "on",
                 "tipo_usuario": "adm",
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Gerente nao pode criar usuario Administrador.")
+        self.assertContains(response, "Gerente não pode criar usuário Administrador.")
+
+    def test_cadastro_usuario_exige_senha_forte(self):
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("configuracoes:adicionar_usuario"),
+            {
+                "username": "usuario_senha_fraca",
+                "email": "fraco@teste.com",
+                "password": "senha1234",
+                "numero_vendedor": "23",
+                "tipo_vinculo": "FUNCIONARIO",
+                "percentual_comissao_servico": "0",
+                "percentual_comissao_peca": "0",
+                "is_active": "on",
+                "is_staff": "on",
+                "tipo_usuario": "atendente",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "A senha deve conter ao menos uma letra maiuscula.")
+        self.assertContains(response, "A senha deve conter ao menos um caractere especial.")
 
     def test_backup_permite_gerente(self):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:backup_banco"))
         self.assertEqual(response.status_code, 302)
+        backup_dir = Path(settings.BASE_DIR) / "backups"
+        self.assertTrue(backup_dir.exists())
 
     def test_backup_bloqueia_atendente(self):
         self.client.force_login(self.atendente)
@@ -136,6 +174,63 @@ class PermissoesConfiguracoesTests(TestCase):
         self.assertEqual(response_delete.status_code, 302)
         self.assertFalse(MarcaGarantia.objects.filter(id=marca.id).exists())
 
+    def test_gerente_crud_item_mao_obra_na_edicao_da_marca(self):
+        marca = MarcaGarantia.objects.create(nome="Marca Regra", valor_mao_obra_garantia=10, ativo=True)
+        self.client.force_login(self.gerente)
+        hoje = timezone.localdate().isoformat()
+
+        response_add = self.client.post(
+            reverse("configuracoes:marcas_fornecedores"),
+            {
+                "form_type": "regra_add",
+                "marca_id": marca.id,
+                "tipo_produto": "secador",
+                "valor_mao_obra": "20.00",
+                "valor_mao_obra_tecnico": "8.00",
+                "modalidade_pagamento": "pix",
+                "prazo_pagamento_dias": 30,
+                "inicio_vigencia": hoje,
+                "fim_vigencia": "",
+                "ativo": "on",
+            },
+        )
+        self.assertEqual(response_add.status_code, 302)
+        regra = RegraGarantiaMarca.objects.get(marca=marca, tipo_produto="secador")
+        self.assertEqual(str(regra.valor_mao_obra), "20.00")
+        self.assertEqual(str(regra.valor_mao_obra_tecnico), "8.00")
+
+        response_edit = self.client.post(
+            reverse("configuracoes:marcas_fornecedores"),
+            {
+                "form_type": "regra_edit",
+                "marca_id": marca.id,
+                "regra_id": regra.id,
+                "tipo_produto": "secador",
+                "valor_mao_obra": "50.00",
+                "valor_mao_obra_tecnico": "25.00",
+                "modalidade_pagamento": "pix",
+                "prazo_pagamento_dias": 30,
+                "inicio_vigencia": hoje,
+                "fim_vigencia": "",
+                "ativo": "on",
+            },
+        )
+        self.assertEqual(response_edit.status_code, 302)
+        regra.refresh_from_db()
+        self.assertEqual(str(regra.valor_mao_obra), "50.00")
+        self.assertEqual(str(regra.valor_mao_obra_tecnico), "25.00")
+
+        response_delete = self.client.post(
+            reverse("configuracoes:marcas_fornecedores"),
+            {
+                "form_type": "regra_delete",
+                "marca_id": marca.id,
+                "regra_id": regra.id,
+            },
+        )
+        self.assertEqual(response_delete.status_code, 302)
+        self.assertFalse(RegraGarantiaMarca.objects.filter(id=regra.id).exists())
+
     def test_consulta_fornecedores_tem_paginacao(self):
         self.client.force_login(self.gerente)
         for i in range(12):
@@ -184,3 +279,169 @@ class PermissoesConfiguracoesTests(TestCase):
         self.client.force_login(self.tecnico)
         response = self.client.get(reverse("clientes:lista_clientes"))
         self.assertEqual(response.status_code, 403)
+
+    def test_tecnico_pode_buscar_cep(self):
+        self.client.force_login(self.tecnico)
+        response = self.client.get(reverse("configuracoes:buscar_cep"), {"cep": "123"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("CEP", response.json().get("erro", ""))
+
+    def test_atendente_e_tecnico_acessam_cep_sem_bloqueio_de_permissao(self):
+        for usuario in (self.atendente, self.tecnico):
+            with self.subTest(usuario=usuario.username):
+                self.client.force_login(usuario)
+                response = self.client.get(reverse("configuracoes:buscar_cep"), {"cep": "123"})
+                self.assertNotEqual(response.status_code, 403)
+                self.assertEqual(response.status_code, 400)
+
+    def test_todos_tipos_de_usuario_podem_acessar_fluxo_criacao_os_e_cep(self):
+        cliente = Cliente.objects.create(
+            nome="Cliente Permissao OS",
+            documento="52998224725",
+            telefone="11999990000",
+            estado="SP",
+        )
+        user_model = get_user_model()
+        usuarios_por_tipo = {
+            "adm": self.admin,
+            "gerente": self.gerente,
+            "atendente": self.atendente,
+            "tecnico": self.tecnico,
+        }
+        for tipo_usuario, _ in user_model.TIPO_CHOICES:
+            usuario = usuarios_por_tipo.get(tipo_usuario)
+            if usuario is None:
+                usuario = user_model.objects.create_user(
+                    username=f"{tipo_usuario}_criacao_os",
+                    password="senha123",
+                    tipo_usuario=tipo_usuario,
+                )
+                usuarios_por_tipo[tipo_usuario] = usuario
+
+            with self.subTest(tipo_usuario=tipo_usuario):
+                self.client.force_login(usuario)
+                self.assertEqual(
+                    self.client.get(reverse("ordens:verificar_cliente_os")).status_code,
+                    200,
+                )
+                self.assertEqual(
+                    self.client.get(reverse("ordens:selecionar_cliente_os")).status_code,
+                    200,
+                )
+                self.assertEqual(
+                    self.client.get(reverse("ordens:nova_ordem_cliente", args=[cliente.id])).status_code,
+                    200,
+                )
+                response_cep = self.client.get(reverse("configuracoes:buscar_cep"), {"cep": "123"})
+                self.assertEqual(response_cep.status_code, 400)
+                self.assertIn("CEP", response_cep.json().get("erro", ""))
+
+
+class ComandosConfiguracoesTests(TestCase):
+    def test_backup_db_gera_arquivo_gzip(self):
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "dev.sqlite3"
+            db_path.write_bytes(b"sqlite-dev-content")
+            output_dir = Path(tmp_dir) / "backups"
+            with override_settings(DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": str(db_path)}}):
+                call_command("backup_db", output_dir=str(output_dir), gzip=True)
+            files = list(output_dir.glob("db_*.sqlite3.gz"))
+            self.assertEqual(len(files), 1)
+
+    def test_restore_db_exige_force(self):
+        with TemporaryDirectory() as tmp_dir:
+            backup_path = Path(tmp_dir) / "origem.sqlite3"
+            backup_path.write_bytes(b"sqlite-origem")
+            target_path = Path(tmp_dir) / "destino.sqlite3"
+            with override_settings(DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": str(target_path)}}):
+                with self.assertRaises(CommandError):
+                    call_command("restore_db", str(backup_path))
+
+    def test_restore_db_por_gzip(self):
+        with TemporaryDirectory() as tmp_dir:
+            payload = b"sqlite-restaurado"
+            backup_path = Path(tmp_dir) / "origem.sqlite3.gz"
+            with gzip.open(backup_path, "wb") as fp:
+                fp.write(payload)
+            target_path = Path(tmp_dir) / "destino.sqlite3"
+            with override_settings(DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": str(target_path)}}):
+                call_command("restore_db", str(backup_path), force=True)
+            self.assertTrue(target_path.exists())
+            self.assertEqual(target_path.read_bytes(), payload)
+
+    def test_import_shoficina_dry_run_nao_grava(self):
+        with TemporaryDirectory() as tmp_dir:
+            clientes_csv = Path(tmp_dir) / "clientes.csv"
+            with clientes_csv.open("w", encoding="utf-8", newline="") as fp:
+                writer = csv.DictWriter(fp, fieldnames=["nome", "documento", "telefone"])
+                writer.writeheader()
+                writer.writerow({"nome": "Cliente Teste", "documento": "52998224725", "telefone": "11999990000"})
+            call_command("import_shoficina_csv", clientes=str(clientes_csv), dry_run=True)
+            self.assertEqual(Cliente.objects.count(), 0)
+
+    def test_import_shoficina_importa_produto_e_ignora_documento_invalido(self):
+        with TemporaryDirectory() as tmp_dir:
+            clientes_csv = Path(tmp_dir) / "clientes.csv"
+            produtos_csv = Path(tmp_dir) / "produtos.csv"
+            with clientes_csv.open("w", encoding="utf-8", newline="") as fp:
+                writer = csv.DictWriter(fp, fieldnames=["nome", "documento", "telefone"])
+                writer.writeheader()
+                writer.writerow({"nome": "Doc Invalido", "documento": "1234", "telefone": "11911112222"})
+            with produtos_csv.open("w", encoding="utf-8", newline="") as fp:
+                writer = csv.DictWriter(fp, fieldnames=["nome", "ean", "preco_venda", "quantidade"])
+                writer.writeheader()
+                writer.writerow({"nome": "Tela iPhone", "ean": "7890001112223", "preco_venda": "1.234,56", "quantidade": "2"})
+            call_command("import_shoficina_csv", clientes=str(clientes_csv), produtos=str(produtos_csv))
+            self.assertEqual(Cliente.objects.count(), 1)
+            self.assertIsNone(Cliente.objects.first().documento)
+            produto = Produto.objects.get(ean="7890001112223")
+            self.assertEqual(str(produto.preco_final), "1234.56")
+            self.assertEqual(produto.quantidade, 2)
+
+    def test_gerar_base_teste_cria_clientes_e_produtos(self):
+        call_command("gerar_base_teste", prefixo="SEEDCMD", clientes=6, produtos=8, limpar=True)
+
+        self.assertEqual(Cliente.objects.filter(nome__startswith="SEEDCMD - ").count(), 6)
+        self.assertEqual(Produto.objects.filter(nome__startswith="SEEDCMD - ").count(), 8)
+        self.assertGreaterEqual(CategoriaProduto.objects.filter(nome__startswith="SEEDCMD - ").count(), 1)
+
+    def test_gerar_base_teste_permite_somente_limpeza(self):
+        call_command("gerar_base_teste", prefixo="SEEDLIMPA", clientes=2, produtos=2, limpar=True)
+        self.assertEqual(Cliente.objects.filter(nome__startswith="SEEDLIMPA - ").count(), 2)
+        self.assertEqual(Produto.objects.filter(nome__startswith="SEEDLIMPA - ").count(), 2)
+
+        call_command("gerar_base_teste", prefixo="SEEDLIMPA", clientes=0, produtos=0, limpar=True)
+        self.assertEqual(Cliente.objects.filter(nome__startswith="SEEDLIMPA - ").count(), 0)
+        self.assertEqual(Produto.objects.filter(nome__startswith="SEEDLIMPA - ").count(), 0)
+
+
+class GarantiaTiposEquipamentoTests(TestCase):
+    def test_regra_form_usa_tipos_configurados_da_os(self):
+        TipoEquipamentoConfig.objects.update_or_create(
+            codigo="secador",
+            defaults={"nome": "Secador", "ativo": True},
+        )
+        TipoEquipamentoConfig.objects.update_or_create(
+            codigo="alisador",
+            defaults={"nome": "Alisador", "ativo": True},
+        )
+        form = RegraGarantiaMarcaForm()
+        choices = dict(form.fields["tipo_produto"].choices)
+        self.assertIn("secador", choices)
+        self.assertIn("alisador", choices)
+
+    def test_tipo_produto_label_prioriza_configuracao(self):
+        fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor Label")
+        marca = MarcaGarantia.objects.create(nome="Marca Label", fornecedor=fornecedor, valor_mao_obra_garantia=0)
+        TipoEquipamentoConfig.objects.update_or_create(
+            codigo="secador",
+            defaults={"nome": "Secador Profissional", "ativo": True},
+        )
+        regra = RegraGarantiaMarca.objects.create(
+            marca=marca,
+            tipo_produto="secador",
+            valor_mao_obra="20.00",
+            modalidade_pagamento="pix",
+            prazo_pagamento_dias=30,
+        )
+        self.assertEqual(regra.tipo_produto_label, "Secador Profissional")

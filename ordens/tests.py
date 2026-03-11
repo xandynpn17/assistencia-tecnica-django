@@ -15,7 +15,7 @@ from configuracoes.models import FornecedorGarantia, MarcaGarantia, ModeloMensag
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.forms import LinhaTrabalhoForm
-from ordens.models import OrdemServico, LinhaTrabalho, NotificacaoCliente, ServicoPeca
+from ordens.models import OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, ServicoPeca
 
 
 class VerificarClienteOSViewTests(TestCase):
@@ -277,7 +277,9 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
             url,
             {
                 "tipo_equipamento": "celular",
-                "marca_equipamento": "Marca A",
+                "marca_catalogo": "__outros__",
+                "marca_manual": "Marca A",
+                "marca_equipamento": "",
                 "modelo_equipamento": "Modelo B",
                 "numero_serie_equipamento": "SN-123",
                 "defeito": "Nao liga",
@@ -340,6 +342,7 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
                 "defeito": "Nao liga",
                 "acessorios": "",
                 "tipo_reparo": "Garantia",
+                "data_compra": "2026-01-10",
                 "numero_nota_fiscal": "NF-12345",
                 "status": "diagnosticar",
                 "peritagem": "",
@@ -348,6 +351,27 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
         self.assertEqual(response.status_code, 302)
         ordem = OrdemServico.objects.latest("id")
         self.assertEqual(ordem.marca_equipamento, "Marca Nova")
+
+    def test_criacao_os_nao_aceita_marca_manual_sem_escolher_outros(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        response = self.client.post(
+            url,
+            {
+                "tipo_equipamento": "celular",
+                "marca_catalogo": "",
+                "marca_manual": "Marca Solta",
+                "marca_equipamento": "",
+                "modelo_equipamento": "Modelo C",
+                "numero_serie_equipamento": "SN-888",
+                "defeito": "Nao liga",
+                "acessorios": "",
+                "tipo_reparo": "Fora de Garantia",
+                "status": "diagnosticar",
+                "peritagem": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Selecione uma marca ou escolha Outros.")
 
     def test_criacao_os_garantia_sem_nota_fiscal_exibe_erro(self):
         url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
@@ -363,13 +387,35 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
                 "defeito": "Sem video",
                 "acessorios": "",
                 "tipo_reparo": "Garantia",
+                "data_compra": "2026-01-10",
                 "status": "diagnosticar",
                 "peritagem": "",
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "informe o numero da nota fiscal")
+        self.assertContains(response, "informe o número da nota fiscal")
 
+    def test_criacao_os_garantia_sem_data_compra_exibe_erro(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        response = self.client.post(
+            url,
+            {
+                "tipo_equipamento": "celular",
+                "marca_catalogo": "__outros__",
+                "marca_manual": "Marca Sem Data",
+                "marca_equipamento": "",
+                "modelo_equipamento": "Modelo E",
+                "numero_serie_equipamento": "SN-777",
+                "defeito": "Sem audio",
+                "acessorios": "",
+                "tipo_reparo": "Garantia",
+                "numero_nota_fiscal": "NF-777",
+                "status": "diagnosticar",
+                "peritagem": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "informe a data da compra")
 
 class LinhaTrabalhoFormTests(TestCase):
     def test_status_criada_nao_aparece_para_selecao_manual(self):
@@ -400,7 +446,9 @@ class IntegracaoFluxoOSCaixaTests(TestCase):
             url_criar,
             {
                 "tipo_equipamento": "celular",
-                "marca_equipamento": "Marca T",
+                "marca_catalogo": "__outros__",
+                "marca_manual": "Marca T",
+                "marca_equipamento": "",
                 "modelo_equipamento": "Modelo Z",
                 "numero_serie_equipamento": "SN-999",
                 "defeito": "Nao liga",
@@ -647,7 +695,7 @@ class OrdemFechadaBloqueioEdicaoTests(TestCase):
         url = reverse("orcamentos:adicionar_item", args=[self.orcamento.id])
         response = self.client.post(
             url,
-            {"nome": "Novo item", "quantidade": 1, "valor_unitario": "10.00", "origem": "manual"},
+            {"nome": "Novo item", "quantidade": 1, "valor_unitario": "10.00", "origem": "manual", "tipo_item": "servico"},
         )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(ItemOrcamento.objects.filter(orcamento=self.orcamento).count(), 1)
@@ -1087,6 +1135,93 @@ class FluxoCriticoE2ETests(TestCase):
         )
         self.caixa = Caixa.objects.create(aberto=True, saldo_inicial=Decimal("0.00"))
 
+    def test_e2e_abertura_os_garantia_com_dados_obrigatorios(self):
+        response = self.client.post(
+            reverse("ordens:nova_ordem_cliente", args=[self.cliente.id]),
+            {
+                "tipo_equipamento": "celular",
+                "marca_catalogo": "__outros__",
+                "marca_manual": "Marca Garantia E2E",
+                "marca_equipamento": "",
+                "modelo_equipamento": "Modelo Garantia",
+                "numero_serie_equipamento": "SN-GAR-001",
+                "peritagem": "Sem danos externos",
+                "tipo_reparo": "Garantia",
+                "data_compra": "2026-02-10",
+                "numero_nota_fiscal": "NF-E2E-001",
+                "defeito": "Nao liga",
+                "acessorios": "Carregador original",
+                "notas_internas": "Fluxo E2E garantia",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        ordem = OrdemServico.objects.latest("id")
+        self.assertEqual(ordem.tipo_reparo, "Garantia")
+        self.assertEqual(str(ordem.data_compra), "2026-02-10")
+        self.assertEqual(ordem.numero_nota_fiscal, "NF-E2E-001")
+
+    def test_e2e_orcamento_aprovado_migrado_para_servicos_e_pecas(self):
+        tecnico = get_user_model().objects.create_user(
+            username="tecnico_e2e_orc",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+        )
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca E2E",
+            modelo_equipamento="Modelo E2E",
+            defeito="Nao carrega",
+            tipo_reparo="Fora de Garantia",
+            status="pendente_orcamento",
+            tecnico_responsavel=tecnico,
+        )
+        orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=ordem)
+        item_servico = ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome="Servico de bancada",
+            descricao="Ajuste do conector",
+            valor_unitario=Decimal("80.00"),
+            quantidade=1,
+            tipo_item="servico",
+            origem="manual",
+            status="pendente",
+            tecnico_responsavel=tecnico,
+        )
+        item_peca = ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome="Conector de carga",
+            descricao="Peca de reposicao",
+            valor_unitario=Decimal("25.00"),
+            quantidade=1,
+            tipo_item="peca",
+            origem="estoque",
+            status="pendente",
+            tecnico_responsavel=tecnico,
+        )
+
+        response_aceitar = self.client.post(
+            reverse("orcamentos:aceitar_orcamento", args=[orcamento.id]),
+            {"itens_selecionados": [str(item_servico.id), str(item_peca.id)]},
+        )
+        self.assertEqual(response_aceitar.status_code, 302)
+        item_servico.refresh_from_db()
+        item_peca.refresh_from_db()
+        self.assertEqual(item_servico.status, "aprovado")
+        self.assertEqual(item_peca.status, "aprovado")
+
+        response_migrar = self.client.post(
+            reverse("orcamentos:migrar_para_servicos", args=[orcamento.id]),
+            {"itens_selecionados": [str(item_servico.id), str(item_peca.id)]},
+        )
+        self.assertEqual(response_migrar.status_code, 302)
+        servicos_pecas = ServicoPeca.objects.filter(
+            ordem=ordem,
+            item_orcamento__in=[item_servico, item_peca],
+        )
+        self.assertEqual(servicos_pecas.count(), 2)
+        self.assertSetEqual(set(servicos_pecas.values_list("tipo", flat=True)), {"servico", "peca"})
+
     def test_fluxo_critico_completo_os_confirmacao_orcamento_notificacao_fechamento_caixa(self):
         # 1) criar OS
         resp_criar = self.client.post(
@@ -1125,6 +1260,7 @@ class FluxoCriticoE2ETests(TestCase):
                 "descricao": "Diagnostico e reparo",
                 "valor_unitario": "150.00",
                 "quantidade": "1",
+                "tipo_item": "servico",
             },
         )
         self.assertEqual(resp_item.status_code, 302)
@@ -1164,7 +1300,47 @@ class FluxoCriticoE2ETests(TestCase):
             {"valor": "150.00", "metodo": "pix", "referencia": "E2E-001"},
         )
         self.assertEqual(resp_pag.status_code, 302)
-        self.assertTrue(Pagamento.objects.filter(ordem_servico=ordem, referencia="E2E-001").exists())
+        pagamento = Pagamento.objects.filter(ordem_servico=ordem, referencia="E2E-001").first()
+        self.assertIsNotNone(pagamento)
+        item = ServicoPeca.objects.filter(ordem=ordem).order_by("id").first()
+        self.assertIsNotNone(item)
+        self.assertIn(pagamento.numero_talao, item.numeros_taloes)
+        self.assertTrue(OrdemTalao.objects.filter(ordem=ordem, numero=pagamento.numero_talao).exists())
+
+    def test_fechamento_migra_itens_aprovados_do_orcamento_para_servicos_pecas(self):
+        tecnico = get_user_model().objects.create_user(
+            username="tecnico_migracao_fechamento",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+        )
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Mig",
+            modelo_equipamento="Modelo Mig",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="em_andamento",
+        )
+        orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=ordem)
+        item_orc = ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome="Troca de conector",
+            descricao="Servico aprovado",
+            valor_unitario=Decimal("80.00"),
+            quantidade=1,
+            tipo_item="servico",
+            origem="manual",
+            status="aprovado",
+            tecnico_responsavel=tecnico,
+        )
+        ordem.relatorio_tecnico = "Relatorio de fechamento com migracao"
+        ordem.tipo_reparacao = "substituicao"
+        ordem.save(update_fields=["relatorio_tecnico", "tipo_reparacao"])
+
+        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[ordem.id]))
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(ServicoPeca.objects.filter(ordem=ordem, item_orcamento=item_orc).exists())
 
 
 class OSConfirmadaBloqueioEdicaoTests(TestCase):
@@ -1207,3 +1383,106 @@ class OSConfirmadaBloqueioEdicaoTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(ServicoPeca.objects.filter(ordem=self.ordem).count(), 1)
+
+    def test_permite_excluir_item_servico_peca(self):
+        item = ServicoPeca.objects.create(
+            ordem=self.ordem,
+            tipo="servico",
+            nome="Teste excluir",
+            quantidade=1,
+            valor_unitario=Decimal("90.00"),
+        )
+        response = self.client.post(
+            reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+            {
+                "form_type": "excluir_servico_peca",
+                "item_id": str(item.id),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ServicoPeca.objects.filter(id=item.id).exists())
+
+
+class ConfirmacaoManualResumoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_confirmacao_manual",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Presencial",
+            documento="39053344705",
+            telefone="11970001111",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca P",
+            modelo_equipamento="Modelo P",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+
+    def test_confirmacao_manual_no_resumo(self):
+        response = self.client.post(reverse("ordens:confirmar_manual_resumo", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("ordens:resumo_ordem", args=[self.ordem.id]))
+
+        self.ordem.refresh_from_db()
+        self.assertTrue(self.ordem.confirmado)
+        self.assertEqual(self.ordem.tipo_confirmacao, "impresso")
+        self.assertEqual(self.ordem.confirmado_por_id, self.user.id)
+        self.assertIsNotNone(self.ordem.data_confirmacao)
+        self.assertTrue(self.ordem.logs_confirmacao.exists())
+
+    def test_confirmacao_manual_ja_confirmada_nao_duplica_log(self):
+        self.ordem.confirmado = True
+        self.ordem.tipo_confirmacao = "impresso"
+        self.ordem.data_confirmacao = timezone.now()
+        self.ordem.confirmado_por = self.user
+        self.ordem.save(update_fields=["confirmado", "tipo_confirmacao", "data_confirmacao", "confirmado_por"])
+        logs_antes = self.ordem.logs_confirmacao.count()
+
+        response = self.client.post(reverse("ordens:confirmar_manual_resumo", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 302)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.logs_confirmacao.count(), logs_antes)
+
+
+class ConfirmacaoPublicaTemplateTests(TestCase):
+    def setUp(self):
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Confirmacao Publica",
+            documento="11144477735",
+            telefone="11911112222",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Publica",
+            modelo_equipamento="Modelo Publico",
+            numero_serie_equipamento="SERIE-PUBLICA-1",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+        config = ConfiguracaoSistema.get_configuracao()
+        config.termos_ordem_servico = "Termo publico de teste da OS."
+        config.condicoes_orcamento = "Condicao geral publica para o cliente."
+        config.save(update_fields=["termos_ordem_servico", "condicoes_orcamento"])
+
+    def test_confirmacao_publica_exibe_termos_sem_layout_interno(self):
+        response = self.client.get(reverse("confirmar_os_publico", kwargs={"token": self.ordem.token_confirmacao}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Confirma\u00e7\u00e3o da Ordem de Servi\u00e7o")
+        self.assertContains(response, "Termo publico de teste da OS.")
+        self.assertContains(response, "Condicao geral publica para o cliente.")
+        self.assertNotContains(response, "main-sidebar")
+
+
