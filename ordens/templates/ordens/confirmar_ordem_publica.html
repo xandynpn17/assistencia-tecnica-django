@@ -1,30 +1,172 @@
-﻿{% extends "core/base.html" %}
-
-{% block title %}Confirmacao de Ordem de Servico{% endblock %}
-
-{% block content %}
-<div class="card">
-  <div class="card-header bg-primary text-white">
-    <h5 class="mb-0">Confirmacao da OS {{ ordem.numero_os }}</h5>
-  </div>
-  <div class="card-body">
-    <p><strong>Cliente:</strong> {{ ordem.cliente.nome }}</p>
-    <p><strong>Equipamento:</strong> {{ ordem.get_tipo_equipamento_display }} - {{ ordem.marca_equipamento }} {{ ordem.modelo_equipamento }}</p>
-    <p><strong>Defeito relatado:</strong> {{ ordem.defeito }}</p>
-    <hr>
-    <h6>Termo de responsabilidade</h6>
-    <p class="mb-3">Declaro que li e aceito os termos da Ordem de Servico e autorizo o procedimento tecnico conforme condicoes informadas.</p>
-
-    {% if ja_confirmada %}
-      <div class="alert alert-success">
-        Esta OS ja foi confirmada em {{ ordem.data_confirmacao|date:"d/m/Y H:i" }}.
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confirmação da Ordem de Serviço</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #1f2d3d;
+      --muted: #6b7a8c;
+      --primary: #1f4d8f;
+      --success: #2f855a;
+      --border: #d7e0ea;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 12px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background: linear-gradient(180deg, #eef3f9 0%, var(--bg) 100%);
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 10px 24px rgba(15, 28, 43, 0.08);
+      overflow: hidden;
+    }
+    .header {
+      background: var(--primary);
+      color: #fff;
+      padding: 18px 22px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+    .body {
+      padding: 20px 22px 22px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 20px;
+      margin-bottom: 16px;
+    }
+    .item strong { font-weight: 700; }
+    .item span { color: var(--muted); }
+    .section-title {
+      margin: 18px 0 8px;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .terms {
+      background: #f9fbfe;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      line-height: 1.5;
+      white-space: normal;
+    }
+    .terms p { margin: 0; }
+    .messages { margin-bottom: 14px; }
+    .alert {
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+      border: 1px solid transparent;
+    }
+    .alert-success {
+      background: #e6f7ef;
+      border-color: #b6e5ca;
+      color: #1b6e47;
+    }
+    .alert-info {
+      background: #ebf4ff;
+      border-color: #cde1ff;
+      color: #1f4d8f;
+    }
+    .footer {
+      margin-top: 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--success);
+      color: #fff;
+    }
+    .note {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    @media (max-width: 760px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <h1>Confirmação da Ordem de Serviço {{ ordem.numero_os }}</h1>
       </div>
-    {% else %}
-      <form method="post">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-success">Confirmo e aceito</button>
-      </form>
-    {% endif %}
+      <div class="body">
+        {% if messages %}
+          <div class="messages">
+            {% for message in messages %}
+              <div class="alert {% if message.tags == 'success' %}alert-success{% else %}alert-info{% endif %}">
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="grid">
+          <div class="item"><strong>Cliente:</strong> <span>{{ ordem.cliente.nome }}</span></div>
+          <div class="item"><strong>Equipamento:</strong> <span>{{ ordem.get_tipo_equipamento_display }} - {{ ordem.marca_equipamento }} {{ ordem.modelo_equipamento }}</span></div>
+          <div class="item"><strong>Número de série:</strong> <span>{{ ordem.numero_serie_equipamento|default:"Não informado" }}</span></div>
+          <div class="item"><strong>Defeito relatado:</strong> <span>{{ ordem.defeito|default:"Não informado" }}</span></div>
+        </div>
+
+        <h2 class="section-title">Termos e Condições da Ordem de Serviço</h2>
+        <div class="terms">
+          {% if termos_os %}
+            <p>{{ termos_os|linebreaksbr }}</p>
+          {% else %}
+            <p>Não há termos cadastrados no momento.</p>
+          {% endif %}
+        </div>
+
+        {% if condicoes_os %}
+          <h2 class="section-title">Condições Gerais</h2>
+          <div class="terms">
+            <p>{{ condicoes_os|linebreaksbr }}</p>
+          </div>
+        {% endif %}
+
+        <div class="footer">
+          {% if ja_confirmada %}
+            <div class="alert alert-success">
+              Esta OS já foi confirmada em {{ ordem.data_confirmacao|date:"d/m/Y H:i" }}.
+            </div>
+          {% else %}
+            <form method="post">
+              {% csrf_token %}
+              <button type="submit" class="btn">Li e concordo com os termos</button>
+            </form>
+            <span class="note">Ao confirmar, o aceite ficará registrado com data e hora.</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
   </div>
-</div>
-{% endblock %}
+</body>
+</html>

@@ -1,13 +1,18 @@
-from django.shortcuts import render, redirect, get_object_or_404
+﻿from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib import messages
+from django.conf import settings
+from django.core.management import call_command
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.db.models.deletion import ProtectedError
+from django.urls import reverse
 from .forms import (
     EmpresaForm, AliquotaForm, UserForm,
     ConfiguracaoOrdemServicoForm, ConfiguracaoSistemaForm,
     FornecedorGarantiaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm,
     ModeloMensagemForm,
+    UsuarioArquivoForm,
     )
 from .models import (
     Aliquota,
@@ -19,17 +24,35 @@ from .models import (
     ModeloMensagem,
     RegraGarantiaMarca,
     TipoEquipamentoConfig,
+    UsuarioArquivo,
+    UsuarioLog,
 )
 from .forms import TipoEquipamentoConfigForm
-from django.views.decorators.csrf import csrf_exempt
 import requests
 import json
 import logging
+from pathlib import Path
 from django.http import JsonResponse
-from .permissions import role_required, ADM_ROLES, MANAGER_ROLES, STAFF_ROLES
+from .permissions import role_required, ADM_ROLES, MANAGER_ROLES, ORDER_CREATION_ROLES, STAFF_ROLES
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+TIPOS_EQUIPAMENTO_PADRAO = [
+    ("celular", "Celular"),
+    ("notebook", "Notebook"),
+    ("tablet", "Tablet"),
+    ("computador", "Computador"),
+    ("secador", "Secador"),
+    ("alisador", "Alisador"),
+    ("modelador", "Modelador"),
+    ("escova", "Escova"),
+    ("ventilador", "Ventilador"),
+    ("climatizador", "Climatizador"),
+    ("aspirador", "Aspirador"),
+    ("cafeteira", "Cafeteira"),
+    ("outros", "Outros"),
+]
 
 
 def _request_ip(request):
@@ -37,6 +60,23 @@ def _request_ip(request):
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR", "")
+
+
+def _garantir_tipos_equipamento_padrao():
+    for ordem, (codigo, nome) in enumerate(TIPOS_EQUIPAMENTO_PADRAO):
+        TipoEquipamentoConfig.objects.get_or_create(
+            codigo=codigo,
+            defaults={"nome": nome, "ativo": True, "ordem": ordem},
+        )
+
+
+def _log_usuario(usuario_alvo, acao, descricao, usuario_responsavel=None):
+    UsuarioLog.objects.create(
+        usuario_alvo=usuario_alvo,
+        acao=acao,
+        descricao=descricao,
+        usuario_responsavel=usuario_responsavel,
+    )
 
 
 # ---------------------------
@@ -124,6 +164,7 @@ def tipos_equipamento(request):
             form.save()
             messages.success(request, "Tipo de equipamento salvo.")
             return redirect("configuracoes:tipos_equipamento")
+        messages.error(request, "Não foi possível salvar. Verifique os campos informados.")
     else:
         form = TipoEquipamentoConfigForm(instance=instancia)
 
@@ -132,7 +173,7 @@ def tipos_equipamento(request):
         "configuracoes/tipos_equipamento.html",
         {
             "form": form,
-            "itens": TipoEquipamentoConfig.objects.all(),
+            "itens": TipoEquipamentoConfig.objects.order_by("nome"),
             "edit_item_id": instancia.id if instancia else None,
             "menu_app": "configuracoes",
             "menu_sub": "tipos_equipamento",
@@ -206,23 +247,111 @@ def excluir_aliquota(request, aliquota_id):
 # ---------------------------
 # Usuários
 # ---------------------------
-@role_required(ADM_ROLES)
+@role_required(MANAGER_ROLES)
 def lista_usuarios(request):
-    usuarios = User.objects.all()
-    return render(request, 'configuracoes/usuarios_list.html', {'usuarios': usuarios})
+    usuarios = User.objects.all().prefetch_related("groups").order_by("username")
+    q = (request.GET.get("q") or "").strip()
+    tipo = (request.GET.get("tipo") or "").strip()
+    ativo = (request.GET.get("ativo") or "").strip()
+    if q:
+        usuarios = usuarios.filter(
+            Q(username__icontains=q)
+            | Q(nome_completo__icontains=q)
+            | Q(email__icontains=q)
+            | Q(documento_cpf_cnpj__icontains=q)
+        )
+    if tipo:
+        usuarios = usuarios.filter(tipo_usuario=tipo)
+    if ativo == "1":
+        usuarios = usuarios.filter(is_active=True)
+    elif ativo == "0":
+        usuarios = usuarios.filter(is_active=False)
+
+    return render(
+        request,
+        'configuracoes/usuarios_list.html',
+        {
+            'usuarios': usuarios,
+            'q': q,
+            'tipo': tipo,
+            'ativo': ativo,
+            'tipo_choices': User.TIPO_CHOICES,
+            'menu_app': "configuracoes",
+            'menu_sub': "usuarios",
+        },
+    )
+
+
+@role_required(MANAGER_ROLES)
+def detalhes_usuario(request, usuario_id):
+    user = get_object_or_404(User, id=usuario_id)
+    if request.method == "POST":
+        form_type = request.POST.get("form_type")
+        if form_type == "toggle_ativo":
+            if user == request.user:
+                messages.error(request, "Não é permitido inativar seu próprio usuário.")
+                return redirect("configuracoes:detalhes_usuario", usuario_id=user.id)
+            user.is_active = not user.is_active
+            user.save(update_fields=["is_active"])
+            _log_usuario(
+                user,
+                "reativacao" if user.is_active else "inativacao",
+                f"Usuário {'reativado' if user.is_active else 'inativado'} pelo painel.",
+                usuario_responsavel=request.user,
+            )
+            messages.success(request, f"Usuário {'reativado' if user.is_active else 'inativado'} com sucesso.")
+            return redirect("configuracoes:detalhes_usuario", usuario_id=user.id)
+        if form_type == "anexo":
+            anexo_form = UsuarioArquivoForm(request.POST, request.FILES)
+            if anexo_form.is_valid():
+                anexo = anexo_form.save(commit=False)
+                anexo.usuario = user
+                anexo.enviado_por = request.user
+                anexo.save()
+                _log_usuario(
+                    user,
+                    "anexo",
+                    f"Arquivo anexado ({anexo.get_categoria_display()}).",
+                    usuario_responsavel=request.user,
+                )
+                messages.success(request, "Arquivo anexado com sucesso.")
+                return redirect("configuracoes:detalhes_usuario", usuario_id=user.id)
+        else:
+            anexo_form = UsuarioArquivoForm()
+    else:
+        anexo_form = UsuarioArquivoForm()
+
+    return render(
+        request,
+        "configuracoes/usuario_detalhes.html",
+        {
+            "usuario_obj": user,
+            "anexo_form": anexo_form,
+            "anexos": user.arquivos.select_related("enviado_por").all(),
+            "logs_usuario": user.logs_perfil.select_related("usuario_responsavel").all()[:80],
+            'menu_app': "configuracoes",
+            'menu_sub': "usuarios",
+        },
+    )
 
 
 @role_required(MANAGER_ROLES)
 def adicionar_usuario(request):
     if request.method == 'POST':
-        form = UserForm(request.POST)
+        form = UserForm(request.POST, request.FILES)
         if form.is_valid():
             novo_tipo = form.cleaned_data.get("tipo_usuario")
             if request.user.tipo_usuario == "gerente" and novo_tipo == "adm":
-                form.add_error("tipo_usuario", "Gerente nao pode criar usuario Administrador.")
+                form.add_error("tipo_usuario", "Gerente não pode criar usuário Administrador.")
                 return render(request, 'configuracoes/usuario_form.html', {'form': form})
 
-            form.save()
+            novo_usuario = form.save()
+            _log_usuario(
+                novo_usuario,
+                "criacao",
+                "Usuario criado no painel de configuracoes.",
+                usuario_responsavel=request.user,
+            )
             logger.info(
                 "auditoria_operacional",
                 extra={
@@ -245,31 +374,62 @@ def adicionar_usuario(request):
         ]
         form.fields["is_staff"].initial = True
 
-    return render(request, 'configuracoes/usuario_form.html', {'form': form})
+    return render(
+        request,
+        'configuracoes/usuario_form.html',
+        {'form': form, 'editando': False, 'menu_app': "configuracoes", 'menu_sub': "usuarios"},
+    )
 
 
-@role_required(ADM_ROLES)
+@role_required(MANAGER_ROLES)
 def editar_usuario(request, usuario_id):
     user = get_object_or_404(User, id=usuario_id)
     if request.method == 'POST':
-        form = UserForm(request.POST, instance=user)
+        form = UserForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
+            if request.user.tipo_usuario == "gerente" and form.cleaned_data.get("tipo_usuario") == "adm":
+                form.add_error("tipo_usuario", "Gerente não pode promover usuário para Administrador.")
+                return render(
+                    request,
+                    'configuracoes/usuario_form.html',
+                    {'form': form, 'editando': True, 'usuario_obj': user, 'menu_app': "configuracoes", 'menu_sub': "usuarios"},
+                )
             form.save()
             messages.success(request, "Usuário atualizado com sucesso!")
-            return redirect('configuracoes:lista_usuarios')
+            _log_usuario(
+                user,
+                "edicao",
+                "Cadastro de usuário atualizado.",
+                usuario_responsavel=request.user,
+            )
+            return redirect('configuracoes:detalhes_usuario', usuario_id=user.id)
     else:
         form = UserForm(instance=user)
-    return render(request, 'configuracoes/usuario_form.html', {'form': form})
+    return render(
+        request,
+        'configuracoes/usuario_form.html',
+        {'form': form, 'editando': True, 'usuario_obj': user, 'menu_app': "configuracoes", 'menu_sub': "usuarios"},
+    )
 
 
-@role_required(ADM_ROLES)
+@role_required(MANAGER_ROLES)
 def excluir_usuario(request, usuario_id):
     user = get_object_or_404(User, id=usuario_id)
     if request.method == 'POST':
-        user.delete()
-        messages.success(request, "Usuário excluído com sucesso!")
+        if user == request.user:
+            messages.error(request, "Não é permitido inativar seu próprio usuário.")
+            return redirect("configuracoes:detalhes_usuario", usuario_id=user.id)
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        _log_usuario(
+            user,
+            "inativacao",
+            "Usuário inativado pelo menu de exclusão.",
+            usuario_responsavel=request.user,
+        )
+        messages.success(request, "Usuário inativado com sucesso!")
         return redirect('configuracoes:lista_usuarios')
-    return render(request, 'configuracoes/confirm_delete.html', {'obj': user})
+    return render(request, 'configuracoes/confirm_delete.html', {'obj': user, 'titulo': 'Inativar usuario'})
 
 
 # ---------------------------
@@ -285,15 +445,34 @@ def backup_banco(request):
             "ip": _request_ip(request),
         },
     )
-    messages.info(request, "Backup do banco ainda não implementado.")
-    return redirect('configuracoes:painel')
+    backup_dir = Path(settings.BASE_DIR) / "backups"
+    db_name = str(settings.DATABASES.get("default", {}).get("NAME", ""))
+    if db_name.startswith("file:memorydb_") or db_name == ":memory:":
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        messages.info(request, "Backup ignorado: banco em memoria (ambiente de teste).")
+        return redirect("configuracoes:painel")
+    try:
+        call_command("backup_db", output_dir=str(backup_dir), gzip=True)
+        messages.success(request, f"Backup gerado com sucesso em: {backup_dir}")
+    except Exception as exc:
+        logger.exception("falha_backup_banco")
+        messages.error(request, f"Falha ao gerar backup: {exc}")
+    return redirect("configuracoes:painel")
 
 
 @role_required(MANAGER_ROLES)
 def restore_banco(request):
-    messages.info(request, "Restore do banco ainda não implementado.")
-    return redirect('configuracoes:painel')
-
+    backup_path = (request.GET.get("arquivo") or "").strip()
+    if not backup_path:
+        messages.info(request, "Informe ?arquivo=/caminho/backup.sqlite3(.gz) para restaurar.")
+        return redirect("configuracoes:painel")
+    try:
+        call_command("restore_db", backup_path, force=True)
+        messages.success(request, "Restore executado com sucesso.")
+    except Exception as exc:
+        logger.exception("falha_restore_banco")
+        messages.error(request, f"Falha no restore: {exc}")
+    return redirect("configuracoes:painel")
 
 @role_required(MANAGER_ROLES)
 def configuracao_os_edit(request):
@@ -344,13 +523,18 @@ def marcas_fornecedores(request):
     busca_marca = (request.GET.get("qm") or "").strip()
     edit_fornecedor_id = (request.GET.get("edit_fornecedor") or "").strip()
     edit_marca_id = (request.GET.get("edit_marca") or "").strip()
+    edit_regra_id = (request.GET.get("edit_regra") or "").strip()
+
+    fornecedor_form = FornecedorGarantiaForm()
+    marca_form = MarcaGarantiaForm()
+    regra_form = RegraGarantiaMarcaForm()
+    marca_em_edicao = None
+    regra_em_edicao = None
 
     if request.method == "POST":
         form_type = request.POST.get("form_type")
         if form_type == "fornecedor":
             fornecedor_form = FornecedorGarantiaForm(request.POST, request.FILES)
-            marca_form = MarcaGarantiaForm()
-            regra_form = RegraGarantiaMarcaForm()
             if fornecedor_form.is_valid():
                 fornecedor_form.save()
                 messages.success(request, "Fornecedor salvo com sucesso.")
@@ -358,8 +542,6 @@ def marcas_fornecedores(request):
         elif form_type == "fornecedor_edit":
             fornecedor = get_object_or_404(FornecedorGarantia, id=request.POST.get("fornecedor_id"))
             fornecedor_form = FornecedorGarantiaForm(request.POST, request.FILES, instance=fornecedor)
-            marca_form = MarcaGarantiaForm()
-            regra_form = RegraGarantiaMarcaForm()
             if fornecedor_form.is_valid():
                 fornecedor_form.save()
                 messages.success(request, "Fornecedor atualizado com sucesso.")
@@ -368,53 +550,85 @@ def marcas_fornecedores(request):
             fornecedor = get_object_or_404(FornecedorGarantia, id=request.POST.get("fornecedor_id"))
             try:
                 fornecedor.delete()
-                messages.success(request, "Fornecedor excluido com sucesso.")
+                messages.success(request, "Fornecedor excluído com sucesso.")
             except ProtectedError:
-                messages.error(request, "Fornecedor vinculado a marcas. Remova os vinculos antes de excluir.")
+                messages.error(request, "Fornecedor vinculado a marcas. Remova os vínculos antes de excluir.")
             return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "marca":
             marca_form = MarcaGarantiaForm(request.POST)
-            fornecedor_form = FornecedorGarantiaForm()
-            regra_form = RegraGarantiaMarcaForm()
             if marca_form.is_valid():
-                marca_form.save()
+                marca = marca_form.save()
                 messages.success(request, "Marca de garantia salva com sucesso.")
-                return redirect("configuracoes:marcas_fornecedores")
+                return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
         elif form_type == "marca_edit":
             marca = get_object_or_404(MarcaGarantia, id=request.POST.get("marca_id"))
             marca_form = MarcaGarantiaForm(request.POST, instance=marca)
-            fornecedor_form = FornecedorGarantiaForm()
-            regra_form = RegraGarantiaMarcaForm()
             if marca_form.is_valid():
-                marca_form.save()
+                marca = marca_form.save()
                 messages.success(request, "Marca atualizada com sucesso.")
-                return redirect("configuracoes:marcas_fornecedores")
+                return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
         elif form_type == "marca_delete":
             marca = get_object_or_404(MarcaGarantia, id=request.POST.get("marca_id"))
             marca.delete()
             messages.success(request, "Marca excluida com sucesso.")
             return redirect("configuracoes:marcas_fornecedores")
-        else:
-            regra_form = RegraGarantiaMarcaForm(request.POST)
-            fornecedor_form = FornecedorGarantiaForm()
-            marca_form = MarcaGarantiaForm()
+        elif form_type == "regra_add":
+            marca_id_post = (request.POST.get("marca_id") or "").strip()
+            marca = get_object_or_404(MarcaGarantia, id=marca_id_post)
+            marca_form = MarcaGarantiaForm(instance=marca)
+            marca_em_edicao = marca
+            regra_payload = request.POST.copy()
+            regra_payload["marca"] = str(marca.id)
+            regra_form = RegraGarantiaMarcaForm(regra_payload)
             if regra_form.is_valid():
-                regra_form.save()
+                regra = regra_form.save(commit=False)
+                regra.marca = marca
+                regra.save()
                 messages.success(request, "Regra de garantia salva com sucesso.")
-                return redirect("configuracoes:marcas_fornecedores")
+                return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
+        elif form_type == "regra_edit":
+            marca_id_post = (request.POST.get("marca_id") or "").strip()
+            regra_id_post = (request.POST.get("regra_id") or "").strip()
+            marca = get_object_or_404(MarcaGarantia, id=marca_id_post)
+            regra_obj = get_object_or_404(RegraGarantiaMarca, id=regra_id_post, marca=marca)
+            marca_form = MarcaGarantiaForm(instance=marca)
+            marca_em_edicao = marca
+            regra_em_edicao = regra_obj
+            regra_payload = request.POST.copy()
+            regra_payload["marca"] = str(marca.id)
+            regra_form = RegraGarantiaMarcaForm(regra_payload, instance=regra_obj)
+            if regra_form.is_valid():
+                regra = regra_form.save(commit=False)
+                regra.marca = marca
+                regra.save()
+                messages.success(request, "Item de mão de obra atualizado com sucesso.")
+                return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
+        elif form_type == "regra_delete":
+            marca_id_post = (request.POST.get("marca_id") or "").strip()
+            regra_id_post = (request.POST.get("regra_id") or "").strip()
+            marca = get_object_or_404(MarcaGarantia, id=marca_id_post)
+            regra_obj = get_object_or_404(RegraGarantiaMarca, id=regra_id_post, marca=marca)
+            regra_obj.delete()
+            messages.success(request, "Item de mão de obra removido com sucesso.")
+            return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
     else:
         if edit_fornecedor_id.isdigit():
             fornecedor_obj = FornecedorGarantia.objects.filter(id=int(edit_fornecedor_id)).first()
             fornecedor_form = FornecedorGarantiaForm(instance=fornecedor_obj)
-        else:
-            fornecedor_form = FornecedorGarantiaForm()
 
         if edit_marca_id.isdigit():
-            marca_obj = MarcaGarantia.objects.filter(id=int(edit_marca_id)).first()
-            marca_form = MarcaGarantiaForm(instance=marca_obj)
-        else:
-            marca_form = MarcaGarantiaForm()
-        regra_form = RegraGarantiaMarcaForm()
+            marca_em_edicao = MarcaGarantia.objects.filter(id=int(edit_marca_id)).first()
+            if marca_em_edicao:
+                marca_form = MarcaGarantiaForm(instance=marca_em_edicao)
+                if edit_regra_id.isdigit():
+                    regra_em_edicao = RegraGarantiaMarca.objects.filter(
+                        id=int(edit_regra_id),
+                        marca=marca_em_edicao,
+                    ).first()
+                if regra_em_edicao:
+                    regra_form = RegraGarantiaMarcaForm(instance=regra_em_edicao)
+                else:
+                    regra_form = RegraGarantiaMarcaForm(initial={"marca": marca_em_edicao.id})
 
     fornecedores_qs = (
         FornecedorGarantia.objects.filter(nome__icontains=busca_fornecedor)
@@ -428,6 +642,9 @@ def marcas_fornecedores(request):
     )
     fornecedores_page = Paginator(fornecedores_qs.order_by("nome"), 10).get_page(request.GET.get("page_f"))
     marcas_page = Paginator(marcas_qs.order_by("nome"), 10).get_page(request.GET.get("page_m"))
+    regras_marca = RegraGarantiaMarca.objects.none()
+    if marca_em_edicao:
+        regras_marca = RegraGarantiaMarca.objects.filter(marca=marca_em_edicao).order_by("-inicio_vigencia", "tipo_produto")
 
     return render(
         request,
@@ -439,10 +656,13 @@ def marcas_fornecedores(request):
             "fornecedores": fornecedores_page,
             "marcas": marcas_page,
             "regras": RegraGarantiaMarca.objects.select_related("marca", "marca__fornecedor").all(),
+            "regras_marca": regras_marca,
             "busca_fornecedor": busca_fornecedor,
             "busca_marca": busca_marca,
             "edit_fornecedor_id": int(edit_fornecedor_id) if edit_fornecedor_id.isdigit() else None,
             "edit_marca_id": int(edit_marca_id) if edit_marca_id.isdigit() else None,
+            "edit_regra_id": int(edit_regra_id) if edit_regra_id.isdigit() else None,
+            "marca_em_edicao": marca_em_edicao,
             "menu_app": "configuracoes",
             "menu_sub": "marcas_fornecedores",
         },
@@ -451,8 +671,7 @@ def marcas_fornecedores(request):
 #---------------------------
 #Busca cep
 #---------------------------
-@role_required(STAFF_ROLES)
-@csrf_exempt
+@role_required(ORDER_CREATION_ROLES)
 def buscar_cep(request):
     if request.method == 'GET':
         cep = request.GET.get('cep', '').replace('-', '').strip()
@@ -512,10 +731,13 @@ def buscar_cep(request):
                     'complemento': data.get('complement', '')
                 })
 
-        except requests.exceptions.RequestException as e:
-            return JsonResponse({'erro': f'Erro na requisição: {str(e)}'}, status=500)
-        except Exception as e:
-            return JsonResponse({'erro': f'Erro interno: {str(e)}'}, status=500)
+        except requests.exceptions.RequestException as exc:
+            logger.warning("Falha ao consultar CEP %s: %s", cep, exc)
+            return JsonResponse({'erro': 'Não foi possível consultar o CEP agora. Tente novamente.'}, status=502)
+        except Exception:
+            logger.exception("Erro interno na busca de CEP para %s", cep)
+            return JsonResponse({'erro': 'Erro interno ao consultar CEP.'}, status=500)
 
     return JsonResponse({'erro': 'Método não permitido'}, status=405)
+
 

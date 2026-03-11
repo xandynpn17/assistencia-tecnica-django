@@ -111,7 +111,7 @@
                         {% elif query %}
                         <div class="text-center py-5">
                             <i class="fas fa-search fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">Cliente nao encontrado</h5>
+                            <h5 class="text-muted">Cliente não encontrado</h5>
                             <p class="text-muted">Cadastre um novo cliente para continuar.</p>
                             <a href="{% url 'ordens:verificar_cliente_os' %}?cpf_telefone={{ query|urlencode }}&novo_cliente=true" class="btn btn-primary btn-sm">
                                 <i class="fas fa-user-plus"></i> Cadastrar novo cliente

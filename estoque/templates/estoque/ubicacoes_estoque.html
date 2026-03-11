@@ -43,8 +43,8 @@
           <thead>
             <tr>
               <th>Ponto</th>
-              <th>Codigo</th>
-              <th>Descricao</th>
+              <th>Código</th>
+              <th>Descrição</th>
               <th>Ativo</th>
             </tr>
           </thead>
@@ -54,10 +54,10 @@
               <td>{{ u.ponto_operacional.codigo }} - {{ u.ponto_operacional.nome }}</td>
               <td>{{ u.codigo }}</td>
               <td>{{ u.descricao|default:"-" }}</td>
-              <td>{% if u.ativo %}Sim{% else %}Nao{% endif %}</td>
+              <td>{% if u.ativo %}Sim{% else %}Não{% endif %}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="text-center text-muted">Sem ubicacoes cadastradas.</td></tr>
+            <tr><td colspan="4" class="text-center text-muted">Sem ubicações cadastradas.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -66,4 +66,3 @@
   </div>
 </div>
 {% endblock %}
-

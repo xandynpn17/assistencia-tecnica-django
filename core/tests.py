@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from clientes.models import Cliente
 from ordens.models import OrdemServico
@@ -92,3 +95,18 @@ class DashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["is_managerial"])
         self.assertFalse(response.context["is_operational"])
+
+    def test_dashboard_gerencial_contabiliza_paradas_ha_15_dias(self):
+        self.client.force_login(self.gerente)
+        ordem_antiga_pendente = self._criar_ordem(status="pendente_cliente", fechada=False)
+        ordem_recente_pendente = self._criar_ordem(status="pendente_tecnico", fechada=False)
+        self._criar_ordem(status="bancada", fechada=False)
+
+        agora = timezone.now()
+        OrdemServico.objects.filter(pk=ordem_antiga_pendente.pk).update(data_abertura=agora - timedelta(days=20))
+        OrdemServico.objects.filter(pk=ordem_recente_pendente.pk).update(data_abertura=agora - timedelta(days=5))
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["gerencial_cards"]["paradas"], 1)

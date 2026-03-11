@@ -25,6 +25,7 @@ from django.utils import timezone
 
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from estoque.services import cancelar_reserva
+from caixa.services.comissoes import cancelar_comissoes_por_item, processar_evento_servico_finalizado
 from ordens.services.os_policy_service import OSAccessPolicyService
 
 
@@ -54,7 +55,7 @@ def _garantir_ordem_editavel(request, ordem, form_type):
 # ==========================
 # Criar e editar orçamento
 # ==========================
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def criar_orcamento(request, ordem_id):
     ordem = get_object_or_404(OrdemServico, id=ordem_id)
     if not _garantir_ordem_editavel(request, ordem, "orcamento"):
@@ -70,7 +71,7 @@ def criar_orcamento(request, ordem_id):
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     return render(request, "orcamentos/orcamento_form.html", {"orcamento": orcamento, "ordem": ordem})
 
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def editar_orcamento(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
     if not _garantir_ordem_editavel(request, orcamento.ordem_servico, "orcamento"):
@@ -82,7 +83,7 @@ def editar_orcamento(request, orcamento_id):
         return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
     return render(request, "orcamentos/orcamento_form.html", {"orcamento": orcamento, "ordem": orcamento.ordem_servico})
 
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def excluir_orcamento(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
     ordem = orcamento.ordem_servico
@@ -99,7 +100,7 @@ def excluir_orcamento(request, orcamento_id):
 # ==========================
 # Itens do orçamento
 # ==========================
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def adicionar_item(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
     if not _garantir_ordem_editavel(request, orcamento.ordem_servico, "orcamento_item"):
@@ -126,6 +127,10 @@ def adicionar_item(request, orcamento_id):
 
         produto = _detectar_produto_estoque(ean=ean, nome=nome)
         origem = "estoque" if produto else "manual"
+        tipo_item = (request.POST.get("tipo_item") or "").strip()
+        if tipo_item not in {"servico", "peca"}:
+            messages.error(request, "Selecione obrigatoriamente o tipo do item: Serviço ou Peça.")
+            return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos&open_modal=adicionar_item")
 
         item = ItemOrcamento.objects.create(
             orcamento=orcamento,
@@ -134,6 +139,7 @@ def adicionar_item(request, orcamento_id):
             descricao=descricao,
             quantidade=quantidade,
             valor_unitario=valor_unitario,
+            tipo_item=tipo_item,
             origem=origem,
             tecnico_responsavel=tecnico,
         )
@@ -177,7 +183,7 @@ def adicionar_item(request, orcamento_id):
         messages.success(request, "Item adicionado com sucesso!")
     return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
 
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def editar_item(request, item_id):
     item = get_object_or_404(ItemOrcamento, id=item_id)
     if not _garantir_ordem_editavel(request, item.orcamento.ordem_servico, "orcamento_item"):
@@ -197,6 +203,11 @@ def editar_item(request, item_id):
             pass
         produto = _detectar_produto_estoque(item.ean, item.nome)
         item.origem = "estoque" if produto else "manual"
+        tipo_item = (request.POST.get("tipo_item") or "").strip()
+        if tipo_item in {"servico", "peca"}:
+            item.tipo_item = tipo_item
+        elif item.origem == "estoque":
+            item.tipo_item = "peca"
         tecnico_id = request.POST.get("tecnico_responsavel")
         if tecnico_id:
             item.tecnico_responsavel = get_user_model().objects.filter(
@@ -218,11 +229,12 @@ def editar_item(request, item_id):
         "descricao": item.descricao,
         "quantidade": item.quantidade,
         "valor_unitario": str(item.valor_unitario),
+        "tipo_item": item.tipo_item,
         "origem": item.origem,
         "tecnico_responsavel": item.tecnico_responsavel_id,
     })
 
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def excluir_item(request, item_id):
     item = get_object_or_404(ItemOrcamento, id=item_id)
     ordem = item.orcamento.ordem_servico
@@ -230,6 +242,7 @@ def excluir_item(request, item_id):
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         reservas_item = list(item.reservas_estoque.all())
+        cancelar_comissoes_por_item(item, motivo="Item removido do orcamento.", evento="CANCELAMENTO_ITEM")
         item.delete()
         for reserva in reservas_item:
             try:
@@ -242,7 +255,7 @@ def excluir_item(request, item_id):
 # ==========================
 # Aceitar / Recusar itens selecionados
 # ==========================
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def aceitar_itens_orcamento(request, orcamento_id):
     if request.method == "POST":
         orc = get_object_or_404(Orcamento, id=orcamento_id)
@@ -254,26 +267,36 @@ def aceitar_itens_orcamento(request, orcamento_id):
             return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
 
         itens = orc.itens.filter(id__in=itens_ids)
+        total_migrados = 0
         for item in itens:
             item.status = "aprovado"
             item.save()
+            try:
+                from caixa.views import _gerar_comissao_item_orcamento
+
+                _gerar_comissao_item_orcamento(item, modo_pagamento="antecipado")
+            except Exception:
+                pass
+        processar_evento_servico_finalizado(orc.ordem_servico, evento="SERVICO_FINALIZADO")
 
         if not orc.itens.filter(status='pendente').exists():
             orc.status = "aprovado"
             orc.save()
             ordem = orc.ordem_servico
-            ordem.status = "autorizado"
-            ordem.save()
+            status_anterior = ordem.status
+            if ordem.status not in {"pronto_contactar", "pronto_contactado", "concluida"}:
+                ordem.status = "autorizado"
+                ordem.save(update_fields=["status"])
             LinhaTrabalho.objects.create(
                 ordem=ordem,
-                status="autorizado",
-                descricao="Todos os itens do orçamento aprovados pelo cliente.",
+                status=ordem.status,
+                descricao=f"Todos os itens do orçamento aprovados pelo cliente (status: {status_anterior} -> {ordem.status}).",
                 usuario=request.user
             )
         messages.success(request, f"{itens.count()} item(s) aprovado(s) com sucesso!")
     return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
 
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def recusar_itens_orcamento(request, orcamento_id):
     if request.method == "POST":
         orc = get_object_or_404(Orcamento, id=orcamento_id)
@@ -288,6 +311,7 @@ def recusar_itens_orcamento(request, orcamento_id):
         for item in itens:
             item.status = "recusado"
             item.save()
+            cancelar_comissoes_por_item(item, motivo="Item de orcamento recusado.", evento="CANCELAMENTO_ITEM")
 
         if not orc.itens.filter(status='pendente').exists():
             orc.status = "recusado"
@@ -307,12 +331,12 @@ def recusar_itens_orcamento(request, orcamento_id):
 
 
 
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def lista_orcamentos(request):
     orcamentos = Orcamento.objects.all()
     return render(request, 'orcamentos/lista_orcamentos.html', {'orcamentos': orcamentos})
 
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def buscar_produtos(request):
     termo = request.GET.get('q', '').strip()
     produtos = []
@@ -329,7 +353,7 @@ def buscar_produtos(request):
 # ==========================
 # Migrar itens para serviços
 # ==========================
-@login_required(login_url='configuracoes:login')
+@login_required(login_url='core:login')
 def migrar_para_servicos(request, orcamento_id):
     orc = get_object_or_404(Orcamento, id=orcamento_id)
     ordem = orc.ordem_servico
@@ -339,27 +363,41 @@ def migrar_para_servicos(request, orcamento_id):
         itens_ids = request.POST.getlist("itens_selecionados")
         itens = orc.itens.filter(id__in=itens_ids)
         if not itens.exists():
-            messages.warning(request, "Nenhum item selecionado para migração.")
+            messages.warning(request, "Nenhum item selecionado para migracao.")
             return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
+        total_migrados = 0
         for item in itens:
-            tipo_item = "servico" if "serviço" in item.nome.lower() else "peca"
-            ServicoPeca.objects.create(
+            tipo_item = (item.tipo_item or "").strip()
+            if tipo_item not in {"servico", "peca"}:
+                tipo_item = "peca" if item.origem == "estoque" else "servico"
+            _, created = ServicoPeca.objects.get_or_create(
                 ordem=ordem,
-                nome=item.nome,
-                descricao=item.descricao,
-                valor_unitario=item.valor_unitario,
-                quantidade=item.quantidade,
-                tipo=tipo_item
+                item_orcamento=item,
+                defaults={
+                    "nome": item.nome,
+                    "descricao": item.descricao,
+                    "valor_unitario": item.valor_unitario,
+                    "quantidade": item.quantidade,
+                    "tipo": tipo_item,
+                    "tecnico_responsavel": item.tecnico_responsavel or ordem.tecnico_responsavel,
+                },
             )
+            if not created:
+                continue
+            total_migrados += 1
+
+        if not total_migrados:
+            messages.info(request, "Os itens selecionados ja estavam migrados para Servicos & Pecas.")
+            return redirect(f"{ordem.get_absolute_url()}?tab=servicos")
 
         LinhaTrabalho.objects.create(
             ordem=ordem,
             status="orcamentado",
-            descricao=f"{itens.count()} item(s) migrado(s) para Serviços & Peças.",
+            descricao=f"{total_migrados} item(s) migrado(s) para Servicos & Pecas.",
             usuario=request.user
         )
-        messages.success(request, f"{itens.count()} item(s) migrado(s) com sucesso!")
+        messages.success(request, f"{total_migrados} item(s) migrado(s) com sucesso!")
     return redirect(f"{ordem.get_absolute_url()}?tab=servicos")
 
 def imprimir_orcamento(request, pk):
@@ -481,3 +519,5 @@ def imprimir_orcamento(request, pk):
 
     doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
     return response
+
+

@@ -1,0 +1,129 @@
+{% extends "core/base.html" %}
+{% block title %}Detalhes do Usuario{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-4">
+    <div class="card card-modern">
+      <div class="card-modern-header">Perfil</div>
+      <div class="card-modern-body">
+        <div class="text-center mb-3">
+          {% if usuario_obj.foto_perfil %}
+          <img src="{{ usuario_obj.foto_perfil.url }}" alt="Foto perfil" style="width:96px;height:96px;object-fit:cover;border-radius:50%;border:2px solid #e9ecef;">
+          {% else %}
+          <i class="fas fa-user-circle fa-5x text-muted"></i>
+          {% endif %}
+        </div>
+        <p class="mb-1"><strong>Nome:</strong> {{ usuario_obj.nome_exibicao }}</p>
+        <p class="mb-1"><strong>Usuario:</strong> {{ usuario_obj.username }}</p>
+        <p class="mb-1"><strong>Perfil:</strong> {{ usuario_obj.get_tipo_usuario_display }}</p>
+        <p class="mb-1"><strong>Email:</strong> {{ usuario_obj.email|default:"-" }}</p>
+        <p class="mb-1"><strong>Telefone:</strong> {{ usuario_obj.telefone|default:"-" }}</p>
+        <p class="mb-1"><strong>CPF/CNPJ:</strong> {{ usuario_obj.documento_cpf_cnpj|default:"-" }}</p>
+        <p class="mb-0"><strong>Status:</strong> {% if usuario_obj.is_active %}<span class="badge badge-success">Ativo</span>{% else %}<span class="badge badge-secondary">Inativo</span>{% endif %}</p>
+        <hr>
+        <a href="{% url 'configuracoes:editar_usuario' usuario_obj.id %}" class="btn btn-primary btn-sm">Editar</a>
+        <form method="post" class="d-inline">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="toggle_ativo">
+          <button type="submit" class="btn btn-sm {% if usuario_obj.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+            {% if usuario_obj.is_active %}Inativar{% else %}Reativar{% endif %}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card card-modern mb-3">
+      <div class="card-modern-header">Dados Trabalhistas</div>
+      <div class="card-modern-body">
+        <div class="row">
+          <div class="col-md-4"><strong>Cargo:</strong> {{ usuario_obj.cargo|default:"-" }}</div>
+          <div class="col-md-4"><strong>Departamento:</strong> {{ usuario_obj.departamento|default:"-" }}</div>
+          <div class="col-md-4"><strong>Regime:</strong> {{ usuario_obj.get_regime_contratacao_display|default:"-" }}</div>
+          <div class="col-md-4 mt-2"><strong>Admissao:</strong> {{ usuario_obj.data_admissao|date:"d/m/Y"|default:"-" }}</div>
+          <div class="col-md-4 mt-2"><strong>Demissao:</strong> {{ usuario_obj.data_demissao|date:"d/m/Y"|default:"-" }}</div>
+          <div class="col-md-4 mt-2"><strong>Vendedor:</strong> {{ usuario_obj.numero_vendedor|default:"-" }}</div>
+          <div class="col-md-4 mt-2"><strong>PIS/PASEP:</strong> {{ usuario_obj.pis_pasep|default:"-" }}</div>
+          <div class="col-md-4 mt-2"><strong>CTPS:</strong> {{ usuario_obj.ctps|default:"-" }}</div>
+          <div class="col-md-4 mt-2"><strong>Salario base:</strong> {% if usuario_obj.salario_base %}R$ {{ usuario_obj.salario_base }}{% else %}-{% endif %}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-modern mb-3">
+      <div class="card-modern-header">Anexos do Colaborador</div>
+      <div class="card-modern-body">
+        <form method="post" enctype="multipart/form-data" class="border rounded p-3 bg-light mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="anexo">
+          <div class="form-row">
+            <div class="col-md-3 form-group mb-2">{{ anexo_form.categoria.label_tag }}{{ anexo_form.categoria }}</div>
+            <div class="col-md-4 form-group mb-2">{{ anexo_form.descricao.label_tag }}{{ anexo_form.descricao }}</div>
+            <div class="col-md-5 form-group mb-2">{{ anexo_form.arquivo.label_tag }}{{ anexo_form.arquivo }}</div>
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary">Anexar</button>
+        </form>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th>Descricao</th>
+                <th>Arquivo</th>
+                <th>Enviado por</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in anexos %}
+              <tr>
+                <td>{{ a.get_categoria_display }}</td>
+                <td>{{ a.descricao|default:"-" }}</td>
+                <td><a href="{{ a.arquivo.url }}" target="_blank" rel="noopener">Abrir</a></td>
+                <td>{% if a.enviado_por %}{{ a.enviado_por.username }}{% else %}-{% endif %}</td>
+                <td>{{ a.criado_em|date:"d/m/Y H:i" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" class="text-center text-muted">Sem anexos.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-modern">
+      <div class="card-modern-header">Historico (log)</div>
+      <div class="card-modern-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Acao</th>
+                <th>Descricao</th>
+                <th>Responsavel</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for log in logs_usuario %}
+              <tr>
+                <td>{{ log.data_evento|date:"d/m/Y H:i" }}</td>
+                <td>{{ log.get_acao_display }}</td>
+                <td>{{ log.descricao }}</td>
+                <td>{% if log.usuario_responsavel %}{{ log.usuario_responsavel.username }}{% else %}-{% endif %}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted">Sem logs.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

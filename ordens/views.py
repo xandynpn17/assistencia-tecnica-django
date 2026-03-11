@@ -1,4 +1,4 @@
-﻿import re
+import re
 from decimal import Decimal
 from urllib.parse import quote
 from django.shortcuts import render, redirect, get_object_or_404
@@ -20,12 +20,14 @@ from .models import (
     PedidoCompraFoto,
     OrdemAlerta,
     OrdemArquivo,
+    OrdemTalao,
 )
 from .forms import LinhaTrabalhoForm, OrdemServicoForm, OrdemSerieForm, ServicoPecaForm
 from clientes.models import Cliente
 from clientes.forms import ClienteForm
 from caixa.models import Pagamento
 from caixa.models import AuditoriaGarantia
+from caixa.services.comissoes import cancelar_comissoes_por_item, cancelar_comissoes_por_servico_peca
 from caixa.views import _upsert_auditoria_garantia_ordem
 from orcamentos.models import Orcamento
 from orcamentos.forms import OrcamentoForm, ItemOrcamentoForm
@@ -46,7 +48,7 @@ import logging
 from datetime import datetime, timedelta
 import json
 from configuracoes.models import ConfiguracaoSistema, Empresa, MarcaGarantia, ModeloMensagem
-from configuracoes.permissions import role_required, ORDER_ROLES, RoleRequiredMixin
+from configuracoes.permissions import role_required, ORDER_ROLES, ORDER_CREATION_ROLES, RoleRequiredMixin
 from .utils import registrar_auditoria
 from estoque.services import consumir_reservas_ordem, devolver_reservas_ordem
 from ordens.services.confirmacao_service import ConfirmacaoOSService
@@ -282,10 +284,55 @@ def _log_os(ordem, tipo_evento, descricao, usuario=None, dados_extras=None):
     )
 
 
+def _recalcular_comissoes_itens_antecipado(ordem):
+    try:
+        from caixa.services.comissoes import processar_evento_servico_finalizado
+    except Exception:
+        return 0
+    return processar_evento_servico_finalizado(ordem, evento="SERVICO_FINALIZADO")
+
+
+def _migrar_itens_aprovados_para_servicos_pecas(ordem, usuario=None):
+    from orcamentos.models import ItemOrcamento
+
+    itens_aprovados = ItemOrcamento.objects.select_related("tecnico_responsavel").filter(
+        orcamento__ordem_servico=ordem,
+        status="aprovado",
+    )
+    total_migrados = 0
+    for item in itens_aprovados:
+        tipo_item = (item.tipo_item or "").strip()
+        if tipo_item not in {"servico", "peca"}:
+            tipo_item = "peca" if item.origem == "estoque" else "servico"
+        _, created = ServicoPeca.objects.get_or_create(
+            ordem=ordem,
+            item_orcamento=item,
+            defaults={
+                "tipo": tipo_item,
+                "nome": item.nome,
+                "descricao": item.descricao,
+                "quantidade": item.quantidade,
+                "valor_unitario": item.valor_unitario,
+                "tecnico_responsavel": item.tecnico_responsavel or ordem.tecnico_responsavel,
+            },
+        )
+        total_migrados += int(created)
+
+    if total_migrados:
+        LinhaTrabalho.objects.create(
+            ordem=ordem,
+            status=ordem.status,
+            descricao=f"Itens aprovados migrados para Servicos & Pecas ({total_migrados}).",
+            usuario=usuario,
+            tipo_evento="sistema",
+        )
+    return total_migrados
+
+
 # ===========================
 # Verificação de Cliente - CORRIGIDA
 # ===========================
-@role_required(ORDER_ROLES)
+@role_required(ORDER_CREATION_ROLES)
 def verificar_cliente_os(request):
     clientes = []
     cpf_telefone = request.GET.get("cpf_telefone", "").strip()
@@ -395,7 +442,7 @@ def verificar_cliente_os(request):
             messages.success(request, "Cliente cadastrado com sucesso!")
             return redirect("ordens:nova_ordem_cliente", cliente.id)
         else:
-            messages.error(request, "Por favor, corrija os erros no formulario.")
+            messages.error(request, "Por favor, corrija os erros no formulário.")
 
     context = {
         "clientes": clientes,
@@ -412,7 +459,7 @@ def verificar_cliente_os(request):
 # ===========================
 # Selecionar Cliente
 # ===========================
-@role_required(ORDER_ROLES)
+@role_required(ORDER_CREATION_ROLES)
 def selecionar_cliente_os(request):
     clientes = Cliente.objects.all()
     if request.method == "POST":
@@ -496,7 +543,7 @@ def dashboard_pedidos_compra(request):
         "q": buscar,
         "os_filtro": os_filtro,
         "tecnico_filtro": tecnico_id,
-        "tecnicos": User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username"),
+            "tecnicos": User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username"),
         "menu_app": "ordens",
         "menu_sub": "dashboard_pedidos",
     }
@@ -576,7 +623,12 @@ def toggle_fechamento_pedido_compra(request, pedido_id):
 def toggle_fechamento_os(request, pk):
     ordem = get_object_or_404(OrdemServico, id=pk)
     try:
-        ordem.atualizar_status_fechamento(fechar=not ordem.fechada, usuario=request.user)
+        fechando = not ordem.fechada
+        itens_migrados = 0
+        if fechando:
+            itens_migrados = _migrar_itens_aprovados_para_servicos_pecas(ordem, usuario=request.user)
+
+        ordem.atualizar_status_fechamento(fechar=fechando, usuario=request.user)
         acao = "Ordem fechada" if ordem.fechada else "Ordem reaberta"
         reservas_processadas = 0
         if ordem.fechada:
@@ -584,7 +636,7 @@ def toggle_fechamento_os(request, pk):
         else:
             reservas_processadas = devolver_reservas_ordem(ordem, usuario=request.user)
 
-        # ðŸ”¹ Registrar no histórico quem fechou/reabriu
+        # Registrar no histórico quem fechou/reabriu
         LinhaTrabalho.objects.create(
             ordem=ordem,
             descricao=acao,
@@ -606,7 +658,7 @@ def toggle_fechamento_os(request, pk):
             "alteracao_status",
             f"{acao}.",
             usuario=request.user,
-            dados_extras={"status": ordem.status, "fechada": ordem.fechada},
+            dados_extras={"status": ordem.status, "fechada": ordem.fechada, "itens_migrados": itens_migrados},
         )
 
         if reservas_processadas:
@@ -622,7 +674,7 @@ def toggle_fechamento_os(request, pk):
 # Criar Ordem de Serviço
 # ===========================
 class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
-    allowed_roles = ORDER_ROLES
+    allowed_roles = ORDER_CREATION_ROLES
     model = OrdemServico
     form_class = OrdemServicoForm
     template_name = "ordens/ordem_servico_form.html"
@@ -686,11 +738,11 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
                 wa = quote(resultado.get("url", ""), safe="")
                 wa_app = quote(resultado.get("app_url", ""), safe="")
                 registrar_auditoria(logger, self.request, "os_criada", ordem=self.object)
-                messages.success(self.request, "OS criada e WhatsApp de confirmacao preparado.")
+                messages.success(self.request, "OS criada e WhatsApp de confirmação preparado.")
                 return redirect(f"{reverse('ordens:resumo_ordem', kwargs={'pk': self.object.pk})}?wa={wa}&wa_app={wa_app}")
-            messages.warning(self.request, "OS criada, mas o WhatsApp automatico falhou. Use o reenvio no resumo.")
+            messages.warning(self.request, "OS criada, mas o WhatsApp automático falhou. Use o reenvio no resumo.")
         else:
-            messages.warning(self.request, "OS criada sem telefone do cliente. Envie a confirmacao manualmente.")
+            messages.warning(self.request, "OS criada sem telefone do cliente. Envie a confirmação manualmente.")
         registrar_auditoria(logger, self.request, "os_criada", ordem=self.object)
         return redirect("ordens:resumo_ordem", pk=self.object.pk)
 
@@ -781,7 +833,7 @@ class OrdemServicoUpdateView(RoleRequiredMixin, UpdateView):
                 usuario=self.request.user,
                 tipo_evento="manual",
             )
-            messages.success(self.request, "Numero de serie atualizado e registrado no historico.")
+            messages.success(self.request, "Número de série atualizado e registrado no histórico.")
         else:
             messages.info(self.request, "Nenhuma alteracao no numero de serie.")
         return response
@@ -819,13 +871,15 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["linhas"] = ordem.linhas_trabalho.exclude(
             tipo_evento="automatico",
             descricao__startswith="Status alterado de",
-        ).order_by("criado_em")
+        ).order_by("-criado_em", "-id")
         context["linha_form"] = LinhaTrabalhoForm()
         context["servico_form"] = ServicoPecaForm()
         context["orcamento_form"] = OrcamentoForm()
         context["tipos_reparacao"] = OrdemServico.TIPOS_REPARACAO
         context["item_form"] = ItemOrcamentoForm()
         context["itens"] = ordem.servicos_pecas.all()
+        context["taloes_os"] = ordem.taloes.select_related("criado_por", "pagamento").all()
+        context["empresa_talao"] = Empresa.objects.first()
         context["total_os"] = sum(item.total() for item in context["itens"])
         pagamentos_os = Pagamento.objects.filter(ordem_servico=ordem).order_by("-data")
         total_pago = sum((p.valor for p in pagamentos_os), Decimal("0.00"))
@@ -902,6 +956,21 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             tabs.append({"id": "logs", "label": "Logs", "icon": "bi bi-journal-text"})
         context["tabs"] = tabs
         context["tecnicos"] = User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username")
+        context["pode_editar_serie"] = bool(
+            self.request.user.is_superuser
+            or getattr(self.request.user, "tipo_usuario", "") in ORDER_ROLES
+        )
+        serial = (ordem.numero_serie_equipamento or "").strip()
+        if serial:
+            context["processo_anterior_sn"] = (
+                OrdemServico.objects.filter(numero_serie_equipamento__iexact=serial)
+                .exclude(pk=ordem.pk)
+                .select_related("cliente")
+                .order_by("-data_abertura")
+                .first()
+            )
+        else:
+            context["processo_anterior_sn"] = None
         context["menu_app"] = "ordens"
         context["menu_sub"] = "lista_ordens"
         # Normaliza textos com "\n" escapado para exibicao no template.
@@ -945,6 +1014,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                         )
                     except ValueError as exc:
                         messages.error(request, str(exc))
+                _recalcular_comissoes_itens_antecipado(self.object)
                 registrar_auditoria(
                     logger,
                     request,
@@ -970,8 +1040,94 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 )
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
+        elif form_type == "excluir_servico_peca":
+            item_id = request.POST.get("item_id")
+            item = get_object_or_404(ServicoPeca, id=item_id, ordem=self.object)
+            nome_item = item.nome
+            if item.item_orcamento_id:
+                cancelar_comissoes_por_item(
+                    item.item_orcamento,
+                    motivo="Servico/Peca removido da OS.",
+                    evento="CANCELAMENTO_ITEM",
+                )
+            else:
+                cancelar_comissoes_por_servico_peca(
+                    item.id,
+                    motivo="Servico/Peca removido da OS.",
+                    evento="CANCELAMENTO_ITEM",
+                )
+            item.delete()
+            _log_os(
+                self.object,
+                "cancelamento",
+                f"Servico/Peca removido: {nome_item}.",
+                usuario=request.user,
+                dados_extras={"item_id": item_id},
+            )
+            messages.success(request, "Item removido com sucesso.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+
+        elif form_type == "atualizar_taloes_item":
+            item_id = request.POST.get("item_id")
+            numeros_taloes = (request.POST.get("numeros_taloes") or "").strip()
+            item = get_object_or_404(ServicoPeca, id=item_id, ordem=self.object)
+            item.numeros_taloes = numeros_taloes
+            item.save(update_fields=["numeros_taloes"])
+            _log_os(
+                self.object,
+                "edicao_critica",
+                f"Taloes atualizados no item '{item.nome}'.",
+                usuario=request.user,
+                dados_extras={"item_id": item.id, "numeros_taloes": numeros_taloes},
+            )
+            return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+
+        elif form_type == "adicionar_talao":
+            numero = (request.POST.get("numero_talao") or "").strip()
+            valor_raw = (request.POST.get("valor_talao") or "").strip().replace(",", ".")
+            item_ref = (request.POST.get("item_talao") or "").strip()
+            descricao = (request.POST.get("descricao_talao") or "").strip()
+            imagem = request.FILES.get("imagem_talao")
+            if not numero:
+                messages.error(request, "Informe o número do talão.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+            try:
+                valor = Decimal(valor_raw) if valor_raw else None
+            except Exception:
+                messages.error(request, "Valor do talão inválido.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+            talao, created = OrdemTalao.objects.get_or_create(
+                ordem=self.object,
+                numero=numero,
+                defaults={
+                    "valor": valor,
+                    "item_referencia": item_ref,
+                    "descricao": descricao,
+                    "imagem": imagem,
+                    "origem": "manual",
+                    "criado_por": request.user,
+                },
+            )
+            if not created:
+                talao.valor = valor
+                talao.item_referencia = item_ref
+                if descricao:
+                    talao.descricao = descricao
+                if imagem:
+                    talao.imagem = imagem
+                talao.save(update_fields=["valor", "item_referencia", "descricao", "imagem"])
+            _log_os(
+                self.object,
+                "edicao_critica",
+                f"Talao registrado: {numero}.",
+                usuario=request.user,
+                dados_extras={"numero_talao": numero, "talao_id": talao.id},
+            )
+            return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+
         # Finalizar OS e registrar no Caixa
         elif form_type == "finalizar_caixa":
+            itens_migrados = _migrar_itens_aprovados_para_servicos_pecas(self.object, usuario=request.user)
             total_os = sum(item.total() for item in self.object.servicos_pecas.all())
             try:
                 self.object.transicionar_status(
@@ -988,7 +1144,11 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 "alteracao_status",
                 "OS finalizada pelo fluxo de caixa.",
                 usuario=request.user,
-                dados_extras={"status": self.object.status, "reservas_processadas": reservas_processadas},
+                dados_extras={
+                    "status": self.object.status,
+                    "reservas_processadas": reservas_processadas,
+                    "itens_migrados": itens_migrados,
+                },
             )
             registrar_auditoria(
                 logger,
@@ -1012,17 +1172,17 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             assunto = (request.POST.get("assunto") or "").strip()
             mensagem = (request.POST.get("mensagem") or "").strip()
             if canal not in {"email", "whatsapp"}:
-                messages.error(request, "Canal de envio invalido.")
+                messages.error(request, "Canal de envio inválido.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
             if not modelo_id:
                 messages.error(request, "Selecione um modelo de mensagem.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
             modelo = get_object_or_404(ModeloMensagem, id=modelo_id, ativo=True)
             if canal == "email" and not assunto:
-                messages.error(request, "Assunto e obrigatorio para envio por email.")
+                messages.error(request, "Assunto é obrigatório para envio por e-mail.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
             if not mensagem:
-                messages.error(request, "Mensagem nao pode ficar vazia.")
+                messages.error(request, "Mensagem não pode ficar vazia.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
 
             notif = _registrar_notificacao(
@@ -1050,7 +1210,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                     dados_extras={"canal": canal, "modelo_id": modelo.id, "notificacao_id": notif.id},
                 )
                 if resultado.get("url"):
-                    messages.success(request, "WhatsApp preparado em nova aba mantendo voce no sistema.")
+                    messages.success(request, "WhatsApp preparado em nova aba mantendo você no sistema.")
                     wa = quote(resultado.get("url", ""), safe="")
                     wa_app = quote(resultado.get("app_url", ""), safe="")
                     return redirect(f"{self.object.get_absolute_url()}?tab=detalhes&wa={wa}&wa_app={wa_app}")
@@ -1288,6 +1448,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             self.object.relatorio_tecnico = request.POST.get("relatorio_tecnico", "")
             self.object.tipo_reparacao = request.POST.get("tipo_reparacao", "")
             self.object.save()
+            _recalcular_comissoes_itens_antecipado(self.object)
             _log_os(
                 self.object,
                 "edicao_critica",
@@ -1296,7 +1457,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 dados_extras={"tipo_reparacao": self.object.tipo_reparacao or ""},
             )
 
-            # ðŸ”¹ Registrar quem atualizou o relatÃ³rio
+            # Registrar quem atualizou o relatório
             LinhaTrabalho.objects.create(
                 ordem=self.object,
                 descricao="Relatório técnico atualizado",
@@ -1328,17 +1489,21 @@ def migrar_orcamento(request, pk):
 
         count = 0
         for item in orcamento.itens.all():
-            ServicoPeca.objects.create(
+            _, created = ServicoPeca.objects.get_or_create(
                 ordem=ordem,
-                tipo="peca" if "peça" in item.nome.lower() else "servico",
-                nome=item.nome,
-                descricao=item.descricao,
-                quantidade=item.quantidade,
-                valor_unitario=item.valor_unitario,
+                item_orcamento=item,
+                defaults={
+                    "tipo": (item.tipo_item if item.tipo_item in {"servico", "peca"} else ("peca" if item.origem == "estoque" else "servico")),
+                    "nome": item.nome,
+                    "descricao": item.descricao,
+                    "quantidade": item.quantidade,
+                    "valor_unitario": item.valor_unitario,
+                    "tecnico_responsavel": item.tecnico_responsavel or ordem.tecnico_responsavel,
+                },
             )
-            count += 1
+            count += int(created)
 
-        # ðŸ”¹ Registrar a migraÃ§Ã£o
+        # Registrar a migração
         LinhaTrabalho.objects.create(
             ordem=ordem,
             descricao=f"Itens do orçamento migrados ({count} itens)",
@@ -1430,13 +1595,13 @@ def notificar_cliente_ordem(request, pk, tipo):
         if tipo == "orcamento" and canal in {"email", "whatsapp"}:
             _registrar_pendente_cliente_envio_orcamento(ordem, request.user, canal)
         if resultado.get("url"):
-            messages.success(request, "WhatsApp preparado em nova aba mantendo voce no sistema.")
+            messages.success(request, "WhatsApp preparado em nova aba mantendo você no sistema.")
             wa = quote(resultado.get("url", ""), safe="")
             wa_app = quote(resultado.get("app_url", ""), safe="")
             return redirect(f"{ordem.get_absolute_url()}?tab=detalhes&wa={wa}&wa_app={wa_app}")
-        messages.success(request, "Notificacao enviada com sucesso.")
+        messages.success(request, "Notificação enviada com sucesso.")
     else:
-        messages.error(request, f"Falha ao enviar notificacao: {notif.erro or 'erro desconhecido'}")
+        messages.error(request, f"Falha ao enviar notificação: {notif.erro or 'erro desconhecido'}")
     return redirect(f"{ordem.get_absolute_url()}?tab=detalhes")
 
 
@@ -1467,7 +1632,7 @@ def reenviar_confirmacao_whatsapp(request, pk):
         )
         wa = quote(resultado.get("url", ""), safe="")
         wa_app = quote(resultado.get("app_url", ""), safe="")
-        messages.success(request, "WhatsApp de confirmacao preparado.")
+        messages.success(request, "WhatsApp de confirmação preparado.")
         _log_os(
             ordem,
             "confirmacao",
@@ -1481,8 +1646,44 @@ def reenviar_confirmacao_whatsapp(request, pk):
     return redirect("ordens:resumo_ordem", pk=ordem.pk)
 
 
+@role_required(ORDER_ROLES)
+def confirmar_manual_resumo(request, pk):
+    ordem = get_object_or_404(OrdemServico, pk=pk)
+    if request.method != "POST":
+        return redirect("ordens:resumo_ordem", pk=ordem.pk)
+
+    try:
+        ConfirmacaoOSService.confirmar_presencial_ou_impresso(
+            ordem,
+            usuario=request.user,
+            tipo_confirmacao="impresso",
+        )
+        LinhaTrabalho.objects.create(
+            ordem=ordem,
+            status=ordem.status,
+            descricao="Confirmacao manual registrada apos impressao da OS.",
+            usuario=request.user,
+            tipo_evento="manual",
+        )
+        _log_os(
+            ordem,
+            "confirmacao",
+            "Confirmacao manual registrada no resumo da OS.",
+            usuario=request.user,
+            dados_extras={"origem": "resumo", "tipo_confirmacao": "impresso"},
+        )
+        messages.success(request, "Confirmacao manual registrada com sucesso.")
+    except ValueError as exc:
+        messages.warning(request, str(exc))
+
+    return redirect("ordens:resumo_ordem", pk=ordem.pk)
+
+
 def confirmar_ordem_token_publico(request, token):
     ordem = get_object_or_404(OrdemServico, token_confirmacao=token)
+    config = ConfiguracaoSistema.get_configuracao()
+    termos_os = (config.termos_ordem_servico or "").strip().replace("___ dias", "60 dias")
+    condicoes_os = (config.condicoes_orcamento or "").strip()
     ja_confirmada = ordem.confirmado
     if request.method == "POST":
         if ja_confirmada:
@@ -1509,6 +1710,8 @@ def confirmar_ordem_token_publico(request, token):
         {
             "ordem": ordem,
             "ja_confirmada": ja_confirmada,
+            "termos_os": termos_os,
+            "condicoes_os": condicoes_os,
         },
     )
 
@@ -1563,14 +1766,24 @@ def atualizar_local(request, os_id):
                 OSAccessPolicyService.ensure_can_edit(ordem, "edicao_local", usuario=request.user)
             except ValueError as exc:
                 return JsonResponse({"success": False, "message": str(exc)}, status=400)
-            ordem.local_armazenamento = local
-            ordem.save()
+            local_anterior = (ordem.local_armazenamento or "").strip()
+            local_novo = (local or "").strip()
+            ordem.local_armazenamento = local_novo
+            ordem.save(update_fields=["local_armazenamento"])
+            if local_anterior != local_novo:
+                LinhaTrabalho.objects.create(
+                    ordem=ordem,
+                    status=ordem.status,
+                    descricao=f"Local de armazenamento alterado de '{local_anterior or '-'}' para '{local_novo or '-'}'.",
+                    usuario=request.user,
+                    tipo_evento="manual",
+                )
             _log_os(
                 ordem,
                 "edicao_critica",
                 "Local de armazenamento atualizado.",
                 usuario=request.user,
-                dados_extras={"local_armazenamento": local},
+                dados_extras={"local_armazenamento": local_novo},
             )
             return JsonResponse({"success": True, "message": "Local atualizado com sucesso!"})
         except User.DoesNotExist:
@@ -1607,6 +1820,7 @@ def adicionar_linha(request, os_id):
                     ordem.aplicar_status_sem_historico(status_os)
                 except ValueError as exc:
                     mensagem_aviso = str(exc)
+            _recalcular_comissoes_itens_antecipado(ordem)
             registrar_auditoria(
                 logger,
                 request,
@@ -1681,7 +1895,7 @@ def atualizar_tecnico(request, os_id):
                     dados_extras={"tecnico_id": tecnico.id},
                 )
 
-                # ðŸ”¹ Registrar a mudança no histórico
+                # Registrar a mudança no histórico
                 LinhaTrabalho.objects.create(
                     ordem=ordem,
                     descricao=f"Técnico responsável alterado para {tecnico.username}",
@@ -1713,6 +1927,62 @@ def atualizar_tecnico(request, os_id):
         except OrdemServico.DoesNotExist:
             return JsonResponse({"success": False, "message": "OS não encontrada."}, status=404)
     return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
+
+
+@role_required(ORDER_ROLES)
+def atualizar_numero_serie(request, os_id):
+    """Atualiza o número de série da OS via AJAX."""
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            numero_serie = (data.get("numero_serie") or "").strip()
+            ordem = OrdemServico.objects.get(id=os_id)
+            try:
+                OSAccessPolicyService.ensure_can_edit(ordem, "edicao_serie", usuario=request.user)
+            except ValueError as exc:
+                return JsonResponse({"success": False, "message": str(exc)}, status=400)
+
+            serie_antiga = (ordem.numero_serie_equipamento or "").strip()
+            if numero_serie == serie_antiga:
+                return JsonResponse({"success": True, "message": "Nenhuma alteracao realizada."})
+
+            ordem.numero_serie_equipamento = numero_serie
+            ordem.save(update_fields=["numero_serie_equipamento"])
+
+            descricao = (
+                f"Numero de serie alterado de '{serie_antiga or '-'}' para '{numero_serie or '-'}'."
+            )
+            LinhaTrabalho.objects.create(
+                ordem=ordem,
+                status=ordem.status,
+                descricao=descricao,
+                usuario=request.user,
+                tipo_evento="manual",
+            )
+            _log_os(
+                ordem,
+                "edicao_critica",
+                descricao,
+                usuario=request.user,
+                dados_extras={"serie_antiga": serie_antiga, "serie_nova": numero_serie},
+            )
+            registrar_auditoria(
+                logger,
+                request,
+                "numero_serie_os_atualizado",
+                ordem=ordem,
+                extra={"serie_antiga": serie_antiga, "serie_nova": numero_serie},
+            )
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": "Numero de serie atualizado com sucesso.",
+                    "numero_serie": numero_serie,
+                }
+            )
+        except OrdemServico.DoesNotExist:
+            return JsonResponse({"success": False, "message": "OS nao encontrada."}, status=404)
+    return JsonResponse({"success": False, "message": "Metodo invalido."}, status=400)
 # ===========================
 # PDFs
 # ===========================
@@ -2190,4 +2460,5 @@ def imprimir_relatorio_tecnico(request, pk):
 
     doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
     return response
+
 

@@ -1,12 +1,18 @@
-﻿{% extends 'core/base.html' %}
+{% extends 'core/base.html' %}
 
 {% block content %}
 <div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Filtro de Relatorio</h3></div>
+  <div class="card-header"><h3 class="card-title">Administração de Comissões</h3></div>
   <div class="card-body">
+    <div class="alert alert-info py-2 mb-3">
+      <small>
+        Regra operacional: comissão <strong>cancelada</strong> não pode ser liberada/paga; comissão
+        <strong>paga</strong> não pode ser cancelada.
+      </small>
+    </div>
     <form method="get" class="form-row">
       <div class="col-md-3">
-        <label>Tecnico</label>
+        <label>Técnico</label>
         <select name="tecnico" class="form-control">
           <option value="">Todos</option>
           {% for t in tecnicos %}
@@ -14,185 +20,187 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-3">
-        <label>Data inicio</label>
+      <div class="col-md-2">
+        <label>Status</label>
+        <select name="status" class="form-control">
+          <option value="">Todos</option>
+          <option value="GERADA" {% if status_filtro == 'GERADA' %}selected{% endif %}>Gerada</option>
+          <option value="LIBERADA" {% if status_filtro == 'LIBERADA' %}selected{% endif %}>Liberada</option>
+          <option value="PAGA" {% if status_filtro == 'PAGA' %}selected{% endif %}>Paga</option>
+          <option value="CANCELADA" {% if status_filtro == 'CANCELADA' %}selected{% endif %}>Cancelada</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label>OS</label>
+        <input type="text" name="os" value="{{ os_filtro }}" class="form-control" placeholder="Ex.: OS-0022">
+      </div>
+      <div class="col-md-2">
+        <label>Data de início</label>
         <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
       </div>
-      <div class="col-md-3">
-        <label>Data fim</label>
+      <div class="col-md-2">
+        <label>Data de fim</label>
         <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
       </div>
-      <div class="col-md-3 d-flex align-items-end">
-        <button class="btn btn-primary mr-2" type="submit">Filtrar</button>
-        <a class="btn btn-outline-secondary" href="{% url 'caixa:comissoes_tecnicos' %}">Limpar</a>
+      <div class="col-md-1 d-flex align-items-end">
+        <button class="btn btn-primary btn-block" type="submit">Filtrar</button>
       </div>
     </form>
   </div>
-</div>
-<div class="row mb-3">
-  <div class="col-md-6"><div class="alert alert-warning">Comissoes pendentes: R$ {{ total_pendente|floatformat:2 }}</div></div>
-  <div class="col-md-6"><div class="alert alert-success">Comissoes pagas: R$ {{ total_pago|floatformat:2 }}</div></div>
-</div>
-<div class="row mb-3">
-  <div class="col-md-6"><div class="alert alert-warning">Comissoes por item pendentes: R$ {{ total_pendente_itens|floatformat:2 }}</div></div>
-  <div class="col-md-6"><div class="alert alert-success">Comissoes por item pagas: R$ {{ total_pago_itens|floatformat:2 }}</div></div>
 </div>
 
 <div class="row mb-3">
   <div class="col-md-6">
-    <div class="card">
-      <div class="card-header"><h3 class="card-title">Resumo por tecnico (OS)</h3></div>
-      <div class="card-body p-0">
-        <table class="table table-sm mb-0">
-          <thead><tr><th>Tecnico</th><th>Total</th></tr></thead>
-          <tbody>
-          {% for r in resumo_os %}
-          <tr><td>{{ r.tecnico__username|default:"-" }}</td><td>R$ {{ r.total|default:0|floatformat:2 }}</td></tr>
-          {% empty %}<tr><td colspan="2" class="text-center text-muted">Sem dados.</td></tr>{% endfor %}
-          </tbody>
-        </table>
+    <div class="card h-100">
+      <div class="card-header"><strong>Reprocessar Serviços</strong></div>
+      <div class="card-body">
+        <form method="post" class="form-row">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="recalcular_servicos">
+          <div class="col-md-5">
+            <label>Data de início</label>
+            <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
+          </div>
+          <div class="col-md-5">
+            <label>Data de fim</label>
+            <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-outline-primary btn-block">Executar</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
   <div class="col-md-6">
-    <div class="card">
-      <div class="card-header"><h3 class="card-title">Resumo por tecnico (Itens)</h3></div>
-      <div class="card-body p-0">
-        <table class="table table-sm mb-0">
-          <thead><tr><th>Tecnico</th><th>Total</th></tr></thead>
-          <tbody>
-          {% for r in resumo_itens %}
-          <tr><td>{{ r.tecnico__username|default:"-" }}</td><td>R$ {{ r.total|default:0|floatformat:2 }}</td></tr>
-          {% empty %}<tr><td colspan="2" class="text-center text-muted">Sem dados.</td></tr>{% endfor %}
-          </tbody>
-        </table>
+    <div class="card h-100">
+      <div class="card-header"><strong>Reprocessar Peças</strong></div>
+      <div class="card-body">
+        <form method="post" class="form-row">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="recalcular_pecas">
+          <div class="col-md-5">
+            <label>Data de início</label>
+            <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
+          </div>
+          <div class="col-md-5">
+            <label>Data de fim</label>
+            <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-outline-success btn-block">Executar</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
 </div>
 
-<div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Nova Regra de Comissao</h3></div>
-  <div class="card-body">
-    <form method="post" class="row">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="regra">
-      <div class="col-md-3">{{ regra_form.usuario.label_tag }}{{ regra_form.usuario }}</div>
-      <div class="col-md-3">{{ regra_form.percentual_servico.label_tag }}{{ regra_form.percentual_servico }}</div>
-      <div class="col-md-3">{{ regra_form.percentual_peca.label_tag }}{{ regra_form.percentual_peca }}</div>
-      <div class="col-md-1">{{ regra_form.ativo.label_tag }}{{ regra_form.ativo }}</div>
-      <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary" type="submit">Salvar</button></div>
-    </form>
-    <form method="post" class="mt-3">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="recalcular">
-      <label class="mr-2"><input type="checkbox" name="considerar_pecas" value="1"> considerar pecas</label>
-      <button class="btn btn-outline-secondary btn-sm" type="submit">Recalcular comissoes por OS</button>
-    </form>
-    <form method="post" class="mt-2">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="recalcular_itens_antecipado">
-      <button class="btn btn-outline-primary btn-sm" type="submit">Recalcular comissao por item (antecipado)</button>
-    </form>
-    <form method="post" class="mt-2">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="recalcular_itens_fechamento">
-      <button class="btn btn-outline-dark btn-sm" type="submit">Recalcular comissao por item (no fechamento)</button>
-    </form>
-    <a href="{% url 'caixa:premios_meta' %}" class="btn btn-sm btn-info mt-3">Ir para pagina de Premios e Metas</a>
-  </div>
+<div class="row mb-3">
+  <div class="col-md-3"><div class="alert alert-info mb-0">Total válido: R$ {{ total_geral|floatformat:2 }}</div></div>
+  <div class="col-md-3"><div class="alert alert-warning mb-0">Geradas: R$ {{ total_gerada|floatformat:2 }}</div></div>
+  <div class="col-md-3"><div class="alert alert-primary mb-0">Liberadas: R$ {{ total_liberada|floatformat:2 }}</div></div>
+  <div class="col-md-3"><div class="alert alert-success mb-0">Pagas: R$ {{ total_paga|floatformat:2 }}</div></div>
 </div>
 
 <div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Regras Ativas</h3></div>
+  <div class="card-header"><h3 class="card-title">Resumo por Tipo</h3></div>
   <div class="card-body p-0">
     <table class="table table-sm table-bordered mb-0">
-      <thead><tr><th>Tecnico</th><th>% Servico</th><th>% Peca</th><th>Ativa</th></tr></thead>
+      <thead><tr><th>Tipo</th><th>Total</th></tr></thead>
       <tbody>
-      {% for r in regras %}
-      <tr><td>{{ r.usuario }}</td><td>{{ r.percentual_servico }}</td><td>{{ r.percentual_peca }}</td><td>{{ r.ativo|yesno:"Sim,Nao" }}</td></tr>
-      {% empty %}<tr><td colspan="4" class="text-center text-muted">Sem regras.</td></tr>{% endfor %}
+      {% for row in resumo_tipos %}
+      <tr><td>{{ row.tipo }}</td><td>R$ {{ row.total|floatformat:2 }}</td></tr>
+      {% empty %}
+      <tr><td colspan="2" class="text-center text-muted">Sem dados no filtro.</td></tr>
+      {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 
 <div class="card">
-  <div class="card-header"><h3 class="card-title">Comissoes por OS</h3></div>
+  <div class="card-header"><h3 class="card-title">Comissões</h3></div>
   <div class="card-body p-0">
     <table class="table table-sm table-bordered mb-0">
-      <thead><tr><th>OS</th><th>Tecnico</th><th>Base Servico</th><th>Base Peca</th><th>Valor</th><th>Status</th><th>Referencia</th><th>Acoes</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>OS</th>
+          <th>Técnico</th>
+          <th>Tipo</th>
+          <th>Descrição</th>
+          <th>Base</th>
+          <th>%</th>
+          <th>Valor</th>
+          <th>Status</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
       <tbody>
       {% for c in comissoes %}
       <tr>
-        <td>{{ c.ordem_servico.numero_os }}</td>
-        <td>{{ c.tecnico }}</td>
-        <td>{{ c.base_servico|floatformat:2 }}</td>
-        <td>{{ c.base_peca|floatformat:2 }}</td>
-        <td>{{ c.valor_comissao|floatformat:2 }}</td>
-        <td>{{ c.get_status_display }}</td>
-        <td>{{ c.referencia_pagamento|default:'-' }}</td>
+        <td>{{ c.data_criacao|date:"d/m/Y H:i" }}</td>
+        <td>{% if c.ordem_servico %}{{ c.ordem_servico.numero_os }}{% else %}-{% endif %}</td>
+        <td>{% if c.tecnico %}{{ c.tecnico.username }}{% else %}-{% endif %}</td>
+        <td>{{ c.tipo }}</td>
+        <td>{{ c.descricao|default:"-" }}</td>
+        <td>R$ {{ c.valor_base|floatformat:2 }}</td>
+        <td>{{ c.percentual|floatformat:2 }}%</td>
+        <td>R$ {{ c.valor_comissao|floatformat:2 }}</td>
         <td>
-          <form method="post" class="form-inline">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="status">
-            <input type="hidden" name="comissao_id" value="{{ c.id }}">
-            <select name="status" class="form-control form-control-sm mr-1">
-              <option value="pendente" {% if c.status == 'pendente' %}selected{% endif %}>Pendente</option>
-              <option value="paga" {% if c.status == 'paga' %}selected{% endif %}>Paga</option>
-              <option value="cancelada" {% if c.status == 'cancelada' %}selected{% endif %}>Cancelada</option>
-            </select>
-            <input type="text" name="referencia_pagamento" value="{{ c.referencia_pagamento }}" placeholder="ref" class="form-control form-control-sm mr-1">
-            <button class="btn btn-sm btn-primary" type="submit">Salvar</button>
-          </form>
+          {% if c.status == "GERADA" %}
+          <span class="badge badge-warning">Gerada</span>
+          {% elif c.status == "LIBERADA" %}
+          <span class="badge badge-primary">Liberada</span>
+          {% elif c.status == "PAGA" %}
+          <span class="badge badge-success">Paga</span>
+          {% else %}
+          <span class="badge badge-secondary">Cancelada</span>
+          {% endif %}
         </td>
-      </tr>
-      {% empty %}<tr><td colspan="8" class="text-center text-muted">Sem comissoes.</td></tr>{% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+        <td>
+          <div class="d-flex flex-wrap" style="gap: 6px;">
+            {% if c.status == "GERADA" %}
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="liberar">
+              <input type="hidden" name="comissao_id" value="{{ c.id }}">
+              <button type="submit" class="btn btn-sm btn-outline-primary">Liberar</button>
+            </form>
+            {% endif %}
 
-<div class="card mt-3">
-  <div class="card-header"><h3 class="card-title">Comissoes por Item de Orcamento</h3></div>
-  <div class="card-body p-0">
-    <table class="table table-sm table-bordered mb-0">
-      <thead><tr><th>Nº OS</th><th>Servico/Item</th><th>Valor Servico</th><th>Comissao</th><th>Tecnico</th><th>Modo</th><th>Status</th><th>Referencia</th><th>Acoes</th></tr></thead>
-      <tbody>
-      {% for ci in comissoes_itens %}
-      <tr>
-        <td>{{ ci.ordem_servico.numero_os }}</td>
-        <td>{{ ci.item_orcamento.nome }}</td>
-        <td>R$ {{ ci.base_calculo|floatformat:2 }}</td>
-        <td>R$ {{ ci.valor_comissao|floatformat:2 }}</td>
-        <td>{{ ci.tecnico }}</td>
-        <td>{{ ci.get_modo_pagamento_display }}</td>
-        <td>{{ ci.get_status_display }}</td>
-        <td>{{ ci.referencia_pagamento|default:'-' }}</td>
-        <td>
-          <form method="post" class="form-inline">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="status_item">
-            <input type="hidden" name="comissao_item_id" value="{{ ci.id }}">
-            <select name="status" class="form-control form-control-sm mr-1">
-              <option value="pendente" {% if ci.status == 'pendente' %}selected{% endif %}>Pendente</option>
-              <option value="paga" {% if ci.status == 'paga' %}selected{% endif %}>Paga</option>
-              <option value="cancelada" {% if ci.status == 'cancelada' %}selected{% endif %}>Cancelada</option>
-            </select>
-            <input type="text" name="referencia_pagamento" value="{{ ci.referencia_pagamento }}" placeholder="ref" class="form-control form-control-sm mr-1">
-            <button class="btn btn-sm btn-primary" type="submit">Salvar</button>
-          </form>
+            {% if c.status == "GERADA" or c.status == "LIBERADA" %}
+            <form method="post" class="d-flex">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="pagar">
+              <input type="hidden" name="comissao_id" value="{{ c.id }}">
+              <input type="text" name="referencia_pagamento" value="{{ c.referencia_pagamento }}" placeholder="Ref." class="form-control form-control-sm mr-1" style="width: 110px;">
+              <button type="submit" class="btn btn-sm btn-success">Pagar</button>
+            </form>
+            {% endif %}
+
+            {% if c.status == "GERADA" or c.status == "LIBERADA" %}
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="cancelar">
+              <input type="hidden" name="comissao_id" value="{{ c.id }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar</button>
+            </form>
+            {% endif %}
+
+            {% if c.status == "PAGA" %}
+            <span class="badge badge-success align-self-center">Pagamento concluído</span>
+            {% elif c.status == "CANCELADA" %}
+            <span class="badge badge-secondary align-self-center">Sem ações</span>
+            {% endif %}
+          </div>
         </td>
       </tr>
-      {% empty %}<tr><td colspan="9" class="text-center text-muted">Sem comissoes por item.</td></tr>{% endfor %}
+      {% empty %}
+      <tr><td colspan="10" class="text-center text-muted">Sem comissões no filtro informado.</td></tr>
+      {% endfor %}
       </tbody>
-      <tfoot>
-        <tr>
-          <th colspan="3" class="text-right">Valor total</th>
-          <th>R$ {{ total_comissoes_itens|floatformat:2 }}</th>
-          <th colspan="5">-</th>
-        </tr>
-      </tfoot>
     </table>
   </div>
 </div>

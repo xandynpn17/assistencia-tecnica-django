@@ -42,7 +42,7 @@
       <thead><tr><th>Nome</th><th>Valor Mensal</th><th>Dia</th><th>Ponto</th><th>Ativa</th></tr></thead>
       <tbody>
       {% for d in despesas_recorrentes %}
-      <tr><td>{{ d.nome }}</td><td>{{ d.valor_mensal|floatformat:2 }}</td><td>{{ d.dia_vencimento }}</td><td>{{ d.ponto_operacional|default:'-' }}</td><td>{{ d.ativo|yesno:'Sim,Nao' }}</td></tr>
+      <tr><td>{{ d.nome }}</td><td>{{ d.valor_mensal|floatformat:2 }}</td><td>{{ d.dia_vencimento }}</td><td>{{ d.ponto_operacional|default:'-' }}</td><td>{{ d.ativo|yesno:'Sim,Não' }}</td></tr>
       {% empty %}<tr><td colspan="5" class="text-center text-muted">Sem despesas recorrentes.</td></tr>{% endfor %}
       </tbody>
     </table>

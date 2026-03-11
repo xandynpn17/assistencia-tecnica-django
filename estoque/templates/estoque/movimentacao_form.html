@@ -36,6 +36,11 @@
         {{ form.destino_ubicacao }}
       </div>
       <div class="form-group">
+        <label for="{{ form.valor_unitario_custo.id_for_label }}">Custo unitario da entrada (opcional)</label>
+        {{ form.valor_unitario_custo }}
+        <small class="text-muted">Usado para calcular custo medio quando o tipo for Entrada de estoque.</small>
+      </div>
+      <div class="form-group">
         <label for="{{ form.observacao.id_for_label }}">Observacao</label>
         {{ form.observacao }}
       </div>
@@ -51,6 +56,9 @@
 document.addEventListener("DOMContentLoaded", function () {
   const filtro = document.getElementById("filtroProduto");
   const select = document.getElementById("id_produto");
+  const tipo = document.getElementById("id_tipo");
+  const origem = document.getElementById("id_origem");
+  const destino = document.getElementById("id_destino");
   if (!filtro || !select) return;
   const options = Array.from(select.options).map(o => ({value: o.value, text: o.text}));
   filtro.addEventListener("input", function () {
@@ -69,6 +77,22 @@ document.addEventListener("DOMContentLoaded", function () {
       select.value = atual;
     }
   });
+
+  function ajustarCamposPorTipo() {
+    if (!tipo || !origem || !destino) return;
+    if (tipo.value === "entrada") {
+      origem.disabled = true;
+      origem.value = "";
+      destino.disabled = false;
+    } else {
+      origem.disabled = false;
+      destino.disabled = false;
+    }
+  }
+  if (tipo) {
+    tipo.addEventListener("change", ajustarCamposPorTipo);
+    ajustarCamposPorTipo();
+  }
 });
 </script>
 {% endblock %}

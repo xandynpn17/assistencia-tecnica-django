@@ -1,43 +1,80 @@
-﻿{% extends "core/base.html" %}
-{% block title %}Lista de Usuarios{% endblock %}
+{% extends "core/base.html" %}
+{% block title %}Usuarios{% endblock %}
 
 {% block content %}
 <div class="card card-modern">
-  <div class="card-modern-header">
-    <i class="fas fa-users"></i> Lista de Usuarios
-    <a href="{% url 'configuracoes:adicionar_usuario' %}" class="btn btn-success btn-sm float-right">
-      <i class="fas fa-plus"></i> Novo
+  <div class="card-modern-header d-flex justify-content-between align-items-center">
+    <span><i class="fas fa-users"></i> Usuarios do Sistema</span>
+    <a href="{% url 'configuracoes:adicionar_usuario' %}" class="btn btn-success btn-sm">
+      <i class="fas fa-plus"></i> Novo Usuario
     </a>
   </div>
-  <div class="card-modern-body table-responsive">
-    <table class="table table-hover align-middle">
-      <thead>
-        <tr>
-          <th>Usuario</th>
-          <th>Email</th>
-          <th>Vendedor</th>
-          <th>Status</th>
-          <th>Staff</th>
-          <th>Grupos</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in usuarios %}
-        <tr>
-          <td>{{ u.username }}</td>
-          <td>{{ u.email }}</td>
-          <td>{{ u.numero_vendedor|default:"-" }}</td>
-          <td>{% if u.is_active %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Inativo</span>{% endif %}</td>
-          <td>{% if u.is_staff %}<span class="badge bg-info text-dark">Sim</span>{% else %}Nao{% endif %}</td>
-          <td>{{ u.groups.all|join:", " }}</td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="6" class="text-center text-muted">Nenhum usuario cadastrado.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="card-modern-body">
+    <form method="get" class="form-row mb-3">
+      <div class="col-md-5 mb-2">
+        <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Buscar por usuario, nome, email ou CPF/CNPJ">
+      </div>
+      <div class="col-md-3 mb-2">
+        <select name="tipo" class="form-control">
+          <option value="">Todos os perfis</option>
+          {% for value, label in tipo_choices %}
+          <option value="{{ value }}" {% if tipo == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 mb-2">
+        <select name="ativo" class="form-control">
+          <option value="">Todos</option>
+          <option value="1" {% if ativo == "1" %}selected{% endif %}>Ativos</option>
+          <option value="0" {% if ativo == "0" %}selected{% endif %}>Inativos</option>
+        </select>
+      </div>
+      <div class="col-md-2 mb-2">
+        <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Nome</th>
+            <th>Perfil</th>
+            <th>Documento</th>
+            <th>Vendedor</th>
+            <th>Status</th>
+            <th class="text-right">Acoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in usuarios %}
+          <tr>
+            <td><strong>{{ u.username }}</strong><br><small class="text-muted">{{ u.email|default:"-" }}</small></td>
+            <td>{{ u.nome_exibicao }}</td>
+            <td>{{ u.get_tipo_usuario_display }}</td>
+            <td>{{ u.documento_cpf_cnpj|default:"-" }}</td>
+            <td>{{ u.numero_vendedor|default:"-" }}</td>
+            <td>
+              {% if u.is_active %}
+              <span class="badge badge-success">Ativo</span>
+              {% else %}
+              <span class="badge badge-secondary">Inativo</span>
+              {% endif %}
+            </td>
+            <td class="text-right text-nowrap">
+              <a href="{% url 'configuracoes:detalhes_usuario' u.id %}" class="btn btn-sm btn-outline-info">Detalhes</a>
+              <a href="{% url 'configuracoes:editar_usuario' u.id %}" class="btn btn-sm btn-outline-primary">Editar</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted">Nenhum usuario encontrado.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 {% endblock %}

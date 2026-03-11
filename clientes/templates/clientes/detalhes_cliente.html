@@ -48,7 +48,7 @@
                                 {% elif cliente.cnpj %}
                                     {{ cliente.cnpj|slice:":2" }}.{{ cliente.cnpj|slice:"2:5" }}.{{ cliente.cnpj|slice:"5:8" }}/{{ cliente.cnpj|slice:"8:12" }}-{{ cliente.cnpj|slice:"12:" }}
                                 {% else %}
-                                    <span class="text-muted">Nao informado</span>
+                                    <span class="text-muted">Não informado</span>
                                 {% endif %}
                             </dd>
 

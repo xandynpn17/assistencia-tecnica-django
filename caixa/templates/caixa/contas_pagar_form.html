@@ -1,0 +1,25 @@
+{% extends 'core/base.html' %}
+{% load widget_tweaks %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">Nova Conta a Pagar</h3>
+  <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+      <div class="mb-2">
+        <label>{{ field.label }}</label>
+        {{ field|add_class:"form-control" }}
+        {% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

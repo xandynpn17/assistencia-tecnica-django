@@ -21,6 +21,8 @@ class OSAccessPolicyService:
         "edicao_local",
         "edicao_observacoes",
         "edicao_tecnico",
+        "edicao_serie",
+        "adicionar_talao",
     }
 
     @classmethod

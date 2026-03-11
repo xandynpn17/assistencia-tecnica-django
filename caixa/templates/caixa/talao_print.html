@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <title>Talao {{ pagamento.numero_talao }}</title>
+    <style>
+        :root {
+            --receipt-width: 80mm;
+            --logo-height: 18mm;
+            --text: #111;
+            --muted: #555;
+            --line: #000;
+            --bg: #f4f4f4;
+        }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "Courier New", Courier, monospace;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        body[data-format="a4"] {
+            --receipt-width: 190mm;
+            --logo-height: 24mm;
+        }
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 16px;
+            background: #fff;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        .toolbar .group {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .toolbar button {
+            font-family: inherit;
+            font-size: 12px;
+            border: 1px solid #bbb;
+            background: #fff;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+        .toolbar button.active {
+            background: #111;
+            color: #fff;
+            border-color: #111;
+        }
+        .paper {
+            padding: 16px 12px 40px;
+            display: flex;
+            justify-content: center;
+        }
+        .receipt {
+            width: 100%;
+            max-width: var(--receipt-width);
+            background: #fff;
+            border: 1px dashed #aaa;
+            padding: 12px 12px 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .center { text-align: center; }
+        .header-logo img {
+            max-height: var(--logo-height);
+            max-width: 60mm;
+            width: auto;
+            height: auto;
+        }
+        .company-name {
+            font-weight: 700;
+            font-size: 14px;
+            margin-top: 6px;
+            text-transform: uppercase;
+        }
+        .meta {
+            color: var(--muted);
+            font-size: 11px;
+            margin-top: 2px;
+            text-transform: uppercase;
+        }
+        .rule {
+            border-top: 1px dashed var(--line);
+            margin: 10px 0;
+        }
+        .title {
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-size: 12px;
+        }
+        .subtitle {
+            text-transform: uppercase;
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 6px;
+        }
+        .label {
+            text-transform: uppercase;
+            font-size: 11px;
+            color: var(--muted);
+        }
+        .value {
+            font-weight: 700;
+            font-size: 12px;
+            text-align: right;
+        }
+        .block {
+            margin-top: 6px;
+        }
+        .block .value {
+            text-align: left;
+            font-weight: 600;
+        }
+        .total {
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .footer {
+            margin-top: 12px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--muted);
+        }
+        @media print {
+            .toolbar { display: none; }
+            body { background: #fff; }
+            .paper { padding: 0; }
+            .receipt { border: none; box-shadow: none; }
+            @page { size: auto; margin: 4mm; }
+        }
+    </style>
+</head>
+<body data-format="thermal">
+<div class="toolbar">
+    <div class="group">
+        <span>Formato:</span>
+        <button type="button" class="format-btn active" data-format="thermal">Termica 80mm</button>
+        <button type="button" class="format-btn" data-format="a4">A4</button>
+    </div>
+    <button type="button" onclick="window.print()">Imprimir</button>
+</div>
+
+<div class="paper">
+    <div class="receipt">
+        <div class="center header-logo">
+            {% if empresa and empresa.logo %}
+                <img src="{{ empresa.logo.url }}" alt="Logo">
+            {% endif %}
+        </div>
+        <div class="center company-name">{{ empresa.nome|default:"-" }}</div>
+        <div class="center meta">CNPJ: {{ empresa.cnpj|default:"-" }}</div>
+        <div class="center meta">{{ empresa.endereco|default:"-" }}</div>
+        <div class="center meta">Telefone: {{ empresa.telefone|default:"-" }}</div>
+
+        <div class="rule"></div>
+
+        <div class="center title">Comprovante de Pagamento</div>
+        <div class="center subtitle">Cupom não fiscal</div>
+
+        <div class="rule"></div>
+
+        <div class="row">
+            <div class="label">Numero do Talao</div>
+            <div class="value">{{ pagamento.numero_talao }}</div>
+        </div>
+        <div class="row">
+            <div class="label">Data/Hora</div>
+            <div class="value">{{ pagamento.data|date:"d/m/Y H:i" }}</div>
+        </div>
+        <div class="row">
+            <div class="label">OS</div>
+            <div class="value">{% if pagamento.ordem_servico %}{{ pagamento.ordem_servico.numero_os }}{% else %}-{% endif %}</div>
+        </div>
+        <div class="row">
+            <div class="label">Forma Pagamento</div>
+            <div class="value">{{ pagamento.metodo_display }}</div>
+        </div>
+
+        <div class="rule"></div>
+
+        <div class="row">
+            <div class="label">Valor Total</div>
+            <div class="value total">R$ {{ pagamento.valor|floatformat:2 }}</div>
+        </div>
+        <div class="row">
+            <div class="label">Referencia</div>
+            <div class="value">{{ pagamento.referencia|default:"-" }}</div>
+        </div>
+
+        {% if pagamento.observacao %}
+        <div class="rule"></div>
+        <div class="block">
+            <div class="label">Observacao</div>
+            <div class="value">{{ pagamento.observacao }}</div>
+        </div>
+        {% endif %}
+
+        <div class="rule"></div>
+
+        <div class="footer">
+            2a via emitida pelo sistema.
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const body = document.body;
+        const buttons = document.querySelectorAll(".format-btn");
+        const saved = window.localStorage ? localStorage.getItem("talao_format") : null;
+        if (saved) {
+            body.setAttribute("data-format", saved);
+            buttons.forEach(btn => btn.classList.toggle("active", btn.dataset.format === saved));
+        }
+        buttons.forEach(btn => {
+            btn.addEventListener("click", () => {
+                const format = btn.dataset.format;
+                body.setAttribute("data-format", format);
+                buttons.forEach(b => b.classList.toggle("active", b === btn));
+                if (window.localStorage) localStorage.setItem("talao_format", format);
+            });
+        });
+    })();
+</script>
+</body>
+</html>

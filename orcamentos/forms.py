@@ -27,7 +27,7 @@ class ItemOrcamentoForm(forms.ModelForm):
     """
     class Meta:
         model = ItemOrcamento
-        fields = ['ean', 'nome', 'descricao', 'valor_unitario', 'quantidade', 'origem', 'tecnico_responsavel']
+        fields = ['ean', 'nome', 'descricao', 'valor_unitario', 'quantidade', 'tipo_item', 'origem', 'tecnico_responsavel']
         widgets = {
             'ean': forms.TextInput(attrs={
                 'placeholder': 'Código EAN ou serviço',
@@ -51,6 +51,7 @@ class ItemOrcamentoForm(forms.ModelForm):
                 'min': 1,
                 'class': 'form-control'
             }),
+            'tipo_item': forms.Select(attrs={'class': 'form-control'}),
             'origem': forms.Select(attrs={'class': 'form-control'}),
             'tecnico_responsavel': forms.Select(attrs={'class': 'form-control'}),
         }

@@ -22,6 +22,7 @@ urlpatterns = [
     path('<int:pk>/editar/', OrdemServicoUpdateView.as_view(), name='editar_ordem'),
     path('<int:pk>/detalhes/', DetalhesOrdemView.as_view(), name='detalhes_ordem'),
     path('<int:pk>/resumo/', OrdemServicoResumoView.as_view(), name='resumo_ordem'),
+    path('<int:pk>/confirmar-manual-resumo/', views.confirmar_manual_resumo, name='confirmar_manual_resumo'),
     path('<int:pk>/toggle-fechamento/', views.toggle_fechamento_os, name='toggle_fechamento_os'),
     path('<int:pk>/imprimir-confirmacao/', views.imprimir_confirmacao_os, name='imprimir_confirmacao_os'),
     path('<int:pk>/reenviar-confirmacao-whatsapp/', views.reenviar_confirmacao_whatsapp, name='reenviar_confirmacao_whatsapp'),
@@ -57,6 +58,7 @@ urlpatterns = [
     path('<int:os_id>/adicionar_linha/', views.adicionar_linha, name='adicionar_linha'),
     path('<int:os_id>/atualizar_observacoes/', views.atualizar_observacoes, name='atualizar_observacoes'),
     path('<int:os_id>/atualizar_tecnico/', views.atualizar_tecnico, name='atualizar_tecnico'),
+    path('<int:os_id>/atualizar_numero_serie/', views.atualizar_numero_serie, name='atualizar_numero_serie'),
 
 
 

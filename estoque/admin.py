@@ -1,10 +1,19 @@
 from django.contrib import admin
-from .models import Produto, PontoOperacional, UbicacaoEstoque, SaldoEstoquePonto, MovimentacaoEstoque
+from .models import (
+    CategoriaProduto,
+    MovimentacaoEstoque,
+    PontoOperacional,
+    Produto,
+    SaldoEstoquePonto,
+    ServicoReferencia,
+    UbicacaoEstoque,
+)
 
 @admin.register(Produto)
 class ProdutoAdmin(admin.ModelAdmin):
-    list_display = ['nome', 'preco', 'quantidade', 'ativo']
-    search_fields = ['nome']
+    list_display = ["nome", "tipo_item", "ean", "sku", "categoria", "quantidade", "preco_final", "ativo"]
+    list_filter = ["tipo_item", "ativo", "permite_os", "categoria_config", "marca"]
+    search_fields = ["nome", "ean", "sku", "modelos_compativeis", "fornecedor"]
 
 
 @admin.register(PontoOperacional)
@@ -29,6 +38,20 @@ class SaldoEstoquePontoAdmin(admin.ModelAdmin):
 
 @admin.register(MovimentacaoEstoque)
 class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
-    list_display = ["produto", "tipo", "quantidade", "origem", "destino", "criado_em"]
+    list_display = ["produto", "tipo", "quantidade", "origem", "destino", "valor_unitario_custo", "criado_em"]
     list_filter = ["tipo", "origem", "destino"]
     search_fields = ["produto__nome", "observacao", "destino_ubicacao"]
+
+
+@admin.register(CategoriaProduto)
+class CategoriaProdutoAdmin(admin.ModelAdmin):
+    list_display = ["nome", "margem_padrao", "ordem", "ativo"]
+    list_filter = ["ativo"]
+    search_fields = ["nome"]
+
+
+@admin.register(ServicoReferencia)
+class ServicoReferenciaAdmin(admin.ModelAdmin):
+    list_display = ["nome", "ativo"]
+    list_filter = ["ativo"]
+    search_fields = ["nome"]

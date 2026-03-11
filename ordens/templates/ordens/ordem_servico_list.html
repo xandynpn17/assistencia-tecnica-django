@@ -50,27 +50,26 @@
                             <th>Modelo</th>
                             <th>Status</th>
                             <th>Criada em</th>
-                            <th>Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for os in ordens %}
-                        <tr>
-                            <td>{{ os.numero_os }}</td>
+                        <tr class="os-row" data-detalhes-url="{% url 'ordens:detalhes_ordem' os.id %}">
+                            <td>
+                                <a href="{% url 'ordens:detalhes_ordem' os.id %}" class="font-weight-bold text-dark">
+                                    {{ os.numero_os }}
+                                </a>
+                            </td>
                             <td>{{ os.cliente.nome }}</td>
                             <td>{{ os.tipo_equipamento|title }}</td>
                             <td>{{ os.marca_equipamento }}</td>
                             <td>{{ os.modelo_equipamento }}</td>
                             <td>{{ os.get_status_display }}</td>
                             <td>{{ os.data_abertura|date:"d/m/Y H:i" }}</td>
-                            <td>
-                                <a href="{% url 'ordens:editar_ordem' os.id %}" class="btn btn-sm btn-warning">Editar</a>
-                                <a href="{% url 'ordens:detalhes_ordem' os.id %}" class="btn btn-sm btn-info">Detalhes</a>
-                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center">Nenhuma ordem encontrada.</td>
+                            <td colspan="7" class="text-center">Nenhuma ordem encontrada.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -99,4 +98,16 @@
         </div>
     </div>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".os-row").forEach(function (row) {
+        row.addEventListener("dblclick", function () {
+            const url = row.getAttribute("data-detalhes-url");
+            if (url) {
+                window.location.href = url;
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

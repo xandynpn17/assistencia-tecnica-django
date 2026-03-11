@@ -1,13 +1,22 @@
 from functools import wraps
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
 
+
+def _tipos_usuario_configurados():
+    user_model = get_user_model()
+    return {codigo for codigo, _ in getattr(user_model, "TIPO_CHOICES", [])}
+
+
+ALL_USER_ROLES = _tipos_usuario_configurados()
 ADM_ROLES = {"adm"}
 MANAGER_ROLES = {"adm", "gerente"}
 STAFF_ROLES = {"adm", "gerente", "atendente"}
 ORDER_ROLES = {"adm", "gerente", "atendente", "tecnico"}
+ORDER_CREATION_ROLES = set(ALL_USER_ROLES) if ALL_USER_ROLES else set(ORDER_ROLES)
 STOCK_VIEW_ROLES = {"adm", "gerente", "atendente", "tecnico"}
 STOCK_MANAGE_ROLES = {"adm", "gerente", "atendente"}
 CAIXA_FINANCIAL_ROLES = {"adm", "gerente"}
@@ -24,7 +33,7 @@ def has_role(user, allowed_roles):
     return getattr(user, "tipo_usuario", None) in allowed_roles
 
 
-def role_required(allowed_roles, login_url="configuracoes:login"):
+def role_required(allowed_roles, login_url="core:login"):
     allowed_roles = set(allowed_roles)
 
     def decorator(view_func):
@@ -41,8 +50,9 @@ def role_required(allowed_roles, login_url="configuracoes:login"):
 
 
 class RoleRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
-    login_url = "configuracoes:login"
+    login_url = "core:login"
     allowed_roles = STAFF_ROLES
 
     def test_func(self):
         return has_role(self.request.user, set(self.allowed_roles))
+

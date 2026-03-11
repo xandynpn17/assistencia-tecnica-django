@@ -53,7 +53,7 @@
             <span class="text-muted">Sem faixas</span>
           {% endfor %}
         </td>
-        <td>{{ r.ativo|yesno:"Sim,Nao" }}</td>
+        <td>{{ r.ativo|yesno:"Sim,Não" }}</td>
       </tr>
       {% empty %}<tr><td colspan="6" class="text-center text-muted">Sem regras cadastradas.</td></tr>{% endfor %}
       </tbody>

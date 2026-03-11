@@ -211,7 +211,7 @@
                             <td>{{ ordem.numero_os }}</td>
                             <td>{{ ordem.cliente.nome }}</td>
                             <td>{{ ordem.get_status_display }}</td>
-                            <td>{% if ordem.tecnico_responsavel %}{{ ordem.tecnico_responsavel.get_full_name|default:ordem.tecnico_responsavel.username }}{% else %}<span class="text-muted">Nao atribuido</span>{% endif %}</td>
+                            <td>{% if ordem.tecnico_responsavel %}{{ ordem.tecnico_responsavel.get_full_name|default:ordem.tecnico_responsavel.username }}{% else %}<span class="text-muted">Não atribuído</span>{% endif %}</td>
                             <td>{{ ordem.data_abertura|date:"d/m/Y H:i" }}</td>
                             <td class="text-right pr-3"><a href="{% url 'ordens:detalhes_ordem' ordem.id %}" class="btn btn-sm btn-outline-primary">Abrir</a></td>
                         </tr>

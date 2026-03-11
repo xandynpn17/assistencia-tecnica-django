@@ -1,12 +1,12 @@
 ﻿{% extends "core/base.html" %}
 
-{% block header %}<h1 class="m-0 text-dark">Movimentacoes de Estoque</h1>{% endblock %}
+{% block header %}<h1 class="m-0 text-dark">Movimentações de Estoque</h1>{% endblock %}
 
 {% block content %}
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
-    <span>Historico de movimentacoes</span>
-    <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm">Nova movimentacao</a>
+    <span>Histórico de movimentações</span>
+    <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm">Nova movimentação</a>
   </div>
   <div class="card-body border-bottom">
     <form method="get" class="form-inline">

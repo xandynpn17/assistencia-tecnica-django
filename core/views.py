@@ -5,6 +5,8 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from datetime import timedelta
+
 from django.utils import timezone
 
 from clientes.models import Cliente
@@ -16,7 +18,7 @@ from ordens.models import OrdemServico
 # ---------------------
 # DASHBOARD
 # ---------------------
-@login_required(login_url="configuracoes:login")
+@login_required(login_url="core:login")
 def dashboard(request):
     if not has_role(request.user, ORDER_ROLES):
         raise PermissionDenied
@@ -72,8 +74,11 @@ def dashboard(request):
             fechada=False,
             status__in={"pendente_cliente", "pendente_tecnico", "pendente_pecas", "pendente_marca"},
         ).count()
+        limite_parada = timezone.now() - timedelta(days=15)
         ordens_paradas = OrdemServico.objects.filter(
-            fechada=False, status__in={"pendente_cliente", "pendente_tecnico", "pendente_pecas", "pendente_marca"}
+            fechada=False,
+            status__in={"pendente_cliente", "pendente_tecnico", "pendente_pecas", "pendente_marca"},
+            data_abertura__lte=limite_parada,
         ).count()
 
         ordens_recentes = (
@@ -118,7 +123,7 @@ def login_view(request):
     return render(request, "core/login.html")
 
 
-@login_required(login_url="configuracoes:login")
+@login_required(login_url="core:login")
 def logout_view(request):
     logout(request)
     messages.info(request, "Voce saiu do sistema com sucesso.", extra_tags="logout")
@@ -134,10 +139,11 @@ def home_redirect(request):
     return redirect("core:login")
 
 
-@login_required(login_url="configuracoes:login")
+@login_required(login_url="core:login")
 def painel(request):
     context = {
         "user": request.user,
         "tipo_usuario": request.user.get_tipo_display(),
     }
     return render(request, "configuracoes/painel.html", context)
+

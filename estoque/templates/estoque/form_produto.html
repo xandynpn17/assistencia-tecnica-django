@@ -6,67 +6,215 @@
 <h1 class="m-0 text-dark">{{ form.instance.pk|yesno:"Editar Produto,Novo Produto" }}</h1>
 {% endblock %}
 
+{% block extra_css %}
+{{ block.super }}
+<style>
+    .secao-titulo {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #2c3e50;
+        margin-bottom: 0.65rem;
+    }
+    .bloco-box {
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 12px;
+        background: #fff;
+    }
+    .resumo-kpi {
+        border: 1px solid #e3e7ea;
+        border-radius: 8px;
+        padding: 10px;
+        background: #f8fafc;
+    }
+    .resumo-kpi .lbl {
+        font-size: 12px;
+        color: #667085;
+    }
+    .resumo-kpi .val {
+        font-size: 1.05rem;
+        font-weight: 700;
+    }
+    .alerta-minimo {
+        display: none;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card-modern">
     <div class="card-modern-header">
         {{ form.instance.pk|yesno:"Editar Produto,Novo Produto" }}
     </div>
     <div class="card-modern-body">
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
-            <div class="row">
-                <div class="col-md-6">{{ form.nome.label_tag }} {{ form.nome }}</div>
-                <div class="col-md-3">{{ form.sku.label_tag }} {{ form.sku }}</div>
-                <div class="col-md-3">{{ form.ean.label_tag }} {{ form.ean }}</div>
+            {% if form.errors %}
+            <div class="alert alert-danger">
+                <strong>Corrija os erros abaixo:</strong>
+                <ul class="mb-0 mt-2">
+                    {% for field in form %}
+                        {% for err in field.errors %}
+                        <li><strong>{{ field.label }}:</strong> {{ err }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                    {% for err in form.non_field_errors %}
+                    <li>{{ err }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+                {% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="bloco-box">
+                <div class="secao-titulo">Identificação</div>
+                <div class="row">
+                    <div class="col-md-5">{{ form.nome.label_tag }} {{ form.nome }}</div>
+                    <div class="col-md-3">{{ form.sku.label_tag }} {{ form.sku }}</div>
+                    <div class="col-md-4">
+                        {{ form.ean.label_tag }}
+                        <div class="input-group">
+                            {{ form.ean }}
+                            <div class="input-group-append">
+                                <button class="btn btn-outline-secondary" type="button" id="btn-gerar-ean">Gerar código de barras</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-3">{{ form.tipo_item.label_tag }} {{ form.tipo_item }}</div>
+                    <div class="col-md-3">{{ form.modo_preco.label_tag }} {{ form.modo_preco }}</div>
+                    <div class="col-md-3">{{ form.data_entrada.label_tag }} {{ form.data_entrada }}</div>
+                    <div class="col-md-3">{{ form.ponto_operacional.label_tag }} {{ form.ponto_operacional }}</div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-2">{{ form.foto.label_tag }} {{ form.foto }}</div>
+                    <div class="col-md-2">{{ form.localizacao.label_tag }} {{ form.localizacao }}</div>
+                    <div class="col-md-2">{{ form.garantia_peca_dias.label_tag }} {{ form.garantia_peca_dias }}</div>
+                    <div class="col-md-2 form-check mt-4">{{ form.permite_os }} {{ form.permite_os.label_tag }}</div>
+                    <div class="col-md-2 form-check mt-4">{{ form.permite_comissao_peca }} {{ form.permite_comissao_peca.label_tag }}</div>
+                    <div class="col-md-2">{{ form.percentual_comissao_peca.label_tag }} {{ form.percentual_comissao_peca }}</div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-3">{{ form.bonus_venda.label_tag }} {{ form.bonus_venda }}</div>
+                </div>
             </div>
 
-            <div class="row mt-2">
-                <div class="col-md-3">{{ form.tipo_item.label_tag }} {{ form.tipo_item }}</div>
-                <div class="col-md-3">{{ form.categoria.label_tag }} {{ form.categoria }}</div>
-                <div class="col-md-3">{{ form.fornecedor.label_tag }} {{ form.fornecedor }}</div>
-                <div class="col-md-3">{{ form.data_entrada.label_tag }} {{ form.data_entrada }}</div>
-            </div>
-            <div class="row mt-2">
-                <div class="col-md-4">{{ form.ponto_operacional.label_tag }} {{ form.ponto_operacional }}</div>
-            </div>
-
-            <div class="row mt-2">
-                <div class="col-md-12">{{ form.descricao.label_tag }} {{ form.descricao }}</div>
-            </div>
-
-            <hr>
-
-            <div class="row mt-2">
-                <div class="col-md-3">{{ form.custo_unitario.label_tag }} {{ form.custo_unitario }}</div>
-                <div class="col-md-3">{{ form.custo_operacional.label_tag }} {{ form.custo_operacional }}</div>
-                <div class="col-md-3">{{ form.margem_lucro.label_tag }} {{ form.margem_lucro }}</div>
-                <div class="col-md-3">{{ form.taxa_cartao.label_tag }} {{ form.taxa_cartao }}</div>
-            </div>
-            <div class="row mt-2">
-                <div class="col-md-3">{{ form.quantidade.label_tag }} {{ form.quantidade }}</div>
-                <div class="col-md-3">{{ form.estoque_minimo.label_tag }} {{ form.estoque_minimo }}</div>
-                <div class="col-md-3 form-check mt-4">{{ form.usar_aliquota_manual }} {{ form.usar_aliquota_manual.label_tag }}</div>
-                <div class="col-md-3">{{ form.aliquota_manual.label_tag }} {{ form.aliquota_manual }}</div>
+            <div class="bloco-box">
+                <div class="secao-titulo">Classificação e Origem</div>
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="filtro-categoria">Buscar categoria</label>
+                        <input type="text" id="filtro-categoria" class="form-control mb-1" placeholder="Digite para filtrar">
+                        {{ form.categoria_config.label_tag }} {{ form.categoria_config }}
+                    </div>
+                    <div class="col-md-4">{{ form.categoria.label_tag }} {{ form.categoria }}</div>
+                    <div class="col-md-4">{{ form.marca.label_tag }} {{ form.marca }}</div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-6">{{ form.fornecedor_config.label_tag }} {{ form.fornecedor_config }}</div>
+                    <div class="col-md-6">{{ form.fornecedor_manual.label_tag }} {{ form.fornecedor_manual }}</div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12">{{ form.modelos_compativeis.label_tag }} {{ form.modelos_compativeis }}</div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12">{{ form.servicos_compativeis.label_tag }} {{ form.servicos_compativeis }}</div>
+                </div>
             </div>
 
-            <div id="bloco-avancado-item" class="row mt-2">
-                <div class="col-md-3">{{ form.icms.label_tag }} {{ form.icms }}</div>
-                <div class="col-md-3">{{ form.ipi.label_tag }} {{ form.ipi }}</div>
-                <div class="col-md-3">{{ form.pis.label_tag }} {{ form.pis }}</div>
-                <div class="col-md-3">{{ form.cofins.label_tag }} {{ form.cofins }}</div>
+            <div class="bloco-box">
+                <div class="secao-titulo">Descrição</div>
+                <div class="row">
+                    <div class="col-md-6">{{ form.descricao.label_tag }} {{ form.descricao }}</div>
+                    <div class="col-md-6">{{ form.observacao_interna.label_tag }} {{ form.observacao_interna }}</div>
+                </div>
             </div>
 
-            <div class="row mt-2">
-                <div class="col-md-3"><label>Preco sugerido</label><input id="id_preco_sugerido" class="form-control" readonly></div>
-                <div class="col-md-3">{{ form.preco_final.label_tag }} {{ form.preco_final }}<small class="text-muted">Pode ser alterado manualmente</small></div>
-                <div class="col-md-3 form-check mt-4">{{ form.ativo }} {{ form.ativo.label_tag }}</div>
+            <div class="bloco-box">
+                <div class="secao-titulo">Custos e Precificação</div>
+                <div class="row">
+                    <div class="col-md-2">{{ form.custo_unitario.label_tag }} {{ form.custo_unitario }}</div>
+                    <div class="col-md-2">{{ form.custo_operacional.label_tag }} {{ form.custo_operacional }}</div>
+                    <div class="col-md-2">{{ form.custo_frete.label_tag }} {{ form.custo_frete }}</div>
+                    <div class="col-md-2">{{ form.custo_impostos.label_tag }} {{ form.custo_impostos }}</div>
+                    <div class="col-md-2">{{ form.custo_comissao.label_tag }} {{ form.custo_comissao }}</div>
+                    <div class="col-md-2">{{ form.custo_marketplace.label_tag }} {{ form.custo_marketplace }}</div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-2">{{ form.custo_medio.label_tag }} {{ form.custo_medio }}</div>
+                    <div class="col-md-2">{{ form.margem_lucro.label_tag }} {{ form.margem_lucro }}</div>
+                    <div class="col-md-2">{{ form.margem_minima.label_tag }} {{ form.margem_minima }}</div>
+                    <div class="col-md-2">{{ form.taxa_cartao.label_tag }} {{ form.taxa_cartao }}</div>
+                    <div class="col-md-2 form-check mt-4">{{ form.usar_aliquota_manual }} {{ form.usar_aliquota_manual.label_tag }}</div>
+                    <div class="col-md-2">{{ form.aliquota_manual.label_tag }} {{ form.aliquota_manual }}</div>
+                </div>
+
+                <div id="bloco-avancado-item" class="row mt-2">
+                    <div class="col-md-3">{{ form.icms.label_tag }} {{ form.icms }}</div>
+                    <div class="col-md-3">{{ form.ipi.label_tag }} {{ form.ipi }}</div>
+                    <div class="col-md-3">{{ form.pis.label_tag }} {{ form.pis }}</div>
+                    <div class="col-md-3">{{ form.cofins.label_tag }} {{ form.cofins }}</div>
+                </div>
+
+                <div class="row mt-2">
+                    <div class="col-md-3">
+                        <label>Preço sugerido</label>
+                        <input id="id_preco_sugerido" class="form-control" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        <label>Preço mínimo</label>
+                        <input id="id_preco_minimo" class="form-control" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.preco_final.label_tag }} {{ form.preco_final }}
+                        <small class="text-muted">Pode ser alterado manualmente</small>
+                    </div>
+                    <div class="col-md-3 form-check mt-4">{{ form.ativo }} {{ form.ativo.label_tag }}</div>
+                </div>
+
+                <div class="alert alert-warning mt-2 alerta-minimo" id="alerta-minimo">
+                    Venda abaixo da margem mínima configurada.
+                </div>
+
+                <div class="row mt-2">
+                    <div class="col-md-3">
+                        <div class="resumo-kpi">
+                            <div class="lbl">Lucro estimado</div>
+                            <div class="val" id="kpi-lucro">R$ 0.00</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="resumo-kpi">
+                            <div class="lbl">Margem real</div>
+                            <div class="val" id="kpi-margem">0.00%</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="resumo-kpi">
+                            <div class="lbl">Recebido no cartão</div>
+                            <div class="val" id="kpi-cartao-recebido">R$ 0.00</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="resumo-kpi">
+                            <div class="lbl">Lucro no cartão</div>
+                            <div class="val" id="kpi-cartao-lucro">R$ 0.00</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {{ form.is_servico.as_hidden }}
             {{ form.pis_cofins.as_hidden }}
 
-            <button type="submit" class="btn btn-primary mt-3"><i class="fas fa-save"></i> Salvar</button>
-            <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-secondary mt-3">Cancelar</a>
+            <button type="submit" class="btn btn-primary mt-2"><i class="fas fa-save"></i> Salvar</button>
+            <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-secondary mt-2">Cancelar</a>
         </form>
     </div>
 </div>
@@ -74,77 +222,164 @@
 
 {% block extra_js %}
 <script>
+function parseValor(id) {
+    return parseFloat(document.getElementById(id)?.value || "0") || 0;
+}
+
+function formatBRL(valor) {
+    return `R$ ${valor.toFixed(2)}`;
+}
+
 function atualizarCamposTributarios() {
     const usarManual = document.getElementById("id_usar_aliquota_manual")?.checked;
-    const regime = "{{ empresa.regime_tributario|default:'simples' }}";
-    const modo = "{{ empresa.modo_tributario|default:'basico' }}";
+    const modo = document.getElementById("id_modo_preco")?.value || "avancado";
     const blocoAvancado = document.getElementById("bloco-avancado-item");
     const campoAliqManual = document.getElementById("id_aliquota_manual");
 
     if (blocoAvancado) {
-        blocoAvancado.style.display = (regime === "simples" && modo === "basico") ? "none" : "flex";
+        blocoAvancado.style.display = (modo === "avancado") ? "flex" : "none";
     }
     if (campoAliqManual) {
-        campoAliqManual.readOnly = !usarManual;
+        campoAliqManual.readOnly = !usarManual || modo === "simples";
     }
 }
 
-function atualizarPrecoSugerido() {
-    const custo = parseFloat(document.getElementById("id_custo_unitario")?.value) || 0;
-    const custoOp = parseFloat(document.getElementById("id_custo_operacional")?.value) || 0;
-    const margem = parseFloat(document.getElementById("id_margem_lucro")?.value) || 0;
-    const taxaCartao = parseFloat(document.getElementById("id_taxa_cartao")?.value) || 0;
-
+function calcularAliquotaAvancada() {
     const usarManual = document.getElementById("id_usar_aliquota_manual")?.checked;
-    const aliquotaManual = parseFloat(document.getElementById("id_aliquota_manual")?.value) || 0;
+    if (usarManual) return parseValor("id_aliquota_manual");
+    return parseValor("id_icms") + parseValor("id_ipi") + parseValor("id_pis") + parseValor("id_cofins");
+}
 
-    const regime = "{{ empresa.regime_tributario|default:'simples' }}";
-    const modo = "{{ empresa.modo_tributario|default:'basico' }}";
-    const tipoItem = document.getElementById("id_tipo_item")?.value || "produto";
+function atualizarPrecoSugerido() {
+    const custoUnit = parseValor("id_custo_unitario");
+    const custoOper = parseValor("id_custo_operacional");
+    const frete = parseValor("id_custo_frete");
+    const impostos = parseValor("id_custo_impostos");
+    const comissao = parseValor("id_custo_comissao");
+    const marketplace = parseValor("id_custo_marketplace");
+    const margem = parseValor("id_margem_lucro");
+    const margemMin = parseValor("id_margem_minima");
+    const taxaCartao = parseValor("id_taxa_cartao");
+    const modo = document.getElementById("id_modo_preco")?.value || "avancado";
 
-    let aliquota;
-    if (usarManual) {
-        aliquota = aliquotaManual;
-    } else if (regime === "simples" && modo === "basico") {
-        if (tipoItem === "servico") {
-            aliquota = parseFloat("{{ empresa.aliquota_servico|default:0 }}") || 0;
-        } else {
-            aliquota = parseFloat("{{ empresa.aliquota_comercio|default:0 }}") || 0;
-        }
+    let custoOperFinal = custoOper;
+    const detalhado = frete + impostos + comissao + marketplace;
+    if (detalhado > 0) custoOperFinal = detalhado;
+    const custoTotal = custoUnit + custoOperFinal;
+
+    let precoSugerido = custoTotal;
+    if (modo === "simples") {
+        precoSugerido = custoTotal * (1 + (margem / 100));
     } else {
-        const icms = parseFloat(document.getElementById("id_icms")?.value) || 0;
-        const ipi = parseFloat(document.getElementById("id_ipi")?.value) || 0;
-        const pis = parseFloat(document.getElementById("id_pis")?.value) || 0;
-        const cofins = parseFloat(document.getElementById("id_cofins")?.value) || 0;
-        aliquota = icms + ipi + pis + cofins;
+        const aliquota = calcularAliquotaAvancada();
+        const fator = 1 - (aliquota / 100) - (taxaCartao / 100) - (margem / 100);
+        precoSugerido = fator <= 0 ? custoTotal : (custoTotal / fator);
     }
 
-    const fator = 1 - (aliquota / 100) - (taxaCartao / 100) - (margem / 100);
-    const preco = fator <= 0 ? (custo + custoOp) : ((custo + custoOp) / fator);
+    let precoMinimo = custoTotal;
+    const fatorMin = 1 - (margemMin / 100);
+    if (margemMin > 0 && fatorMin > 0) {
+        precoMinimo = custoTotal / fatorMin;
+    }
 
-    const out = document.getElementById("id_preco_sugerido");
-    if (out) out.value = preco.toFixed(2);
+    const campoSug = document.getElementById("id_preco_sugerido");
+    const campoMin = document.getElementById("id_preco_minimo");
+    if (campoSug) campoSug.value = precoSugerido.toFixed(2);
+    if (campoMin) campoMin.value = precoMinimo.toFixed(2);
+
+    const precoFinalEl = document.getElementById("id_preco_final");
+    const precoFinal = parseFloat(precoFinalEl?.value || "0") || 0;
+    const precoUsado = precoFinal > 0 ? precoFinal : precoSugerido;
+
+    const lucro = precoUsado - custoTotal;
+    const margemReal = precoUsado > 0 ? (lucro / precoUsado) * 100 : 0;
+    const recebidoCartao = precoUsado * (1 - (taxaCartao / 100));
+    const lucroCartao = recebidoCartao - custoTotal;
+
+    const alerta = document.getElementById("alerta-minimo");
+    if (alerta) {
+        alerta.style.display = (precoUsado > 0 && precoUsado < precoMinimo) ? "block" : "none";
+    }
+
+    document.getElementById("kpi-lucro").textContent = formatBRL(lucro);
+    document.getElementById("kpi-margem").textContent = `${margemReal.toFixed(2)}%`;
+    document.getElementById("kpi-cartao-recebido").textContent = formatBRL(recebidoCartao);
+    document.getElementById("kpi-cartao-lucro").textContent = formatBRL(lucroCartao);
+}
+
+function filtrarSelectCategoria() {
+    const termo = (document.getElementById("filtro-categoria")?.value || "").toLowerCase();
+    const select = document.getElementById("id_categoria_config");
+    if (!select) return;
+    Array.from(select.options).forEach((opt) => {
+        if (!opt.value) {
+            opt.hidden = false;
+            return;
+        }
+        opt.hidden = !opt.text.toLowerCase().includes(termo);
+    });
+}
+
+function bindGerarEAN() {
+    const btn = document.getElementById("btn-gerar-ean");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+        fetch("{% url 'estoque:api_gerar_ean' %}", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": "{{ csrf_token }}",
+            },
+        })
+            .then((r) => r.json())
+            .then((data) => {
+                if (data.ok && data.ean) {
+                    document.getElementById("id_ean").value = data.ean;
+                }
+            });
+    });
 }
 
 document.addEventListener("DOMContentLoaded", function() {
     [
-        "id_custo_unitario", "id_custo_operacional", "id_margem_lucro", "id_taxa_cartao",
-        "id_icms", "id_ipi", "id_pis", "id_cofins", "id_aliquota_manual", "id_tipo_item"
+        "id_custo_unitario",
+        "id_custo_operacional",
+        "id_custo_frete",
+        "id_custo_impostos",
+        "id_custo_comissao",
+        "id_custo_marketplace",
+        "id_margem_lucro",
+        "id_margem_minima",
+        "id_taxa_cartao",
+        "id_icms",
+        "id_ipi",
+        "id_pis",
+        "id_cofins",
+        "id_aliquota_manual",
+        "id_preco_final",
     ].forEach(function(id) {
         const el = document.getElementById(id);
         if (el) el.addEventListener("input", atualizarPrecoSugerido);
-        if (el && el.tagName === "SELECT") el.addEventListener("change", atualizarPrecoSugerido);
     });
-    const chk = document.getElementById("id_usar_aliquota_manual");
-    if (chk) {
-        chk.addEventListener("change", function() {
+
+    ["id_tipo_item", "id_modo_preco", "id_categoria_config"].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("change", atualizarPrecoSugerido);
+    });
+
+    const chkAliq = document.getElementById("id_usar_aliquota_manual");
+    if (chkAliq) {
+        chkAliq.addEventListener("change", function() {
             atualizarCamposTributarios();
             atualizarPrecoSugerido();
         });
     }
+    const filtroCategoria = document.getElementById("filtro-categoria");
+    if (filtroCategoria) filtroCategoria.addEventListener("input", filtrarSelectCategoria);
 
+    bindGerarEAN();
     atualizarCamposTributarios();
     atualizarPrecoSugerido();
 });
 </script>
 {% endblock %}
+

@@ -32,15 +32,28 @@
     <div class="col-md-3"><div class="small-box bg-light"><div class="inner"><h4>R$ {{ a_receber_cliente|floatformat:2 }}</h4><p>A Receber Cliente</p></div></div></div>
     <div class="col-md-3"><div class="small-box bg-light"><div class="inner"><h4>R$ {{ a_receber_garantia|floatformat:2 }}</h4><p>A Receber Garantia</p></div></div></div>
 </div>
+<div class="row">
+    <div class="col-md-6">
+        <div class="small-box bg-warning">
+            <div class="inner">
+                <h4>R$ {{ prontas_sem_recebimento_total|floatformat:2 }}</h4>
+                <p>Prontas sem recebimento ({{ prontas_sem_recebimento_qtd }} OS)</p>
+            </div>
+            <a href="{% url 'caixa:contas_receber' %}?prontas_sem_recebimento=1" class="small-box-footer">
+                Ver contas <i class="fas fa-arrow-circle-right"></i>
+            </a>
+        </div>
+    </div>
+</div>
 
 <div class="card">
     <div class="card-header"><h3 class="card-title">Pagamentos</h3></div>
     <div class="card-body table-responsive p-0">
         <table class="table table-hover text-nowrap mb-0">
-            <thead><tr><th>OS</th><th>Valor</th><th>Metodo</th><th>Data</th></tr></thead>
+            <thead><tr><th>OS</th><th>Valor</th><th>Forma</th><th>Data</th></tr></thead>
             <tbody>
                 {% for p in pagamentos %}
-                <tr><td>{{ p.ordem_servico|default:"Avulso" }}</td><td>R$ {{ p.valor|floatformat:2 }}</td><td>{{ p.get_metodo_display }}</td><td>{{ p.data|date:"d/m/Y H:i" }}</td></tr>
+                <tr><td>{{ p.ordem_servico|default:"Avulso" }}</td><td>R$ {{ p.valor|floatformat:2 }}</td><td>{{ p.metodo_display }}</td><td>{{ p.data|date:"d/m/Y H:i" }}</td></tr>
                 {% empty %}
                 <tr><td colspan="4">Nenhum pagamento</td></tr>
                 {% endfor %}
@@ -54,7 +67,11 @@
     <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary"><i class="fas fa-plus"></i> Registrar Pagamento</a>
     <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-warning"><i class="fas fa-minus"></i> Registrar Saida</a>
     <a href="{% url 'caixa:contas_receber' %}" class="btn btn-secondary"><i class="fas fa-file-invoice-dollar"></i> Contas a Receber</a>
+    <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-secondary"><i class="fas fa-file-invoice"></i> Contas a Pagar</a>
     <a href="{% url 'caixa:aging_receber' %}" class="btn btn-dark"><i class="fas fa-chart-bar"></i> Aging</a>
+    <a href="{% url 'caixa:formas_pagamento' %}" class="btn btn-outline-dark"><i class="fas fa-credit-card"></i> Formas Pgto</a>
+    <a href="{% url 'caixa:centros_custo' %}" class="btn btn-outline-dark"><i class="fas fa-sitemap"></i> Centros de Custo</a>
+    <a href="{% url 'caixa:taloes' %}" class="btn btn-outline-dark"><i class="fas fa-receipt"></i> Taloes</a>
     <a href="{% url 'caixa:comissoes_tecnicos' %}" class="btn btn-info"><i class="fas fa-user-cog"></i> Comissoes</a>
     <a href="{% url 'caixa:dre' %}" class="btn btn-outline-primary"><i class="fas fa-chart-line"></i> DRE</a>
     <a href="{% url 'caixa:fluxo_projetado' %}" class="btn btn-outline-secondary"><i class="fas fa-calendar-alt"></i> Fluxo Projetado</a>

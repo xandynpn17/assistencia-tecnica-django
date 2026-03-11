@@ -1,18 +1,131 @@
 {% extends "core/base.html" %}
-{% block title %}Adicionar / Editar Usuário{% endblock %}
+{% block title %}{% if editando %}Editar{% else %}Novo{% endif %} Usuario{% endblock %}
+
+{% block extra_css %}
+<style>
+  .user-form-wrap .card-modern {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 10px 28px rgba(11, 34, 57, 0.08);
+  }
+  .user-form-wrap .card-modern-header {
+    background: linear-gradient(120deg, #203a56 0%, #2c5f82 55%, #4f91a8 100%);
+    color: #fff;
+    border-radius: 12px 12px 0 0;
+    padding: 14px 18px;
+    font-weight: 600;
+  }
+  .user-form-wrap .card-modern-body {
+    padding: 20px;
+  }
+  .user-form-wrap .section-title {
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #2c5f82;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #e6edf3;
+    padding-bottom: 6px;
+  }
+  .user-form-wrap .form-group {
+    margin-bottom: 0.85rem;
+  }
+  .user-form-wrap .inline-checks {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    padding-top: 8px;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="card card-modern">
-  <div class="card-modern-header">
-    <i class="fas fa-user"></i> Adicionar / Editar Usuário
-  </div>
-  <div class="card-modern-body">
-    <form method="post">
-      {% csrf_token %}
-      {{ form.as_p }}
-      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
-      <a href="{% url 'configuracoes:painel' %}" class="btn btn-secondary">Cancelar</a>
-    </form>
+<div class="user-form-wrap">
+  <div class="card-modern">
+    <div class="card-modern-header">
+      <i class="fas fa-id-card mr-2"></i>
+      {% if editando %}Editar{% else %}Cadastrar{% endif %} Usuario
+    </div>
+    <div class="card-modern-body">
+      <form method="post" enctype="multipart/form-data" autocomplete="off">
+        {% csrf_token %}
+        <input type="text" name="fake_username" autocomplete="username" style="display:none">
+        <input type="password" name="fake_password" autocomplete="current-password" style="display:none">
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="section-title">Acesso</div>
+        <div class="form-row">
+          <div class="col-lg-4 form-group">{{ form.username.label_tag }}{{ form.username }}{{ form.username.errors }}</div>
+          <div class="col-lg-4 form-group">
+            {{ form.password.label_tag }}{{ form.password }}
+            <small class="form-text text-muted">{{ form.password.help_text }}</small>
+            {{ form.password.errors }}
+          </div>
+          <div class="col-lg-4 form-group">{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>
+        </div>
+
+        <div class="section-title mt-3">Perfil e Documento</div>
+        <div class="form-row">
+          <div class="col-lg-4 form-group">{{ form.nome_completo.label_tag }}{{ form.nome_completo }}{{ form.nome_completo.errors }}</div>
+          <div class="col-lg-2 form-group">{{ form.tipo_usuario.label_tag }}{{ form.tipo_usuario }}{{ form.tipo_usuario.errors }}</div>
+          <div class="col-lg-2 form-group">{{ form.tipo_pessoa.label_tag }}{{ form.tipo_pessoa }}{{ form.tipo_pessoa.errors }}</div>
+          <div class="col-lg-2 form-group">{{ form.documento_cpf_cnpj.label_tag }}{{ form.documento_cpf_cnpj }}{{ form.documento_cpf_cnpj.errors }}</div>
+          <div class="col-lg-2 form-group">{{ form.data_nascimento.label_tag }}{{ form.data_nascimento }}{{ form.data_nascimento.errors }}</div>
+        </div>
+
+        <div class="section-title mt-3">Contato</div>
+        <div class="form-row">
+          <div class="col-lg-3 form-group">{{ form.telefone.label_tag }}{{ form.telefone }}{{ form.telefone.errors }}</div>
+          <div class="col-lg-6 form-group">{{ form.endereco.label_tag }}{{ form.endereco }}{{ form.endereco.errors }}</div>
+          <div class="col-lg-3 form-group">{{ form.foto_perfil.label_tag }}{{ form.foto_perfil }}{{ form.foto_perfil.errors }}</div>
+        </div>
+
+        <div class="section-title mt-3">Dados Trabalhistas</div>
+        <div class="form-row">
+          <div class="col-lg-3 form-group">{{ form.cargo.label_tag }}{{ form.cargo }}{{ form.cargo.errors }}</div>
+          <div class="col-lg-3 form-group">{{ form.departamento.label_tag }}{{ form.departamento }}{{ form.departamento.errors }}</div>
+          <div class="col-lg-3 form-group">{{ form.regime_contratacao.label_tag }}{{ form.regime_contratacao }}{{ form.regime_contratacao.errors }}</div>
+          <div class="col-lg-3 form-group">{{ form.tipo_vinculo.label_tag }}{{ form.tipo_vinculo }}{{ form.tipo_vinculo.errors }}</div>
+        </div>
+        <div class="form-row">
+          <div class="col-lg-2 form-group">{{ form.data_admissao.label_tag }}{{ form.data_admissao }}{{ form.data_admissao.errors }}</div>
+          <div class="col-lg-2 form-group">{{ form.data_demissao.label_tag }}{{ form.data_demissao }}{{ form.data_demissao.errors }}</div>
+          <div class="col-lg-2 form-group">{{ form.pis_pasep.label_tag }}{{ form.pis_pasep }}{{ form.pis_pasep.errors }}</div>
+          <div class="col-lg-2 form-group">{{ form.ctps.label_tag }}{{ form.ctps }}{{ form.ctps.errors }}</div>
+          <div class="col-lg-2 form-group">{{ form.salario_base.label_tag }}{{ form.salario_base }}{{ form.salario_base.errors }}</div>
+          <div class="col-lg-2 form-group">{{ form.numero_vendedor.label_tag }}{{ form.numero_vendedor }}{{ form.numero_vendedor.errors }}</div>
+        </div>
+        <div class="form-row">
+          <div class="col-lg-3 form-group">{{ form.percentual_comissao_servico.label_tag }}{{ form.percentual_comissao_servico }}{{ form.percentual_comissao_servico.errors }}</div>
+          <div class="col-lg-3 form-group">{{ form.percentual_comissao_peca.label_tag }}{{ form.percentual_comissao_peca }}{{ form.percentual_comissao_peca.errors }}</div>
+          <div class="col-lg-6 form-group">{{ form.groups.label_tag }}{{ form.groups }}{{ form.groups.errors }}</div>
+        </div>
+
+        <div class="section-title mt-3">Controles</div>
+        <div class="form-row">
+          <div class="col-lg-8 form-group">{{ form.observacoes_internas.label_tag }}{{ form.observacoes_internas }}{{ form.observacoes_internas.errors }}</div>
+          <div class="col-lg-4 form-group">
+            <label class="d-block mb-2">Permissoes basicas</label>
+            <div class="inline-checks">
+              <label class="mb-0">{{ form.is_active }} {{ form.is_active.label }}</label>
+              <label class="mb-0">{{ form.is_staff }} {{ form.is_staff.label }}</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-2">
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i>Salvar</button>
+          {% if editando and usuario_obj %}
+          <a href="{% url 'configuracoes:detalhes_usuario' usuario_obj.id %}" class="btn btn-outline-secondary">Cancelar</a>
+          {% else %}
+          <a href="{% url 'configuracoes:lista_usuarios' %}" class="btn btn-outline-secondary">Cancelar</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 {% endblock %}

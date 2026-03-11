@@ -1,18 +1,34 @@
-{% extends 'core/base.html' %}
+{% extends "core/base.html" %}
 {% load widget_tweaks %}
 
 {% block content %}
 <div class="content-header">
-    <h1>Relatórios do Caixa</h1>
+    <h1>Relatorios do Caixa</h1>
 </div>
 
 <div class="card">
     <div class="card-body">
+        <form method="get" class="row mb-3">
+            <div class="col-md-3">
+                <label for="id_data_inicio">Data inicio</label>
+                <input id="id_data_inicio" type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
+            </div>
+            <div class="col-md-3">
+                <label for="id_data_fim">Data fim</label>
+                <input id="id_data_fim" type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
+            </div>
+            <div class="col-md-3 align-self-end">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+            </div>
+        </form>
+
         {% if lancamentos or pagamentos %}
         <h3>Resumo</h3>
-        <p><strong>Total Entradas:</strong> {{ total_entradas|floatformat:2 }}€</p>
-        <p><strong>Total Saídas:</strong> {{ total_saidas|floatformat:2 }}€</p>
-        <p><strong>Saldo Final:</strong> {{ saldo|floatformat:2 }}€</p>
+        <p><strong>Total Entradas:</strong> {{ total_entradas|floatformat:2 }}</p>
+        <p><strong>Total Pagamentos:</strong> {{ total_entradas_pagamentos|floatformat:2 }}</p>
+        <p><strong>Entradas sem lancamento:</strong> {{ entradas_orfas_pagamento|floatformat:2 }}</p>
+        <p><strong>Total Saidas:</strong> {{ total_saidas|floatformat:2 }}</p>
+        <p><strong>Saldo Final:</strong> {{ saldo|floatformat:2 }}</p>
 
         <hr>
         <h4>Pagamentos</h4>
@@ -21,7 +37,7 @@
                 <tr>
                     <th>OS</th>
                     <th>Valor</th>
-                    <th>Método</th>
+                    <th>Metodo</th>
                     <th>Data</th>
                 </tr>
             </thead>
@@ -29,19 +45,19 @@
                 {% for p in pagamentos %}
                 <tr>
                     <td>{{ p.ordem_servico|default:"Avulso" }}</td>
-                    <td>{{ p.valor|floatformat:2 }}€</td>
-                    <td>{{ p.get_metodo_display }}</td>
+                    <td>{{ p.valor|floatformat:2 }}</td>
+                    <td>{{ p.metodo_display }}</td>
                     <td>{{ p.data|date:"d/m/Y H:i" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
-        <h4>Lançamentos Avulsos</h4>
+        <h4>Lancamentos</h4>
         <table class="table table-hover text-nowrap">
             <thead>
                 <tr>
-                    <th>Descrição</th>
+                    <th>Descricao</th>
                     <th>Valor</th>
                     <th>Tipo</th>
                     <th>Data</th>
@@ -51,7 +67,7 @@
                 {% for l in lancamentos %}
                 <tr>
                     <td>{{ l.descricao }}</td>
-                    <td>{{ l.valor|floatformat:2 }}€</td>
+                    <td>{{ l.valor|floatformat:2 }}</td>
                     <td>{{ l.get_tipo_display }}</td>
                     <td>{{ l.data|date:"d/m/Y H:i" }}</td>
                 </tr>
@@ -60,7 +76,7 @@
         </table>
         {% else %}
         <div class="alert alert-info">
-            Nenhum lançamento ou pagamento encontrado.
+            Nenhum lancamento ou pagamento encontrado para o periodo.
         </div>
         {% endif %}
     </div>

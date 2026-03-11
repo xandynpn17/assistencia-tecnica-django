@@ -315,6 +315,52 @@ class OrdemServico(models.Model):
         self.status = novo_status
         self.save(update_fields=["status", "fechada", "data_conclusao"])
 
+    # ===========================
+    # MARGEM FINANCEIRA (base DRE)
+    # ===========================
+    def receita_total_financeira(self):
+        return sum((item.total() for item in self.servicos_pecas.all()), 0)
+
+    def custo_pecas_financeiro(self):
+        # Estrutura preparada para custo real:
+        # se no futuro ServicoPeca/Estoque tiver custo_unitario, passa a usar esse valor.
+        total = 0
+        for item in self.servicos_pecas.all():
+            if item.tipo != "peca":
+                continue
+            custo_unitario = getattr(item, "custo_unitario", None)
+            if custo_unitario is not None:
+                total += (custo_unitario * item.quantidade)
+        return total
+
+    def total_comissoes_financeiro(self):
+        from django.apps import apps
+
+        Comissao = apps.get_model("caixa", "Comissao")
+        ComissaoTecnico = apps.get_model("caixa", "ComissaoTecnico")
+        ComissaoItemOrcamento = apps.get_model("caixa", "ComissaoItemOrcamento")
+        total_novo = sum(
+            (c.valor_comissao for c in Comissao.objects.filter(ordem_servico=self).exclude(status="CANCELADA")),
+            0,
+        )
+        if total_novo:
+            return total_novo
+        total_os = sum(
+            (c.valor_comissao for c in ComissaoTecnico.objects.filter(ordem_servico=self).exclude(status="cancelada")),
+            0,
+        )
+        total_itens = sum(
+            (c.valor_comissao for c in ComissaoItemOrcamento.objects.filter(ordem_servico=self).exclude(status="cancelada")),
+            0,
+        )
+        return total_os + total_itens
+
+    def lucro_bruto_financeiro(self):
+        return self.receita_total_financeira() - self.custo_pecas_financeiro()
+
+    def lucro_liquido_financeiro(self):
+        return self.lucro_bruto_financeiro() - self.total_comissoes_financeiro()
+
 # ===========================
 # LINHA DE TRABALHO
 # ===========================
@@ -365,11 +411,28 @@ class LinhaTrabalho(models.Model):
 
 class ServicoPeca(models.Model):
     ordem = models.ForeignKey("OrdemServico", on_delete=models.CASCADE, related_name="servicos_pecas")
+    item_orcamento = models.ForeignKey(
+        "orcamentos.ItemOrcamento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="servicos_pecas",
+    )
     tipo = models.CharField(max_length=20, choices=(("servico", "Serviço"), ("peca", "Peça")))
     nome = models.CharField(max_length=100)
     descricao = models.TextField(blank=True, null=True)
     quantidade = models.PositiveIntegerField(default=1)
     valor_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    garantia_dias = models.PositiveIntegerField(null=True, blank=True)
+    tecnico_responsavel = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="servicos_pecas_responsavel",
+        limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
+    )
+    numeros_taloes = models.CharField(max_length=255, blank=True, default="")
     criado_em = models.DateTimeField(auto_now_add=True)
 
     def total(self):
@@ -377,6 +440,17 @@ class ServicoPeca(models.Model):
 
     def __str__(self):
         return f"{self.nome} ({self.tipo})"
+
+    def adicionar_numero_talao(self, numero_talao):
+        numero = (numero_talao or "").strip()
+        if not numero:
+            return False
+        atuais = [n.strip() for n in (self.numeros_taloes or "").split(",") if n.strip()]
+        if numero in atuais:
+            return False
+        atuais.append(numero)
+        self.numeros_taloes = ", ".join(atuais)
+        return True
 
 
 class NotificacaoCliente(models.Model):
@@ -419,6 +493,43 @@ class NotificacaoCliente(models.Model):
 
     def __str__(self):
         return f"Notif {self.get_tipo_display()} - {self.ordem.numero_os}"
+
+
+class OrdemTalao(models.Model):
+    ORIGEM_CHOICES = [
+        ("manual", "Manual"),
+        ("pagamento", "Pagamento"),
+    ]
+
+    ordem = models.ForeignKey(OrdemServico, related_name="taloes", on_delete=models.CASCADE)
+    numero = models.CharField(max_length=40, db_index=True)
+    valor = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    item_referencia = models.CharField(max_length=180, blank=True)
+    descricao = models.TextField(blank=True)
+    imagem = models.ImageField(upload_to="ordens/taloes/", blank=True, null=True)
+    origem = models.CharField(max_length=20, choices=ORIGEM_CHOICES, default="manual")
+    pagamento = models.ForeignKey(
+        "caixa.Pagamento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="taloes_os",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="taloes_criados",
+    )
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        unique_together = [("ordem", "numero")]
+
+    def __str__(self):
+        return f"{self.numero} - {self.ordem.numero_os}"
 
 
 class PedidoCompra(models.Model):

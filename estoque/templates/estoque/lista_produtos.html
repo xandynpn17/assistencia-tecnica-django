@@ -11,7 +11,7 @@
     <div class="card-modern-header d-flex justify-content-between align-items-center">
         Produtos cadastrados
         <div>
-            <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-info btn-sm"><i class="fas fa-exchange-alt"></i> Movimentacoes</a>
+            <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-info btn-sm"><i class="fas fa-exchange-alt"></i> Movimentações</a>
             <a href="{% url 'estoque:criar_produto' %}" class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Novo Produto</a>
         </div>
     </div>
@@ -19,7 +19,7 @@
         <form method="get" class="form-inline mb-3">
             <a href="?tipo=todos&ponto={{ ponto_filtro }}" class="btn btn-sm {% if filtro == 'todos' %}btn-primary{% else %}btn-outline-primary{% endif %} mr-1">Todos</a>
             <a href="?tipo=produtos&ponto={{ ponto_filtro }}" class="btn btn-sm {% if filtro == 'produtos' %}btn-primary{% else %}btn-outline-primary{% endif %} mr-1">Produtos</a>
-            <a href="?tipo=servicos&ponto={{ ponto_filtro }}" class="btn btn-sm {% if filtro == 'servicos' %}btn-primary{% else %}btn-outline-primary{% endif %} mr-3">Servicos</a>
+            <a href="?tipo=servicos&ponto={{ ponto_filtro }}" class="btn btn-sm {% if filtro == 'servicos' %}btn-primary{% else %}btn-outline-primary{% endif %} mr-3">Serviços</a>
             <label class="mr-2">Ponto:</label>
             <select name="ponto" class="form-control form-control-sm mr-2">
                 <option value="">Todos</option>
@@ -30,22 +30,31 @@
             <button type="submit" class="btn btn-sm btn-secondary">Filtrar</button>
         </form>
 
+        <div class="alert alert-light border small mb-3">
+            Mostrando visão resumida. Clique em <strong>Detalhes</strong> para ver informações completas do item.
+        </div>
+
         <div class="table-responsive p-0">
-            <table class="table table-hover text-nowrap">
+            <table class="table table-hover">
                 <thead>
                 <tr>
-                    <th>ID</th><th>Nome</th><th>EAN</th><th>Categoria</th><th>Ponto</th><th>Preco</th><th>Qtd</th><th>Min</th><th>Ativo</th><th>Acoes</th>
+                    <th>Nome</th>
+                    <th>EAN</th>
+                    <th>Marca</th>
+                    <th>Preço</th>
+                    <th>Ponto</th>
+                    <th>Estoque</th>
+                    <th>Ações</th>
                 </tr>
                 </thead>
                 <tbody>
                 {% for produto in produtos %}
                 <tr>
-                    <td>{{ produto.id }}</td>
-                    <td>{{ produto.nome }}</td>
+                    <td class="font-weight-bold">{{ produto.nome }}</td>
                     <td>{{ produto.ean|default:"-" }}</td>
-                    <td>{{ produto.categoria|default:"-" }}</td>
+                    <td>{% if produto.marca %}{{ produto.marca.nome }}{% else %}-{% endif %}</td>
+                    <td>R$ {{ produto.preco_final|floatformat:2 }}</td>
                     <td>{% if produto.ponto_operacional %}{{ produto.ponto_operacional.codigo }} - {{ produto.ponto_operacional.nome }}{% else %}-{% endif %}</td>
-                    <td>R$ {{ produto.preco|floatformat:2 }}</td>
                     <td>
                         {% if produto.quantidade <= produto.estoque_minimo %}
                             <span class="badge badge-warning">{{ produto.quantidade }}</span>
@@ -53,15 +62,42 @@
                             {{ produto.quantidade }}
                         {% endif %}
                     </td>
-                    <td>{{ produto.estoque_minimo }}</td>
-                    <td>{% if produto.ativo %}<span class="badge badge-success">Sim</span>{% else %}<span class="badge badge-danger">Nao</span>{% endif %}</td>
-                    <td>
+                    <td class="text-nowrap">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#detalhes-{{ produto.id }}" aria-expanded="false" aria-controls="detalhes-{{ produto.id }}">
+                            Detalhes
+                        </button>
                         <a href="{% url 'estoque:editar_produto' produto.id %}" class="btn btn-sm btn-primary"><i class="fas fa-edit"></i></a>
                         <a href="{% url 'estoque:excluir_produto' produto.id %}" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></a>
                     </td>
                 </tr>
+                <tr>
+                    <td colspan="7" class="p-0 border-top-0">
+                        <div class="collapse" id="detalhes-{{ produto.id }}">
+                            <div class="p-3 bg-light border-top">
+                                <div class="row">
+                                    <div class="col-md-3"><strong>SKU:</strong> {{ produto.sku|default:"-" }}</div>
+                                    <div class="col-md-3"><strong>Tipo:</strong> {{ produto.get_tipo_item_display }}</div>
+                                    <div class="col-md-3"><strong>Categoria:</strong> {{ produto.categoria|default:"-" }}</div>
+                                    <div class="col-md-3"><strong>Fornecedor:</strong> {% if produto.fornecedor_config %}{{ produto.fornecedor_config.nome }}{% else %}{{ produto.fornecedor|default:"-" }}{% endif %}</div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-3"><strong>Estoque mínimo:</strong> {{ produto.estoque_minimo }}</div>
+                                    <div class="col-md-3"><strong>Localização:</strong> {{ produto.localizacao|default:"-" }}</div>
+                                    <div class="col-md-3"><strong>Garantia (dias):</strong> {{ produto.garantia_peca_dias|default:"-" }}</div>
+                                    <div class="col-md-3"><strong>Ativo:</strong> {% if produto.ativo %}Sim{% else %}Não{% endif %}</div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-12"><strong>Modelos compatíveis:</strong> {{ produto.modelos_compativeis|default:"-" }}</div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-12"><strong>Descrição:</strong> {{ produto.descricao|default:"-" }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
                 {% empty %}
-                <tr><td colspan="10" class="text-center">Nenhum produto cadastrado.</td></tr>
+                <tr><td colspan="7" class="text-center">Nenhum produto cadastrado.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

@@ -1,8 +1,11 @@
 # forms.py - VERSÃO CORRIGIDA E PROFISSIONAL
 from django import forms
+import logging
 from .models import Cliente
 from configuracoes.models import ConfiguracaoSistema
 import re
+
+logger = logging.getLogger(__name__)
 
 
 class ClienteForm(forms.ModelForm):
@@ -237,7 +240,7 @@ class ClienteForm(forms.ModelForm):
         ddd = cleaned_data.get('ddd', '')
         telefone_numero = cleaned_data.get('telefone_numero', '')
 
-        print(f"DEBUG - DDD: {ddd}, Telefone número: {telefone_numero}")
+        logger.debug("Telefone recebido no form cliente. ddd=%s numero=%s", ddd, telefone_numero)
 
         if telefone_numero:
             # Remove formatação do número
@@ -251,10 +254,10 @@ class ClienteForm(forms.ModelForm):
                 if len(telefone_completo) == 10:  # DDD (2) + 8 dígitos
                     # Salvar no campo 'telefone' do modelo
                     self.instance.telefone = telefone_completo
-                    print(f"DEBUG - Telefone salvo (10 dígitos): {telefone_completo}")
+                    logger.debug("Telefone salvo com 10 digitos: %s", telefone_completo)
                 elif len(telefone_completo) == 11:  # DDD (2) + 9 dígitos
                     self.instance.telefone = telefone_completo
-                    print(f"DEBUG - Telefone salvo (11 dígitos): {telefone_completo}")
+                    logger.debug("Telefone salvo com 11 digitos: %s", telefone_completo)
                 else:
                     self.add_error('telefone_numero',
                                    f'Telefone inválido. Com DDD {ddd} deve ter 10 ou 11 dígitos.')

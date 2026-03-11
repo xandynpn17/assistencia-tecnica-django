@@ -1,9 +1,18 @@
-﻿{% extends "core/base.html" %}
+{% extends "core/base.html" %}
 
 {% block title %}Consulta de Artigos{% endblock %}
 
 {% block extra_css %}
 <style>
+  .pdv-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.8fr) minmax(320px, 1fr);
+    gap: 14px;
+  }
+  .pdv-sticky { position: sticky; top: 82px; }
+  .pdv-card { border-radius: 12px; }
+  .pdv-title { font-weight: 700; }
+  .pdv-shortcuts { font-size: 12px; color: #6b7280; }
   .artigo-item {
     border: 1px solid #e5e7eb;
     border-radius: 10px;
@@ -21,30 +30,86 @@
   .artigo-meta { font-size: 12px; color: #6b7280; }
   #estoquePontosTable tbody tr { cursor: pointer; }
   #estoquePontosTable tbody tr.selected { background: #eaf2fb; }
-  .cesto-total { font-size: 1.1rem; font-weight: 700; }
+  .cesto-total { font-size: 1.15rem; font-weight: 700; }
+  .cesto-table-wrap { max-height: 56vh; overflow-y: auto; }
+
+  @media (max-width: 991.98px) {
+    .pdv-grid { grid-template-columns: 1fr; }
+    .pdv-sticky { position: static; }
+    .cesto-table-wrap { max-height: 40vh; }
+  }
 </style>
 {% endblock %}
 
 {% block header %}
-<h1 class="m-0 text-dark">Consulta de Artigos</h1>
+<h1 class="m-0 text-dark">Venda a Mostrador</h1>
 {% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="card-body">
-    <div class="row">
-      <div class="col-md-10 mb-2">
-        <input type="text" id="artigoBuscaInput" class="form-control" placeholder="Pesquisar por nome, EAN, SKU ou interno (ID)">
-      </div>
-      <div class="col-md-2 mb-2">
-        <button class="btn btn-primary w-100" id="artigoBuscaBtn" type="button">Buscar</button>
+<div class="pdv-grid">
+  <div>
+    <div class="card pdv-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="pdv-title">Consulta de Artigos</div>
+            <small class="text-muted">Digite ao menos 2 caracteres e clique em <strong>Buscar</strong>.</small>
+          </div>
+          <small class="pdv-shortcuts">Atalhos: <strong>F2</strong> buscar | <strong>Ctrl+Enter</strong> finalizar</small>
+        </div>
+        <div class="row">
+          <div class="col-md-10 mb-2">
+            <input type="text" id="artigoBuscaInput" class="form-control" placeholder="Pesquisar por nome, EAN, SKU ou interno (ID)">
+          </div>
+          <div class="col-md-2 mb-2">
+            <button class="btn btn-primary w-100" id="artigoBuscaBtn" type="button">Buscar</button>
+          </div>
+        </div>
+        {% if not pode_venda_mostrador %}
+        <div class="alert alert-warning py-2 mb-2">
+          Seu perfil pode consultar artigos, mas não pode concluir venda a mostrador.
+        </div>
+        {% endif %}
+        <div id="artigoBuscaResultados" class="list-group"></div>
+        <div class="d-flex justify-content-between mt-2">
+          <button class="btn btn-sm btn-outline-secondary" id="artigoPrevBtn" type="button">Anterior</button>
+          <small class="text-muted" id="artigoPaginaInfo"></small>
+          <button class="btn btn-sm btn-outline-secondary" id="artigoNextBtn" type="button">Próxima</button>
+        </div>
       </div>
     </div>
-    <div id="artigoBuscaResultados" class="list-group"></div>
-    <div class="d-flex justify-content-between mt-2">
-      <button class="btn btn-sm btn-outline-secondary" id="artigoPrevBtn" type="button">Anterior</button>
-      <small class="text-muted" id="artigoPaginaInfo"></small>
-      <button class="btn btn-sm btn-outline-secondary" id="artigoNextBtn" type="button">Proxima</button>
+  </div>
+
+  <div>
+    <div class="card pdv-card pdv-sticky">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="pdv-title">Cesto Atual</div>
+            <small class="text-muted">Código: <span id="cestoCodigo">-</span></small>
+          </div>
+          <div class="cesto-total">R$ <span id="cestoTotal">0.00</span></div>
+        </div>
+
+        <div class="input-group input-group-sm mb-2">
+          <input type="text" id="cestoCodigoInput" class="form-control" placeholder="Retomar cesto (ex.: CES-00000001)">
+          <div class="input-group-append">
+            <button class="btn btn-outline-secondary" type="button" id="retomarCestoBtn">Retomar</button>
+            <button class="btn btn-outline-dark" type="button" id="novoCestoBtn">Novo</button>
+          </div>
+        </div>
+
+        <div class="table-responsive cesto-table-wrap">
+          <table class="table table-sm table-striped mb-2" id="cestoTable">
+            <thead>
+              <tr><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Vendedor</th><th>Total</th><th>Ações</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button class="btn btn-primary btn-block" type="button" id="finalizarCestoBtn">Finalizar cesto e gerar guia</button>
+        <div id="cestoFeedback" class="small mt-2"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -67,54 +132,30 @@
         </div>
         <p id="modalDescricao" class="text-muted"></p>
 
-        <ul class="nav nav-tabs" id="artigoTabs" role="tablist">
-          <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tabEstoque">Stock por Ponto</a></li>
-          <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tabCesto">Cesto e Guia</a></li>
-          <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tabReserva">Reservas</a></li>
-        </ul>
+        <h6 class="mb-2">Estoque por ponto</h6>
+        <table class="table table-sm table-bordered" id="estoquePontosTable">
+          <thead><tr><th>Ponto operacional</th><th>Estoque disponível</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <small class="text-muted">Clique em PO3 ou PO2 com estoque para adicionar ao cesto.</small>
 
-        <div class="tab-content pt-3">
-          <div class="tab-pane fade show active" id="tabEstoque">
-            <table class="table table-sm table-bordered" id="estoquePontosTable">
-              <thead><tr><th>Ponto operacional</th><th>Stock</th></tr></thead>
-              <tbody></tbody>
-            </table>
-            <small class="text-muted">Clique na linha de PO3 ou PO2 com stock para adicionar ao cesto.</small>
-          </div>
-
-          <div class="tab-pane fade" id="tabCesto">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <div><strong>Cesto:</strong> <span id="cestoCodigo">-</span></div>
-              <div class="cesto-total">Total: R$ <span id="cestoTotal">0.00</span></div>
-            </div>
-            <div class="table-responsive">
-              <table class="table table-sm table-striped" id="cestoTable">
-                <thead><tr><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Vendedor</th><th>Total</th></tr></thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <button class="btn btn-primary" type="button" id="finalizarCestoBtn">Finalizar cesto e gerar guia</button>
-            <div id="cestoFeedback" class="small mt-2"></div>
-          </div>
-
-          <div class="tab-pane fade" id="tabReserva">
-            <div class="row">
-              <div class="col-md-3 mb-2"><label>Ponto</label><select class="form-control" id="reservaPontoId"></select></div>
-              <div class="col-md-2 mb-2"><label>Qtd</label><input class="form-control" type="number" id="reservaQuantidade" min="1" value="1"></div>
-              <div class="col-md-3 mb-2"><label>Nome</label><input class="form-control" type="text" id="reservaNome"></div>
-              <div class="col-md-2 mb-2"><label>Telefone</label><input class="form-control" type="text" id="reservaTelefone"></div>
-              <div class="col-md-2 mb-2"><label>Valido ate</label><input class="form-control" type="date" id="reservaValidoAte"></div>
-            </div>
-            <button class="btn btn-outline-primary" type="button" id="confirmarReservaBtn">Criar reserva</button>
-            <a href="{% url 'estoque:reservas_clientes' %}" class="btn btn-outline-secondary">Ver reservas</a>
-            <div id="reservaFeedback" class="small mt-2"></div>
-            <hr>
-            <table class="table table-sm table-bordered" id="reservasTable">
-              <thead><tr><th>Codigo</th><th>Nome</th><th>Telefone</th><th>Qtd</th><th>Ponto</th><th>Valido ate</th><th>Status</th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+        <hr>
+        <h6 class="mb-2">Reservas</h6>
+        <div class="row">
+          <div class="col-md-3 mb-2"><label>Ponto</label><select class="form-control" id="reservaPontoId"></select></div>
+          <div class="col-md-2 mb-2"><label>Qtd</label><input class="form-control" type="number" id="reservaQuantidade" min="1" value="1"></div>
+          <div class="col-md-3 mb-2"><label>Nome</label><input class="form-control" type="text" id="reservaNome"></div>
+          <div class="col-md-2 mb-2"><label>Telefone</label><input class="form-control" type="text" id="reservaTelefone"></div>
+          <div class="col-md-2 mb-2"><label>Válido até</label><input class="form-control" type="date" id="reservaValidoAte"></div>
         </div>
+        <button class="btn btn-outline-primary" type="button" id="confirmarReservaBtn">Criar reserva</button>
+        <a href="{% url 'estoque:reservas_clientes' %}" class="btn btn-outline-secondary">Ver reservas</a>
+        <div id="reservaFeedback" class="small mt-2"></div>
+        <hr>
+        <table class="table table-sm table-bordered" id="reservasTable">
+          <thead><tr><th>Código</th><th>Nome</th><th>Telefone</th><th>Qtd</th><th>Ponto</th><th>Válido até</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -134,12 +175,12 @@
           <input type="text" class="form-control" id="addPontoNome" readonly>
         </div>
         <div class="form-group">
-          <label>Tecnico</label>
+          <label>Técnico</label>
           <select class="form-control" id="addTecnicoSelect">
-            <option value="">Selecione um tecnico</option>
+            <option value="">Selecione um técnico</option>
             {% for tecnico in tecnicos_disponiveis %}
             <option value="{{ tecnico.numero_vendedor|default:'' }}" {% if tecnico.numero_vendedor == numero_vendedor_padrao %}selected{% endif %}>
-              {{ tecnico.username }}{% if tecnico.numero_vendedor %} - Vendedor {{ tecnico.numero_vendedor }}{% else %} - sem numero de vendedor{% endif %}
+              {{ tecnico.username }}{% if tecnico.numero_vendedor %} - Vendedor {{ tecnico.numero_vendedor }}{% else %} - sem número de vendedor{% endif %}
             </option>
             {% endfor %}
           </select>
@@ -168,18 +209,33 @@ document.addEventListener("DOMContentLoaded", function () {
   const prevBtn = document.getElementById("artigoPrevBtn");
   const nextBtn = document.getElementById("artigoNextBtn");
   const pageInfo = document.getElementById("artigoPaginaInfo");
+  const cestoCodigoInput = document.getElementById("cestoCodigoInput");
   const modal = $("#artigoResumoModal");
   const vendedorModal = $("#vendedorModal");
   const vendedorPadrao = "{{ numero_vendedor_padrao|default:''|escapejs }}";
+  const podeVendaMostrador = {{ pode_venda_mostrador|yesno:"true,false" }};
   let paginaAtual = 1;
   let hasPrev = false;
   let hasNext = false;
-  let debounceTimer = null;
   let cestoCodigoAtual = "";
 
   function getCsrf() {
     const name = "csrftoken=";
     return document.cookie.split(";").map(c => c.trim()).find(c => c.startsWith(name))?.substring(name.length) || "";
+  }
+
+  function setFeedback(tipo, textoHtml) {
+    const fb = document.getElementById("cestoFeedback");
+    fb.className = `small mt-2 ${tipo === "erro" ? "text-danger" : tipo === "ok" ? "text-success" : "text-muted"}`;
+    if (typeof textoHtml === "string") {
+      fb.innerHTML = textoHtml;
+    }
+  }
+
+  function setCestoCodigo(codigo) {
+    cestoCodigoAtual = (codigo || "").trim();
+    document.getElementById("cestoCodigo").textContent = cestoCodigoAtual || "-";
+    cestoCodigoInput.value = cestoCodigoAtual;
   }
 
   function renderResultados(items) {
@@ -197,6 +253,7 @@ document.addEventListener("DOMContentLoaded", function () {
           <div>
             <div class="artigo-nome">${item.nome}</div>
             <div class="artigo-meta">EAN: ${item.ean || '-'}</div>
+            <div class="artigo-meta">Modelos: ${item.modelos_compativeis || '-'}</div>
           </div>
           <div class="artigo-preco-bloco">
             <div class="artigo-preco">R$ ${item.preco.toFixed(2)}</div>
@@ -214,6 +271,10 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function abrirModalAdicionar(ponto) {
+    if (!podeVendaMostrador) {
+      setFeedback("erro", "Seu perfil não possui permissão para venda a mostrador.");
+      return;
+    }
     document.getElementById("addPontoId").value = String(ponto.id);
     document.getElementById("addPontoNome").value = `${ponto.codigo} - ${ponto.nome} (disp: ${ponto.disponivel})`;
     const tecnicoSelect = document.getElementById("addTecnicoSelect");
@@ -227,21 +288,33 @@ document.addEventListener("DOMContentLoaded", function () {
     body.innerHTML = "";
     (data.itens || []).forEach(item => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${item.produto}</td><td>${item.ponto}</td><td>${item.quantidade}</td><td>${item.vendedor}</td><td>R$ ${Number(item.valor_total).toFixed(2)}</td>`;
+      tr.innerHTML = `<td>${item.produto}</td><td>${item.ponto}</td><td>${item.quantidade}</td><td>${item.vendedor}</td><td>R$ ${Number(item.valor_total).toFixed(2)}</td><td><button type="button" class="btn btn-sm btn-outline-danger js-remover-cesto-item" data-id="${item.id}" ${!podeVendaMostrador ? "disabled" : ""}>Remover</button></td>`;
       body.appendChild(tr);
     });
-    document.getElementById("cestoCodigo").textContent = data.cesto_codigo || "-";
+    if (!data.itens || !data.itens.length) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = '<td colspan="6" class="text-muted text-center">Cesto vazio.</td>';
+      body.appendChild(tr);
+    }
+    setCestoCodigo(data.cesto_codigo || cestoCodigoAtual);
     document.getElementById("cestoTotal").textContent = Number(data.total || 0).toFixed(2);
+    const btnFinalizar = document.getElementById("finalizarCestoBtn");
+    if (btnFinalizar) {
+      btnFinalizar.disabled = !podeVendaMostrador || !(data.itens || []).length;
+    }
   }
 
   function carregarCesto() {
     if (!cestoCodigoAtual) {
       renderCesto({ cesto_codigo: "", total: 0, itens: [] });
-      return;
+      return Promise.resolve({ ok: true, cesto_codigo: "", total: 0, itens: [] });
     }
-    fetch(`{% url 'estoque:api_cesto_resumo' 'DUMMY' %}`.replace("DUMMY", encodeURIComponent(cestoCodigoAtual)))
+    return fetch(`{% url 'estoque:api_cesto_resumo' 'DUMMY' %}`.replace("DUMMY", encodeURIComponent(cestoCodigoAtual)))
       .then(r => r.json())
-      .then(data => renderCesto(data));
+      .then(data => {
+        renderCesto(data);
+        return data;
+      });
   }
 
   function carregarResumo(produtoId) {
@@ -253,7 +326,8 @@ document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("modalEan").textContent = data.ean || "-";
         document.getElementById("modalSku").textContent = data.sku || "-";
         document.getElementById("modalQtdTotal").textContent = data.quantidade_total;
-        document.getElementById("modalDescricao").textContent = data.descricao || "Sem descricao";
+        const infoExtra = ` | Loc: ${data.localizacao || '-'} | Garantia: ${data.garantia_peca_dias || 0} dias`;
+        document.getElementById("modalDescricao").textContent = (data.descricao || "Sem descrição") + infoExtra;
         document.getElementById("modalPreco").textContent = Number(data.preco).toFixed(2);
 
         const tbody = document.querySelector("#estoquePontosTable tbody");
@@ -289,20 +363,29 @@ document.addEventListener("DOMContentLoaded", function () {
           reservasBody.appendChild(tr);
         });
 
-        carregarCesto();
         modal.modal("show");
       });
   }
 
   function buscarArtigos(page = 1) {
     const q = (buscarInput.value || "").trim();
+    if (q.length < 2) {
+      resultados.innerHTML = '<div class="list-group-item text-muted">Digite pelo menos 2 caracteres e clique em Buscar.</div>';
+      paginaAtual = 1;
+      hasPrev = false;
+      hasNext = false;
+      pageInfo.textContent = "";
+      prevBtn.disabled = true;
+      nextBtn.disabled = true;
+      return;
+    }
     fetch(`{% url 'estoque:api_consulta_artigos' %}?q=${encodeURIComponent(q)}&page=${page}`)
       .then(r => r.json())
       .then(data => {
         paginaAtual = data.page || 1;
         hasPrev = !!data.has_prev;
         hasNext = !!data.has_next;
-        pageInfo.textContent = `Pagina ${paginaAtual}`;
+        pageInfo.textContent = `Página ${paginaAtual}`;
         prevBtn.disabled = !hasPrev;
         nextBtn.disabled = !hasNext;
         renderResultados(data.resultados || []);
@@ -310,11 +393,13 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function adicionarCesto() {
+    if (!podeVendaMostrador) {
+      setFeedback("erro", "Seu perfil não possui permissão para venda a mostrador.");
+      return;
+    }
     const vendedorNumero = document.getElementById("addTecnicoSelect").value;
     if (!vendedorNumero) {
-      const fb = document.getElementById("cestoFeedback");
-      fb.className = "small text-danger";
-      fb.textContent = "Selecione um tecnico com numero de vendedor cadastrado.";
+      setFeedback("erro", "Selecione um técnico com número de vendedor cadastrado.");
       return;
     }
 
@@ -332,28 +417,30 @@ document.addEventListener("DOMContentLoaded", function () {
     })
       .then(r => r.json())
       .then(data => {
-        const fb = document.getElementById("cestoFeedback");
         if (data.ok) {
-          cestoCodigoAtual = data.cesto_codigo;
-          fb.className = "small text-success";
-          fb.textContent = `Item adicionado ao cesto ${cestoCodigoAtual}.`;
+          setCestoCodigo(data.cesto_codigo);
+          setFeedback("ok", `Item adicionado ao cesto ${cestoCodigoAtual}.`);
           vendedorModal.modal("hide");
           carregarCesto();
+          buscarArtigos(paginaAtual);
           carregarResumo(document.getElementById("modalProdutoId").value);
-          buscarArtigos();
-          $('#artigoTabs a[href="#tabCesto"]').tab('show');
         } else {
-          fb.className = "small text-danger";
-          fb.textContent = data.erro || "Erro ao adicionar item.";
+          setFeedback("erro", data.erro || "Erro ao adicionar item.");
+          if ((data.erro || "").toLowerCase().includes("cesto ja foi finalizado")) {
+            setCestoCodigo("");
+            carregarCesto();
+          }
         }
       });
   }
 
   function finalizarCesto() {
+    if (!podeVendaMostrador) {
+      setFeedback("erro", "Seu perfil não possui permissão para venda a mostrador.");
+      return;
+    }
     if (!cestoCodigoAtual) {
-      const fb = document.getElementById("cestoFeedback");
-      fb.className = "small text-danger";
-      fb.textContent = "Adicione itens antes de finalizar o cesto.";
+      setFeedback("erro", "Adicione itens antes de finalizar o cesto.");
       return;
     }
 
@@ -366,15 +453,59 @@ document.addEventListener("DOMContentLoaded", function () {
     })
       .then(r => r.json())
       .then(data => {
-        const fb = document.getElementById("cestoFeedback");
         if (data.ok) {
-          fb.className = "small text-success";
-          fb.innerHTML = `Guia ${data.guia} gerada. Total R$ ${Number(data.total).toFixed(2)}. <a href="${data.redirect_caixa}">Ir para caixa</a> | <a href="${data.imprimir_url}" target="_blank">Imprimir guia</a>`;
+          setFeedback(
+            "ok",
+            `Guia ${data.guia} gerada. Total R$ ${Number(data.total).toFixed(2)}. <a href="${data.redirect_caixa}">Ir para caixa</a> | <a href="${data.imprimir_url}" target="_blank">Imprimir guia</a>`
+          );
+          setCestoCodigo("");
+          carregarCesto();
         } else {
-          fb.className = "small text-danger";
-          fb.textContent = data.erro || "Erro ao finalizar cesto.";
+          setFeedback("erro", data.erro || "Erro ao finalizar cesto.");
         }
       });
+  }
+
+  function removerItemCesto(vendaId) {
+    if (!podeVendaMostrador) { return; }
+    const payload = new URLSearchParams();
+    payload.append("cesto_codigo", cestoCodigoAtual);
+    fetch(`{% url 'estoque:api_cesto_item_remover' 0 %}`.replace("/0/", `/${vendaId}/`), {
+      method: "POST",
+      headers: {"X-CSRFToken": getCsrf(), "Content-Type": "application/x-www-form-urlencoded"},
+      body: payload.toString(),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          renderCesto(data);
+          setFeedback("ok", "Item removido do cesto.");
+        } else {
+          setFeedback("erro", data.erro || "Não foi possível remover o item.");
+        }
+      });
+  }
+
+  function retomarCesto() {
+    const codigo = (cestoCodigoInput.value || "").trim().toUpperCase();
+    if (!codigo) {
+      setFeedback("erro", "Informe o código do cesto para retomar.");
+      return;
+    }
+    setCestoCodigo(codigo);
+    carregarCesto().then(data => {
+      if (!data.itens || !data.itens.length) {
+        setFeedback("info", "Cesto carregado sem itens em pré-reserva.");
+      } else {
+        setFeedback("ok", `Cesto ${codigo} retomado com ${data.itens.length} item(ns).`);
+      }
+    });
+  }
+
+  function novoCesto() {
+    setCestoCodigo("");
+    carregarCesto();
+    setFeedback("info", "Novo cesto iniciado.");
   }
 
   function confirmarReserva() {
@@ -396,7 +527,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const fb = document.getElementById("reservaFeedback");
         if (data.ok) {
           fb.className = "small text-success";
-          fb.textContent = `Reserva criada com codigo ${data.codigo_reserva}.`;
+          fb.textContent = `Reserva criada com código ${data.codigo_reserva}.`;
           carregarResumo(document.getElementById("modalProdutoId").value);
         } else {
           fb.className = "small text-danger";
@@ -406,18 +537,50 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   buscarBtn?.addEventListener("click", () => buscarArtigos(1));
-  buscarInput?.addEventListener("keypress", (e) => { if (e.key === "Enter") { e.preventDefault(); buscarArtigos(1); } });
-  buscarInput?.addEventListener("input", () => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => buscarArtigos(1), 350);
+  buscarInput?.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      buscarArtigos(1);
+    }
   });
   prevBtn?.addEventListener("click", () => { if (hasPrev) buscarArtigos(paginaAtual - 1); });
   nextBtn?.addEventListener("click", () => { if (hasNext) buscarArtigos(paginaAtual + 1); });
   document.getElementById("confirmarAdicionarCestoBtn")?.addEventListener("click", adicionarCesto);
   document.getElementById("finalizarCestoBtn")?.addEventListener("click", finalizarCesto);
   document.getElementById("confirmarReservaBtn")?.addEventListener("click", confirmarReserva);
+  document.getElementById("retomarCestoBtn")?.addEventListener("click", retomarCesto);
+  document.getElementById("novoCestoBtn")?.addEventListener("click", novoCesto);
+  cestoCodigoInput?.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      retomarCesto();
+    }
+  });
+  document.querySelector("#cestoTable tbody")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".js-remover-cesto-item");
+    if (!btn) { return; }
+    removerItemCesto(btn.dataset.id);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "F2") {
+      e.preventDefault();
+      buscarInput?.focus();
+      buscarInput?.select();
+    } else if (e.ctrlKey && e.key === "Enter") {
+      e.preventDefault();
+      finalizarCesto();
+    }
+  });
 
-  buscarArtigos(1);
+  resultados.innerHTML = '<div class="list-group-item text-muted">Digite pelo menos 2 caracteres e clique em Buscar.</div>';
+  prevBtn.disabled = true;
+  nextBtn.disabled = true;
+  if (!podeVendaMostrador) {
+    document.getElementById("finalizarCestoBtn").disabled = true;
+    document.getElementById("retomarCestoBtn").disabled = true;
+    document.getElementById("novoCestoBtn").disabled = true;
+  }
+  carregarCesto();
 });
 </script>
 {% endblock %}

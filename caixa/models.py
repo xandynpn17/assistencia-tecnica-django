@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 
@@ -10,29 +11,38 @@ class Caixa(models.Model):
     aberto = models.BooleanField(default=True)
     saldo_inicial = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     saldo_final = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    valor_contado_fisico = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    diferenca_fechamento = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    justificativa_diferenca = models.TextField(blank=True)
 
     def __str__(self):
         return f"Caixa {self.data} - {'Aberto' if self.aberto else 'Fechado'}"
 
 
 class Pagamento(models.Model):
-    METODOS = [
-        ("pix", "PIX"),
-        ("dinheiro", "Dinheiro"),
-        ("credito", "Cartao de Credito"),
-        ("debito", "Cartao de Debito"),
-        ("garantia_fabricante", "Garantia Fabricante"),
-        ("loja", "Custo da Loja"),
-    ]
-
     caixa = models.ForeignKey("Caixa", on_delete=models.CASCADE, related_name="pagamentos", null=True, blank=True)
     ordem_servico = models.ForeignKey("ordens.OrdemServico", on_delete=models.SET_NULL, null=True, blank=True)
     stock_item = models.ForeignKey("estoque.Produto", on_delete=models.SET_NULL, null=True, blank=True)
     valor = models.DecimalField(max_digits=10, decimal_places=2)
-    metodo = models.CharField(max_length=30, choices=METODOS)
+    forma_pagamento = models.ForeignKey(
+        "FormaPagamento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pagamentos",
+    )
+    metodo = models.CharField(max_length=50, blank=True, default="")
     referencia = models.CharField(max_length=50, blank=True, null=True, help_text="Numero do talao ou comprovante")
+    numero_talao = models.CharField(max_length=32, unique=True, null=True, blank=True, db_index=True)
+    data_emissao_talao = models.DateTimeField(null=True, blank=True)
     data = models.DateTimeField(auto_now_add=True)
     observacao = models.TextField(blank=True, null=True)
+
+    @property
+    def metodo_display(self):
+        if self.forma_pagamento:
+            return self.forma_pagamento.nome
+        return self.metodo or "-"
 
     def __str__(self):
         origem = (
@@ -41,6 +51,47 @@ class Pagamento(models.Model):
             "Avulso"
         )
         return f"{origem} - {self.metodo} - {self.valor}"
+
+    def _gerar_numero_talao(self):
+        data_ref = self.data or timezone.now()
+        numero_loja = "01"
+        try:
+            from configuracoes.models import ConfiguracaoSistema
+
+            config = ConfiguracaoSistema.get_configuracao()
+            numero_loja = (config.numero_loja_talao or "01").zfill(2)[:2]
+        except Exception:
+            numero_loja = "01"
+        # Padrao: 00 + loja(2) + 00 + data(YYYYMMDD) + numero_operacao(6)
+        return f"00{numero_loja}00{data_ref:%Y%m%d}{self.pk:06d}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.numero_talao and self.pk:
+            self.numero_talao = self._gerar_numero_talao()
+            if not self.data_emissao_talao:
+                self.data_emissao_talao = self.data or timezone.now()
+            super().save(update_fields=["numero_talao", "data_emissao_talao"])
+
+
+class FormaPagamento(models.Model):
+    TIPO_CHOICES = [
+        ("avista", "A vista"),
+        ("aprazo", "A prazo"),
+    ]
+
+    nome = models.CharField(max_length=60, unique=True)
+    codigo = models.SlugField(max_length=40, unique=True)
+    tipo = models.CharField(max_length=10, choices=TIPO_CHOICES, default="avista")
+    taxa_percentual = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    dias_recebimento = models.PositiveIntegerField(default=0)
+    ativa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
 
 
 class CategoriaFinanceira(models.Model):
@@ -61,6 +112,11 @@ class CategoriaFinanceira(models.Model):
 
 
 class ContaReceber(models.Model):
+    TIPO_ORIGEM = [
+        ("cliente_os", "Cliente OS"),
+        ("garantia_fabricante", "Garantia Fabricante"),
+        ("avulso", "Avulso"),
+    ]
     STATUS = [
         ("aberta", "Aberta"),
         ("parcial", "Parcial"),
@@ -72,6 +128,7 @@ class ContaReceber(models.Model):
     ponto_operacional = models.ForeignKey("estoque.PontoOperacional", on_delete=models.SET_NULL, null=True, blank=True)
     categoria = models.ForeignKey(CategoriaFinanceira, on_delete=models.SET_NULL, null=True, blank=True)
     descricao = models.CharField(max_length=200)
+    tipo_origem = models.CharField(max_length=24, choices=TIPO_ORIGEM, default="avulso", db_index=True)
     cliente_nome = models.CharField(max_length=120, blank=True)
     valor_original = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     valor_aberto = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -125,7 +182,21 @@ class LancamentoCaixa(models.Model):
     ]
 
     caixa = models.ForeignKey(Caixa, on_delete=models.CASCADE, related_name="lancamentos")
+    pagamento = models.OneToOneField(
+        "Pagamento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lancamento_caixa",
+    )
     descricao = models.CharField(max_length=200)
+    centro_custo = models.ForeignKey(
+        "CentroCusto",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lancamentos",
+    )
     valor = models.DecimalField(max_digits=10, decimal_places=2)
     tipo = models.CharField(max_length=10, choices=TIPOS)
     data = models.DateTimeField(auto_now_add=True)
@@ -148,10 +219,34 @@ class AuditoriaFinanceira(models.Model):
         ordering = ["-criado_em", "-id"]
 
 
+class CentroCusto(models.Model):
+    TIPO_CHOICES = [
+        ("fixo", "Fixo"),
+        ("variavel", "Variavel"),
+    ]
+
+    nome = models.CharField(max_length=120, unique=True)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="variavel")
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return f"{self.nome} ({self.get_tipo_display()})"
+
+
 class RegraComissaoTecnico(models.Model):
+    MOMENTO_LIBERACAO_CHOICES = [
+        ("entregue_pago", "Somente apos entrega ao cliente + pagamento"),
+        ("pronto_contactado", "A partir de pronto contactado (adiantamento)"),
+    ]
+
     usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="regra_comissao")
     percentual_servico = models.DecimalField(max_digits=5, decimal_places=2, default=10)
     percentual_peca = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    momento_liberacao = models.CharField(max_length=24, choices=MOMENTO_LIBERACAO_CHOICES, default="entregue_pago")
+    exigir_pagamento_para_liberar = models.BooleanField(default=True)
     comissionar_garantia = models.BooleanField(default=False)
     ativo = models.BooleanField(default=True)
 
@@ -219,6 +314,79 @@ class ComissaoItemOrcamento(models.Model):
 
     def __str__(self):
         return f"Comissao item #{self.item_orcamento_id} - {self.tecnico} - {self.valor_comissao}"
+
+
+class Comissao(models.Model):
+    TIPO_CHOICES = [
+        ("SERVICO", "Servico"),
+        ("PECA", "Peca"),
+        ("BONUS_PRODUTO", "Bonus por produto"),
+        ("BONUS_RETIRADA", "Bonus por retirada"),
+        ("BONUS_SERVICO", "Bonus de servico"),
+    ]
+    STATUS_CHOICES = [
+        ("GERADA", "Gerada"),
+        ("LIBERADA", "Liberada"),
+        ("PAGA", "Paga"),
+        ("CANCELADA", "Cancelada"),
+    ]
+
+    tecnico = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="comissoes_gerais",
+    )
+    ordem_servico = models.ForeignKey(
+        "ordens.OrdemServico",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="comissoes_gerais",
+    )
+    item_orcamento = models.ForeignKey(
+        "orcamentos.ItemOrcamento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="comissoes_gerais",
+    )
+    produto = models.ForeignKey(
+        "estoque.Produto",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="comissoes_gerais",
+    )
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    descricao = models.CharField(max_length=180, blank=True)
+    valor_base = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    percentual = models.DecimalField(max_digits=7, decimal_places=2, default=0)
+    valor_comissao = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    evento_gerador = models.CharField(max_length=40, default="SERVICO_FINALIZADO")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="GERADA")
+    chave_unica = models.CharField(max_length=160, unique=True)
+    referencia_pagamento = models.CharField(max_length=80, blank=True)
+    data_liberacao = models.DateTimeField(null=True, blank=True)
+    data_pagamento = models.DateTimeField(null=True, blank=True)
+    dados_extras = models.JSONField(default=dict, blank=True)
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-data_criacao", "-id"]
+        indexes = [
+            models.Index(fields=["tecnico", "status"]),
+            models.Index(fields=["ordem_servico", "status"]),
+            models.Index(fields=["tipo"]),
+            models.Index(fields=["evento_gerador"]),
+        ]
+
+    def __str__(self):
+        tecnico = getattr(self.tecnico, "username", None) or "SEM_TECNICO"
+        numero_os = getattr(self.ordem_servico, "numero_os", None) or "SEM_OS"
+        return f"{self.tipo} | {tecnico} | OS {numero_os} | {self.valor_comissao}"
 
 
 class RegraPremioMeta(models.Model):
@@ -319,3 +487,67 @@ class AuditoriaGarantia(models.Model):
 
     def __str__(self):
         return f"Auditoria garantia {self.ordem_servico.numero_os} - {self.get_status_faturamento_display()}"
+
+
+class ContaPagar(models.Model):
+    STATUS = [
+        ("aberta", "Aberta"),
+        ("parcial", "Parcial"),
+        ("paga", "Paga"),
+        ("vencida", "Vencida"),
+        ("cancelada", "Cancelada"),
+    ]
+
+    fornecedor = models.CharField(max_length=150, blank=True)
+    descricao = models.CharField(max_length=220)
+    valor_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valor_pago = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    vencimento = models.DateField()
+    centro_custo = models.ForeignKey(CentroCusto, on_delete=models.SET_NULL, null=True, blank=True, related_name="contas_pagar")
+    status = models.CharField(max_length=12, choices=STATUS, default="aberta")
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-vencimento", "-id"]
+
+    @property
+    def valor_aberto(self):
+        return max(Decimal("0.00"), (self.valor_total or Decimal("0.00")) - (self.valor_pago or Decimal("0.00")))
+
+    def atualizar_status_automatico(self):
+        if self.status == "cancelada":
+            return
+        if self.valor_aberto <= Decimal("0.00"):
+            self.status = "paga"
+        elif (self.valor_pago or Decimal("0.00")) > Decimal("0.00"):
+            self.status = "parcial"
+        elif self.vencimento < timezone.localdate():
+            self.status = "vencida"
+        else:
+            self.status = "aberta"
+
+    def __str__(self):
+        return f"{self.descricao} - {self.get_status_display()}"
+
+    def delete(self, *args, **kwargs):
+        if self.pagamentos.exists():
+            raise ValidationError("Nao e permitido excluir conta a pagar com pagamentos vinculados.")
+        return super().delete(*args, **kwargs)
+
+
+class PagamentoContaPagar(models.Model):
+    conta = models.ForeignKey(ContaPagar, on_delete=models.CASCADE, related_name="pagamentos")
+    caixa = models.ForeignKey(Caixa, on_delete=models.SET_NULL, null=True, blank=True, related_name="pagamentos_conta_pagar")
+    forma_pagamento = models.ForeignKey(FormaPagamento, on_delete=models.SET_NULL, null=True, blank=True, related_name="pagamentos_conta_pagar")
+    valor = models.DecimalField(max_digits=12, decimal_places=2)
+    referencia = models.CharField(max_length=80, blank=True)
+    observacao = models.TextField(blank=True)
+    data = models.DateTimeField(auto_now_add=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        ordering = ["-data", "-id"]
+
+    def __str__(self):
+        return f"Pgto conta pagar #{self.conta_id} - {self.valor}"

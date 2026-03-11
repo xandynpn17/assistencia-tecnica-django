@@ -41,6 +41,10 @@ class Orcamento(models.Model):
 
 
 class ItemOrcamento(models.Model):
+    TIPO_ITEM_CHOICES = [
+        ("servico", "Servico"),
+        ("peca", "Peca"),
+    ]
     ORIGEM_CHOICES = [
         ('estoque', 'Estoque'),
         ('manual', 'Manual'),
@@ -58,6 +62,7 @@ class ItemOrcamento(models.Model):
     descricao = models.TextField(blank=True)
     valor_unitario = models.DecimalField(max_digits=10, decimal_places=2)
     quantidade = models.PositiveIntegerField(default=1)
+    tipo_item = models.CharField(max_length=20, choices=TIPO_ITEM_CHOICES, default="servico")
     origem = models.CharField(max_length=10, choices=ORIGEM_CHOICES, default='manual')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pendente')  # ← campo novo
     tecnico_responsavel = models.ForeignKey(
@@ -73,5 +78,7 @@ class ItemOrcamento(models.Model):
         return self.valor_unitario * self.quantidade
 
     def save(self, *args, **kwargs):
+        if not self.tipo_item:
+            self.tipo_item = "peca" if self.origem == "estoque" else "servico"
         super().save(*args, **kwargs)
         self.orcamento.atualizar_total()

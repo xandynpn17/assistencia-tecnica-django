@@ -2,73 +2,169 @@
 {% load widget_tweaks %}
 
 {% block content %}
-<div class="container mt-4">
-    <h1>Registrar Pagamento</h1>
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">Registrar Pagamento (POS)</h1>
+        <div class="d-flex gap-2">
+            <a href="{% url 'caixa:taloes' %}" class="btn btn-outline-dark btn-sm">Consultar Taloes</a>
+            <a href="{% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}{% url 'caixa:dashboard_caixa' %}{% else %}{% url 'caixa:registrar_pagamento' %}{% endif %}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+        </div>
+    </div>
 
     {% if not caixa %}
         <div class="alert alert-danger">
             Nenhum caixa aberto. <a href="{% url 'caixa:abrir_caixa' %}">Abra um caixa</a> primeiro.
         </div>
     {% else %}
-        <form method="post">
-            {% csrf_token %}
-            {{ form.non_field_errors }}
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>1) Validar Ordem de Servico</strong>
+                        <small class="text-muted">Digite OS-0123 ou somente 123</small>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" class="form-row align-items-end">
+                            <div class="col-md-9">
+                                <label for="id_os_numero_busca"><strong>Numero da OS</strong></label>
+                                <input type="text"
+                                       id="id_os_numero_busca"
+                                       name="os_numero"
+                                       class="form-control form-control-lg"
+                                       placeholder="Ex: OS-0123"
+                                       value="{{ numero_os_busca|default:'' }}"
+                                       autocomplete="off">
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-outline-primary btn-lg btn-block">
+                                    Validar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
 
-            {% if ordem %}
-            <div class="alert alert-info">
-                Pagamento vinculado automaticamente a OS <strong>{{ ordem.numero_os }}</strong> ({{ ordem.cliente.nome }}).
-            </div>
-            {% if garantia_sugerida %}
-            <div class="alert alert-warning">
-                OS de garantia detectada. Valor sugerido de mao de obra da marca: <strong>R$ {{ garantia_sugerida|floatformat:2 }}</strong>.
-            </div>
-            {% endif %}
-            <div class="d-none">
-                {{ form.ordem_servico|add_class:"form-control" }}
-            </div>
-            {% elif guia_codigo and vendas_guia %}
-            <div class="alert alert-info">
-                Finalizando guia <strong>{{ guia_codigo }}</strong> com {{ vendas_guia|length }} item(ns) em pre-reserva.
-                <a href="{% url 'estoque:guia_pagamento' guia_codigo %}" target="_blank">Visualizar/Imprimir guia</a>
-            </div>
-            {% elif venda %}
-            <div class="alert alert-info">
-                Finalizando pre-reserva de venda <strong>#{{ venda.id }}</strong>:
-                {{ venda.produto.nome }} | {{ venda.ponto_operacional.codigo }} | Qtd {{ venda.quantidade }}.
-            </div>
-            {% else %}
-            <div class="form-group">
-                <label for="{{ form.ordem_servico.id_for_label }}">Ordem de Servico (opcional)</label>
-                {{ form.ordem_servico|add_class:"form-control" }}
-            </div>
-            {% endif %}
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>2) Finalizar Pagamento</strong>
+                        <small class="text-muted">F2 valor | F3 forma | F4 finalizar</small>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" id="form-pagamento-pos">
+                            {% csrf_token %}
+                            {{ form.non_field_errors }}
 
-            <div class="form-group">
-                <label for="{{ form.valor.id_for_label }}">Valor</label>
-                {{ form.valor|add_class:"form-control" }}
+                            <input type="hidden" name="os_numero" value="{{ numero_os_busca|default:'' }}">
+                            <div class="d-none">
+                                {{ form.ordem_servico|add_class:"form-control" }}
+                                {{ form.metodo }}
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-md-4">
+                                    <label for="{{ form.valor.id_for_label }}"><strong>Valor</strong></label>
+                                    {{ form.valor|add_class:"form-control form-control-lg"|attr:"id:id_valor_pos" }}
+                                    {% if form.valor.errors %}<small class="text-danger">{{ form.valor.errors|striptags }}</small>{% endif %}
+                                </div>
+                                <div class="form-group col-md-5">
+                                    <label for="{{ form.forma_pagamento.id_for_label }}"><strong>Forma de Pagamento</strong></label>
+                                    {{ form.forma_pagamento|add_class:"form-control form-control-lg"|attr:"id:id_forma_pos" }}
+                                    {% if form.forma_pagamento.errors %}<small class="text-danger">{{ form.forma_pagamento.errors|striptags }}</small>{% endif %}
+                                </div>
+                                <div class="form-group col-md-3">
+                                    <label for="{{ form.referencia.id_for_label }}"><strong>Referencia</strong></label>
+                                    {{ form.referencia|add_class:"form-control form-control-lg" }}
+                                    {% if form.referencia.errors %}<small class="text-danger">{{ form.referencia.errors|striptags }}</small>{% endif %}
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="d-block mb-2"><strong>Valores rapidos</strong></label>
+                                <div class="btn-group btn-group-sm flex-wrap" role="group">
+                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="30.00">30,00</button>
+                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="50.00">50,00</button>
+                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="100.00">100,00</button>
+                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="150.00">150,00</button>
+                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="200.00">200,00</button>
+                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="300.00">300,00</button>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" id="btn-finalizar-pos" class="btn btn-success btn-lg px-4">
+                                    Finalizar Pagamento
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="{{ form.metodo.id_for_label }}">Metodo de Pagamento</label>
-                {{ form.metodo|add_class:"form-control" }}
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-header bg-white"><strong>Resumo Rapido</strong></div>
+                    <div class="card-body">
+                        <p class="mb-2"><strong>Caixa:</strong> {% if caixa.aberto %}Aberto{% else %}Fechado{% endif %}</p>
+                        {% if ordem %}
+                            <div class="alert alert-success py-2 mb-2">OS valida</div>
+                            <p class="mb-1"><strong>OS:</strong> {{ ordem.numero_os }}</p>
+                            <p class="mb-1"><strong>Cliente:</strong> {{ ordem.cliente.nome }}</p>
+                            <p class="mb-1"><strong>Status:</strong> {{ ordem.get_status_display }}</p>
+                            {% if garantia_sugerida %}
+                            <p class="mb-1 text-info">OS de garantia detectada</p>
+                            <p class="mb-0 text-warning"><strong>Garantia:</strong> R$ {{ garantia_sugerida|floatformat:2 }} sugerido</p>
+                            {% endif %}
+                        {% elif numero_os_busca %}
+                            <div class="alert alert-danger py-2 mb-0">OS não encontrada</div>
+                        {% elif venda %}
+                            <p class="mb-1"><strong>Pre-reserva:</strong> #{{ venda.id }}</p>
+                            <p class="mb-1"><strong>Produto:</strong> {{ venda.produto.nome }}</p>
+                            <p class="mb-0"><strong>Total:</strong> R$ {{ venda.valor_total|floatformat:2 }}</p>
+                        {% elif guia_codigo and vendas_guia %}
+                            <p class="mb-1"><strong>Guia:</strong> {{ guia_codigo }}</p>
+                            <p class="mb-0"><strong>Itens:</strong> {{ vendas_guia|length }}</p>
+                        {% else %}
+                            <p class="mb-0 text-muted">Valide a OS para pagamento vinculado.</p>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
-
-            <div class="form-group">
-                <label for="{{ form.referencia.id_for_label }}">Referencia (talão/comprovante)</label>
-                {{ form.referencia|add_class:"form-control" }}
-            </div>
-
-            <button type="submit" class="btn btn-success mt-2">
-                <i class="fas fa-plus-circle"></i> Registrar Pagamento
-            </button>
-            <a href="{% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}{% url 'caixa:dashboard_caixa' %}{% else %}{% url 'caixa:registrar_pagamento' %}{% endif %}" class="btn btn-secondary mt-2">
-                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
-                Voltar
-                {% else %}
-                Continuar
-                {% endif %}
-            </a>
-        </form>
+        </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const valorInput = document.getElementById("id_valor_pos");
+    const formaInput = document.getElementById("id_forma_pos");
+    const formPagamento = document.getElementById("form-pagamento-pos");
+    const btnFinalizar = document.getElementById("btn-finalizar-pos");
+    const botoesRapidos = document.querySelectorAll(".js-valor-rapido");
+
+    botoesRapidos.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            if (!valorInput) return;
+            valorInput.value = btn.getAttribute("data-value");
+            valorInput.focus();
+        });
+    });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "F2") {
+            event.preventDefault();
+            if (valorInput) valorInput.focus();
+        }
+        if (event.key === "F3") {
+            event.preventDefault();
+            if (formaInput) formaInput.focus();
+        }
+        if (event.key === "F4") {
+            event.preventDefault();
+            if (formPagamento && btnFinalizar) formPagamento.requestSubmit(btnFinalizar);
+        }
+    });
+});
+</script>
 {% endblock %}

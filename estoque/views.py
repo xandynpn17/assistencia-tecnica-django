@@ -2,18 +2,18 @@
 from decimal import Decimal
 import logging
 import random
+import re
 import string
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from caixa.models import Pagamento
 from configuracoes.permissions import (
     CAIXA_OPERATIONAL_ROLES,
     ORDER_ROLES,
@@ -22,7 +22,7 @@ from configuracoes.permissions import (
     has_role,
     role_required,
 )
-from configuracoes.models import Empresa
+from configuracoes.models import ConfiguracaoSistema, Empresa
 
 from .forms import MovimentacaoEstoqueForm, PontoOperacionalForm, ProdutoForm, UbicacaoEstoqueForm
 from .models import (
@@ -33,6 +33,7 @@ from .models import (
     Produto,
     ReservaEstoque,
     SaldoEstoquePonto,
+    ServicoReferencia,
     UbicacaoEstoque,
     VendaRapidaEstoque,
 )
@@ -84,19 +85,52 @@ def _codigo_guia():
             return codigo
 
 
+def _config_sistema():
+    return ConfiguracaoSistema.get_configuracao()
+
+
+def _normalizar_texto(valor):
+    texto = (valor or "").strip().lower()
+    texto = re.sub(r"\s+", " ", texto)
+    return texto
+
+
+def _resumo_cesto(cesto_codigo):
+    vendas = list(
+        VendaRapidaEstoque.objects.select_related("produto", "ponto_operacional")
+        .filter(cesto_codigo=cesto_codigo, status="pre_reserva")
+        .order_by("-id")
+    )
+    total = sum((v.valor_total for v in vendas), Decimal("0.00"))
+    guia = ""
+    for v in vendas:
+        if v.guia_pagamento:
+            guia = v.guia_pagamento
+            break
+    return {
+        "ok": True,
+        "cesto_codigo": cesto_codigo,
+        "guia": guia,
+        "itens": [
+            {
+                "id": v.id,
+                "produto": v.produto.nome,
+                "ponto": v.ponto_operacional.codigo,
+                "quantidade": v.quantidade,
+                "valor_unitario": float(v.valor_unitario),
+                "valor_total": float(v.valor_total),
+                "vendedor": v.funcionario_numero,
+            }
+            for v in vendas
+        ],
+        "total": float(total),
+    }
+
+
 @role_required(STOCK_VIEW_ROLES)
 def buscar_produtos(request):
-    termo = request.GET.get("q", "").strip()
-    produtos = []
-    if termo:
-        produtos = Produto.objects.filter(Q(nome__icontains=termo) | Q(ean__icontains=termo), ativo=True)[:50]
-    context = {
-        "produtos": produtos,
-        "termo": termo,
-        "menu_app": "estoque",
-        "menu_sub": "buscar_produtos",
-    }
-    return render(request, "estoque/buscar_produtos.html", context)
+    messages.info(request, "A tela 'Buscar Produto' foi descontinuada. Use 'Consulta de Artigos'.")
+    return redirect("estoque:consulta_artigos")
 
 
 @role_required(STOCK_VIEW_ROLES)
@@ -115,7 +149,7 @@ def lista_produtos(request):
         produtos = produtos.filter(ponto_operacional_id=ponto_id)
 
     context = {
-        "produtos": produtos.select_related("ponto_operacional"),
+        "produtos": produtos.select_related("ponto_operacional", "categoria_config", "marca", "fornecedor_config").order_by("nome"),
         "pontos": PontoOperacional.objects.filter(ativo=True),
         "menu_app": "estoque",
         "menu_sub": "lista_produtos",
@@ -140,14 +174,12 @@ def criar_produto(request):
         }
 
     if request.method == "POST":
-        form = ProdutoForm(request.POST)
+        form = ProdutoForm(request.POST, request.FILES)
         if form.is_valid():
-            produto = form.save(commit=False)
-            po3, _ = PontoOperacional.objects.get_or_create(codigo="PO3", defaults={"nome": "Loja", "ativo": True})
-            produto.ponto_operacional = po3
-            produto.save()
+            produto = form.save()
             _normalizar_saldos_produto(produto)
             _recalcular_total_produto(produto)
+            messages.success(request, "Produto cadastrado com sucesso.")
             return redirect("estoque:lista_produtos")
     else:
         form = ProdutoForm(initial=initial)
@@ -161,7 +193,7 @@ def criar_produto(request):
 def editar_produto(request, produto_id):
     produto = get_object_or_404(Produto, id=produto_id)
     if request.method == "POST":
-        form = ProdutoForm(request.POST, instance=produto)
+        form = ProdutoForm(request.POST, request.FILES, instance=produto)
         if form.is_valid():
             produto = form.save()
             _normalizar_saldos_produto(produto)
@@ -188,7 +220,7 @@ def excluir_produto(request, produto_id):
     produto = get_object_or_404(Produto, id=produto_id)
     if request.method == "POST":
         produto.delete()
-        messages.success(request, "Produto excluido com sucesso!")
+        messages.success(request, "Produto excluído com sucesso!")
         return redirect("estoque:lista_produtos")
     return render(request, "estoque/confirm_delete.html", {"produto": produto, "menu_app": "estoque", "menu_sub": "lista_produtos"})
 
@@ -196,9 +228,141 @@ def excluir_produto(request, produto_id):
 @role_required(STOCK_VIEW_ROLES)
 def buscar_produto(request):
     q = request.GET.get("q", "").strip()
-    produtos = Produto.objects.filter(nome__icontains=q) | Produto.objects.filter(ean__icontains=q)
-    data = list(produtos.values("id", "ean", "sku", "nome", "descricao", "preco"))
+    produtos = Produto.objects.filter(ativo=True, permite_os=True).filter(
+        Q(nome__icontains=q) | Q(ean__icontains=q) | Q(sku__icontains=q) | Q(modelos_compativeis__icontains=q)
+    )
+    data = list(
+        produtos.values(
+            "id",
+            "ean",
+            "sku",
+            "nome",
+            "descricao",
+            "preco",
+            "modelos_compativeis",
+            "garantia_peca_dias",
+        )[:50]
+    )
     return JsonResponse(data, safe=False)
+
+
+@role_required(STOCK_MANAGE_ROLES)
+def api_gerar_ean(request):
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
+    produto_tmp = Produto()
+    codigo = produto_tmp._gerar_codigo_ean()
+    return JsonResponse({"ok": True, "ean": codigo})
+
+
+@role_required(ORDER_ROLES)
+def api_sugerir_pecas_os(request):
+    q = (request.GET.get("q") or "").strip()
+    modelo = (request.GET.get("modelo") or "").strip()
+    servico = (request.GET.get("servico") or "").strip()
+    defeito = (request.GET.get("defeito") or "").strip()
+    tipo_equipamento = (request.GET.get("tipo_equipamento") or "").strip()
+    if not modelo and not servico and not q:
+        return JsonResponse({"ok": True, "resultados": []})
+
+    base_qs = Produto.objects.filter(ativo=True, is_servico=False, permite_os=True).prefetch_related("servicos_compativeis")
+    produtos = base_qs
+    if q:
+        produtos = produtos.filter(
+            Q(nome__icontains=q) | Q(ean__icontains=q) | Q(sku__icontains=q) | Q(modelos_compativeis__icontains=q)
+        )
+    if modelo:
+        produtos = produtos.filter(modelos_compativeis__icontains=modelo)
+    if servico:
+        produtos = produtos.filter(Q(servicos_compativeis__nome__icontains=servico) | Q(nome__icontains=servico)).distinct()
+
+    candidatos = list(produtos.select_related("categoria_config").order_by("nome")[:120])
+    if not candidatos:
+        fallback = base_qs
+        if q:
+            fallback = fallback.filter(Q(nome__icontains=q) | Q(ean__icontains=q) | Q(sku__icontains=q))
+        candidatos = list(fallback.select_related("categoria_config").order_by("nome")[:60])
+
+    historico_por_nome = {}
+    try:
+        from ordens.models import ServicoPeca
+
+        historico = ServicoPeca.objects.filter(tipo="peca")
+        if modelo:
+            historico = historico.filter(ordem__modelo_equipamento__icontains=modelo)
+        if tipo_equipamento:
+            historico = historico.filter(ordem__tipo_equipamento__icontains=tipo_equipamento)
+        if defeito:
+            historico = historico.filter(ordem__defeito__icontains=defeito)
+        if servico:
+            historico = historico.filter(
+                Q(nome__icontains=servico) | Q(descricao__icontains=servico) | Q(ordem__relatorio_tecnico__icontains=servico)
+            )
+
+        for row in historico.values("nome").annotate(total=Count("id")):
+            chave = _normalizar_texto(row.get("nome"))
+            if not chave:
+                continue
+            atual = int(historico_por_nome.get(chave, 0))
+            historico_por_nome[chave] = max(atual, int(row.get("total") or 0))
+    except Exception:
+        historico_por_nome = {}
+
+    modelo_norm = _normalizar_texto(modelo)
+    servico_norm = _normalizar_texto(servico)
+    q_norm = _normalizar_texto(q)
+    ranked = []
+    for p in candidatos:
+        nome_norm = _normalizar_texto(p.nome)
+        modelos_norm = _normalizar_texto(p.modelos_compativeis)
+        historico = int(historico_por_nome.get(nome_norm, 0))
+        if historico == 0:
+            for chave, total in historico_por_nome.items():
+                if nome_norm and chave and (nome_norm in chave or chave in nome_norm):
+                    historico = max(historico, int(total or 0))
+
+        score = 0
+        motivos = []
+        if modelo_norm and modelos_norm and modelo_norm in modelos_norm:
+            score += 55
+            motivos.append("Modelo compatível")
+        if servico_norm and any(servico_norm in _normalizar_texto(s.nome) for s in p.servicos_compativeis.all()):
+            score += 24
+            motivos.append("Serviço compatível")
+        if q_norm and (q_norm in nome_norm or q_norm in _normalizar_texto(p.ean) or q_norm in _normalizar_texto(p.sku)):
+            score += 14
+            motivos.append("Termo da busca")
+        if historico > 0:
+            bonus_historico = min(45, historico * 9)
+            score += bonus_historico
+            motivos.append(f"Histórico ({historico}x)")
+        if int(p.quantidade or 0) > 0:
+            score += 6
+            motivos.append("Com estoque")
+        else:
+            score -= 8
+        if p.garantia_peca_dias:
+            score += 2
+
+        ranked.append(
+            {
+                "id": p.id,
+                "nome": p.nome,
+                "ean": p.ean or "",
+                "sku": p.sku or "",
+                "preco": float(p.preco_final),
+                "garantia_peca_dias": p.garantia_peca_dias or 0,
+                "modelos_compativeis": p.modelos_compativeis or "",
+                "quantidade": int(p.quantidade or 0),
+                "score": int(score),
+                "frequencia_historica": int(historico),
+                "motivos": motivos[:3],
+            }
+        )
+
+    ranked.sort(key=lambda x: (x["score"], x["frequencia_historica"], x["quantidade"], x["nome"]), reverse=True)
+    data = ranked[:30]
+    return JsonResponse({"ok": True, "resultados": data})
 
 
 @role_required(STOCK_MANAGE_ROLES)
@@ -210,9 +374,13 @@ def registrar_movimentacao(request):
             mov.usuario = request.user
             produto = mov.produto
             _normalizar_saldos_produto(produto)
+            config = _config_sistema()
 
             with transaction.atomic():
                 if mov.tipo == "transferencia":
+                    if int(mov.quantidade or 0) <= 0:
+                        messages.error(request, "Transferência exige quantidade positiva.")
+                        return redirect("estoque:registrar_movimentacao")
                     origem_saldo, _ = SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=mov.origem)
                     destino_saldo, _ = SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=mov.destino)
                     if origem_saldo.quantidade < mov.quantidade:
@@ -222,10 +390,31 @@ def registrar_movimentacao(request):
                     destino_saldo.quantidade += mov.quantidade
                     origem_saldo.save(update_fields=["quantidade"])
                     destino_saldo.save(update_fields=["quantidade"])
+                elif mov.tipo == "entrada" and mov.destino:
+                    ajustar_saldo(produto, mov.destino, abs(int(mov.quantidade)))
+                    mov.quantidade = abs(int(mov.quantidade))
+                    custo_entrada = mov.valor_unitario_custo if mov.valor_unitario_custo is not None else produto.custo_unitario
+                    qtd_entrada = abs(int(mov.quantidade))
+                    qtd_anterior = max(int(produto.quantidade or 0) - qtd_entrada, 0)
+                    custo_anterior = Decimal(str(produto.custo_medio or produto.custo_unitario or 0))
+                    custo_entrada_dec = Decimal(str(custo_entrada or 0))
+                    if (qtd_anterior + qtd_entrada) > 0:
+                        custo_medio = ((custo_anterior * qtd_anterior) + (custo_entrada_dec * qtd_entrada)) / Decimal(qtd_anterior + qtd_entrada)
+                        produto.custo_medio = custo_medio
+                        produto.custo_unitario = custo_medio
+                        produto.save(update_fields=["custo_medio", "custo_unitario"])
                 elif mov.tipo in {"ajuste", "avaria", "inventario"} and mov.origem:
+                    if not (mov.observacao or "").strip():
+                        messages.error(request, "Informe observação para ajuste/avaria/inventário.")
+                        return redirect("estoque:registrar_movimentacao")
                     ajustar_saldo(produto, mov.origem, mov.quantidade)
                 elif mov.tipo in {"venda", "consumo_os"} and mov.origem:
-                    ajustar_saldo(produto, mov.origem, -abs(int(mov.quantidade)), allow_negative=True)
+                    ajustar_saldo(
+                        produto,
+                        mov.origem,
+                        -abs(int(mov.quantidade)),
+                        allow_negative=bool(config.estoque_permitir_negativo),
+                    )
                     mov.quantidade = -abs(int(mov.quantidade))
                 elif mov.tipo in {"devolucao_reserva"} and mov.destino:
                     ajustar_saldo(produto, mov.destino, abs(int(mov.quantidade)))
@@ -233,7 +422,7 @@ def registrar_movimentacao(request):
                 mov.save()
                 _recalcular_total_produto(produto)
 
-            messages.success(request, "Movimentacao registrada com sucesso.")
+            messages.success(request, "Movimentação registrada com sucesso.")
             return redirect("estoque:movimentacoes")
     else:
         form = MovimentacaoEstoqueForm()
@@ -294,7 +483,7 @@ def ubicacoes_estoque(request):
         form = UbicacaoEstoqueForm(request.POST)
         if form.is_valid():
             form.save()
-            messages.success(request, "Ubicacao salva.")
+            messages.success(request, "Ubicação salva.")
             return redirect("estoque:ubicacoes_estoque")
     else:
         form = UbicacaoEstoqueForm()
@@ -335,14 +524,14 @@ def transferir_estoque(request):
             quantidade = 0
 
         if quantidade <= 0:
-            messages.error(request, "Quantidade invalida.")
+            messages.error(request, "Quantidade inválida.")
             return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
         if origem == destino:
             messages.error(request, "Origem e destino devem ser diferentes.")
             return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
         destino_codigo = (destino.codigo or "").upper()
         if destino_codigo == "PO2" and not destino_ubicacao_id and not destino_ubicacao_txt:
-            messages.error(request, "Selecione ou informe a ubicacao de destino no PO2.")
+            messages.error(request, "Selecione ou informe a ubicação de destino no PO2.")
             return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
 
         destino_ubicacao = destino_ubicacao_txt
@@ -350,7 +539,7 @@ def transferir_estoque(request):
             ub = UbicacaoEstoque.objects.filter(id=destino_ubicacao_id, ativo=True).select_related("ponto_operacional").first()
             if ub:
                 if ub.ponto_operacional_id != destino.id:
-                    messages.error(request, "A ubicacao selecionada nao pertence ao ponto de destino.")
+                    messages.error(request, "A ubicação selecionada não pertence ao ponto de destino.")
                     return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
                 destino_ubicacao = ub.codigo if not ub.descricao else f"{ub.codigo} - {ub.descricao}"
 
@@ -359,7 +548,7 @@ def transferir_estoque(request):
             SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=destino)
             disponivel = saldo_disponivel(produto, origem)
             if disponivel < quantidade:
-                messages.error(request, f"Saldo insuficiente na origem. Disponivel: {disponivel}.")
+                messages.error(request, f"Saldo insuficiente na origem. Disponível: {disponivel}.")
                 return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
 
             ajustar_saldo(produto, origem, -quantidade)
@@ -378,7 +567,7 @@ def transferir_estoque(request):
             "transferencia_estoque",
             extra={"produto_id": produto.id, "origem_id": origem.id, "destino_id": destino.id, "quantidade": quantidade, "usuario_id": request.user.id},
         )
-        messages.success(request, "Transpasse registrado com sucesso.")
+        messages.success(request, "Transferência registrada com sucesso.")
         return redirect("estoque:movimentacoes")
 
     return render(
@@ -400,7 +589,7 @@ def reposicao_estoque(request):
     po2 = PontoOperacional.objects.filter(codigo__iexact="PO2", ativo=True).first()
     po3 = PontoOperacional.objects.filter(codigo__iexact="PO3", ativo=True).first()
     if not po2 or not po3:
-        messages.error(request, "Configure os pontos PO2 (Armazem) e PO3 (Loja) para usar reposicao inteligente.")
+        messages.error(request, "Configure os pontos PO2 (Armazém) e PO3 (Loja) para usar reposição inteligente.")
         return redirect("estoque:pontos_operacionais")
 
     if request.method == "POST":
@@ -410,7 +599,7 @@ def reposicao_estoque(request):
         except ValueError:
             quantidade = 0
         if quantidade <= 0:
-            messages.error(request, "Quantidade invalida para reposicao.")
+            messages.error(request, "Quantidade inválida para reposição.")
             return redirect("estoque:reposicao_estoque")
 
         with transaction.atomic():
@@ -433,7 +622,7 @@ def reposicao_estoque(request):
                 observacao="Reposicao inteligente PO2 -> PO3",
                 usuario=request.user,
             )
-        messages.success(request, f"Reposicao realizada: {quantidade} un de {produto.nome}.")
+        messages.success(request, f"Reposição realizada: {quantidade} un de {produto.nome}.")
         return redirect("estoque:reposicao_estoque")
 
     produtos = Produto.objects.filter(ativo=True, is_servico=False).order_by("nome")
@@ -580,20 +769,27 @@ def relatorio_divergencias_estoque(request):
 @role_required(ORDER_ROLES)
 def consulta_artigos(request):
     user_model = get_user_model()
-    tecnicos = (
-        user_model.objects.filter(is_active=True, tipo_usuario="tecnico")
+    tecnicos_qs = (
+        user_model.objects.filter(is_active=True)
+        .exclude(numero_vendedor__isnull=True)
+        .exclude(numero_vendedor="")
         .order_by("username")
-        .values("id", "username", "numero_vendedor")
     )
+    if not tecnicos_qs.exists():
+        tecnicos_qs = (
+            user_model.objects.filter(is_active=True, tipo_usuario="tecnico")
+            .order_by("username")
+        )
+    tecnicos = tecnicos_qs.values("id", "username", "numero_vendedor")
     return render(
         request,
         "estoque/consulta_artigos.html",
         {
             "menu_app": "estoque",
             "menu_sub": "consulta_artigos",
-            "metodos_pagamento": Pagamento.METODOS,
             "numero_vendedor_padrao": (getattr(request.user, "numero_vendedor", "") or ""),
             "tecnicos_disponiveis": list(tecnicos),
+            "pode_venda_mostrador": has_role(request.user, STOCK_MANAGE_ROLES),
         },
     )
 
@@ -606,13 +802,33 @@ def api_consulta_artigos(request):
     except ValueError:
         page = 1
     page_size = 20
-    produtos = Produto.objects.filter(ativo=True, is_servico=False)
-    if q:
-        q_low = q.lower()
-        if q_low.isdigit():
-            produtos = produtos.filter(Q(id=int(q_low)) | Q(ean__icontains=q) | Q(sku__icontains=q) | Q(nome__icontains=q))
-        else:
-            produtos = produtos.filter(Q(nome__icontains=q) | Q(ean__icontains=q) | Q(sku__icontains=q))
+
+    # Evita varredura geral sem termo para reduzir carga.
+    if len(q) < 2:
+        return JsonResponse(
+            {
+                "resultados": [],
+                "page": 1,
+                "has_next": False,
+                "has_prev": False,
+                "total": 0,
+            }
+        )
+
+    produtos = Produto.objects.filter(ativo=True, is_servico=False, permite_os=True)
+    q_low = q.lower()
+    if q_low.isdigit():
+        produtos = produtos.filter(
+            Q(id=int(q_low))
+            | Q(ean__icontains=q)
+            | Q(sku__icontains=q)
+            | Q(nome__icontains=q)
+            | Q(modelos_compativeis__icontains=q)
+        )
+    else:
+        produtos = produtos.filter(
+            Q(nome__icontains=q) | Q(ean__icontains=q) | Q(sku__icontains=q) | Q(modelos_compativeis__icontains=q)
+        )
 
     inicio = (page - 1) * page_size
     fim = inicio + page_size
@@ -626,6 +842,7 @@ def api_consulta_artigos(request):
             "sku": p.sku or "",
             "preco": float(p.preco_final),
             "quantidade": p.quantidade,
+            "modelos_compativeis": p.modelos_compativeis or "",
         }
         for p in produtos.order_by("nome")[inicio:fim]
     ]
@@ -703,6 +920,10 @@ def api_resumo_artigo(request, produto_id):
             "ean": produto.ean or "",
             "sku": produto.sku or "",
             "descricao": produto.descricao or "",
+            "observacao_interna": produto.observacao_interna or "",
+            "localizacao": produto.localizacao or "",
+            "garantia_peca_dias": produto.garantia_peca_dias or 0,
+            "modelos_compativeis": produto.modelos_compativeis or "",
             "preco": float(produto.preco_final),
             "quantidade_total": produto.quantidade,
             "estoque_minimo": produto.estoque_minimo,
@@ -718,7 +939,7 @@ def api_resumo_artigo(request, produto_id):
 @role_required(STOCK_MANAGE_ROLES)
 def api_venda_rapida(request):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
 
     produto_id = request.POST.get("produto_id")
     ponto_id = request.POST.get("ponto_id")
@@ -728,22 +949,33 @@ def api_venda_rapida(request):
     try:
         quantidade = int(request.POST.get("quantidade") or "1")
     except ValueError:
-        return JsonResponse({"ok": False, "erro": "Quantidade invalida."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Quantidade inválida."}, status=400)
 
     if quantidade <= 0:
         return JsonResponse({"ok": False, "erro": "Quantidade deve ser maior que zero."}, status=400)
     if not funcionario_numero.isdigit() or len(funcionario_numero) < 2:
-        return JsonResponse({"ok": False, "erro": "Numero de vendedor invalido. Use ao menos 2 digitos."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Número de vendedor inválido. Use ao menos 2 dígitos."}, status=400)
 
-    produto = get_object_or_404(Produto, id=produto_id, ativo=True)
+    produto = get_object_or_404(Produto, id=produto_id, ativo=True, is_servico=False, permite_os=True)
     ponto = get_object_or_404(PontoOperacional, id=ponto_id, ativo=True)
     _normalizar_saldos_produto(produto)
+    config = _config_sistema()
 
     codigo_ref = ponto.codigo.upper()
     if codigo_ref not in {"PO3", "PO2"}:
         return JsonResponse({"ok": False, "erro": "Venda permitida apenas para pontos PO3 (Loja) e PO2 (Armazem)."}, status=400)
 
     with transaction.atomic():
+        if cesto_codigo:
+            cesto_em_aberto = VendaRapidaEstoque.objects.filter(cesto_codigo=cesto_codigo, status="pre_reserva")
+            if cesto_em_aberto.exclude(guia_pagamento="").exists():
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "erro": "Este cesto ja foi finalizado. Inicie um novo cesto para continuar.",
+                    },
+                    status=409,
+                )
         SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=ponto)
         pre_reservado = (
             VendaRapidaEstoque.objects.filter(
@@ -753,6 +985,20 @@ def api_venda_rapida(request):
             ).aggregate(total=Sum("quantidade"))["total"]
             or 0
         )
+        if config.estoque_pre_reserva_exige_saldo:
+            saldo_atual = SaldoEstoquePonto.objects.get(produto=produto, ponto_operacional=ponto)
+            disponivel = int(saldo_atual.quantidade) - int(pre_reservado)
+            if disponivel < quantidade:
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "erro": (
+                            f"Saldo insuficiente para pre-reserva no ponto {ponto.codigo}. "
+                            f"Disponivel: {disponivel}."
+                        ),
+                    },
+                    status=400,
+                )
         valor_unitario = Decimal(str(produto.preco_final))
         valor_total = valor_unitario * quantidade
 
@@ -792,61 +1038,60 @@ def api_venda_rapida(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_cesto_resumo(request, cesto_codigo):
-    vendas = list(
-        VendaRapidaEstoque.objects.select_related("produto", "ponto_operacional")
-        .filter(cesto_codigo=cesto_codigo, status="pre_reserva")
-        .order_by("-id")
-    )
-    total = sum((v.valor_total for v in vendas), Decimal("0.00"))
-    return JsonResponse(
-        {
-            "ok": True,
-            "cesto_codigo": cesto_codigo,
-            "itens": [
-                {
-                    "id": v.id,
-                    "produto": v.produto.nome,
-                    "ponto": v.ponto_operacional.codigo,
-                    "quantidade": v.quantidade,
-                    "valor_unitario": float(v.valor_unitario),
-                    "valor_total": float(v.valor_total),
-                    "vendedor": v.funcionario_numero,
-                }
-                for v in vendas
-            ],
-            "total": float(total),
-        }
-    )
+    return JsonResponse(_resumo_cesto(cesto_codigo))
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_cesto_finalizar(request):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
 
     cesto_codigo = (request.POST.get("cesto_codigo") or "").strip()
     if not cesto_codigo:
-        return JsonResponse({"ok": False, "erro": "Cesto invalido."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Cesto inválido."}, status=400)
 
     vendas_qs = VendaRapidaEstoque.objects.filter(cesto_codigo=cesto_codigo, status="pre_reserva")
     if not vendas_qs.exists():
-        return JsonResponse({"ok": False, "erro": "Cesto vazio ou ja finalizado."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Cesto vazio ou já finalizado."}, status=400)
 
     guia = vendas_qs.exclude(guia_pagamento="").values_list("guia_pagamento", flat=True).first()
     if not guia:
         guia = _codigo_guia()
-        vendas_qs.update(guia_pagamento=guia)
+    vendas_qs.exclude(guia_pagamento=guia).update(guia_pagamento=guia)
 
-    total = vendas_qs.aggregate(total=Sum("valor_total"))["total"] or Decimal("0.00")
+    resumo = _resumo_cesto(cesto_codigo)
     return JsonResponse(
         {
             "ok": True,
             "guia": guia,
-            "total": float(total),
+            "total": resumo["total"],
+            "itens": len(resumo["itens"]),
             "redirect_caixa": f"{reverse('caixa:registrar_pagamento')}?guia={guia}",
             "imprimir_url": reverse("estoque:guia_pagamento", args=[guia]),
         }
     )
+
+
+@role_required(STOCK_MANAGE_ROLES)
+def api_cesto_item_remover(request, venda_id):
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+
+    cesto_codigo = (request.POST.get("cesto_codigo") or "").strip()
+    if not cesto_codigo:
+        return JsonResponse({"ok": False, "erro": "Informe o codigo do cesto."}, status=400)
+    venda = get_object_or_404(VendaRapidaEstoque, id=venda_id)
+
+    if venda.status != "pre_reserva":
+        return JsonResponse({"ok": False, "erro": "Somente itens em pre-reserva podem ser removidos."}, status=400)
+    if cesto_codigo and venda.cesto_codigo != cesto_codigo:
+        return JsonResponse({"ok": False, "erro": "Item nao pertence ao cesto informado."}, status=400)
+
+    venda.status = "cancelada"
+    venda.concluido_em = timezone.now()
+    venda.save(update_fields=["status", "concluido_em"])
+
+    return JsonResponse(_resumo_cesto(venda.cesto_codigo))
 
 
 @role_required(CAIXA_OPERATIONAL_ROLES)
@@ -857,7 +1102,7 @@ def guia_pagamento(request, guia_codigo):
         .order_by("id")
     )
     if not vendas_qs.exists():
-        messages.error(request, "Guia nao encontrada.")
+        messages.error(request, "Guia não encontrada.")
         return redirect("estoque:consulta_artigos")
     vendas = list(vendas_qs)
     user_model = get_user_model()
@@ -885,9 +1130,9 @@ def guia_pagamento(request, guia_codigo):
 @role_required(ORDER_ROLES)
 def api_criar_reserva(request):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
 
-    produto = get_object_or_404(Produto, id=request.POST.get("produto_id"), ativo=True)
+    produto = get_object_or_404(Produto, id=request.POST.get("produto_id"), ativo=True, is_servico=False, permite_os=True)
     ponto = get_object_or_404(PontoOperacional, id=request.POST.get("ponto_id"), ativo=True)
     nome = (request.POST.get("nome") or "").strip()
     telefone = (request.POST.get("telefone") or "").strip()
@@ -895,38 +1140,58 @@ def api_criar_reserva(request):
     try:
         quantidade = int(request.POST.get("quantidade") or "1")
     except ValueError:
-        return JsonResponse({"ok": False, "erro": "Quantidade invalida."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Quantidade inválida."}, status=400)
     if not nome:
         return JsonResponse({"ok": False, "erro": "Informe nome para reserva."}, status=400)
 
+    valido_ate_raw = (request.POST.get("valido_ate") or "").strip()
     try:
-        valido_ate = datetime.strptime(request.POST.get("valido_ate"), "%Y-%m-%d").date()
+        valido_ate = datetime.strptime(valido_ate_raw, "%Y-%m-%d").date()
     except Exception:
-        valido_ate = timezone.localdate() + timedelta(days=2)
+        return JsonResponse({"ok": False, "erro": "Data de validade inválida. Use YYYY-MM-DD."}, status=400)
 
     if quantidade <= 0:
-        return JsonResponse({"ok": False, "erro": "Quantidade invalida."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Quantidade inválida."}, status=400)
     if valido_ate < timezone.localdate():
-        return JsonResponse({"ok": False, "erro": "Data de validade da reserva nao pode ser passada."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Data de validade da reserva não pode ser passada."}, status=400)
 
     expirar_reservas_vencidas()
     _normalizar_saldos_produto(produto)
-    SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=ponto)
-    disponivel = saldo_disponivel(produto, ponto)
-    if disponivel < quantidade:
-        return JsonResponse({"ok": False, "erro": "Sem saldo disponivel para reservar neste ponto."}, status=400)
+    with transaction.atomic():
+        saldo = (
+            SaldoEstoquePonto.objects.select_for_update()
+            .filter(produto=produto, ponto_operacional=ponto)
+            .first()
+        )
+        if not saldo:
+            saldo = SaldoEstoquePonto.objects.create(produto=produto, ponto_operacional=ponto, quantidade=0)
 
-    reserva = ReservaEstoque.objects.create(
-        codigo_reserva=_codigo_reserva(),
-        produto=produto,
-        ponto_operacional=ponto,
-        quantidade=quantidade,
-        nome_contato=nome,
-        telefone_contato=telefone,
-        valido_ate=valido_ate,
-        status="ativa",
-        usuario=request.user,
-    )
+        reservado = (
+            ReservaEstoque.objects.select_for_update()
+            .filter(
+                produto=produto,
+                ponto_operacional=ponto,
+                status="ativa",
+                valido_ate__gte=timezone.localdate(),
+            )
+            .aggregate(total=Sum("quantidade"))["total"]
+            or 0
+        )
+        disponivel = int(saldo.quantidade) - int(reservado)
+        if disponivel < quantidade:
+            return JsonResponse({"ok": False, "erro": "Sem saldo disponivel para reservar neste ponto."}, status=400)
+
+        reserva = ReservaEstoque.objects.create(
+            codigo_reserva=_codigo_reserva(),
+            produto=produto,
+            ponto_operacional=ponto,
+            quantidade=quantidade,
+            nome_contato=nome,
+            telefone_contato=telefone,
+            valido_ate=valido_ate,
+            status="ativa",
+            usuario=request.user,
+        )
     logger.info(
         "reserva_criada",
         extra={"reserva_id": reserva.id, "produto_id": produto.id, "ponto_id": ponto.id, "quantidade": quantidade, "usuario_id": request.user.id},
@@ -938,7 +1203,7 @@ def api_criar_reserva(request):
 @role_required(STOCK_MANAGE_ROLES)
 def api_expirar_reservas(request):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
     total = expirar_reservas_vencidas(usuario=request.user)
     logger.info("reservas_expiradas_execucao", extra={"quantidade": total, "usuario_id": request.user.id})
     return JsonResponse({"ok": True, "reservas_expiradas": total})
@@ -947,7 +1212,7 @@ def api_expirar_reservas(request):
 @role_required(STOCK_MANAGE_ROLES)
 def api_converter_reserva(request, codigo_reserva):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
     reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
     try:
         converter_reserva(reserva, usuario=request.user, motivo="Conversao manual")
@@ -960,7 +1225,7 @@ def api_converter_reserva(request, codigo_reserva):
 @role_required(STOCK_MANAGE_ROLES)
 def api_cancelar_reserva(request, codigo_reserva):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
     motivo = (request.POST.get("motivo") or "").strip() or "Cancelada manualmente"
     reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
     try:
@@ -974,8 +1239,22 @@ def api_cancelar_reserva(request, codigo_reserva):
 @role_required(STOCK_MANAGE_ROLES)
 def api_inventario_iniciar(request):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
     ponto = get_object_or_404(PontoOperacional, id=request.POST.get("ponto_id"), ativo=True)
+    inventario_aberto = (
+        InventarioEstoque.objects.filter(ponto_operacional=ponto, status="aberto")
+        .order_by("-id")
+        .first()
+    )
+    if inventario_aberto:
+        return JsonResponse(
+            {
+                "ok": False,
+                "erro": "Já existe inventário aberto para este ponto operacional.",
+                "inventario_id": inventario_aberto.id,
+            },
+            status=409,
+        )
     inventario = InventarioEstoque.objects.create(
         ponto_operacional=ponto,
         observacao=(request.POST.get("observacao") or "").strip(),
@@ -987,57 +1266,98 @@ def api_inventario_iniciar(request):
 @role_required(STOCK_MANAGE_ROLES)
 def api_inventario_adicionar_item(request, inventario_id):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
     inventario = get_object_or_404(InventarioEstoque, id=inventario_id)
     if inventario.status != "aberto":
-        return JsonResponse({"ok": False, "erro": "Inventario ja finalizado."}, status=400)
-    produto = get_object_or_404(Produto, id=request.POST.get("produto_id"))
+        return JsonResponse({"ok": False, "erro": "Inventário já finalizado."}, status=400)
+    produto = get_object_or_404(Produto, id=request.POST.get("produto_id"), ativo=True, is_servico=False)
     try:
         quantidade_contada = int(request.POST.get("quantidade_contada") or "0")
     except ValueError:
-        return JsonResponse({"ok": False, "erro": "Quantidade invalida."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Quantidade inválida."}, status=400)
+    if quantidade_contada < 0:
+        return JsonResponse({"ok": False, "erro": "Quantidade contada não pode ser negativa."}, status=400)
 
-    saldo, _ = SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=inventario.ponto_operacional)
-    item, _ = ItemInventarioEstoque.objects.get_or_create(
-        inventario=inventario,
-        produto=produto,
-        defaults={"quantidade_sistema": saldo.quantidade},
-    )
-    item.quantidade_sistema = saldo.quantidade
-    item.quantidade_contada = quantidade_contada
-    item.ajuste = quantidade_contada - saldo.quantidade
-    item.observacao = (request.POST.get("observacao") or "").strip()
-    item.save()
+    with transaction.atomic():
+        saldo = (
+            SaldoEstoquePonto.objects.select_for_update()
+            .filter(produto=produto, ponto_operacional=inventario.ponto_operacional)
+            .first()
+        )
+        if not saldo:
+            saldo = SaldoEstoquePonto.objects.create(produto=produto, ponto_operacional=inventario.ponto_operacional, quantidade=0)
+        item, _ = ItemInventarioEstoque.objects.get_or_create(
+            inventario=inventario,
+            produto=produto,
+            defaults={"quantidade_sistema": saldo.quantidade},
+        )
+        item.quantidade_sistema = saldo.quantidade
+        item.quantidade_contada = quantidade_contada
+        item.ajuste = quantidade_contada - saldo.quantidade
+        item.observacao = (request.POST.get("observacao") or "").strip()
+        item.save()
     return JsonResponse({"ok": True, "ajuste": item.ajuste})
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_inventario_finalizar(request, inventario_id):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
     inventario = get_object_or_404(InventarioEstoque, id=inventario_id)
     if inventario.status != "aberto":
-        return JsonResponse({"ok": False, "erro": "Inventario ja finalizado."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Inventário já finalizado."}, status=400)
 
-    with transaction.atomic():
-        for item in inventario.itens.select_related("produto"):
-            if item.ajuste == 0:
-                continue
-            ajustar_saldo(item.produto, inventario.ponto_operacional, item.ajuste)
-            MovimentacaoEstoque.objects.create(
-                produto=item.produto,
-                tipo="inventario",
-                quantidade=item.ajuste,
-                origem=inventario.ponto_operacional if item.ajuste < 0 else None,
-                destino=inventario.ponto_operacional if item.ajuste > 0 else None,
-                observacao=f"Ajuste inventario #{inventario.id}",
-                usuario=request.user,
+    itens_ajustados = 0
+    unidades_ajustadas = 0
+    try:
+        with transaction.atomic():
+            inventario = InventarioEstoque.objects.select_for_update().get(id=inventario.id)
+            if inventario.status != "aberto":
+                return JsonResponse({"ok": False, "erro": "Inventário já finalizado."}, status=400)
+
+            itens = list(
+                ItemInventarioEstoque.objects.select_for_update()
+                .filter(inventario=inventario)
+                .select_related("produto")
             )
-        inventario.status = "fechado"
-        inventario.fechado_em = timezone.now()
-        inventario.save(update_fields=["status", "fechado_em"])
+            if not itens:
+                return JsonResponse({"ok": False, "erro": "Inventário sem itens para finalizar."}, status=400)
+
+            for item in itens:
+                if item.ajuste == 0:
+                    continue
+                ajustar_saldo(item.produto, inventario.ponto_operacional, item.ajuste)
+                MovimentacaoEstoque.objects.create(
+                    produto=item.produto,
+                    tipo="inventario",
+                    quantidade=item.ajuste,
+                    origem=inventario.ponto_operacional if item.ajuste < 0 else None,
+                    destino=inventario.ponto_operacional if item.ajuste > 0 else None,
+                    observacao=(
+                        f"Ajuste inventario #{inventario.id} "
+                        f"(sistema={item.quantidade_sistema}, contado={item.quantidade_contada}). "
+                        f"{(item.observacao or '').strip()}"
+                    ).strip(),
+                    usuario=request.user,
+                )
+                itens_ajustados += 1
+                unidades_ajustadas += abs(int(item.ajuste))
+
+            inventario.status = "fechado"
+            inventario.fechado_em = timezone.now()
+            inventario.save(update_fields=["status", "fechado_em"])
+    except ValueError as exc:
+        return JsonResponse({"ok": False, "erro": str(exc)}, status=400)
     logger.info("inventario_finalizado", extra={"inventario_id": inventario.id, "usuario_id": request.user.id})
-    return JsonResponse({"ok": True})
+    return JsonResponse(
+        {
+            "ok": True,
+            "resumo": {
+                "itens_ajustados": itens_ajustados,
+                "unidades_ajustadas": unidades_ajustadas,
+            },
+        }
+    )
 
 
 @role_required(STOCK_VIEW_ROLES)
@@ -1096,13 +1416,13 @@ def associar_reserva_ordem(request, codigo_reserva):
     reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
     ordem_id = request.POST.get("ordem_id")
     if not ordem_id:
-        messages.error(request, "Informe o numero da ordem (ID).")
+        messages.error(request, "Informe o número da ordem (ID).")
         return redirect("estoque:reservas_clientes")
     from ordens.models import OrdemServico
 
     ordem = OrdemServico.objects.filter(id=ordem_id).first()
     if not ordem:
-        messages.error(request, "Ordem nao encontrada.")
+        messages.error(request, "Ordem não encontrada.")
         return redirect("estoque:reservas_clientes")
     reserva.ordem_servico = ordem
     reserva.save(update_fields=["ordem_servico"])
@@ -1148,5 +1468,6 @@ def integrar_reservas_no_fechamento(ordem, usuario=None):
 
 def integrar_reservas_na_reabertura(ordem, usuario=None):
     return devolver_reservas_ordem(ordem, usuario=usuario)
+
 
 
