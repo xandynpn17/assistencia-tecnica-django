@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import csv
 import gzip
+from io import StringIO
 from configuracoes.models import FornecedorGarantia, MarcaGarantia
 from configuracoes.forms import MarcaGarantiaForm, RegraGarantiaMarcaForm
 from django.conf import settings
@@ -45,6 +46,59 @@ class PermissoesConfiguracoesTests(TestCase):
         self.client.force_login(self.atendente)
         response = self.client.get(reverse("configuracoes:painel"))
         self.assertEqual(response.status_code, 403)
+
+    def test_create_user_sem_numero_vendedor_gera_numero_automatico(self):
+        user_model = get_user_model()
+        usuario = user_model.objects.create_user(
+            username="sem_numero_vendedor_auto",
+            password="Senha@123",
+            tipo_usuario="atendente",
+        )
+        self.assertIsNotNone(usuario.numero_vendedor)
+        self.assertRegex(usuario.numero_vendedor, r"^\d{2}$")
+
+    def test_create_user_usa_tres_digitos_quando_nao_ha_dois_disponiveis(self):
+        user_model = get_user_model()
+        for numero in range(1, 100):
+            codigo = f"{numero:02d}"
+            if user_model.objects.filter(numero_vendedor=codigo).exists():
+                continue
+            user_model.objects.create_user(
+                username=f"user_vend_{codigo}",
+                password="Senha@123",
+                tipo_usuario="atendente",
+                numero_vendedor=codigo,
+            )
+
+        usuario = user_model.objects.create_user(
+            username="sem_numero_tres_digitos",
+            password="Senha@123",
+            tipo_usuario="tecnico",
+        )
+        self.assertRegex(usuario.numero_vendedor, r"^\d{3}$")
+
+    def test_cadastro_usuario_gera_numero_vendedor_quando_campo_vazio(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            reverse("configuracoes:adicionar_usuario"),
+            {
+                "username": "usuario_sem_numero_form",
+                "email": "auto@teste.com",
+                "password": "Senha@123",
+                "tipo_vinculo": "FUNCIONARIO",
+                "percentual_comissao_servico": "0",
+                "percentual_comissao_peca": "0",
+                "is_active": "on",
+                "is_staff": "on",
+                "tipo_usuario": "atendente",
+                "numero_vendedor": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        user_model = get_user_model()
+        usuario = user_model.objects.get(username="usuario_sem_numero_form")
+        self.assertTrue((usuario.numero_vendedor or "").isdigit())
+        self.assertGreaterEqual(len(usuario.numero_vendedor or ""), 2)
 
     def test_painel_permitem_gerente(self):
         self.client.force_login(self.gerente)
@@ -338,6 +392,47 @@ class PermissoesConfiguracoesTests(TestCase):
 
 
 class ComandosConfiguracoesTests(TestCase):
+    def test_preencher_numero_vendedor_preenche_usuarios_sem_numero(self):
+        user_model = get_user_model()
+        usuario_sem_numero = user_model.objects.create_user(
+            username="usuario_sem_numero_cmd",
+            password="Senha@123",
+            tipo_usuario="atendente",
+            numero_vendedor="31",
+        )
+        user_model.objects.filter(id=usuario_sem_numero.id).update(numero_vendedor="")
+
+        usuario_com_numero = user_model.objects.create_user(
+            username="usuario_com_numero_cmd",
+            password="Senha@123",
+            tipo_usuario="tecnico",
+            numero_vendedor="77",
+        )
+
+        call_command("preencher_numero_vendedor")
+
+        usuario_sem_numero.refresh_from_db()
+        usuario_com_numero.refresh_from_db()
+        self.assertRegex(usuario_sem_numero.numero_vendedor or "", r"^\d{2,}$")
+        self.assertEqual(usuario_com_numero.numero_vendedor, "77")
+
+    def test_preencher_numero_vendedor_dry_run_nao_persiste(self):
+        user_model = get_user_model()
+        usuario = user_model.objects.create_user(
+            username="usuario_sem_numero_dry_run",
+            password="Senha@123",
+            tipo_usuario="atendente",
+            numero_vendedor="32",
+        )
+        user_model.objects.filter(id=usuario.id).update(numero_vendedor="")
+
+        saida = StringIO()
+        call_command("preencher_numero_vendedor", "--dry-run", stdout=saida)
+
+        usuario.refresh_from_db()
+        self.assertEqual(usuario.numero_vendedor or "", "")
+        self.assertIn("DRY-RUN", saida.getvalue())
+
     def test_backup_db_gera_arquivo_gzip(self):
         with TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "dev.sqlite3"

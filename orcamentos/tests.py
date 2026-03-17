@@ -166,6 +166,7 @@ class ItemOrcamentoTecnicoTests(TestCase):
             quantidade=1,
             origem="manual",
             tipo_item="servico",
+            status="aprovado",
             tecnico_responsavel=self.tecnico,
         )
         response = self.client.post(
@@ -177,7 +178,29 @@ class ItemOrcamentoTecnicoTests(TestCase):
         self.assertIsNotNone(servico)
         self.assertEqual(servico.tecnico_responsavel_id, self.tecnico.id)
 
-    def test_aceitar_itens_gera_comissao_antecipada_quando_ordem_qualifica(self):
+    def test_migrar_para_servicos_ignora_item_nao_aprovado(self):
+        item = ItemOrcamento.objects.create(
+            orcamento=self.orcamento,
+            nome="Peca pendente",
+            descricao="Teste",
+            valor_unitario="50.00",
+            quantidade=1,
+            origem="manual",
+            tipo_item="peca",
+            status="pendente",
+            tecnico_responsavel=self.tecnico,
+        )
+        response = self.client.post(
+            reverse("orcamentos:migrar_para_servicos", args=[self.orcamento.id]),
+            {"itens_selecionados": [str(item.id)]},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(self.ordem.servicos_pecas.filter(item_orcamento=item).exists())
+        mensagens = [str(message) for message in response.context["messages"]]
+        self.assertTrue(any("Somente itens aprovados" in mensagem for mensagem in mensagens))
+
+    def test_aceitar_itens_nao_gera_comissao_legada_automaticamente(self):
         self.ordem.status = "pronto_contactado"
         self.ordem.save(update_fields=["status"])
         RegraComissaoTecnico.objects.create(
@@ -204,7 +227,7 @@ class ItemOrcamentoTecnicoTests(TestCase):
             {"itens_selecionados": [str(item.id)]},
         )
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(
+        self.assertFalse(
             ComissaoItemOrcamento.objects.filter(
                 item_orcamento=item,
                 tecnico=self.tecnico,

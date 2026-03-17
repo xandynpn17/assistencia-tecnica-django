@@ -68,9 +68,8 @@ class UserForm(forms.ModelForm):
         label="Senha",
     )
     numero_vendedor = forms.CharField(
-        required=True,
-        min_length=2,
-        label="Numero de vendedor",
+        required=False,
+        label="Número de vendedor",
     )
 
     class Meta:
@@ -93,6 +92,7 @@ class UserForm(forms.ModelForm):
             'tipo_vinculo',
             'percentual_comissao_servico',
             'percentual_comissao_peca',
+            'percentual_comissao_vendas',
             'data_admissao',
             'data_demissao',
             'pis_pasep',
@@ -121,6 +121,7 @@ class UserForm(forms.ModelForm):
             'tipo_vinculo': forms.Select(attrs={'class': 'form-control'}),
             'percentual_comissao_servico': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
             'percentual_comissao_peca': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
+            'percentual_comissao_vendas': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
             'data_admissao': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'data_demissao': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'pis_pasep': forms.TextInput(attrs={'class': 'form-control'}),
@@ -135,6 +136,10 @@ class UserForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["tipo_pessoa"].required = False
         self.fields["tipo_pessoa"].initial = self.fields["tipo_pessoa"].initial or "fisica"
+        self.fields["percentual_comissao_vendas"].required = False
+        self.fields["percentual_comissao_vendas"].initial = self.fields["percentual_comissao_vendas"].initial or 0
+        self.fields["numero_vendedor"].required = False
+        self.fields["numero_vendedor"].help_text = "Se ficar vazio, o sistema gera automaticamente (2 ou 3 digitos)."
         self.fields["password"].widget.attrs.update(
             {
                 "placeholder": "Informe uma senha segura",
@@ -191,16 +196,18 @@ class UserForm(forms.ModelForm):
         tipo_pessoa = self.cleaned_data.get("tipo_pessoa") or "fisica"
         if tipo_pessoa == "fisica":
             if not self._validar_cpf(digits):
-                raise forms.ValidationError("CPF invalido.")
+                raise forms.ValidationError("CPF inválido.")
         else:
             if not self._validar_cnpj(digits):
-                raise forms.ValidationError("CNPJ invalido.")
+                raise forms.ValidationError("CNPJ inválido.")
         return digits
 
     def clean_numero_vendedor(self):
         valor = (self.cleaned_data.get('numero_vendedor') or '').strip()
+        if not valor:
+            return ""
         if not valor.isdigit() or len(valor) < 2:
-            raise forms.ValidationError('Informe um numero de vendedor com ao menos 2 digitos.')
+            raise forms.ValidationError('Informe um número de vendedor com ao menos 2 dígitos.')
         return valor
 
     def clean_password(self):
@@ -218,7 +225,7 @@ class UserForm(forms.ModelForm):
         admissao = cleaned.get("data_admissao")
         demissao = cleaned.get("data_demissao")
         if admissao and demissao and demissao < admissao:
-            self.add_error("data_demissao", "Data de demissao nao pode ser anterior a admissao.")
+            self.add_error("data_demissao", "Data de demissão não pode ser anterior à admissão.")
         return cleaned
 
     def save(self, commit=True):
@@ -361,7 +368,7 @@ class FornecedorGarantiaForm(forms.ModelForm):
             return ""
         digits = self._somente_digitos(raw)
         if len(digits) != 14:
-            raise forms.ValidationError("Informe um CNPJ valido com 14 digitos.")
+            raise forms.ValidationError("Informe um CNPJ válido com 14 dígitos.")
         return digits
 
     def clean_telefone(self):
@@ -370,7 +377,7 @@ class FornecedorGarantiaForm(forms.ModelForm):
             return ""
         digits = self._somente_digitos(raw)
         if len(digits) not in {10, 11}:
-            raise forms.ValidationError("Informe um telefone valido com DDD.")
+            raise forms.ValidationError("Informe um telefone válido com DDD.")
         return digits
 
     def clean_cep(self):
@@ -379,7 +386,7 @@ class FornecedorGarantiaForm(forms.ModelForm):
             return ""
         digits = self._somente_digitos(raw)
         if len(digits) != 8:
-            raise forms.ValidationError("Informe um CEP valido com 8 digitos.")
+            raise forms.ValidationError("Informe um CEP válido com 8 dígitos.")
         return digits
 
 
@@ -463,7 +470,7 @@ class RegraGarantiaMarcaForm(forms.ModelForm):
         if not tipo_produto:
             self.add_error("tipo_produto", "Selecione o tipo de equipamento.")
         if inicio and fim and fim < inicio:
-            self.add_error("fim_vigencia", "Fim da vigencia nao pode ser anterior ao inicio.")
+            self.add_error("fim_vigencia", "Fim da vigência não pode ser anterior ao início.")
         return cleaned_data
 
 class ModeloMensagemForm(forms.ModelForm):
