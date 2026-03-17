@@ -2,177 +2,785 @@
 
 {% block extra_css %}
 <style>
-.hero-commission {
+.desempenho-page {
+  background: linear-gradient(180deg, #f3f7fa 0%, #ffffff 42%);
+  border: 1px solid #d9e3ea;
+  border-radius: 14px;
+  padding: 16px;
+}
+.desempenho-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.desempenho-title {
+  margin: 0;
+  color: #173647;
+  font-weight: 700;
+}
+.desempenho-subtitle {
+  margin: 2px 0 0;
+  color: #5b6b76;
+  font-size: 0.95rem;
+}
+.meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.meta-tag {
+  border: 1px solid #c9d8e2;
+  background: #ffffff;
+  color: #355260;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+.filter-card,
+.section-card {
+  border: 1px solid #d9e3ea;
   border-radius: 12px;
-  color: #fff;
-  padding: 18px 20px;
-  background: linear-gradient(130deg, #0f2d40 0%, #1f4f66 48%, #3d8aa8 100%);
+  overflow: hidden;
+  background: #fff;
+}
+.filter-card .card-header,
+.section-card .card-header {
+  background: #f6fafc;
+  border-bottom: 1px solid #d9e3ea;
+}
+.group-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5b6b76;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.kpi-card {
+  border: 1px solid #d9e3ea;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 11px 12px;
+  height: 100%;
+  border-top: 3px solid #8fa9b6;
+}
+.kpi-card.kpi-servicos { border-top-color: #206487; }
+.kpi-card.kpi-pecas { border-top-color: #1f8b61; }
+.kpi-card.kpi-vendas { border-top-color: #875f20; }
+.kpi-card.kpi-total { border-top-color: #3d2a8a; background: #f8f6ff; }
+.kpi-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5b6b76;
+  margin-bottom: 4px;
+}
+.kpi-value {
+  color: #173647;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.status-line {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.status-pill {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.84rem;
+  border: 1px solid #d5e1e8;
+  background: #fff;
+  color: #365160;
+}
+.status-pill strong {
+  color: #173647;
+}
+.toolbar-inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.accordion .collaborator-item {
+  border-top: 1px solid #e6edf2;
+}
+.accordion .collaborator-item:first-child {
+  border-top: 0;
+}
+.collaborator-btn {
+  width: 100%;
+  border: 0;
+  background: #fff;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+.collaborator-btn:hover {
+  background: #f8fbfd;
+}
+.collaborator-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.collaborator-name {
+  color: #173647;
+  font-weight: 700;
+  line-height: 1.1;
+  font-size: 0.92rem;
+}
+.collaborator-user {
+  color: #6a7d8a;
+  font-size: 0.83rem;
+}
+.collaborator-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.collaborator-totals {
+  text-align: right;
+  color: #5b6b76;
+  font-size: 0.84rem;
+}
+.collaborator-totals strong {
+  color: #173647;
+}
+.collaborator-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid #d4e0e8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #3e5e6f;
+  transition: transform .2s ease;
+}
+.collaborator-btn[aria-expanded="true"] .collaborator-icon {
+  transform: rotate(180deg);
+}
+.collaborator-cats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.cat-chip {
+  border: 1px solid #d5e1e8;
+  background: #ffffff;
+  color: #315465;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+}
+.cat-chip strong {
+  color: #173647;
+}
+.categoria-resumo-card {
+  border: 1px solid #dce7ee;
+  border-radius: 10px;
+  background: #fbfdff;
+  padding: 10px 11px;
+  height: 100%;
+}
+.categoria-resumo-titulo {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #1f4e65;
+  margin-bottom: 6px;
+}
+.categoria-resumo-linha {
+  font-size: 0.84rem;
+  color: #4a6474;
+  line-height: 1.2;
+}
+.categoria-resumo-linha strong {
+  color: #183c4f;
+}
+.categoria-resumo-acoes {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+.categoria-card {
+  border: 1px solid #e2e9ee;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.categoria-card .card-header {
+  background: #f9fbfd;
+  border-bottom: 1px solid #e2e9ee;
+  padding: 9px 12px;
+}
+.categoria-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.categoria-count {
+  border: 1px solid #d2dee7;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  color: #466475;
+  background: #fff;
+}
+.categoria-tools {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: 8px;
+  margin-top: 8px;
+}
+.table-wrap {
+  overflow-x: auto;
+}
+.table-wrap .table {
+  margin-bottom: 0;
+}
+.table-wrap thead th {
+  background: #edf4f8;
+  color: #2b4a59;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.table-wrap td {
+  vertical-align: middle;
+}
+.linha-sem-resultado {
+  display: none;
+}
+@media (max-width: 991px) {
+  .categoria-tools {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 767px) {
+  .kpi-value {
+    font-size: 1.04rem;
+  }
+  .collaborator-btn {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .collaborator-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .collaborator-totals {
+    text-align: left;
+  }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="hero-commission mb-3">
-  <h4 class="mb-1">Comissões por Serviço/Item</h4>
-  <div class="small">Os resultados aparecem somente após aplicar filtro.</div>
-</div>
-
-<div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Filtros</h3></div>
-  <div class="card-body">
-    <form method="get" class="form-row">
-      {% if pode_filtrar_tecnicos %}
-      <div class="col-md-3">
-        <label>Técnico</label>
-        <select name="tecnico" class="form-control">
-          <option value="">Todos</option>
-          {% for t in tecnicos %}
-          <option value="{{ t.id }}" {% if tecnico_filtro == t.id|stringformat:'s' %}selected{% endif %}>{{ t.username }}</option>
-          {% endfor %}
-        </select>
-      </div>
+<div class="desempenho-page">
+  <div class="desempenho-header">
+    <div>
+      <h3 class="desempenho-title">Meu desempenho</h3>
+      <p class="desempenho-subtitle">Comissoes por período, organizadas por colaborador e por categoria.</p>
+    </div>
+    {% if filtro_aplicado %}
+    <div class="meta-tags">
+      <span class="meta-tag"><strong>Período:</strong> {{ data_inicio|date:"d/m/Y" }} a {{ data_fim|date:"d/m/Y" }}</span>
+      <span class="meta-tag"><strong>Critério:</strong> {{ criterio_label }}</span>
+      {% if status_filtro %}
+      <span class="meta-tag"><strong>Status:</strong> {{ status_filtro }}</span>
       {% endif %}
-      <div class="col-md-2">
-        <label>Status</label>
-        <select name="status" class="form-control">
-          <option value="">Todos</option>
-          <option value="GERADA" {% if status_filtro == 'GERADA' %}selected{% endif %}>Gerada</option>
-          <option value="LIBERADA" {% if status_filtro == 'LIBERADA' %}selected{% endif %}>Liberada</option>
-          <option value="PAGA" {% if status_filtro == 'PAGA' %}selected{% endif %}>Paga</option>
-          <option value="CANCELADA" {% if status_filtro == 'CANCELADA' %}selected{% endif %}>Cancelada</option>
-        </select>
-      </div>
-      <div class="col-md-2">
-        <label>Data início</label>
-        <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control" required>
-      </div>
-      <div class="col-md-2">
-        <label>Data fim</label>
-        <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control" required>
-      </div>
-      <div class="col-md-2">
-        <label class="d-block">Calcular serviços</label>
-        <input type="hidden" name="aplicar_servicos" value="0">
-        <div class="d-flex align-items-center">
-          <input type="checkbox" name="aplicar_servicos" value="1" {% if aplicar_servicos %}checked{% endif %} class="mr-2">
-          <input type="number" min="0" step="0.01" name="percentual_servicos" value="{{ percentual_servicos }}" class="form-control" placeholder="%">
+      <span class="meta-tag"><strong>Regra:</strong> cada fonte é paga apenas uma vez</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card filter-card mb-3">
+    <div class="card-header">
+      <h3 class="card-title mb-0">Filtros de cálculo</h3>
+    </div>
+    <div class="card-body">
+      <form method="get">
+        <div class="form-row">
+          {% if pode_filtrar_tecnicos %}
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="group-title">Colaborador</div>
+            <label>Selecionar</label>
+            <select name="tecnico" class="form-control">
+              <option value="">Todos</option>
+              {% for t in tecnicos %}
+              <option value="{{ t.id }}" {% if tecnico_filtro == t.id|stringformat:'s' %}selected{% endif %}>{{ t.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="group-title">Critério técnico</div>
+            <label>Modo</label>
+            <select name="criterio" class="form-control">
+              <option value="servicos_finalizados" {% if criterio_filtro == 'servicos_finalizados' %}selected{% endif %}>Serviços finalizados</option>
+              <option value="retirado_pago" {% if criterio_filtro == 'retirado_pago' %}selected{% endif %}>Equipamento retirado e pago</option>
+            </select>
+            <small class="text-muted">Escolha quando a OS entra na folha de pagamento do técnico.</small>
+          </div>
+
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="group-title">Status da comissão</div>
+            <label>Status</label>
+            <select name="status" class="form-control">
+              <option value="" {% if not status_filtro %}selected{% endif %}>Ativas (exceto canceladas)</option>
+              <option value="PENDENTE" {% if status_filtro == 'PENDENTE' %}selected{% endif %}>Pendentes (gerada/liberada)</option>
+              <option value="GERADA" {% if status_filtro == 'GERADA' %}selected{% endif %}>Gerada</option>
+              <option value="LIBERADA" {% if status_filtro == 'LIBERADA' %}selected{% endif %}>Liberada</option>
+              <option value="PAGA" {% if status_filtro == 'PAGA' %}selected{% endif %}>Paga</option>
+              <option value="CANCELADA" {% if status_filtro == 'CANCELADA' %}selected{% endif %}>Cancelada</option>
+            </select>
+          </div>
+
+          <input type="hidden" name="somente_fechadas" value="{% if criterio_filtro == 'retirado_pago' %}1{% else %}0{% endif %}">
+        </div>
+
+        <div class="form-row">
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="group-title">Período</div>
+            <label>Data de início</label>
+            <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control" required>
+          </div>
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="group-title">&nbsp;</div>
+            <label>Data de fim</label>
+            <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control" required>
+          </div>
+          <div class="col-lg-2 col-md-4 mb-3">
+            <div class="group-title">Percentuais</div>
+            <label>Serviços (%)</label>
+            <input type="number" step="0.01" min="0" name="percentual_servicos" value="{{ percentual_servicos }}" class="form-control">
+          </div>
+          <div class="col-lg-2 col-md-4 mb-3">
+            <div class="group-title">&nbsp;</div>
+            <label>Peças (%)</label>
+            <input type="number" step="0.01" min="0" name="percentual_pecas" value="{{ percentual_pecas }}" class="form-control">
+          </div>
+          <div class="col-lg-2 col-md-4 mb-3 d-flex align-items-end justify-content-md-end">
+            <button type="submit" class="btn btn-primary px-4">Pesquisar</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="col-lg-2 col-md-4 mb-2 d-flex align-items-center">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="id_aplicar_servicos" name="aplicar_servicos" value="1" {% if aplicar_servicos %}checked{% endif %}>
+              <label class="form-check-label" for="id_aplicar_servicos">Calcular serviços</label>
+            </div>
+          </div>
+          <div class="col-lg-2 col-md-4 mb-2 d-flex align-items-center">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="id_aplicar_pecas" name="aplicar_pecas" value="1" {% if aplicar_pecas %}checked{% endif %}>
+              <label class="form-check-label" for="id_aplicar_pecas">Calcular peças</label>
+            </div>
+          </div>
+          <input type="hidden" name="aplicar_vendas" value="1">
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if filtro_aplicado %}
+  <div class="card section-card mb-3">
+    <div class="card-header">
+      <h3 class="card-title mb-0">Resumo do período</h3>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="kpi-card kpi-servicos">
+            <div class="kpi-label">Base serviços</div>
+            <div class="kpi-value">R$ {{ resumo_calculo.base_servicos|floatformat:2 }}</div>
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="kpi-card kpi-servicos">
+            <div class="kpi-label">Comissão serviços</div>
+            <div class="kpi-value">R$ {{ resumo_calculo.comissao_servicos|floatformat:2 }}</div>
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="kpi-card kpi-pecas">
+            <div class="kpi-label">Base peças</div>
+            <div class="kpi-value">R$ {{ resumo_calculo.base_pecas|floatformat:2 }}</div>
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="kpi-card kpi-pecas">
+            <div class="kpi-label">Comissão peças</div>
+            <div class="kpi-value">R$ {{ resumo_calculo.comissao_pecas|floatformat:2 }}</div>
+          </div>
         </div>
       </div>
-      <div class="col-md-2">
-        <label class="d-block">Calcular peças</label>
-        <input type="hidden" name="aplicar_pecas" value="0">
-        <div class="d-flex align-items-center">
-          <input type="checkbox" name="aplicar_pecas" value="1" {% if aplicar_pecas %}checked{% endif %} class="mr-2">
-          <input type="number" min="0" step="0.01" name="percentual_pecas" value="{{ percentual_pecas }}" class="form-control" placeholder="%">
+
+      <div class="row">
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="kpi-card kpi-vendas">
+            <div class="kpi-label">Vendas</div>
+            <div class="kpi-value">R$ {{ resumo_por_tipo_real.vendas|floatformat:2 }}</div>
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="kpi-card kpi-vendas">
+            <div class="kpi-label">Bônus</div>
+            <div class="kpi-value">R$ {{ resumo_por_tipo_real.bonus|floatformat:2 }}</div>
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="kpi-card">
+            <div class="kpi-label">Pagas</div>
+            <div class="kpi-value">R$ {{ resumo_real.pago|floatformat:2 }}</div>
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="kpi-card kpi-total">
+            <div class="kpi-label">Total do período</div>
+            <div class="kpi-value">R$ {{ total_desempenho_periodo|floatformat:2 }}</div>
+          </div>
         </div>
       </div>
-      <div class="col-md-2">
-        <label class="d-block">Modo de contabilização</label>
-        <input type="hidden" name="somente_fechadas" value="0">
-        <div class="form-check mt-2">
-          <input class="form-check-input" type="checkbox" id="somente_fechadas" name="somente_fechadas" value="1" {% if somente_fechadas %}checked{% endif %}>
-          <label class="form-check-label" for="somente_fechadas">Apenas ordens fechadas</label>
+
+      <div class="status-line">
+        <span class="status-pill"><strong>Em aberto:</strong> R$ {{ resumo_real.pendente|floatformat:2 }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card section-card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+      <h3 class="card-title mb-0">Folhas por colaborador</h3>
+      <div class="toolbar-inline mt-2 mt-md-0">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="expandirFolhasBtn">Expandir todos</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="recolherFolhasBtn">Recolher todos</button>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      {% if folhas_colaboradores %}
+      <div class="accordion" id="folhasAccordion">
+        {% for folha in folhas_colaboradores %}
+        <div class="collaborator-item">
+          <h2 class="mb-0" id="heading{{ forloop.counter }}">
+            <button
+              class="collaborator-btn"
+              type="button"
+              data-toggle="collapse"
+              data-target="#collapse{{ forloop.counter }}"
+              aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}"
+              aria-controls="collapse{{ forloop.counter }}"
+            >
+              <span class="collaborator-left">
+                <span class="collaborator-name">{{ folha.tecnico.first_name|default:folha.tecnico.username }}</span>
+                {% if folha.tecnico.first_name %}
+                <span class="collaborator-user">{{ folha.tecnico.username }}</span>
+                {% endif %}
+                <span class="collaborator-cats">
+                  <span class="cat-chip">Serviços: <strong>R$ {{ folha.servicos.total_comissao|floatformat:2 }}</strong></span>
+                  <span class="cat-chip">Peças: <strong>R$ {{ folha.pecas.total_comissao|floatformat:2 }}</strong></span>
+                  <span class="cat-chip">Vendas: <strong>R$ {{ folha.vendas.total_comissao|floatformat:2 }}</strong></span>
+                  <span class="cat-chip">Bônus: <strong>R$ {{ folha.bonus.total_comissao|floatformat:2 }}</strong></span>
+                </span>
+              </span>
+              <span class="collaborator-right">
+                <span class="collaborator-totals">
+                  <div>Valor total: <strong>R$ {{ folha.total_valor|floatformat:2 }}</strong></div>
+                  <div>Comissão total: <strong>R$ {{ folha.total_comissao|floatformat:2 }}</strong></div>
+                </span>
+                <span class="collaborator-icon">
+                  <i class="fas fa-chevron-down"></i>
+                </span>
+              </span>
+            </button>
+          </h2>
+          <div
+            id="collapse{{ forloop.counter }}"
+            class="collaborator-collapse collapse {% if forloop.first %}show{% endif %}"
+            aria-labelledby="heading{{ forloop.counter }}"
+          >
+            <div class="p-3">
+              <div class="row">
+                {% for secao in folha.secoes %}
+                <div class="col-xl-3 col-md-6 mb-2">
+                  <div class="categoria-resumo-card">
+                    <div class="categoria-resumo-titulo">{{ secao.titulo }}</div>
+                    <div class="categoria-resumo-linha">Valor total: <strong>R$ {{ secao.total_valor|floatformat:2 }}</strong></div>
+                    <div class="categoria-resumo-linha">Comissão total: <strong>R$ {{ secao.total_comissao|floatformat:2 }}</strong></div>
+                    <div class="categoria-resumo-linha">Itens: <strong>{{ secao.linhas|length }}</strong></div>
+                    <div class="categoria-resumo-acoes">
+                      <button
+                        type="button"
+                        class="btn btn-outline-primary btn-sm btn-block toggle-detalhe-btn"
+                        data-toggle="collapse"
+                        data-target="#detalhe{{ forloop.parentloop.counter }}_{{ forloop.counter }}"
+                        aria-expanded="false"
+                        aria-controls="detalhe{{ forloop.parentloop.counter }}_{{ forloop.counter }}"
+                        {% if not secao.linhas %}disabled{% endif %}
+                      >
+                        {% if secao.linhas %}Ver ordens{% else %}Sem ordens{% endif %}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm btn-block export-categoria-btn"
+                        data-target="#tabela{{ forloop.parentloop.counter }}_{{ forloop.counter }}"
+                        data-titulo="{{ folha.tecnico.username }}-{{ secao.titulo }}"
+                        {% if not secao.linhas %}disabled{% endif %}
+                      >
+                        Exportar CSV
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+
+              {% for secao in folha.secoes %}
+              <div id="detalhe{{ forloop.parentloop.counter }}_{{ forloop.counter }}" class="categoria-detalhe-collapse collapse mt-2">
+                <div class="categoria-card">
+                  <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap">
+                      <strong>{{ secao.titulo }}</strong>
+                      <div class="categoria-meta">
+                        <span class="categoria-count">{{ secao.linhas|length }} itens</span>
+                        <small>Valor: <strong>R$ {{ secao.total_valor|floatformat:2 }}</strong></small>
+                        <small>Comissão: <strong>R$ {{ secao.total_comissao|floatformat:2 }}</strong></small>
+                      </div>
+                    </div>
+                    {% if secao.linhas %}
+                    <div class="categoria-tools">
+                      <input
+                        type="search"
+                        class="form-control form-control-sm filtro-categoria-input"
+                        data-target="#tabela{{ forloop.parentloop.counter }}_{{ forloop.counter }}"
+                        placeholder="Filtrar por OS, descrição ou tipo"
+                      >
+                      <select
+                        class="form-control form-control-sm ordenacao-categoria-select"
+                        data-target="#tabela{{ forloop.parentloop.counter }}_{{ forloop.counter }}"
+                      >
+                        <option value="data_desc">Mais recentes</option>
+                        <option value="data_asc">Mais antigas</option>
+                        <option value="valor_desc">Maior valor</option>
+                        <option value="valor_asc">Menor valor</option>
+                        <option value="comissao_desc">Maior comissão</option>
+                        <option value="comissao_asc">Menor comissão</option>
+                      </select>
+                    </div>
+                    {% endif %}
+                  </div>
+
+                  {% if secao.linhas %}
+                  <div class="table-wrap">
+                    <table class="table table-sm table-striped table-bordered tabela-categoria" id="tabela{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
+                      <thead>
+                        <tr>
+                          <th>Ordem/Ref.</th>
+                          <th>Data</th>
+                          <th>Descrição</th>
+                          <th>Valor</th>
+                          <th>Comissão</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for row in secao.linhas %}
+                        <tr data-search="{{ row.numero_os|default:'' }} {{ row.tipo_item|default:'' }} {{ row.descricao|default:'' }}">
+                          <td data-sort="texto">{{ row.numero_os|default:"-" }}</td>
+                          <td data-sort="data" data-sort-value="{{ row.data_pronto|date:'Y-m-d'|default:'' }}">{{ row.data_pronto|date:"d/m/Y"|default:"-" }}</td>
+                          <td data-sort="texto">{{ row.tipo_item }} - {{ row.descricao }}</td>
+                          <td data-sort="numero" data-sort-value="{{ row.valor|default_if_none:'0' }}">R$ {{ row.valor|floatformat:2 }}</td>
+                          <td data-sort="numero" data-sort-value="{{ row.comissao|default_if_none:'0' }}">R$ {{ row.comissao|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="linha-sem-resultado">
+                          <td colspan="5" class="text-center text-muted">Nenhum item encontrado para o filtro informado.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  {% else %}
+                  <div class="p-2 text-muted small">Sem registros nesta categoria.</div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
         </div>
+        {% endfor %}
       </div>
-      <div class="col-md-1 d-flex align-items-end">
-        <button type="submit" class="btn btn-primary btn-block">Pesquisar</button>
-      </div>
-    </form>
+      {% else %}
+      <div class="p-3 text-center text-muted">Sem registros para os colaboradores no período informado.</div>
+      {% endif %}
+    </div>
   </div>
+  {% else %}
+  <div class="alert alert-info">Selecione o período e clique em <strong>Pesquisar</strong>.</div>
+  {% endif %}
 </div>
-
-<div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Painel de metas</h3></div>
-  <div class="card-body">
-    <small class="text-muted">Painel de metas e premiações mantido para compatibilidade.</small>
-  </div>
-</div>
-
-{% if filtro_aplicado %}
-<div class="row mb-3">
-  <div class="col-md-2"><div class="alert alert-primary mb-0">Base serviços<br><strong>R$ {{ resumo_calculo.base_servicos|floatformat:2 }}</strong></div></div>
-  <div class="col-md-2"><div class="alert alert-info mb-0">Base peças<br><strong>R$ {{ resumo_calculo.base_pecas|floatformat:2 }}</strong></div></div>
-  <div class="col-md-2"><div class="alert alert-warning mb-0">Comissão serviços<br><strong>R$ {{ resumo_calculo.comissao_servicos|floatformat:2 }}</strong></div></div>
-  <div class="col-md-2"><div class="alert alert-secondary mb-0">Comissão peças<br><strong>R$ {{ resumo_calculo.comissao_pecas|floatformat:2 }}</strong></div></div>
-  <div class="col-md-4"><div class="alert alert-success mb-0">Total calculado<br><strong>R$ {{ resumo_calculo.total|floatformat:2 }}</strong></div></div>
-</div>
-
-<div class="card">
-  <div class="card-header"><h3 class="card-title">Resultado calculado por OS/técnico</h3></div>
-  <div class="card-body p-0">
-    <table class="table table-sm table-bordered mb-0">
-      <thead>
-        <tr>
-          <th>Data</th>
-          <th>OS</th>
-          {% if pode_filtrar_tecnicos %}<th>Técnico</th>{% endif %}
-          <th>Base serviços</th>
-          <th>Base peças</th>
-          <th>Com. serviços</th>
-          <th>Com. peças</th>
-          <th>Total comissão</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for row in ordens_relatorio %}
-      <tr>
-        <td>{% if row.data_conclusao %}{{ row.data_conclusao|date:"d/m/Y" }}{% else %}-{% endif %}</td>
-        <td>{{ row.numero_os }}</td>
-        {% if pode_filtrar_tecnicos %}<td>{{ row.tecnico.username }}</td>{% endif %}
-        <td>R$ {{ row.valor_servicos|floatformat:2 }}</td>
-        <td>R$ {{ row.valor_pecas|floatformat:2 }}</td>
-        <td>R$ {{ row.comissao_servicos|floatformat:2 }}</td>
-        <td>R$ {{ row.comissao_pecas|floatformat:2 }}</td>
-        <td>R$ {{ row.valor_comissao|floatformat:2 }}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="{% if pode_filtrar_tecnicos %}8{% else %}7{% endif %}" class="text-center text-muted">Sem dados para cálculo no período.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<div class="card mt-3">
-  <div class="card-header"><h3 class="card-title">Comissões geradas (recalculadas pelo filtro)</h3></div>
-  <div class="card-body p-0">
-    <table class="table table-sm table-bordered mb-0">
-      <thead>
-        <tr>
-          <th>Data</th>
-          <th>OS</th>
-          {% if pode_filtrar_tecnicos %}<th>Técnico</th>{% endif %}
-          <th>Tipo</th>
-          <th>Descrição</th>
-          <th>Base</th>
-          <th>% filtro</th>
-          <th>Comissão calculada</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for row in comissoes_calculadas %}
-      {% with c=row.comissao %}
-      <tr>
-        <td>{{ c.data_criacao|date:"d/m/Y H:i" }}</td>
-        <td>{{ c.ordem_servico.numero_os }}</td>
-        {% if pode_filtrar_tecnicos %}<td>{{ c.tecnico.username }}</td>{% endif %}
-        <td>{{ c.tipo }}</td>
-        <td>{{ c.descricao|default:"-" }}</td>
-        <td>R$ {{ c.valor_base|floatformat:2 }}</td>
-        <td>{{ row.percentual_aplicado|floatformat:2 }}%</td>
-        <td>R$ {{ row.valor_calculado|floatformat:2 }}</td>
-        <td>{{ c.get_status_display }}</td>
-      </tr>
-      {% endwith %}
-      {% empty %}
-      <tr><td colspan="{% if pode_filtrar_tecnicos %}9{% else %}8{% endif %}" class="text-center text-muted">Sem comissões geradas no filtro.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% else %}
-<div class="alert alert-info">Selecione os filtros e clique em <strong>Pesquisar</strong>.</div>
-{% endif %}
 {% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const expandirBtn = document.getElementById("expandirFolhasBtn");
+  const recolherBtn = document.getElementById("recolherFolhasBtn");
+  const hasJQuery = Boolean(window.jQuery);
+
+  if (expandirBtn && hasJQuery) {
+    expandirBtn.addEventListener("click", function () {
+      window.jQuery("#folhasAccordion .collaborator-collapse").collapse("show");
+    });
+  }
+
+  if (recolherBtn && hasJQuery) {
+    recolherBtn.addEventListener("click", function () {
+      window.jQuery("#folhasAccordion .collaborator-collapse").collapse("hide");
+    });
+  }
+
+  function normalizarNumero(valor) {
+    const bruto = String(valor || "0").replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
+    const numero = parseFloat(bruto);
+    return Number.isNaN(numero) ? 0 : numero;
+  }
+
+  function filtrarTabela(tabela, termo) {
+    const linhas = Array.from(tabela.querySelectorAll("tbody tr:not(.linha-sem-resultado)"));
+    const termoNormalizado = String(termo || "").trim().toLowerCase();
+    let visiveis = 0;
+    linhas.forEach(function (linha) {
+      const alvo = (linha.getAttribute("data-search") || linha.textContent || "").toLowerCase();
+      const mostrar = !termoNormalizado || alvo.includes(termoNormalizado);
+      linha.style.display = mostrar ? "" : "none";
+      if (mostrar) visiveis += 1;
+    });
+    const linhaSemResultado = tabela.querySelector(".linha-sem-resultado");
+    if (linhaSemResultado) {
+      linhaSemResultado.style.display = visiveis === 0 ? "" : "none";
+    }
+  }
+
+  function ordenarTabela(tabela, criterio) {
+    const tbody = tabela.querySelector("tbody");
+    if (!tbody) return;
+    const linhas = Array.from(tbody.querySelectorAll("tr:not(.linha-sem-resultado)"));
+    const [campo, direcao] = String(criterio || "data_desc").split("_");
+    const indice = campo === "valor" ? 3 : (campo === "comissao" ? 4 : (campo === "data" ? 1 : 0));
+    const isDesc = direcao !== "asc";
+
+    linhas.sort(function (a, b) {
+      const celA = a.children[indice];
+      const celB = b.children[indice];
+      if (!celA || !celB) return 0;
+
+      let valA = celA.getAttribute("data-sort-value") || celA.textContent || "";
+      let valB = celB.getAttribute("data-sort-value") || celB.textContent || "";
+      if (campo === "valor" || campo === "comissao") {
+        valA = normalizarNumero(valA);
+        valB = normalizarNumero(valB);
+      } else {
+        valA = String(valA).toLowerCase();
+        valB = String(valB).toLowerCase();
+      }
+
+      if (valA < valB) return isDesc ? 1 : -1;
+      if (valA > valB) return isDesc ? -1 : 1;
+      return 0;
+    });
+
+    linhas.forEach(function (linha) {
+      tbody.appendChild(linha);
+    });
+  }
+
+  document.querySelectorAll(".filtro-categoria-input").forEach(function (input) {
+    input.addEventListener("input", function () {
+      const tabela = document.querySelector(input.getAttribute("data-target"));
+      if (tabela) {
+        filtrarTabela(tabela, input.value);
+      }
+    });
+  });
+
+  document.querySelectorAll(".ordenacao-categoria-select").forEach(function (select) {
+    select.addEventListener("change", function () {
+      const tabela = document.querySelector(select.getAttribute("data-target"));
+      if (tabela) {
+        ordenarTabela(tabela, select.value);
+      }
+    });
+  });
+
+  document.querySelectorAll(".toggle-detalhe-btn").forEach(function (btn) {
+    const alvo = btn.getAttribute("data-target");
+    if (!alvo) return;
+    const colapso = document.querySelector(alvo);
+    if (!colapso) return;
+
+    if (hasJQuery) {
+      window.jQuery(colapso).on("shown.bs.collapse", function () {
+        btn.textContent = "Ocultar ordens";
+      });
+      window.jQuery(colapso).on("hidden.bs.collapse", function () {
+        btn.textContent = "Ver ordens";
+      });
+    }
+  });
+
+  document.querySelectorAll(".export-categoria-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const tabela = document.querySelector(btn.getAttribute("data-target"));
+      if (!tabela) return;
+
+      const cabecalhos = Array.from(tabela.querySelectorAll("thead th")).map(function (th) {
+        return th.textContent.trim();
+      });
+      const linhas = Array.from(tabela.querySelectorAll("tbody tr:not(.linha-sem-resultado)")).filter(function (tr) {
+        return tr.style.display !== "none";
+      });
+      const csvLinhas = [cabecalhos];
+
+      linhas.forEach(function (tr) {
+        const colunas = Array.from(tr.querySelectorAll("td")).map(function (td) {
+          return td.textContent.trim();
+        });
+        csvLinhas.push(colunas);
+      });
+
+      const csv = csvLinhas.map(function (cols) {
+        return cols.map(function (cell) {
+          return '"' + String(cell).replace(/"/g, '""') + '"';
+        }).join(";");
+      }).join("\n");
+
+      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const titulo = btn.getAttribute("data-titulo") || "folha";
+      link.href = url;
+      link.download = "desempenho-" + titulo.toLowerCase().replace(/\s+/g, "-") + ".csv";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+  });
+});
+</script>
+{% endblock %}
+
+

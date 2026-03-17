@@ -20,13 +20,13 @@
             <div class="col-lg-8">
                 <div class="card shadow-sm border-0 mb-3">
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <strong>1) Validar Ordem de Servico</strong>
+                        <strong>1) Validar Ordem de Serviço</strong>
                         <small class="text-muted">Digite OS-0123 ou somente 123</small>
                     </div>
                     <div class="card-body">
                         <form method="get" class="form-row align-items-end">
                             <div class="col-md-9">
-                                <label for="id_os_numero_busca"><strong>Numero da OS</strong></label>
+                                <label for="id_os_numero_busca"><strong>Número da OS</strong></label>
                                 <input type="text"
                                        id="id_os_numero_busca"
                                        name="os_numero"
@@ -72,7 +72,7 @@
                                     {% if form.forma_pagamento.errors %}<small class="text-danger">{{ form.forma_pagamento.errors|striptags }}</small>{% endif %}
                                 </div>
                                 <div class="form-group col-md-3">
-                                    <label for="{{ form.referencia.id_for_label }}"><strong>Referencia</strong></label>
+                                    <label for="{{ form.referencia.id_for_label }}"><strong>Referência</strong></label>
                                     {{ form.referencia|add_class:"form-control form-control-lg" }}
                                     {% if form.referencia.errors %}<small class="text-danger">{{ form.referencia.errors|striptags }}</small>{% endif %}
                                 </div>

@@ -24,7 +24,7 @@ class Command(BaseCommand):
 
         cfg = ConfiguracaoSistema.get_configuracao()
         if (cfg.backup_retencao_dias or 0) < 7:
-            avisos.append("Retencao de backup menor que 7 dias.")
+            avisos.append("Retenção de backup menor que 7 dias.")
         if (cfg.inventario_ciclico_dias or 0) > 45:
             avisos.append("Inventario ciclico acima de 45 dias.")
 

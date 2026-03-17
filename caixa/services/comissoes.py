@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from caixa.models import Comissao, RegraComissaoTecnico
 from configuracoes.models import ConfiguracaoSistema
-from estoque.models import Produto
+from estoque.models import Produto, VendaRapidaEstoque
 from orcamentos.models import ItemOrcamento
 
 
@@ -69,6 +70,14 @@ def _percentual_peca_tecnico(tecnico) -> Decimal:
         return Decimal("0")
 
 
+def _percentual_vendas_colaborador(colaborador) -> Decimal:
+    valor = getattr(colaborador, "percentual_comissao_vendas", None)
+    try:
+        return max(Decimal(str(valor or 0)), Decimal("0"))
+    except Exception:
+        return Decimal("0")
+
+
 def _regra_comissao_ativa(tecnico):
     try:
         regra = tecnico.regra_comissao
@@ -122,6 +131,18 @@ def _criar_comissao_idempotente(*, chave_unica: str, defaults: dict) -> bool:
             update_fields.append("atualizado_em")
             comissao.save(update_fields=update_fields)
     return created
+
+
+def _colaborador_por_numero_vendedor(numero_vendedor: str):
+    numero_vendedor = (numero_vendedor or "").strip()
+    if not numero_vendedor:
+        return None
+    return (
+        get_user_model()
+        .objects.filter(is_active=True, numero_vendedor=numero_vendedor)
+        .order_by("id")
+        .first()
+    )
 
 
 def _normalizar_tipos_filtro(tipos=None):
@@ -225,13 +246,13 @@ def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO
                         "ordem_servico": ordem,
                         "item_orcamento": item_orcamento,
                         "tipo": "SERVICO",
-                        "descricao": f"Comissao servico - item {nome_ref}",
+                        "descricao": f"Comissão de serviço - item {nome_ref}",
                         "valor_base": base,
                         "percentual": percentual,
                         "valor_comissao": valor_comissao,
                         "evento_gerador": evento,
                         "status": "GERADA",
-                        "dados_extras": {"tipo_item": tipo_item},
+                        "dados_extras": {"tipo_item": tipo_item, "origem_comissao": "os"},
                     },
                 )
                 total_criadas += int(created)
@@ -255,35 +276,13 @@ def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO
                     "item_orcamento": item_orcamento,
                     "produto": produto,
                     "tipo": "PECA",
-                    "descricao": f"Comissao peca - item {nome_ref}",
+                    "descricao": f"Comissão de peça - item {nome_ref}",
                     "valor_base": base,
                     "percentual": percentual_peca,
                     "valor_comissao": valor_comissao,
                     "evento_gerador": evento,
                     "status": "GERADA",
-                    "dados_extras": {"tipo_item": tipo_item},
-                },
-            )
-            total_criadas += int(created)
-
-        bonus_venda = Decimal(str(produto.bonus_venda or 0))
-        if bonus_venda > 0:
-            chave_bonus = f"{evento}:BONUS_PRODUTO:{chave_ref}"
-            created = _criar_comissao_idempotente(
-                chave_unica=chave_bonus,
-                defaults={
-                    "tecnico": tecnico,
-                    "ordem_servico": ordem,
-                    "item_orcamento": item_orcamento,
-                    "produto": produto,
-                    "tipo": "BONUS_PRODUTO",
-                    "descricao": f"Bonus por venda de produto - {nome_ref}",
-                    "valor_base": base,
-                    "percentual": Decimal("0"),
-                    "valor_comissao": bonus_venda,
-                    "evento_gerador": evento,
-                    "status": "GERADA",
-                    "dados_extras": {"tipo_item": tipo_item},
+                    "dados_extras": {"tipo_item": tipo_item, "origem_comissao": "os"},
                 },
             )
             total_criadas += int(created)
@@ -358,7 +357,7 @@ def processar_evento_retirada_cliente(ordem, evento: str = "RETIRADA_CLIENTE", d
                     "tecnico": tecnico,
                     "ordem_servico": ordem,
                     "tipo": "BONUS_RETIRADA",
-                    "descricao": f"Bonus retirada em {dias} dia(s)",
+                    "descricao": f"Bônus retirada em {dias} dia(s)",
                     "valor_base": Decimal("0"),
                     "percentual": Decimal("0"),
                     "valor_comissao": valor_bonus,
@@ -369,6 +368,74 @@ def processar_evento_retirada_cliente(ordem, evento: str = "RETIRADA_CLIENTE", d
             )
             return int(created)
     return 0
+
+
+def processar_evento_venda_mostrador(venda: VendaRapidaEstoque, evento: str = "VENDA_MOSTRADOR") -> int:
+    if not venda or venda.status != "vendida":
+        return 0
+
+    colaborador = _colaborador_por_numero_vendedor(venda.funcionario_numero)
+    if not colaborador:
+        return 0
+
+    produto = venda.produto
+    base = Decimal(str(venda.valor_total or 0))
+    if base <= 0:
+        return 0
+
+    total_criadas = 0
+    percentual_vendas = _percentual_vendas_colaborador(colaborador)
+    if percentual_vendas > 0:
+        valor_comissao = (base * percentual_vendas) / Decimal("100")
+        chave = f"{evento}:COMISSAO_VENDAS:venda:{venda.id}"
+        created = _criar_comissao_idempotente(
+            chave_unica=chave,
+            defaults={
+                "tecnico": colaborador,
+                "produto": produto,
+                "tipo": "COMISSAO_VENDAS",
+                "descricao": f"Comissão venda mostrador - {produto.nome}",
+                "valor_base": base,
+                "percentual": percentual_vendas,
+                "valor_comissao": valor_comissao,
+                "evento_gerador": evento,
+                "status": "GERADA",
+                "dados_extras": {
+                    "origem_comissao": "venda_mostrador",
+                    "venda_rapida_id": venda.id,
+                    "funcionario_numero": venda.funcionario_numero,
+                    "ponto_operacional_id": venda.ponto_operacional_id,
+                },
+            },
+        )
+        total_criadas += int(created)
+
+    bonus_venda = Decimal(str(getattr(produto, "bonus_venda", 0) or 0))
+    if bonus_venda > 0:
+        chave_bonus = f"{evento}:BONUS_PRODUTO:venda:{venda.id}"
+        created = _criar_comissao_idempotente(
+            chave_unica=chave_bonus,
+            defaults={
+                "tecnico": colaborador,
+                "produto": produto,
+                "tipo": "BONUS_PRODUTO",
+                "descricao": f"Bônus por venda mostrador - {produto.nome}",
+                "valor_base": base,
+                "percentual": Decimal("0"),
+                "valor_comissao": bonus_venda,
+                "evento_gerador": evento,
+                "status": "GERADA",
+                "dados_extras": {
+                    "origem_comissao": "venda_mostrador",
+                    "venda_rapida_id": venda.id,
+                    "funcionario_numero": venda.funcionario_numero,
+                    "ponto_operacional_id": venda.ponto_operacional_id,
+                },
+            },
+        )
+        total_criadas += int(created)
+
+    return total_criadas
 
 
 def _cancelar_queryset(queryset, motivo: str, evento: str) -> int:

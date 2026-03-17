@@ -179,7 +179,7 @@ def adicionar_item(request, orcamento_id):
                         )
                         messages.info(request, f"Pre-reserva criada para {produto.nome}.")
                     else:
-                        messages.warning(request, f"Item {produto.nome} adicionado sem reserva por falta de saldo disponivel no ponto.")
+                        messages.warning(request, f"Item {produto.nome} adicionado sem reserva por falta de saldo disponível no ponto.")
         messages.success(request, "Item adicionado com sucesso!")
     return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
 
@@ -190,11 +190,11 @@ def editar_item(request, item_id):
         if request.method == "POST":
             return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
         from django.http import JsonResponse
-        return JsonResponse({"erro": "OS bloqueada para edicao de orcamento."}, status=400)
+        return JsonResponse({"erro": "OS bloqueada para edição de orçamento."}, status=400)
     if request.method == "POST":
         item.ean = request.POST.get("ean", item.ean)
         item.nome = request.POST.get("nome", item.nome)
-        # Descricao nao deve ser alterada apos insercao para manter rastreabilidade.
+        # Descrição nao deve ser alterada apos insercao para manter rastreabilidade.
         item.quantidade = int(request.POST.get("quantidade", item.quantidade))
         valor_str = request.POST.get("valor_unitario", str(item.valor_unitario)).replace(",", ".")
         try:
@@ -242,11 +242,11 @@ def excluir_item(request, item_id):
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         reservas_item = list(item.reservas_estoque.all())
-        cancelar_comissoes_por_item(item, motivo="Item removido do orcamento.", evento="CANCELAMENTO_ITEM")
+        cancelar_comissoes_por_item(item, motivo="Item removido do orçamento.", evento="CANCELAMENTO_ITEM")
         item.delete()
         for reserva in reservas_item:
             try:
-                cancelar_reserva(reserva, usuario=request.user, motivo="Item de orcamento excluido")
+                cancelar_reserva(reserva, usuario=request.user, motivo="Item de orçamento excluído")
             except ValueError:
                 pass
         messages.success(request, "Item excluído com sucesso!")
@@ -271,12 +271,6 @@ def aceitar_itens_orcamento(request, orcamento_id):
         for item in itens:
             item.status = "aprovado"
             item.save()
-            try:
-                from caixa.views import _gerar_comissao_item_orcamento
-
-                _gerar_comissao_item_orcamento(item, modo_pagamento="antecipado")
-            except Exception:
-                pass
         processar_evento_servico_finalizado(orc.ordem_servico, evento="SERVICO_FINALIZADO")
 
         if not orc.itens.filter(status='pendente').exists():
@@ -311,7 +305,7 @@ def recusar_itens_orcamento(request, orcamento_id):
         for item in itens:
             item.status = "recusado"
             item.save()
-            cancelar_comissoes_por_item(item, motivo="Item de orcamento recusado.", evento="CANCELAMENTO_ITEM")
+            cancelar_comissoes_por_item(item, motivo="Item de orçamento recusado.", evento="CANCELAMENTO_ITEM")
 
         if not orc.itens.filter(status='pendente').exists():
             orc.status = "recusado"
@@ -363,11 +357,18 @@ def migrar_para_servicos(request, orcamento_id):
         itens_ids = request.POST.getlist("itens_selecionados")
         itens = orc.itens.filter(id__in=itens_ids)
         if not itens.exists():
-            messages.warning(request, "Nenhum item selecionado para migracao.")
+            messages.warning(request, "Nenhum item selecionado para migração.")
+            return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+
+        itens_aprovados = itens.filter(status="aprovado")
+        itens_nao_aprovados = itens.exclude(status="aprovado")
+        if itens_nao_aprovados.exists():
+            messages.warning(request, "Somente itens aprovados podem ser migrados para Serviços & Peças.")
+        if not itens_aprovados.exists():
             return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
         total_migrados = 0
-        for item in itens:
+        for item in itens_aprovados:
             tipo_item = (item.tipo_item or "").strip()
             if tipo_item not in {"servico", "peca"}:
                 tipo_item = "peca" if item.origem == "estoque" else "servico"
@@ -388,13 +389,13 @@ def migrar_para_servicos(request, orcamento_id):
             total_migrados += 1
 
         if not total_migrados:
-            messages.info(request, "Os itens selecionados ja estavam migrados para Servicos & Pecas.")
+            messages.info(request, "Os itens selecionados já estavam migrados para Serviços & Peças.")
             return redirect(f"{ordem.get_absolute_url()}?tab=servicos")
 
         LinhaTrabalho.objects.create(
             ordem=ordem,
             status="orcamentado",
-            descricao=f"{total_migrados} item(s) migrado(s) para Servicos & Pecas.",
+            descricao=f"{total_migrados} item(s) migrado(s) para Serviços & Peças.",
             usuario=request.user
         )
         messages.success(request, f"{total_migrados} item(s) migrado(s) com sucesso!")
@@ -429,7 +430,7 @@ def imprimir_orcamento(request, pk):
         canv.line(doc.leftMargin, doc.bottomMargin - 0.25 * cm, A4[0] - doc.rightMargin, doc.bottomMargin - 0.25 * cm)
         canv.setFont("Helvetica", 8)
         canv.setFillColor(colors.HexColor("#6b7280"))
-        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"Orcamento {orcamento.id} - OS {ordem.numero_os}")
+        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"Orçamento {orcamento.id} - OS {ordem.numero_os}")
         canv.drawRightString(A4[0] - doc.rightMargin, doc.bottomMargin - 0.6 * cm, f"Pagina {canv.getPageNumber()}")
         canv.restoreState()
 
@@ -452,11 +453,11 @@ def imprimir_orcamento(request, pk):
         logo_path = os.path.join(settings.BASE_DIR, "core/static/adminlte/img/abtech_logo.png")
         logo = Image(logo_path, width=3.0 * cm, height=2.0 * cm)
     except Exception:
-        logo = Paragraph("<b>ASSISTENCIA TECNICA</b>", styles["OrcMeta"])
+        logo = Paragraph("<b>ASSISTÊNCIA TÉCNICA</b>", styles["OrcMeta"])
 
     header_right = [
-        Paragraph("ORCAMENTO", styles["OrcTitle"]),
-        Paragraph(f"<b>Nº Orcamento:</b> {orcamento.id}", styles["OrcMeta"]),
+        Paragraph("ORÇAMENTO", styles["OrcTitle"]),
+        Paragraph(f"<b>Nº Orçamento:</b> {orcamento.id}", styles["OrcMeta"]),
         Paragraph(f"<b>OS:</b> {ordem.numero_os}", styles["OrcMeta"]),
         Paragraph(f"<b>Data:</b> {orcamento.data_criacao.strftime('%d/%m/%Y')}", styles["OrcMeta"]),
         Paragraph(f"<b>Status:</b> {orcamento.get_status_display()}", styles["OrcMeta"]),
@@ -479,18 +480,18 @@ def imprimir_orcamento(request, pk):
             [Paragraph("Tipo", styles["OrcLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["OrcValue"])],
             [Paragraph("Marca", styles["OrcLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["OrcValue"])],
             [Paragraph("Modelo", styles["OrcLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["OrcValue"])],
-            [Paragraph("Numero de Serie", styles["OrcLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["OrcValue"])],
+            [Paragraph("Número de Série", styles["OrcLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["OrcValue"])],
             [Paragraph("Defeito", styles["OrcLabel"]), Paragraph(ordem.defeito or "-", styles["OrcValue"])],
             [Paragraph("Peritagem", styles["OrcLabel"]), Paragraph(ordem.peritagem or "-", styles["OrcValue"])],
         ]),
         Spacer(1, 0.28 * cm),
-        _section("Itens do Orcamento"),
+        _section("Itens do Orçamento"),
     ]
 
     linhas = [[
         Paragraph("<b>Item</b>", styles["OrcLabel"]),
         Paragraph("<b>Qtd</b>", styles["OrcLabel"]),
-        Paragraph("<b>Unitario</b>", styles["OrcLabel"]),
+        Paragraph("<b>Unitário</b>", styles["OrcLabel"]),
         Paragraph("<b>Total</b>", styles["OrcLabel"]),
     ]]
     for item in orcamento.itens.all():
@@ -510,11 +511,11 @@ def imprimir_orcamento(request, pk):
     story.extend([
         tabela_itens,
         Spacer(1, 0.25 * cm),
-        Paragraph(f"<b>Total do Orcamento: R$ {orcamento.total():.2f}</b>", styles["OrcTitle"]),
+        Paragraph(f"<b>Total do Orçamento: R$ {orcamento.total():.2f}</b>", styles["OrcTitle"]),
         Spacer(1, 0.45 * cm),
         Paragraph("Assinatura do Cliente: ____________________________________________", styles["OrcText"]),
         Spacer(1, 0.15 * cm),
-        Paragraph("Declaro estar ciente dos valores e autorizo o servico descrito neste orcamento.", styles["OrcMeta"]),
+        Paragraph("Declaro estar ciente dos valores e autorizo o serviço descrito neste orçamento.", styles["OrcMeta"]),
     ])
 
     doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)

@@ -33,7 +33,7 @@ class OSAccessPolicyService:
             LogOSService.registrar(
                 ordem=ordem,
                 tipo_evento="edicao_critica",
-                descricao=f"Tentativa bloqueada de edicao apos confirmacao (acao: {form_type}).",
+                descricao=f"Tentativa bloqueada de edição após confirmação (ação: {form_type}).",
                 usuario=usuario,
                 dados_extras={"bloqueio": "confirmacao", "acao": form_type},
             )
@@ -44,7 +44,7 @@ class OSAccessPolicyService:
             LogOSService.registrar(
                 ordem=ordem,
                 tipo_evento="edicao_critica",
-                descricao=f"Tentativa bloqueada de edicao em OS fechada (acao: {form_type}).",
+                descricao=f"Tentativa bloqueada de edição em OS fechada (ação: {form_type}).",
                 usuario=usuario,
                 dados_extras={"bloqueio": "fechada", "acao": form_type},
             )

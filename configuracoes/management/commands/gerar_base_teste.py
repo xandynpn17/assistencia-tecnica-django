@@ -62,7 +62,7 @@ class ProdutoSeed:
 
 
 class Command(BaseCommand):
-    help = "Gera base de testes com clientes, produtos, técnicos e ordens para validação funcional."
+    help = "Gera base de testes com clientes, produtos, tecnicos e ordens para validação funcional."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -84,6 +84,12 @@ class Command(BaseCommand):
             help="Quantidade de produtos de teste a criar/atualizar (padrao: 20).",
         )
         parser.add_argument(
+            "--marcas",
+            type=int,
+            default=3,
+            help="Quantidade de marcas de garantia a criar/atualizar (padrao: 3).",
+        )
+        parser.add_argument(
             "--limpar",
             action="store_true",
             help="Remove dados anteriores do mesmo prefixo antes de gerar novos.",
@@ -98,13 +104,14 @@ class Command(BaseCommand):
             "--tecnicos",
             type=int,
             default=3,
-            help="Quantidade de técnicos de teste (usado quando --ordens > 0).",
+            help="Quantidade de tecnicos de teste (usado quando --ordens > 0).",
         )
 
     def handle(self, *args, **options):
         prefixo = (options["prefixo"] or "").strip()
         qtd_clientes = int(options["clientes"] or 0)
         qtd_produtos = int(options["produtos"] or 0)
+        qtd_marcas = int(options["marcas"] or 0)
         qtd_ordens = int(options["ordens"] or 0)
         qtd_tecnicos = int(options["tecnicos"] or 0)
         limpar = bool(options["limpar"])
@@ -112,8 +119,8 @@ class Command(BaseCommand):
         if not prefixo or len(prefixo) < 2:
             raise CommandError("Informe --prefixo com pelo menos 2 caracteres para segurança.")
 
-        if qtd_clientes < 0 or qtd_produtos < 0 or qtd_ordens < 0 or qtd_tecnicos < 0:
-            raise CommandError("Use valores zero ou positivos para --clientes, --produtos, --ordens e --tecnicos.")
+        if qtd_clientes < 0 or qtd_produtos < 0 or qtd_ordens < 0 or qtd_tecnicos < 0 or qtd_marcas < 0:
+            raise CommandError("Use valores zero ou positivos para --clientes, --produtos, --ordens, --marcas e --tecnicos.")
 
         if limpar:
             self._limpar_dados(prefixo=prefixo)
@@ -123,7 +130,7 @@ class Command(BaseCommand):
             return
 
         categorias = self._criar_categorias(prefixo=prefixo)
-        fornecedor_map, marca_map = self._criar_fornecedores_marcas(prefixo=prefixo)
+        fornecedor_map, marca_map = self._criar_fornecedores_marcas(prefixo=prefixo, quantidade=qtd_marcas)
         resumo_clientes = self._criar_clientes(prefixo=prefixo, quantidade=qtd_clientes)
         resumo_produtos = self._criar_produtos(
             prefixo=prefixo,
@@ -197,7 +204,7 @@ class Command(BaseCommand):
                 "Limpeza concluída: "
                 f"{total_clientes} clientes, {total_produtos} produtos, "
                 f"{total_marcas} marcas, {total_fornecedores} fornecedores, {total_categorias} categorias, "
-                f"{total_tecnicos} técnicos, {total_ordens} ordens, {total_pagamentos} pagamentos, "
+                f"{total_tecnicos} tecnicos, {total_ordens} ordens, {total_pagamentos} pagamentos, "
                 f"{total_contas} contas e {total_comissoes} comissões."
             )
         )
@@ -301,7 +308,7 @@ class Command(BaseCommand):
             categorias[nome] = categoria
         return categorias
 
-    def _criar_fornecedores_marcas(self, *, prefixo: str):
+    def _criar_fornecedores_marcas(self, *, prefixo: str, quantidade: int = 3):
         fornecedores_seed = [
             "Fornecedor Eletro Sul",
             "Distribuidora Tech Parts",
@@ -327,7 +334,19 @@ class Command(BaseCommand):
             ("Marca UltraHeat", "Distribuidora Tech Parts"),
             ("Marca Electra", "Componentes Brasil"),
         ]
-        for nome_marca, nome_fornecedor in marcas_seed:
+        marcas_alvo = []
+        if quantidade <= len(marcas_seed):
+            marcas_alvo = marcas_seed[:quantidade]
+        else:
+            marcas_alvo = list(marcas_seed)
+            idx_extra = 1
+            while len(marcas_alvo) < quantidade:
+                nome_marca = f"Marca Seed {idx_extra:02d}"
+                fornecedor = fornecedores_seed[(idx_extra - 1) % len(fornecedores_seed)]
+                marcas_alvo.append((nome_marca, fornecedor))
+                idx_extra += 1
+
+        for nome_marca, nome_fornecedor in marcas_alvo:
             nome_marca_final = f"{prefixo} - {nome_marca}"
             marca, _ = MarcaGarantia.objects.update_or_create(
                 nome=nome_marca_final,
@@ -420,12 +439,12 @@ class Command(BaseCommand):
 
     def _criar_tecnicos(self, *, prefixo: str, quantidade: int):
         nomes_base = [
-            "Tecnico Motor",
-            "Tecnico Eletronica",
-            "Tecnico Campo",
-            "Tecnico Garantia",
-            "Tecnico Banco",
-            "Tecnico Freelance",
+            "Técnico Motor",
+            "Técnico Eletrônica",
+            "Técnico Campo",
+            "Técnico Garantia",
+            "Técnico Banco",
+            "Técnico Freelance",
         ]
         user_model = get_user_model()
         criados = 0
@@ -504,7 +523,7 @@ class Command(BaseCommand):
 
             ordem = OrdemServico.objects.filter(notas_internas__icontains=marcador).first()
             relatorio = (
-                f"Relatorio tecnico seed para ordem {idx + 1:03d}. Troca de componentes e testes executados."
+                f"Relatório técnico seed para ordem {idx + 1:03d}. Troca de componentes e testes executados."
                 if status in {"autorizado", "pronto_contactar", "pronto_contactado", "concluida"}
                 else ""
             )
@@ -558,12 +577,12 @@ class Command(BaseCommand):
                     ordem_servico=ordem,
                     numero=1,
                     tipo="1",
-                    descricao=f"Orcamento seed {marcador}",
+                    descricao=f"Orçamento seed {marcador}",
                     status="pendente",
                 )
             else:
                 orcamento.cliente = cliente
-                orcamento.descricao = f"Orcamento seed {marcador}"
+                orcamento.descricao = f"Orçamento seed {marcador}"
                 orcamento.status = "pendente"
                 orcamento.save(update_fields=["cliente", "descricao", "status", "data_atualizacao"])
 
@@ -577,7 +596,7 @@ class Command(BaseCommand):
                 item_servico = ItemOrcamento.objects.create(
                     orcamento=orcamento,
                     nome=f"Mao de obra seed {idx + 1:03d}",
-                    descricao="Servico tecnico de diagnostico e reparacao.",
+                    descricao="Serviço técnico de diagnóstico e reparação.",
                     valor_unitario=(produto_servico.preco_final if produto_servico else Decimal("80.00")),
                     quantidade=1,
                     tipo_item="servico",
@@ -586,7 +605,7 @@ class Command(BaseCommand):
                     tecnico_responsavel=tecnico if status_item == "aprovado" else None,
                 )
             else:
-                item_servico.descricao = "Servico tecnico de diagnostico e reparacao."
+                item_servico.descricao = "Serviço técnico de diagnóstico e reparação."
                 item_servico.valor_unitario = produto_servico.preco_final if produto_servico else Decimal("80.00")
                 item_servico.quantidade = 1
                 item_servico.tipo_item = "servico"

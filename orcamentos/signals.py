@@ -45,12 +45,12 @@ def item_orcamento_post_save_comissao(sender, instance, created, raw=False, **kw
         if anterior and (anterior.status == "aprovado" or anterior.tecnico_responsavel_id):
             _cancelar_e_remover_servicos_vinculados(
                 instance,
-                motivo="Item deixou de estar apto para comissao.",
+                motivo="Item deixou de estar apto para comissão.",
                 evento="CANCELAMENTO_ITEM",
             )
             cancelar_comissoes_por_item(
                 instance,
-                motivo="Item deixou de estar apto para comissao.",
+                motivo="Item deixou de estar apto para comissão.",
                 evento="CANCELAMENTO_ITEM",
             )
         return
@@ -70,12 +70,12 @@ def item_orcamento_post_save_comissao(sender, instance, created, raw=False, **kw
 def item_orcamento_pre_delete_comissao(sender, instance, **kwargs):
     _cancelar_e_remover_servicos_vinculados(
         instance,
-        motivo="Item removido do orcamento.",
+        motivo="Item removido do orçamento.",
         evento="CANCELAMENTO_ITEM",
     )
     cancelar_comissoes_por_item(
         instance,
-        motivo="Item removido do orcamento.",
+        motivo="Item removido do orçamento.",
         evento="CANCELAMENTO_ITEM",
     )
 
@@ -105,6 +105,6 @@ def orcamento_post_save_cancelamento(sender, instance, created, raw=False, **kwa
     for item in instance.itens.all():
         cancelar_comissoes_por_item(
             item,
-            motivo="Orcamento recusado.",
+            motivo="Orçamento recusado.",
             evento="CANCELAMENTO_ORCAMENTO",
         )

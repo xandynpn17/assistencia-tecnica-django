@@ -222,6 +222,39 @@
               </ul>
             </li>
 
+            <!-- Agenda -->
+            <li class="nav-item has-treeview {% if menu_app == 'agenda' %}menu-open{% endif %}">
+              <a href="#" class="nav-link {% if menu_app == 'agenda' %}active{% endif %}">
+                <i class="nav-icon far fa-calendar-alt"></i>
+                <p>
+                  Agenda
+                  <i class="right fas fa-angle-left"></i>
+                </p>
+              </a>
+              <ul class="nav nav-treeview">
+                <li class="nav-item">
+                  <a href="{% url 'agenda:calendario_agenda' %}" class="nav-link {% if menu_sub == 'calendario_agenda' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Calendario</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'agenda:lista_agendamentos' %}" class="nav-link {% if menu_sub == 'lista_agendamentos' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Lista</p>
+                  </a>
+                </li>
+                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+                <li class="nav-item">
+                  <a href="{% url 'agenda:disponibilidades' %}" class="nav-link {% if menu_sub == 'disponibilidades' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Disponibilidades</p>
+                  </a>
+                </li>
+                {% endif %}
+              </ul>
+            </li>
+
             <!-- Estoque -->
             <li class="nav-item has-treeview {% if menu_app == 'estoque' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'estoque' %}active{% endif %}">
@@ -292,6 +325,13 @@
                   </a>
                 </li>
                 <li class="nav-item">
+                  <a href="{% url 'estoque:tabelas_preco' %}"
+                     class="nav-link {% if menu_sub == 'tabelas_preco' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Tabelas de Preco</p>
+                  </a>
+                </li>
+                <li class="nav-item">
                   <a href="{% url 'estoque:relatorio_divergencias' %}"
                      class="nav-link {% if menu_sub == 'relatorio_divergencias' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
@@ -318,12 +358,21 @@
               </ul>
             </li>
 
+            {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+            <li class="nav-item">
+              <a href="{% url 'fiscal:painel_fiscal' %}" class="nav-link {% if menu_app == 'fiscal' %}active{% endif %}">
+                <i class="nav-icon fas fa-file-invoice"></i>
+                <p>Fiscal</p>
+              </a>
+            </li>
+            {% endif %}
+
             <!-- Caixa -->
             <li class="nav-item">
               <a href="{% url 'caixa:meu_desempenho' %}"
                  class="nav-link {% if menu_sub == 'meu_desempenho' %}active{% endif %}">
                 <i class="nav-icon fas fa-trophy"></i>
-                <p>Prêmios e Comissões</p>
+                <p>Prêmios e Comissoes</p>
               </a>
             </li>
             {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
@@ -408,7 +457,7 @@
                   <a href="{% url 'caixa:comissoes_tecnicos' %}"
                      class="nav-link {% if menu_sub == 'comissoes_tecnicos' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Administrar Comissões</p>
+                    <p>Administrar Comissoes</p>
                   </a>
                 </li>
                 <li class="nav-item">

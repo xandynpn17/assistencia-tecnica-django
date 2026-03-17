@@ -19,8 +19,8 @@ PENDING_STOPPED_STATUSES = {
 
 class Command(BaseCommand):
     help = (
-        "Gera ordens de servico de teste com datas antigas/novas para validar indicadores, "
-        "incluindo o card de 'Paradas ha 15+ dias'."
+        "Gera ordens de serviço de teste com datas antigas/novas para validar indicadores, "
+        "incluindo o card de 'Paradas há 15+ dias'."
     )
 
     def add_arguments(self, parser):
@@ -28,7 +28,7 @@ class Command(BaseCommand):
             "--quantidade",
             type=int,
             default=24,
-            help="Quantidade de OS de teste a criar (padrao: 24).",
+            help="Quantidade de OS de teste a criar (padrão: 24).",
         )
         parser.add_argument(
             "--prefixo",
@@ -45,13 +45,13 @@ class Command(BaseCommand):
             "--tecnico",
             type=str,
             default="tecnico_teste_auto",
-            help="Username do tecnico de teste (padrao: tecnico_teste_auto).",
+            help="Username do técnico de teste (padrão: tecnico_teste_auto).",
         )
         parser.add_argument(
             "--senha-tecnico",
             type=str,
             default="Teste@123",
-            help="Senha para o tecnico criado automaticamente.",
+            help="Senha para o técnico criado automaticamente.",
         )
 
     def handle(self, *args, **options):
@@ -85,12 +85,12 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("Dados de teste gerados com sucesso."))
         self.stdout.write(f"Cliente teste: {cliente.nome} (id={cliente.id})")
-        self.stdout.write(f"Tecnico teste: {tecnico.username}")
+        self.stdout.write(f"Técnico teste: {tecnico.username}")
         self.stdout.write(f"OS criadas: {resumo['total_os']}")
         self.stdout.write(f"OS pendentes totais: {resumo['pendentes_total']}")
         self.stdout.write(f"OS pendentes com 15+ dias: {resumo['pendentes_15_mais']}")
         self.stdout.write(
-            "Validacao rapida: acesse o Dashboard gerencial e confira o card 'Paradas ha 15+ dias'."
+            "Validação rápida: acesse o Dashboard gerencial e confira o card 'Paradas há 15+ dias'."
         )
 
     def _obter_ou_criar_tecnico(self, *, username_tecnico: str, senha: str) -> User:
@@ -99,7 +99,7 @@ class Command(BaseCommand):
             defaults={
                 "tipo_usuario": "tecnico",
                 "is_active": True,
-                "nome_completo": "Tecnico Teste Automatico",
+                "nome_completo": "Técnico Teste Automático",
             },
         )
         if created:

@@ -1,43 +1,128 @@
 {% extends "core/base.html" %}
-{% load widget_tweaks %}
 
 {% block content %}
-<div class="content-header">
-    <h1>Relatorios do Caixa</h1>
+<div class="content-header mb-3">
+    <h1>Relatórios do caixa</h1>
 </div>
 
-<div class="card">
+<div class="card mb-3">
     <div class="card-body">
-        <form method="get" class="row mb-3">
-            <div class="col-md-3">
-                <label for="id_data_inicio">Data inicio</label>
+        <form method="get" class="form-row">
+            <div class="col-md-2">
+                <label for="id_data_inicio">Data início</label>
                 <input id="id_data_inicio" type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label for="id_data_fim">Data fim</label>
                 <input id="id_data_fim" type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
             </div>
-            <div class="col-md-3 align-self-end">
-                <button type="submit" class="btn btn-primary">Filtrar</button>
+            <div class="col-md-3">
+                <label>Forma de pagamento</label>
+                <select name="forma_pagamento" class="form-control">
+                    <option value="">Todas</option>
+                    {% for forma in formas_pagamento %}
+                    <option value="{{ forma.id }}" {% if forma_pagamento_filtro == forma.id|stringformat:'s' %}selected{% endif %}>{{ forma.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label>Centro de custo</label>
+                <select name="centro_custo" class="form-control">
+                    <option value="">Todos</option>
+                    {% for centro in centros_custo %}
+                    <option value="{{ centro.id }}" {% if centro_custo_filtro == centro.id|stringformat:'s' %}selected{% endif %}>{{ centro.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label>Tipo de lançamento</label>
+                <select name="tipo_lancamento" class="form-control">
+                    <option value="">Todos</option>
+                    <option value="entrada" {% if tipo_lancamento_filtro == 'entrada' %}selected{% endif %}>Entrada</option>
+                    <option value="saida" {% if tipo_lancamento_filtro == 'saida' %}selected{% endif %}>Saída</option>
+                </select>
+            </div>
+            <div class="col-md-3 mt-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="todos_caixas" value="1" id="todos_caixas" {% if considerar_todos_caixas %}checked{% endif %}>
+                    <label class="form-check-label" for="todos_caixas">Considerar todos os caixas</label>
+                </div>
+            </div>
+            <div class="col-md-2 mt-3">
+                <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
             </div>
         </form>
+    </div>
+</div>
 
-        {% if lancamentos or pagamentos %}
-        <h3>Resumo</h3>
-        <p><strong>Total Entradas:</strong> {{ total_entradas|floatformat:2 }}</p>
-        <p><strong>Total Pagamentos:</strong> {{ total_entradas_pagamentos|floatformat:2 }}</p>
-        <p><strong>Entradas sem lancamento:</strong> {{ entradas_orfas_pagamento|floatformat:2 }}</p>
-        <p><strong>Total Saidas:</strong> {{ total_saidas|floatformat:2 }}</p>
-        <p><strong>Saldo Final:</strong> {{ saldo|floatformat:2 }}</p>
+<div class="row mb-3">
+    <div class="col-md-3"><div class="alert alert-success mb-0">Entradas totais<br><strong>R$ {{ total_entradas|floatformat:2 }}</strong></div></div>
+    <div class="col-md-3"><div class="alert alert-info mb-0">Pagamentos<br><strong>R$ {{ total_entradas_pagamentos|floatformat:2 }}</strong></div></div>
+    <div class="col-md-3"><div class="alert alert-warning mb-0">Entradas sem lançamento<br><strong>R$ {{ entradas_orfas_pagamento|floatformat:2 }}</strong></div></div>
+    <div class="col-md-3"><div class="alert alert-danger mb-0">Saídas totais<br><strong>R$ {{ total_saidas|floatformat:2 }}</strong></div></div>
+</div>
 
-        <hr>
-        <h4>Pagamentos</h4>
-        <table class="table table-hover text-nowrap">
+<div class="card mb-3">
+    <div class="card-body">
+        <strong>Saldo apurado:</strong> R$ {{ saldo|floatformat:2 }}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Pagamentos por forma</h3></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Forma</th><th>Qtde.</th><th>Total</th></tr></thead>
+                    <tbody>
+                        {% for row in pagamentos_por_forma %}
+                        <tr>
+                            <td>{{ row.forma_pagamento__nome|default:row.metodo|default:"-" }}</td>
+                            <td>{{ row.quantidade }}</td>
+                            <td>R$ {{ row.total|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted">Sem pagamentos.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Saídas por centro de custo</h3></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Centro de custo</th><th>Qtde.</th><th>Total</th></tr></thead>
+                    <tbody>
+                        {% for row in saidas_por_centro %}
+                        <tr>
+                            <td>{{ row.centro_custo__nome|default:"Sem centro de custo" }}</td>
+                            <td>{{ row.quantidade }}</td>
+                            <td>R$ {{ row.total|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted">Sem saídas.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if lancamentos or pagamentos %}
+<div class="card mb-3">
+    <div class="card-header"><h3 class="card-title">Pagamentos</h3></div>
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-hover text-nowrap mb-0">
             <thead>
                 <tr>
                     <th>OS</th>
                     <th>Valor</th>
-                    <th>Metodo</th>
+                    <th>Método</th>
                     <th>Data</th>
                 </tr>
             </thead>
@@ -45,19 +130,24 @@
                 {% for p in pagamentos %}
                 <tr>
                     <td>{{ p.ordem_servico|default:"Avulso" }}</td>
-                    <td>{{ p.valor|floatformat:2 }}</td>
+                    <td>R$ {{ p.valor|floatformat:2 }}</td>
                     <td>{{ p.metodo_display }}</td>
                     <td>{{ p.data|date:"d/m/Y H:i" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+</div>
 
-        <h4>Lancamentos</h4>
-        <table class="table table-hover text-nowrap">
+<div class="card">
+    <div class="card-header"><h3 class="card-title">Lançamentos</h3></div>
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-hover text-nowrap mb-0">
             <thead>
                 <tr>
-                    <th>Descricao</th>
+                    <th>Descrição</th>
+                    <th>Centro de custo</th>
                     <th>Valor</th>
                     <th>Tipo</th>
                     <th>Data</th>
@@ -67,18 +157,19 @@
                 {% for l in lancamentos %}
                 <tr>
                     <td>{{ l.descricao }}</td>
-                    <td>{{ l.valor|floatformat:2 }}</td>
+                    <td>{{ l.centro_custo.nome|default:"-" }}</td>
+                    <td>R$ {{ l.valor|floatformat:2 }}</td>
                     <td>{{ l.get_tipo_display }}</td>
                     <td>{{ l.data|date:"d/m/Y H:i" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <div class="alert alert-info">
-            Nenhum lancamento ou pagamento encontrado para o periodo.
-        </div>
-        {% endif %}
     </div>
 </div>
+{% else %}
+<div class="alert alert-info">
+    Nenhum lançamento ou pagamento encontrado para o período.
+</div>
+{% endif %}
 {% endblock %}

@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
 import random
@@ -24,16 +24,29 @@ from configuracoes.permissions import (
 )
 from configuracoes.models import ConfiguracaoSistema, Empresa
 
-from .forms import MovimentacaoEstoqueForm, PontoOperacionalForm, ProdutoForm, UbicacaoEstoqueForm
+from .forms import (
+    MovimentacaoEstoqueForm,
+    PontoOperacionalForm,
+    ProdutoEquivalenteForm,
+    ProdutoForm,
+    ProdutoKitItemForm,
+    ProdutoPrecoTabelaForm,
+    TabelaPrecoForm,
+    UbicacaoEstoqueForm,
+)
 from .models import (
     InventarioEstoque,
     ItemInventarioEstoque,
     MovimentacaoEstoque,
     PontoOperacional,
     Produto,
+    ProdutoEquivalente,
+    ProdutoKitItem,
+    ProdutoPrecoTabela,
     ReservaEstoque,
     SaldoEstoquePonto,
     ServicoReferencia,
+    TabelaPreco,
     UbicacaoEstoque,
     VendaRapidaEstoque,
 )
@@ -216,6 +229,110 @@ def editar_produto(request, produto_id):
 
 
 @role_required(STOCK_MANAGE_ROLES)
+def tabelas_preco(request):
+    if request.method == "POST":
+        acao = (request.POST.get("acao") or "").strip()
+        if acao == "excluir":
+            tabela_id = request.POST.get("tabela_id")
+            if tabela_id and tabela_id.isdigit():
+                tabela = TabelaPreco.objects.filter(id=int(tabela_id)).first()
+                if tabela:
+                    tabela.delete()
+                    messages.success(request, "Tabela de preco excluida.")
+            return redirect("estoque:tabelas_preco")
+        form = TabelaPrecoForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Tabela de preco salva.")
+            return redirect("estoque:tabelas_preco")
+    else:
+        form = TabelaPrecoForm()
+
+    return render(
+        request,
+        "estoque/tabelas_preco.html",
+        {
+            "form": form,
+            "tabelas": TabelaPreco.objects.order_by("nome"),
+            "menu_app": "estoque",
+            "menu_sub": "tabelas_preco",
+        },
+    )
+
+
+@role_required(STOCK_MANAGE_ROLES)
+def estrutura_produto(request, produto_id):
+    produto = get_object_or_404(Produto, id=produto_id)
+
+    if request.method == "POST":
+        acao = (request.POST.get("acao") or "").strip()
+        if acao == "adicionar_preco_tabela":
+            preco_form = ProdutoPrecoTabelaForm(request.POST)
+            if preco_form.is_valid():
+                item, _ = ProdutoPrecoTabela.objects.update_or_create(
+                    produto=produto,
+                    tabela=preco_form.cleaned_data["tabela"],
+                    defaults={"preco": preco_form.cleaned_data["preco"]},
+                )
+                messages.success(request, f"Preco da tabela '{item.tabela.nome}' atualizado.")
+                return redirect("estoque:estrutura_produto", produto_id=produto.id)
+        elif acao == "adicionar_equivalente":
+            equivalente_form = ProdutoEquivalenteForm(request.POST, produto=produto)
+            if equivalente_form.is_valid():
+                eq = equivalente_form.save(commit=False)
+                eq.produto = produto
+                eq.save()
+                messages.success(request, "Produto equivalente adicionado.")
+                return redirect("estoque:estrutura_produto", produto_id=produto.id)
+        elif acao == "adicionar_kit_item":
+            kit_form = ProdutoKitItemForm(request.POST, produto=produto)
+            if kit_form.is_valid():
+                kit_item = kit_form.save(commit=False)
+                kit_item.produto_kit = produto
+                kit_item.save()
+                messages.success(request, "Componente de kit adicionado.")
+                return redirect("estoque:estrutura_produto", produto_id=produto.id)
+        elif acao == "excluir_preco_tabela":
+            item_id = request.POST.get("item_id")
+            if item_id and item_id.isdigit():
+                ProdutoPrecoTabela.objects.filter(id=int(item_id), produto=produto).delete()
+                messages.success(request, "Preco de tabela removido.")
+                return redirect("estoque:estrutura_produto", produto_id=produto.id)
+        elif acao == "excluir_equivalente":
+            item_id = request.POST.get("item_id")
+            if item_id and item_id.isdigit():
+                ProdutoEquivalente.objects.filter(id=int(item_id), produto=produto).delete()
+                messages.success(request, "Equivalente removido.")
+                return redirect("estoque:estrutura_produto", produto_id=produto.id)
+        elif acao == "excluir_kit_item":
+            item_id = request.POST.get("item_id")
+            if item_id and item_id.isdigit():
+                ProdutoKitItem.objects.filter(id=int(item_id), produto_kit=produto).delete()
+                messages.success(request, "Componente do kit removido.")
+                return redirect("estoque:estrutura_produto", produto_id=produto.id)
+
+    preco_form = ProdutoPrecoTabelaForm()
+    equivalente_form = ProdutoEquivalenteForm(produto=produto)
+    kit_form = ProdutoKitItemForm(produto=produto)
+
+    return render(
+        request,
+        "estoque/estrutura_produto.html",
+        {
+            "produto": produto,
+            "preco_form": preco_form,
+            "equivalente_form": equivalente_form,
+            "kit_form": kit_form,
+            "precos_tabela": ProdutoPrecoTabela.objects.select_related("tabela").filter(produto=produto),
+            "equivalentes": ProdutoEquivalente.objects.select_related("equivalente").filter(produto=produto),
+            "kit_componentes": ProdutoKitItem.objects.select_related("componente").filter(produto_kit=produto),
+            "menu_app": "estoque",
+            "menu_sub": "lista_produtos",
+        },
+    )
+
+
+@role_required(STOCK_MANAGE_ROLES)
 def excluir_produto(request, produto_id):
     produto = get_object_or_404(Produto, id=produto_id)
     if request.method == "POST":
@@ -239,6 +356,7 @@ def buscar_produto(request):
             "nome",
             "descricao",
             "preco",
+            "tipo_item",
             "modelos_compativeis",
             "garantia_peca_dias",
         )[:50]
@@ -335,7 +453,7 @@ def api_sugerir_pecas_os(request):
         if historico > 0:
             bonus_historico = min(45, historico * 9)
             score += bonus_historico
-            motivos.append(f"Histórico ({historico}x)")
+            motivos.append(f"Historico ({historico}x)")
         if int(p.quantidade or 0) > 0:
             score += 6
             motivos.append("Com estoque")
@@ -1075,17 +1193,17 @@ def api_cesto_finalizar(request):
 @role_required(STOCK_MANAGE_ROLES)
 def api_cesto_item_remover(request, venda_id):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+        return JsonResponse({"ok": False, "erro": "Método inválido."}, status=405)
 
     cesto_codigo = (request.POST.get("cesto_codigo") or "").strip()
     if not cesto_codigo:
-        return JsonResponse({"ok": False, "erro": "Informe o codigo do cesto."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Informe o código do cesto."}, status=400)
     venda = get_object_or_404(VendaRapidaEstoque, id=venda_id)
 
     if venda.status != "pre_reserva":
-        return JsonResponse({"ok": False, "erro": "Somente itens em pre-reserva podem ser removidos."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Somente itens em pré-reserva podem ser removidos."}, status=400)
     if cesto_codigo and venda.cesto_codigo != cesto_codigo:
-        return JsonResponse({"ok": False, "erro": "Item nao pertence ao cesto informado."}, status=400)
+        return JsonResponse({"ok": False, "erro": "Item não pertence ao cesto informado."}, status=400)
 
     venda.status = "cancelada"
     venda.concluido_em = timezone.now()

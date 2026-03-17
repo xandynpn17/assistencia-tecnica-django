@@ -160,23 +160,23 @@
               <ul class="dropdown-menu dropdown-menu-right">
                 <li>
                   <a class="dropdown-item" href="{% url 'ordens:imprimir_ordem_servico_impressao' ordem.id %}" target="_blank">
-                    Ordem de Servico (Impressao)
+                    Ordem de Serviço (Impressao)
                   </a>
                 </li>
                 <li>
                   <a class="dropdown-item" href="{% url 'ordens:imprimir_ordem_servico' ordem.id %}" target="_blank">
-                    Ordem de Servico (Digital)
+                    Ordem de Serviço (Digital)
                   </a>
                 </li>
                 <li>
                   <a class="dropdown-item" href="{% url 'ordens:imprimir_relatorio_tecnico' ordem.id %}" target="_blank">
-                    Relatorio Tecnico
+                    Relatório Técnico
                   </a>
                 </li>
                 {% if orcamento %}
                 <li>
                   <a class="dropdown-item" href="{% url 'orcamentos:imprimir_orcamento' orcamento.id %}" target="_blank">
-                    Orcamento
+                    Orçamento
                   </a>
                 </li>
                 {% endif %}
@@ -190,7 +190,7 @@
             {% endif %}
             {% if not ordem.confirmado %}
             <button type="button" class="btn btn-outline-primary btn-sm ml-2" data-toggle="modal" data-target="#modalConfirmacaoImpresso">
-                <i class="fas fa-file-signature mr-1"></i> Registrar confirmacao presencial/impresso
+                <i class="fas fa-file-signature mr-1"></i> Registrar confirmação presencial/impresso
             </button>
             {% endif %}
             {% if ordem.fechada %}
@@ -252,7 +252,7 @@
 <div class="tab-content mt-4">
     {% if ordem.fechada %}
     <div class="alert alert-warning">
-        OS fechada: para adicionar linhas ou alterar orcamento/itens, reabra a ordem.
+        OS fechada: para adicionar linhas ou alterar orçamento/itens, reabra a ordem.
     </div>
     {% endif %}
     {% for alerta in alertas_ativos %}
@@ -344,21 +344,24 @@
                                 <p class="mb-1"><strong>Marca:</strong> {{ ordem.marca_equipamento }}</p>
                                 <p class="mb-1"><strong>Modelo:</strong> {{ ordem.modelo_equipamento }}</p>
                                 <p class="mb-1">
-                                    <strong>Nº Serie:</strong>
-                                    <span id="serie-view"
-                                          class="{% if pode_editar_serie %}text-primary{% endif %}"
-                                          {% if pode_editar_serie %}style="cursor:pointer;" title="Duplo clique para editar"{% endif %}>
+                                    <strong>Nº Série:</strong>
+                                    <span id="série-view"
+                                          class="{% if pode_editar_série %}text-primary{% endif %}"
+                                          {% if pode_editar_série %}style="cursor:pointer;" title="Duplo clique para editar"{% endif %}>
                                         {{ ordem.numero_serie_equipamento|default:"-" }}
                                     </span>
-                                    {% if pode_editar_serie %}
-                                    <span id="serie-editor" class="d-none ml-2">
-                                        <input type="text" id="serie-input" class="form-control form-control-sm d-inline-block" style="width:220px;" value="{{ ordem.numero_serie_equipamento|default:'' }}">
-                                        <button type="button" id="serie-save" class="btn btn-sm btn-success ml-1">Salvar</button>
-                                        <button type="button" id="serie-cancel" class="btn btn-sm btn-outline-secondary ml-1">Cancelar</button>
+                                    {% if pode_editar_série %}
+                                    <span id="série-editor" class="d-none ml-2">
+                                        <input type="text" id="série-input" class="form-control form-control-sm d-inline-block" style="width:220px;" value="{{ ordem.numero_serie_equipamento|default:'' }}">
+                                        <button type="button" id="série-save" class="btn btn-sm btn-success ml-1">Salvar</button>
+                                        <button type="button" id="série-cancel" class="btn btn-sm btn-outline-secondary ml-1">Cancelar</button>
                                     </span>
                                     {% endif %}
                                 </p>
-                                <div id="serie-feedback" class="small"></div>
+                                <div id="série-feedback" class="small"></div>
+                                <p class="mb-1 mt-2">
+                                    <strong>Preventiva:</strong> definida no agendamento da OS
+                                </p>
                                 <p class="mb-1 mt-2">
                                     <strong>Processo anterior:</strong>
                                     {% if processo_anterior_sn %}
@@ -367,9 +370,9 @@
                                 </p>
                             </div>
 
-                            <!-- Observacoes Internas -->
+                            <!-- Observações Internas -->
                             <div class="observacoes-wrap">
-                                <label class="font-weight-bold mb-1" for="observacoes">Observacoes (internas)</label>
+                                <label class="font-weight-bold mb-1" for="observacoes">Observações (internas)</label>
                                 <textarea id="observacoes"
                                           class="form-control form-control-sm"
                                           rows="5"
@@ -381,7 +384,7 @@
                             <div class="detalhes-footer-meta">
                                 <div class="mb-2">
                                     <div class="meta-stacked">
-                                        <label class="meta-label" for="tecnicoResponsavel">Tecnico responsavel:</label>
+                                        <label class="meta-label" for="tecnicoResponsavel">Técnico responsável:</label>
                                         <select id="tecnicoResponsavel"
                                                 class="form-control form-control-sm"
                                                 style="height: 31px;"
@@ -426,7 +429,7 @@
                             ↓
                        </span>
                         <!-- Titulo -->
-                        <span>  Historico de Trabalho</span>
+                        <span>  Histórico de Trabalho</span>
                     </div>
 
                     <!-- Botao adicionar linha a direita -->
@@ -517,17 +520,17 @@
     </script>
 
 
-<!-- Servicos & Pecas -->
+<!-- Serviços & Peças -->
 <div class="tab-pane fade {% if active_tab == 'servicos' %}show active{% endif %}" id="servicos">
     <div class="card-modern">
         <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span>Servicos & Pecas</span>
+            <span>Serviços & Peças</span>
             {% if not ordem.fechada %}
             <div class="d-flex">
                 <button type="button" class="btn btn-sm btn-light mr-2" data-toggle="modal" data-target="#modalAdicionarServicoPeca">
                     <i class="fas fa-barcode mr-1"></i>Adicionar EAN/Produto
                 </button>
-                <button type="button" class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarTalao">
+                <button type="button" class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarTalão">
                     <i class="fas fa-receipt mr-1"></i>Adicionar Taloes
                 </button>
             </div>
@@ -562,7 +565,7 @@
                     <strong>Pago?</strong> {% if os_pago %}Sim{% else %}Não{% endif %}
                     <br>
                     <small>
-                        <strong>Referencias:</strong>
+                        <strong>Referências:</strong>
                         {% if referencias_pagamento %}
                             {{ referencias_pagamento|join:", " }}
                         {% else %}
@@ -583,7 +586,7 @@
                 <p class="mb-1"><strong>Fornecedor:</strong> {{ auditoria_garantia.fornecedor.nome|default:"-" }}</p>
                 <p class="mb-1"><strong>Marca:</strong> {{ auditoria_garantia.marca.nome|default:"-" }}</p>
                 <p class="mb-1"><strong>Valor previsto fabricante:</strong> R$ {{ auditoria_garantia.valor_previsto_fabricante|floatformat:2 }}</p>
-                <p class="mb-1"><strong>Comissao prevista tecnica:</strong> R$ {{ auditoria_garantia.comissao_prevista_tecnica|floatformat:2 }}</p>
+                <p class="mb-1"><strong>Comissão prevista tecnica:</strong> R$ {{ auditoria_garantia.comissao_prevista_tecnica|floatformat:2 }}</p>
                 <p class="mb-0"><strong>Status faturamento:</strong> {{ auditoria_garantia.get_status_faturamento_display }}</p>
                 {% else %}
                 <p class="mb-0 text-muted">Feche a OS para gerar auditoria financeira da garantia.</p>
@@ -598,6 +601,9 @@
                     <div class="w-100">
                         <h6>{{ item.nome }} <span class="badge badge-light border">{{ item.get_tipo_display }}</span></h6>
                         <p class="mb-1">R$ {{ item.valor_unitario }} x {{ item.quantidade }} = R$ {{ item.total }}</p>
+                        {% if item.produto_estoque %}
+                        <small class="text-muted">Estoque vinculado: {{ item.produto_estoque.nome }}{% if item.estoque_consumido_em %} | Baixado{% endif %}</small><br>
+                        {% endif %}
                         <small class="text-muted">Responsavel: {{ item.tecnico_responsavel.username|default:"-" }}</small>
                         {% if item.garantia_dias %}
                         <br><small class="text-muted">Garantia da peca: {{ item.garantia_dias }} dias</small>
@@ -618,7 +624,7 @@
             </div>
             <p class="text-end fw-bold">Total OS: R$ {{ total_os }}</p>
             {% else %}
-            <p class="text-muted text-center py-3">Nenhum Servico ou Peca registrado.</p>
+            <p class="text-muted text-center py-3">Nenhum Serviço ou Peca registrado.</p>
             {% endif %}
 
             <hr>
@@ -628,7 +634,7 @@
                 {% for talao in taloes_os %}
                     <a href="#" class="badge badge-light border mr-2 mb-2 p-2"
                        data-toggle="modal"
-                       data-target="#modalTalao{{ talao.id }}">
+                       data-target="#modalTalão{{ talao.id }}">
                         {{ talao.numero }}
                     </a>
                 {% endfor %}
@@ -641,11 +647,11 @@
 </div>
 
 {% for talao in taloes_os %}
-<div class="modal fade" id="modalTalao{{ talao.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal fade" id="modalTalão{{ talao.id }}" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Talao {{ talao.numero }}</h5>
+                <h5 class="modal-title">Talão {{ talao.numero }}</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <div class="modal-body">
@@ -666,7 +672,7 @@
                 </div>
                 {% if talao.criado_por %}<p class="mt-2 mb-2"><strong>Usuario:</strong> {{ talao.criado_por.username }}</p>{% endif %}
                 {% if talao.descricao %}
-                <p class="mb-2"><strong>Descricao:</strong><br>{{ talao.descricao|linebreaksbr }}</p>
+                <p class="mb-2"><strong>Descrição:</strong><br>{{ talao.descricao|linebreaksbr }}</p>
                 {% endif %}
                 {% if talao.imagem %}
                 <a href="{{ talao.imagem.url }}" target="_blank">
@@ -683,13 +689,14 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-plus-circle mr-2"></i>Adicionar Servico/Peca</h5>
+                <h5 class="modal-title"><i class="fas fa-plus-circle mr-2"></i>Adicionar Serviço/Peca</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form method="post">
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="servico_peca">
                 <div class="modal-body">
+                    <input type="hidden" name="produto_estoque_id" id="sp_produto_estoque_id">
                     <div class="row mb-3">
                         <div class="col-md-10">
                             <input type="text" id="sp_produto_busca" class="form-control" placeholder="Buscar por EAN ou nome do produto">
@@ -704,7 +711,7 @@
                             <label>Tipo</label>
                             <select name="tipo" class="form-control" id="sp_tipo">
                                 <option value="peca">Peca</option>
-                                <option value="servico">Servico</option>
+                                <option value="servico">Serviço</option>
                             </select>
                         </div>
                         <div class="form-group col-md-8">
@@ -713,7 +720,7 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Descricao</label>
+                        <label>Descrição</label>
                         <textarea name="descricao" id="sp_descricao" rows="2" class="form-control"></textarea>
                     </div>
                     <div class="form-row">
@@ -751,11 +758,11 @@
     </div>
 </div>
 
-<div class="modal fade" id="modalAdicionarTalao" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal fade" id="modalAdicionarTalão" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-receipt mr-2"></i>Adicionar Talao</h5>
+                <h5 class="modal-title"><i class="fas fa-receipt mr-2"></i>Adicionar Talão</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form method="post" enctype="multipart/form-data">
@@ -763,7 +770,7 @@
                 <input type="hidden" name="form_type" value="adicionar_talao">
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>Numero do talao</label>
+                        <label>Número do talao</label>
                         <input type="text" name="numero_talao" class="form-control" required>
                     </div>
                     <div class="form-row">
@@ -772,12 +779,12 @@
                             <input type="number" step="0.01" min="0" name="valor_talao" class="form-control">
                         </div>
                         <div class="form-group col-md-6">
-                            <label>Produto/Servico</label>
-                            <input type="text" name="item_talao" class="form-control" placeholder="Ex: Mao de obra">
+                            <label>Produto/Serviço</label>
+                            <input type="text" name="item_talao" class="form-control" placeholder="Ex: Mão de obra">
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Descricao</label>
+                        <label>Descrição</label>
                         <textarea name="descricao_talao" rows="3" class="form-control"></textarea>
                     </div>
                     <div class="form-group">
@@ -832,7 +839,7 @@ document.addEventListener('DOMContentLoaded', function () {
             row.innerHTML = `
                 <div><strong>${produto.ean || '-'} - ${produto.nome}</strong> (R$ ${produto.preco})</div>
                 <small class="text-muted">SKU: ${produto.sku || '-'} | Estoque: ${produto.quantidade ?? '-'}</small>
-                ${historico > 0 || score > 0 ? `<br><small class="text-info">Ranking: ${score} | Historico: ${historico}x ${motivos ? `| ${motivos}` : ''}</small>` : ''}
+                ${historico > 0 || score > 0 ? `<br><small class="text-info">Ranking: ${score} | Histórico: ${historico}x ${motivos ? `| ${motivos}` : ''}</small>` : ''}
             `;
             row.addEventListener('click', function () {
                 aplicarProdutoNoFormulario(produto);
@@ -964,13 +971,13 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
 </div>
 
-<!-- Orcamento -->
+<!-- Orçamento -->
 <div class="tab-pane fade {% if active_tab == 'orcamentos' %}show active{% endif %}" id="orcamentos">
     <div class="card-modern flex-fill mt-3">
 
         <!-- Cabecalho -->
         <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span>Orcamentos</span>
+            <span>Orçamentos</span>
             <div class="d-flex">
                 {% if not ordem.fechada %}
                 <button type="button" class="btn btn-primary btn-sm mr-2" data-toggle="modal"
@@ -983,7 +990,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
         </div>
 
-        <!-- Formulario unico para Acoes -->
+        <!-- Formulario unico para Ações -->
         <form id="formOrcamentoAcoes" method="post">
             {% csrf_token %}
             <input type="hidden" name="orcamento_id" value="{{ orcamento.id }}">
@@ -1007,33 +1014,33 @@ document.addEventListener('DOMContentLoaded', function () {
                 </button>
                 <button type="submit" formaction="{% url 'orcamentos:excluir_orcamento' orcamento.id %}"
                         class="btn btn-outline-danger btn-sm ml-2"
-                        onclick="return window.AppMessages.confirmSync('Excluir este orcamento e todos os itens?');">
-                    <i class="fas fa-trash"></i> Excluir Orcamento
+                        onclick="return window.AppMessages.confirmSync('Excluir este orçamento e todos os itens?');">
+                    <i class="fas fa-trash"></i> Excluir Orçamento
                 </button>
                 {% else %}
-                <span class="text-muted"><i class="fas fa-lock mr-1"></i> Acoes bloqueadas com OS fechada</span>
+                <span class="text-muted"><i class="fas fa-lock mr-1"></i> Ações bloqueadas com OS fechada</span>
                 {% endif %}
             </div>
 
             <!-- Corpo -->
             <div class="card-modern-body">
-                <p><strong>Descricao:</strong> {{ orcamento.descricao|default:"-" }}</p>
+                <p><strong>Descrição:</strong> {{ orcamento.descricao|default:"-" }}</p>
                 <p><strong>Total:</strong> R$ {{ orcamento.valor_total|default:0|floatformat:2 }}</p>
 
                 <table class="table table-sm table-bordered">
                     <thead>
                         <tr>
                             <th><input type="checkbox" id="checkAll"></th>
-                            <th>EAN / Servico</th>
+                            <th>EAN / Serviço</th>
                             <th>Nome</th>
-                            <th>Descricao</th>
+                            <th>Descrição</th>
                             <th>Valor Unit.</th>
                             <th>Qtd</th>
                             <th>Total</th>
                             <th>Tipo</th>
                             <th>Origem</th>
                             <th>Responsavel</th>
-                            <th>Acoes</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1046,7 +1053,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             <td>{{ item.valor_unitario|floatformat:2 }}</td>
                             <td>{{ item.quantidade }}</td>
                             <td>{{ item.total|floatformat:2 }}</td>
-                            <td>{{ item.get_tipo_item_display|default:"Servico" }}</td>
+                            <td>{{ item.get_tipo_item_display|default:"Serviço" }}</td>
                             <td>{{ item.origem }}</td>
                             <td>{{ item.tecnico_responsavel.username|default:"-" }}</td>
                             <td class="text-center">
@@ -1103,7 +1110,7 @@ function mostrarMensagemPagina(mensagem, tipo = 'warning') {
 function validarSelecao(acao) {
     const selecionados = document.querySelectorAll('input[name="itens_selecionados"]:checked');
     if (selecionados.length === 0) {
-        mostrarMensagemPagina(`Selecione ao menos um item antes de ${acao === 'migrar' ? 'migrar' : acao + ' o Orcamento'}.`, 'warning');
+        mostrarMensagemPagina(`Selecione ao menos um item antes de ${acao === 'migrar' ? 'migrar' : acao + ' o Orçamento'}.`, 'warning');
         return false;
     }
     return window.AppMessages.confirmSync(`Tem certeza que deseja ${acao} os itens selecionados?`);
@@ -1115,14 +1122,14 @@ document.getElementById('checkAll').addEventListener('change', function() {
 </script>
 
 
-<!-- Modal Adicionar Item Orcamento -->
+<!-- Modal Adicionar Item Orçamento -->
 <div class="modal fade" id="modalAdicionarItem2" tabindex="-1" role="dialog"
      aria-labelledby="modalAdicionarItem2Label" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalAdicionarItem2Label">
-                    <i class="fas fa-plus-circle mr-2"></i>Adicionar Item ao Orcamento
+                    <i class="fas fa-plus-circle mr-2"></i>Adicionar Item ao Orçamento
                 </h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
                     <span aria-hidden="true">&times;</span>
@@ -1154,7 +1161,7 @@ document.getElementById('checkAll').addEventListener('change', function() {
                     <!-- Campos do Formulario ja existentes -->
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="id_ean2">EAN / Codigo</label>
+                            <label for="id_ean2">EAN / Código</label>
                             <input type="text" name="ean" id="id_ean2" class="form-control"
                                    value="{{ item_form.ean.value|default_if_none:'' }}">
                         </div>
@@ -1166,7 +1173,7 @@ document.getElementById('checkAll').addEventListener('change', function() {
                     </div>
 
                     <div class="mb-3">
-                        <label for="id_descricao2">Descricao</label>
+                        <label for="id_descricao2">Descrição</label>
                         <textarea name="descricao" id="id_descricao2" rows="3" class="form-control">{{ item_form.descricao.value|default_if_none:'' }}</textarea>
                     </div>
 
@@ -1199,7 +1206,7 @@ document.getElementById('checkAll').addEventListener('change', function() {
                             <input type="hidden" name="origem" id="id_origem2" value="manual">
                         </div>
                         <div class="col-md-8 mb-3">
-                            <label for="id_tecnico_responsavel2">Responsavel da Comissao</label>
+                            <label for="id_tecnico_responsavel2">Responsavel da Comissão</label>
                             <select name="tecnico_responsavel" id="id_tecnico_responsavel2" class="form-control">
                                 <option value="">-- Selecione --</option>
                                 {% for user in tecnicos %}
@@ -1344,6 +1351,61 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btnBuscarServicoPeca = document.getElementById('sp_btn_buscar');
+    const inputBuscaServicoPeca = document.getElementById('sp_produto_busca');
+    const resultadoServicoPeca = document.getElementById('sp_resultado_busca');
+    const produtoIdInput = document.getElementById('sp_produto_estoque_id');
+    const tipoInput = document.getElementById('sp_tipo');
+    const nomeInput = document.getElementById('sp_nome');
+    const descricaoInput = document.getElementById('sp_descricao');
+    const valorInput = document.getElementById('sp_valor');
+    const garantiaInput = document.getElementById('sp_garantia');
+
+    if (!btnBuscarServicoPeca || !inputBuscaServicoPeca || !resultadoServicoPeca) return;
+
+    function limparVinculoEstoqueServicoPeca() {
+        if (produtoIdInput) produtoIdInput.value = '';
+    }
+
+    if (nomeInput) {
+        nomeInput.addEventListener('input', limparVinculoEstoqueServicoPeca);
+    }
+
+    btnBuscarServicoPeca.addEventListener('click', function() {
+        const query = inputBuscaServicoPeca.value.trim();
+        if (!query) return;
+
+        fetch(`/estoque/buscar_produto/?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                resultadoServicoPeca.innerHTML = '';
+                if (data.length === 0) {
+                    resultadoServicoPeca.innerHTML = '<div class="text-muted">Nenhum item encontrado</div>';
+                    return;
+                }
+
+                data.forEach(produto => {
+                    const div = document.createElement('div');
+                    div.classList.add('border', 'p-2', 'mb-1');
+                    div.style.cursor = 'pointer';
+                    div.textContent = `${produto.ean || '-'} - ${produto.nome} (R$ ${produto.preco})`;
+                    div.addEventListener('click', () => {
+                        if (produtoIdInput) produtoIdInput.value = produto.id;
+                        if (tipoInput) tipoInput.value = produto.tipo_item === 'servico' ? 'servico' : 'peca';
+                        if (nomeInput) nomeInput.value = produto.nome || '';
+                        if (descricaoInput) descricaoInput.value = produto.descricao || '';
+                        if (valorInput) valorInput.value = produto.preco || '';
+                        if (garantiaInput) garantiaInput.value = produto.garantia_peca_dias || '';
+                        resultadoServicoPeca.innerHTML = '';
+                    });
+                    resultadoServicoPeca.appendChild(div);
+                });
+            });
+    });
+});
+</script>
 <div class="tab-pane fade {% if active_tab == 'arquivos' %}show active{% endif %}" id="arquivos">
     <div class="card-modern">
         <div class="card-modern-header d-flex justify-content-between align-items-center">
@@ -1360,9 +1422,9 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="mb-2">
                 <span class="badge badge-info">Fotos: {{ fotos_count }}</span>
                 {% if pode_incluir_fotos_relatorio %}
-                <span class="badge badge-success">Ja e possivel incluir fotos no relatorio tecnico</span>
+                <span class="badge badge-success">Já é possível incluir fotos no relatório técnico</span>
                 {% else %}
-                <span class="badge badge-secondary">Anexe mais fotos (minimo 4) para habilitar inclusao no relatorio</span>
+                <span class="badge badge-secondary">Anexe mais fotos (mínimo 4) para habilitar inclusão no relatório</span>
                 {% endif %}
             </div>
             <div class="table-responsive">
@@ -1370,9 +1432,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     <thead>
                         <tr>
                             <th>Arquivo</th>
-                            <th>Descricao</th>
+                            <th>Descrição</th>
                             <th>Tipo</th>
-                            <th>Incluir no Relatorio</th>
+                            <th>Incluir no Relatório</th>
                             <th>Enviado por</th>
                             <th>Data</th>
                         </tr>
@@ -1419,7 +1481,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 {% endfor %}
 
                 <hr>
-                <h6>Historico de alertas encerrados</h6>
+                <h6>Histórico de alertas encerrados</h6>
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered">
                         <thead>
@@ -1448,7 +1510,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="tab-pane fade {% if active_tab == 'relatorio' %}show active{% endif %}" id="relatorio">
         <div class="card-modern">
             <div class="card-modern-header">
-                <i class="fas fa-file-alt mr-2"></i>Relatorio Tecnico
+                <i class="fas fa-file-alt mr-2"></i>Relatório Técnico
             </div>
             <div class="card-modern-body">
                 <form method="post">
@@ -1456,7 +1518,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="hidden" name="form_type" value="relatorio">
 
                     <div class="form-group">
-                        <label for="relatorio_tecnico">Descricao</label>
+                        <label for="relatorio_tecnico">Descrição</label>
                         <textarea name="relatorio_tecnico" id="relatorio_tecnico" rows="5" class="form-control">{{ relatorio_tecnico_display|default_if_none:"" }}</textarea>
                     </div>
 
@@ -1471,7 +1533,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </select>
                     </div>
 
-                    <button type="submit" class="btn btn-success"><i class="fas fa-save mr-2"></i> Salvar Relatorio
+                    <button type="submit" class="btn btn-success"><i class="fas fa-save mr-2"></i> Salvar Relatório
                     </button>
                 </form>
             </div>
@@ -1491,7 +1553,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <tr>
                                 <th>Data</th>
                                 <th>Evento</th>
-                                <th>Descricao</th>
+                                <th>Descrição</th>
                                 <th>Usuario</th>
                             </tr>
                         </thead>
@@ -1561,7 +1623,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <small class="form-text text-muted">Suporta imagens e documentos. Pode enviar mais de um arquivo.</small>
                     </div>
                     <div class="form-group">
-                        <label for="descricao_arquivo">Descricao (opcional)</label>
+                        <label for="descricao_arquivo">Descrição (opcional)</label>
                         <input type="text" id="descricao_arquivo" name="descricao" class="form-control" maxlength="160" placeholder="Ex: fotos do defeito / nota fiscal">
                     </div>
                     <div class="form-group mb-0">
@@ -1572,7 +1634,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         {% else %}
                         <div class="text-muted">
-                            Opcao de incluir no relatorio habilita com 4 ou mais fotos na OS.
+                            Opção de incluir no relatório habilita com 4 ou mais fotos na OS.
                         </div>
                         {% endif %}
                     </div>
@@ -1589,7 +1651,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalConfirmacaoImpressoLabel">Registrar confirmacao de OS</h5>
+                <h5 class="modal-title" id="modalConfirmacaoImpressoLabel">Registrar confirmação de OS</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -1599,7 +1661,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <input type="hidden" name="form_type" value="confirmacao_impresso">
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="tipo_confirmacao">Tipo de confirmacao</label>
+                        <label for="tipo_confirmacao">Tipo de confirmação</label>
                         <select class="form-control" id="tipo_confirmacao" name="tipo_confirmacao">
                             <option value="impresso">Impresso</option>
                             <option value="presencial_assinatura">Presencial com assinatura</option>
@@ -1640,7 +1702,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <input type="text" name="tipo_peca" id="pedido_tipo_peca" class="form-control" placeholder="Ex: Placa principal, display, motor">
                     </div>
                     <div class="form-group">
-                        <label for="pedido_descricao">Descricao</label>
+                        <label for="pedido_descricao">Descrição</label>
                         <textarea name="descricao" id="pedido_descricao" class="form-control" rows="3" placeholder="Detalhes do item a encomendar"></textarea>
                     </div>
                     <div class="form-group">
@@ -1734,6 +1796,25 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="fab-menu">
     <ul class="fab-options">
         <li>
+            <a href="{% url 'ordens:agendar_ordem' ordem.id %}" class="btn btn-light border d-block">
+                <i class="far fa-calendar-plus mr-2"></i>AGENDAR REPARO (OS)
+            </a>
+        </li>
+        <li>
+            <div class="dropdown">
+                <button class="btn btn-light border dropdown-toggle w-100 text-left" type="button" data-toggle="dropdown" aria-expanded="false">
+                    <i class="far fa-calendar-check mr-2"></i>AGENDAR PREVENTIVA
+                </button>
+                <div class="dropdown-menu dropdown-menu-right">
+                    <a class="dropdown-item" href="{% url 'ordens:agendar_ordem' ordem.id %}?tipo=preventiva&meses=3">Em 3 meses</a>
+                    <a class="dropdown-item" href="{% url 'ordens:agendar_ordem' ordem.id %}?tipo=preventiva&meses=6">Em 6 meses</a>
+                    <a class="dropdown-item" href="{% url 'ordens:agendar_ordem' ordem.id %}?tipo=preventiva&meses=12">Em 12 meses</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="{% url 'ordens:agendar_ordem' ordem.id %}?tipo=preventiva">Definir no evento</a>
+                </div>
+            </div>
+        </li>
+        <li>
             <button type="button" class="btn btn-light border" data-toggle="modal" data-target="#modalAdicionarPedido">
                 <i class="fas fa-shopping-cart mr-2"></i>PEDIDO DE COMPRA
             </button>
@@ -1754,7 +1835,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </button>
         </li>
     </ul>
-    <button type="button" class="fab-main" title="Acoes rapidas">
+    <button type="button" class="fab-main" title="Ações rápidas">
         <i class="fas fa-ellipsis-h"></i>
     </button>
 </div>
@@ -1943,12 +2024,12 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const view = document.getElementById("serie-view");
-    const editor = document.getElementById("serie-editor");
-    const input = document.getElementById("serie-input");
-    const btnSave = document.getElementById("serie-save");
-    const btnCancel = document.getElementById("serie-cancel");
-    const feedback = document.getElementById("serie-feedback");
+    const view = document.getElementById("série-view");
+    const editor = document.getElementById("série-editor");
+    const input = document.getElementById("série-input");
+    const btnSave = document.getElementById("série-save");
+    const btnCancel = document.getElementById("série-cancel");
+    const feedback = document.getElementById("série-feedback");
 
     if (!view || !editor || !input || !btnSave || !btnCancel) {
         return;
@@ -2001,15 +2082,15 @@ document.addEventListener("DOMContentLoaded", function () {
             .then((res) => res.json())
             .then((data) => {
                 if (!data.success) {
-                    setFeedback(data.message || "Erro ao atualizar numero de serie.", false);
+                    setFeedback(data.message || "Erro ao atualizar número de série.", false);
                     return;
                 }
                 view.textContent = data.numero_serie && data.numero_serie.length ? data.numero_serie : "-";
-                setFeedback(data.message || "Numero de serie atualizado.", true);
+                setFeedback(data.message || "Número de série atualizado.", true);
                 fecharEditor();
             })
             .catch(() => {
-                setFeedback("Erro ao atualizar numero de serie.", false);
+                setFeedback("Erro ao atualizar número de série.", false);
             });
     });
 });

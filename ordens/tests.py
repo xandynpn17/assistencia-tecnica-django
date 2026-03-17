@@ -1,5 +1,6 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
+from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -51,13 +52,13 @@ class VerificarClienteOSViewTests(TestCase):
         response = self.client.get(self.url, {"cpf_telefone": "abc###"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Digite apenas numeros para busca.")
+        self.assertContains(response, "Digite apenas números para busca.")
 
     def test_busca_abaixo_do_minimo_mostra_erro(self):
         response = self.client.get(self.url, {"cpf_telefone": "1234"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Digite pelo menos 5 numeros para buscar.")
+        self.assertContains(response, "Digite pelo menos 5 números para buscar.")
 
     def test_busca_por_cpf_encontra_cliente(self):
         cliente = Cliente.objects.create(
@@ -644,7 +645,7 @@ class IntegracaoFluxoOSCaixaTests(TestCase):
         self.assertTrue(
             LinhaTrabalho.objects.filter(
                 ordem=ordem,
-                descricao__icontains="Numero de serie alterado",
+                descricao__icontains="Número de série alterado",
             ).exists()
         )
 
@@ -823,7 +824,7 @@ class PortalClienteTests(TestCase):
             {"codigo": self.ordem.codigo_portal, "cpf": "00000000000"},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "CPF nao confere")
+        self.assertContains(response, "CPF não confere")
 
     def test_portal_cliente_sem_cpf_bloqueia(self):
         response = self.client.get(
@@ -869,7 +870,7 @@ class PortalClienteTests(TestCase):
             LinhaTrabalho.objects.filter(
                 ordem=self.ordem,
                 status="pendente_cliente",
-                descricao__icontains="Orcamento enviado por WhatsApp",
+                descricao__icontains="Orçamento enviado por WhatsApp",
             ).exists()
         )
 
@@ -1403,6 +1404,104 @@ class OSConfirmadaBloqueioEdicaoTests(TestCase):
         self.assertFalse(ServicoPeca.objects.filter(id=item.id).exists())
 
 
+class IntegracaoServicoPecaEstoqueTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="estoque_os",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Estoque OS",
+            documento="52998224725",
+            telefone="11999990000",
+            estado="SP",
+        )
+        self.ponto = PontoOperacional.objects.create(codigo="PO1", nome="Matriz")
+        self.produto = Produto.objects.create(
+            nome="Bateria A1",
+            tipo_item="peca",
+            quantidade=5,
+            estoque_minimo=1,
+            preco_final=Decimal("80.00"),
+            preco=Decimal("80.00"),
+            custo_unitario=Decimal("30.00"),
+            ponto_operacional=self.ponto,
+            permite_os=True,
+        )
+        SaldoEstoquePonto.objects.update_or_create(
+            produto=self.produto,
+            ponto_operacional=self.ponto,
+            defaults={"quantidade": 5},
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca E",
+            modelo_equipamento="Modelo E",
+            defeito="Nao segura carga",
+            tipo_reparo="Fora de Garantia",
+            status="em_andamento",
+            relatorio_tecnico="Troca de bateria",
+            tipo_reparacao="substituicao",
+        )
+
+    def test_adiciona_item_os_vinculado_ao_estoque(self):
+        response = self.client.post(
+            reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+            {
+                "form_type": "servico_peca",
+                "produto_estoque_id": str(self.produto.id),
+                "tipo": "peca",
+                "nome": self.produto.nome,
+                "quantidade": "1",
+                "valor_unitario": "80.00",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        item = ServicoPeca.objects.get(ordem=self.ordem)
+        self.assertEqual(item.produto_estoque_id, self.produto.id)
+
+    def test_fechamento_consume_estoque_do_item_vinculado(self):
+        item = ServicoPeca.objects.create(
+            ordem=self.ordem,
+            produto_estoque=self.produto,
+            tipo="peca",
+            nome="Bateria A1",
+            quantidade=2,
+            valor_unitario=Decimal("80.00"),
+        )
+
+        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 302)
+
+        item.refresh_from_db()
+        saldo = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto)
+        self.assertIsNotNone(item.estoque_consumido_em)
+        self.assertEqual(saldo.quantidade, 3)
+
+    def test_reabertura_devolve_estoque_do_item_vinculado(self):
+        item = ServicoPeca.objects.create(
+            ordem=self.ordem,
+            produto_estoque=self.produto,
+            tipo="peca",
+            nome="Bateria A1",
+            quantidade=1,
+            valor_unitario=Decimal("80.00"),
+        )
+
+        self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 302)
+
+        item.refresh_from_db()
+        saldo = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto)
+        self.assertIsNone(item.estoque_consumido_em)
+        self.assertEqual(saldo.quantidade, 5)
+
+
 class ConfirmacaoManualResumoTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
@@ -1484,5 +1583,76 @@ class ConfirmacaoPublicaTemplateTests(TestCase):
         self.assertContains(response, "Termo publico de teste da OS.")
         self.assertContains(response, "Condicao geral publica para o cliente.")
         self.assertNotContains(response, "main-sidebar")
+
+
+class AgendamentoOrdemServicoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.atendente = user_model.objects.create_user(
+            username="atendente_agenda_os",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.tecnico = user_model.objects.create_user(
+            username="tecnico_agenda_os",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+        )
+        self.client.force_login(self.atendente)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Agenda OS",
+            documento="39053344705",
+            telefone="11988887777",
+            email="cliente.agenda.os@teste.com",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Agenda",
+            modelo_equipamento="Modelo Agenda",
+            defeito="Nao carrega",
+            tipo_reparo="Fora de Garantia",
+            tecnico_responsavel=self.tecnico,
+            manutencao_preventiva_meses=6,
+            status="em_andamento",
+        )
+
+    def test_agendar_ordem_reparo_redireciona_com_os_vinculada(self):
+        response = self.client.get(reverse("ordens:agendar_ordem", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 302)
+
+        destino = urlparse(response.url)
+        self.assertEqual(destino.path, reverse("agenda:criar_agendamento"))
+        qs = parse_qs(destino.query)
+        self.assertEqual(qs.get("ordem"), [str(self.ordem.id)])
+        self.assertEqual(qs.get("cliente"), [str(self.cliente.id)])
+        self.assertEqual(qs.get("tecnico"), [str(self.tecnico.id)])
+        self.assertTrue((qs.get("titulo") or [""])[0].startswith("Reparo OS"))
+
+    def test_agendar_ordem_preventiva_sem_meses_usa_padrao_e_redireciona_agenda(self):
+        response = self.client.get(reverse("ordens:agendar_ordem", args=[self.ordem.id]) + "?tipo=preventiva")
+        self.assertEqual(response.status_code, 302)
+        destino = urlparse(response.url)
+        self.assertEqual(destino.path, reverse("agenda:criar_agendamento"))
+        qs = parse_qs(destino.query)
+        self.assertEqual((qs.get("modo_preventiva") or [""])[0], "1")
+        self.assertEqual((qs.get("preventiva_em_meses") or [""])[0], "6")
+
+    def test_agendar_ordem_preventiva_define_titulo_e_hora_padrao(self):
+        self.ordem.data_conclusao = timezone.now()
+        self.ordem.save(update_fields=["data_conclusao"])
+
+        response = self.client.get(reverse("ordens:agendar_ordem", args=[self.ordem.id]) + "?tipo=preventiva")
+        self.assertEqual(response.status_code, 302)
+        destino = urlparse(response.url)
+        qs = parse_qs(destino.query)
+
+        titulo = (qs.get("titulo") or [""])[0]
+        self.assertIn("Manutenção preventiva", titulo)
+        inicio = (qs.get("inicio") or [""])[0]
+        self.assertTrue(bool(inicio))
+        dt_inicio = datetime.fromisoformat(inicio)
+        self.assertEqual(dt_inicio.hour, 9)
 
 

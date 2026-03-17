@@ -42,8 +42,8 @@ class Orcamento(models.Model):
 
 class ItemOrcamento(models.Model):
     TIPO_ITEM_CHOICES = [
-        ("servico", "Servico"),
-        ("peca", "Peca"),
+        ("servico", "Serviço"),
+        ("peca", "Peça"),
     ]
     ORIGEM_CHOICES = [
         ('estoque', 'Estoque'),

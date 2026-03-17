@@ -203,7 +203,7 @@ class ClienteForm(forms.ModelForm):
                 "Este documento já está cadastrado no sistema."
             )
 
-        # Validação de dígitos verificadores
+        # Validacao de dígitos verificadores
         if len(doc_limpo) == 11:
             if not Cliente.validar_cpf(doc_limpo):
                 raise forms.ValidationError("CPF inválido.")
@@ -240,7 +240,7 @@ class ClienteForm(forms.ModelForm):
         ddd = cleaned_data.get('ddd', '')
         telefone_numero = cleaned_data.get('telefone_numero', '')
 
-        logger.debug("Telefone recebido no form cliente. ddd=%s numero=%s", ddd, telefone_numero)
+        logger.debug("Telefone recebido no form cliente. ddd=%s número=%s", ddd, telefone_numero)
 
         if telefone_numero:
             # Remove formatação do número
@@ -262,7 +262,7 @@ class ClienteForm(forms.ModelForm):
                     self.add_error('telefone_numero',
                                    f'Telefone inválido. Com DDD {ddd} deve ter 10 ou 11 dígitos.')
             elif numero_limpo and not ddd:
-                # Número válido mas sem DDD
+                # Numero válido mas sem DDD
                 self.add_error('ddd', 'Selecione um DDD para o telefone.')
         elif ddd and not telefone_numero:
             # Apenas DDD selecionado, sem número - manter telefone vazio

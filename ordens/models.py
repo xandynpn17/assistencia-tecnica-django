@@ -105,6 +105,11 @@ class OrdemServico(models.Model):
     peritagem = models.TextField(blank=True, null=False)
     data_compra = models.DateField(blank=True, null=True)
     numero_nota_fiscal = models.CharField(max_length=60, blank=True)
+    manutencao_preventiva_meses = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        help_text="Intervalo sugerido para manutenção preventiva futura.",
+    )
     notas_internas = models.TextField(blank=True)
 
     # ===========================
@@ -122,7 +127,7 @@ class OrdemServico(models.Model):
         blank=True,
         related_name="ordens_responsaveis",
         limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
-        verbose_name="Tecnico responsavel"
+        verbose_name="Técnico responsável"
     )
 
     def __str__(self):
@@ -186,7 +191,7 @@ class OrdemServico(models.Model):
     fechada = models.BooleanField(default=False)
     token_confirmacao = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     TIPO_CONFIRMACAO_CHOICES = [
-        ("link", "Confirmacao por link"),
+        ("link", "Confirmação por link"),
         ("presencial_assinatura", "Presencial com assinatura"),
         ("impresso", "Impresso"),
     ]
@@ -216,7 +221,7 @@ class OrdemServico(models.Model):
         """
 
         if fechar:
-            # 🔒 Validação obrigatória
+            # 🔒 Validacao obrigatória
             if not self.relatorio_tecnico or not self.tipo_reparacao:
                 raise ValueError("Não é possível fechar a OS sem Relatório Técnico e Tipo de Reparação.")
 
@@ -251,17 +256,17 @@ class OrdemServico(models.Model):
 
     def pode_transicionar_para(self, novo_status):
         # Fluxo livre entre status validos da OS.
-        # "criada" existe apenas na LinhaTrabalho, nao como status de OS.
+        # "criada" existe apenas na LinhaTrabalho, não como status de OS.
         return novo_status in self.status_validos()
 
     def transicionar_status(self, novo_status, usuario=None, motivo=""):
         novo_status = self.normalizar_status_os(novo_status)
         if novo_status not in self.status_validos():
-            raise ValueError("Status de destino invalido.")
+            raise ValueError("Status de destino inválido.")
 
         if not self.pode_transicionar_para(novo_status):
             raise ValueError(
-                f"Transicao de status invalida: {self.status} -> {novo_status}."
+                f"Transição de status inválida: {self.status} -> {novo_status}."
             )
 
         status_anterior = self.status
@@ -271,7 +276,7 @@ class OrdemServico(models.Model):
         if novo_status == "concluida":
             if not self.relatorio_tecnico or not self.tipo_reparacao:
                 raise ValueError(
-                    "Nao e possivel concluir sem relatorio tecnico e tipo de reparacao."
+                    "Não é possível concluir sem relatório técnico e tipo de reparação."
                 )
             self.fechada = True
             self.data_conclusao = timezone.now()
@@ -296,7 +301,7 @@ class OrdemServico(models.Model):
     def aplicar_status_sem_historico(self, novo_status):
         novo_status = self.normalizar_status_os(novo_status)
         if novo_status not in self.status_validos():
-            raise ValueError("Status de destino invalido.")
+            raise ValueError("Status de destino inválido.")
 
         if self.status == novo_status:
             return
@@ -304,7 +309,7 @@ class OrdemServico(models.Model):
         if novo_status == "concluida":
             if not self.relatorio_tecnico or not self.tipo_reparacao:
                 raise ValueError(
-                    "Nao e possivel concluir sem relatorio tecnico e tipo de reparacao."
+                    "Não é possível concluir sem relatório técnico e tipo de reparação."
                 )
             self.fechada = True
             self.data_conclusao = timezone.now()
@@ -340,7 +345,12 @@ class OrdemServico(models.Model):
         ComissaoTecnico = apps.get_model("caixa", "ComissaoTecnico")
         ComissaoItemOrcamento = apps.get_model("caixa", "ComissaoItemOrcamento")
         total_novo = sum(
-            (c.valor_comissao for c in Comissao.objects.filter(ordem_servico=self).exclude(status="CANCELADA")),
+            (
+                c.valor_comissao
+                for c in Comissao.objects.filter(ordem_servico=self)
+                .exclude(status="CANCELADA")
+                .exclude(tipo="BONUS_PRODUTO")
+            ),
             0,
         )
         if total_novo:
@@ -367,7 +377,7 @@ class OrdemServico(models.Model):
 class LinhaTrabalho(models.Model):
     TIPO_EVENTO_CHOICES = [
         ("manual", "Manual"),
-        ("automatico", "Automatico"),
+        ("automatico", "Automático"),
         ("sistema", "Sistema"),
     ]
 
@@ -411,6 +421,13 @@ class LinhaTrabalho(models.Model):
 
 class ServicoPeca(models.Model):
     ordem = models.ForeignKey("OrdemServico", on_delete=models.CASCADE, related_name="servicos_pecas")
+    produto_estoque = models.ForeignKey(
+        "estoque.Produto",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_os",
+    )
     item_orcamento = models.ForeignKey(
         "orcamentos.ItemOrcamento",
         on_delete=models.SET_NULL,
@@ -433,6 +450,7 @@ class ServicoPeca(models.Model):
         limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
     )
     numeros_taloes = models.CharField(max_length=255, blank=True, default="")
+    estoque_consumido_em = models.DateTimeField(null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     def total(self):
@@ -455,7 +473,7 @@ class ServicoPeca(models.Model):
 
 class NotificacaoCliente(models.Model):
     TIPO_CHOICES = [
-        ("orcamento", "Orcamento"),
+        ("orcamento", "Orçamento"),
         ("pronto", "Equipamento pronto"),
         ("manual", "Manual"),
     ]
@@ -535,14 +553,14 @@ class OrdemTalao(models.Model):
 class PedidoCompra(models.Model):
     STATUS_CHOICES = [
         ("contactar", "Contactar"),
-        ("indisponivel", "Indisponivel"),
-        ("orcamentado", "Orcamentado"),
+        ("indisponivel", "Indisponível"),
+        ("orcamentado", "Orçamentado"),
         ("pedido_incompleto", "Pedido incompleto"),
         ("pendente_marca", "Pendente marca"),
         ("pendente_cliente", "Pendente cliente"),
         ("pre_pagamento", "Pre-pagamento"),
         ("recepcionado", "Recepcionado"),
-        ("transito", "Transito"),
+        ("transito", "Trânsito"),
         ("fechado", "Fechado"),
     ]
 
@@ -677,9 +695,9 @@ class LogConfirmacaoOS(models.Model):
 
 class LogOS(models.Model):
     TIPO_EVENTO_CHOICES = [
-        ("alteracao_status", "Alteracao de status"),
-        ("confirmacao", "Confirmacao"),
-        ("edicao_critica", "Edicao critica"),
+        ("alteracao_status", "Alteração de status"),
+        ("confirmacao", "Confirmação"),
+        ("edicao_critica", "Edição crítica"),
         ("cancelamento", "Cancelamento"),
     ]
 

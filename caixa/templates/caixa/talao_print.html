@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="utf-8">
-    <title>Talao {{ pagamento.numero_talao }}</title>
+    <title>Talão {{ pagamento.numero_talao }}</title>
     <style>
         :root {
             --receipt-width: 80mm;
@@ -171,7 +171,7 @@
         <div class="rule"></div>
 
         <div class="row">
-            <div class="label">Numero do Talao</div>
+            <div class="label">Número do Talão</div>
             <div class="value">{{ pagamento.numero_talao }}</div>
         </div>
         <div class="row">
@@ -194,7 +194,7 @@
             <div class="value total">R$ {{ pagamento.valor|floatformat:2 }}</div>
         </div>
         <div class="row">
-            <div class="label">Referencia</div>
+            <div class="label">Referência</div>
             <div class="value">{{ pagamento.referencia|default:"-" }}</div>
         </div>
 

@@ -1,4 +1,4 @@
-﻿from django.urls import path
+from django.urls import path
 from . import views
 
 app_name = 'estoque'
@@ -8,7 +8,9 @@ urlpatterns = [
     path('novo/', views.criar_produto, name='criar_produto'),
     path('buscar/', views.buscar_produtos, name='buscar_produtos'),
     path('editar/<int:produto_id>/', views.editar_produto, name='editar_produto'),
+    path('produto/<int:produto_id>/estrutura/', views.estrutura_produto, name='estrutura_produto'),
     path('excluir/<int:produto_id>/', views.excluir_produto, name='excluir_produto'),
+    path('tabelas-preco/', views.tabelas_preco, name='tabelas_preco'),
     path('buscar_produto/', views.buscar_produto, name='buscar_produto'),
     path('api/gerar-ean/', views.api_gerar_ean, name='api_gerar_ean'),
     path('api/sugerir-pecas-os/', views.api_sugerir_pecas_os, name='api_sugerir_pecas_os'),

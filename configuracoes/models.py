@@ -1,4 +1,4 @@
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.core.validators import RegexValidator
@@ -20,8 +20,8 @@ class Empresa(models.Model):
         ("V", "Anexo V"),
     ]
     MODO_TRIBUTARIO_CHOICES = [
-        ("basico", "Modo Basico"),
-        ("avancado", "Modo Avancado"),
+        ("basico", "Modo Básico"),
+        ("avancado", "Modo Avançado"),
     ]
 
     nome = models.CharField(max_length=200)
@@ -79,11 +79,11 @@ class TipoEquipamentoConfig(models.Model):
 
 class FornecedorGarantia(models.Model):
     MODALIDADE_PAGAMENTO_CHOICES = [
-        ("transferencia_bancaria", "Transferencia bancaria"),
+        ("transferencia_bancaria", "Transferência bancária"),
         ("pix", "PIX"),
         ("boleto", "Boleto"),
-        ("cartao_credito", "Cartao de credito"),
-        ("cartao_debito", "Cartao de debito"),
+        ("cartao_credito", "Cartão de crédito"),
+        ("cartao_debito", "Cartão de débito"),
         ("dinheiro", "Dinheiro"),
         ("outro", "Outro"),
     ]
@@ -158,14 +158,14 @@ class RegraGarantiaMarca(models.Model):
         ("faturado", "Faturado"),
         ("boleto", "Boleto"),
         ("pix", "PIX"),
-        ("credito_loja", "Credito em conta loja"),
+        ("credito_loja", "Crédito em conta loja"),
         ("outro", "Outro"),
     ]
 
     marca = models.ForeignKey(MarcaGarantia, on_delete=models.CASCADE, related_name="regras_garantia")
     tipo_produto = models.CharField(max_length=40)
     valor_mao_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Valor pago")
-    valor_mao_obra_tecnico = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Mao de obra tecnico")
+    valor_mao_obra_tecnico = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Mão de obra técnico")
     modalidade_pagamento = models.CharField(max_length=30, choices=MODALIDADE_CHOICES, default="faturado")
     prazo_pagamento_dias = models.PositiveIntegerField(default=30)
     inicio_vigencia = models.DateField(default=timezone.localdate)
@@ -230,22 +230,22 @@ class User(AbstractUser):
         ('adm', 'Administrador'),
         ('gerente', 'Gerente'),
         ('atendente', 'Atendente'),
-        ('tecnico', 'Tecnico'),
+        ('tecnico', 'Técnico'),
     ]
     TIPO_PESSOA_CHOICES = [
-        ("fisica", "Pessoa Fisica"),
-        ("juridica", "Pessoa Juridica (ME/PJ)"),
+        ("fisica", "Pessoa Física"),
+        ("juridica", "Pessoa Jurídica (ME/PJ)"),
     ]
     REGIME_CONTRATACAO_CHOICES = [
         ("clt", "CLT"),
         ("pj", "PJ"),
-        ("estagio", "Estagio"),
+        ("estagio", "Estágio"),
         ("freelancer", "Freelancer"),
-        ("temporario", "Temporario"),
+        ("temporario", "Temporário"),
         ("outro", "Outro"),
     ]
     TIPO_VINCULO_CHOICES = [
-        ("FUNCIONARIO", "Funcionario"),
+        ("FUNCIONARIO", "Funcionário"),
         ("PJ", "PJ"),
         ("FREELANCER", "Freelancer"),
     ]
@@ -271,6 +271,7 @@ class User(AbstractUser):
     tipo_vinculo = models.CharField(max_length=20, choices=TIPO_VINCULO_CHOICES, default="FUNCIONARIO")
     percentual_comissao_servico = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     percentual_comissao_peca = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    percentual_comissao_vendas = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     numero_vendedor = models.CharField(
         max_length=10,
         blank=True,
@@ -279,7 +280,7 @@ class User(AbstractUser):
         validators=[
             RegexValidator(
                 regex=r'^\d{2,10}$',
-                message='Numero de vendedor deve conter apenas digitos (minimo 2).',
+                message='Número de vendedor deve conter apenas dígitos (mínimo 2).',
             )
         ],
     )
@@ -293,6 +294,52 @@ class User(AbstractUser):
     @property
     def nome_exibicao(self):
         return (self.nome_completo or "").strip() or self.get_full_name() or self.username
+
+    @classmethod
+    def _gerar_numero_vendedor_disponivel(cls, *, excluir_usuario_id=None):
+        usados_qs = cls.objects.exclude(numero_vendedor__isnull=True).exclude(numero_vendedor="")
+        if excluir_usuario_id:
+            usados_qs = usados_qs.exclude(id=excluir_usuario_id)
+        usados = set(usados_qs.values_list("numero_vendedor", flat=True))
+
+        for numero in range(1, 100):
+            candidato = f"{numero:02d}"
+            if candidato not in usados:
+                return candidato
+
+        for numero in range(100, 1000):
+            candidato = f"{numero:03d}"
+            if candidato not in usados:
+                return candidato
+
+        maior_numero = max((int(valor) for valor in usados if str(valor).isdigit()), default=999)
+        candidato = max(1000, maior_numero + 1)
+        while str(candidato) in usados:
+            candidato += 1
+        return str(candidato)
+
+    def save(self, *args, **kwargs):
+        numero_vendedor = (self.numero_vendedor or "").strip()
+        if numero_vendedor:
+            if not numero_vendedor.isdigit():
+                raise ValueError("Número de vendedor deve conter apenas dígitos.")
+            if len(numero_vendedor) == 1:
+                numero_vendedor = numero_vendedor.zfill(2)
+            self.numero_vendedor = numero_vendedor
+            return super().save(*args, **kwargs)
+
+        tentativas = 6
+        ultima_excecao = None
+        for _ in range(tentativas):
+            self.numero_vendedor = self._gerar_numero_vendedor_disponivel(excluir_usuario_id=self.pk)
+            try:
+                return super().save(*args, **kwargs)
+            except IntegrityError as exc:
+                ultima_excecao = exc
+                self.numero_vendedor = None
+        if ultima_excecao:
+            raise ultima_excecao
+        return super().save(*args, **kwargs)
 
 
 class UsuarioArquivo(models.Model):
@@ -325,10 +372,10 @@ class UsuarioArquivo(models.Model):
 
 class UsuarioLog(models.Model):
     ACAO_CHOICES = [
-        ("criacao", "Criacao"),
-        ("edicao", "Edicao"),
-        ("inativacao", "Inativacao"),
-        ("reativacao", "Reativacao"),
+        ("criacao", "Criação"),
+        ("edicao", "Edição"),
+        ("inativacao", "Inativação"),
+        ("reativacao", "Reativação"),
         ("anexo", "Anexo"),
     ]
 
@@ -479,8 +526,8 @@ class ConfiguracaoSistema(models.Model):
     numero_loja_talao = models.CharField(
         max_length=2,
         default="01",
-        validators=[RegexValidator(regex=r"^\d{2}$", message="Numero da loja deve ter 2 digitos.")],
-        verbose_name="Numero da loja (talao)",
+        validators=[RegexValidator(regex=r"^\d{2}$", message="Número da loja deve ter 2 dígitos.")],
+        verbose_name="Número da loja (talão)",
     )
 
     # Campos obrigatórios para cliente
@@ -527,16 +574,16 @@ class ConfiguracaoSistema(models.Model):
     )
     inventario_ciclico_dias = models.PositiveIntegerField(
         default=30,
-        verbose_name="Periodicidade do inventario ciclico (dias)",
+        verbose_name="Periodicidade do inventário cíclico (dias)",
     )
     inventario_ultima_execucao = models.DateField(
         null=True,
         blank=True,
-        verbose_name="Ultima execucao do inventario ciclico",
+        verbose_name="Última execução do inventário cíclico",
     )
     backup_retencao_dias = models.PositiveIntegerField(
         default=15,
-        verbose_name="Retencao de backups (dias)",
+        verbose_name="Retenção de backups (dias)",
     )
     lgpd_mascarar_documento = models.BooleanField(
         default=True,
@@ -544,23 +591,23 @@ class ConfiguracaoSistema(models.Model):
     )
     mensagem_orcamento_email = models.TextField(
         blank=True,
-        default="Ola {cliente_nome}, seu orcamento da OS {numero_os} esta disponivel. Valor: {valor_orcamento}. Condicoes: {condicoes}. Codigo: {codigo_portal}.",
+        default="Olá {cliente_nome}, seu orçamento da OS {numero_os} está disponível. Valor: {valor_orcamento}. Condições: {condicoes}. Código: {codigo_portal}.",
     )
     mensagem_orcamento_whatsapp = models.TextField(
         blank=True,
-        default="Ola {cliente_nome}! Orcamento da OS {numero_os}: {valor_orcamento}. Condicoes: {condicoes}. Codigo de acompanhamento: {codigo_portal}.",
+        default="Olá, {cliente_nome}. Orçamento da OS {numero_os}: {valor_orcamento}. Condições: {condicoes}. Código de acompanhamento: {codigo_portal}.",
     )
     mensagem_pronto_email = models.TextField(
         blank=True,
-        default="Ola {cliente_nome}, seu equipamento da OS {numero_os} esta pronto para retirada. Codigo: {codigo_portal}.",
+        default="Olá {cliente_nome}, seu equipamento da OS {numero_os} está pronto para retirada. Código: {codigo_portal}.",
     )
     mensagem_pronto_whatsapp = models.TextField(
         blank=True,
-        default="Ola {cliente_nome}! Seu equipamento da OS {numero_os} esta pronto para retirada. Codigo: {codigo_portal}.",
+        default="Olá, {cliente_nome}. Seu equipamento da OS {numero_os} está pronto para retirada. Código: {codigo_portal}.",
     )
     condicoes_orcamento = models.TextField(
         blank=True,
-        default="Validade de 7 dias. Valores sujeitos a aprovacao do cliente.",
+        default="Validade de 7 dias. Valores sujeitos à aprovação do cliente.",
     )
     dias_bonus_retirada_1 = models.PositiveIntegerField(default=0)
     valor_bonus_1 = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -572,27 +619,27 @@ class ConfiguracaoSistema(models.Model):
         max_digits=5,
         decimal_places=2,
         default=0,
-        verbose_name="Percentual padrao de desempenho (servicos)",
+        verbose_name="Percentual padrão de desempenho (serviços)",
     )
     percentual_padrao_desempenho_peca = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         default=0,
-        verbose_name="Percentual padrao de desempenho (pecas)",
+        verbose_name="Percentual padrão de desempenho (peças)",
     )
     termos_ordem_servico = models.TextField(
         blank=True,
         default=(
-            "O equipamento descrito nesta OS sera submetido a analise tecnica e eventual reparo mediante aprovacao do orcamento. "
-            "O prazo informado e estimado e podera variar conforme complexidade do reparo ou disponibilidade de pecas. "
-            "Poderao ser utilizadas pecas originais ou compativeis. Pecas substituidas somente serao devolvidas mediante solicitacao previa. "
-            "Garantia de 90 dias, limitada ao servico executado. Perde-se a garantia em caso de violacao do lacre, intervencao de terceiros, "
-            "mau uso, queda ou contato com liquido. Apos comunicacao de conclusao, o equipamento devera ser retirado em ate ___ dias. "
-            "Apos 90 dias sem retirada, podera ser considerado abandonado. Ao assinar esta OS, o cliente declara estar ciente e de acordo com os termos acima, "
-            "autorizando a abertura do equipamento para diagnostico e reparo. O cliente declara estar ciente de que equipamentos com desgaste, danos previos "
-            "ou vicios ocultos poderao apresentar agravamento de falhas durante o reparo, nao sendo a assistencia responsavel por defeitos decorrentes de condicoes preexistentes."
+            "O equipamento descrito nesta OS será submetido à análise técnica e eventual reparo mediante aprovação do orçamento. "
+            "O prazo informado é estimado e poderá variar conforme a complexidade do reparo ou disponibilidade de peças. "
+            "Poderão ser utilizadas peças originais ou compatíveis. Peças substituídas somente serão devolvidas mediante solicitação prévia. "
+            "Garantia de 90 dias, limitada ao serviço executado. Perde-se a garantia em caso de violação do lacre, intervenção de terceiros, "
+            "mau uso, queda ou contato com líquido. Após comunicação de conclusão, o equipamento deverá ser retirado em até ___ dias. "
+            "Após 90 dias sem retirada, poderá ser considerado abandonado. Ao assinar esta OS, o cliente declara estar ciente e de acordo com os termos acima, "
+            "autorizando a abertura do equipamento para diagnóstico e reparo. O cliente declara estar ciente de que equipamentos com desgaste, danos prévios "
+            "ou vícios ocultos poderão apresentar agravamento de falhas durante o reparo, não sendo a assistência responsável por defeitos decorrentes de condições preexistentes."
         ),
-        verbose_name="Termos e condicoes da Ordem de Servico",
+        verbose_name="Termos e condições da Ordem de Serviço",
     )
 
     data_atualizacao = models.DateTimeField(auto_now=True)
@@ -636,7 +683,7 @@ class ModeloMensagem(models.Model):
         from django.core.exceptions import ValidationError
 
         if self.tipo in {"email", "ambos"} and not (self.assunto or "").strip():
-            raise ValidationError({"assunto": "Assunto e obrigatorio para modelos com Email."})
+            raise ValidationError({"assunto": "Assunto é obrigatório para modelos com E-mail."})
 
     def __str__(self):
         return self.nome

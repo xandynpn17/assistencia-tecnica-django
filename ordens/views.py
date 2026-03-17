@@ -1,6 +1,7 @@
 import re
 from decimal import Decimal
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
+from calendar import monthrange
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -45,12 +46,17 @@ from django.templatetags.static import static
 from django.conf import settings
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import json
 from configuracoes.models import ConfiguracaoSistema, Empresa, MarcaGarantia, ModeloMensagem
 from configuracoes.permissions import role_required, ORDER_ROLES, ORDER_CREATION_ROLES, RoleRequiredMixin
 from .utils import registrar_auditoria
-from estoque.services import consumir_reservas_ordem, devolver_reservas_ordem
+from estoque.services import (
+    consumir_itens_estoque_ordem,
+    consumir_reservas_ordem,
+    devolver_itens_estoque_ordem,
+    devolver_reservas_ordem,
+)
 from ordens.services.confirmacao_service import ConfirmacaoOSService
 from ordens.services.log_os_service import LogOSService
 from ordens.services.os_policy_service import OSAccessPolicyService
@@ -95,7 +101,7 @@ def _aplicar_busca_ordens(queryset, termo_busca):
     # - número da OS (com ou sem "OS")
     # - cpf/cnpj
     # - telefone
-    # - número de série
+    # - número de serie
     filtro = (
         Q(cliente__nome__icontains=termo)
         | Q(numero_os__icontains=termo)
@@ -155,7 +161,7 @@ def _enviar_notificacao(notif):
             return {"enviada": False, "url": ""}
         try:
             send_mail(
-                subject=notif.assunto or f"Atualizacao da OS {notif.ordem.numero_os}",
+                subject=notif.assunto or f"Atualização da OS {notif.ordem.numero_os}",
                 message=notif.mensagem,
                 from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@assistencia.local"),
                 recipient_list=[notif.destinatario],
@@ -235,10 +241,10 @@ def _mensagem_confirmacao_inicial(ordem, request):
     link_assinatura = request.build_absolute_uri(reverse("confirmar_os_publico", kwargs={"token": ordem.token_confirmacao}))
     nome = ordem.cliente.nome or "Cliente"
     return (
-        f"Ola {nome}, sua OS {ordem.numero_os} foi registrada com sucesso.\n\n"
+        f"Olá {nome}, sua OS {ordem.numero_os} foi registrada com sucesso.\n\n"
         f"PDF da ordem: {link_pdf}\n"
-        f"Confirmacao/assinatura digital: {link_assinatura}\n\n"
-        "Se nao conseguir assinar pelo link, podemos imprimir para assinatura presencial."
+        f"Confirmação/assinatura digital: {link_assinatura}\n\n"
+        "Se não conseguir assinar pelo link, podemos imprimir para assinatura presencial."
     )
 
 
@@ -268,7 +274,7 @@ def _registrar_pendente_cliente_envio_orcamento(ordem, usuario, canal):
     LinhaTrabalho.objects.create(
         ordem=ordem,
         status="pendente_cliente",
-        descricao=f"Orcamento enviado por {canal_txt}. Aguardando retorno do cliente.",
+        descricao=f"Orçamento enviado por {canal_txt}. Aguardando retorno do cliente.",
         usuario=usuario,
         tipo_evento="manual",
     )
@@ -322,11 +328,30 @@ def _migrar_itens_aprovados_para_servicos_pecas(ordem, usuario=None):
         LinhaTrabalho.objects.create(
             ordem=ordem,
             status=ordem.status,
-            descricao=f"Itens aprovados migrados para Servicos & Pecas ({total_migrados}).",
+            descricao=f"Itens aprovados migrados para Serviços & Peças ({total_migrados}).",
             usuario=usuario,
             tipo_evento="sistema",
         )
     return total_migrados
+
+
+def _somar_meses_data(data_base, meses):
+    if not data_base or not meses:
+        return data_base
+    meses_total = (data_base.month - 1) + int(meses)
+    ano = data_base.year + (meses_total // 12)
+    mes = (meses_total % 12) + 1
+    dia = min(data_base.day, monthrange(ano, mes)[1])
+    return data_base.replace(year=ano, month=mes, day=dia)
+
+
+def _fim_mesmo_dia(inicio):
+    if not inicio:
+        return None
+    fim = inicio.replace(hour=23, minute=59, second=0, microsecond=0)
+    if fim <= inicio:
+        fim = inicio + timedelta(hours=1)
+    return fim
 
 
 # ===========================
@@ -358,11 +383,11 @@ def verificar_cliente_os(request):
     # Validacao: minimo de caracteres para busca
     if cpf_telefone:
         if caracteres_invalidos or not cpf_digits:
-            mensagem_erro = "Digite apenas numeros para busca."
+            mensagem_erro = "Digite apenas números para busca."
         elif len(cpf_digits) < busca_minimo:
-            mensagem_erro = f"Digite pelo menos {busca_minimo} numeros para buscar."
+            mensagem_erro = f"Digite pelo menos {busca_minimo} números para buscar."
 
-    # Busca so se nao houver mensagem de erro
+    # Busca só se não houver mensagem de erro
     if cpf_digits and not mensagem_erro:
         # Busca exata primeiro (documento completo ou telefone)
         clientes = Cliente.objects.filter(
@@ -370,14 +395,14 @@ def verificar_cliente_os(request):
             Q(telefone__contains=cpf_digits)
         ).order_by('nome')
 
-        # Se nao encontrou, tenta busca parcial com limite
+        # Se não encontrou, tenta busca parcial com limite
         if not clientes and len(cpf_digits) >= busca_minimo:
             clientes = Cliente.objects.filter(
                 Q(documento__contains=cpf_digits) |
                 Q(telefone__contains=cpf_digits)
             ).order_by('nome')[:10]
 
-    # Botao "Cadastrar Novo Cliente" ou quando busca nao encontra cliente
+    # Botão "Cadastrar Novo Cliente" ou quando busca não encontra cliente
     if novo_cliente or (not clientes and cpf_digits and not mensagem_erro):
         initial_data = {}
         ddd_choices = {str(dd[0]) for dd in ConfiguracaoSistema.DDD_BRASIL}
@@ -396,7 +421,7 @@ def verificar_cliente_os(request):
             initial_data['ddd'] = ddd if ddd in ddd_choices else config.ddd_padrao
             initial_data['telefone_numero'] = _formatar_numero_telefone(numero)
 
-        elif tamanho == 9:  # Numero sem DDD
+        elif tamanho == 9:  # Número sem DDD
             initial_data['ddd'] = config.ddd_padrao
             initial_data['telefone_numero'] = _formatar_numero_telefone(cpf_digits)
 
@@ -490,7 +515,7 @@ def lista_ordens(request):
         "menu_app": "ordens",
         "menu_sub": "lista_ordens",
     }
-    return render(request, "ordens/lista_ordens.html", context)
+    return render(request, "ordens/ordem_servico_list.html", context)
 
 
 @role_required(ORDER_ROLES)
@@ -631,10 +656,13 @@ def toggle_fechamento_os(request, pk):
         ordem.atualizar_status_fechamento(fechar=fechando, usuario=request.user)
         acao = "Ordem fechada" if ordem.fechada else "Ordem reaberta"
         reservas_processadas = 0
+        itens_estoque_processados = 0
         if ordem.fechada:
             reservas_processadas = consumir_reservas_ordem(ordem, usuario=request.user)
+            itens_estoque_processados = consumir_itens_estoque_ordem(ordem, usuario=request.user)
         else:
             reservas_processadas = devolver_reservas_ordem(ordem, usuario=request.user)
+            itens_estoque_processados = devolver_itens_estoque_ordem(ordem, usuario=request.user)
 
         # Registrar no histórico quem fechou/reabriu
         LinhaTrabalho.objects.create(
@@ -658,17 +686,73 @@ def toggle_fechamento_os(request, pk):
             "alteracao_status",
             f"{acao}.",
             usuario=request.user,
-            dados_extras={"status": ordem.status, "fechada": ordem.fechada, "itens_migrados": itens_migrados},
+            dados_extras={
+                "status": ordem.status,
+                "fechada": ordem.fechada,
+                "itens_migrados": itens_migrados,
+                "itens_estoque_processados": itens_estoque_processados,
+            },
         )
 
-        if reservas_processadas:
-            messages.success(request, f"Ordem atualizada com sucesso! Reservas processadas: {reservas_processadas}.")
+        if reservas_processadas or itens_estoque_processados:
+            messages.success(
+                request,
+                "Ordem atualizada com sucesso! "
+                f"Reservas processadas: {reservas_processadas}. "
+                f"Itens de estoque processados: {itens_estoque_processados}.",
+            )
         else:
             messages.success(request, "Ordem atualizada com sucesso!")
         return redirect(f"{ordem.get_absolute_url()}?tab=detalhes")
     except ValueError as e:
         messages.error(request, str(e))
         return redirect(f"{ordem.get_absolute_url()}?tab=relatorio")
+
+
+@role_required(ORDER_ROLES)
+def agendar_ordem(request, pk):
+    ordem = get_object_or_404(OrdemServico, pk=pk)
+    tipo = (request.GET.get("tipo") or "reparo").strip().lower()
+    meses_raw = (request.GET.get("meses") or "").strip()
+    meses_preventiva = int(meses_raw) if meses_raw.isdigit() else 6
+
+    titulo = f"Reparo OS {ordem.numero_os}"
+    descricao = (
+        f"Agendamento vinculado a {ordem.numero_os}. "
+        f"Equipamento: {ordem.get_tipo_equipamento_display()} {ordem.marca_equipamento} {ordem.modelo_equipamento}. "
+        f"Defeito: {(ordem.defeito or '').strip()[:180]}"
+    ).strip()
+    inicio = timezone.localtime() + timedelta(hours=1)
+
+    if tipo == "preventiva":
+        data_referencia = ordem.data_conclusao.date() if ordem.data_conclusao else timezone.localdate()
+        data_prevista = _somar_meses_data(data_referencia, meses_preventiva)
+        inicio = timezone.make_aware(
+            datetime.combine(data_prevista, time(hour=9, minute=0)),
+            timezone.get_current_timezone(),
+        )
+        titulo = f"Manutenção preventiva - {ordem.numero_os}"
+        descricao = (
+            f"Preventiva programada ({meses_preventiva} mês(es)) para {ordem.numero_os}. "
+            f"Equipamento: {ordem.get_tipo_equipamento_display()} {ordem.marca_equipamento} {ordem.modelo_equipamento}."
+        )
+
+    fim = _fim_mesmo_dia(inicio)
+    params = {
+        "ordem": ordem.id,
+        "cliente": ordem.cliente_id,
+        "tecnico": ordem.tecnico_responsavel_id or "",
+        "titulo": titulo,
+        "descricao": descricao,
+        "telefone": ordem.cliente.telefone or "",
+        "email": ordem.cliente.email or "",
+        "inicio": timezone.localtime(inicio).strftime("%Y-%m-%dT%H:%M:%S"),
+        "fim": timezone.localtime(fim).strftime("%Y-%m-%dT%H:%M:%S"),
+        "modo_preventiva": "1" if tipo == "preventiva" else "0",
+        "preventiva_em_meses": meses_preventiva if tipo == "preventiva" else "",
+    }
+    query = urlencode({chave: valor for chave, valor in params.items() if valor not in ("", None)})
+    return redirect(f"{reverse('agenda:criar_agendamento')}?{query}")
 
 # ===========================
 # Criar Ordem de Serviço
@@ -724,23 +808,23 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
                 LinhaTrabalho.objects.create(
                     ordem=self.object,
                     status=self.object.status,
-                    descricao="Link de confirmacao da OS enviado por WhatsApp apos abertura.",
+                    descricao="Link de confirmação da OS enviado por WhatsApp após abertura.",
                     usuario=self.request.user,
                     tipo_evento="automatico",
                 )
                 _log_os(
                     self.object,
                     "confirmacao",
-                    "Link de confirmacao enviado por WhatsApp apos abertura.",
+                    "Link de confirmação enviado por WhatsApp após abertura.",
                     usuario=self.request.user,
                     dados_extras={"canal": "whatsapp", "automatico": True},
                 )
                 wa = quote(resultado.get("url", ""), safe="")
                 wa_app = quote(resultado.get("app_url", ""), safe="")
                 registrar_auditoria(logger, self.request, "os_criada", ordem=self.object)
-                messages.success(self.request, "OS criada e WhatsApp de confirmação preparado.")
+                messages.success(self.request, "OS criada e mensagem de confirmação do WhatsApp preparada.")
                 return redirect(f"{reverse('ordens:resumo_ordem', kwargs={'pk': self.object.pk})}?wa={wa}&wa_app={wa_app}")
-            messages.warning(self.request, "OS criada, mas o WhatsApp automático falhou. Use o reenvio no resumo.")
+            messages.warning(self.request, "OS criada, mas o envio automático do WhatsApp falhou. Utilize o reenvio no resumo.")
         else:
             messages.warning(self.request, "OS criada sem telefone do cliente. Envie a confirmação manualmente.")
         registrar_auditoria(logger, self.request, "os_criada", ordem=self.object)
@@ -829,13 +913,13 @@ class OrdemServicoUpdateView(RoleRequiredMixin, UpdateView):
             LinhaTrabalho.objects.create(
                 ordem=self.object,
                 status=self.object.status,
-                descricao=f"Numero de serie alterado de '{serie_anterior or '-'}' para '{serie_nova or '-'}'.",
+                descricao=f"Número de série alterado de '{serie_anterior or '-'}' para '{serie_nova or '-'}'.",
                 usuario=self.request.user,
                 tipo_evento="manual",
             )
             messages.success(self.request, "Número de série atualizado e registrado no histórico.")
         else:
-            messages.info(self.request, "Nenhuma alteracao no numero de serie.")
+            messages.info(self.request, "Nenhuma alteração no número de série.")
         return response
 
     def get_success_url(self):
@@ -1030,11 +1114,12 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             if servico_form.is_valid():
                 item = servico_form.save(commit=False)
                 item.ordem = self.object
+                item.produto_estoque = servico_form.cleaned_data.get("produto_estoque")
                 item.save()
                 _log_os(
                     self.object,
                     "edicao_critica",
-                    f"Servico/Peca adicionado: {item.nome}.",
+                    f"Serviço/Peça adicionado: {item.nome}.",
                     usuario=request.user,
                     dados_extras={"item_id": item.id, "tipo": item.tipo},
                 )
@@ -1047,20 +1132,20 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             if item.item_orcamento_id:
                 cancelar_comissoes_por_item(
                     item.item_orcamento,
-                    motivo="Servico/Peca removido da OS.",
+                    motivo="Serviço/Peça removido da OS.",
                     evento="CANCELAMENTO_ITEM",
                 )
             else:
                 cancelar_comissoes_por_servico_peca(
                     item.id,
-                    motivo="Servico/Peca removido da OS.",
+                    motivo="Serviço/Peça removido da OS.",
                     evento="CANCELAMENTO_ITEM",
                 )
             item.delete()
             _log_os(
                 self.object,
                 "cancelamento",
-                f"Servico/Peca removido: {nome_item}.",
+                f"Serviço/Peça removido: {nome_item}.",
                 usuario=request.user,
                 dados_extras={"item_id": item_id},
             )
@@ -1119,7 +1204,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             _log_os(
                 self.object,
                 "edicao_critica",
-                f"Talao registrado: {numero}.",
+                f"Talão registrado: {numero}.",
                 usuario=request.user,
                 dados_extras={"numero_talao": numero, "talao_id": talao.id},
             )
@@ -1139,6 +1224,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 messages.error(request, str(exc))
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
             reservas_processadas = consumir_reservas_ordem(self.object, usuario=request.user)
+            itens_estoque_processados = consumir_itens_estoque_ordem(self.object, usuario=request.user)
             _log_os(
                 self.object,
                 "alteracao_status",
@@ -1148,6 +1234,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                     "status": self.object.status,
                     "reservas_processadas": reservas_processadas,
                     "itens_migrados": itens_migrados,
+                    "itens_estoque_processados": itens_estoque_processados,
                 },
             )
             registrar_auditoria(
@@ -1210,7 +1297,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                     dados_extras={"canal": canal, "modelo_id": modelo.id, "notificacao_id": notif.id},
                 )
                 if resultado.get("url"):
-                    messages.success(request, "WhatsApp preparado em nova aba mantendo você no sistema.")
+                    messages.success(request, "O WhatsApp foi aberto em nova aba, mantendo a sessão no sistema.")
                     wa = quote(resultado.get("url", ""), safe="")
                     wa_app = quote(resultado.get("app_url", ""), safe="")
                     return redirect(f"{self.object.get_absolute_url()}?tab=detalhes&wa={wa}&wa_app={wa_app}")
@@ -1281,7 +1368,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             pedido = get_object_or_404(PedidoCompra, id=pedido_id, ordem=self.object)
             status_validos = {valor for valor, _ in PedidoCompra.STATUS_CHOICES}
             if status_linha not in status_validos:
-                messages.error(request, "Status de pedido invalido.")
+                messages.error(request, "Status de pedido inválido.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
 
             PedidoCompraLinha.objects.create(
@@ -1366,7 +1453,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 incluir_relatorio = False
                 messages.warning(
                     request,
-                    "Inclusao no relatorio tecnico habilita com 4 ou mais fotos. Arquivos anexados sem marcacao.",
+                    "Inclusão no relatório técnico habilita com 4 ou mais fotos. Arquivos anexados sem marcação.",
                 )
 
             criados = 0
@@ -1433,11 +1520,11 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 _log_os(
                     self.object,
                     "confirmacao",
-                    f"Confirmacao registrada via {tipo_conf}.",
+                    f"Confirmação registrada via {tipo_conf}.",
                     usuario=request.user,
                     dados_extras={"tipo_confirmacao": tipo_conf},
                 )
-                messages.success(request, "Confirmacao da OS registrada com sucesso.")
+                messages.success(request, "Confirmação da OS registrada com sucesso.")
             except ValueError as exc:
                 messages.error(request, str(exc))
             return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
@@ -1452,7 +1539,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             _log_os(
                 self.object,
                 "edicao_critica",
-                "Relatorio tecnico atualizado.",
+                "Relatório técnico atualizado.",
                 usuario=request.user,
                 dados_extras={"tipo_reparacao": self.object.tipo_reparacao or ""},
             )
@@ -1479,7 +1566,7 @@ def migrar_orcamento(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
     orcamento = getattr(ordem, "orcamento", None)
     if ordem.fechada:
-        messages.error(request, "A OS esta fechada. Reabra para alterar o orcamento.")
+        messages.error(request, "A OS está fechada. Reabra para alterar o orçamento.")
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
     if request.method == "POST":
@@ -1487,8 +1574,13 @@ def migrar_orcamento(request, pk):
             messages.warning(request, "Nenhum item encontrado no orçamento.")
             return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
+        itens_aprovados = orcamento.itens.filter(status="aprovado")
+        if not itens_aprovados.exists():
+            messages.warning(request, "Somente itens aprovados podem ser migrados para Serviços & Peças.")
+            return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+
         count = 0
-        for item in orcamento.itens.all():
+        for item in itens_aprovados:
             _, created = ServicoPeca.objects.get_or_create(
                 ordem=ordem,
                 item_orcamento=item,
@@ -1521,7 +1613,7 @@ def migrar_orcamento(request, pk):
         _log_os(
             ordem,
             "edicao_critica",
-            f"Orcamento migrado para servicos/pecas ({count} itens).",
+            f"Orçamento migrado para serviços/peças ({count} itens).",
             usuario=request.user,
             dados_extras={"itens": count},
         )
@@ -1563,16 +1655,16 @@ def _mensagem_padrao_notificacao(ordem, tipo, canal="sistema"):
     base = _contexto_variaveis_mensagem(ordem)
     if tipo == "orcamento":
         if canal == "email":
-            template = config.mensagem_orcamento_email or "Orcamento OS {numero_os}: {valor_orcamento}."
+            template = config.mensagem_orcamento_email or "Orçamento OS {numero_os}: {valor_orcamento}."
         else:
-            template = config.mensagem_orcamento_whatsapp or "Orcamento OS {numero_os}: {valor_orcamento}."
+            template = config.mensagem_orcamento_whatsapp or "Orçamento OS {numero_os}: {valor_orcamento}."
     elif tipo == "pronto":
         if canal == "email":
             template = config.mensagem_pronto_email or "OS {numero_os} pronta para retirada."
         else:
             template = config.mensagem_pronto_whatsapp or "OS {numero_os} pronta para retirada."
     else:
-        template = "Atualizacao da OS {numero_os}. Codigo de acompanhamento: {codigo_portal}."
+        template = "Atualização da OS {numero_os}. Código de acompanhamento: {codigo_portal}."
     return _render_template_mensagem(template, base)
 
 
@@ -1595,7 +1687,7 @@ def notificar_cliente_ordem(request, pk, tipo):
         if tipo == "orcamento" and canal in {"email", "whatsapp"}:
             _registrar_pendente_cliente_envio_orcamento(ordem, request.user, canal)
         if resultado.get("url"):
-            messages.success(request, "WhatsApp preparado em nova aba mantendo você no sistema.")
+            messages.success(request, "O WhatsApp foi aberto em nova aba, mantendo a sessão no sistema.")
             wa = quote(resultado.get("url", ""), safe="")
             wa_app = quote(resultado.get("app_url", ""), safe="")
             return redirect(f"{ordem.get_absolute_url()}?tab=detalhes&wa={wa}&wa_app={wa_app}")
@@ -1626,17 +1718,17 @@ def reenviar_confirmacao_whatsapp(request, pk):
         LinhaTrabalho.objects.create(
             ordem=ordem,
             status=ordem.status,
-            descricao="Link de confirmacao da OS reenviado por WhatsApp.",
+            descricao="Link de confirmação da OS reenviado por WhatsApp.",
             usuario=request.user,
             tipo_evento="manual",
         )
         wa = quote(resultado.get("url", ""), safe="")
         wa_app = quote(resultado.get("app_url", ""), safe="")
-        messages.success(request, "WhatsApp de confirmação preparado.")
+        messages.success(request, "Mensagem de confirmação no WhatsApp preparada.")
         _log_os(
             ordem,
             "confirmacao",
-            "Link de confirmacao reenviado por WhatsApp.",
+            "Link de confirmação reenviado por WhatsApp.",
             usuario=request.user,
             dados_extras={"canal": "whatsapp", "notificacao_id": notif.id},
         )
@@ -1661,18 +1753,18 @@ def confirmar_manual_resumo(request, pk):
         LinhaTrabalho.objects.create(
             ordem=ordem,
             status=ordem.status,
-            descricao="Confirmacao manual registrada apos impressao da OS.",
+            descricao="Confirmação manual registrada após impressão da OS.",
             usuario=request.user,
             tipo_evento="manual",
         )
         _log_os(
             ordem,
             "confirmacao",
-            "Confirmacao manual registrada no resumo da OS.",
+            "Confirmação manual registrada no resumo da OS.",
             usuario=request.user,
             dados_extras={"origem": "resumo", "tipo_confirmacao": "impresso"},
         )
-        messages.success(request, "Confirmacao manual registrada com sucesso.")
+        messages.success(request, "Confirmação manual registrada com sucesso.")
     except ValueError as exc:
         messages.warning(request, str(exc))
 
@@ -1694,11 +1786,11 @@ def confirmar_ordem_token_publico(request, token):
             _log_os(
                 ordem,
                 "confirmacao",
-                "Confirmacao realizada por link publico.",
+                "Confirmação realizada por link público.",
                 usuario=None,
                 dados_extras={"ip": _request_ip(request)},
             )
-            messages.success(request, "Confirmacao realizada com sucesso.")
+            messages.success(request, "Confirmação realizada com sucesso.")
             return redirect(reverse("confirmar_os_publico", kwargs={"token": token}))
         except ValueError as exc:
             messages.error(request, str(exc))
@@ -1732,14 +1824,14 @@ def portal_cliente(request):
         if not cpf:
             erro = "Informe o CPF do titular para consultar."
         elif len(cpf) != 11:
-            erro = "CPF invalido. Informe 11 digitos."
+            erro = "CPF inválido. Informe 11 dígitos."
         else:
             ordem = OrdemServico.objects.select_related("cliente").filter(codigo_portal=codigo).first()
             if not ordem:
-                erro = "Codigo nao encontrado."
+                erro = "Código não encontrado."
             elif (ordem.cliente.documento or "") != cpf:
                 ordem = None
-                erro = "CPF nao confere com o codigo informado."
+                erro = "CPF não confere com o código informado."
 
     context = {
         "ordem": ordem,
@@ -1787,7 +1879,7 @@ def atualizar_local(request, os_id):
             )
             return JsonResponse({"success": True, "message": "Local atualizado com sucesso!"})
         except User.DoesNotExist:
-            return JsonResponse({"success": False, "message": "Tecnico nao encontrado."}, status=404)
+            return JsonResponse({"success": False, "message": "Técnico não encontrado."}, status=404)
         except OrdemServico.DoesNotExist:
             return JsonResponse({"success": False, "message": "OS não encontrada."}, status=404)
     return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
@@ -1890,7 +1982,7 @@ def atualizar_tecnico(request, os_id):
                 _log_os(
                     ordem,
                     "edicao_critica",
-                    f"Tecnico responsavel alterado para {tecnico.username}.",
+                    f"Técnico responsável alterado para {tecnico.username}.",
                     usuario=request.user,
                     dados_extras={"tecnico_id": tecnico.id},
                 )
@@ -1918,7 +2010,7 @@ def atualizar_tecnico(request, os_id):
                 _log_os(
                     ordem,
                     "edicao_critica",
-                    "Tecnico responsavel removido.",
+                    "Técnico responsável removido.",
                     usuario=request.user,
                     dados_extras={},
                 )
@@ -1944,13 +2036,13 @@ def atualizar_numero_serie(request, os_id):
 
             serie_antiga = (ordem.numero_serie_equipamento or "").strip()
             if numero_serie == serie_antiga:
-                return JsonResponse({"success": True, "message": "Nenhuma alteracao realizada."})
+                return JsonResponse({"success": True, "message": "Nenhuma alteração realizada."})
 
             ordem.numero_serie_equipamento = numero_serie
             ordem.save(update_fields=["numero_serie_equipamento"])
 
             descricao = (
-                f"Numero de serie alterado de '{serie_antiga or '-'}' para '{numero_serie or '-'}'."
+                f"Número de série alterado de '{serie_antiga or '-'}' para '{numero_serie or '-'}'."
             )
             LinhaTrabalho.objects.create(
                 ordem=ordem,
@@ -1976,13 +2068,13 @@ def atualizar_numero_serie(request, os_id):
             return JsonResponse(
                 {
                     "success": True,
-                    "message": "Numero de serie atualizado com sucesso.",
+                    "message": "Número de série atualizado com sucesso.",
                     "numero_serie": numero_serie,
                 }
             )
         except OrdemServico.DoesNotExist:
-            return JsonResponse({"success": False, "message": "OS nao encontrada."}, status=404)
-    return JsonResponse({"success": False, "message": "Metodo invalido."}, status=400)
+            return JsonResponse({"success": False, "message": "OS não encontrada."}, status=404)
+    return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
 # ===========================
 # PDFs
 # ===========================
@@ -2030,9 +2122,9 @@ def imprimir_ordem_servico(request, pk):
             logo_path = os.path.join(settings.BASE_DIR, "core/static/adminlte/img/abtech_logo.png")
             logo = Image(logo_path, width=3.0 * cm, height=2.0 * cm)
         except Exception:
-            logo = Paragraph("<b>ASSISTENCIA TECNICA</b>", styles["PdfMeta"])
+            logo = Paragraph("<b>ASSISTÊNCIA TÉCNICA</b>", styles["PdfMeta"])
         right = [
-            Paragraph("ORDEM DE SERVICO", styles["PdfTitle"]),
+            Paragraph("ORDEM DE SERVIÇO", styles["PdfTitle"]),
             Paragraph(f"<b>Nº OS:</b> {ordem.numero_os}", styles["PdfMeta"]),
             Paragraph(f"<b>Abertura:</b> {ordem.data_abertura.strftime('%d/%m/%Y %H:%M')}", styles["PdfMeta"]),
             Paragraph(f"<b>Status:</b> {ordem.get_status_display()}", styles["PdfMeta"]),
@@ -2043,7 +2135,7 @@ def imprimir_ordem_servico(request, pk):
             if empresa.cnpj:
                 right.append(Paragraph(f"<b>CNPJ:</b> {empresa.cnpj}", styles["PdfMeta"]))
             if empresa.endereco:
-                right.append(Paragraph(f"<b>Endereco:</b> {empresa.endereco}", styles["PdfMeta"]))
+                right.append(Paragraph(f"<b>Endereço:</b> {empresa.endereco}", styles["PdfMeta"]))
             if empresa.telefone:
                 right.append(Paragraph(f"<b>Telefone:</b> {empresa.telefone}", styles["PdfMeta"]))
         head = Table([[logo, right]], colWidths=[3.4 * cm, usable_w - 3.4 * cm])
@@ -2097,10 +2189,10 @@ def imprimir_ordem_servico(request, pk):
             [Paragraph("Tipo", styles["PdfLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["PdfValue"])],
             [Paragraph("Marca", styles["PdfLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["PdfValue"])],
             [Paragraph("Modelo", styles["PdfLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["PdfValue"])],
-            [Paragraph("Numero de Serie", styles["PdfLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["PdfValue"])],
+            [Paragraph("Número de Série", styles["PdfLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["PdfValue"])],
             [Paragraph("Defeito Informado", styles["PdfLabel"]), Paragraph(ordem.defeito or "-", styles["PdfValue"])],
             [Paragraph("Tipo de Reparo", styles["PdfLabel"]), Paragraph(ordem.tipo_reparo or "-", styles["PdfValue"])],
-            [Paragraph("Confirmacao", styles["PdfLabel"]), Paragraph(confirmacao_txt, styles["PdfValue"])],
+            [Paragraph("Confirmação", styles["PdfLabel"]), Paragraph(confirmacao_txt, styles["PdfValue"])],
         ]),
         Spacer(1, 0.28 * cm),
         _section_title("Termos e Condicoes"),
@@ -2110,7 +2202,7 @@ def imprimir_ordem_servico(request, pk):
     story.extend([
         Spacer(1, 0.22 * cm),
         _section_title("Termos e Assinaturas"),
-        Paragraph("Ao assinar, o cliente confirma os dados da OS e autoriza os procedimentos tecnicos e comerciais aplicaveis.", styles["PdfText"]),
+        Paragraph("Ao assinar, o cliente confirma os dados da OS e autoriza os procedimentos técnicos e comerciais aplicáveis.", styles["PdfText"]),
         Spacer(1, 0.4 * cm),
         Table(
             [["Assinatura do Cliente: ______________________________", "Assinatura da Assistencia: ______________________________"]],
@@ -2187,7 +2279,7 @@ def imprimir_ordem_servico_impressao(request, pk):
         except Exception:
             logo = Paragraph("<b>LOGO</b>", styles["PrintSmall"])
 
-        head = Paragraph(f"{rotulo} - ORDEM DE SERVICO Nº {ordem.numero_os}", styles["PrintTitle"])
+        head = Paragraph(f"{rotulo} - ORDEM DE SERVIÇO Nº {ordem.numero_os}", styles["PrintTitle"])
         head_empresa = Paragraph(empresa_txt, styles["PrintSmall"]) if empresa_txt else Spacer(1, 0.01 * cm)
         head_box = Table([[logo, [head, head_empresa]]], colWidths=[2.9 * cm, frame_width - 2.9 * cm])
         head_box.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
@@ -2231,7 +2323,7 @@ def imprimir_ordem_servico_impressao(request, pk):
         dados_equip = [
             [Paragraph("Equipamento", styles["PrintLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["PrintSmall"])],
             [Paragraph("Marca/Modelo", styles["PrintLabel"]), Paragraph(f"{ordem.marca_equipamento or '-'} / {ordem.modelo_equipamento or '-'}", styles["PrintSmall"])],
-            [Paragraph("Numero de Serie", styles["PrintLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["PrintSmall"])],
+            [Paragraph("Número de Série", styles["PrintLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["PrintSmall"])],
             [Paragraph("Defeito Relatado", styles["PrintLabel"]), Paragraph(ordem.defeito or "-", styles["PrintSmall"])],
             [Paragraph("Peritagem", styles["PrintLabel"]), Paragraph(ordem.peritagem or "-", styles["PrintSmall"])],
             [Paragraph("Data de Abertura", styles["PrintLabel"]), Paragraph(ordem.data_abertura.strftime("%d/%m/%Y %H:%M"), styles["PrintSmall"])],
@@ -2263,7 +2355,7 @@ def imprimir_ordem_servico_impressao(request, pk):
         ]
 
     def _bloco_termos(rotulo):
-        titulo = Paragraph(f"{rotulo} - TERMOS E CONDICOES", styles["PrintTitle"])
+        titulo = Paragraph(f"{rotulo} - TERMOS E CONDIÇÕES", styles["PrintTitle"])
         barra = Table([[Paragraph("TERMOS CONTRATUAIS", styles["PrintSection"])]], colWidths=[frame_width])
         barra.setStyle(
             TableStyle(
@@ -2333,7 +2425,7 @@ def imprimir_relatorio_tecnico(request, pk):
         canv.line(doc.leftMargin, doc.bottomMargin - 0.25 * cm, A4[0] - doc.rightMargin, doc.bottomMargin - 0.25 * cm)
         canv.setFont("Helvetica", 8)
         canv.setFillColor(colors.HexColor("#6b7280"))
-        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"Relatorio Tecnico - OS {ordem.numero_os}")
+        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"Relatório Técnico - OS {ordem.numero_os}")
         canv.drawRightString(A4[0] - doc.rightMargin, doc.bottomMargin - 0.6 * cm, f"Pagina {canv.getPageNumber()}")
         canv.restoreState()
 
@@ -2356,10 +2448,10 @@ def imprimir_relatorio_tecnico(request, pk):
         logo_path = os.path.join(settings.BASE_DIR, "core/static/adminlte/img/abtech_logo.png")
         logo = Image(logo_path, width=3.0 * cm, height=2.0 * cm)
     except Exception:
-        logo = Paragraph("<b>ASSISTENCIA TECNICA</b>", styles["RtMeta"])
+        logo = Paragraph("<b>ASSISTÊNCIA TÉCNICA</b>", styles["RtMeta"])
 
     header_right = [
-        Paragraph("RELATORIO TECNICO", styles["RtTitle"]),
+        Paragraph("RELATÓRIO TÉCNICO", styles["RtTitle"]),
         Paragraph(f"<b>Nº OS:</b> {ordem.numero_os}", styles["RtMeta"]),
         Paragraph(f"<b>Emissao:</b> {(ordem.data_conclusao or datetime.now()).strftime('%d/%m/%Y')}", styles["RtMeta"]),
     ]
@@ -2380,21 +2472,21 @@ def imprimir_relatorio_tecnico(request, pk):
             [Paragraph("Tipo", styles["RtLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["RtValue"])],
             [Paragraph("Marca", styles["RtLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["RtValue"])],
             [Paragraph("Modelo", styles["RtLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["RtValue"])],
-            [Paragraph("Numero de Serie", styles["RtLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["RtValue"])],
-            [Paragraph("Tipo de Reparacao", styles["RtLabel"]), Paragraph(ordem.get_tipo_reparacao_display() or "-", styles["RtValue"])],
+            [Paragraph("Número de Série", styles["RtLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["RtValue"])],
+            [Paragraph("Tipo de Reparação", styles["RtLabel"]), Paragraph(ordem.get_tipo_reparacao_display() or "-", styles["RtValue"])],
         ]),
         Spacer(1, 0.28 * cm),
-        _title_bar("Diagnostico e Relatorio"),
+        _title_bar("Diagnóstico e Relatório"),
         Paragraph(ordem.relatorio_tecnico or "-", styles["RtText"]),
         Spacer(1, 0.25 * cm),
     ])
 
     itens = ServicoPeca.objects.filter(ordem=ordem)
     if itens.exists():
-        story.append(_title_bar("Servicos e Pecas"))
+        story.append(_title_bar("Serviços e Peças"))
         linhas = [[
             Paragraph("<b>Tipo</b>", styles["RtLabel"]),
-            Paragraph("<b>Descricao</b>", styles["RtLabel"]),
+            Paragraph("<b>Descrição</b>", styles["RtLabel"]),
             Paragraph("<b>Qtd</b>", styles["RtLabel"]),
             Paragraph("<b>Unit.</b>", styles["RtLabel"]),
             Paragraph("<b>Total</b>", styles["RtLabel"]),
@@ -2453,7 +2545,7 @@ def imprimir_relatorio_tecnico(request, pk):
             story.extend([tabela_fotos, Spacer(1, 0.3 * cm)])
 
     story.extend([
-        Paragraph("Assinatura do Tecnico: _________________________________", styles["RtText"]),
+        Paragraph("Assinatura do Técnico: _________________________________", styles["RtText"]),
         Spacer(1, 0.15 * cm),
         Paragraph(f"Documento emitido em {(ordem.data_conclusao or datetime.now()).strftime('%d/%m/%Y')}.", styles["RtMeta"]),
     ])

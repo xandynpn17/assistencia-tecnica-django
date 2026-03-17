@@ -1,5 +1,6 @@
 from decimal import Decimal
-from datetime import timedelta
+from datetime import date, timedelta
+from calendar import monthrange
 from io import StringIO
 
 from django.contrib.auth import get_user_model
@@ -12,11 +13,13 @@ from django.utils import timezone
 from caixa.models import (
     AuditoriaGarantia,
     Caixa,
+    CentroCusto,
     Comissao,
     ComissaoItemOrcamento,
     ContaPagar,
     ContaReceber,
     FaixaPremioMeta,
+    FormaPagamento,
     LancamentoCaixa,
     Pagamento,
     PremioColaboradorCompetencia,
@@ -29,7 +32,10 @@ from estoque.models import MovimentacaoEstoque, PontoOperacional, Produto, Saldo
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.models import OrdemServico, ServicoPeca
 from caixa.services.comissao_status import ComissaoStatusError, aplicar_acao_comissao
-from caixa.services.comissoes import cancelar_comissoes_por_ordem, processar_evento_servico_finalizado
+from caixa.services.comissoes import (
+    cancelar_comissoes_por_ordem,
+    processar_evento_servico_finalizado,
+)
 
 
 class CaixaPermissoesTests(TestCase):
@@ -167,6 +173,144 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(str(conta.valor_aberto), "60.00")
         self.assertEqual(conta.status, "parcial")
 
+    def test_baixa_conta_receber_aplica_juros_no_caixa_e_desconto_na_quitacao(self):
+        conta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="OS com juros",
+            cliente_nome=self.cliente.nome,
+            valor_original="100.00",
+            valor_aberto="100.00",
+            vencimento="2030-01-01",
+            status="aberta",
+        )
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_receber", args=[conta.id]),
+            {
+                "valor": "90.00",
+                "desconto": "10.00",
+                "juros": "5.00",
+                "referencia": "REC-2",
+                "observacao": "",
+                "metodo": "pix",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        pagamento = Pagamento.objects.latest("id")
+        self.assertEqual(str(pagamento.valor), "95.00")
+        self.assertEqual(str(conta.valor_aberto), "0.00")
+        self.assertEqual(conta.status, "paga")
+
+    def test_baixa_conta_receber_bloqueia_abatimento_maior_que_saldo(self):
+        conta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="OS com desconto excedente",
+            cliente_nome=self.cliente.nome,
+            valor_original="100.00",
+            valor_aberto="100.00",
+            vencimento="2030-01-01",
+            status="aberta",
+        )
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_receber", args=[conta.id]),
+            {
+                "valor": "95.00",
+                "desconto": "10.00",
+                "juros": "0.00",
+                "referencia": "REC-3",
+                "observacao": "",
+                "metodo": "pix",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(str(conta.valor_aberto), "100.00")
+        self.assertFalse(Pagamento.objects.filter(referencia="REC-3").exists())
+
+    def test_nao_permite_abrir_novo_caixa_no_mesmo_dia_apos_fechamento(self):
+        caixa = Caixa.objects.filter(aberto=True).first()
+        caixa.aberto = False
+        caixa.saldo_final = Decimal("0.00")
+        caixa.save(update_fields=["aberto", "saldo_final"])
+
+        self.client.force_login(self.atendente)
+        response = self.client.post(reverse("caixa:abrir_caixa"), {"saldo_inicial": "10.00"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ja existe um caixa registrado para hoje")
+        self.assertEqual(Caixa.objects.count(), 1)
+
+    def test_dashboard_filtra_movimento_por_periodo(self):
+        self.client.force_login(self.gerente)
+        caixa_hoje = Caixa.objects.filter(aberto=True).first()
+        Pagamento.objects.create(caixa=caixa_hoje, ordem_servico=self.ordem, valor=Decimal("50.00"), metodo="pix")
+
+        caixa_hoje.aberto = False
+        caixa_hoje.data = timezone.localdate() - timedelta(days=1)
+        caixa_hoje.saldo_final = Decimal("50.00")
+        caixa_hoje.save(update_fields=["aberto", "data", "saldo_final"])
+
+        caixa_novo = Caixa.objects.create(aberto=True, saldo_inicial=Decimal("0.00"))
+        Pagamento.objects.create(caixa=caixa_novo, ordem_servico=self.ordem, valor=Decimal("20.00"), metodo="pix")
+
+        response = self.client.get(
+            reverse("caixa:dashboard_caixa"),
+            {"data_inicio": timezone.localdate().isoformat(), "data_fim": timezone.localdate().isoformat()},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_entradas"], Decimal("20.00"))
+
+    def test_registrar_saida_garante_centros_padrao_e_exibe_saldo(self):
+        self.client.force_login(self.atendente)
+        CentroCusto.objects.all().delete()
+
+        response = self.client.get(reverse("caixa:registrar_saida"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Saldo atual")
+        self.assertTrue(CentroCusto.objects.filter(nome="Operacional", ativo=True).exists())
+        self.assertGreater(response.context["form"].fields["centro_custo"].queryset.count(), 0)
+
+    def test_criar_conta_pagar_garante_centros_padrao(self):
+        self.client.force_login(self.gerente)
+        CentroCusto.objects.all().delete()
+
+        response = self.client.get(reverse("caixa:criar_conta_pagar"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(CentroCusto.objects.filter(nome="Administrativo", ativo=True).exists())
+        self.assertGreater(response.context["form"].fields["centro_custo"].queryset.count(), 0)
+
+    def test_contas_receber_filtra_por_busca_e_origem(self):
+        conta_cliente = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="Reparo notebook",
+            cliente_nome="Cliente Caixa",
+            tipo_origem="cliente_os",
+            valor_original="150.00",
+            valor_aberto="150.00",
+            vencimento="2030-01-01",
+            status="aberta",
+        )
+        ContaReceber.objects.create(
+            descricao="Garantia fabricante",
+            cliente_nome="Outro cliente",
+            tipo_origem="garantia_fabricante",
+            valor_original="90.00",
+            valor_aberto="90.00",
+            vencimento="2030-01-01",
+            status="aberta",
+        )
+
+        self.client.force_login(self.gerente)
+        response = self.client.get(
+            reverse("caixa:contas_receber"),
+            {"q": "notebook", "tipo_origem": "cliente_os"},
+        )
+        self.assertEqual(response.status_code, 200)
+        contas = list(response.context["contas"])
+        self.assertEqual(len(contas), 1)
+        self.assertEqual(contas[0].id, conta_cliente.id)
+
     def test_finalizar_pre_reserva_no_caixa_da_baixa_no_estoque(self):
         self.client.force_login(self.atendente)
         ponto = PontoOperacional.objects.create(codigo="PO3", nome="Loja")
@@ -201,6 +345,145 @@ class CaixaPermissoesTests(TestCase):
         saldo = SaldoEstoquePonto.objects.get(produto=produto, ponto_operacional=ponto)
         self.assertEqual(saldo.quantidade, 3)
         self.assertTrue(MovimentacaoEstoque.objects.filter(produto=produto, tipo="venda").exists())
+
+    def test_venda_mostrador_gera_comissao_total_e_bonus_produto(self):
+        self.client.force_login(self.atendente)
+        self.atendente.numero_vendedor = "12"
+        self.atendente.percentual_comissao_vendas = Decimal("6.00")
+        self.atendente.save(update_fields=["numero_vendedor", "percentual_comissao_vendas"])
+
+        ponto = PontoOperacional.objects.create(codigo="PO3A", nome="Loja A")
+        produto = Produto.objects.create(
+            nome="Copo Liquidificador",
+            ean="7899991110012",
+            preco_final=Decimal("100.00"),
+            preco=Decimal("100.00"),
+            quantidade=5,
+            ponto_operacional=ponto,
+            ativo=True,
+            bonus_venda=Decimal("4.00"),
+        )
+        SaldoEstoquePonto.objects.create(produto=produto, ponto_operacional=ponto, quantidade=5)
+        venda = VendaRapidaEstoque.objects.create(
+            produto=produto,
+            ponto_operacional=ponto,
+            quantidade=1,
+            valor_unitario=Decimal("100.00"),
+            valor_total=Decimal("100.00"),
+            funcionario_numero="12",
+            status="pre_reserva",
+            usuario=self.atendente,
+        )
+
+        response = self.client.post(
+            reverse("caixa:registrar_pagamento") + f"?venda={venda.id}",
+            {"valor": "100.00", "metodo": "pix", "referencia": "PDV-COM-1"},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        venda.refresh_from_db()
+        self.assertEqual(venda.status, "vendida")
+        tipos = {
+            row["tipo"]: row["valor_comissao"]
+            for row in Comissao.objects.filter(tecnico=self.atendente).values("tipo", "valor_comissao")
+        }
+        self.assertEqual(tipos["COMISSAO_VENDAS"], Decimal("6.00"))
+        self.assertEqual(tipos["BONUS_PRODUTO"], Decimal("4.00"))
+
+        hoje = timezone.localdate().isoformat()
+        response_desempenho = self.client.get(
+            reverse("caixa:meu_desempenho"),
+            {
+                "data_inicio": hoje,
+                "data_fim": hoje,
+                "percentual_servicos": "0",
+                "percentual_pecas": "0",
+                "percentual_vendas": "6",
+                "aplicar_servicos": "0",
+                "aplicar_pecas": "0",
+                "aplicar_vendas": "1",
+            },
+        )
+        self.assertEqual(response_desempenho.status_code, 200)
+        self.assertEqual(response_desempenho.context["total_base_vendas_relatorio"], Decimal("100.00"))
+        self.assertEqual(response_desempenho.context["total_comissao_vendas_relatorio"], Decimal("6.00"))
+        self.assertEqual(response_desempenho.context["total_comissao_relatorio"], Decimal("10.00"))
+        self.assertEqual(response_desempenho.context["resumo"]["bonus_produto"], Decimal("4.00"))
+
+    def test_auditar_comissoes_ok_para_venda_mostrador(self):
+        self.atendente.numero_vendedor = "18"
+        self.atendente.percentual_comissao_vendas = Decimal("5.00")
+        self.atendente.save(update_fields=["numero_vendedor", "percentual_comissao_vendas"])
+
+        ponto = PontoOperacional.objects.create(codigo="POAUD", nome="Loja Auditoria")
+        produto = Produto.objects.create(
+            nome="Produto Auditoria",
+            ean="7899991110099",
+            preco_final=Decimal("80.00"),
+            preco=Decimal("80.00"),
+            quantidade=3,
+            ponto_operacional=ponto,
+            ativo=True,
+            bonus_venda=Decimal("2.00"),
+        )
+        venda = VendaRapidaEstoque.objects.create(
+            produto=produto,
+            ponto_operacional=ponto,
+            quantidade=1,
+            valor_unitario=Decimal("80.00"),
+            valor_total=Decimal("80.00"),
+            funcionario_numero="18",
+            status="vendida",
+            usuario=self.atendente,
+            concluido_em=timezone.now(),
+        )
+        Comissao.objects.create(
+            tecnico=self.atendente,
+            produto=produto,
+            tipo="COMISSAO_VENDAS",
+            descricao="Comissao venda mostrador - Produto Auditoria",
+            valor_base=Decimal("80.00"),
+            percentual=Decimal("5.00"),
+            valor_comissao=Decimal("4.00"),
+            evento_gerador="VENDA_MOSTRADOR",
+            status="GERADA",
+            chave_unica=f"VENDA_MOSTRADOR:COMISSAO_VENDAS:venda:{venda.id}",
+        )
+        Comissao.objects.create(
+            tecnico=self.atendente,
+            produto=produto,
+            tipo="BONUS_PRODUTO",
+            descricao="Bonus por venda mostrador - Produto Auditoria",
+            valor_base=Decimal("80.00"),
+            percentual=Decimal("0.00"),
+            valor_comissao=Decimal("2.00"),
+            evento_gerador="VENDA_MOSTRADOR",
+            status="GERADA",
+            chave_unica=f"VENDA_MOSTRADOR:BONUS_PRODUTO:venda:{venda.id}",
+        )
+
+        out = StringIO()
+        call_command("auditar_comissoes", stdout=out)
+        self.assertIn("Nenhuma inconsist", out.getvalue())
+
+    def test_comissoes_tecnicos_lista_atendente_com_comissao_vendas(self):
+        Comissao.objects.create(
+            tecnico=self.atendente,
+            tipo="COMISSAO_VENDAS",
+            descricao="Comissao venda balcao",
+            valor_base=Decimal("100.00"),
+            percentual=Decimal("7.00"),
+            valor_comissao=Decimal("7.00"),
+            evento_gerador="VENDA_MOSTRADOR",
+            status="GERADA",
+            chave_unica="VENDA_MOSTRADOR:COMISSAO_VENDAS:venda:2701",
+        )
+
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("caixa:comissoes_tecnicos"), {"tecnico": str(self.atendente.id)})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.atendente, list(response.context["tecnicos"]))
+        self.assertEqual(list(response.context["comissoes"])[0].tecnico_id, self.atendente.id)
 
     def test_bloqueia_finalizacao_pre_reserva_com_valor_divergente(self):
         self.client.force_login(self.atendente)
@@ -657,7 +940,7 @@ class CaixaPermissoesTests(TestCase):
         self.assertIn("SERVICO", tipos_gerados)
         self.assertNotIn("PECA", tipos_gerados)
 
-    def test_motor_novo_gera_comissao_peca_e_bonus_produto(self):
+    def test_motor_novo_gera_comissao_peca_sem_bonus_produto_na_os(self):
         tecnico = get_user_model().objects.create_user(
             username="tecnico_motor_novo_peca",
             password="senha-forte-123",
@@ -690,7 +973,7 @@ class CaixaPermissoesTests(TestCase):
         )
         tipos = set(Comissao.objects.filter(item_orcamento=item).values_list("tipo", flat=True))
         self.assertIn("PECA", tipos)
-        self.assertIn("BONUS_PRODUTO", tipos)
+        self.assertNotIn("BONUS_PRODUTO", tipos)
 
     def test_motor_novo_cancela_comissao_quando_item_e_recusado(self):
         tecnico = get_user_model().objects.create_user(
@@ -729,13 +1012,13 @@ class CaixaPermissoesTests(TestCase):
             percentual_comissao_servico=Decimal("10.00"),
             percentual_comissao_peca=Decimal("5.00"),
         )
-        self.ordem.relatorio_tecnico = "Relatório preenchido"
+        self.ordem.relatorio_tecnico = "Relatorio preenchido"
         self.ordem.save(update_fields=["relatorio_tecnico"])
         orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem)
         item_servico = ItemOrcamento.objects.create(
             orcamento=orcamento,
             nome="Mão de obra",
-            descricao="Serviço técnico",
+            descricao="Servico técnico",
             quantidade=1,
             valor_unitario=Decimal("80.00"),
             origem="manual",
@@ -783,7 +1066,7 @@ class CaixaPermissoesTests(TestCase):
             tecnico=self.tecnico,
             ordem_servico=self.ordem,
             tipo="SERVICO",
-            descricao="Comissão já paga",
+            descricao="Comissao já paga",
             valor_base=Decimal("100.00"),
             percentual=Decimal("10.00"),
             valor_comissao=Decimal("10.00"),
@@ -822,6 +1105,91 @@ class CaixaPermissoesTests(TestCase):
             aplicar_acao_comissao(comissao, acao="pagar", usuario=self.gerente, referencia_pagamento="PIX-2")
         with self.assertRaises(ComissaoStatusError):
             aplicar_acao_comissao(comissao, acao="cancelar", usuario=self.gerente)
+
+    def test_comissoes_tecnicos_liberar_lote_aplica_em_varios_itens(self):
+        self.client.force_login(self.gerente)
+        c1 = Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="SERVICO",
+            descricao="Lote liberar 1",
+            valor_base=Decimal("100.00"),
+            percentual=Decimal("10.00"),
+            valor_comissao=Decimal("10.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="GERADA",
+            chave_unica=f"SERVICO_FINALIZADO:SERVICO:os:{self.ordem.id}:lote-liberar-1",
+        )
+        c2 = Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="PECA",
+            descricao="Lote liberar 2",
+            valor_base=Decimal("80.00"),
+            percentual=Decimal("5.00"),
+            valor_comissao=Decimal("4.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="GERADA",
+            chave_unica=f"SERVICO_FINALIZADO:PECA:os:{self.ordem.id}:lote-liberar-2",
+        )
+        response = self.client.post(
+            reverse("caixa:comissoes_tecnicos"),
+            {
+                "action": "liberar_lote",
+                "comissao_ids": [str(c1.id), str(c2.id)],
+                "return_query": "status=GERADA",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("status=GERADA", response.url)
+        c1.refresh_from_db()
+        c2.refresh_from_db()
+        self.assertEqual(c1.status, "LIBERADA")
+        self.assertEqual(c2.status, "LIBERADA")
+        self.assertIsNotNone(c1.data_liberacao)
+        self.assertIsNotNone(c2.data_liberacao)
+
+    def test_comissoes_tecnicos_pagar_lote_respeita_status_e_referencia(self):
+        self.client.force_login(self.gerente)
+        c1 = Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="SERVICO",
+            descricao="Lote pagar 1",
+            valor_base=Decimal("120.00"),
+            percentual=Decimal("10.00"),
+            valor_comissao=Decimal("12.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="GERADA",
+            chave_unica=f"SERVICO_FINALIZADO:SERVICO:os:{self.ordem.id}:lote-pagar-1",
+        )
+        c2 = Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="SERVICO",
+            descricao="Lote pagar 2 bloqueada",
+            valor_base=Decimal("50.00"),
+            percentual=Decimal("10.00"),
+            valor_comissao=Decimal("5.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="CANCELADA",
+            chave_unica=f"SERVICO_FINALIZADO:SERVICO:os:{self.ordem.id}:lote-pagar-2",
+        )
+        response = self.client.post(
+            reverse("caixa:comissoes_tecnicos"),
+            {
+                "action": "pagar_lote",
+                "comissao_ids": [str(c1.id), str(c2.id)],
+                "referencia_pagamento_lote": "LOTE-PIX-001",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        c1.refresh_from_db()
+        c2.refresh_from_db()
+        self.assertEqual(c1.status, "PAGA")
+        self.assertEqual(c1.referencia_pagamento, "LOTE-PIX-001")
+        self.assertIsNotNone(c1.data_pagamento)
+        self.assertEqual(c2.status, "CANCELADA")
 
     def test_auditar_comissoes_reporta_sem_fonte_valida_e_paga_base_zerada(self):
         Comissao.objects.create(
@@ -862,12 +1230,12 @@ class CaixaPermissoesTests(TestCase):
             call_command("auditar_comissoes", falhar_se_divergir=True)
 
     def test_auditar_comissoes_ok_quando_fontes_sao_validas(self):
-        self.ordem.relatorio_tecnico = "Relatório de execução"
+        self.ordem.relatorio_tecnico = "Relatorio de execução"
         self.ordem.save(update_fields=["relatorio_tecnico"])
         orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem)
         ItemOrcamento.objects.create(
             orcamento=orcamento,
-            nome="Serviço válido",
+            nome="Servico válido",
             descricao="Teste",
             quantidade=1,
             valor_unitario=Decimal("150.00"),
@@ -934,7 +1302,9 @@ class CaixaPermissoesTests(TestCase):
         self.client.force_login(self.tecnico)
         response = self.client.get(reverse("caixa:meu_desempenho"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Painel de metas")
+        self.assertContains(response, "Meu desempenho")
+        self.assertContains(response, 'name="percentual_servicos"', html=False)
+        self.assertContains(response, 'name="percentual_pecas"', html=False)
 
     def test_meu_desempenho_filtra_por_data_para_tecnico(self):
         comissao = ComissaoItemOrcamento.objects.create(
@@ -957,12 +1327,145 @@ class CaixaPermissoesTests(TestCase):
         )
         comissao.criado_em = timezone.now() - timedelta(days=10)
         comissao.save(update_fields=["criado_em"])
+        OrdemServico.objects.filter(id=self.ordem.id).update(
+            data_abertura=timezone.now() - timedelta(days=10),
+            data_conclusao=timezone.now() - timedelta(days=10),
+        )
 
         self.client.force_login(self.tecnico)
         hoje = timezone.localdate().isoformat()
         response = self.client.get(reverse("caixa:meu_desempenho"), {"data_inicio": hoje, "data_fim": hoje})
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Item comissao data")
+
+    def test_meu_desempenho_filtra_por_criterio_pronto_reparado(self):
+        ordem_retirada = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="notebook",
+            marca_equipamento="Marca",
+            modelo_equipamento="Modelo pago",
+            defeito="Teste",
+            tipo_reparo="Fora de Garantia",
+            status="concluida",
+            fechada=True,
+        )
+        pagamento = Pagamento.objects.create(
+            caixa=Caixa.objects.filter(aberto=True).first(),
+            ordem_servico=ordem_retirada,
+            valor=Decimal("150.00"),
+            metodo="pix",
+        )
+        self.assertIsNotNone(pagamento.id)
+
+        Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="SERVICO",
+            descricao="Servico pronto",
+            valor_base=Decimal("100.00"),
+            percentual=Decimal("10.00"),
+            valor_comissao=Decimal("10.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="GERADA",
+            chave_unica="SERVICO_FINALIZADO:SERVICO:item:pronto-1",
+        )
+        Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=ordem_retirada,
+            tipo="SERVICO",
+            descricao="Servico retirado",
+            valor_base=Decimal("150.00"),
+            percentual=Decimal("10.00"),
+            valor_comissao=Decimal("15.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="GERADA",
+            chave_unica="SERVICO_FINALIZADO:SERVICO:item:retirada-1",
+        )
+
+        self.client.force_login(self.gerente)
+        hoje = timezone.localdate().isoformat()
+        response = self.client.get(
+            reverse("caixa:meu_desempenho"),
+            {
+                "tecnico": str(self.tecnico.id),
+                "data_inicio": hoje,
+                "data_fim": hoje,
+                "criterio": "pronto_reparado",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        referencias = [row["referencia"] for row in response.context["linhas_realizadas"]]
+        self.assertIn(self.ordem.numero_os, referencias)
+        self.assertNotIn(ordem_retirada.numero_os, referencias)
+
+    def test_meu_desempenho_separa_comissoes_por_tipo(self):
+        Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="SERVICO",
+            descricao="Troca de display",
+            valor_base=Decimal("120.00"),
+            percentual=Decimal("10.00"),
+            valor_comissao=Decimal("12.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="GERADA",
+            chave_unica="SERVICO_FINALIZADO:SERVICO:item:sep-1",
+        )
+        Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="PECA",
+            descricao="Peca aplicada",
+            valor_base=Decimal("80.00"),
+            percentual=Decimal("5.00"),
+            valor_comissao=Decimal("4.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="GERADA",
+            chave_unica="SERVICO_FINALIZADO:PECA:item:sep-2",
+        )
+        Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="BONUS_SERVICO",
+            descricao="Bonus tecnico",
+            valor_base=Decimal("0.00"),
+            percentual=Decimal("0.00"),
+            valor_comissao=Decimal("7.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="GERADA",
+            chave_unica="SERVICO_FINALIZADO:BONUS_SERVICO:item:sep-3",
+        )
+        Comissao.objects.create(
+            tecnico=self.tecnico,
+            tipo="COMISSAO_VENDAS",
+            descricao="Venda de mostrador",
+            valor_base=Decimal("200.00"),
+            percentual=Decimal("6.00"),
+            valor_comissao=Decimal("12.00"),
+            evento_gerador="VENDA_MOSTRADOR",
+            status="GERADA",
+            chave_unica="VENDA_MOSTRADOR:COMISSAO_VENDAS:venda:sep-4",
+        )
+
+        self.client.force_login(self.gerente)
+        hoje = timezone.localdate().isoformat()
+        response = self.client.get(
+            reverse("caixa:meu_desempenho"),
+            {"tecnico": str(self.tecnico.id), "data_inicio": hoje, "data_fim": hoje},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Serviços")
+        self.assertContains(response, "Peças")
+        self.assertContains(response, "Bônus")
+        self.assertContains(response, "Vendas")
+        self.assertEqual(response.context["resumo_por_tipo_real"]["servicos"], Decimal("12.00"))
+        self.assertEqual(response.context["resumo_por_tipo_real"]["pecas"], Decimal("4.00"))
+        self.assertEqual(response.context["resumo_por_tipo_real"]["bonus"], Decimal("7.00"))
+        self.assertEqual(response.context["resumo_por_tipo_real"]["vendas"], Decimal("12.00"))
+        self.assertEqual(len(response.context["linhas_realizadas_por_tipo"]["servicos"]), 1)
+        self.assertEqual(len(response.context["linhas_realizadas_por_tipo"]["pecas"]), 1)
+        self.assertEqual(len(response.context["linhas_realizadas_por_tipo"]["bonus"]), 1)
+        self.assertEqual(len(response.context["linhas_realizadas_por_tipo"]["vendas"]), 1)
 
     def test_meu_desempenho_gerente_filtra_por_tecnico(self):
         outro_tecnico = get_user_model().objects.create_user(
@@ -1035,9 +1538,138 @@ class CaixaPermissoesTests(TestCase):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("caixa:meu_desempenho"), {"tecnico": str(self.tecnico.id)})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context.get("ordens_relatorio", []), [])
-        mensagens = [str(m) for m in response.context["messages"]]
-        self.assertTrue(any("data de início e data de fim" in msg for msg in mensagens))
+        hoje = timezone.localdate()
+        inicio_mes = hoje.replace(day=1).isoformat()
+        fim_mes = date(hoje.year, hoje.month, monthrange(hoje.year, hoje.month)[1]).isoformat()
+        self.assertEqual(response.context["data_inicio"], inicio_mes)
+        self.assertEqual(response.context["data_fim"], fim_mes)
+        self.assertTrue(response.context.get("ordens_relatorio", []))
+
+    def test_meu_desempenho_exibe_checkbox_para_calcular_pecas(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("caixa:meu_desempenho"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="aplicar_pecas"')
+        self.assertContains(response, 'type="checkbox"')
+
+    def test_meu_desempenho_separa_folha_por_tipo_de_comissao(self):
+        ItemOrcamento.objects.create(
+            orcamento=Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem),
+            nome="Servico folha",
+            descricao="Teste servico",
+            quantidade=1,
+            valor_unitario=Decimal("100.00"),
+            origem="manual",
+            tipo_item="servico",
+            tecnico_responsavel=self.tecnico,
+            status="aprovado",
+        )
+        ItemOrcamento.objects.create(
+            orcamento=Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem),
+            nome="Peca folha",
+            descricao="Teste peca",
+            quantidade=1,
+            valor_unitario=Decimal("50.00"),
+            origem="manual",
+            tipo_item="peca",
+            tecnico_responsavel=self.tecnico,
+            status="aprovado",
+        )
+        Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="COMISSAO_VENDAS",
+            descricao="Venda folha",
+            valor_base=Decimal("200.00"),
+            percentual=Decimal("5.00"),
+            valor_comissao=Decimal("10.00"),
+            evento_gerador="VENDA_MOSTRADOR",
+            status="GERADA",
+            chave_unica="VENDA_MOSTRADOR:COMISSAO_VENDAS:folha-sep-1",
+        )
+        Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="BONUS_PRODUTO",
+            descricao="Bonus folha",
+            valor_base=Decimal("0.00"),
+            percentual=Decimal("0.00"),
+            valor_comissao=Decimal("4.00"),
+            evento_gerador="VENDA_MOSTRADOR",
+            status="GERADA",
+            chave_unica="VENDA_MOSTRADOR:BONUS_PRODUTO:folha-sep-2",
+        )
+
+        self.client.force_login(self.gerente)
+        hoje = timezone.localdate().isoformat()
+        response = self.client.get(
+            reverse("caixa:meu_desempenho"),
+            {
+                "tecnico": str(self.tecnico.id),
+                "data_inicio": hoje,
+                "data_fim": hoje,
+                "percentual_servicos": "10",
+                "percentual_pecas": "5",
+                "aplicar_servicos": "1",
+                "aplicar_pecas": "1",
+                "aplicar_vendas": "1",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        folhas = response.context.get("folhas_colaboradores", [])
+        self.assertTrue(folhas)
+        folha = next((row for row in folhas if row["tecnico"].id == self.tecnico.id), None)
+        self.assertIsNotNone(folha)
+        self.assertTrue(folha["servicos"]["linhas"])
+        self.assertTrue(folha["pecas"]["linhas"])
+        self.assertTrue(folha["vendas"]["linhas"])
+        self.assertTrue(folha["bonus"]["linhas"])
+        self.assertEqual(len(folha["secoes"]), 4)
+
+    def test_meu_desempenho_checkbox_pecas_desmarcado_nao_calcula_pecas(self):
+        ItemOrcamento.objects.create(
+            orcamento=Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem),
+            nome="Servico base checkbox",
+            descricao="Teste",
+            quantidade=1,
+            valor_unitario=Decimal("100.00"),
+            origem="manual",
+            tipo_item="servico",
+            tecnico_responsavel=self.tecnico,
+            status="aprovado",
+        )
+        ItemOrcamento.objects.create(
+            orcamento=Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem),
+            nome="Peca base checkbox",
+            descricao="Teste",
+            quantidade=1,
+            valor_unitario=Decimal("70.00"),
+            origem="manual",
+            tipo_item="peca",
+            tecnico_responsavel=self.tecnico,
+            status="aprovado",
+        )
+
+        self.client.force_login(self.gerente)
+        hoje = timezone.localdate().isoformat()
+        response = self.client.get(
+            reverse("caixa:meu_desempenho"),
+            {
+                "tecnico": str(self.tecnico.id),
+                "data_inicio": hoje,
+                "data_fim": hoje,
+                "percentual_servicos": "10",
+                "percentual_pecas": "5",
+                "aplicar_servicos": "1",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["aplicar_pecas"])
+        self.assertEqual(response.context["total_comissao_pecas_relatorio"], Decimal("0.00"))
+        folhas = response.context.get("folhas_colaboradores", [])
+        folha = next((row for row in folhas if row["tecnico"].id == self.tecnico.id), None)
+        self.assertIsNotNone(folha)
+        self.assertEqual(folha["pecas"]["linhas"], [])
 
     def test_meu_desempenho_bloqueia_intervalo_maior_que_12_meses(self):
         ItemOrcamento.objects.create(
@@ -1194,6 +1826,49 @@ class CaixaPermissoesTests(TestCase):
         self.assertTrue(linhas)
         self.assertEqual(linhas[0]["percentual_aplicado"], Decimal("25"))
         self.assertEqual(linhas[0]["valor_calculado"], Decimal("20.00"))
+
+    def test_meu_desempenho_nao_reapresenta_fonte_ja_paga(self):
+        self.tecnico.percentual_comissao_servico = Decimal("10.00")
+        self.tecnico.save(update_fields=["percentual_comissao_servico"])
+        self.ordem.relatorio_tecnico = "Relatorio para evitar duplicidade"
+        self.ordem.status = "pronto_contactado"
+        self.ordem.save(update_fields=["relatorio_tecnico", "status"])
+        item = ItemOrcamento.objects.create(
+            orcamento=Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem),
+            nome="Servico ja pago",
+            descricao="Teste",
+            quantidade=1,
+            valor_unitario=Decimal("120.00"),
+            origem="manual",
+            tipo_item="servico",
+            tecnico_responsavel=self.tecnico,
+            status="aprovado",
+        )
+        chave = f"SERVICO_FINALIZADO:SERVICO:item:{item.id}"
+        comissao = Comissao.objects.filter(chave_unica=chave).first()
+        self.assertIsNotNone(comissao)
+        aplicar_acao_comissao(comissao, acao="pagar", usuario=self.gerente, referencia_pagamento="PAGO-1")
+
+        self.client.force_login(self.gerente)
+        hoje = timezone.localdate().isoformat()
+        response = self.client.get(
+            reverse("caixa:meu_desempenho"),
+            {
+                "tecnico": str(self.tecnico.id),
+                "data_inicio": hoje,
+                "data_fim": hoje,
+                "percentual_servicos": "10",
+                "aplicar_servicos": "1",
+                "aplicar_pecas": "0",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        folhas = response.context.get("folhas_colaboradores", [])
+        linhas = []
+        for folha in folhas:
+            if folha["tecnico"].id == self.tecnico.id:
+                linhas.extend(folha["linhas"])
+        self.assertFalse(any(linha["descricao"] == "Servico ja pago" for linha in linhas))
 
     def test_excluir_item_remove_servico_vinculado_e_cancela_comissao_sp(self):
         item = ItemOrcamento.objects.create(
@@ -1955,3 +2630,280 @@ class CaixaPermissoesTests(TestCase):
         response = self.client.post(reverse("caixa:garantias_fabricante"), {"action": "sincronizar"})
         self.assertEqual(response.status_code, 302)
         self.assertTrue(AuditoriaGarantia.objects.filter(ordem_servico=ordem_sync).exists())
+
+    def test_relatorios_filtra_por_forma_pagamento_e_centro_custo(self):
+        self.client.force_login(self.gerente)
+        caixa = Caixa.objects.filter(aberto=True).first()
+        forma_pix = FormaPagamento.objects.create(nome="PIX teste", codigo="pix-teste", tipo="avista", ativa=True)
+        forma_cartao = FormaPagamento.objects.create(nome="Cartao teste", codigo="cartao-teste", tipo="avista", ativa=True)
+        centro_operacional = CentroCusto.objects.create(nome="Operacional teste", tipo="variavel", ativo=True)
+        centro_marketing = CentroCusto.objects.create(nome="Marketing teste", tipo="variavel", ativo=True)
+
+        Pagamento.objects.create(
+            caixa=caixa,
+            ordem_servico=self.ordem,
+            valor=Decimal("40.00"),
+            forma_pagamento=forma_pix,
+            metodo="pix",
+        )
+        Pagamento.objects.create(
+            caixa=caixa,
+            ordem_servico=self.ordem,
+            valor=Decimal("60.00"),
+            forma_pagamento=forma_cartao,
+            metodo="cartao",
+        )
+        LancamentoCaixa.objects.create(
+            caixa=caixa,
+            descricao="Compra operacional",
+            centro_custo=centro_operacional,
+            valor=Decimal("15.00"),
+            tipo="saida",
+            usuario=self.gerente,
+        )
+        LancamentoCaixa.objects.create(
+            caixa=caixa,
+            descricao="Campanha",
+            centro_custo=centro_marketing,
+            valor=Decimal("25.00"),
+            tipo="saida",
+            usuario=self.gerente,
+        )
+
+        response = self.client.get(
+            reverse("caixa:relatorios"),
+            {
+                "forma_pagamento": str(forma_pix.id),
+                "centro_custo": str(centro_operacional.id),
+                "tipo_lancamento": "saida",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["pagamentos"].count(), 1)
+        self.assertEqual(response.context["lancamentos"].count(), 1)
+        self.assertEqual(response.context["pagamentos"].first().forma_pagamento_id, forma_pix.id)
+        self.assertEqual(response.context["lancamentos"].first().centro_custo_id, centro_operacional.id)
+
+    def test_dre_intervalo_customizado_separa_cliente_garantia_e_despesa(self):
+        self.client.force_login(self.gerente)
+        forma_dinheiro = FormaPagamento.objects.create(nome="Dinheiro teste", codigo="dinheiro-teste", tipo="avista", ativa=True)
+        forma_garantia, _ = FormaPagamento.objects.get_or_create(
+            codigo="garantia_fabricante",
+            defaults={
+                "nome": "Garantia fabricante teste",
+                "tipo": "aprazo",
+                "ativa": True,
+            },
+        )
+        centro = CentroCusto.objects.create(nome="Assistencia tecnica", tipo="variavel", ativo=True)
+        caixa = Caixa.objects.filter(aberto=True).first()
+
+        Pagamento.objects.create(
+            caixa=caixa,
+            ordem_servico=self.ordem,
+            valor=Decimal("80.00"),
+            forma_pagamento=forma_dinheiro,
+            metodo="dinheiro",
+        )
+        Pagamento.objects.create(
+            caixa=caixa,
+            ordem_servico=self.ordem,
+            valor=Decimal("20.00"),
+            forma_pagamento=forma_garantia,
+            metodo="garantia_fabricante",
+        )
+        LancamentoCaixa.objects.create(
+            caixa=caixa,
+            descricao="Despesa tecnica",
+            centro_custo=centro,
+            valor=Decimal("30.00"),
+            tipo="saida",
+            usuario=self.gerente,
+        )
+
+        hoje = timezone.localdate().isoformat()
+        response = self.client.get(reverse("caixa:dre"), {"data_inicio": hoje, "data_fim": hoje})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["receita_bruta"], Decimal("100.00"))
+        self.assertEqual(response.context["receita_cliente"], Decimal("80.00"))
+        self.assertEqual(response.context["receita_garantia"], Decimal("20.00"))
+        self.assertEqual(response.context["despesas_operacionais"], Decimal("30.00"))
+        self.assertEqual(response.context["resultado_operacional"], Decimal("70.00"))
+
+    def test_auditoria_operacional_lista_pendencias(self):
+        self.client.force_login(self.gerente)
+        caixa = Caixa.objects.filter(aberto=True).first()
+        caixa.aberto = False
+        caixa.saldo_final = Decimal("100.00")
+        caixa.valor_contado_fisico = Decimal("95.00")
+        caixa.diferenca_fechamento = Decimal("-5.00")
+        caixa.save(update_fields=["aberto", "saldo_final", "valor_contado_fisico", "diferenca_fechamento"])
+
+        conta_pronta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="OS pronta sem recebimento",
+            cliente_nome=self.cliente.nome,
+            tipo_origem="cliente_os",
+            valor_original="120.00",
+            valor_aberto="120.00",
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        conta_vencida = ContaReceber.objects.create(
+            descricao="Conta vencida",
+            cliente_nome="Cliente vencido",
+            tipo_origem="avulso",
+            valor_original="80.00",
+            valor_aberto="80.00",
+            vencimento=timezone.localdate() - timedelta(days=2),
+            status="vencida",
+        )
+        pagamento_sem_talao = Pagamento.objects.create(
+            caixa=caixa,
+            ordem_servico=self.ordem,
+            valor=Decimal("55.00"),
+            metodo="pix",
+        )
+        Pagamento.objects.filter(pk=pagamento_sem_talao.pk).update(numero_talao="")
+        LancamentoCaixa.objects.create(
+            caixa=caixa,
+            descricao="Saida sem centro",
+            valor=Decimal("12.00"),
+            tipo="saida",
+            usuario=self.gerente,
+        )
+        AuditoriaGarantia.objects.create(
+            ordem_servico=OrdemServico.objects.create(
+                cliente=self.cliente,
+                tipo_equipamento="celular",
+                marca_equipamento="Marca G",
+                modelo_equipamento="Modelo G",
+                defeito="Teste garantia pendente",
+                tipo_reparo="Garantia",
+                status="concluida",
+                fechada=True,
+            ),
+            status_faturamento="pendente",
+            valor_previsto_fabricante=Decimal("150.00"),
+        )
+
+        response = self.client.get(reverse("caixa:auditoria_operacional"), {"dias": "30"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(conta_pronta, response.context["ordens_prontas_sem_recebimento"])
+        self.assertIn(conta_vencida, response.context["contas_vencidas"])
+        self.assertEqual(response.context["total_caixas_com_diferenca"], 1)
+        self.assertEqual(response.context["total_pagamentos_sem_talao"], 1)
+        self.assertEqual(response.context["total_saidas_sem_centro"], 1)
+        self.assertEqual(response.context["total_garantias_pendentes"], 1)
+
+    def test_fluxo_integrado_fechamento_pagamento_e_comissoes_tecnico(self):
+        self.client.force_login(self.gerente)
+        tecnico = get_user_model().objects.create_user(
+            username="tecnico_fluxo_integrado",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+            percentual_comissao_servico=Decimal("10.00"),
+            percentual_comissao_peca=Decimal("4.00"),
+        )
+        produto = Produto.objects.create(
+            nome="Motor Integrado",
+            ean="7891231231231",
+            preco_final=Decimal("80.00"),
+            quantidade=3,
+            permite_comissao_peca=True,
+            percentual_comissao_peca=Decimal("12.00"),
+            bonus_venda=Decimal("5.00"),
+        )
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="maquina_lavar",
+            marca_equipamento="Marca Integrada",
+            modelo_equipamento="Modelo Integrado",
+            defeito="Nao centrifuga",
+            tipo_reparo="Fora de Garantia",
+            status="em_andamento",
+            relatorio_tecnico="Motor e mao de obra executados.",
+            tipo_reparacao="substituicao",
+        )
+        orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=ordem)
+        item_servico = ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome="Mao de obra integrada",
+            descricao="Servico principal",
+            quantidade=1,
+            valor_unitario=Decimal("200.00"),
+            origem="manual",
+            tipo_item="servico",
+            tecnico_responsavel=tecnico,
+            status="aprovado",
+        )
+        item_peca = ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome=produto.nome,
+            ean=produto.ean,
+            descricao="Peca aplicada",
+            quantidade=1,
+            valor_unitario=Decimal("80.00"),
+            origem="estoque",
+            tipo_item="peca",
+            tecnico_responsavel=tecnico,
+            status="aprovado",
+        )
+
+        response_fechamento = self.client.get(reverse("ordens:toggle_fechamento_os", args=[ordem.id]) + "?ir_caixa=1")
+        self.assertEqual(response_fechamento.status_code, 302)
+        self.assertIn(reverse("caixa:registrar_pagamento"), response_fechamento.url)
+        ordem.refresh_from_db()
+        self.assertTrue(ordem.fechada)
+        self.assertEqual(ordem.status, "concluida")
+        self.assertEqual(ServicoPeca.objects.filter(ordem=ordem).count(), 2)
+
+        comissoes_fechamento = Comissao.objects.filter(ordem_servico=ordem, tecnico=tecnico).order_by("tipo")
+        self.assertEqual(comissoes_fechamento.count(), 2)
+        self.assertEqual(
+            {row["tipo"]: row["valor_comissao"] for row in comissoes_fechamento.values("tipo", "valor_comissao")},
+            {
+                "PECA": Decimal("9.60"),
+                "SERVICO": Decimal("20.00"),
+            },
+        )
+
+        response_pagamento = self.client.post(
+            reverse("caixa:registrar_pagamento") + f"?os={ordem.id}",
+            {"valor": "280.00", "metodo": "pix", "referencia": "FLUXO-INT-001"},
+        )
+        self.assertEqual(response_pagamento.status_code, 302)
+
+        pagamento = Pagamento.objects.filter(ordem_servico=ordem, referencia="FLUXO-INT-001").first()
+        self.assertIsNotNone(pagamento)
+        self.assertTrue(bool(pagamento.numero_talao))
+
+        comissoes = Comissao.objects.filter(ordem_servico=ordem, tecnico=tecnico).order_by("tipo")
+        self.assertEqual(comissoes.count(), 2)
+        self.assertEqual(
+            {row["tipo"]: row["valor_comissao"] for row in comissoes.values("tipo", "valor_comissao")},
+            {
+                "PECA": Decimal("9.60"),
+                "SERVICO": Decimal("20.00"),
+            },
+        )
+        self.assertEqual(ordem.total_comissoes_financeiro(), Decimal("29.60"))
+
+        hoje = timezone.localdate().isoformat()
+        response_desempenho = self.client.get(
+            reverse("caixa:meu_desempenho"),
+            {
+                "tecnico": str(tecnico.id),
+                "data_inicio": hoje,
+                "data_fim": hoje,
+                "percentual_servicos": "10",
+                "percentual_pecas": "12",
+                "aplicar_servicos": "1",
+                "aplicar_pecas": "1",
+                "somente_fechadas": "1",
+            },
+        )
+        self.assertEqual(response_desempenho.status_code, 200)
+        self.assertEqual(response_desempenho.context["total_comissao_servicos_relatorio"], Decimal("20.00"))
+        self.assertEqual(response_desempenho.context["total_comissao_pecas_relatorio"], Decimal("9.60"))
+        self.assertEqual(response_desempenho.context["total_comissao_relatorio"], Decimal("29.60"))

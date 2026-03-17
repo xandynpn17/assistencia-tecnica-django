@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
@@ -14,6 +15,28 @@ class Caixa(models.Model):
     valor_contado_fisico = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     diferenca_fechamento = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     justificativa_diferenca = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-data", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["data"], name="caixa_unico_por_data"),
+            models.UniqueConstraint(
+                fields=["aberto"],
+                condition=Q(aberto=True),
+                name="caixa_apenas_um_aberto",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.data and Caixa.objects.exclude(pk=self.pk).filter(data=self.data).exists():
+            raise ValidationError({"data": "Ja existe um caixa registrado para esta data."})
+        if self.aberto and Caixa.objects.exclude(pk=self.pk).filter(aberto=True).exists():
+            raise ValidationError("Ja existe um caixa aberto.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Caixa {self.data} - {'Aberto' if self.aberto else 'Fechado'}"
@@ -32,7 +55,7 @@ class Pagamento(models.Model):
         related_name="pagamentos",
     )
     metodo = models.CharField(max_length=50, blank=True, default="")
-    referencia = models.CharField(max_length=50, blank=True, null=True, help_text="Numero do talao ou comprovante")
+    referencia = models.CharField(max_length=50, blank=True, null=True, help_text="Número do talão ou comprovante")
     numero_talao = models.CharField(max_length=32, unique=True, null=True, blank=True, db_index=True)
     data_emissao_talao = models.DateTimeField(null=True, blank=True)
     data = models.DateTimeField(auto_now_add=True)
@@ -76,7 +99,7 @@ class Pagamento(models.Model):
 
 class FormaPagamento(models.Model):
     TIPO_CHOICES = [
-        ("avista", "A vista"),
+        ("avista", "À vista"),
         ("aprazo", "A prazo"),
     ]
 
@@ -97,7 +120,7 @@ class FormaPagamento(models.Model):
 class CategoriaFinanceira(models.Model):
     TIPOS = [
         ("entrada", "Entrada"),
-        ("saida", "Saida"),
+        ("saida", "Saída"),
         ("receber", "Contas a Receber"),
     ]
     nome = models.CharField(max_length=80)
@@ -178,7 +201,7 @@ class RecebimentoConta(models.Model):
 class LancamentoCaixa(models.Model):
     TIPOS = [
         ("entrada", "Entrada"),
-        ("saida", "Saida"),
+        ("saida", "Saída"),
     ]
 
     caixa = models.ForeignKey(Caixa, on_delete=models.CASCADE, related_name="lancamentos")
@@ -222,7 +245,7 @@ class AuditoriaFinanceira(models.Model):
 class CentroCusto(models.Model):
     TIPO_CHOICES = [
         ("fixo", "Fixo"),
-        ("variavel", "Variavel"),
+        ("variavel", "Variável"),
     ]
 
     nome = models.CharField(max_length=120, unique=True)
@@ -238,7 +261,7 @@ class CentroCusto(models.Model):
 
 class RegraComissaoTecnico(models.Model):
     MOMENTO_LIBERACAO_CHOICES = [
-        ("entregue_pago", "Somente apos entrega ao cliente + pagamento"),
+        ("entregue_pago", "Somente após entrega ao cliente + pagamento"),
         ("pronto_contactado", "A partir de pronto contactado (adiantamento)"),
     ]
 
@@ -254,7 +277,7 @@ class RegraComissaoTecnico(models.Model):
         ordering = ["usuario__username"]
 
     def __str__(self):
-        return f"Comissao {self.usuario} ({self.percentual_servico}%/{self.percentual_peca}%)"
+        return f"Comissão {self.usuario} ({self.percentual_servico}%/{self.percentual_peca}%)"
 
 
 class ComissaoTecnico(models.Model):
@@ -281,7 +304,7 @@ class ComissaoTecnico(models.Model):
         unique_together = [("ordem_servico", "tecnico", "considerar_pecas")]
 
     def __str__(self):
-        return f"Comissao {self.tecnico} - OS {self.ordem_servico.numero_os} - {self.valor_comissao}"
+        return f"Comissão {self.tecnico} - OS {self.ordem_servico.numero_os} - {self.valor_comissao}"
 
 
 class ComissaoItemOrcamento(models.Model):
@@ -313,16 +336,17 @@ class ComissaoItemOrcamento(models.Model):
         unique_together = [("item_orcamento", "modo_pagamento")]
 
     def __str__(self):
-        return f"Comissao item #{self.item_orcamento_id} - {self.tecnico} - {self.valor_comissao}"
+        return f"Comissão item #{self.item_orcamento_id} - {self.tecnico} - {self.valor_comissao}"
 
 
 class Comissao(models.Model):
     TIPO_CHOICES = [
-        ("SERVICO", "Servico"),
-        ("PECA", "Peca"),
-        ("BONUS_PRODUTO", "Bonus por produto"),
-        ("BONUS_RETIRADA", "Bonus por retirada"),
-        ("BONUS_SERVICO", "Bonus de servico"),
+        ("SERVICO", "Serviço"),
+        ("PECA", "Peça"),
+        ("COMISSAO_VENDAS", "Comissão sobre vendas"),
+        ("BONUS_PRODUTO", "Bônus por produto"),
+        ("BONUS_RETIRADA", "Bônus por retirada"),
+        ("BONUS_SERVICO", "Bônus de serviço"),
     ]
     STATUS_CHOICES = [
         ("GERADA", "Gerada"),
@@ -395,7 +419,7 @@ class RegraPremioMeta(models.Model):
         ("faturamento_loja", "Faturamento da loja"),
     ]
     PUBLICO_CHOICES = [
-        ("tecnico", "Tecnicos"),
+        ("tecnico", "Técnicos"),
         ("atendente", "Atendentes"),
         ("todos_operacionais", "Todos operacionais"),
     ]
@@ -426,7 +450,7 @@ class FaixaPremioMeta(models.Model):
 
     def __str__(self):
         teto = self.meta_maxima if self.meta_maxima is not None else "sem teto"
-        return f"{self.regra.nome}: {self.meta_minima} ate {teto} => {self.premio_valor}"
+        return f"{self.regra.nome}: {self.meta_minima} até {teto} => {self.premio_valor}"
 
 
 class PremioColaboradorCompetencia(models.Model):
@@ -532,7 +556,7 @@ class ContaPagar(models.Model):
 
     def delete(self, *args, **kwargs):
         if self.pagamentos.exists():
-            raise ValidationError("Nao e permitido excluir conta a pagar com pagamentos vinculados.")
+            raise ValidationError("Não é permitido excluir conta a pagar com pagamentos vinculados.")
         return super().delete(*args, **kwargs)
 
 

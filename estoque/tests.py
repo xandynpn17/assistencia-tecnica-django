@@ -18,8 +18,11 @@ from estoque.models import (
     MovimentacaoEstoque,
     PontoOperacional,
     Produto,
+    ProdutoEquivalente,
+    ProdutoPrecoTabela,
     ReservaEstoque,
     SaldoEstoquePonto,
+    TabelaPreco,
     VendaRapidaEstoque,
 )
 from ordens.models import OrdemServico, ServicoPeca
@@ -308,7 +311,7 @@ class ConsultaArtigosTests(TestCase):
     def test_produto_form_servico_rejeita_estoque_positivo(self):
         form = ProdutoForm(
             data={
-                "nome": "Serviço com estoque",
+                "nome": "Servico com estoque",
                 "tipo_item": "servico",
                 "modo_preco": "avancado",
                 "preco_final": "50.00",
@@ -802,3 +805,72 @@ class AuditoriaEstoqueCommandTests(TestCase):
 
         with self.assertRaises(CommandError):
             call_command("auditar_estoque", falhar_se_divergir=True)
+
+
+class EstruturaProdutoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="estoque_estrutura",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.ponto = PontoOperacional.objects.create(codigo="PO3", nome="Loja", ativo=True)
+        self.produto = Produto.objects.create(
+            nome="Motor Principal",
+            ean="7895550000011",
+            sku="SKU-MOTOR-01",
+            preco_final=Decimal("100.00"),
+            preco=Decimal("100.00"),
+            quantidade=8,
+            ponto_operacional=self.ponto,
+            ativo=True,
+        )
+        self.equivalente = Produto.objects.create(
+            nome="Motor Alternativo",
+            ean="7895550000012",
+            sku="SKU-MOTOR-02",
+            preco_final=Decimal("95.00"),
+            preco=Decimal("95.00"),
+            quantidade=5,
+            ponto_operacional=self.ponto,
+            ativo=True,
+        )
+
+    def test_tabelas_preco_cria_tabela(self):
+        response = self.client.post(
+            reverse("estoque:tabelas_preco"),
+            {"nome": "Atacado", "margem_extra": "5.00", "ativo": "on"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(TabelaPreco.objects.filter(nome="Atacado").exists())
+
+    def test_estrutura_produto_adiciona_equivalente(self):
+        response = self.client.post(
+            reverse("estoque:estrutura_produto", args=[self.produto.id]),
+            {
+                "acao": "adicionar_equivalente",
+                "equivalente": str(self.equivalente.id),
+                "observacao": "Compativel",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            ProdutoEquivalente.objects.filter(produto=self.produto, equivalente=self.equivalente).exists()
+        )
+
+    def test_estrutura_produto_adiciona_preco_tabela(self):
+        tabela = TabelaPreco.objects.create(nome="Balcao", margem_extra=Decimal("2.00"), ativo=True)
+        response = self.client.post(
+            reverse("estoque:estrutura_produto", args=[self.produto.id]),
+            {
+                "acao": "adicionar_preco_tabela",
+                "tabela": str(tabela.id),
+                "preco": "110.00",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            ProdutoPrecoTabela.objects.filter(produto=self.produto, tabela=tabela, preco=Decimal("110.00")).exists()
+        )

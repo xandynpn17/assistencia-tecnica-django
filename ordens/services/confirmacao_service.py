@@ -1,4 +1,4 @@
-﻿from django.db import transaction
+from django.db import transaction
 from django.utils import timezone
 
 from ordens.models import LogConfirmacaoOS

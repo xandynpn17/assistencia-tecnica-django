@@ -6,9 +6,10 @@ from django.core.management.base import BaseCommand, CommandError
 
 from caixa.models import Comissao
 from caixa.services.comissoes import _fontes_comissionaveis
+from estoque.models import VendaRapidaEstoque
 
 
-TIPOS_COM_FONTE = {"SERVICO", "PECA", "BONUS_PRODUTO"}
+TIPOS_COM_FONTE = {"SERVICO", "PECA", "BONUS_PRODUTO", "COMISSAO_VENDAS"}
 
 
 class Command(BaseCommand):
@@ -105,6 +106,16 @@ class Command(BaseCommand):
                 validas["BONUS_PRODUTO"].add(chave_ref)
         return validas
 
+    def _venda_rapida_valida(self, chave_ref: str):
+        prefixo, _, venda_id = str(chave_ref or "").partition(":")
+        if prefixo != "venda" or not venda_id.isdigit():
+            return None
+        return (
+            VendaRapidaEstoque.objects.select_related("produto")
+            .filter(id=int(venda_id), status="vendida")
+            .first()
+        )
+
     def _parse_chave_unica(self, chave_unica: str):
         parts = str(chave_unica or "").split(":", 2)
         if len(parts) < 3:
@@ -163,7 +174,7 @@ class Command(BaseCommand):
         if comissao.tipo not in TIPOS_COM_FONTE or comissao.status == "CANCELADA":
             return
 
-        _, tipo_da_chave, chave_ref = self._parse_chave_unica(comissao.chave_unica)
+        evento, tipo_da_chave, chave_ref = self._parse_chave_unica(comissao.chave_unica)
         if not chave_ref:
             self._registrar_issue(
                 issues,
@@ -182,6 +193,18 @@ class Command(BaseCommand):
                 comissao=comissao,
                 detalhe=f"Tipo na chave ({tipo_da_chave}) difere do campo tipo ({comissao.tipo}).",
             )
+
+        if evento == "VENDA_MOSTRADOR" or chave_ref.startswith("venda:"):
+            venda = self._venda_rapida_valida(chave_ref)
+            if not venda:
+                self._registrar_issue(
+                    issues,
+                    issues_count,
+                    kind="sem_fonte_valida",
+                    comissao=comissao,
+                    detalhe=f"Referência '{chave_ref}' não encontrada nas vendas rápidas válidas.",
+                )
+            return
 
         if not comissao.ordem_servico_id:
             self._registrar_issue(
