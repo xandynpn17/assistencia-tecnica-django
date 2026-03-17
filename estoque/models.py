@@ -1,4 +1,5 @@
-﻿from decimal import Decimal
+from decimal import Decimal
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
@@ -74,7 +75,7 @@ class Produto(models.Model):
         ("produto", "Produto"),
         ("peca", "Peça"),
         ("consumivel", "Consumível"),
-        ("servico", "Serviço"),
+        ("servico", "Servico"),
     ]
 
     nome = models.CharField(max_length=100)
@@ -338,6 +339,70 @@ class Produto(models.Model):
         return (self.lucro_reais / self.preco_sugerido_sem_margem) * 100
 
 
+class TabelaPreco(models.Model):
+    nome = models.CharField(max_length=80, unique=True)
+    ativo = models.BooleanField(default=True)
+    margem_extra = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(200)],
+    )
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
+class ProdutoPrecoTabela(models.Model):
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="precos_tabela")
+    tabela = models.ForeignKey(TabelaPreco, on_delete=models.CASCADE, related_name="itens_preco")
+    preco = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+
+    class Meta:
+        unique_together = [("produto", "tabela")]
+        ordering = ["tabela__nome"]
+
+    def __str__(self):
+        return f"{self.produto.nome} - {self.tabela.nome}"
+
+
+class ProdutoEquivalente(models.Model):
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="equivalentes_principais")
+    equivalente = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="equivalente_de")
+    observacao = models.CharField(max_length=160, blank=True)
+
+    class Meta:
+        unique_together = [("produto", "equivalente")]
+        ordering = ["produto__nome", "equivalente__nome"]
+
+    def clean(self):
+        if self.produto_id and self.equivalente_id and self.produto_id == self.equivalente_id:
+            raise ValidationError("Produto equivalente não pode ser o mesmo produto.")
+
+    def __str__(self):
+        return f"{self.produto.nome} ~ {self.equivalente.nome}"
+
+
+class ProdutoKitItem(models.Model):
+    produto_kit = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="kit_componentes")
+    componente = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="usado_em_kits")
+    quantidade = models.DecimalField(max_digits=10, decimal_places=3, default=1, validators=[MinValueValidator(0.001)])
+
+    class Meta:
+        unique_together = [("produto_kit", "componente")]
+        ordering = ["produto_kit__nome", "componente__nome"]
+
+    def clean(self):
+        if self.produto_kit_id and self.componente_id and self.produto_kit_id == self.componente_id:
+            raise ValidationError("Componente do kit não pode ser o mesmo produto.")
+
+    def __str__(self):
+        return f"{self.produto_kit.nome} -> {self.componente.nome} ({self.quantidade})"
+
+
 class MovimentacaoEstoque(models.Model):
     TIPO_CHOICES = [
         ("entrada", "Entrada de estoque"),
@@ -508,5 +573,9 @@ class ItemInventarioEstoque(models.Model):
 
     def __str__(self):
         return f"{self.produto.nome} ({self.ajuste:+d})"
+
+
+
+
 
 

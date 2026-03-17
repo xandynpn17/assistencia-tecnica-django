@@ -67,7 +67,7 @@
         </div>
         {% if not pode_venda_mostrador %}
         <div class="alert alert-warning py-2 mb-2">
-          Seu perfil pode consultar artigos, mas não pode concluir venda a mostrador.
+          Este perfil pode consultar artigos, mas não pode concluir venda a mostrador.
         </div>
         {% endif %}
         <div id="artigoBuscaResultados" class="list-group"></div>
@@ -272,7 +272,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function abrirModalAdicionar(ponto) {
     if (!podeVendaMostrador) {
-      setFeedback("erro", "Seu perfil não possui permissão para venda a mostrador.");
+      setFeedback("erro", "Este perfil não possui permissão para venda a mostrador.");
       return;
     }
     document.getElementById("addPontoId").value = String(ponto.id);
@@ -394,12 +394,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function adicionarCesto() {
     if (!podeVendaMostrador) {
-      setFeedback("erro", "Seu perfil não possui permissão para venda a mostrador.");
+      setFeedback("erro", "Este perfil não possui permissão para venda a mostrador.");
       return;
     }
     const vendedorNumero = document.getElementById("addTecnicoSelect").value;
     if (!vendedorNumero) {
-      setFeedback("erro", "Selecione um técnico com número de vendedor cadastrado.");
+      setFeedback("erro", "Selecione um colaborador com número de vendedor cadastrado.");
       return;
     }
 
@@ -436,7 +436,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function finalizarCesto() {
     if (!podeVendaMostrador) {
-      setFeedback("erro", "Seu perfil não possui permissão para venda a mostrador.");
+      setFeedback("erro", "Este perfil não possui permissão para venda a mostrador.");
       return;
     }
     if (!cestoCodigoAtual) {

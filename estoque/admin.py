@@ -4,8 +4,12 @@ from .models import (
     MovimentacaoEstoque,
     PontoOperacional,
     Produto,
+    ProdutoEquivalente,
+    ProdutoKitItem,
+    ProdutoPrecoTabela,
     SaldoEstoquePonto,
     ServicoReferencia,
+    TabelaPreco,
     UbicacaoEstoque,
 )
 
@@ -55,3 +59,29 @@ class ServicoReferenciaAdmin(admin.ModelAdmin):
     list_display = ["nome", "ativo"]
     list_filter = ["ativo"]
     search_fields = ["nome"]
+
+
+@admin.register(TabelaPreco)
+class TabelaPrecoAdmin(admin.ModelAdmin):
+    list_display = ["nome", "margem_extra", "ativo"]
+    list_filter = ["ativo"]
+    search_fields = ["nome"]
+
+
+@admin.register(ProdutoPrecoTabela)
+class ProdutoPrecoTabelaAdmin(admin.ModelAdmin):
+    list_display = ["produto", "tabela", "preco"]
+    list_filter = ["tabela"]
+    search_fields = ["produto__nome", "tabela__nome"]
+
+
+@admin.register(ProdutoEquivalente)
+class ProdutoEquivalenteAdmin(admin.ModelAdmin):
+    list_display = ["produto", "equivalente", "observacao"]
+    search_fields = ["produto__nome", "equivalente__nome"]
+
+
+@admin.register(ProdutoKitItem)
+class ProdutoKitItemAdmin(admin.ModelAdmin):
+    list_display = ["produto_kit", "componente", "quantidade"]
+    search_fields = ["produto_kit__nome", "componente__nome"]

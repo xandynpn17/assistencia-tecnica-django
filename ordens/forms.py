@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
+from estoque.models import Produto
 from configuracoes.models import MarcaGarantia, TipoEquipamentoConfig
 from orcamentos.models import Orcamento
 
@@ -91,9 +92,7 @@ class OrdemServicoForm(forms.ModelForm):
 
     class Meta:
         model = OrdemServico
-        exclude = ["cliente"]
         fields = [
-            "cliente",
             "tipo_equipamento",
             "marca_catalogo",
             "marca_equipamento",
@@ -108,7 +107,6 @@ class OrdemServicoForm(forms.ModelForm):
             "notas_internas",
         ]
         widgets = {
-            "cliente": forms.Select(attrs={"class": "form-control"}),
             "tipo_equipamento": forms.Select(attrs={"class": "form-control"}),
             "marca_equipamento": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex: Samsung"}),
             "modelo_equipamento": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex: Galaxy S23"}),
@@ -167,6 +165,8 @@ class OrcamentoForm(forms.ModelForm):
 
 
 class ServicoPecaForm(forms.ModelForm):
+    produto_estoque_id = forms.IntegerField(required=False, widget=forms.HiddenInput())
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["tecnico_responsavel"].queryset = (
@@ -174,6 +174,34 @@ class ServicoPecaForm(forms.ModelForm):
             .objects.filter(is_active=True, tipo_usuario="tecnico")
             .order_by("username")
         )
+
+    def clean(self):
+        cleaned = super().clean()
+        produto_id = cleaned.pop("produto_estoque_id", None)
+        produto = None
+        if produto_id:
+            produto = Produto.objects.filter(id=produto_id, ativo=True, permite_os=True).first()
+            if not produto:
+                self.add_error(None, "Produto do estoque inválido para vincular ao item da OS.")
+                return cleaned
+
+        tipo = cleaned.get("tipo")
+        if produto:
+            cleaned["produto_estoque"] = produto
+            if tipo == "peca" and produto.tipo_item == "servico":
+                self.add_error("tipo", "O item selecionado no estoque é um serviço, não uma peça.")
+            if tipo == "servico" and produto.tipo_item != "servico" and not produto.is_servico:
+                self.add_error("tipo", "O item selecionado no estoque é uma peça/produto, não um serviço.")
+            if not (cleaned.get("nome") or "").strip():
+                cleaned["nome"] = produto.nome
+            if not (cleaned.get("descricao") or "").strip():
+                cleaned["descricao"] = produto.descricao
+            if cleaned.get("garantia_dias") in {None, ""} and produto.garantia_peca_dias:
+                cleaned["garantia_dias"] = produto.garantia_peca_dias
+        else:
+            cleaned["produto_estoque"] = None
+
+        return cleaned
 
     class Meta:
         model = ServicoPeca
@@ -204,6 +232,4 @@ class NotificacaoClienteForm(forms.ModelForm):
             "canal": forms.Select(attrs={"class": "form-control"}),
             "mensagem": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
-
-
 

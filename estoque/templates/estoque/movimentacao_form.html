@@ -1,4 +1,4 @@
-﻿{% extends "core/base.html" %}
+{% extends "core/base.html" %}
 
 {% block header %}<h1 class="m-0 text-dark">Nova Movimentacao de Estoque</h1>{% endblock %}
 
@@ -8,7 +8,7 @@
     <form method="post">
       {% csrf_token %}
       <div class="form-group">
-        <label>Buscar artigo (EAN, SKU ou descricao)</label>
+        <label>Buscar artigo (EAN, SKU ou descrição)</label>
         <input type="text" id="filtroProduto" class="form-control" placeholder="Digite para filtrar o artigo">
       </div>
       <div class="form-group">

@@ -1,0 +1,110 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h3 class="card-title mb-0">Estrutura do produto: {{ produto.nome }}</h3>
+    <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-lg-4">
+        <h6>Precos por tabela</h6>
+        <form method="post" class="mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="acao" value="adicionar_preco_tabela">
+          <div class="form-group">{{ preco_form.tabela.label_tag }}{{ preco_form.tabela }}</div>
+          <div class="form-group">{{ preco_form.preco.label_tag }}{{ preco_form.preco }}</div>
+          <button type="submit" class="btn btn-primary btn-sm">Adicionar/Atualizar</button>
+        </form>
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>Tabela</th><th>Preco</th><th></th></tr></thead>
+          <tbody>
+          {% for item in precos_tabela %}
+            <tr>
+              <td>{{ item.tabela.nome }}</td>
+              <td>R$ {{ item.preco|floatformat:2 }}</td>
+              <td class="text-center">
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="acao" value="excluir_preco_tabela">
+                  <input type="hidden" name="item_id" value="{{ item.id }}">
+                  <button class="btn btn-outline-danger btn-sm" type="submit">x</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="text-center text-muted">Sem tabelas para este produto.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="col-lg-4">
+        <h6>Produtos equivalentes</h6>
+        <form method="post" class="mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="acao" value="adicionar_equivalente">
+          <div class="form-group">{{ equivalente_form.equivalente.label_tag }}{{ equivalente_form.equivalente }}</div>
+          <div class="form-group">{{ equivalente_form.observacao.label_tag }}{{ equivalente_form.observacao }}</div>
+          <button type="submit" class="btn btn-primary btn-sm">Adicionar equivalente</button>
+        </form>
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>Equivalente</th><th>Obs.</th><th></th></tr></thead>
+          <tbody>
+          {% for item in equivalentes %}
+            <tr>
+              <td>{{ item.equivalente.nome }}</td>
+              <td>{{ item.observacao|default:"-" }}</td>
+              <td class="text-center">
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="acao" value="excluir_equivalente">
+                  <input type="hidden" name="item_id" value="{{ item.id }}">
+                  <button class="btn btn-outline-danger btn-sm" type="submit">x</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="text-center text-muted">Sem equivalentes.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="col-lg-4">
+        <h6>Composicao de kit</h6>
+        <form method="post" class="mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="acao" value="adicionar_kit_item">
+          <div class="form-group">{{ kit_form.componente.label_tag }}{{ kit_form.componente }}</div>
+          <div class="form-group">{{ kit_form.quantidade.label_tag }}{{ kit_form.quantidade }}</div>
+          <button type="submit" class="btn btn-primary btn-sm">Adicionar componente</button>
+        </form>
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>Componente</th><th>Qtd</th><th></th></tr></thead>
+          <tbody>
+          {% for item in kit_componentes %}
+            <tr>
+              <td>{{ item.componente.nome }}</td>
+              <td>{{ item.quantidade }}</td>
+              <td class="text-center">
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="acao" value="excluir_kit_item">
+                  <input type="hidden" name="item_id" value="{{ item.id }}">
+                  <button class="btn btn-outline-danger btn-sm" type="submit">x</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="text-center text-muted">Sem componentes.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

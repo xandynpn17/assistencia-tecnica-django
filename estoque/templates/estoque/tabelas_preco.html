@@ -1,0 +1,45 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header"><h3 class="card-title mb-0">Tabelas de preço</h3></div>
+  <div class="card-body">
+    <form method="post" class="form-row mb-3">
+      {% csrf_token %}
+      <div class="col-md-5 form-group">{{ form.nome.label_tag }}{{ form.nome }}{{ form.nome.errors }}</div>
+      <div class="col-md-3 form-group">{{ form.margem_extra.label_tag }}{{ form.margem_extra }}{{ form.margem_extra.errors }}</div>
+      <div class="col-md-2 form-group d-flex align-items-center">
+        <div class="form-check mt-4">{{ form.ativo }} <label class="form-check-label ml-2">Ativa</label></div>
+      </div>
+      <div class="col-md-2 d-flex align-items-end form-group">
+        <button type="submit" class="btn btn-primary btn-block">Salvar</button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered">
+        <thead><tr><th>Nome</th><th>Margem extra (%)</th><th>Ativa</th><th></th></tr></thead>
+        <tbody>
+          {% for tabela in tabelas %}
+          <tr>
+            <td>{{ tabela.nome }}</td>
+            <td>{{ tabela.margem_extra|floatformat:2 }}</td>
+            <td>{% if tabela.ativo %}Sim{% else %}Não{% endif %}</td>
+            <td class="text-center">
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="acao" value="excluir">
+                <input type="hidden" name="tabela_id" value="{{ tabela.id }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm">Excluir</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="text-center text-muted">Nenhuma tabela cadastrada.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

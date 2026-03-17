@@ -3,7 +3,18 @@ from django.utils import timezone
 
 from configuracoes.models import FornecedorGarantia, MarcaGarantia
 
-from .models import CategoriaProduto, MovimentacaoEstoque, PontoOperacional, Produto, ServicoReferencia, UbicacaoEstoque
+from .models import (
+    CategoriaProduto,
+    MovimentacaoEstoque,
+    PontoOperacional,
+    Produto,
+    ProdutoEquivalente,
+    ProdutoKitItem,
+    ProdutoPrecoTabela,
+    ServicoReferencia,
+    TabelaPreco,
+    UbicacaoEstoque,
+)
 
 
 class ProdutoForm(forms.ModelForm):
@@ -253,3 +264,60 @@ class UbicacaoEstoqueForm(forms.ModelForm):
             "descricao": forms.TextInput(attrs={"class": "form-control"}),
             "ativo": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
+
+
+class TabelaPrecoForm(forms.ModelForm):
+    class Meta:
+        model = TabelaPreco
+        fields = ["nome", "margem_extra", "ativo"]
+        widgets = {
+            "nome": forms.TextInput(attrs={"class": "form-control"}),
+            "margem_extra": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": 0}),
+            "ativo": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+
+class ProdutoPrecoTabelaForm(forms.ModelForm):
+    class Meta:
+        model = ProdutoPrecoTabela
+        fields = ["tabela", "preco"]
+        widgets = {
+            "tabela": forms.Select(attrs={"class": "form-control"}),
+            "preco": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": 0}),
+        }
+
+
+class ProdutoEquivalenteForm(forms.ModelForm):
+    class Meta:
+        model = ProdutoEquivalente
+        fields = ["equivalente", "observacao"]
+        widgets = {
+            "equivalente": forms.Select(attrs={"class": "form-control"}),
+            "observacao": forms.TextInput(attrs={"class": "form-control"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        produto = kwargs.pop("produto", None)
+        super().__init__(*args, **kwargs)
+        queryset = Produto.objects.filter(ativo=True, is_servico=False).order_by("nome")
+        if produto:
+            queryset = queryset.exclude(id=produto.id)
+        self.fields["equivalente"].queryset = queryset
+
+
+class ProdutoKitItemForm(forms.ModelForm):
+    class Meta:
+        model = ProdutoKitItem
+        fields = ["componente", "quantidade"]
+        widgets = {
+            "componente": forms.Select(attrs={"class": "form-control"}),
+            "quantidade": forms.NumberInput(attrs={"class": "form-control", "step": "0.001", "min": 0.001}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        produto = kwargs.pop("produto", None)
+        super().__init__(*args, **kwargs)
+        queryset = Produto.objects.filter(ativo=True, is_servico=False).order_by("nome")
+        if produto:
+            queryset = queryset.exclude(id=produto.id)
+        self.fields["componente"].queryset = queryset

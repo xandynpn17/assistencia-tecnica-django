@@ -216,3 +216,57 @@ def devolver_reservas_ordem(ordem, usuario=None):
         )
         total += 1
     return total
+
+
+@transaction.atomic
+def consumir_itens_estoque_ordem(ordem, usuario=None):
+    total = 0
+    itens = (
+        ordem.servicos_pecas.select_related("produto_estoque", "produto_estoque__ponto_operacional")
+        .filter(tipo="peca", produto_estoque__isnull=False, estoque_consumido_em__isnull=True)
+    )
+    for item in itens:
+        produto = item.produto_estoque
+        ponto = getattr(produto, "ponto_operacional", None)
+        if not produto or not ponto:
+            raise ValueError(f"O item '{item.nome}' não possui ponto operacional para baixa de estoque.")
+        ajustar_saldo(produto, ponto, -int(item.quantidade))
+        MovimentacaoEstoque.objects.create(
+            produto=produto,
+            tipo="consumo_os",
+            quantidade=-int(item.quantidade),
+            origem=ponto,
+            observacao=f"Consumo automático na OS {ordem.numero_os} - item {item.id}",
+            usuario=usuario,
+        )
+        item.estoque_consumido_em = timezone.now()
+        item.save(update_fields=["estoque_consumido_em"])
+        total += 1
+    return total
+
+
+@transaction.atomic
+def devolver_itens_estoque_ordem(ordem, usuario=None):
+    total = 0
+    itens = (
+        ordem.servicos_pecas.select_related("produto_estoque", "produto_estoque__ponto_operacional")
+        .filter(tipo="peca", produto_estoque__isnull=False, estoque_consumido_em__isnull=False)
+    )
+    for item in itens:
+        produto = item.produto_estoque
+        ponto = getattr(produto, "ponto_operacional", None)
+        if not produto or not ponto:
+            continue
+        ajustar_saldo(produto, ponto, int(item.quantidade))
+        MovimentacaoEstoque.objects.create(
+            produto=produto,
+            tipo="devolucao_reserva",
+            quantidade=int(item.quantidade),
+            destino=ponto,
+            observacao=f"Devolução automática por reabertura da OS {ordem.numero_os} - item {item.id}",
+            usuario=usuario,
+        )
+        item.estoque_consumido_em = None
+        item.save(update_fields=["estoque_consumido_em"])
+        total += 1
+    return total
