@@ -1,0 +1,65 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title mb-0">{% if agendamento %}Editar agendamento{% else %}Novo agendamento{% endif %}</h3>
+  </div>
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {{ form.modo_preventiva }}
+      <div class="form-row">
+        <div class="col-md-6 form-group">{{ form.titulo.label_tag }}{{ form.titulo }}{{ form.titulo.errors }}</div>
+        <div class="col-md-3 form-group">{{ form.status.label_tag }}{{ form.status }}{{ form.status.errors }}</div>
+        <div class="col-md-3 form-group">{{ form.tecnico.label_tag }}{{ form.tecnico }}{{ form.tecnico.errors }}</div>
+      </div>
+      <div class="form-row">
+        <div class="col-md-4 form-group">{{ form.cliente.label_tag }}{{ form.cliente }}{{ form.cliente.errors }}</div>
+        <div class="col-md-4 form-group">{{ form.ordem_servico.label_tag }}{{ form.ordem_servico }}{{ form.ordem_servico.errors }}</div>
+        <div class="col-md-4 form-group">{{ form.nome_cliente_avulso.label_tag }}{{ form.nome_cliente_avulso }}{{ form.nome_cliente_avulso.errors }}</div>
+      </div>
+      <div class="form-row">
+        <div class="col-md-3 form-group">{{ form.telefone_contato.label_tag }}{{ form.telefone_contato }}{{ form.telefone_contato.errors }}</div>
+        <div class="col-md-3 form-group">{{ form.email_contato.label_tag }}{{ form.email_contato }}{{ form.email_contato.errors }}</div>
+        <div class="col-md-3 form-group">{{ form.data_inicio.label_tag }}{{ form.data_inicio }}{{ form.data_inicio.errors }}</div>
+        <div class="col-md-3 form-group">{{ form.data_fim.label_tag }}{{ form.data_fim }}{{ form.data_fim.errors }}</div>
+      </div>
+      {% if form.modo_preventiva.value %}
+      <div class="form-row">
+        <div class="col-md-3 form-group">
+          {{ form.preventiva_em_meses.label_tag }}
+          {{ form.preventiva_em_meses }}
+          {{ form.preventiva_em_meses.errors }}
+        </div>
+      </div>
+      {% endif %}
+      <div class="form-group">{{ form.descricao.label_tag }}{{ form.descricao }}{{ form.descricao.errors }}</div>
+      <div class="d-flex justify-content-end">
+        <a href="{% url 'agenda:calendario_agenda' %}" class="btn btn-secondary mr-2">Cancelar</a>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const inicioInput = document.getElementById("id_data_inicio");
+    const fimInput = document.getElementById("id_data_fim");
+    if (!inicioInput || !fimInput) return;
+
+    function ajustarFimMesmoDia() {
+      const valorInicio = (inicioInput.value || "").trim();
+      if (!valorInicio) return;
+      const dia = valorInicio.slice(0, 10);
+      if (!dia) return;
+      fimInput.value = dia + "T23:59";
+    }
+
+    inicioInput.addEventListener("change", ajustarFimMesmoDia);
+  })();
+</script>
+{% endblock %}

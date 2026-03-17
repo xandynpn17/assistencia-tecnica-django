@@ -21,6 +21,7 @@ urlpatterns = [
     path('', OrdemServicoListView.as_view(), name='lista_ordens'),
     path('<int:pk>/editar/', OrdemServicoUpdateView.as_view(), name='editar_ordem'),
     path('<int:pk>/detalhes/', DetalhesOrdemView.as_view(), name='detalhes_ordem'),
+    path('<int:pk>/agendar/', views.agendar_ordem, name='agendar_ordem'),
     path('<int:pk>/resumo/', OrdemServicoResumoView.as_view(), name='resumo_ordem'),
     path('<int:pk>/confirmar-manual-resumo/', views.confirmar_manual_resumo, name='confirmar_manual_resumo'),
     path('<int:pk>/toggle-fechamento/', views.toggle_fechamento_os, name='toggle_fechamento_os'),
@@ -40,7 +41,7 @@ urlpatterns = [
     path('verificar-cliente/', views.verificar_cliente_os, name='verificar_cliente_os'),
 
     # =======================
-    # Orçamentos
+    # Orcamentos
     #path('orcamentos/', orc_views.lista_orcamentos, name='lista_orcamentos'),
     path('orcamentos/novo/<int:ordem_id>/', orc_views.criar_orcamento, name='criar_orcamento'),
     path('orcamentos/<int:orcamento_id>/aceitar/', orc_views.aceitar_itens_orcamento, name='aceitar_orcamento'),

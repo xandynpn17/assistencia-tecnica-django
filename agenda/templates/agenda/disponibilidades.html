@@ -1,0 +1,94 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><h3 class="card-title mb-0">Disponibilidade semanal</h3></div>
+      <div class="card-body">
+        <form method="post" class="mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="form_tipo" value="disponibilidade">
+          <div class="form-row">
+            <div class="col-md-6 form-group">{{ disponibilidade_form.tecnico.label_tag }}{{ disponibilidade_form.tecnico }}{{ disponibilidade_form.tecnico.errors }}</div>
+            <div class="col-md-6 form-group">{{ disponibilidade_form.dia_semana.label_tag }}{{ disponibilidade_form.dia_semana }}{{ disponibilidade_form.dia_semana.errors }}</div>
+          </div>
+          <div class="form-row">
+            <div class="col-md-4 form-group">{{ disponibilidade_form.hora_inicio.label_tag }}{{ disponibilidade_form.hora_inicio }}{{ disponibilidade_form.hora_inicio.errors }}</div>
+            <div class="col-md-4 form-group">{{ disponibilidade_form.hora_fim.label_tag }}{{ disponibilidade_form.hora_fim }}{{ disponibilidade_form.hora_fim.errors }}</div>
+            <div class="col-md-4 form-group">{{ disponibilidade_form.duracao_minutos.label_tag }}{{ disponibilidade_form.duracao_minutos }}{{ disponibilidade_form.duracao_minutos.errors }}</div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Salvar disponibilidade</button>
+        </form>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>Técnico</th><th>Dia</th><th>Horário</th><th>Duração</th><th></th></tr></thead>
+            <tbody>
+              {% for item in disponibilidades %}
+              <tr>
+                <td>{{ item.tecnico.username }}</td>
+                <td>{{ item.get_dia_semana_display }}</td>
+                <td>{{ item.hora_inicio|time:"H:i" }} - {{ item.hora_fim|time:"H:i" }}</td>
+                <td>{{ item.duracao_minutos }} min</td>
+                <td class="text-center">
+                  <form method="post" action="{% url 'agenda:excluir_disponibilidade' item.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Excluir</button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" class="text-center text-muted">Sem disponibilidades.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><h3 class="card-title mb-0">Bloqueios</h3></div>
+      <div class="card-body">
+        <form method="post" class="mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="form_tipo" value="bloqueio">
+          <div class="form-row">
+            <div class="col-md-6 form-group">{{ bloqueio_form.tecnico.label_tag }}{{ bloqueio_form.tecnico }}{{ bloqueio_form.tecnico.errors }}</div>
+            <div class="col-md-6 form-group">{{ bloqueio_form.motivo.label_tag }}{{ bloqueio_form.motivo }}{{ bloqueio_form.motivo.errors }}</div>
+          </div>
+          <div class="form-row">
+            <div class="col-md-6 form-group">{{ bloqueio_form.inicio.label_tag }}{{ bloqueio_form.inicio }}{{ bloqueio_form.inicio.errors }}</div>
+            <div class="col-md-6 form-group">{{ bloqueio_form.fim.label_tag }}{{ bloqueio_form.fim }}{{ bloqueio_form.fim.errors }}</div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Salvar bloqueio</button>
+        </form>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>Técnico</th><th>Período</th><th>Motivo</th><th></th></tr></thead>
+            <tbody>
+              {% for item in bloqueios %}
+              <tr>
+                <td>{{ item.tecnico.username|default:"GLOBAL" }}</td>
+                <td>{{ item.inicio|date:"d/m/Y H:i" }} - {{ item.fim|date:"d/m/Y H:i" }}</td>
+                <td>{{ item.motivo|default:"-" }}</td>
+                <td class="text-center">
+                  <form method="post" action="{% url 'agenda:excluir_bloqueio' item.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Excluir</button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted">Sem bloqueios.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

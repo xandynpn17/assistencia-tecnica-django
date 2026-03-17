@@ -23,6 +23,8 @@ urlpatterns = [
     path('orcamentos/', include(('orcamentos.urls', 'orcamentos'), namespace='orcamentos')),
     path('estoque/', include('estoque.urls')),
     path('caixa/', include('caixa.urls')),
+    path('agenda/', include(('agenda.urls', 'agenda'), namespace='agenda')),
+    path('fiscal/', include(('fiscal.urls', 'fiscal'), namespace='fiscal')),
     path('configuracoes/', include('configuracoes.urls')),
     path('os/confirmar/<uuid:token>/', confirmar_ordem_token_publico, name='confirmar_os_publico'),
 ]

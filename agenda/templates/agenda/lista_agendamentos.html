@@ -1,0 +1,82 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h3 class="card-title mb-0">Agenda de serviços</h3>
+    <div>
+      <a href="{% url 'agenda:calendario_agenda' %}" class="btn btn-outline-secondary btn-sm">Calendário</a>
+      <a href="{% url 'agenda:disponibilidades' %}" class="btn btn-outline-secondary btn-sm">Disponibilidades</a>
+      <a href="{% url 'agenda:criar_agendamento' %}" class="btn btn-primary btn-sm">Novo agendamento</a>
+    </div>
+  </div>
+  <div class="card-body">
+    <form method="get" class="form-row mb-3">
+      <div class="col-md-3">
+        <label>Técnico</label>
+        <select name="tecnico" class="form-control">
+          <option value="">Todos</option>
+          {% for tecnico in tecnicos %}
+          <option value="{{ tecnico.id }}" {% if tecnico_filtro == tecnico.id|stringformat:'s' %}selected{% endif %}>{{ tecnico.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label>Status</label>
+        <select name="status" class="form-control">
+          <option value="">Todos</option>
+          {% for codigo, nome in status_choices %}
+          <option value="{{ codigo }}" {% if status_filtro == codigo %}selected{% endif %}>{{ nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label>Data início</label>
+        <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
+      </div>
+      <div class="col-md-2">
+        <label>Data fim</label>
+        <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered">
+        <thead>
+          <tr>
+            <th>Data/hora</th>
+            <th>Título</th>
+            <th>Cliente</th>
+            <th>Técnico</th>
+            <th>Status</th>
+            <th>Origem</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for agendamento in agendamentos %}
+          <tr>
+            <td>{{ agendamento.data_inicio|date:"d/m/Y H:i" }} - {{ agendamento.data_fim|date:"H:i" }}</td>
+            <td>{{ agendamento.titulo }}</td>
+            <td>{{ agendamento.cliente.nome|default:agendamento.nome_cliente_avulso|default:"-" }}</td>
+            <td>{{ agendamento.tecnico.username|default:"-" }}</td>
+            <td>{{ agendamento.get_status_display }}</td>
+            <td>{{ agendamento.get_origem_display }}</td>
+            <td class="text-center">
+              <a href="{% url 'agenda:editar_agendamento' agendamento.id %}" class="btn btn-outline-primary btn-sm">Editar</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted">Nenhum agendamento no período.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

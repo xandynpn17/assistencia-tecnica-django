@@ -1,0 +1,120 @@
+<form method="post" action="{{ action_url }}" data-agenda-modal-form>
+  {% csrf_token %}
+  {{ form.modo_preventiva }}
+  <h6 class="mb-3">{{ titulo }}</h6>
+  <div class="form-row">
+    <div class="col-md-6 form-group">
+      {{ form.titulo.label_tag }}
+      {{ form.titulo }}
+      {{ form.titulo.errors }}
+    </div>
+    <div class="col-md-3 form-group">
+      {{ form.status.label_tag }}
+      {{ form.status }}
+      {{ form.status.errors }}
+    </div>
+    <div class="col-md-3 form-group">
+      {{ form.tecnico.label_tag }}
+      {{ form.tecnico }}
+      {{ form.tecnico.errors }}
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="col-md-6 form-group">
+      {{ form.cliente.label_tag }}
+      {{ form.cliente }}
+      {{ form.cliente.errors }}
+    </div>
+    <div class="col-md-6 form-group">
+      {{ form.ordem_servico.label_tag }}
+      {{ form.ordem_servico }}
+      {{ form.ordem_servico.errors }}
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="col-md-4 form-group">
+      {{ form.data_inicio.label_tag }}
+      {{ form.data_inicio }}
+      {{ form.data_inicio.errors }}
+    </div>
+    <div class="col-md-4 form-group">
+      {{ form.data_fim.label_tag }}
+      {{ form.data_fim }}
+      {{ form.data_fim.errors }}
+    </div>
+    <div class="col-md-4 form-group">
+      {{ form.nome_cliente_avulso.label_tag }}
+      {{ form.nome_cliente_avulso }}
+      {{ form.nome_cliente_avulso.errors }}
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="col-md-6 form-group">
+      {{ form.telefone_contato.label_tag }}
+      {{ form.telefone_contato }}
+      {{ form.telefone_contato.errors }}
+    </div>
+    <div class="col-md-6 form-group">
+      {{ form.email_contato.label_tag }}
+      {{ form.email_contato }}
+      {{ form.email_contato.errors }}
+    </div>
+  </div>
+
+  {% if form.modo_preventiva.value %}
+  <div class="form-row">
+    <div class="col-md-4 form-group">
+      {{ form.preventiva_em_meses.label_tag }}
+      {{ form.preventiva_em_meses }}
+      {{ form.preventiva_em_meses.errors }}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="form-group">
+    {{ form.descricao.label_tag }}
+    {{ form.descricao }}
+    {{ form.descricao.errors }}
+  </div>
+
+  {% if agendamento and quick_action_url %}
+  <hr>
+  <div class="d-flex flex-wrap justify-content-between align-items-center">
+    <div class="mb-2">
+      <button
+        type="button"
+        class="btn btn-outline-danger btn-sm mr-1"
+        data-agenda-quick-action="cancelar"
+        data-agenda-action-url="{{ quick_action_url }}"
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        class="btn btn-outline-success btn-sm mr-1"
+        data-agenda-quick-action="concluir"
+        data-agenda-action-url="{{ quick_action_url }}"
+      >
+        Marcar concluído
+      </button>
+      <button
+        type="button"
+        class="btn btn-outline-primary btn-sm"
+        data-agenda-quick-action="duplicar"
+        data-agenda-action-url="{{ quick_action_url }}"
+      >
+        Duplicar
+      </button>
+    </div>
+    <small class="text-muted mb-2">Ações rápidas para este agendamento.</small>
+  </div>
+  {% endif %}
+
+  <div class="text-right mt-3">
+    <button type="button" class="btn btn-secondary mr-2" data-dismiss="modal">Cancelar</button>
+    <button type="submit" class="btn btn-primary">Salvar</button>
+  </div>
+</form>

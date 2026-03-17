@@ -1,0 +1,419 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block extra_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'adminlte/plugins/fullcalendar/main.min.css' %}">
+<style>
+  .fc .fc-toolbar-title { font-size: 1.1rem; }
+  .agenda-feedback { min-height: 1.5rem; }
+  .agenda-legenda span {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 12px;
+    font-size: 12px;
+  }
+  .agenda-legenda i {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    display: inline-block;
+    margin-right: 6px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div class="d-flex flex-wrap justify-content-between align-items-end">
+      <div>
+        <h3 class="card-title mb-1">Calendário da Agenda</h3>
+        <div class="text-muted small">Visual semanal/mensal com arrastar e soltar.</div>
+      </div>
+      <div class="mt-2">
+        <button type="button" id="abrirModalNovo" class="btn btn-primary btn-sm">Novo agendamento</button>
+        <a href="{% url 'agenda:lista_agendamentos' %}" class="btn btn-outline-secondary btn-sm">Lista</a>
+        {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+        <a href="{% url 'agenda:disponibilidades' %}" class="btn btn-outline-secondary btn-sm">Disponibilidades</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="card-body">
+    <form id="filtrosAgenda" class="form-row align-items-end mb-3">
+      <div class="col-md-4">
+        <label for="filtroTecnico">Técnico</label>
+        <select id="filtroTecnico" class="form-control">
+          <option value="">Todos</option>
+          {% for tecnico in tecnicos %}
+          <option value="{{ tecnico.id }}" {% if tecnico_filtro == tecnico.id|stringformat:'s' %}selected{% endif %}>{{ tecnico.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label for="filtroStatus">Status</label>
+        <select id="filtroStatus" class="form-control">
+          <option value="">Todos</option>
+          {% for codigo, nome in status_choices %}
+          <option value="{{ codigo }}" {% if status_filtro == codigo %}selected{% endif %}>{{ nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <button type="submit" class="btn btn-primary">Aplicar filtro</button>
+        <button type="button" id="limparFiltros" class="btn btn-outline-secondary">Limpar</button>
+      </div>
+    </form>
+
+    <div id="agendaFeedback" class="agenda-feedback text-danger small mb-2"></div>
+
+    <div class="agenda-legenda mb-3">
+      <span><i style="background:#f39c12;"></i>Solicitado</span>
+      <span><i style="background:#17a2b8;"></i>Agendado</span>
+      <span><i style="background:#28a745;"></i>Confirmado</span>
+      <span><i style="background:#6c757d;"></i>Concluído</span>
+      <span><i style="background:#dc3545;"></i>Cancelado</span>
+      <span><i style="background:#343a40;"></i>Falta</span>
+    </div>
+
+    <div id="agenda-calendar"></div>
+  </div>
+</div>
+
+<div class="modal fade" id="agendaModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="agendaModalTitulo">Agendamento</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="agendaModalBody">
+        <div class="text-muted">Carregando...</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'adminlte/plugins/fullcalendar/main.min.js' %}"></script>
+<script src="{% static 'adminlte/plugins/fullcalendar/locales/pt-br.js' %}"></script>
+<script>
+  (function () {
+    const calendarEl = document.getElementById("agenda-calendar");
+    const filtroTecnico = document.getElementById("filtroTecnico");
+    const filtroStatus = document.getElementById("filtroStatus");
+    const formFiltros = document.getElementById("filtrosAgenda");
+    const limparFiltros = document.getElementById("limparFiltros");
+    const botaoNovo = document.getElementById("abrirModalNovo");
+    const feedbackEl = document.getElementById("agendaFeedback");
+    const modalEl = document.getElementById("agendaModal");
+    const modalTitulo = document.getElementById("agendaModalTitulo");
+    const modalBody = document.getElementById("agendaModalBody");
+    if (!calendarEl) return;
+
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(";").shift();
+      return "";
+    }
+
+    function mostrarErro(msg) {
+      feedbackEl.textContent = msg || "";
+    }
+
+    function limparErro() {
+      feedbackEl.textContent = "";
+    }
+
+    function doisDigitos(valor) {
+      return String(valor).padStart(2, "0");
+    }
+
+    function formatarDataHoraLocal(dataObj) {
+      if (!(dataObj instanceof Date) || Number.isNaN(dataObj.getTime())) {
+        return "";
+      }
+      const ano = dataObj.getFullYear();
+      const mes = doisDigitos(dataObj.getMonth() + 1);
+      const dia = doisDigitos(dataObj.getDate());
+      const hora = doisDigitos(dataObj.getHours());
+      const minuto = doisDigitos(dataObj.getMinutes());
+      const segundo = doisDigitos(dataObj.getSeconds());
+      return `${ano}-${mes}-${dia}T${hora}:${minuto}:${segundo}`;
+    }
+
+    function urlEventos(fetchInfo) {
+      const params = new URLSearchParams({
+        start: fetchInfo.startStr,
+        end: fetchInfo.endStr
+      });
+      if (filtroTecnico.value) params.set("tecnico", filtroTecnico.value);
+      if (filtroStatus.value) params.set("status", filtroStatus.value);
+      return "{% url 'agenda:api_eventos_agenda' %}?" + params.toString();
+    }
+
+    function urlNovoModal(info) {
+      const inicio = info.start ? formatarDataHoraLocal(info.start) : (info.startStr || "");
+      const fim = info.end ? formatarDataHoraLocal(info.end) : (info.endStr || "");
+      const params = new URLSearchParams({
+        inicio: inicio,
+        fim: fim
+      });
+      if (filtroTecnico.value) params.set("tecnico", filtroTecnico.value);
+      return "{% url 'agenda:api_modal_agendamento_novo' %}?" + params.toString();
+    }
+
+    function exibirModal(titulo, html) {
+      modalTitulo.textContent = titulo || "Agendamento";
+      modalBody.innerHTML = html || "";
+      if (window.jQuery) {
+        window.jQuery(modalEl).modal("show");
+      }
+    }
+
+    function abrirModal(url, titulo) {
+      limparErro();
+      fetch(url, {
+        headers: {"X-Requested-With": "XMLHttpRequest"}
+      })
+      .then(resp => resp.json())
+      .then(data => {
+        if (!data.ok) {
+          mostrarErro(data.erro || "Não foi possível carregar o formulário.");
+          return;
+        }
+        exibirModal(titulo, data.html || "");
+      })
+      .catch(() => {
+        mostrarErro("Erro de comunicação ao carregar o formulário.");
+      });
+    }
+
+    function salvarModal(formEl) {
+      limparErro();
+      const formData = new FormData(formEl);
+      fetch(formEl.action, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken"),
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: formData
+      })
+      .then(resp => resp.json().then(data => ({status: resp.status, data: data})))
+      .then(({status, data}) => {
+        if (status >= 400 || !data.ok) {
+          if (data.html) {
+            modalBody.innerHTML = data.html;
+          }
+          mostrarErro(data.erro || "Não foi possível salvar o agendamento.");
+          return;
+        }
+        if (window.jQuery) {
+          window.jQuery(modalEl).modal("hide");
+        }
+        limparErro();
+        calendar.refetchEvents();
+      })
+      .catch(() => {
+        mostrarErro("Erro de comunicação ao salvar o agendamento.");
+      });
+    }
+
+    function ajustarFimMesmoDiaEscopo(scopeEl) {
+      if (!scopeEl) return;
+      const inicioInput = scopeEl.querySelector("#id_data_inicio");
+      const fimInput = scopeEl.querySelector("#id_data_fim");
+      if (!inicioInput || !fimInput) return;
+      const valorInicio = (inicioInput.value || "").trim();
+      if (!valorInicio) return;
+      const dia = valorInicio.slice(0, 10);
+      if (!dia) return;
+      fimInput.value = dia + "T23:59";
+    }
+
+    function executarAcaoRapida(actionUrl, acao) {
+      limparErro();
+      const rotulos = {
+        cancelar: "cancelar",
+        concluir: "concluir",
+        duplicar: "duplicar"
+      };
+      const rotulo = rotulos[acao] || acao;
+      if (!window.confirm("Confirma a ação: " + rotulo + "?")) {
+        return;
+      }
+
+      const body = new URLSearchParams({acao: acao});
+      fetch(actionUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "X-CSRFToken": getCookie("csrftoken"),
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: body.toString()
+      })
+      .then(resp => resp.json().then(data => ({status: resp.status, data: data})))
+      .then(({status, data}) => {
+        if (status >= 400 || !data.ok) {
+          mostrarErro(data.erro || "Não foi possível executar a ação.");
+          return;
+        }
+        if (window.jQuery) {
+          window.jQuery(modalEl).modal("hide");
+        }
+        limparErro();
+        calendar.refetchEvents();
+      })
+      .catch(() => {
+        mostrarErro("Erro de comunicação ao executar a ação.");
+      });
+    }
+
+    function persistirMovimento(evento, revertFn) {
+      limparErro();
+      fetch("{% url 'agenda:api_mover_agendamento' 0 %}".replace("/0/", "/" + evento.id + "/"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCookie("csrftoken")
+        },
+        body: JSON.stringify({
+          start: evento.start ? formatarDataHoraLocal(evento.start) : "",
+          end: evento.end ? formatarDataHoraLocal(evento.end) : ""
+        })
+      })
+      .then(resp => resp.json().then(data => ({status: resp.status, data: data})))
+      .then(({status, data}) => {
+        if (status >= 400 || !data.ok) {
+          mostrarErro(data.erro || "Não foi possível atualizar o agendamento.");
+          revertFn();
+          return;
+        }
+        limparErro();
+      })
+      .catch(() => {
+        mostrarErro("Erro de comunicação ao atualizar o agendamento.");
+        revertFn();
+      });
+    }
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      locale: "pt-br",
+      initialView: "timeGridWeek",
+      timeZone: "{{ frontend_timezone|default:'America/Sao_Paulo'|escapejs }}",
+      firstDay: 1,
+      selectable: true,
+      editable: true,
+      nextDayThreshold: "00:00:00",
+      dayMaxEvents: true,
+      nowIndicator: true,
+      allDaySlot: false,
+      slotMinTime: "07:00:00",
+      slotMaxTime: "21:00:00",
+      slotDuration: "00:30:00",
+      height: "auto",
+      headerToolbar: {
+        left: "prev,next today",
+        center: "title",
+        right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek"
+      },
+      buttonText: {
+        today: "Hoje",
+        month: "Mês",
+        week: "Semana",
+        day: "Dia",
+        list: "Lista"
+      },
+      events: function(fetchInfo, successCallback, failureCallback) {
+        fetch(urlEventos(fetchInfo))
+          .then(resp => resp.json())
+          .then(payload => {
+            if (!payload.ok) {
+              mostrarErro(payload.erro || "Não foi possível carregar os eventos.");
+              failureCallback(payload.erro || "Erro");
+              return;
+            }
+            limparErro();
+            successCallback(payload.eventos || []);
+          })
+          .catch(() => {
+            mostrarErro("Erro de comunicação ao carregar o calendário.");
+            failureCallback("Erro de comunicação");
+          });
+      },
+      eventClick: function(info) {
+        info.jsEvent.preventDefault();
+        abrirModal(
+          "{% url 'agenda:api_modal_agendamento_editar' 0 %}".replace("/0/", "/" + info.event.id + "/"),
+          "Editar agendamento"
+        );
+      },
+      select: function(info) {
+        abrirModal(urlNovoModal(info), "Novo agendamento");
+        calendar.unselect();
+      },
+      eventDrop: function(info) {
+        persistirMovimento(info.event, info.revert);
+      },
+      eventResize: function(info) {
+        persistirMovimento(info.event, info.revert);
+      }
+    });
+
+    calendar.render();
+
+    formFiltros.addEventListener("submit", function(ev) {
+      ev.preventDefault();
+      calendar.refetchEvents();
+    });
+
+    limparFiltros.addEventListener("click", function() {
+      filtroTecnico.value = "";
+      filtroStatus.value = "";
+      calendar.refetchEvents();
+    });
+
+    botaoNovo.addEventListener("click", function() {
+      const agora = new Date();
+      const fim = new Date(agora.getTime() + 60 * 60 * 1000);
+      abrirModal(
+        urlNovoModal({start: agora, end: fim}),
+        "Novo agendamento"
+      );
+    });
+
+    modalBody.addEventListener("submit", function(ev) {
+      const form = ev.target.closest("form[data-agenda-modal-form]");
+      if (!form) return;
+      ev.preventDefault();
+      salvarModal(form);
+    });
+
+    modalBody.addEventListener("change", function(ev) {
+      if (ev.target && ev.target.id === "id_data_inicio") {
+        ajustarFimMesmoDiaEscopo(modalBody);
+      }
+    });
+
+    modalBody.addEventListener("click", function(ev) {
+      const botao = ev.target.closest("[data-agenda-quick-action]");
+      if (!botao) return;
+      ev.preventDefault();
+      const acao = (botao.getAttribute("data-agenda-quick-action") || "").trim();
+      const url = (botao.getAttribute("data-agenda-action-url") || "").trim();
+      if (!acao || !url) {
+        mostrarErro("Ação rápida inválida.");
+        return;
+      }
+      executarAcaoRapida(url, acao);
+    });
+  })();
+</script>
+{% endblock %}

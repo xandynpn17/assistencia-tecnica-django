@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'ordens',
     'orcamentos',
     'caixa',
+    'agenda',
+    'fiscal',
 
 ]
 

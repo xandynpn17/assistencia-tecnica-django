@@ -1,0 +1,70 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header"><h3 class="card-title mb-0">Configuração Fiscal</h3></div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="form-group">{{ form.ambiente.label_tag }}{{ form.ambiente }}{{ form.ambiente.errors }}</div>
+          <div class="form-group">{{ form.modo_integracao.label_tag }}{{ form.modo_integracao }}{{ form.modo_integracao.errors }}</div>
+          <div class="form-group">{{ form.fornecedor_api.label_tag }}{{ form.fornecedor_api }}{{ form.fornecedor_api.errors }}</div>
+          <div class="form-group">{{ form.certificado_a1.label_tag }}{{ form.certificado_a1 }}{{ form.certificado_a1.errors }}</div>
+          <div class="form-group">{{ form.senha_certificado.label_tag }}{{ form.senha_certificado }}{{ form.senha_certificado.errors }}</div>
+          <div class="form-row">
+            <div class="col-md-6 form-group">{{ form.cnpj_emitente.label_tag }}{{ form.cnpj_emitente }}{{ form.cnpj_emitente.errors }}</div>
+            <div class="col-md-6 form-group">{{ form.inscricao_estadual.label_tag }}{{ form.inscricao_estadual }}{{ form.inscricao_estadual.errors }}</div>
+          </div>
+          <div class="form-row">
+            <div class="col-md-3 form-group">{{ form.serie_nfe.label_tag }}{{ form.serie_nfe }}{{ form.serie_nfe.errors }}</div>
+            <div class="col-md-3 form-group">{{ form.proximo_numero_nfe.label_tag }}{{ form.proximo_numero_nfe }}{{ form.proximo_numero_nfe.errors }}</div>
+            <div class="col-md-3 form-group">{{ form.serie_nfce.label_tag }}{{ form.serie_nfce }}{{ form.serie_nfce.errors }}</div>
+            <div class="col-md-3 form-group">{{ form.proximo_numero_nfce.label_tag }}{{ form.proximo_numero_nfce }}{{ form.proximo_numero_nfce.errors }}</div>
+          </div>
+          <div class="form-check mb-2">{{ form.nfse_habilitada }} <label class="form-check-label ml-2">NFS-e habilitada</label></div>
+          <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">Documentos fiscais</h3>
+        <div>
+          <form method="post" action="{% url 'fiscal:processar_fila_fiscal' %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Processar fila</button>
+          </form>
+          <a href="{% url 'fiscal:novo_documento_fiscal' %}" class="btn btn-primary btn-sm">Novo documento</a>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-bordered mb-0">
+          <thead>
+            <tr><th>ID</th><th>Tipo</th><th>Origem</th><th>Status</th><th>Número</th><th>Valor</th><th>Chave</th></tr>
+          </thead>
+          <tbody>
+            {% for doc in documentos %}
+            <tr>
+              <td>{{ doc.id }}</td>
+              <td>{{ doc.get_tipo_display }}</td>
+              <td>{{ doc.get_origem_display }}{% if doc.origem_referencia %} ({{ doc.origem_referencia }}){% endif %}</td>
+              <td>{{ doc.get_status_display }}</td>
+              <td>{% if doc.numero %}{{ doc.serie }}/{{ doc.numero }}{% else %}-{% endif %}</td>
+              <td>R$ {{ doc.valor_total|floatformat:2 }}</td>
+              <td>{{ doc.chave_acesso|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center text-muted">Nenhum documento fiscal.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
