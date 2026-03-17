@@ -22,7 +22,7 @@ def _request_ip(request):
 
 @role_required(STAFF_ROLES)
 def lista_clientes(request):
-    """Tela principal - apenas busca, nao lista todos"""
+    """Tela principal: apenas busca, não lista todos."""
     query = request.GET.get("query", "").strip()
     clientes = []
 
@@ -85,7 +85,7 @@ def buscar_cliente(request):
             )
         return JsonResponse({"existe": False})
 
-    return JsonResponse({"erro": "Requisicao invalida"}, status=400)
+    return JsonResponse({"erro": "Requisição inválida"}, status=400)
 
 
 @role_required(STAFF_ROLES)
@@ -270,7 +270,7 @@ def unificar_clientes(request):
                 {
                     "query": query,
                     "candidatos": candidatos,
-                    "erro": "Principal e duplicado nao podem ser o mesmo cliente.",
+                    "erro": "Principal e duplicado não podem ser o mesmo cliente.",
                     "menu_app": "clientes",
                 },
             )

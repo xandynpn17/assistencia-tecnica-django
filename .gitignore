@@ -53,3 +53,7 @@ Thumbs.db
 # Secretos
 secret_key.txt
 credentials.json
+
+# Artefatos locais de diagnostico
+__full_test_output.txt
+backups/

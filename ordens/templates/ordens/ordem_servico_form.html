@@ -107,7 +107,7 @@
                                 <div class="col-md-4 form-group">{{ form.tipo_reparo.label_tag }}{{ form.tipo_reparo }}{{ form.tipo_reparo.errors }}</div>
                                 <div class="col-md-4 form-group">{{ form.data_compra.label_tag }}{{ form.data_compra }}{{ form.data_compra.errors }}</div>
                                 <div class="col-md-4 form-group">{{ form.numero_nota_fiscal.label_tag }}{{ form.numero_nota_fiscal }}{{ form.numero_nota_fiscal.errors }}</div>
-                                <div class="col-md-8 form-group">{{ form.defeito.label_tag }}{{ form.defeito }}{{ form.defeito.errors }}</div>
+                                <div class="col-md-12 form-group">{{ form.defeito.label_tag }}{{ form.defeito }}{{ form.defeito.errors }}</div>
                                 <div class="col-md-4 form-group">{{ form.acessorios.label_tag }}{{ form.acessorios }}{{ form.acessorios.errors }}</div>
                                 <div class="col-md-12 form-group">{{ form.notas_internas.label_tag }}{{ form.notas_internas }}{{ form.notas_internas.errors }}</div>
                             </div>
@@ -304,7 +304,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (semDataCompra || semNota) {
                 event.preventDefault();
                 showStep(1);
-                mostrarMensagemWizard("Para OS de garantia, informe a data da compra e o numero da nota fiscal.", "danger");
+                mostrarMensagemWizard("Para OS de garantia, informe a data da compra e o número da nota fiscal.", "danger");
                 if (semDataCompra && dataCompra) {
                     dataCompra.focus();
                 } else if (semNota && numeroNotaFiscal) {

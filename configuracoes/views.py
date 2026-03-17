@@ -1,4 +1,4 @@
-﻿from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib import messages
 from django.conf import settings
@@ -570,7 +570,7 @@ def marcas_fornecedores(request):
         elif form_type == "marca_delete":
             marca = get_object_or_404(MarcaGarantia, id=request.POST.get("marca_id"))
             marca.delete()
-            messages.success(request, "Marca excluida com sucesso.")
+            messages.success(request, "Marca excluída com sucesso.")
             return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "regra_add":
             marca_id_post = (request.POST.get("marca_id") or "").strip()

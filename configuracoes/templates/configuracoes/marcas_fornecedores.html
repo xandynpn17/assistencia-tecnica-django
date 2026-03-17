@@ -62,7 +62,7 @@
         </form>
         <div class="table-responsive">
           <table class="table table-sm table-bordered">
-            <thead><tr><th>Nome</th><th>CNPJ</th><th>IE</th><th>Contato</th><th>Telefone</th><th>Endereco</th><th>Modalidade</th><th>Prazo</th><th>Documento</th><th>Comprovante</th><th>Ativo</th><th>Acoes</th></tr></thead>
+            <thead><tr><th>Nome</th><th>CNPJ</th><th>IE</th><th>Contato</th><th>Telefone</th><th>Endereço</th><th>Modalidade</th><th>Prazo</th><th>Documento</th><th>Comprovante</th><th>Ativo</th><th>Ações</th></tr></thead>
             <tbody>
               {% for f in fornecedores %}
               <tr>
@@ -170,12 +170,12 @@
               <tr>
                 <th>Tipo equipamento</th>
                 <th>Valor mao de obra (marca)</th>
-                <th>Repasse tecnico</th>
+                <th>Repasse técnico</th>
                 <th>Modalidade</th>
                 <th>Prazo</th>
-                <th>Vigencia</th>
+                <th>Vigência</th>
                 <th>Ativo</th>
-                <th>Acoes</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -186,7 +186,7 @@
                 <td>R$ {{ r.valor_mao_obra_tecnico|floatformat:2 }}</td>
                 <td>{{ r.get_modalidade_pagamento_display }}</td>
                 <td>{{ r.prazo_pagamento_dias }} dias</td>
-                <td>{{ r.inicio_vigencia|date:"d/m/Y" }}{% if r.fim_vigencia %} ate {{ r.fim_vigencia|date:"d/m/Y" }}{% else %} (sem fim){% endif %}</td>
+                <td>{{ r.inicio_vigencia|date:"d/m/Y" }}{% if r.fim_vigencia %} até {{ r.fim_vigencia|date:"d/m/Y" }}{% else %} (sem fim){% endif %}</td>
                 <td>{{ r.ativo|yesno:"Sim,Não" }}</td>
                 <td class="text-nowrap">
                   <a class="btn btn-sm btn-outline-primary" href="?edit_marca={{ edit_marca_id }}&edit_regra={{ r.id }}#tab-marca-cad">Editar</a>
@@ -207,7 +207,7 @@
         </div>
         {% else %}
         <div class="alert alert-info mb-0">
-          Salve a marca primeiro. Depois sera liberada a tabela para cadastrar os itens de mao de obra por tipo de equipamento.
+          Salve a marca primeiro. Depois será liberada a tabela para cadastrar os itens de mão de obra por tipo de equipamento.
         </div>
         {% endif %}
       </div>
@@ -219,7 +219,7 @@
         </form>
         <div class="table-responsive mb-3">
           <table class="table table-sm table-bordered">
-            <thead><tr><th>Marca</th><th>Fornecedor</th><th>Parceira Garantia</th><th>Procedimentos</th><th>Ativa</th><th>Acoes</th></tr></thead>
+            <thead><tr><th>Marca</th><th>Fornecedor</th><th>Parceira Garantia</th><th>Procedimentos</th><th>Ativa</th><th>Ações</th></tr></thead>
             <tbody>
               {% for m in marcas %}
               <tr>
@@ -260,7 +260,7 @@
 
         <div class="table-responsive">
           <table class="table table-sm table-bordered">
-            <thead><tr><th>Marca</th><th>Equipamento</th><th>Valor pago</th><th>Mao de obra tecnico</th><th>Modalidade</th><th>Prazo</th><th>Vigencia</th></tr></thead>
+            <thead><tr><th>Marca</th><th>Equipamento</th><th>Valor pago</th><th>Mão de obra técnico</th><th>Modalidade</th><th>Prazo</th><th>Vigência</th></tr></thead>
             <tbody>
               {% for r in regras %}
               <tr>
@@ -270,7 +270,7 @@
                 <td>R$ {{ r.valor_mao_obra_tecnico|floatformat:2 }}</td>
                 <td>{{ r.get_modalidade_pagamento_display }}</td>
                 <td>{{ r.prazo_pagamento_dias }} dias</td>
-                <td>{{ r.inicio_vigencia|date:"d/m/Y" }}{% if r.fim_vigencia %} ate {{ r.fim_vigencia|date:"d/m/Y" }}{% else %} (sem fim){% endif %}</td>
+                <td>{{ r.inicio_vigencia|date:"d/m/Y" }}{% if r.fim_vigencia %} até {{ r.fim_vigencia|date:"d/m/Y" }}{% else %} (sem fim){% endif %}</td>
               </tr>
               {% empty %}
               <tr><td colspan="7" class="text-center text-muted">Sem regras.</td></tr>

@@ -1,4 +1,4 @@
-﻿{% extends 'core/base.html' %}
+{% extends 'core/base.html' %}
 
 {% block title %}Dashboard - Assistencia{% endblock %}
 
@@ -176,7 +176,7 @@
     <div class="row section-space">
         <div class="col-md-6 col-lg-4 mb-3"><div class="stat-card stat-card-secondary"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.abertas_total }}</div><div class="stat-card-title">Ordens Abertas</div><div class="stat-card-icon"><i class="fas fa-hourglass-start"></i></div></div></div></div>
         <div class="col-md-6 col-lg-4 mb-3"><div class="stat-card stat-card-info"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.fechadas_total }}</div><div class="stat-card-title">Ordens Fechadas</div><div class="stat-card-icon"><i class="fas fa-check-circle"></i></div></div></div></div>
-        <div class="col-md-6 col-lg-4 mb-3"><div class="stat-card stat-card-primary"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.sem_tecnico }}</div><div class="stat-card-title">Abertas sem Tecnico</div><div class="stat-card-icon"><i class="fas fa-user-slash"></i></div></div></div></div>
+        <div class="col-md-6 col-lg-4 mb-3"><div class="stat-card stat-card-primary"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.sem_tecnico }}</div><div class="stat-card-title">Abertas sem Técnico</div><div class="stat-card-icon"><i class="fas fa-user-slash"></i></div></div></div></div>
         <div class="col-md-6 col-lg-4 mb-3"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.prontas }}</div><div class="stat-card-title">Prontas para Entrega</div><div class="stat-card-icon"><i class="fas fa-hand-holding text-primary"></i></div></div></div></div>
         <div class="col-md-6 col-lg-4 mb-3"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.criticas }}</div><div class="stat-card-title">Pendencias Criticas</div><div class="stat-card-icon"><i class="fas fa-exclamation-triangle text-primary"></i></div></div></div></div>
         <div class="col-md-6 col-lg-4 mb-3"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.paradas }}</div><div class="stat-card-title">Paradas ha 15+ dias</div><div class="stat-card-icon"><i class="fas fa-clock text-primary"></i></div></div></div></div>
@@ -204,7 +204,7 @@
         <div class="card-modern-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
-                    <thead><tr><th>OS</th><th>Cliente</th><th>Status</th><th>Tecnico</th><th>Abertura</th><th class="text-right pr-3">Acoes</th></tr></thead>
+                    <thead><tr><th>OS</th><th>Cliente</th><th>Status</th><th>Técnico</th><th>Abertura</th><th class="text-right pr-3">Ações</th></tr></thead>
                     <tbody>
                     {% for ordem in ordens_recentes %}
                         <tr>

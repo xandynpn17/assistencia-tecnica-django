@@ -1,19 +1,19 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Editar Numero de Serie{% endblock %}
+{% block title %}Editar Número de Série{% endblock %}
 
 {% block content %}
 <section class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1><i class="fas fa-barcode mr-1"></i> Editar Numero de Serie</h1>
+                <h1><i class="fas fa-barcode mr-1"></i> Editar Número de Série</h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
                     <li class="breadcrumb-item"><a href="{% url 'core:home' %}">Home</a></li>
                     <li class="breadcrumb-item"><a href="{% url 'ordens:lista_ordens' %}">Ordens</a></li>
-                    <li class="breadcrumb-item active">Numero de Serie</li>
+                    <li class="breadcrumb-item active">Número de Série</li>
                 </ol>
             </div>
         </div>
@@ -35,13 +35,13 @@
                         </div>
 
                         <div class="alert alert-info py-2">
-                            Apenas o numero de serie pode ser alterado nesta tela. A alteracao sera registrada no historico da OS.
+                            Apenas o número de série pode ser alterado nesta tela. A alteração será registrada no histórico da OS.
                         </div>
 
                         <form method="post" novalidate>
                             {% csrf_token %}
                             <div class="form-group">
-                                <label for="id_numero_serie_equipamento">Numero de serie</label>
+                                <label for="id_numero_serie_equipamento">Número de série</label>
                                 {{ form.numero_serie_equipamento }}
                                 {{ form.numero_serie_equipamento.errors }}
                             </div>

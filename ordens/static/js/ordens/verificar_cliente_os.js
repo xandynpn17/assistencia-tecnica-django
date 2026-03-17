@@ -145,10 +145,10 @@ async function buscarCEP() {
 
         if (!response.ok) {
             let mensagem = data.erro || data.error || 'Falha ao consultar CEP.';
-            if (response.status === 400) mensagem = data.erro || 'CEP invalido.';
-            if (response.status === 403) mensagem = 'Seu perfil nao tem permissao para buscar CEP.';
-            if (response.status === 404) mensagem = data.erro || 'CEP nao encontrado.';
-            if (response.status === 502) mensagem = data.erro || 'Servico de CEP indisponivel no momento.';
+            if (response.status === 400) mensagem = data.erro || 'CEP inválido.';
+            if (response.status === 403) mensagem = 'Este perfil não possui permissão para buscar CEP.';
+            if (response.status === 404) mensagem = data.erro || 'CEP não encontrado.';
+            if (response.status === 502) mensagem = data.erro || 'Serviço de CEP indisponível no momento.';
             if (response.status >= 500) mensagem = data.erro || 'Erro interno ao consultar CEP.';
             throw new Error(mensagem);
         }

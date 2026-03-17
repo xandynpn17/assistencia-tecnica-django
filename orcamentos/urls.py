@@ -11,11 +11,11 @@ urlpatterns = [
     # Criar orçamento vinculado a uma ordem
     path('ordem/<int:ordem_id>/novo/', orc_views.criar_orcamento, name='criar_orcamento'),
 
-    # Orçamento (editar/excluir)
+    # Orcamento (editar/excluir)
     path('orcamento/<int:orcamento_id>/editar/', orc_views.editar_orcamento, name='editar_orcamento'),
     path('orcamento/<int:orcamento_id>/excluir/', orc_views.excluir_orcamento, name='excluir_orcamento'),
 
-    # Ações por itens selecionados
+    # Acoes por itens selecionados
     path('orcamento/<int:orcamento_id>/aceitar/', orc_views.aceitar_itens_orcamento, name='aceitar_orcamento'),
     path('orcamento/<int:orcamento_id>/recusar/', orc_views.recusar_itens_orcamento, name='recusar_orcamento'),
     path('orcamento/<int:orcamento_id>/migrar/', orc_views.migrar_para_servicos, name='migrar_para_servicos'),

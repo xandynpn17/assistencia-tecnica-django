@@ -34,7 +34,7 @@ class UserAdmin(BaseUserAdmin):
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         (
-            "Informacoes pessoais",
+            "Informações pessoais",
             {
                 "fields": (
                     "first_name",
@@ -109,17 +109,17 @@ class ConfiguracaoOrdemServicoAdmin(SingletonModelAdmin):
     list_display = ("prefixo_os", "inicio_id_ordem", "gerar_numero_automatico")
     fieldsets = (
         (
-            "Numeracao",
+            "Numeração",
             {
                 "fields": ("prefixo_os", "inicio_id_ordem", "gerar_numero_automatico"),
-                "description": "Configuracoes de geracao automatica de numero da OS",
+                "description": "Configurações de geração automática de número da OS",
             },
         ),
         (
             "Relatorios",
             {
                 "fields": ("rodape_relatorio",),
-                "description": "Texto exibido no rodape dos PDFs e impressoes.",
+                "description": "Texto exibido no rodapé dos PDFs e impressões.",
             },
         ),
     )

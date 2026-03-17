@@ -210,14 +210,14 @@
           <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens Padrao</h5>
         </div>
         <div class="card-body">
-          <p class="text-muted">Variaveis disponiveis: <code>{cliente_nome}</code>, <code>{numero_os}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>.</p>
+          <p class="text-muted">Variáveis disponíveis: <code>{cliente_nome}</code>, <code>{numero_os}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>.</p>
           <div class="row">
             <div class="col-md-6 form-group">
-              <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orcamento (Email)" }}</label>
+              <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orçamento (Email)" }}</label>
               {{ form.mensagem_orcamento_email }}
             </div>
             <div class="col-md-6 form-group">
-              <label>{{ form.mensagem_orcamento_whatsapp.label|default:"Mensagem Orcamento (WhatsApp)" }}</label>
+              <label>{{ form.mensagem_orcamento_whatsapp.label|default:"Mensagem Orçamento (WhatsApp)" }}</label>
               {{ form.mensagem_orcamento_whatsapp }}
             </div>
             <div class="col-md-6 form-group">
@@ -229,11 +229,11 @@
               {{ form.mensagem_pronto_whatsapp }}
             </div>
             <div class="col-md-12 form-group">
-              <label>{{ form.condicoes_orcamento.label|default:"Condicoes do Orcamento" }}</label>
+              <label>{{ form.condicoes_orcamento.label|default:"Condições do Orçamento" }}</label>
               {{ form.condicoes_orcamento }}
             </div>
             <div class="col-md-12 form-group">
-              <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Servico" }}</label>
+              <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Serviço" }}</label>
               {{ form.termos_ordem_servico }}
               <small class="form-text text-muted">Usado nos PDFs de OS (digital e impressao).</small>
             </div>
