@@ -3,39 +3,45 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h1>Fechar Caixa</h1>
+    <h1>Fechar caixa</h1>
 
     {% if not caixa %}
         <div class="alert alert-danger">
             Nenhum caixa aberto.
         </div>
-        <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-primary">Abrir Caixa</a>
+        <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-primary">Abrir caixa</a>
     {% else %}
         <div class="card mb-3">
             <div class="card-body">
-                <p><strong>Saldo Inicial:</strong> {{ caixa.saldo_inicial|floatformat:2 }}R$</p>
-                <p><strong>Total Entradas:</strong> {{ total_entradas|floatformat:2 }}R$</p>
-                <p><strong>Total Saídas:</strong> {{ total_saidas|floatformat:2 }}R$</p>
-                <p><strong>Saldo Atual:</strong> {{ saldo|floatformat:2 }}R$</p>
+                <p><strong>Data:</strong> {{ caixa.data|date:"d/m/Y" }}</p>
+                <p><strong>Saldo inicial:</strong> R$ {{ caixa.saldo_inicial|floatformat:2 }}</p>
+                <p><strong>Total de entradas:</strong> R$ {{ total_entradas|floatformat:2 }}</p>
+                <p><strong>Total de saidas:</strong> R$ {{ total_saidas|floatformat:2 }}</p>
+                <p class="mb-0"><strong>Saldo atual:</strong> R$ {{ saldo|floatformat:2 }}</p>
             </div>
         </div>
 
-        <form method="post">
+        <form method="post" class="card">
             {% csrf_token %}
-            <div class="form-group">
-                <label for="id_valor_contado_fisico">Valor contado fisicamente</label>
-                <input type="number" step="0.01" min="0" class="form-control" id="id_valor_contado_fisico" name="valor_contado_fisico" value="{{ valor_contado_fisico|default:saldo }}">
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="id_valor_contado_fisico">Valor contado fisicamente</label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="id_valor_contado_fisico" name="valor_contado_fisico" value="{{ valor_contado_fisico|default:saldo }}">
+                </div>
+                <div class="form-group mb-0">
+                    <label for="id_justificativa_diferenca">Justificativa da diferenca</label>
+                    <textarea class="form-control" id="id_justificativa_diferenca" name="justificativa_diferenca" rows="3">{{ caixa.justificativa_diferenca }}</textarea>
+                    <small class="text-muted">Obrigatoria quando houver diferenca no fechamento.</small>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="id_justificativa_diferenca">Justificativa da diferenca (obrigatoria se houver diferenca)</label>
-                <textarea class="form-control" id="id_justificativa_diferenca" name="justificativa_diferenca" rows="3">{{ caixa.justificativa_diferenca }}</textarea>
+            <div class="card-footer">
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-stop"></i> Fechar caixa
+                </button>
+                <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-secondary">
+                    Cancelar
+                </a>
             </div>
-            <button type="submit" class="btn btn-danger">
-                <i class="fas fa-stop"></i> Fechar Caixa
-            </button>
-            <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-secondary">
-                Cancelar
-            </a>
         </form>
     {% endif %}
 </div>

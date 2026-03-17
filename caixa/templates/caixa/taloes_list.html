@@ -2,8 +2,8 @@
 
 {% block content %}
 <div class="content-header d-flex justify-content-between align-items-center mb-3">
-    <h1>Consulta de Taloes</h1>
-    <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary btn-sm">Novo Pagamento</a>
+    <h1>Consulta de talões</h1>
+    <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary btn-sm">Novo pagamento</a>
 </div>
 
 <div class="card mb-3">
@@ -11,7 +11,7 @@
         <form method="get" class="form-row align-items-end">
             <div class="col-md-10">
                 <label for="id_q"><strong>Buscar</strong></label>
-                <input id="id_q" type="text" name="q" class="form-control" value="{{ q }}" placeholder="Numero do talao, OS ou referencia">
+                <input id="id_q" type="text" name="q" class="form-control" value="{{ q }}" placeholder="Número do talão, OS ou referência">
             </div>
             <div class="col-md-2">
                 <button type="submit" class="btn btn-outline-primary btn-block">Buscar</button>
@@ -25,13 +25,13 @@
         <table class="table table-hover text-nowrap mb-0">
             <thead>
                 <tr>
-                    <th>Talao</th>
+                    <th>Talão</th>
                     <th>OS</th>
                     <th>Valor</th>
                     <th>Forma</th>
-                    <th>Referencia</th>
+                    <th>Referência</th>
                     <th>Data</th>
-                    <th class="text-right">Acao</th>
+                    <th class="text-right">Ação</th>
                 </tr>
             </thead>
             <tbody>
@@ -49,7 +49,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">Nenhum talao encontrado.</td>
+                    <td colspan="7" class="text-center text-muted py-4">Nenhum talão encontrado.</td>
                 </tr>
                 {% endfor %}
             </tbody>

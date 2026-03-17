@@ -1,9 +1,9 @@
-﻿{% extends 'core/base.html' %}
+{% extends 'core/base.html' %}
 {% load widget_tweaks %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1>Registrar Saida</h1>
+    <h1>Registrar saída</h1>
 
     {% if not caixa %}
         <div class="alert alert-danger">
@@ -12,31 +12,38 @@
     {% else %}
         <p><strong>Saldo atual:</strong> R$ {{ saldo|floatformat:2 }}</p>
 
-        <form method="post">
+        <form method="post" class="card">
             {% csrf_token %}
-            {{ form.non_field_errors }}
+            <div class="card-body">
+                {{ form.non_field_errors }}
 
-            <div class="form-group">
-                <label for="{{ form.descricao.id_for_label }}">Descricao</label>
-                {{ form.descricao|add_class:"form-control" }}
+                <div class="form-group">
+                    <label for="{{ form.descricao.id_for_label }}">Descrição</label>
+                    {{ form.descricao|add_class:"form-control" }}
+                    {% if form.descricao.errors %}<small class="text-danger">{{ form.descricao.errors|striptags }}</small>{% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label for="{{ form.centro_custo.id_for_label }}">Centro de custo</label>
+                    {{ form.centro_custo|add_class:"form-control" }}
+                    {% if form.centro_custo.errors %}<small class="text-danger">{{ form.centro_custo.errors|striptags }}</small>{% endif %}
+                    <small class="text-muted">Os centros padrão são criados automaticamente. Se precisar, ajuste em "Centros de custo".</small>
+                </div>
+
+                <div class="form-group mb-0">
+                    <label for="{{ form.valor.id_for_label }}">Valor</label>
+                    {{ form.valor|add_class:"form-control" }}
+                    {% if form.valor.errors %}<small class="text-danger">{{ form.valor.errors|striptags }}</small>{% endif %}
+                </div>
             </div>
-
-            <div class="form-group">
-                <label for="{{ form.centro_custo.id_for_label }}">Centro de Custo</label>
-                {{ form.centro_custo|add_class:"form-control" }}
+            <div class="card-footer">
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-minus-circle"></i> Registrar saída
+                </button>
+                <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-secondary">
+                    Voltar
+                </a>
             </div>
-
-            <div class="form-group">
-                <label for="{{ form.valor.id_for_label }}">Valor</label>
-                {{ form.valor|add_class:"form-control" }}
-            </div>
-
-            <button type="submit" class="btn btn-danger mt-2">
-                <i class="fas fa-minus-circle"></i> Registrar Saida
-            </button>
-            <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-secondary mt-2">
-                Voltar
-            </a>
         </form>
     {% endif %}
 </div>

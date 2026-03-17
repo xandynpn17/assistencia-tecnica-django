@@ -3,27 +3,89 @@
 {% block content %}
 <div class="card mb-3">
   <div class="card-body">
-    <form method="get" class="form-inline">
-      <label class="mr-2">Periodo</label>
-      <select name="periodo" class="form-control mr-2">
-        <option value="7" {% if periodo == '7' %}selected{% endif %}>7 dias</option>
-        <option value="30" {% if periodo == '30' %}selected{% endif %}>30 dias</option>
-        <option value="90" {% if periodo == '90' %}selected{% endif %}>90 dias</option>
-      </select>
-      <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
+    <form method="get" class="form-row">
+      <div class="col-md-2">
+        <label>Período rápido</label>
+        <select name="periodo" class="form-control">
+          <option value="7" {% if periodo == '7' %}selected{% endif %}>7 dias</option>
+          <option value="30" {% if periodo == '30' %}selected{% endif %}>30 dias</option>
+          <option value="90" {% if periodo == '90' %}selected{% endif %}>90 dias</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label>Data de início</label>
+        <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label>Data de fim</label>
+        <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary btn-block">Aplicar</button>
+      </div>
     </form>
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header"><h3 class="card-title">DRE Simplificado</h3></div>
+<div class="row mb-3">
+  <div class="col-md-3"><div class="alert alert-success mb-0">Receita bruta<br><strong>R$ {{ receita_bruta|floatformat:2 }}</strong></div></div>
+  <div class="col-md-3"><div class="alert alert-info mb-0">Receita cliente<br><strong>R$ {{ receita_cliente|floatformat:2 }}</strong></div></div>
+  <div class="col-md-3"><div class="alert alert-secondary mb-0">Receita garantia<br><strong>R$ {{ receita_garantia|floatformat:2 }}</strong></div></div>
+  <div class="col-md-3"><div class="alert alert-danger mb-0">Despesas operacionais<br><strong>R$ {{ despesas_operacionais|floatformat:2 }}</strong></div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">DRE simplificado</h3></div>
   <div class="card-body p-0">
     <table class="table mb-0">
-      <tr><th>Receita Bruta</th><td>R$ {{ receita_bruta|floatformat:2 }}</td></tr>
-      <tr><th>Despesas Operacionais</th><td>R$ {{ despesas_operacionais|floatformat:2 }}</td></tr>
-      <tr><th>Resultado Operacional</th><td><strong>R$ {{ resultado_operacional|floatformat:2 }}</strong></td></tr>
+      <tr><th>Receita bruta</th><td>R$ {{ receita_bruta|floatformat:2 }}</td></tr>
+      <tr><th>Despesas operacionais</th><td>R$ {{ despesas_operacionais|floatformat:2 }}</td></tr>
+      <tr><th>Resultado operacional</th><td><strong>R$ {{ resultado_operacional|floatformat:2 }}</strong></td></tr>
       <tr><th>Margem</th><td>{{ margem|floatformat:2 }}%</td></tr>
     </table>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">Receitas por forma</h3></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Forma</th><th>Total</th></tr></thead>
+          <tbody>
+            {% for row in receitas_por_forma %}
+            <tr>
+              <td>{{ row.forma_pagamento__nome|default:row.metodo|default:"-" }}</td>
+              <td>R$ {{ row.total|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-center text-muted">Sem receitas no período.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">Despesas por centro de custo</h3></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Centro de custo</th><th>Total</th></tr></thead>
+          <tbody>
+            {% for row in despesas_por_centro %}
+            <tr>
+              <td>{{ row.centro_custo__nome|default:"Sem centro de custo" }}</td>
+              <td>R$ {{ row.total|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-center text-muted">Sem despesas no período.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

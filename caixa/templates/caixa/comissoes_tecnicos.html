@@ -2,17 +2,20 @@
 
 {% block content %}
 <div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Administração de Comissões</h3></div>
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
+    <h3 class="card-title mb-0">Administração de comissões</h3>
+    <small class="text-muted">Registros no filtro: {{ total_registros }}</small>
+  </div>
   <div class="card-body">
     <div class="alert alert-info py-2 mb-3">
       <small>
-        Regra operacional: comissão <strong>cancelada</strong> não pode ser liberada/paga; comissão
-        <strong>paga</strong> não pode ser cancelada.
+        Esta tela exibe o histórico administrativo das comissões geradas. Para simulações de período e percentual,
+        use <a href="{% url 'caixa:meu_desempenho' %}">Meu desempenho</a>.
       </small>
     </div>
     <form method="get" class="form-row">
       <div class="col-md-3">
-        <label>Técnico</label>
+        <label>Colaborador</label>
         <select name="tecnico" class="form-control">
           <option value="">Todos</option>
           {% for t in tecnicos %}
@@ -50,89 +53,154 @@
 </div>
 
 <div class="row mb-3">
-  <div class="col-md-6">
-    <div class="card h-100">
-      <div class="card-header"><strong>Reprocessar Serviços</strong></div>
-      <div class="card-body">
-        <form method="post" class="form-row">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="recalcular_servicos">
-          <div class="col-md-5">
-            <label>Data de início</label>
-            <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
-          </div>
-          <div class="col-md-5">
-            <label>Data de fim</label>
-            <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
-          </div>
-          <div class="col-md-2 d-flex align-items-end">
-            <button type="submit" class="btn btn-outline-primary btn-block">Executar</button>
-          </div>
-        </form>
+  {% for row in resumo_status %}
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body py-3">
+        <div class="text-muted small">{{ row.label }}</div>
+        <div class="h5 mb-1">{{ row.quantidade }}</div>
+        <div class="font-weight-bold">R$ {{ row.total|floatformat:2 }}</div>
       </div>
     </div>
   </div>
-  <div class="col-md-6">
-    <div class="card h-100">
-      <div class="card-header"><strong>Reprocessar Peças</strong></div>
-      <div class="card-body">
-        <form method="post" class="form-row">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="recalcular_pecas">
-          <div class="col-md-5">
-            <label>Data de início</label>
-            <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
-          </div>
-          <div class="col-md-5">
-            <label>Data de fim</label>
-            <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
-          </div>
-          <div class="col-md-2 d-flex align-items-end">
-            <button type="submit" class="btn btn-outline-success btn-block">Executar</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
+  {% endfor %}
 </div>
 
 <div class="row mb-3">
-  <div class="col-md-3"><div class="alert alert-info mb-0">Total válido: R$ {{ total_geral|floatformat:2 }}</div></div>
-  <div class="col-md-3"><div class="alert alert-warning mb-0">Geradas: R$ {{ total_gerada|floatformat:2 }}</div></div>
-  <div class="col-md-3"><div class="alert alert-primary mb-0">Liberadas: R$ {{ total_liberada|floatformat:2 }}</div></div>
-  <div class="col-md-3"><div class="alert alert-success mb-0">Pagas: R$ {{ total_paga|floatformat:2 }}</div></div>
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header"><strong>Resumo por tipo</strong></div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-bordered mb-0">
+          <thead><tr><th>Tipo</th><th class="text-right">Total</th></tr></thead>
+          <tbody>
+          {% for row in resumo_tipos %}
+          <tr><td>{{ row.tipo }}</td><td class="text-right">R$ {{ row.total|floatformat:2 }}</td></tr>
+          {% empty %}
+          <tr><td colspan="2" class="text-center text-muted">Sem dados no filtro.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header"><strong>Top colaboradores (valor válido)</strong></div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-bordered mb-0">
+          <thead><tr><th>Colaborador</th><th class="text-center">Qtde</th><th class="text-right">Total</th></tr></thead>
+          <tbody>
+          {% for row in resumo_tecnicos %}
+          <tr>
+            <td>{{ row.tecnico__username|default:'-' }}</td>
+            <td class="text-center">{{ row.quantidade }}</td>
+            <td class="text-right">R$ {{ row.total|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="text-center text-muted">Sem dados no filtro.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Resumo por Tipo</h3></div>
-  <div class="card-body p-0">
-    <table class="table table-sm table-bordered mb-0">
-      <thead><tr><th>Tipo</th><th>Total</th></tr></thead>
-      <tbody>
-      {% for row in resumo_tipos %}
-      <tr><td>{{ row.tipo }}</td><td>R$ {{ row.total|floatformat:2 }}</td></tr>
-      {% empty %}
-      <tr><td colspan="2" class="text-center text-muted">Sem dados no filtro.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <div class="card-header"><strong>Ações operacionais</strong></div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-6 mb-3 mb-md-0">
+        <div class="border rounded p-3 h-100">
+          <h6 class="mb-2">Reprocessar serviços</h6>
+          <form method="post" class="form-row">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="recalcular_servicos">
+            <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
+            <div class="col-md-5">
+              <label class="small">Data início</label>
+              <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-5">
+              <label class="small">Data fim</label>
+              <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <button type="submit" class="btn btn-outline-primary btn-sm btn-block">Executar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="border rounded p-3 h-100">
+          <h6 class="mb-2">Reprocessar peças</h6>
+          <form method="post" class="form-row">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="recalcular_pecas">
+            <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
+            <div class="col-md-5">
+              <label class="small">Data início</label>
+              <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-5">
+              <label class="small">Data fim</label>
+              <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <button type="submit" class="btn btn-outline-success btn-sm btn-block">Executar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
 <div class="card">
-  <div class="card-header"><h3 class="card-title">Comissões</h3></div>
-  <div class="card-body p-0">
+  <div class="card-header">
+    <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
+      <h3 class="card-title mb-0">Comissões</h3>
+      <small class="text-muted">
+        Selecionadas: <strong id="selecionadasCount">0</strong>
+        | Valor: <strong id="selecionadasValor">R$ 0,00</strong>
+      </small>
+    </div>
+    <form method="post" id="formAcoesLote" class="form-row mt-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" id="acaoLoteInput" value="">
+      <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
+      <div class="col-md-3 mb-2">
+        <input
+          type="text"
+          name="referencia_pagamento_lote"
+          class="form-control form-control-sm"
+          placeholder="Referência (pagamento em lote)"
+        >
+      </div>
+      <div class="col-md-9 mb-2 d-flex flex-wrap" style="gap: 6px;">
+        <button type="button" class="btn btn-sm btn-outline-primary" data-acao-lote="liberar_lote">Liberar selecionadas</button>
+        <button type="button" class="btn btn-sm btn-success" data-acao-lote="pagar_lote">Pagar selecionadas</button>
+        <button type="button" class="btn btn-sm btn-outline-danger" data-acao-lote="cancelar_lote">Cancelar selecionadas</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="limparSelecaoBtn">Limpar seleção</button>
+      </div>
+    </form>
+  </div>
+  <div class="card-body p-0 table-responsive">
     <table class="table table-sm table-bordered mb-0">
       <thead>
         <tr>
+          <th style="width: 36px;">
+            <input type="checkbox" id="selecionarTodasComissoes" title="Selecionar todas">
+          </th>
           <th>Data</th>
           <th>OS</th>
           <th>Técnico</th>
           <th>Tipo</th>
           <th>Descrição</th>
-          <th>Base</th>
-          <th>%</th>
-          <th>Valor</th>
+          <th class="text-right">Base</th>
+          <th class="text-right">%</th>
+          <th class="text-right">Valor</th>
           <th>Status</th>
           <th>Ações</th>
         </tr>
@@ -140,14 +208,22 @@
       <tbody>
       {% for c in comissoes %}
       <tr>
+        <td>
+          <input
+            type="checkbox"
+            class="comissao-lote-check"
+            value="{{ c.id }}"
+            data-valor="{{ c.valor_comissao|floatformat:2 }}"
+          >
+        </td>
         <td>{{ c.data_criacao|date:"d/m/Y H:i" }}</td>
         <td>{% if c.ordem_servico %}{{ c.ordem_servico.numero_os }}{% else %}-{% endif %}</td>
         <td>{% if c.tecnico %}{{ c.tecnico.username }}{% else %}-{% endif %}</td>
         <td>{{ c.tipo }}</td>
         <td>{{ c.descricao|default:"-" }}</td>
-        <td>R$ {{ c.valor_base|floatformat:2 }}</td>
-        <td>{{ c.percentual|floatformat:2 }}%</td>
-        <td>R$ {{ c.valor_comissao|floatformat:2 }}</td>
+        <td class="text-right">R$ {{ c.valor_base|floatformat:2 }}</td>
+        <td class="text-right">{{ c.percentual|floatformat:2 }}%</td>
+        <td class="text-right">R$ {{ c.valor_comissao|floatformat:2 }}</td>
         <td>
           {% if c.status == "GERADA" %}
           <span class="badge badge-warning">Gerada</span>
@@ -166,6 +242,7 @@
               {% csrf_token %}
               <input type="hidden" name="action" value="liberar">
               <input type="hidden" name="comissao_id" value="{{ c.id }}">
+              <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
               <button type="submit" class="btn btn-sm btn-outline-primary">Liberar</button>
             </form>
             {% endif %}
@@ -175,6 +252,7 @@
               {% csrf_token %}
               <input type="hidden" name="action" value="pagar">
               <input type="hidden" name="comissao_id" value="{{ c.id }}">
+              <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
               <input type="text" name="referencia_pagamento" value="{{ c.referencia_pagamento }}" placeholder="Ref." class="form-control form-control-sm mr-1" style="width: 110px;">
               <button type="submit" class="btn btn-sm btn-success">Pagar</button>
             </form>
@@ -185,6 +263,7 @@
               {% csrf_token %}
               <input type="hidden" name="action" value="cancelar">
               <input type="hidden" name="comissao_id" value="{{ c.id }}">
+              <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
               <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar</button>
             </form>
             {% endif %}
@@ -198,10 +277,131 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="10" class="text-center text-muted">Sem comissões no filtro informado.</td></tr>
+      <tr><td colspan="11" class="text-center text-muted">Sem comissões no filtro informado.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const formLote = document.getElementById("formAcoesLote");
+  const acaoLoteInput = document.getElementById("acaoLoteInput");
+  const checkAll = document.getElementById("selecionarTodasComissoes");
+  const checks = Array.from(document.querySelectorAll(".comissao-lote-check"));
+  const countEl = document.getElementById("selecionadasCount");
+  const valorEl = document.getElementById("selecionadasValor");
+  const limparBtn = document.getElementById("limparSelecaoBtn");
+
+  function confirmar(mensagem) {
+    if (window.AppMessages && typeof window.AppMessages.confirmSync === "function") {
+      return window.AppMessages.confirmSync(mensagem);
+    }
+    return window.confirm(mensagem);
+  }
+
+  function alertar(mensagem) {
+    if (window.AppMessages && typeof window.AppMessages.alertSync === "function") {
+      window.AppMessages.alertSync(mensagem);
+      return;
+    }
+    window.alert(mensagem);
+  }
+
+  function parseDecimal(valor) {
+    const normalizado = String(valor || "0").replace(",", ".").replace(/[^\d.-]/g, "");
+    const numero = Number(normalizado);
+    return Number.isFinite(numero) ? numero : 0;
+  }
+
+  function selecionadosAtuais() {
+    return checks.filter(function (el) { return el.checked; });
+  }
+
+  function atualizarResumoSelecao() {
+    const selecionadas = selecionadosAtuais();
+    const total = selecionadas.reduce(function (acc, el) {
+      return acc + parseDecimal(el.getAttribute("data-valor"));
+    }, 0);
+    if (countEl) {
+      countEl.textContent = String(selecionadas.length);
+    }
+    if (valorEl) {
+      valorEl.textContent = total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    }
+    if (checkAll) {
+      checkAll.checked = checks.length > 0 && checks.every(function (el) { return el.checked; });
+    }
+  }
+
+  if (checkAll) {
+    checkAll.addEventListener("change", function () {
+      checks.forEach(function (el) {
+        el.checked = checkAll.checked;
+      });
+      atualizarResumoSelecao();
+    });
+  }
+
+  checks.forEach(function (el) {
+    el.addEventListener("change", atualizarResumoSelecao);
+  });
+
+  if (limparBtn) {
+    limparBtn.addEventListener("click", function () {
+      if (checkAll) {
+        checkAll.checked = false;
+      }
+      checks.forEach(function (el) {
+        el.checked = false;
+      });
+      atualizarResumoSelecao();
+    });
+  }
+
+  document.querySelectorAll("[data-acao-lote]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      if (!formLote || !acaoLoteInput) {
+        return;
+      }
+      const acao = btn.getAttribute("data-acao-lote");
+      const selecionadas = selecionadosAtuais();
+      if (!selecionadas.length) {
+        alertar("Selecione ao menos uma comissão para executar a ação em lote.");
+        return;
+      }
+
+      let msg = "Confirmar ação em lote para as comissões selecionadas?";
+      if (acao === "pagar_lote") {
+        msg = "Confirmar pagamento em lote das comissões selecionadas?";
+      } else if (acao === "cancelar_lote") {
+        msg = "Confirmar cancelamento em lote das comissões selecionadas?";
+      } else if (acao === "liberar_lote") {
+        msg = "Confirmar liberação em lote das comissões selecionadas?";
+      }
+      if (!confirmar(msg)) {
+        return;
+      }
+
+      formLote.querySelectorAll("input[name='comissao_ids']").forEach(function (el) {
+        el.remove();
+      });
+      selecionadas.forEach(function (el) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "comissao_ids";
+        input.value = el.value;
+        formLote.appendChild(input);
+      });
+      acaoLoteInput.value = acao;
+      formLote.submit();
+    });
+  });
+
+  atualizarResumoSelecao();
+});
+</script>
 {% endblock %}

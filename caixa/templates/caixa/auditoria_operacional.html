@@ -1,0 +1,170 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3" style="gap: 12px;">
+    <div>
+        <h1 class="mb-1">Auditoria operacional</h1>
+        <div class="text-muted small">Pendências financeiras e operacionais para conferência diária.</div>
+    </div>
+    <form method="get" class="form-inline" style="gap: 8px;">
+        <div>
+            <label class="small d-block mb-1">Janela</label>
+            <select name="dias" class="form-control form-control-sm">
+                <option value="7" {% if dias == '7' %}selected{% endif %}>7 dias</option>
+                <option value="30" {% if dias == '30' %}selected{% endif %}>30 dias</option>
+                <option value="90" {% if dias == '90' %}selected{% endif %}>90 dias</option>
+            </select>
+        </div>
+        <div class="d-flex align-items-end">
+            <button type="submit" class="btn btn-sm btn-primary">Atualizar</button>
+        </div>
+    </form>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-2"><div class="small-box bg-warning"><div class="inner"><h4>{{ total_ordens_prontas_sem_recebimento }}</h4><p>Prontas sem recebimento</p></div></div></div>
+    <div class="col-md-2"><div class="small-box bg-danger"><div class="inner"><h4>{{ total_contas_vencidas }}</h4><p>Contas vencidas</p></div></div></div>
+    <div class="col-md-2"><div class="small-box bg-secondary"><div class="inner"><h4>{{ total_caixas_com_diferenca }}</h4><p>Caixas com diferença</p></div></div></div>
+    <div class="col-md-2"><div class="small-box bg-info"><div class="inner"><h4>{{ total_pagamentos_sem_talao }}</h4><p>Pagamentos sem talão</p></div></div></div>
+    <div class="col-md-2"><div class="small-box bg-dark"><div class="inner"><h4>{{ total_saidas_sem_centro }}</h4><p>Saídas sem centro</p></div></div></div>
+    <div class="col-md-2"><div class="small-box bg-primary"><div class="inner"><h4>{{ total_garantias_pendentes }}</h4><p>Garantias pendentes</p></div></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3 class="card-title">Ordens prontas sem recebimento</h3></div>
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-sm mb-0">
+            <thead><tr><th>OS</th><th>Cliente</th><th>Vencimento</th><th>Valor aberto</th><th>Status</th></tr></thead>
+            <tbody>
+                {% for conta in ordens_prontas_sem_recebimento %}
+                <tr>
+                    <td>{% if conta.ordem_servico %}<a href="{% url 'ordens:detalhes_ordem' conta.ordem_servico.pk %}">OS {{ conta.ordem_servico.numero_os }}</a>{% else %}-{% endif %}</td>
+                    <td>{{ conta.cliente_nome|default:'-' }}</td>
+                    <td>{{ conta.vencimento|date:'d/m/Y' }}</td>
+                    <td>R$ {{ conta.valor_aberto|floatformat:2 }}</td>
+                    <td>{{ conta.get_status_display }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted">Nenhuma ordem encontrada.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Contas vencidas</h3></div>
+            <div class="card-body p-0 table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Descrição</th><th>OS</th><th>Vencimento</th><th>Valor</th></tr></thead>
+                    <tbody>
+                        {% for conta in contas_vencidas %}
+                        <tr>
+                            <td>{{ conta.descricao }}</td>
+                            <td>{% if conta.ordem_servico %}OS {{ conta.ordem_servico.numero_os }}{% else %}-{% endif %}</td>
+                            <td>{{ conta.vencimento|date:'d/m/Y' }}</td>
+                            <td>R$ {{ conta.valor_aberto|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted">Nenhuma conta vencida.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Caixas com diferença</h3></div>
+            <div class="card-body p-0 table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Data</th><th>Saldo final</th><th>Contado</th><th>Diferença</th></tr></thead>
+                    <tbody>
+                        {% for item in caixas_com_diferenca %}
+                        <tr>
+                            <td>{{ item.data|date:'d/m/Y' }}</td>
+                            <td>R$ {{ item.saldo_final|floatformat:2 }}</td>
+                            <td>R$ {{ item.valor_contado_fisico|floatformat:2 }}</td>
+                            <td>R$ {{ item.diferenca_fechamento|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted">Nenhum caixa com diferença.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Pagamentos sem talão</h3></div>
+            <div class="card-body p-0 table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>OS</th><th>Valor</th><th>Forma</th><th>Data</th></tr></thead>
+                    <tbody>
+                        {% for pagamento in pagamentos_sem_talao %}
+                        <tr>
+                            <td>{% if pagamento.ordem_servico %}OS {{ pagamento.ordem_servico.numero_os }}{% else %}Avulso{% endif %}</td>
+                            <td>R$ {{ pagamento.valor|floatformat:2 }}</td>
+                            <td>{{ pagamento.metodo_display }}</td>
+                            <td>{{ pagamento.data|date:'d/m/Y H:i' }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted">Nenhum pagamento sem talão.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Saídas sem centro de custo</h3></div>
+            <div class="card-body p-0 table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Descrição</th><th>Valor</th><th>Data</th></tr></thead>
+                    <tbody>
+                        {% for lancamento in saidas_sem_centro %}
+                        <tr>
+                            <td>{{ lancamento.descricao }}</td>
+                            <td>R$ {{ lancamento.valor|floatformat:2 }}</td>
+                            <td>{{ lancamento.data|date:'d/m/Y H:i' }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted">Nenhuma saída sem centro.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3 class="card-title">Garantias pendentes</h3></div>
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-sm mb-0">
+            <thead><tr><th>OS</th><th>Fornecedor</th><th>Status</th><th>Valor previsto</th><th>Atualizado em</th></tr></thead>
+            <tbody>
+                {% for auditoria in garantias_pendentes %}
+                <tr>
+                    <td>OS {{ auditoria.ordem_servico.numero_os }}</td>
+                    <td>{{ auditoria.fornecedor|default:'-' }}</td>
+                    <td>{{ auditoria.get_status_faturamento_display }}</td>
+                    <td>R$ {{ auditoria.valor_previsto_fabricante|floatformat:2 }}</td>
+                    <td>{{ auditoria.atualizado_em|date:'d/m/Y H:i' }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted">Nenhuma garantia pendente.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+

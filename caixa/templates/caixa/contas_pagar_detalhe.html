@@ -1,9 +1,9 @@
-﻿{% extends 'core/base.html' %}
+{% extends 'core/base.html' %}
 {% load widget_tweaks %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h3 class="mb-0">Conta a Pagar #{{ conta.id }}</h3>
+  <h3 class="mb-0">Conta a pagar #{{ conta.id }}</h3>
   <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
 </div>
 
@@ -12,18 +12,18 @@
     <div class="card mb-3">
       <div class="card-body">
         <p><strong>Fornecedor:</strong> {{ conta.fornecedor|default:"-" }}</p>
-        <p><strong>Descricao:</strong> {{ conta.descricao }}</p>
-        <p><strong>Centro de Custo:</strong> {{ conta.centro_custo.nome|default:"-" }}</p>
+        <p><strong>Descrição:</strong> {{ conta.descricao }}</p>
+        <p><strong>Centro de custo:</strong> {{ conta.centro_custo.nome|default:"-" }}</p>
         <p><strong>Status:</strong> {{ conta.get_status_display }}</p>
         <p><strong>Vencimento:</strong> {{ conta.vencimento|date:"d/m/Y" }}</p>
-        <p><strong>Valor Total:</strong> R$ {{ conta.valor_total|floatformat:2 }}</p>
-        <p><strong>Valor Pago:</strong> R$ {{ conta.valor_pago|floatformat:2 }}</p>
-        <p><strong>Valor em Aberto:</strong> R$ {{ conta.valor_aberto|floatformat:2 }}</p>
+        <p><strong>Valor total:</strong> R$ {{ conta.valor_total|floatformat:2 }}</p>
+        <p><strong>Valor pago:</strong> R$ {{ conta.valor_pago|floatformat:2 }}</p>
+        <p><strong>Valor em aberto:</strong> R$ {{ conta.valor_aberto|floatformat:2 }}</p>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-header"><strong>Historico de Pagamentos</strong></div>
+      <div class="card-header"><strong>Histórico de pagamentos</strong></div>
       <div class="card-body table-responsive p-0">
         <table class="table table-hover mb-0">
           <thead>
@@ -31,8 +31,8 @@
               <th>Data</th>
               <th>Valor</th>
               <th>Forma</th>
-              <th>Referencia</th>
-              <th>Usuario</th>
+              <th>Referência</th>
+              <th>Usuário</th>
             </tr>
           </thead>
           <tbody>
@@ -55,7 +55,7 @@
 
   <div class="col-md-5">
     <div class="card mb-3">
-      <div class="card-header"><strong>Registrar Pagamento</strong></div>
+      <div class="card-header"><strong>Registrar pagamento</strong></div>
       <div class="card-body">
         <form method="post">
           {% csrf_token %}
@@ -83,4 +83,3 @@
   </div>
 </div>
 {% endblock %}
-

@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h3 class="mb-0">Centros de Custo</h3>
+  <h3 class="mb-0">Centros de custo</h3>
   <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
 </div>
 
@@ -27,6 +27,10 @@
   </div>
   <div class="col-md-8">
     <div class="card">
+      <div class="card-header">
+        <strong>Centros cadastrados</strong>
+        <small class="text-muted d-block">Os centros padrão são criados automaticamente quando necessário.</small>
+      </div>
       <div class="card-body table-responsive p-0">
         <table class="table table-hover mb-0">
           <thead><tr><th>Nome</th><th>Tipo</th><th>Ativo</th></tr></thead>

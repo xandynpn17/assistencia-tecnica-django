@@ -34,6 +34,14 @@ class PagamentoForm(forms.ModelForm):
 
 
 class LancamentoCaixaForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
+        self.fields["centro_custo"].required = True
+        self.fields["descricao"].label = "Descrição"
+        self.fields["centro_custo"].label = "Centro de custo"
+        self.fields["valor"].label = "Valor"
+
     class Meta:
         model = LancamentoCaixa
         fields = ["descricao", "centro_custo", "valor"]
@@ -75,6 +83,12 @@ class BaixaContaReceberForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(ativa=True).order_by("nome")
+        self.fields["valor"].label = "Valor principal recebido"
+        self.fields["desconto"].label = "Desconto concedido"
+        self.fields["juros"].label = "Juros recebidos"
+        self.fields["referencia"].label = "Referência"
+        self.fields["observacao"].label = "Observação"
+        self.fields["forma_pagamento"].label = "Forma de pagamento"
 
 
 class CategoriaFinanceiraForm(forms.ModelForm):
@@ -153,6 +167,10 @@ class FormaPagamentoForm(forms.ModelForm):
 
 
 class ContaPagarForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
+
     class Meta:
         model = ContaPagar
         fields = ["fornecedor", "descricao", "valor_total", "vencimento", "centro_custo"]
