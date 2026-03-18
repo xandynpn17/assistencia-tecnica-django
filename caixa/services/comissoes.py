@@ -13,6 +13,7 @@ from orcamentos.models import ItemOrcamento
 
 FINALIZACAO_STATUSES = {"pronto_contactar", "pronto_contactado", "concluida"}
 COMISSAO_SERVICO_STATUSES = FINALIZACAO_STATUSES.union({"autorizado"})
+TIPOS_COM_FONTE = {"SERVICO", "PECA", "BONUS_PRODUTO", "COMISSAO_VENDAS"}
 
 
 def _texto_preenchido(value) -> bool:
@@ -105,6 +106,16 @@ def _produto_por_ean_ou_nome(*, ean: str = "", nome: str = ""):
 
 
 def _criar_comissao_idempotente(*, chave_unica: str, defaults: dict) -> bool:
+    defaults = dict(defaults or {})
+    if not defaults.get("competencia"):
+        defaults["competencia"] = _competencia_do_dia()
+    if not defaults.get("fonte_referencia"):
+        defaults["fonte_referencia"] = _extrair_fonte_da_chave(chave_unica)
+
+    duplicada = _comissao_duplicada_por_assinatura(chave_unica, defaults)
+    if duplicada:
+        return False
+
     comissao, created = Comissao.objects.get_or_create(chave_unica=chave_unica, defaults=defaults)
     if not created and comissao.status == "GERADA":
         campos_atualizaveis = [
@@ -118,6 +129,8 @@ def _criar_comissao_idempotente(*, chave_unica: str, defaults: dict) -> bool:
             "percentual",
             "valor_comissao",
             "evento_gerador",
+            "competencia",
+            "fonte_referencia",
             "dados_extras",
         ]
         update_fields = []
@@ -151,6 +164,45 @@ def _normalizar_tipos_filtro(tipos=None):
     normalizados = {str(tipo or "").strip().lower() for tipo in tipos}
     validos = normalizados.intersection({"servico", "peca"})
     return validos or {"servico", "peca"}
+
+
+def _competencia_do_dia(data_ref=None):
+    data_ref = data_ref or timezone.localdate()
+    if hasattr(data_ref, "date"):
+        data_ref = data_ref.date()
+    return data_ref.replace(day=1)
+
+
+def _extrair_fonte_da_chave(chave_unica: str):
+    partes = str(chave_unica or "").split(":", 2)
+    if len(partes) < 3:
+        return ""
+    return (partes[2] or "").strip()
+
+
+def _comissao_duplicada_por_assinatura(chave_unica: str, defaults: dict):
+    tipo = (defaults.get("tipo") or "").strip().upper()
+    if tipo not in TIPOS_COM_FONTE:
+        return None
+
+    fonte_ref = (defaults.get("fonte_referencia") or "").strip()
+    if not fonte_ref:
+        fonte_ref = _extrair_fonte_da_chave(chave_unica)
+    if not fonte_ref:
+        return None
+
+    tecnico = defaults.get("tecnico")
+    ordem = defaults.get("ordem_servico")
+    qs = Comissao.objects.filter(tipo=tipo, fonte_referencia=fonte_ref).exclude(status="CANCELADA")
+    if tecnico is not None:
+        qs = qs.filter(tecnico=tecnico)
+    else:
+        qs = qs.filter(tecnico__isnull=True)
+    if ordem is not None:
+        qs = qs.filter(ordem_servico=ordem)
+    else:
+        qs = qs.filter(ordem_servico__isnull=True)
+    return qs.exclude(chave_unica=chave_unica).order_by("id").first()
 
 
 def _fontes_comissionaveis(ordem):

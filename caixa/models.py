@@ -339,6 +339,52 @@ class ComissaoItemOrcamento(models.Model):
         return f"Comissão item #{self.item_orcamento_id} - {self.tecnico} - {self.valor_comissao}"
 
 
+class ComissaoLotePagamento(models.Model):
+    STATUS_CHOICES = [
+        ("ABERTO", "Aberto"),
+        ("PAGO", "Pago"),
+        ("CANCELADO", "Cancelado"),
+    ]
+    CRITERIO_CHOICES = [
+        ("servicos_finalizados", "Serviços finalizados"),
+        ("retirado_pago", "Retirado e pago"),
+    ]
+
+    codigo = models.CharField(max_length=48, unique=True, db_index=True)
+    competencia = models.DateField(db_index=True)
+    data_inicio = models.DateField(null=True, blank=True)
+    data_fim = models.DateField(null=True, blank=True)
+    criterio = models.CharField(max_length=24, choices=CRITERIO_CHOICES, default="servicos_finalizados")
+    percentual_servicos = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    percentual_pecas = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    percentual_vendas = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    incluir_servicos = models.BooleanField(default=True)
+    incluir_pecas = models.BooleanField(default=True)
+    incluir_vendas = models.BooleanField(default=False)
+    total_itens = models.PositiveIntegerField(default=0)
+    total_valor = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="ABERTO")
+    observacao = models.CharField(max_length=180, blank=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lotes_comissao_criados",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        indexes = [
+            models.Index(fields=["competencia", "status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.codigo} ({self.competencia:%m/%Y})"
+
+
 class Comissao(models.Model):
     TIPO_CHOICES = [
         ("SERVICO", "Serviço"),
@@ -391,6 +437,15 @@ class Comissao(models.Model):
     evento_gerador = models.CharField(max_length=40, default="SERVICO_FINALIZADO")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="GERADA")
     chave_unica = models.CharField(max_length=160, unique=True)
+    fonte_referencia = models.CharField(max_length=120, blank=True, default="")
+    competencia = models.DateField(null=True, blank=True, db_index=True)
+    lote_pagamento = models.ForeignKey(
+        "ComissaoLotePagamento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="comissoes",
+    )
     referencia_pagamento = models.CharField(max_length=80, blank=True)
     data_liberacao = models.DateTimeField(null=True, blank=True)
     data_pagamento = models.DateTimeField(null=True, blank=True)
@@ -405,6 +460,7 @@ class Comissao(models.Model):
             models.Index(fields=["ordem_servico", "status"]),
             models.Index(fields=["tipo"]),
             models.Index(fields=["evento_gerador"]),
+            models.Index(fields=["fonte_referencia"]),
         ]
 
     def __str__(self):

@@ -33,7 +33,15 @@ def _registrar_historico(comissao, *, acao: str, status_anterior: str, status_no
     comissao.dados_extras = payload
 
 
-def aplicar_acao_comissao(comissao, *, acao: str, usuario=None, referencia_pagamento: str = "", motivo_cancelamento: str = ""):
+def aplicar_acao_comissao(
+    comissao,
+    *,
+    acao: str,
+    usuario=None,
+    referencia_pagamento: str = "",
+    motivo_cancelamento: str = "",
+    lote_pagamento=None,
+):
     acao = (acao or "").strip().lower()
     if acao not in {"liberar", "pagar", "cancelar"}:
         raise ComissaoStatusError("Ação de comissão inválida.")
@@ -76,6 +84,8 @@ def aplicar_acao_comissao(comissao, *, acao: str, usuario=None, referencia_pagam
             comissao.status = "PAGA"
             comissao.data_pagamento = timezone.now()
             comissao.referencia_pagamento = (referencia_pagamento or "").strip()[:80]
+            if lote_pagamento is not None:
+                comissao.lote_pagamento = lote_pagamento
             _registrar_historico(
                 comissao,
                 acao="pagar",
@@ -90,6 +100,7 @@ def aplicar_acao_comissao(comissao, *, acao: str, usuario=None, referencia_pagam
                     "data_liberacao",
                     "data_pagamento",
                     "referencia_pagamento",
+                    "lote_pagamento",
                     "dados_extras",
                     "atualizado_em",
                 ]

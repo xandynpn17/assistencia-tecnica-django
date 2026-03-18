@@ -136,8 +136,12 @@ class CaixaPermissoesTests(TestCase):
         self.client.force_login(self.atendente)
         resp_dre = self.client.get(reverse("caixa:dre"))
         resp_comissao = self.client.get(reverse("caixa:comissoes_tecnicos"))
+        resp_pagamento_comissao = self.client.get(reverse("caixa:comissoes_pagamento"))
+        resp_pendencias_comissao = self.client.get(reverse("caixa:comissoes_pendencias"))
         self.assertEqual(resp_dre.status_code, 403)
         self.assertEqual(resp_comissao.status_code, 403)
+        self.assertEqual(resp_pagamento_comissao.status_code, 403)
+        self.assertEqual(resp_pendencias_comissao.status_code, 403)
 
     def test_gerente_com_acesso_a_dre_e_fluxo(self):
         self.client.force_login(self.gerente)
@@ -145,6 +149,67 @@ class CaixaPermissoesTests(TestCase):
         resp_fluxo = self.client.get(reverse("caixa:fluxo_projetado"))
         self.assertEqual(resp_dre.status_code, 200)
         self.assertEqual(resp_fluxo.status_code, 200)
+
+    def test_gerente_com_acesso_a_pagamento_comissoes(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("caixa:comissoes_pagamento"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Pagamento de comissões")
+        self.assertContains(response, "Selecione os filtros e clique em")
+
+    def test_gerente_com_acesso_a_pendencias_comissoes(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("caixa:comissoes_pendencias"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Pendências de comissões")
+
+    def test_pagamento_comissoes_nao_carrega_lista_sem_filtro(self):
+        Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="SERVICO",
+            descricao="Comissao sem filtro inicial",
+            valor_base=Decimal("80.00"),
+            percentual=Decimal("10.00"),
+            valor_comissao=Decimal("8.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="GERADA",
+            chave_unica="SERVICO_FINALIZADO:SERVICO:item:sem-filtro-inicial",
+        )
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("caixa:comissoes_pagamento"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Comissao sem filtro inicial")
+
+    def test_pagamento_comissoes_paga_lote(self):
+        comissao = Comissao.objects.create(
+            tecnico=self.tecnico,
+            ordem_servico=self.ordem,
+            tipo="SERVICO",
+            descricao="Comissao lote simples",
+            valor_base=Decimal("120.00"),
+            percentual=Decimal("10.00"),
+            valor_comissao=Decimal("12.00"),
+            evento_gerador="SERVICO_FINALIZADO",
+            status="GERADA",
+            chave_unica="SERVICO_FINALIZADO:SERVICO:item:teste-lote-simples",
+        )
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("caixa:comissoes_pagamento"),
+            {
+                "action": "pagar_lote",
+                "comissao_ids": [str(comissao.id)],
+                "referencia_pagamento_lote": "LOTE-SIMPLES-01",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        comissao.refresh_from_db()
+        self.assertEqual(comissao.status, "PAGA")
+        self.assertEqual(comissao.referencia_pagamento, "LOTE-SIMPLES-01")
+        self.assertIsNotNone(comissao.lote_pagamento)
+        self.assertEqual(comissao.lote_pagamento.status, "PAGO")
+        self.assertEqual(comissao.lote_pagamento.total_itens, 1)
 
     def test_baixa_parcial_conta_receber(self):
         conta = ContaReceber.objects.create(
@@ -830,6 +895,36 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(criadas, 0)
         total_final = Comissao.objects.filter(item_orcamento=item, tipo="SERVICO").count()
         self.assertEqual(total_final, 1)
+
+    def test_motor_novo_bloqueia_duplicidade_por_assinatura_com_evento_diferente(self):
+        tecnico = get_user_model().objects.create_user(
+            username="tecnico_motor_novo_assinatura",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+            percentual_comissao_servico=Decimal("15.00"),
+        )
+        self.ordem.relatorio_tecnico = "Relatorio para assinatura"
+        self.ordem.save(update_fields=["relatorio_tecnico"])
+        orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem)
+        item = ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome="Servico assinatura",
+            descricao="Teste",
+            quantidade=1,
+            valor_unitario=Decimal("180.00"),
+            origem="manual",
+            tipo_item="servico",
+            tecnico_responsavel=tecnico,
+            status="aprovado",
+        )
+        primeira = Comissao.objects.filter(item_orcamento=item, tipo="SERVICO").first()
+        self.assertIsNotNone(primeira)
+        self.assertEqual(primeira.fonte_referencia, f"item:{item.id}")
+
+        criadas = processar_evento_servico_finalizado(self.ordem, evento="SERVICO_FINALIZADO_REPROCESSADO")
+        self.assertEqual(criadas, 0)
+        total = Comissao.objects.filter(item_orcamento=item, tipo="SERVICO").count()
+        self.assertEqual(total, 1)
 
     def test_motor_novo_usa_regra_quando_percentual_usuario_esta_zero(self):
         tecnico = get_user_model().objects.create_user(
