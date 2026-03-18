@@ -5,9 +5,10 @@ import csv
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, F, Max, Sum
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -40,6 +41,7 @@ from .models import (
     AuditoriaGarantia,
     Caixa,
     Comissao,
+    ComissaoLotePagamento,
     ComissaoItemOrcamento,
     ComissaoTecnico,
     CategoriaFinanceira,
@@ -94,6 +96,136 @@ def _parse_intervalo_datas(raw_inicio, raw_fim):
     if fim and not inicio:
         inicio = fim
     return inicio, fim
+
+
+def _periodo_por_preset(preset, referencia=None):
+    referencia = referencia or timezone.localdate()
+    inicio_mes = referencia.replace(day=1)
+    fim_mes = date(referencia.year, referencia.month, monthrange(referencia.year, referencia.month)[1])
+    fim_mes_anterior = inicio_mes - timedelta(days=1)
+    inicio_mes_anterior = fim_mes_anterior.replace(day=1)
+    mapa = {
+        "hoje": (referencia, referencia),
+        "7d": (referencia - timedelta(days=6), referencia),
+        "30d": (referencia - timedelta(days=29), referencia),
+        "mes_atual": (inicio_mes, fim_mes),
+        "mes_anterior": (inicio_mes_anterior, fim_mes_anterior),
+    }
+    return mapa.get((preset or "").strip(), (None, None))
+
+
+def _querystring_sem_param(request, *params_remover):
+    query = request.GET.copy()
+    for param in params_remover:
+        if param in query:
+            query.pop(param, None)
+    return query.urlencode()
+
+
+def _paginar_queryset(request, queryset, per_page=50, page_param="page"):
+    paginator = Paginator(queryset, per_page)
+    page_number = request.GET.get(page_param) or 1
+    return paginator.get_page(page_number)
+
+
+def _fmt_decimal(valor):
+    try:
+        return f"{Decimal(valor or 0):.2f}"
+    except Exception:
+        return "0.00"
+
+
+def _exportar_csv(filename, cabecalhos, linhas):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+    writer.writerow(cabecalhos)
+    for linha in linhas:
+        writer.writerow(linha)
+    return response
+
+
+def _exportar_pdf_tabela(filename, titulo, cabecalhos, linhas):
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.pdfgen import canvas
+
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    pagina = landscape(A4)
+    largura, altura = pagina
+    margem_x = 24
+    topo = altura - 28
+    linha_altura = 14
+    col_largura = max(70, int((largura - (margem_x * 2)) / max(1, len(cabecalhos))))
+
+    pdf = canvas.Canvas(response, pagesize=pagina)
+    y = topo
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(margem_x, y, titulo[:110])
+    y -= 18
+
+    def _nova_pagina():
+        nonlocal y
+        pdf.showPage()
+        pdf.setFont("Helvetica-Bold", 11)
+        pdf.drawString(margem_x, topo, titulo[:110])
+        y = topo - 18
+
+    pdf.setFont("Helvetica-Bold", 8)
+    for idx, cabecalho in enumerate(cabecalhos):
+        pdf.drawString(margem_x + idx * col_largura, y, str(cabecalho)[:34])
+    y -= linha_altura
+    pdf.setFont("Helvetica", 8)
+
+    for linha in linhas:
+        if y < 28:
+            _nova_pagina()
+            pdf.setFont("Helvetica-Bold", 8)
+            for idx, cabecalho in enumerate(cabecalhos):
+                pdf.drawString(margem_x + idx * col_largura, y, str(cabecalho)[:34])
+            y -= linha_altura
+            pdf.setFont("Helvetica", 8)
+        for idx, coluna in enumerate(linha):
+            pdf.drawString(margem_x + idx * col_largura, y, str(coluna or "")[:34])
+        y -= linha_altura
+
+    pdf.save()
+    return response
+
+
+def _calcular_comparativo_periodo(valor_atual, valor_anterior):
+    atual = Decimal(valor_atual or 0)
+    anterior = Decimal(valor_anterior or 0)
+    variacao = atual - anterior
+    percentual = Decimal("0.00")
+    if anterior:
+        percentual = (variacao / anterior) * Decimal("100.00")
+    return {
+        "atual": atual,
+        "anterior": anterior,
+        "variacao": variacao,
+        "percentual": percentual,
+    }
+
+
+def _atualizar_status_contas_pagar_abertas():
+    hoje = timezone.localdate()
+    agora = timezone.now()
+    base = ContaPagar.objects.exclude(status="cancelada")
+    base.filter(valor_pago__gte=F("valor_total")).exclude(status="paga").update(status="paga", atualizado_em=agora)
+    base.filter(valor_pago__gt=Decimal("0.00"), valor_pago__lt=F("valor_total")).exclude(status="parcial").update(
+        status="parcial",
+        atualizado_em=agora,
+    )
+    base.filter(valor_pago__lte=Decimal("0.00"), vencimento__lt=hoje).exclude(status="vencida").update(
+        status="vencida",
+        atualizado_em=agora,
+    )
+    base.filter(valor_pago__lte=Decimal("0.00"), vencimento__gte=hoje).exclude(status="aberta").update(
+        status="aberta",
+        atualizado_em=agora,
+    )
 
 
 def _redirect_pos_operacao(request, fallback_route):
@@ -403,11 +535,26 @@ def _garantir_conta_garantia(ordem, dados_garantia=None, ignorar_pagamento_id=No
 
 
 def _atualizar_status_contas_abertas():
-    for conta in ContaReceber.objects.filter(status__in=["aberta", "parcial", "vencida"]):
-        status_anterior = conta.status
-        conta.atualizar_status_automatico()
-        if conta.status != status_anterior:
-            conta.save(update_fields=["status", "valor_aberto", "atualizado_em"])
+    hoje = timezone.localdate()
+    agora = timezone.now()
+    base = ContaReceber.objects.exclude(status="cancelada")
+    base.filter(valor_aberto__lte=Decimal("0.00")).exclude(status="paga").update(
+        valor_aberto=Decimal("0.00"),
+        status="paga",
+        atualizado_em=agora,
+    )
+    base.filter(valor_aberto__gt=Decimal("0.00"), valor_aberto__lt=F("valor_original")).exclude(status="parcial").update(
+        status="parcial",
+        atualizado_em=agora,
+    )
+    base.filter(valor_aberto__gte=F("valor_original"), vencimento__lt=hoje).exclude(status="vencida").update(
+        status="vencida",
+        atualizado_em=agora,
+    )
+    base.filter(valor_aberto__gte=F("valor_original"), vencimento__gte=hoje).exclude(status="aberta").update(
+        status="aberta",
+        atualizado_em=agora,
+    )
 
 
 def _valor_garantia_sugerido(ordem):
@@ -619,6 +766,48 @@ def _gerar_comissao_item_orcamento(item, modo_pagamento="fechamento"):
 def _competencia_atual():
     hoje = timezone.localdate()
     return date(hoje.year, hoje.month, 1)
+
+
+def _normalizar_competencia(mes_raw, ano_raw, referencia=None):
+    referencia = referencia or timezone.localdate()
+    try:
+        mes = int(mes_raw or referencia.month)
+    except (TypeError, ValueError):
+        mes = referencia.month
+    try:
+        ano = int(ano_raw or referencia.year)
+    except (TypeError, ValueError):
+        ano = referencia.year
+    if mes < 1 or mes > 12:
+        mes = referencia.month
+    if ano < 2000 or ano > 2100:
+        ano = referencia.year
+    return date(ano, mes, 1)
+
+
+def _parse_decimal_input(valor_raw, default=Decimal("0.00")):
+    valor = (valor_raw or "").strip().replace(",", ".")
+    if not valor:
+        return default
+    try:
+        return Decimal(valor)
+    except Exception:
+        return default
+
+
+def _gerar_codigo_lote_pagamento(competencia):
+    prefixo = f"CMP-{competencia:%Y%m}"
+    sufixo_base = timezone.now().strftime("%d%H%M%S")
+    codigo = f"{prefixo}-{sufixo_base}"
+    if not ComissaoLotePagamento.objects.filter(codigo=codigo).exists():
+        return codigo
+    sequencia = 1
+    while sequencia <= 99:
+        candidato = f"{codigo}-{sequencia:02d}"
+        if not ComissaoLotePagamento.objects.filter(codigo=candidato).exists():
+            return candidato
+        sequencia += 1
+    return f"{codigo}-{timezone.now().microsecond}"
 
 
 def _recalcular_comissoes_itens_antecipado(queryset):
@@ -945,9 +1134,15 @@ def _recalcular_premios_competencia(competencia):
 @role_required(CAIXA_FINANCIAL_ROLES)
 def dashboard_caixa(request):
     _atualizar_status_contas_abertas()
+    _atualizar_status_contas_pagar_abertas()
     hoje = timezone.localdate()
+    preset_periodo = (request.GET.get("preset") or "").strip()
     data_inicio_raw = (request.GET.get("data_inicio") or "").strip()
     data_fim_raw = (request.GET.get("data_fim") or "").strip()
+    preset_inicio, preset_fim = _periodo_por_preset(preset_periodo, referencia=hoje)
+    if preset_inicio and preset_fim:
+        data_inicio_raw = preset_inicio.isoformat()
+        data_fim_raw = preset_fim.isoformat()
     data_inicio, data_fim = _parse_intervalo_datas(data_inicio_raw, data_fim_raw)
     filtro_aplicado = bool(data_inicio_raw or data_fim_raw)
 
@@ -1032,6 +1227,18 @@ def dashboard_caixa(request):
     qtd_caixas_fechados = caixas_periodo.filter(aberto=False).count()
     diferenca_fechamento_total = caixas_periodo.aggregate(total=Sum("diferenca_fechamento"))["total"] or Decimal("0.00")
 
+    dias_periodo = (data_fim - data_inicio).days + 1
+    inicio_anterior = data_inicio - timedelta(days=dias_periodo)
+    fim_anterior = data_inicio - timedelta(days=1)
+    caixas_periodo_anterior = Caixa.objects.filter(data__gte=inicio_anterior, data__lte=fim_anterior).order_by("-data", "-id")
+    resumo_anterior = _resumo_movimento_caixas(caixas_periodo_anterior) if caixas_periodo_anterior.exists() else _resumo_movimento_caixa(None)
+    comparativos = {
+        "entradas": _calcular_comparativo_periodo(total_entradas, resumo_anterior["total_entradas"]),
+        "saidas": _calcular_comparativo_periodo(total_saidas, resumo_anterior["total_saidas"]),
+        "resultado": _calcular_comparativo_periodo(resultado_operacional, (resumo_anterior["total_entradas"] - resumo_anterior["total_saidas"])),
+        "saldo": _calcular_comparativo_periodo(saldo, resumo_anterior["saldo"]),
+    }
+
     return render(
         request,
         "caixa/dashboard_caixa.html",
@@ -1041,6 +1248,7 @@ def dashboard_caixa(request):
             "filtro_aplicado": filtro_aplicado,
             "data_inicio": data_inicio.isoformat() if data_inicio else "",
             "data_fim": data_fim.isoformat() if data_fim else "",
+            "preset_periodo": preset_periodo,
             "data_inicio_ref": data_inicio,
             "data_fim_ref": data_fim,
             "pagamentos": pagamentos,
@@ -1063,6 +1271,9 @@ def dashboard_caixa(request):
             "qtd_caixas_abertos": qtd_caixas_abertos,
             "qtd_caixas_fechados": qtd_caixas_fechados,
             "diferenca_fechamento_total": diferenca_fechamento_total,
+            "comparativos": comparativos,
+            "periodo_anterior_inicio": inicio_anterior,
+            "periodo_anterior_fim": fim_anterior,
             "formas_pagamento_resumo": formas_pagamento_resumo,
             "centros_custo_resumo": centros_custo_resumo,
             "pagamentos_recentes": pagamentos_recentes,
@@ -1557,6 +1768,11 @@ def registrar_saida(request):
         return redirect("caixa:abrir_caixa")
     _garantir_centros_custo_padrao()
     saldo_atual = _resumo_movimento_caixa(caixa)["saldo"]
+    hoje = timezone.localdate()
+    saidas_qs = LancamentoCaixa.objects.filter(caixa=caixa, tipo="saida").select_related("centro_custo", "usuario")
+    saidas_recentes = saidas_qs.order_by("-data", "-id")[:15]
+    total_saidas_hoje = saidas_qs.filter(data__date=hoje).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    quantidade_saidas_hoje = saidas_qs.filter(data__date=hoje).count()
 
     if request.method == "POST":
         form = LancamentoCaixaForm(request.POST)
@@ -1580,6 +1796,9 @@ def registrar_saida(request):
             "menu_sub": "registrar_saida",
             "caixa": caixa,
             "saldo": saldo_atual,
+            "saidas_recentes": saidas_recentes,
+            "total_saidas_hoje": total_saidas_hoje,
+            "quantidade_saidas_hoje": quantidade_saidas_hoje,
         },
     )
 
@@ -1590,7 +1809,35 @@ def contas_receber(request):
     status = (request.GET.get("status") or "").strip()
     busca = (request.GET.get("q") or "").strip()
     tipo_origem = (request.GET.get("tipo_origem") or "").strip()
+    preset_vencimento = (request.GET.get("preset_vencimento") or "").strip()
     prontas_filtro = request.GET.get("prontas_sem_recebimento") == "1"
+    exportar = (request.GET.get("export") or "").strip().lower()
+    vencimento_inicio_raw = (request.GET.get("vencimento_inicio") or "").strip()
+    vencimento_fim_raw = (request.GET.get("vencimento_fim") or "").strip()
+    vencimento_inicio = None
+    vencimento_fim = None
+    filtro_vencimento_invalido = False
+    if vencimento_inicio_raw:
+        try:
+            vencimento_inicio = date.fromisoformat(vencimento_inicio_raw)
+        except ValueError:
+            filtro_vencimento_invalido = True
+    if vencimento_fim_raw:
+        try:
+            vencimento_fim = date.fromisoformat(vencimento_fim_raw)
+        except ValueError:
+            filtro_vencimento_invalido = True
+    if vencimento_inicio and not vencimento_fim:
+        vencimento_fim = vencimento_inicio
+    if vencimento_fim and not vencimento_inicio:
+        vencimento_inicio = vencimento_fim
+    preset_inicio, preset_fim = _periodo_por_preset(preset_vencimento, referencia=timezone.localdate())
+    if preset_inicio and preset_fim:
+        vencimento_inicio = preset_inicio
+        vencimento_fim = preset_fim
+        vencimento_inicio_raw = vencimento_inicio.isoformat()
+        vencimento_fim_raw = vencimento_fim.isoformat()
+
     queryset = ContaReceber.objects.select_related("ordem_servico", "ponto_operacional", "categoria").all()
     if status:
         queryset = queryset.filter(status=status)
@@ -1608,8 +1855,17 @@ def contas_receber(request):
             status__in=["aberta", "parcial", "vencida"],
             ordem_servico__status__in=["pronto_contactado", "pronto_contactar"],
         )
+    if filtro_vencimento_invalido:
+        messages.warning(request, "Filtro de vencimento invalido. Use datas no formato AAAA-MM-DD.")
+    elif vencimento_inicio and vencimento_fim:
+        queryset = queryset.filter(vencimento__gte=vencimento_inicio, vencimento__lte=vencimento_fim)
+    queryset = queryset.order_by("-vencimento", "-id")
 
     total_aberto = queryset.filter(status__in=["aberta", "parcial", "vencida"]).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    resumo_status = {
+        row["status"]: row["total"]
+        for row in queryset.values("status").annotate(total=Count("id"))
+    }
     prontas_qs = ContaReceber.objects.filter(
         tipo_origem="cliente_os",
         status__in=["aberta", "parcial", "vencida"],
@@ -1618,24 +1874,66 @@ def contas_receber(request):
     prontas_sem_recebimento_total = prontas_qs.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     prontas_sem_recebimento_qtd = prontas_qs.count()
 
+    if exportar in {"csv", "pdf"}:
+        linhas = []
+        for conta in queryset:
+            linhas.append(
+                [
+                    conta.id,
+                    getattr(conta.ordem_servico, "numero_os", "") or "-",
+                    conta.descricao or "-",
+                    conta.cliente_nome or "-",
+                    conta.get_tipo_origem_display(),
+                    conta.vencimento.strftime("%d/%m/%Y") if conta.vencimento else "-",
+                    conta.get_status_display(),
+                    _fmt_decimal(conta.valor_original),
+                    _fmt_decimal(conta.valor_aberto),
+                ]
+            )
+        cabecalhos = [
+            "ID",
+            "OS",
+            "Descricao",
+            "Cliente",
+            "Origem",
+            "Vencimento",
+            "Status",
+            "Valor original",
+            "Valor aberto",
+        ]
+        nome_arquivo = f"contas_receber_{timezone.localdate():%Y%m%d}.{'csv' if exportar == 'csv' else 'pdf'}"
+        if exportar == "csv":
+            return _exportar_csv(nome_arquivo, cabecalhos, linhas)
+        return _exportar_pdf_tabela(nome_arquivo, "Contas a receber", cabecalhos, linhas)
+
+    contas_page = _paginar_queryset(request, queryset, per_page=60, page_param="page")
+    querystring_paginacao = _querystring_sem_param(request, "page", "export")
+
     return render(
         request,
         "caixa/contas_receber_list.html",
         {
-            "contas": queryset[:200],
+            "contas": contas_page,
+            "contas_page": contas_page,
             "q": busca,
             "status_filtro": status,
             "tipo_origem_filtro": tipo_origem,
+            "preset_vencimento": preset_vencimento,
             "prontas_filtro": prontas_filtro,
+            "vencimento_inicio": vencimento_inicio.isoformat() if vencimento_inicio else vencimento_inicio_raw,
+            "vencimento_fim": vencimento_fim.isoformat() if vencimento_fim else vencimento_fim_raw,
             "total_aberto": total_aberto,
+            "total_status_aberta": resumo_status.get("aberta", 0),
+            "total_status_parcial": resumo_status.get("parcial", 0),
+            "total_status_vencida": resumo_status.get("vencida", 0),
+            "total_status_paga": resumo_status.get("paga", 0),
             "prontas_sem_recebimento_total": prontas_sem_recebimento_total,
             "prontas_sem_recebimento_qtd": prontas_sem_recebimento_qtd,
+            "querystring_paginacao": querystring_paginacao,
             "menu_app": "caixa",
             "menu_sub": "contas_receber",
         },
     )
-
-
 @role_required(CAIXA_FINANCIAL_ROLES)
 def criar_conta_receber(request):
     if request.method == "POST":
@@ -1662,6 +1960,7 @@ def detalhe_conta_receber(request, conta_id):
     _garantir_formas_pagamento_padrao()
     conta = get_object_or_404(ContaReceber.objects.select_related("ordem_servico"), id=conta_id)
     recebimentos = conta.recebimentos.select_related("usuario", "pagamento")
+    valor_quitado = max(Decimal("0.00"), (conta.valor_original or Decimal("0.00")) - (conta.valor_aberto or Decimal("0.00")))
 
     if request.method == "POST":
         form = BaixaContaReceberForm(_payload_pagamento_normalizado(request))
@@ -1742,6 +2041,7 @@ def detalhe_conta_receber(request, conta_id):
             "conta": conta,
             "form": form,
             "recebimentos": recebimentos,
+            "valor_quitado": valor_quitado,
             "menu_app": "caixa",
             "menu_sub": "contas_receber",
         },
@@ -1796,12 +2096,16 @@ def categorias_financeiras(request):
     else:
         form = CategoriaFinanceiraForm()
     categorias = CategoriaFinanceira.objects.all()
+    total_categorias = categorias.count()
+    total_categorias_ativas = categorias.filter(ativa=True).count()
     return render(
         request,
         "caixa/categorias_financeiras.html",
         {
             "form": form,
             "categorias": categorias,
+            "total_categorias": total_categorias,
+            "total_categorias_ativas": total_categorias_ativas,
             "menu_app": "caixa",
             "menu_sub": "categorias_financeiras",
         },
@@ -1819,12 +2123,16 @@ def formas_pagamento(request):
     else:
         form = FormaPagamentoForm()
     formas = FormaPagamento.objects.all()
+    total_formas = formas.count()
+    total_formas_ativas = formas.filter(ativa=True).count()
     return render(
         request,
         "caixa/formas_pagamento.html",
         {
             "form": form,
             "formas": formas,
+            "total_formas": total_formas,
+            "total_formas_ativas": total_formas_ativas,
             "menu_app": "caixa",
             "menu_sub": "formas_pagamento",
         },
@@ -1843,12 +2151,16 @@ def centros_custo(request):
     else:
         form = CentroCustoForm()
     centros = CentroCusto.objects.all()
+    total_centros = centros.count()
+    total_centros_ativos = centros.filter(ativo=True).count()
     return render(
         request,
         "caixa/centros_custo.html",
         {
             "form": form,
             "centros": centros,
+            "total_centros": total_centros,
+            "total_centros_ativos": total_centros_ativos,
             "menu_app": "caixa",
             "menu_sub": "centros_custo",
         },
@@ -1858,7 +2170,8 @@ def centros_custo(request):
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def taloes(request):
     busca = (request.GET.get("q") or "").strip()
-    pagamentos = Pagamento.objects.select_related("ordem_servico", "forma_pagamento").order_by("-data")
+    exportar = (request.GET.get("export") or "").strip().lower()
+    pagamentos = Pagamento.objects.select_related("ordem_servico", "forma_pagamento").order_by("-data", "-id")
     if busca:
         pagamentos = pagamentos.filter(
             Q(numero_talao__icontains=busca)
@@ -1866,18 +2179,40 @@ def taloes(request):
             | Q(ordem_servico__numero_os__icontains=busca)
         )
 
+    if exportar in {"csv", "pdf"}:
+        linhas = []
+        for pagamento in pagamentos:
+            linhas.append(
+                [
+                    pagamento.numero_talao or "-",
+                    getattr(pagamento.ordem_servico, "numero_os", "") or "-",
+                    _fmt_decimal(pagamento.valor),
+                    pagamento.metodo_display,
+                    pagamento.referencia or "-",
+                    pagamento.data.strftime("%d/%m/%Y %H:%M") if pagamento.data else "-",
+                ]
+            )
+        cabecalhos = ["Talao", "OS", "Valor", "Forma", "Referencia", "Data"]
+        nome_arquivo = f"taloes_{timezone.localdate():%Y%m%d}.{'csv' if exportar == 'csv' else 'pdf'}"
+        if exportar == "csv":
+            return _exportar_csv(nome_arquivo, cabecalhos, linhas)
+        return _exportar_pdf_tabela(nome_arquivo, "Consulta de taloes", cabecalhos, linhas)
+
+    pagamentos_page = _paginar_queryset(request, pagamentos, per_page=80, page_param="page")
+    querystring_paginacao = _querystring_sem_param(request, "page", "export")
+
     return render(
         request,
         "caixa/taloes_list.html",
         {
-            "pagamentos": pagamentos[:200],
+            "pagamentos": pagamentos_page,
+            "pagamentos_page": pagamentos_page,
             "q": busca,
+            "querystring_paginacao": querystring_paginacao,
             "menu_app": "caixa",
             "menu_sub": "taloes",
         },
     )
-
-
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def imprimir_talao(request, pagamento_id):
     pagamento = get_object_or_404(Pagamento.objects.select_related("ordem_servico", "forma_pagamento"), id=pagamento_id)
@@ -1894,30 +2229,111 @@ def imprimir_talao(request, pagamento_id):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def contas_pagar(request):
+    _atualizar_status_contas_pagar_abertas()
     status = (request.GET.get("status") or "").strip()
+    busca = (request.GET.get("q") or "").strip()
+    preset_vencimento = (request.GET.get("preset_vencimento") or "").strip()
+    exportar = (request.GET.get("export") or "").strip().lower()
+    vencimento_inicio_raw = (request.GET.get("vencimento_inicio") or "").strip()
+    vencimento_fim_raw = (request.GET.get("vencimento_fim") or "").strip()
+    vencimento_inicio = None
+    vencimento_fim = None
+    filtro_vencimento_invalido = False
+    if vencimento_inicio_raw:
+        try:
+            vencimento_inicio = date.fromisoformat(vencimento_inicio_raw)
+        except ValueError:
+            filtro_vencimento_invalido = True
+    if vencimento_fim_raw:
+        try:
+            vencimento_fim = date.fromisoformat(vencimento_fim_raw)
+        except ValueError:
+            filtro_vencimento_invalido = True
+    if vencimento_inicio and not vencimento_fim:
+        vencimento_fim = vencimento_inicio
+    if vencimento_fim and not vencimento_inicio:
+        vencimento_inicio = vencimento_fim
+    preset_inicio, preset_fim = _periodo_por_preset(preset_vencimento, referencia=timezone.localdate())
+    if preset_inicio and preset_fim:
+        vencimento_inicio = preset_inicio
+        vencimento_fim = preset_fim
+        vencimento_inicio_raw = vencimento_inicio.isoformat()
+        vencimento_fim_raw = vencimento_fim.isoformat()
+
     queryset = ContaPagar.objects.select_related("centro_custo").all()
-    for conta in queryset:
-        status_ant = conta.status
-        conta.atualizar_status_automatico()
-        if conta.status != status_ant:
-            conta.save(update_fields=["status", "atualizado_em"])
     if status:
         queryset = queryset.filter(status=status)
+    if busca:
+        queryset = queryset.filter(Q(fornecedor__icontains=busca) | Q(descricao__icontains=busca))
+    if filtro_vencimento_invalido:
+        messages.warning(request, "Filtro de vencimento invalido. Use datas no formato AAAA-MM-DD.")
+    elif vencimento_inicio and vencimento_fim:
+        queryset = queryset.filter(vencimento__gte=vencimento_inicio, vencimento__lte=vencimento_fim)
+    queryset = queryset.order_by("-vencimento", "-id")
 
     total_aberto = sum((c.valor_aberto for c in queryset if c.status in {"aberta", "parcial", "vencida"}), Decimal("0.00"))
+    resumo_status = {
+        row["status"]: row["total"]
+        for row in queryset.values("status").annotate(total=Count("id"))
+    }
+
+    if exportar in {"csv", "pdf"}:
+        linhas = []
+        for conta in queryset:
+            linhas.append(
+                [
+                    conta.id,
+                    conta.fornecedor or "-",
+                    conta.descricao or "-",
+                    getattr(conta.centro_custo, "nome", "") or "-",
+                    conta.vencimento.strftime("%d/%m/%Y") if conta.vencimento else "-",
+                    conta.get_status_display(),
+                    _fmt_decimal(conta.valor_total),
+                    _fmt_decimal(conta.valor_pago),
+                    _fmt_decimal(conta.valor_aberto),
+                ]
+            )
+        cabecalhos = [
+            "ID",
+            "Fornecedor",
+            "Descricao",
+            "Centro de custo",
+            "Vencimento",
+            "Status",
+            "Valor total",
+            "Valor pago",
+            "Valor aberto",
+        ]
+        nome_arquivo = f"contas_pagar_{timezone.localdate():%Y%m%d}.{'csv' if exportar == 'csv' else 'pdf'}"
+        if exportar == "csv":
+            return _exportar_csv(nome_arquivo, cabecalhos, linhas)
+        return _exportar_pdf_tabela(nome_arquivo, "Contas a pagar", cabecalhos, linhas)
+
+    contas_page = _paginar_queryset(request, queryset, per_page=60, page_param="page")
+    querystring_paginacao = _querystring_sem_param(request, "page", "export")
+
     return render(
         request,
         "caixa/contas_pagar_list.html",
         {
-            "contas": queryset[:300],
+            "contas": contas_page,
+            "contas_page": contas_page,
             "status_filtro": status,
+            "q": busca,
+            "preset_vencimento": preset_vencimento,
+            "vencimento_inicio": vencimento_inicio.isoformat() if vencimento_inicio else vencimento_inicio_raw,
+            "vencimento_fim": vencimento_fim.isoformat() if vencimento_fim else vencimento_fim_raw,
             "total_aberto": total_aberto,
+            "total_status_aberta": resumo_status.get("aberta", 0),
+            "total_status_parcial": resumo_status.get("parcial", 0),
+            "total_status_vencida": resumo_status.get("vencida", 0),
+            "total_status_paga": resumo_status.get("paga", 0),
+            "total_status_cancelada": resumo_status.get("cancelada", 0),
+            "querystring_paginacao": querystring_paginacao,
             "menu_app": "caixa",
             "menu_sub": "contas_pagar",
         },
     )
-
-
 @role_required(CAIXA_FINANCIAL_ROLES)
 def criar_conta_pagar(request):
     _garantir_centros_custo_padrao()
@@ -2019,6 +2435,540 @@ def detalhe_conta_pagar(request, conta_id):
 
 
 @role_required(CAIXA_FINANCIAL_ROLES)
+def comissoes_pagamento(request):
+    def _redirect_pos_post():
+        return_query = (request.POST.get("return_query") or "").strip()
+        base_url = reverse("caixa:comissoes_pagamento")
+        if return_query:
+            return redirect(f"{base_url}?{return_query}")
+        return redirect("caixa:comissoes_pagamento")
+
+    hoje = timezone.localdate()
+    competencia_ref = _normalizar_competencia(request.GET.get("competencia_mes"), request.GET.get("competencia_ano"), referencia=hoje)
+    competencia_inicio, competencia_fim = _periodo_competencia(competencia_ref)
+
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+        comissao_id = request.POST.get("comissao_id")
+        if action == "salvar_percentuais":
+            tecnico_id = (request.POST.get("tecnico_id") or "").strip()
+            if not tecnico_id.isdigit():
+                messages.warning(request, "Selecione um colaborador válido para salvar os percentuais.")
+                return _redirect_pos_post()
+            tecnico = get_user_model().objects.filter(id=int(tecnico_id), is_active=True).first()
+            if not tecnico:
+                messages.warning(request, "Colaborador não encontrado.")
+                return _redirect_pos_post()
+
+            percentual_servico = max(_parse_decimal_input(request.POST.get("percentual_servico"), Decimal("0.00")), Decimal("0.00"))
+            percentual_peca = max(_parse_decimal_input(request.POST.get("percentual_peca"), Decimal("0.00")), Decimal("0.00"))
+            percentual_vendas = max(_parse_decimal_input(request.POST.get("percentual_vendas"), Decimal("0.00")), Decimal("0.00"))
+
+            tecnico.percentual_comissao_servico = percentual_servico
+            tecnico.percentual_comissao_peca = percentual_peca
+            tecnico.percentual_comissao_vendas = percentual_vendas
+            tecnico.save(
+                update_fields=[
+                    "percentual_comissao_servico",
+                    "percentual_comissao_peca",
+                    "percentual_comissao_vendas",
+                ]
+            )
+            regra, _ = RegraComissaoTecnico.objects.get_or_create(
+                usuario=tecnico,
+                defaults={
+                    "percentual_servico": percentual_servico,
+                    "percentual_peca": percentual_peca,
+                    "momento_liberacao": "entregue_pago",
+                    "exigir_pagamento_para_liberar": True,
+                    "ativo": True,
+                },
+            )
+            changed = []
+            if regra.percentual_servico != percentual_servico:
+                regra.percentual_servico = percentual_servico
+                changed.append("percentual_servico")
+            if regra.percentual_peca != percentual_peca:
+                regra.percentual_peca = percentual_peca
+                changed.append("percentual_peca")
+            if not regra.ativo:
+                regra.ativo = True
+                changed.append("ativo")
+            if changed:
+                regra.save(update_fields=changed)
+
+            messages.success(
+                request,
+                (
+                    f"Percentuais atualizados para {tecnico.username}: "
+                    f"serviços {percentual_servico:.2f}%, peças {percentual_peca:.2f}%, vendas {percentual_vendas:.2f}%."
+                ),
+            )
+            return _redirect_pos_post()
+
+        if action in {"prever_lote", "liberar_lote", "pagar_lote", "cancelar_lote"}:
+            ids = []
+            for raw in request.POST.getlist("comissao_ids"):
+                if raw and str(raw).isdigit():
+                    ids.append(int(raw))
+            ids = list(dict.fromkeys(ids))
+            if not ids:
+                messages.warning(request, "Selecione ao menos uma comissao para executar a acao em lote.")
+                return _redirect_pos_post()
+            comissoes_lote = list(Comissao.objects.filter(id__in=ids).order_by("id"))
+            if not comissoes_lote:
+                messages.warning(request, "Nenhuma comissao valida foi encontrada para o lote informado.")
+                return _redirect_pos_post()
+
+            if action == "prever_lote":
+                aptas = [c for c in comissoes_lote if c.status in {"GERADA", "LIBERADA"}]
+                bloqueadas = [c for c in comissoes_lote if c.status in {"PAGA", "CANCELADA"}]
+                total_apto = sum((c.valor_comissao for c in aptas), Decimal("0.00"))
+                detalhes_bloqueio = ", ".join(f"#{c.id} ({c.status})" for c in bloqueadas[:6])
+                if aptas:
+                    messages.info(
+                        request,
+                        (
+                            f"Prévia do lote: {len(aptas)} comissão(ões) apta(s), "
+                            f"valor previsto R$ {total_apto:.2f}."
+                        ),
+                    )
+                if bloqueadas:
+                    messages.warning(
+                        request,
+                        "Comissões bloqueadas na prévia: "
+                        + detalhes_bloqueio
+                        + ("..." if len(bloqueadas) > 6 else ""),
+                    )
+                return _redirect_pos_post()
+
+            acao_map = {
+                "liberar_lote": "liberar",
+                "pagar_lote": "pagar",
+                "cancelar_lote": "cancelar",
+            }
+            acao_real = acao_map[action]
+            referencia_lote = (request.POST.get("referencia_pagamento_lote") or "").strip()
+            motivo_cancelamento_lote = (request.POST.get("motivo_cancelamento_lote") or "").strip()
+
+            alteradas = 0
+            sem_alteracao = 0
+            bloqueadas = 0
+            total_pago_lote = Decimal("0.00")
+            erros = []
+            marca_lote = timezone.now().strftime("%Y%m%d%H%M")
+            lote_pagamento = None
+            if acao_real == "pagar":
+                competencia_lote = _normalizar_competencia(
+                    request.POST.get("competencia_mes"),
+                    request.POST.get("competencia_ano"),
+                    referencia=timezone.localdate(),
+                )
+                percentual_servicos_ref = _parse_decimal_input(request.POST.get("percentual_servicos_ref"), Decimal("0.00"))
+                percentual_pecas_ref = _parse_decimal_input(request.POST.get("percentual_pecas_ref"), Decimal("0.00"))
+                percentual_vendas_ref = _parse_decimal_input(request.POST.get("percentual_vendas_ref"), Decimal("0.00"))
+                codigo_lote = _gerar_codigo_lote_pagamento(competencia_lote)
+                lote_pagamento = ComissaoLotePagamento.objects.create(
+                    codigo=codigo_lote,
+                    competencia=competencia_lote,
+                    data_inicio=_parse_intervalo_datas(
+                        request.POST.get("data_inicio"),
+                        request.POST.get("data_fim"),
+                    )[0],
+                    data_fim=_parse_intervalo_datas(
+                        request.POST.get("data_inicio"),
+                        request.POST.get("data_fim"),
+                    )[1],
+                    criterio=(request.POST.get("criterio") or "servicos_finalizados").strip(),
+                    percentual_servicos=percentual_servicos_ref,
+                    percentual_pecas=percentual_pecas_ref,
+                    percentual_vendas=percentual_vendas_ref,
+                    incluir_servicos=request.POST.get("aplicar_servicos") in {"1", "on", "true", "True"},
+                    incluir_pecas=request.POST.get("aplicar_pecas") in {"1", "on", "true", "True"},
+                    incluir_vendas=request.POST.get("aplicar_vendas") in {"1", "on", "true", "True"},
+                    total_itens=0,
+                    total_valor=Decimal("0.00"),
+                    status="ABERTO",
+                    criado_por=request.user,
+                    observacao=(request.POST.get("observacao_lote") or "").strip()[:180],
+                )
+            for comissao in comissoes_lote:
+                referencia_pagamento = ""
+                if acao_real == "pagar":
+                    referencia_pagamento = referencia_lote or f"LOTE-{marca_lote}-{comissao.id}"
+                try:
+                    resultado = aplicar_acao_comissao(
+                        comissao,
+                        acao=acao_real,
+                        usuario=request.user,
+                        referencia_pagamento=referencia_pagamento,
+                        motivo_cancelamento=motivo_cancelamento_lote,
+                        lote_pagamento=lote_pagamento if acao_real == "pagar" else None,
+                    )
+                    if resultado.changed:
+                        alteradas += 1
+                        if acao_real == "pagar":
+                            total_pago_lote += comissao.valor_comissao or Decimal("0.00")
+                    else:
+                        sem_alteracao += 1
+                except ComissaoStatusError as exc:
+                    bloqueadas += 1
+                    if len(erros) < 3:
+                        erros.append(f"#{comissao.id}: {exc}")
+
+            if lote_pagamento:
+                if alteradas:
+                    lote_pagamento.total_itens = alteradas
+                    lote_pagamento.total_valor = total_pago_lote
+                    lote_pagamento.status = "PAGO"
+                    lote_pagamento.save(update_fields=["total_itens", "total_valor", "status", "atualizado_em"])
+                else:
+                    lote_pagamento.delete()
+
+            if alteradas:
+                mensagem = f"Acao em lote concluida. Comissoes atualizadas: {alteradas}."
+                if lote_pagamento and alteradas:
+                    mensagem += f" Lote: {lote_pagamento.codigo}."
+                messages.success(request, mensagem)
+            if sem_alteracao or bloqueadas:
+                messages.info(
+                    request,
+                    f"Sem alteracao: {sem_alteracao}. Bloqueadas por regra de status: {bloqueadas}.",
+                )
+            if erros:
+                messages.warning(request, "Detalhes: " + " | ".join(erros))
+            return _redirect_pos_post()
+
+        if action in {"liberar", "pagar", "cancelar"} and comissao_id:
+            comissao = get_object_or_404(Comissao, id=comissao_id)
+            lote_pagamento = None
+            if action == "pagar":
+                competencia_lote = comissao.competencia or _competencia_atual()
+                lote_pagamento = ComissaoLotePagamento.objects.create(
+                    codigo=_gerar_codigo_lote_pagamento(competencia_lote),
+                    competencia=competencia_lote,
+                    data_inicio=competencia_lote,
+                    data_fim=competencia_lote,
+                    criterio="servicos_finalizados",
+                    total_itens=0,
+                    total_valor=Decimal("0.00"),
+                    status="ABERTO",
+                    criado_por=request.user,
+                    observacao=f"Pagamento individual comissão #{comissao.id}",
+                )
+            try:
+                resultado = aplicar_acao_comissao(
+                    comissao,
+                    acao=action,
+                    usuario=request.user,
+                    referencia_pagamento=request.POST.get("referencia_pagamento") or "",
+                    motivo_cancelamento=request.POST.get("motivo_cancelamento") or "",
+                    lote_pagamento=lote_pagamento if action == "pagar" else None,
+                )
+                if resultado.changed:
+                    if action == "pagar" and lote_pagamento:
+                        lote_pagamento.total_itens = 1
+                        lote_pagamento.total_valor = comissao.valor_comissao or Decimal("0.00")
+                        lote_pagamento.status = "PAGO"
+                        lote_pagamento.save(update_fields=["total_itens", "total_valor", "status", "atualizado_em"])
+                    messages.success(request, resultado.message)
+                else:
+                    if action == "pagar" and lote_pagamento:
+                        lote_pagamento.delete()
+                    messages.info(request, resultado.message)
+            except ComissaoStatusError as exc:
+                if action == "pagar" and lote_pagamento:
+                    lote_pagamento.delete()
+                messages.warning(request, str(exc))
+            return _redirect_pos_post()
+
+    tecnico_id = (request.GET.get("tecnico") or "").strip()
+    status_filtro = (request.GET.get("status") or "PENDENTE").strip().upper()
+    os_filtro = (request.GET.get("os") or "").strip()
+    tipo_filtro = (request.GET.get("tipo") or "").strip().upper()
+    criterio_filtro = (request.GET.get("criterio") or "servicos_finalizados").strip().lower()
+    data_inicio_raw = (request.GET.get("data_inicio") or "").strip()
+    data_fim_raw = (request.GET.get("data_fim") or "").strip()
+    competencia_mes_raw = (request.GET.get("competencia_mes") or str(hoje.month)).strip()
+    competencia_ano_raw = (request.GET.get("competencia_ano") or str(hoje.year)).strip()
+    exportar = (request.GET.get("export") or "").strip().lower()
+    filtro_aplicado = bool(request.GET)
+
+    competencia_ref = _normalizar_competencia(competencia_mes_raw, competencia_ano_raw, referencia=hoje)
+    inicio_mes, fim_mes = _periodo_competencia(competencia_ref)
+    if not data_inicio_raw:
+        data_inicio_raw = inicio_mes.isoformat()
+    if not data_fim_raw:
+        data_fim_raw = fim_mes.isoformat()
+
+    comissoes = []
+    comissoes_tabela = []
+    resumo_tipos = []
+    resumo_tecnicos = []
+    folhas_pagamento = []
+    total_registros = 0
+    total_pendente = Decimal("0.00")
+    total_gerada = Decimal("0.00")
+    total_liberada = Decimal("0.00")
+    total_paga = Decimal("0.00")
+    total_cancelada = Decimal("0.00")
+    querystring_paginacao = ""
+
+    if filtro_aplicado:
+        data_inicio, data_fim = _parse_intervalo_datas(data_inicio_raw, data_fim_raw)
+        base_qs = Comissao.objects.select_related("tecnico", "ordem_servico", "item_orcamento", "produto", "lote_pagamento").all()
+        if tecnico_id and tecnico_id.isdigit():
+            base_qs = base_qs.filter(tecnico_id=int(tecnico_id))
+        if os_filtro:
+            base_qs = base_qs.filter(ordem_servico__numero_os__icontains=os_filtro)
+        if tipo_filtro in {"SERVICO", "PECA", "COMISSAO_VENDAS", "BONUS_PRODUTO", "BONUS_RETIRADA", "BONUS_SERVICO"}:
+            base_qs = base_qs.filter(tipo=tipo_filtro)
+        elif tipo_filtro == "BONUS":
+            base_qs = base_qs.filter(tipo__in=["BONUS_PRODUTO", "BONUS_RETIRADA", "BONUS_SERVICO"])
+        base_qs = base_qs.filter(competencia=competencia_ref)
+        if data_inicio:
+            base_qs = base_qs.filter(data_criacao__date__gte=data_inicio)
+        if data_fim:
+            base_qs = base_qs.filter(data_criacao__date__lte=data_fim)
+
+        comissoes_qs = base_qs
+        if status_filtro == "PENDENTE":
+            comissoes_qs = comissoes_qs.filter(status__in=["GERADA", "LIBERADA"])
+        elif status_filtro in {"GERADA", "LIBERADA", "PAGA", "CANCELADA"}:
+            comissoes_qs = comissoes_qs.filter(status=status_filtro)
+        else:
+            status_filtro = "PENDENTE"
+            comissoes_qs = comissoes_qs.filter(status__in=["GERADA", "LIBERADA"])
+
+        comissoes_ordenadas = comissoes_qs.order_by("tecnico__username", "-data_criacao", "-id")
+
+        if exportar in {"csv", "pdf"}:
+            cabecalhos = ["Data", "OS", "Tecnico", "Tipo", "Base", "%", "Comissao", "Status", "Lote", "Fonte"]
+            linhas = []
+            for c in comissoes_ordenadas:
+                linhas.append(
+                    [
+                        c.data_criacao.strftime("%d/%m/%Y %H:%M") if c.data_criacao else "-",
+                        getattr(c.ordem_servico, "numero_os", "") or "-",
+                        getattr(c.tecnico, "username", "") or "-",
+                        c.get_tipo_display() if hasattr(c, "get_tipo_display") else c.tipo,
+                        _fmt_decimal(c.valor_base),
+                        _fmt_decimal(c.percentual),
+                        _fmt_decimal(c.valor_comissao),
+                        c.get_status_display() if hasattr(c, "get_status_display") else c.status,
+                        getattr(c.lote_pagamento, "codigo", "") or "-",
+                        c.fonte_referencia or "-",
+                    ]
+                )
+            nome_arquivo = f"comissoes_pagamento_{competencia_ref:%Y%m}.{'csv' if exportar == 'csv' else 'pdf'}"
+            if exportar == "csv":
+                return _exportar_csv(nome_arquivo, cabecalhos, linhas)
+            return _exportar_pdf_tabela(nome_arquivo, "Comissoes para pagamento", cabecalhos, linhas)
+
+        comissoes_tabela = _paginar_queryset(request, comissoes_ordenadas, per_page=120, page_param="page")
+        querystring_paginacao = _querystring_sem_param(request, "page", "export")
+        comissoes = list(comissoes_ordenadas[:1800])
+
+        total_registros = comissoes_qs.count()
+        total_pendente = base_qs.filter(status__in=["GERADA", "LIBERADA"]).aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+        total_gerada = base_qs.filter(status="GERADA").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+        total_liberada = base_qs.filter(status="LIBERADA").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+        total_paga = base_qs.filter(status="PAGA").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+        total_cancelada = base_qs.filter(status="CANCELADA").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+        resumo_tipos = list(
+            base_qs.exclude(status="CANCELADA")
+            .values("tipo")
+            .annotate(quantidade=Count("id"), total=Sum("valor_comissao"))
+            .order_by("tipo")
+        )
+        resumo_tecnicos_qs = (
+            base_qs.exclude(status="CANCELADA")
+            .values("tecnico_id", "tecnico__username")
+            .annotate(
+                itens=Count("id"),
+                total=Sum("valor_comissao"),
+                servicos=Sum("valor_comissao", filter=Q(tipo="SERVICO")),
+                pecas=Sum("valor_comissao", filter=Q(tipo="PECA")),
+                vendas=Sum("valor_comissao", filter=Q(tipo="COMISSAO_VENDAS")),
+                bonus=Sum("valor_comissao", filter=Q(tipo__in=["BONUS_PRODUTO", "BONUS_RETIRADA", "BONUS_SERVICO"])),
+            )
+            .order_by("tecnico__username")
+        )
+        for row in resumo_tecnicos_qs:
+            row["servicos"] = row["servicos"] or Decimal("0.00")
+            row["pecas"] = row["pecas"] or Decimal("0.00")
+            row["vendas"] = row["vendas"] or Decimal("0.00")
+            row["bonus"] = row["bonus"] or Decimal("0.00")
+            row["total"] = row["total"] or Decimal("0.00")
+            resumo_tecnicos.append(row)
+
+        folhas_map = {}
+        for comissao in comissoes:
+            tecnico_obj = comissao.tecnico
+            tecnico_id_chave = comissao.tecnico_id or 0
+            folha = folhas_map.setdefault(
+                tecnico_id_chave,
+                {
+                    "tecnico": tecnico_obj,
+                    "nome": getattr(tecnico_obj, "username", None) or "Sem tecnico",
+                    "servicos": {"linhas": [], "total": Decimal("0.00")},
+                    "pecas": {"linhas": [], "total": Decimal("0.00")},
+                    "vendas": {"linhas": [], "total": Decimal("0.00")},
+                    "bonus": {"linhas": [], "total": Decimal("0.00")},
+                    "total": Decimal("0.00"),
+                },
+            )
+            if comissao.tipo == "SERVICO":
+                categoria = "servicos"
+            elif comissao.tipo == "PECA":
+                categoria = "pecas"
+            elif comissao.tipo == "COMISSAO_VENDAS":
+                categoria = "vendas"
+            else:
+                categoria = "bonus"
+            folha[categoria]["linhas"].append(comissao)
+            if comissao.status != "CANCELADA":
+                folha[categoria]["total"] += comissao.valor_comissao or Decimal("0.00")
+                folha["total"] += comissao.valor_comissao or Decimal("0.00")
+
+        folhas_pagamento = sorted(
+            folhas_map.values(),
+            key=lambda row: ((row.get("nome") or "").lower(), row.get("total") or Decimal("0.00")),
+        )
+        for folha in folhas_pagamento:
+            folha["secoes"] = [
+                {"chave": "servicos", "titulo": "Servicos", "dados": folha["servicos"]},
+                {"chave": "pecas", "titulo": "Pecas", "dados": folha["pecas"]},
+                {"chave": "vendas", "titulo": "Vendas", "dados": folha["vendas"]},
+                {"chave": "bonus", "titulo": "Bonus", "dados": folha["bonus"]},
+            ]
+    tecnicos = get_user_model().objects.filter(
+        is_active=True,
+        tipo_usuario__in=["tecnico", "atendente"],
+    ).order_by("username")
+    lotes_recentes = ComissaoLotePagamento.objects.select_related("criado_por").order_by("-criado_em")
+    if filtro_aplicado:
+        lotes_recentes = lotes_recentes.filter(competencia=competencia_ref)
+    lotes_recentes = lotes_recentes[:20]
+
+    return render(
+        request,
+        "caixa/comissoes_pagamento.html",
+        {
+            "comissoes": comissoes_tabela,
+            "comissoes_page": comissoes_tabela,
+            "tecnicos": tecnicos,
+            "tecnico_filtro": tecnico_id,
+            "status_filtro": status_filtro,
+            "os_filtro": os_filtro,
+            "tipo_filtro": tipo_filtro,
+            "criterio_filtro": criterio_filtro,
+            "competencia_mes": f"{competencia_ref.month:02d}",
+            "competencia_ano": f"{competencia_ref.year}",
+            "data_inicio": data_inicio_raw,
+            "data_fim": data_fim_raw,
+            "filtro_aplicado": filtro_aplicado,
+            "total_registros": total_registros,
+            "total_pendente": total_pendente,
+            "total_gerada": total_gerada,
+            "total_liberada": total_liberada,
+            "total_paga": total_paga,
+            "total_cancelada": total_cancelada,
+            "resumo_tipos": resumo_tipos,
+            "resumo_tecnicos": resumo_tecnicos,
+            "folhas_pagamento": folhas_pagamento,
+            "lotes_recentes": lotes_recentes,
+            "querystring_paginacao": querystring_paginacao,
+            "menu_app": "caixa",
+            "menu_sub": "comissoes_pagamento",
+        },
+    )
+
+
+@role_required(CAIXA_FINANCIAL_ROLES)
+def comissoes_pendencias(request):
+    from orcamentos.models import ItemOrcamento
+    from ordens.models import ServicoPeca
+
+    hoje = timezone.localdate()
+    competencia_ref = _normalizar_competencia(request.GET.get("competencia_mes"), request.GET.get("competencia_ano"), referencia=hoje)
+    data_inicio, data_fim = _periodo_competencia(competencia_ref)
+    criterio_filtro = (request.GET.get("criterio") or "servicos_finalizados").strip().lower()
+
+    status_validos = ["autorizado", "pronto_contactar", "pronto_contactado", "concluida"]
+    ordens_base = OrdemServico.objects.select_related("tecnico_responsavel", "cliente").filter(status__in=status_validos)
+    ordens_base = ordens_base.filter(data_abertura__date__gte=data_inicio, data_abertura__date__lte=data_fim)
+
+    ordens_sem_relatorio_qs = ordens_base.filter(Q(relatorio_tecnico__isnull=True) | Q(relatorio_tecnico__exact=""))
+    itens_sem_tecnico_qs = ItemOrcamento.objects.select_related("orcamento__ordem_servico").filter(
+        status="aprovado",
+        tecnico_responsavel__isnull=True,
+        orcamento__ordem_servico__status__in=status_validos,
+        orcamento__ordem_servico__data_abertura__date__gte=data_inicio,
+        orcamento__ordem_servico__data_abertura__date__lte=data_fim,
+    )
+    servicos_pecas_sem_tecnico_qs = ServicoPeca.objects.select_related("ordem", "item_orcamento").filter(
+        ordem__status__in=status_validos,
+        ordem__data_abertura__date__gte=data_inicio,
+        ordem__data_abertura__date__lte=data_fim,
+        tipo__in=["servico", "peca"],
+        tecnico_responsavel__isnull=True,
+    )
+    comissoes_sem_fonte_qs = Comissao.objects.select_related("tecnico", "ordem_servico").filter(
+        competencia=competencia_ref,
+        tipo__in=["SERVICO", "PECA", "BONUS_PRODUTO", "COMISSAO_VENDAS"],
+    ).exclude(status="CANCELADA").filter(Q(fonte_referencia__isnull=True) | Q(fonte_referencia=""))
+    comissoes_pagas_sem_lote_qs = Comissao.objects.select_related("tecnico", "ordem_servico").filter(
+        competencia=competencia_ref,
+        status="PAGA",
+        lote_pagamento__isnull=True,
+    )
+    duplicidades_qs = (
+        Comissao.objects.select_related("tecnico", "ordem_servico")
+        .filter(competencia=competencia_ref, tipo__in=["SERVICO", "PECA", "BONUS_PRODUTO", "COMISSAO_VENDAS"])
+        .exclude(status="CANCELADA")
+        .exclude(fonte_referencia="")
+        .values(
+            "tecnico_id",
+            "tecnico__username",
+            "ordem_servico_id",
+            "ordem_servico__numero_os",
+            "tipo",
+            "fonte_referencia",
+        )
+        .annotate(quantidade=Count("id"), total=Sum("valor_comissao"))
+        .filter(quantidade__gt=1)
+        .order_by("-quantidade", "tecnico__username", "ordem_servico__numero_os")
+    )
+
+    return render(
+        request,
+        "caixa/comissoes_pendencias.html",
+        {
+            "competencia_mes": f"{competencia_ref.month:02d}",
+            "competencia_ano": f"{competencia_ref.year}",
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "criterio_filtro": criterio_filtro,
+            "ordens_sem_relatorio": ordens_sem_relatorio_qs.order_by("-id")[:100],
+            "itens_sem_tecnico": itens_sem_tecnico_qs.order_by("-id")[:100],
+            "servicos_pecas_sem_tecnico": servicos_pecas_sem_tecnico_qs.order_by("-id")[:100],
+            "comissoes_sem_fonte": comissoes_sem_fonte_qs.order_by("-id")[:100],
+            "comissoes_pagas_sem_lote": comissoes_pagas_sem_lote_qs.order_by("-id")[:100],
+            "duplicidades_assinatura": list(duplicidades_qs[:100]),
+            "total_ordens_sem_relatorio": ordens_sem_relatorio_qs.count(),
+            "total_itens_sem_tecnico": itens_sem_tecnico_qs.count(),
+            "total_servicos_pecas_sem_tecnico": servicos_pecas_sem_tecnico_qs.count(),
+            "total_comissoes_sem_fonte": comissoes_sem_fonte_qs.count(),
+            "total_comissoes_pagas_sem_lote": comissoes_pagas_sem_lote_qs.count(),
+            "total_duplicidades_assinatura": duplicidades_qs.count(),
+            "menu_app": "caixa",
+            "menu_sub": "comissoes_pendencias",
+        },
+    )
+
+
+@role_required(CAIXA_FINANCIAL_ROLES)
 def comissoes_tecnicos(request):
     from orcamentos.models import ItemOrcamento
 
@@ -2051,6 +3001,7 @@ def comissoes_tecnicos(request):
         data_inicio_post_raw = (request.POST.get("data_inicio") or "").strip()
         data_fim_post_raw = (request.POST.get("data_fim") or "").strip()
         data_inicio_post, data_fim_post = _parse_intervalo_datas(data_inicio_post_raw, data_fim_post_raw)
+
         if action == "recalcular":
             ordens_qs = OrdemServico.objects.filter(
                 status__in=["autorizado", "pronto_contactar", "pronto_contactado", "concluida"]
@@ -2061,6 +3012,7 @@ def comissoes_tecnicos(request):
                 f"Motor novo recalculado. Ordens processadas: {ordens_processadas}. Novas comissoes: {total_novo}.",
             )
             return _redirect_comissoes_pos_post()
+
         if action in {"recalcular_servicos", "recalcular_pecas"}:
             tipos = {"servico"} if action == "recalcular_servicos" else {"peca"}
             ordens_qs = _ordens_por_intervalo(data_inicio_post, data_fim_post)
@@ -2074,7 +3026,7 @@ def comissoes_tecnicos(request):
             if data_inicio_post or data_fim_post:
                 de = data_inicio_post.strftime("%d/%m/%Y") if data_inicio_post else "inicio"
                 ate = data_fim_post.strftime("%d/%m/%Y") if data_fim_post else "hoje"
-                periodo_msg = f" (período {de} a {ate})"
+                periodo_msg = f" (periodo {de} a {ate})"
             messages.success(
                 request,
                 (
@@ -2084,6 +3036,7 @@ def comissoes_tecnicos(request):
                 ),
             )
             return _redirect_comissoes_pos_post()
+
         if action == "recalcular_itens_antecipado":
             itens = (
                 ItemOrcamento.objects.select_related("orcamento__ordem_servico", "tecnico_responsavel")
@@ -2100,12 +3053,13 @@ def comissoes_tecnicos(request):
             messages.success(
                 request,
                 (
-                    "Comissões por item (antecipado) recalculadas. "
+                    "Comissoes por item (antecipado) recalculadas. "
                     f"Motor novo: {total_novo} novas ({ordens_processadas} ordens). "
                     f"Legado: {total_legado}."
                 ),
             )
             return _redirect_comissoes_pos_post()
+
         if action == "recalcular_itens_fechamento":
             itens = (
                 ItemOrcamento.objects.select_related("orcamento__ordem_servico", "tecnico_responsavel")
@@ -2126,12 +3080,13 @@ def comissoes_tecnicos(request):
             messages.success(
                 request,
                 (
-                    "Comissões por item (fechamento) recalculadas. "
+                    "Comissoes por item (fechamento) recalculadas. "
                     f"Motor novo: {total_novo} novas ({ordens_processadas} ordens). "
                     f"Legado: {total_legado}."
                 ),
             )
             return _redirect_comissoes_pos_post()
+
         if action in {"liberar_lote", "pagar_lote", "cancelar_lote"}:
             ids = []
             for raw in request.POST.getlist("comissao_ids"):
@@ -2139,7 +3094,7 @@ def comissoes_tecnicos(request):
                     ids.append(int(raw))
             ids = list(dict.fromkeys(ids))
             if not ids:
-                messages.warning(request, "Selecione ao menos uma comissão para executar a ação em lote.")
+                messages.warning(request, "Selecione ao menos uma comissao para executar a acao em lote.")
                 return _redirect_comissoes_pos_post()
 
             acao_map = {
@@ -2152,7 +3107,7 @@ def comissoes_tecnicos(request):
             motivo_cancelamento_lote = (request.POST.get("motivo_cancelamento_lote") or "").strip()
             comissoes_lote = list(Comissao.objects.filter(id__in=ids).order_by("id"))
             if not comissoes_lote:
-                messages.warning(request, "Nenhuma comissão válida foi encontrada para o lote informado.")
+                messages.warning(request, "Nenhuma comissao valida foi encontrada para o lote informado.")
                 return _redirect_comissoes_pos_post()
 
             alteradas = 0
@@ -2182,18 +3137,13 @@ def comissoes_tecnicos(request):
                         erros.append(f"#{comissao.id}: {exc}")
 
             if alteradas:
-                messages.success(
-                    request,
-                    f"Ação em lote concluída. Comissões atualizadas: {alteradas}.",
-                )
+                messages.success(request, f"Acao em lote concluida. Comissoes atualizadas: {alteradas}.")
             if sem_alteracao or bloqueadas:
-                messages.info(
-                    request,
-                    f"Sem alteração: {sem_alteracao}. Bloqueadas por regra de status: {bloqueadas}.",
-                )
+                messages.info(request, f"Sem alteracao: {sem_alteracao}. Bloqueadas por regra de status: {bloqueadas}.")
             if erros:
                 messages.warning(request, "Detalhes: " + " | ".join(erros))
             return _redirect_comissoes_pos_post()
+
         if action in {"liberar", "pagar", "cancelar"} and comissao_id:
             comissao = get_object_or_404(Comissao, id=comissao_id)
             try:
@@ -2218,7 +3168,7 @@ def comissoes_tecnicos(request):
                 ordem = OrdemServico.objects.filter(id=int(os_id)).first()
                 if ordem:
                     total = processar_evento_servico_finalizado(ordem, evento="SERVICO_FINALIZADO")
-                    messages.success(request, f"Reprocessamento executado. Novas comissões: {total}.")
+                    messages.success(request, f"Reprocessamento executado. Novas comissoes: {total}.")
             return _redirect_comissoes_pos_post()
 
     tecnico_id = (request.GET.get("tecnico") or "").strip()
@@ -2226,11 +3176,9 @@ def comissoes_tecnicos(request):
     os_filtro = (request.GET.get("os") or "").strip()
     data_inicio_raw = (request.GET.get("data_inicio") or "").strip()
     data_fim_raw = (request.GET.get("data_fim") or "").strip()
+    exportar = (request.GET.get("export") or "").strip().lower()
 
-    data_inicio = None
-    data_fim = None
     data_inicio, data_fim = _parse_intervalo_datas(data_inicio_raw, data_fim_raw)
-
     comissoes_qs = Comissao.objects.select_related("tecnico", "ordem_servico", "item_orcamento", "produto").all()
     if tecnico_id and tecnico_id.isdigit():
         comissoes_qs = comissoes_qs.filter(tecnico_id=int(tecnico_id))
@@ -2242,8 +3190,8 @@ def comissoes_tecnicos(request):
         comissoes_qs = comissoes_qs.filter(data_criacao__date__gte=data_inicio)
     if data_fim:
         comissoes_qs = comissoes_qs.filter(data_criacao__date__lte=data_fim)
+    comissoes_qs = comissoes_qs.order_by("-data_criacao", "-id")
 
-    comissoes = comissoes_qs.order_by("-data_criacao", "-id")[:500]
     total_geral = comissoes_qs.exclude(status="CANCELADA").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
     total_gerada = comissoes_qs.filter(status="GERADA").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
     total_liberada = comissoes_qs.filter(status="LIBERADA").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
@@ -2279,6 +3227,30 @@ def comissoes_tecnicos(request):
         .annotate(quantidade=Count("id"), total=Sum("valor_comissao"))
         .order_by("-total", "tecnico__username")[:12]
     )
+
+    if exportar in {"csv", "pdf"}:
+        cabecalhos = ["Data", "OS", "Tecnico", "Tipo", "Base", "%", "Comissao", "Status"]
+        linhas = []
+        for c in comissoes_qs:
+            linhas.append(
+                [
+                    c.data_criacao.strftime("%d/%m/%Y %H:%M") if c.data_criacao else "-",
+                    getattr(c.ordem_servico, "numero_os", "") or "-",
+                    getattr(c.tecnico, "username", "") or "-",
+                    c.get_tipo_display() if hasattr(c, "get_tipo_display") else c.tipo,
+                    _fmt_decimal(c.valor_base),
+                    _fmt_decimal(c.percentual),
+                    _fmt_decimal(c.valor_comissao),
+                    c.get_status_display() if hasattr(c, "get_status_display") else c.status,
+                ]
+            )
+        nome_arquivo = f"comissoes_tecnicos_{timezone.localdate():%Y%m%d}.{'csv' if exportar == 'csv' else 'pdf'}"
+        if exportar == "csv":
+            return _exportar_csv(nome_arquivo, cabecalhos, linhas)
+        return _exportar_pdf_tabela(nome_arquivo, "Comissoes por tecnico", cabecalhos, linhas)
+
+    comissoes_page = _paginar_queryset(request, comissoes_qs, per_page=120, page_param="page")
+    querystring_paginacao = _querystring_sem_param(request, "page", "export")
     tecnicos = get_user_model().objects.filter(
         is_active=True,
         tipo_usuario__in=["tecnico", "atendente"],
@@ -2288,7 +3260,8 @@ def comissoes_tecnicos(request):
         request,
         "caixa/comissoes_tecnicos.html",
         {
-            "comissoes": comissoes,
+            "comissoes": comissoes_page,
+            "comissoes_page": comissoes_page,
             "tecnicos": tecnicos,
             "tecnico_filtro": tecnico_id,
             "status_filtro": status_filtro,
@@ -2303,13 +3276,12 @@ def comissoes_tecnicos(request):
             "resumo_tipos": resumo_tipos,
             "resumo_status": resumo_status,
             "resumo_tecnicos": resumo_tecnicos,
+            "querystring_paginacao": querystring_paginacao,
             "usa_motor_legado": False,
             "menu_app": "caixa",
             "menu_sub": "comissoes_tecnicos",
         },
     )
-
-
 @role_required(CAIXA_FINANCIAL_ROLES)
 def premios_meta(request):
     if request.method == "POST":
@@ -3110,13 +4082,22 @@ def fluxo_projetado(request):
                 "saldo_previsto": saldo_previsto,
             }
         )
+    total_entradas_previstas = sum((m["entradas_previstas"] for m in meses), Decimal("0.00"))
+    total_despesas_previstas = sum((m["despesas_previstas"] for m in meses), Decimal("0.00"))
+    saldo_total_previsto = total_entradas_previstas - total_despesas_previstas
+    despesas_recorrentes = DespesaRecorrente.objects.select_related("ponto_operacional").all()
+    despesas_ativas = despesas_recorrentes.filter(ativo=True)
 
     return render(
         request,
         "caixa/fluxo_projetado.html",
         {
             "form": form,
-            "despesas_recorrentes": DespesaRecorrente.objects.select_related("ponto_operacional").all(),
+            "despesas_recorrentes": despesas_recorrentes,
+            "total_entradas_previstas": total_entradas_previstas,
+            "total_despesas_previstas": total_despesas_previstas,
+            "saldo_total_previsto": saldo_total_previsto,
+            "quantidade_despesas_ativas": despesas_ativas.count(),
             "meses": meses,
             "menu_app": "caixa",
             "menu_sub": "fluxo_projetado",
@@ -3127,16 +4108,25 @@ def fluxo_projetado(request):
 @role_required(CAIXA_FINANCIAL_ROLES)
 def relatorios(request):
     caixa = caixa_atual()
+    hoje = timezone.localdate()
+    preset_periodo = (request.GET.get("preset") or "").strip()
+    exportar = (request.GET.get("export") or "").strip().lower()
+    dataset_export = (request.GET.get("dataset") or "pagamentos").strip().lower()
     data_inicio_raw = (request.GET.get("data_inicio") or "").strip()
     data_fim_raw = (request.GET.get("data_fim") or "").strip()
     forma_pagamento_id = (request.GET.get("forma_pagamento") or "").strip()
     centro_custo_id = (request.GET.get("centro_custo") or "").strip()
     tipo_lancamento = (request.GET.get("tipo_lancamento") or "").strip()
     considerar_todos_caixas = request.GET.get("todos_caixas") == "1"
-    data_inicio, data_fim = _parse_intervalo_datas(data_inicio_raw, data_fim_raw)
 
-    pagamentos = Pagamento.objects.select_related("ordem_servico", "forma_pagamento").order_by("-data")
-    lancamentos = LancamentoCaixa.objects.select_related("centro_custo").order_by("-data")
+    preset_inicio, preset_fim = _periodo_por_preset(preset_periodo, referencia=hoje)
+    if preset_inicio and preset_fim:
+        data_inicio_raw = preset_inicio.isoformat()
+        data_fim_raw = preset_fim.isoformat()
+
+    data_inicio, data_fim = _parse_intervalo_datas(data_inicio_raw, data_fim_raw)
+    pagamentos = Pagamento.objects.select_related("ordem_servico", "forma_pagamento").order_by("-data", "-id")
+    lancamentos = LancamentoCaixa.objects.select_related("centro_custo").order_by("-data", "-id")
     if caixa and not considerar_todos_caixas:
         pagamentos = pagamentos.filter(caixa=caixa)
         lancamentos = lancamentos.filter(caixa=caixa)
@@ -3172,14 +4162,63 @@ def relatorios(request):
         .order_by("-total")[:10]
     )
 
+    if exportar in {"csv", "pdf"}:
+        if dataset_export == "lancamentos":
+            cabecalhos = ["Descricao", "Centro de custo", "Tipo", "Valor", "Data"]
+            linhas = [
+                [
+                    lancamento.descricao or "-",
+                    getattr(lancamento.centro_custo, "nome", "") or "-",
+                    lancamento.get_tipo_display(),
+                    _fmt_decimal(lancamento.valor),
+                    lancamento.data.strftime("%d/%m/%Y %H:%M") if lancamento.data else "-",
+                ]
+                for lancamento in lancamentos
+            ]
+            titulo = "Relatorio de lancamentos"
+        elif dataset_export == "resumo":
+            cabecalhos = ["Indicador", "Valor"]
+            linhas = [
+                ["Entradas totais", _fmt_decimal(total_entradas)],
+                ["Entradas por pagamentos", _fmt_decimal(total_entradas_pagamentos)],
+                ["Entradas sem lancamento", _fmt_decimal(entradas_orfas_pagamento)],
+                ["Saidas totais", _fmt_decimal(total_saidas)],
+                ["Saldo apurado", _fmt_decimal(saldo)],
+            ]
+            titulo = "Resumo financeiro"
+        else:
+            cabecalhos = ["OS", "Valor", "Forma", "Referencia", "Data"]
+            linhas = [
+                [
+                    getattr(pagamento.ordem_servico, "numero_os", "") or "Avulso",
+                    _fmt_decimal(pagamento.valor),
+                    pagamento.metodo_display,
+                    pagamento.referencia or "-",
+                    pagamento.data.strftime("%d/%m/%Y %H:%M") if pagamento.data else "-",
+                ]
+                for pagamento in pagamentos
+            ]
+            titulo = "Relatorio de pagamentos"
+        nome_arquivo = f"relatorios_caixa_{dataset_export}_{timezone.localdate():%Y%m%d}.{'csv' if exportar == 'csv' else 'pdf'}"
+        if exportar == "csv":
+            return _exportar_csv(nome_arquivo, cabecalhos, linhas)
+        return _exportar_pdf_tabela(nome_arquivo, titulo, cabecalhos, linhas)
+
+    pagamentos_page = _paginar_queryset(request, pagamentos, per_page=100, page_param="page_pagamentos")
+    lancamentos_page = _paginar_queryset(request, lancamentos, per_page=100, page_param="page_lancamentos")
+    querystring_pagamentos = _querystring_sem_param(request, "page_pagamentos", "export", "dataset")
+    querystring_lancamentos = _querystring_sem_param(request, "page_lancamentos", "export", "dataset")
+
     return render(
         request,
         "caixa/relatorios.html",
         {
             "caixa": caixa,
             "considerar_todos_caixas": considerar_todos_caixas,
-            "pagamentos": pagamentos[:500],
-            "lancamentos": lancamentos[:500],
+            "pagamentos": pagamentos,
+            "pagamentos_page": pagamentos_page,
+            "lancamentos": lancamentos,
+            "lancamentos_page": lancamentos_page,
             "total_entradas": total_entradas,
             "total_entradas_pagamentos": total_entradas_pagamentos,
             "entradas_orfas_pagamento": entradas_orfas_pagamento,
@@ -3187,6 +4226,7 @@ def relatorios(request):
             "saldo": saldo,
             "data_inicio": data_inicio_raw,
             "data_fim": data_fim_raw,
+            "preset_periodo": preset_periodo,
             "formas_pagamento": FormaPagamento.objects.filter(ativa=True).order_by("nome"),
             "forma_pagamento_filtro": forma_pagamento_id,
             "centros_custo": CentroCusto.objects.filter(ativo=True).order_by("nome"),
@@ -3194,19 +4234,76 @@ def relatorios(request):
             "tipo_lancamento_filtro": tipo_lancamento,
             "pagamentos_por_forma": pagamentos_por_forma,
             "saidas_por_centro": saidas_por_centro,
+            "querystring_pagamentos": querystring_pagamentos,
+            "querystring_lancamentos": querystring_lancamentos,
             "menu_app": "caixa",
             "menu_sub": "relatorios",
         },
     )
-
-
 @role_required(CAIXA_FINANCIAL_ROLES)
 def auditoria_operacional(request):
+    _atualizar_status_contas_abertas()
+    _atualizar_status_contas_pagar_abertas()
     hoje = timezone.localdate()
     dias = (request.GET.get("dias") or "30").strip()
     dias_validos = {"7": 7, "30": 30, "90": 90}
     janela = dias_validos.get(dias, 30)
     data_inicio = hoje - timedelta(days=janela)
+
+    def _redirect_pos_post():
+        return_query = (request.POST.get("return_query") or "").strip()
+        base_url = reverse("caixa:auditoria_operacional")
+        if return_query:
+            return redirect(f"{base_url}?{return_query}")
+        return redirect(f"{base_url}?dias={dias}")
+
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+        if action == "gerar_talao":
+            pagamento_id = (request.POST.get("pagamento_id") or "").strip()
+            pagamento = Pagamento.objects.filter(id=pagamento_id).first() if pagamento_id.isdigit() else None
+            if not pagamento:
+                messages.warning(request, "Pagamento nao encontrado para gerar talao.")
+                return _redirect_pos_post()
+            if pagamento.numero_talao:
+                messages.info(request, f"Pagamento ja possui talao: {pagamento.numero_talao}.")
+                return _redirect_pos_post()
+            pagamento.numero_talao = None
+            pagamento.data_emissao_talao = None
+            pagamento.save()
+            messages.success(request, f"Talao gerado com sucesso: {pagamento.numero_talao}.")
+            return _redirect_pos_post()
+
+        if action == "vincular_centro":
+            lancamento_id = (request.POST.get("lancamento_id") or "").strip()
+            centro_custo_id = (request.POST.get("centro_custo_id") or "").strip()
+            lancamento = LancamentoCaixa.objects.filter(id=lancamento_id, tipo="saida").first() if lancamento_id.isdigit() else None
+            if not lancamento:
+                messages.warning(request, "Lancamento nao encontrado.")
+                return _redirect_pos_post()
+            centro = CentroCusto.objects.filter(id=centro_custo_id, ativo=True).first() if centro_custo_id.isdigit() else None
+            if not centro:
+                messages.warning(request, "Selecione um centro de custo valido.")
+                return _redirect_pos_post()
+            lancamento.centro_custo = centro
+            lancamento.save(update_fields=["centro_custo"])
+            messages.success(request, f"Centro de custo vinculado ao lancamento #{lancamento.id}.")
+            return _redirect_pos_post()
+
+        if action == "atualizar_status_garantia":
+            auditoria_id = (request.POST.get("auditoria_id") or "").strip()
+            novo_status = (request.POST.get("status_faturamento") or "").strip()
+            auditoria = AuditoriaGarantia.objects.filter(id=auditoria_id).first() if auditoria_id.isdigit() else None
+            if not auditoria:
+                messages.warning(request, "Registro de garantia nao encontrado.")
+                return _redirect_pos_post()
+            if novo_status not in {"pendente", "enviado", "pago"}:
+                messages.warning(request, "Status de garantia invalido.")
+                return _redirect_pos_post()
+            auditoria.status_faturamento = novo_status
+            auditoria.save(update_fields=["status_faturamento", "atualizado_em"])
+            messages.success(request, f"Status da garantia OS {auditoria.ordem_servico.numero_os} atualizado para {auditoria.get_status_faturamento_display()}.")
+            return _redirect_pos_post()
 
     ordens_prontas_sem_recebimento = ContaReceber.objects.select_related("ordem_servico").filter(
         tipo_origem="cliente_os",
@@ -3232,29 +4329,42 @@ def auditoria_operacional(request):
         status_faturamento__in=["pendente", "enviado"]
     ).order_by("-atualizado_em")
 
+    ordens_prontas_page = _paginar_queryset(request, ordens_prontas_sem_recebimento, per_page=30, page_param="page_prontas")
+    contas_vencidas_page = _paginar_queryset(request, contas_vencidas, per_page=30, page_param="page_vencidas")
+    caixas_diferenca_page = _paginar_queryset(request, caixas_com_diferenca, per_page=30, page_param="page_caixas")
+    pagamentos_sem_talao_page = _paginar_queryset(request, pagamentos_sem_talao, per_page=30, page_param="page_taloes")
+    saidas_sem_centro_page = _paginar_queryset(request, saidas_sem_centro, per_page=30, page_param="page_saidas")
+    garantias_pendentes_page = _paginar_queryset(request, garantias_pendentes_qs, per_page=30, page_param="page_garantias")
+
     return render(
         request,
         "caixa/auditoria_operacional.html",
         {
             "dias": dias if dias in dias_validos else "30",
-            "ordens_prontas_sem_recebimento": ordens_prontas_sem_recebimento[:100],
-            "contas_vencidas": contas_vencidas[:100],
-            "caixas_com_diferenca": caixas_com_diferenca[:100],
-            "pagamentos_sem_talao": pagamentos_sem_talao[:100],
-            "saidas_sem_centro": saidas_sem_centro[:100],
-            "garantias_pendentes": garantias_pendentes_qs[:50],
+            "ordens_prontas_sem_recebimento": ordens_prontas_page,
+            "ordens_prontas_page": ordens_prontas_page,
+            "contas_vencidas": contas_vencidas_page,
+            "contas_vencidas_page": contas_vencidas_page,
+            "caixas_com_diferenca": caixas_diferenca_page,
+            "caixas_diferenca_page": caixas_diferenca_page,
+            "pagamentos_sem_talao": pagamentos_sem_talao_page,
+            "pagamentos_sem_talao_page": pagamentos_sem_talao_page,
+            "saidas_sem_centro": saidas_sem_centro_page,
+            "saidas_sem_centro_page": saidas_sem_centro_page,
+            "garantias_pendentes": garantias_pendentes_page,
+            "garantias_pendentes_page": garantias_pendentes_page,
             "total_ordens_prontas_sem_recebimento": ordens_prontas_sem_recebimento.count(),
             "total_contas_vencidas": contas_vencidas.count(),
             "total_caixas_com_diferenca": caixas_com_diferenca.count(),
             "total_pagamentos_sem_talao": pagamentos_sem_talao.count(),
             "total_saidas_sem_centro": saidas_sem_centro.count(),
             "total_garantias_pendentes": garantias_pendentes_qs.count(),
+            "centros_custo_ativos": CentroCusto.objects.filter(ativo=True).order_by("nome"),
+            "querystring_auditoria": _querystring_sem_param(request),
             "menu_app": "caixa",
             "menu_sub": "auditoria_operacional",
         },
     )
-
-
 @role_required(CAIXA_FINANCIAL_ROLES)
 def garantias_fabricante(request):
     if request.method == "POST":
@@ -3372,6 +4482,13 @@ def garantias_fabricante(request):
             "menu_sub": "garantias_fabricante",
         },
     )
+
+
+
+
+
+
+
 
 
 
