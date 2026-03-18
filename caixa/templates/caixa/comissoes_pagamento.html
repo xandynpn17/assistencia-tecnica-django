@@ -1,0 +1,748 @@
+﻿{% extends 'core/base.html' %}
+
+{% block extra_css %}
+<style>
+.comissoes-page {
+  background: linear-gradient(180deg, #f3f7fb 0%, #ffffff 45%);
+  border: 1px solid #d9e4ec;
+  border-radius: 14px;
+  padding: 16px;
+}
+.filtro-card,
+.secao-card {
+  border: 1px solid #d9e4ec;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+.filtro-card .card-header,
+.secao-card .card-header {
+  background: #f6fafd;
+  border-bottom: 1px solid #d9e4ec;
+}
+.subtitle-muted {
+  color: #5d6f7d;
+  margin: 2px 0 0;
+  font-size: 0.92rem;
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.chip {
+  border: 1px solid #d2dee8;
+  background: #fff;
+  color: #355262;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+.kpi-card {
+  border: 1px solid #d9e4ec;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  height: 100%;
+  border-top: 3px solid #8fa9b6;
+}
+.kpi-card.pendente { border-top-color: #cf8f00; }
+.kpi-card.gerada { border-top-color: #e2b14a; }
+.kpi-card.liberada { border-top-color: #2f86c9; }
+.kpi-card.paga { border-top-color: #2f9d63; }
+.kpi-card.cancelada { border-top-color: #8a97a4; }
+.kpi-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #5d6f7d;
+}
+.kpi-value {
+  font-size: 1.18rem;
+  font-weight: 700;
+  color: #183a4f;
+}
+.folha-item { border-top: 1px solid #e4ebf1; }
+.folha-item:first-child { border-top: 0; }
+.folha-toggle {
+  width: 100%;
+  border: 0;
+  background: #fff;
+  text-align: left;
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.folha-toggle:hover { background: #f8fbfd; }
+.folha-nome {
+  margin: 0;
+  color: #173647;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+.totais-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.totais-inline .chip {
+  font-size: 0.74rem;
+  padding: 2px 8px;
+}
+.secao-mini {
+  border: 1px solid #dce7ef;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fbfdff;
+  height: 100%;
+}
+.secao-mini h6 {
+  margin: 0 0 6px;
+  font-size: 0.86rem;
+  color: #1e4e66;
+}
+.badge-status {
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.badge-gerada { background: #fff4cc; color: #7a5a00; }
+.badge-liberada { background: #d7ebff; color: #0f4f88; }
+.badge-paga { background: #ddf6e8; color: #1f6b43; }
+.badge-cancelada { background: #eceff2; color: #566370; }
+.batch-action-bar {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 12px;
+  z-index: 1040;
+  border: 1px solid #c4d4e1;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(15, 43, 63, 0.16);
+  padding: 10px 12px;
+  display: none;
+}
+.batch-action-bar.show { display: block; }
+.batch-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.resumo-count {
+  color: #2b4c5f;
+  font-size: 0.88rem;
+}
+.row-detail {
+  background: #f9fcfe;
+}
+@media (max-width: 767px) {
+  .batch-action-bar { left: 8px; right: 8px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'caixa/_subnav_caixa.html' %}
+<div class="comissoes-page">
+  <div class="card filtro-card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
+      <div>
+        <h3 class="card-title mb-0">Pagamento de comissões</h3>
+        <p class="subtitle-muted">GestÃ£o mensal por colaborador, com lote e validaÃ§Ã£o de duplicidade.</p>
+      </div>
+      <small class="text-muted">Registros no filtro: {{ total_registros }}</small>
+    </div>
+    <div class="card-body">
+      <form method="get" class="form-row">
+        <div class="col-lg-2 col-md-4">
+          <label>MÃªs</label>
+          <input type="number" name="competencia_mes" min="1" max="12" value="{{ competencia_mes }}" class="form-control">
+        </div>
+        <div class="col-lg-2 col-md-4">
+          <label>Ano</label>
+          <input type="number" name="competencia_ano" min="2000" max="2100" value="{{ competencia_ano }}" class="form-control">
+        </div>
+        <div class="col-lg-3 col-md-4">
+          <label>Colaborador</label>
+          <select name="tecnico" class="form-control">
+            <option value="">Todos</option>
+            {% for t in tecnicos %}
+            <option value="{{ t.id }}" {% if tecnico_filtro == t.id|stringformat:'s' %}selected{% endif %}>{{ t.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-lg-2 col-md-4 mt-2 mt-lg-0">
+          <label>Status</label>
+          <select name="status" class="form-control">
+            <option value="PENDENTE" {% if status_filtro == 'PENDENTE' %}selected{% endif %}>Pendentes</option>
+            <option value="GERADA" {% if status_filtro == 'GERADA' %}selected{% endif %}>Gerada</option>
+            <option value="LIBERADA" {% if status_filtro == 'LIBERADA' %}selected{% endif %}>Liberada</option>
+            <option value="PAGA" {% if status_filtro == 'PAGA' %}selected{% endif %}>Paga</option>
+            <option value="CANCELADA" {% if status_filtro == 'CANCELADA' %}selected{% endif %}>Cancelada</option>
+          </select>
+        </div>
+        <div class="col-lg-3 col-md-4 mt-2 mt-lg-0">
+          <label>Tipo</label>
+          <select name="tipo" class="form-control">
+            <option value="" {% if not tipo_filtro %}selected{% endif %}>Todos</option>
+            <option value="SERVICO" {% if tipo_filtro == 'SERVICO' %}selected{% endif %}>ServiÃ§os</option>
+            <option value="PECA" {% if tipo_filtro == 'PECA' %}selected{% endif %}>PeÃ§as</option>
+            <option value="COMISSAO_VENDAS" {% if tipo_filtro == 'COMISSAO_VENDAS' %}selected{% endif %}>Vendas</option>
+            <option value="BONUS" {% if tipo_filtro == 'BONUS' %}selected{% endif %}>BÃ´nus</option>
+          </select>
+        </div>
+        <div class="col-lg-3 col-md-6 mt-2">
+          <label>CritÃ©rio do lote</label>
+          <select name="criterio" class="form-control">
+            <option value="servicos_finalizados" {% if criterio_filtro == 'servicos_finalizados' %}selected{% endif %}>ServiÃ§os finalizados</option>
+            <option value="retirado_pago" {% if criterio_filtro == 'retirado_pago' %}selected{% endif %}>Retirado e pago</option>
+          </select>
+        </div>
+        <div class="col-lg-2 col-md-6 mt-2">
+          <label>OS</label>
+          <input type="text" name="os" value="{{ os_filtro }}" class="form-control" placeholder="Ex.: OS-0022">
+        </div>
+        <div class="col-lg-2 col-md-6 mt-2">
+          <label>Data inÃ­cio</label>
+          <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
+        </div>
+        <div class="col-lg-2 col-md-6 mt-2">
+          <label>Data fim</label>
+          <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
+        </div>
+        <div class="col-lg-3 col-md-12 mt-2 d-flex align-items-end" style="gap:8px;">
+          <button class="btn btn-primary flex-fill" type="submit">Filtrar</button>
+          <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-outline-secondary">Limpar</a>
+        </div>
+        <div class="col-lg-3 col-md-12 mt-2 d-flex align-items-end" style="gap:8px;">
+          <a class="btn btn-outline-success flex-fill" href="?{{ request.GET.urlencode }}&export=csv">Exportar CSV</a>
+          <a class="btn btn-outline-danger flex-fill" href="?{{ request.GET.urlencode }}&export=pdf">Exportar PDF</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if filtro_aplicado %}
+  <div class="chip-row">
+    <span class="chip"><strong>CompetÃªncia:</strong> {{ competencia_mes }}/{{ competencia_ano }}</span>
+    <span class="chip"><strong>PerÃ­odo:</strong> {{ data_inicio }} a {{ data_fim }}</span>
+    <span class="chip"><strong>Status:</strong> {{ status_filtro }}</span>
+    <span class="chip"><strong>CritÃ©rio:</strong> {{ criterio_filtro }}</span>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-lg-2 col-md-4 col-6 mb-2">
+      <div class="kpi-card pendente"><div class="kpi-label">Pendentes</div><div class="kpi-value">R$ {{ total_pendente|floatformat:2 }}</div></div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-6 mb-2">
+      <div class="kpi-card gerada"><div class="kpi-label">Geradas</div><div class="kpi-value">R$ {{ total_gerada|floatformat:2 }}</div></div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-6 mb-2">
+      <div class="kpi-card liberada"><div class="kpi-label">Liberadas</div><div class="kpi-value">R$ {{ total_liberada|floatformat:2 }}</div></div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-6 mb-2">
+      <div class="kpi-card paga"><div class="kpi-label">Pagas</div><div class="kpi-value">R$ {{ total_paga|floatformat:2 }}</div></div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-6 mb-2">
+      <div class="kpi-card cancelada"><div class="kpi-label">Canceladas</div><div class="kpi-value">R$ {{ total_cancelada|floatformat:2 }}</div></div>
+    </div>
+  </div>
+
+  <div class="card secao-card mb-3">
+    <div class="card-header">
+      <h3 class="card-title mb-0">Folhas por colaborador</h3>
+    </div>
+    <div class="card-body p-0">
+      {% if folhas_pagamento %}
+      <div class="accordion" id="folhasAccordionAdmin">
+        {% for folha in folhas_pagamento %}
+        <div class="folha-item">
+          <button
+            class="folha-toggle"
+            type="button"
+            data-toggle="collapse"
+            data-target="#folhaAdmin{{ forloop.counter }}"
+            aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}"
+            aria-controls="folhaAdmin{{ forloop.counter }}"
+          >
+            <div>
+              <p class="folha-nome">{{ folha.nome }}</p>
+              <div class="totais-inline mt-1">
+                <span class="chip">ServiÃ§os: <strong>R$ {{ folha.servicos.total|floatformat:2 }}</strong></span>
+                <span class="chip">PeÃ§as: <strong>R$ {{ folha.pecas.total|floatformat:2 }}</strong></span>
+                <span class="chip">Vendas: <strong>R$ {{ folha.vendas.total|floatformat:2 }}</strong></span>
+                <span class="chip">BÃ´nus: <strong>R$ {{ folha.bonus.total|floatformat:2 }}</strong></span>
+              </div>
+            </div>
+            <strong>R$ {{ folha.total|floatformat:2 }}</strong>
+          </button>
+          <div id="folhaAdmin{{ forloop.counter }}" class="collapse {% if forloop.first %}show{% endif %}">
+            <div class="p-3">
+              <div class="row">
+                {% for secao in folha.secoes %}
+                <div class="col-lg-3 col-md-6 mb-2">
+                  <div class="secao-mini">
+                    <h6>{{ secao.titulo }}</h6>
+                    <div class="small text-muted">Itens: {{ secao.dados.linhas|length }}</div>
+                    <div class="small text-muted">Total: <strong>R$ {{ secao.dados.total|floatformat:2 }}</strong></div>
+                    <button
+                      type="button"
+                      class="btn btn-outline-primary btn-xs btn-block mt-2"
+                      data-toggle="collapse"
+                      data-target="#detSecao{{ forloop.parentloop.counter }}{{ forloop.counter }}"
+                      {% if not secao.dados.linhas %}disabled{% endif %}
+                    >
+                      Ver ordens
+                    </button>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+
+              {% for secao in folha.secoes %}
+              <div id="detSecao{{ forloop.parentloop.counter }}{{ forloop.counter }}" class="collapse mt-2">
+                <div class="table-responsive">
+                  <table class="table table-sm table-bordered">
+                    <thead>
+                      <tr>
+                        <th>Data</th>
+                        <th>OS</th>
+                        <th>DescriÃ§Ã£o</th>
+                        <th class="text-right">Base</th>
+                        <th class="text-right">ComissÃ£o</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for c in secao.dados.linhas %}
+                      <tr>
+                        <td>{{ c.data_criacao|date:"d/m/Y" }}</td>
+                        <td>{{ c.ordem_servico.numero_os|default:"-" }}</td>
+                        <td>{{ c.descricao|default:"-" }}</td>
+                        <td class="text-right">R$ {{ c.valor_base|floatformat:2 }}</td>
+                        <td class="text-right">R$ {{ c.valor_comissao|floatformat:2 }}</td>
+                        <td>
+                          {% if c.status == "GERADA" %}
+                          <span class="badge-status badge-gerada">Gerada</span>
+                          {% elif c.status == "LIBERADA" %}
+                          <span class="badge-status badge-liberada">Liberada</span>
+                          {% elif c.status == "PAGA" %}
+                          <span class="badge-status badge-paga">Paga</span>
+                          {% else %}
+                          <span class="badge-status badge-cancelada">Cancelada</span>
+                          {% endif %}
+                        </td>
+                      </tr>
+                      {% empty %}
+                      <tr><td colspan="6" class="text-center text-muted">Sem itens.</td></tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="p-3 text-center text-muted">Sem dados para o filtro aplicado.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card secao-card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
+      <h3 class="card-title mb-0">ComissÃµes no filtro</h3>
+      <small class="resumo-count">
+        Selecionadas: <strong id="selecionadasCount">0</strong>
+        | Valor: <strong id="selecionadasValor">R$ 0,00</strong>
+      </small>
+    </div>
+    <div class="card-body border-bottom">
+      <form method="post" id="formAcoesLote" class="form-row">
+        {% csrf_token %}
+        <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
+        <input type="hidden" name="action" id="acaoLoteInput" value="">
+        <input type="hidden" name="competencia_mes" value="{{ competencia_mes }}">
+        <input type="hidden" name="competencia_ano" value="{{ competencia_ano }}">
+        <input type="hidden" name="data_inicio" value="{{ data_inicio }}">
+        <input type="hidden" name="data_fim" value="{{ data_fim }}">
+        <input type="hidden" name="criterio" value="{{ criterio_filtro }}">
+        <input type="hidden" name="percentual_servicos_ref" value="0">
+        <input type="hidden" name="percentual_pecas_ref" value="0">
+        <input type="hidden" name="percentual_vendas_ref" value="0">
+        <input type="hidden" name="aplicar_servicos" value="1">
+        <input type="hidden" name="aplicar_pecas" value="1">
+        <input type="hidden" name="aplicar_vendas" value="1">
+        <div class="col-lg-4 col-md-6 mb-2">
+          <label>ReferÃªncia pagamento em lote</label>
+          <input type="text" name="referencia_pagamento_lote" class="form-control form-control-sm" placeholder="Ex.: LOTE-MAR-001">
+        </div>
+        <div class="col-lg-4 col-md-6 mb-2">
+          <label>Motivo cancelamento lote</label>
+          <input type="text" name="motivo_cancelamento_lote" class="form-control form-control-sm" placeholder="ObrigatÃ³rio para cancelamento">
+        </div>
+        <div class="col-lg-4 col-md-12 mb-2 d-flex align-items-end">
+          <span class="text-muted small">As aÃ§Ãµes em lote aparecem no rodapÃ© quando houver seleÃ§Ã£o.</span>
+        </div>
+      </form>
+    </div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-sm table-bordered mb-0">
+        <thead>
+          <tr>
+            <th style="width:36px;"><input type="checkbox" id="selecionarTodasComissoes" title="Selecionar todas"></th>
+            <th>Data</th>
+            <th>OS</th>
+            <th>TÃ©cnico</th>
+            <th>Tipo</th>
+            <th class="text-right">ComissÃ£o</th>
+            <th>Status</th>
+            <th>Lote</th>
+            <th>AÃ§Ãµes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in comissoes %}
+          <tr>
+            <td>
+              {% if c.status == "GERADA" or c.status == "LIBERADA" %}
+              <input type="checkbox" class="comissao-lote-check" value="{{ c.id }}" data-valor="{{ c.valor_comissao|floatformat:2 }}">
+              {% endif %}
+            </td>
+            <td>{{ c.data_criacao|date:"d/m/Y H:i" }}</td>
+            <td>{{ c.ordem_servico.numero_os|default:"-" }}</td>
+            <td>{{ c.tecnico.username|default:"-" }}</td>
+            <td>{{ c.tipo }}</td>
+            <td class="text-right"><strong>R$ {{ c.valor_comissao|floatformat:2 }}</strong></td>
+            <td>
+              {% if c.status == "GERADA" %}
+              <span class="badge-status badge-gerada">Gerada</span>
+              {% elif c.status == "LIBERADA" %}
+              <span class="badge-status badge-liberada">Liberada</span>
+              {% elif c.status == "PAGA" %}
+              <span class="badge-status badge-paga">Paga</span>
+              {% else %}
+              <span class="badge-status badge-cancelada">Cancelada</span>
+              {% endif %}
+            </td>
+            <td>{{ c.lote_pagamento.codigo|default:"-" }}</td>
+            <td>
+              <div class="d-flex flex-wrap" style="gap:6px;">
+                <button type="button" class="btn btn-outline-secondary btn-xs" data-toggle="collapse" data-target="#detalheComissao{{ c.id }}">Detalhes</button>
+                {% if c.status == "GERADA" %}
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="liberar">
+                  <input type="hidden" name="comissao_id" value="{{ c.id }}">
+                  <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
+                  <button type="submit" class="btn btn-outline-primary btn-xs">Liberar</button>
+                </form>
+                {% endif %}
+                {% if c.status == "GERADA" or c.status == "LIBERADA" %}
+                <form method="post" class="d-flex">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="pagar">
+                  <input type="hidden" name="comissao_id" value="{{ c.id }}">
+                  <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
+                  <input type="text" name="referencia_pagamento" value="{{ c.referencia_pagamento }}" placeholder="Ref." class="form-control form-control-sm mr-1" style="width:90px;">
+                  <button type="submit" class="btn btn-success btn-xs">Pagar</button>
+                </form>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="cancelar">
+                  <input type="hidden" name="comissao_id" value="{{ c.id }}">
+                  <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
+                  <button type="submit" class="btn btn-outline-danger btn-xs">Cancelar</button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          <tr class="row-detail collapse" id="detalheComissao{{ c.id }}">
+            <td colspan="9">
+              <div class="d-flex flex-wrap" style="gap:14px;">
+                <span><strong>DescriÃ§Ã£o:</strong> {{ c.descricao|default:"-" }}</span>
+                <span><strong>Base:</strong> R$ {{ c.valor_base|floatformat:2 }}</span>
+                <span><strong>Percentual:</strong> {{ c.percentual|floatformat:2 }}%</span>
+                <span><strong>Fonte:</strong> {{ c.fonte_referencia|default:"-" }}</span>
+                <span><strong>Evento:</strong> {{ c.evento_gerador|default:"-" }}</span>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9" class="text-center text-muted">Sem comissÃµes no filtro informado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if comissoes_page and comissoes_page.paginator.num_pages > 1 %}
+    <div class="card-footer d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
+      <small class="text-muted">Pagina {{ comissoes_page.number }} de {{ comissoes_page.paginator.num_pages }}</small>
+      <ul class="pagination pagination-sm mb-0">
+        {% if comissoes_page.has_previous %}
+        <li class="page-item"><a class="page-link" href="?{{ querystring_paginacao }}&page={{ comissoes_page.previous_page_number }}">Anterior</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+        {% endif %}
+        {% if comissoes_page.has_next %}
+        <li class="page-item"><a class="page-link" href="?{{ querystring_paginacao }}&page={{ comissoes_page.next_page_number }}">Proxima</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">Proxima</span></li>
+        {% endif %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card secao-card mb-3">
+    <div class="card-header"><h3 class="card-title mb-0">Lotes recentes</h3></div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-sm table-bordered mb-0">
+        <thead>
+          <tr>
+            <th>Lote</th>
+            <th>CompetÃªncia</th>
+            <th>Status</th>
+            <th class="text-center">Itens</th>
+            <th class="text-right">Valor</th>
+            <th>Criado por</th>
+            <th>Criado em</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lote in lotes_recentes %}
+          <tr>
+            <td>{{ lote.codigo }}</td>
+            <td>{{ lote.competencia|date:"m/Y" }}</td>
+            <td>{{ lote.status }}</td>
+            <td class="text-center">{{ lote.total_itens }}</td>
+            <td class="text-right">R$ {{ lote.total_valor|floatformat:2 }}</td>
+            <td>{{ lote.criado_por.username|default:"-" }}</td>
+            <td>{{ lote.criado_em|date:"d/m/Y H:i" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center text-muted">Sem lotes registrados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card secao-card">
+    <div class="card-header"><h3 class="card-title mb-0">Percentuais por colaborador</h3></div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-sm table-bordered mb-0">
+        <thead>
+          <tr>
+            <th>Colaborador</th>
+            <th class="text-right">ServiÃ§os %</th>
+            <th class="text-right">PeÃ§as %</th>
+            <th class="text-right">Vendas %</th>
+            <th>AÃ§Ã£o</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tecnicos %}
+          <tr>
+            <td>{{ t.username }}</td>
+            <td colspan="4">
+              <form method="post" class="form-row">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="salvar_percentuais">
+                <input type="hidden" name="tecnico_id" value="{{ t.id }}">
+                <input type="hidden" name="return_query" value="{{ request.GET.urlencode }}">
+                <div class="col-md-2">
+                  <input type="number" name="percentual_servico" step="0.01" min="0" class="form-control form-control-sm text-right" value="{{ t.percentual_comissao_servico|default_if_none:0|floatformat:2 }}">
+                </div>
+                <div class="col-md-2">
+                  <input type="number" name="percentual_peca" step="0.01" min="0" class="form-control form-control-sm text-right" value="{{ t.percentual_comissao_peca|default_if_none:0|floatformat:2 }}">
+                </div>
+                <div class="col-md-2">
+                  <input type="number" name="percentual_vendas" step="0.01" min="0" class="form-control form-control-sm text-right" value="{{ t.percentual_comissao_vendas|default_if_none:0|floatformat:2 }}">
+                </div>
+                <div class="col-md-2">
+                  <button type="submit" class="btn btn-outline-primary btn-sm">Salvar</button>
+                </div>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center text-muted">Sem colaboradores ativos.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-light border">Selecione os filtros e clique em <strong>Filtrar</strong> para carregar os resultados.</div>
+  {% endif %}
+</div>
+
+<div id="batchActionBar" class="batch-action-bar">
+  <div class="batch-inner">
+    <div class="resumo-count">
+      Selecionadas: <strong id="selecionadasCountBar">0</strong>
+      | Valor: <strong id="selecionadasValorBar">R$ 0,00</strong>
+    </div>
+    <div class="d-flex flex-wrap" style="gap:6px;">
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-acao-lote="prever_lote">PrÃ©via do lote</button>
+      <button type="button" class="btn btn-outline-primary btn-sm" data-acao-lote="liberar_lote">Liberar</button>
+      <button type="button" class="btn btn-success btn-sm" data-acao-lote="pagar_lote">Pagar</button>
+      <button type="button" class="btn btn-outline-danger btn-sm" data-acao-lote="cancelar_lote">Cancelar</button>
+      <button type="button" class="btn btn-outline-dark btn-sm" id="limparSelecaoBtn">Limpar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const formLote = document.getElementById("formAcoesLote");
+  const acaoLoteInput = document.getElementById("acaoLoteInput");
+  const checkAll = document.getElementById("selecionarTodasComissoes");
+  const checks = Array.from(document.querySelectorAll(".comissao-lote-check"));
+  const countEl = document.getElementById("selecionadasCount");
+  const valorEl = document.getElementById("selecionadasValor");
+  const countBarEl = document.getElementById("selecionadasCountBar");
+  const valorBarEl = document.getElementById("selecionadasValorBar");
+  const limparBtn = document.getElementById("limparSelecaoBtn");
+  const batchBar = document.getElementById("batchActionBar");
+
+  function confirmar(mensagem) {
+    if (window.AppMessages && typeof window.AppMessages.confirmSync === "function") {
+      return window.AppMessages.confirmSync(mensagem);
+    }
+    return window.confirm(mensagem);
+  }
+
+  function alertar(mensagem) {
+    if (window.AppMessages && typeof window.AppMessages.alertSync === "function") {
+      window.AppMessages.alertSync(mensagem);
+      return;
+    }
+    window.alert(mensagem);
+  }
+
+  function parseDecimal(valor) {
+    const normalizado = String(valor || "0").replace(",", ".").replace(/[^\d.-]/g, "");
+    const numero = Number(normalizado);
+    return Number.isFinite(numero) ? numero : 0;
+  }
+
+  function selecionadosAtuais() {
+    return checks.filter(function (el) { return el.checked; });
+  }
+
+  function atualizarResumoSelecao() {
+    const selecionadas = selecionadosAtuais();
+    const total = selecionadas.reduce(function (acc, el) {
+      return acc + parseDecimal(el.getAttribute("data-valor"));
+    }, 0);
+    const valorFormatado = total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    if (countEl) {
+      countEl.textContent = String(selecionadas.length);
+    }
+    if (valorEl) {
+      valorEl.textContent = valorFormatado;
+    }
+    if (countBarEl) {
+      countBarEl.textContent = String(selecionadas.length);
+    }
+    if (valorBarEl) {
+      valorBarEl.textContent = valorFormatado;
+    }
+    if (checkAll) {
+      checkAll.checked = checks.length > 0 && checks.every(function (el) { return el.checked; });
+    }
+    if (batchBar) {
+      if (selecionadas.length > 0) {
+        batchBar.classList.add("show");
+      } else {
+        batchBar.classList.remove("show");
+      }
+    }
+  }
+
+  if (checkAll) {
+    checkAll.addEventListener("change", function () {
+      checks.forEach(function (el) {
+        el.checked = checkAll.checked;
+      });
+      atualizarResumoSelecao();
+    });
+  }
+
+  checks.forEach(function (el) {
+    el.addEventListener("change", atualizarResumoSelecao);
+  });
+
+  if (limparBtn) {
+    limparBtn.addEventListener("click", function () {
+      if (checkAll) {
+        checkAll.checked = false;
+      }
+      checks.forEach(function (el) {
+        el.checked = false;
+      });
+      atualizarResumoSelecao();
+    });
+  }
+
+  document.querySelectorAll("[data-acao-lote]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      if (!formLote || !acaoLoteInput) {
+        return;
+      }
+      const acao = btn.getAttribute("data-acao-lote");
+      const selecionadas = selecionadosAtuais();
+      if (!selecionadas.length) {
+        alertar("Selecione ao menos uma comissÃ£o para executar a aÃ§Ã£o em lote.");
+        return;
+      }
+      if (acao !== "prever_lote") {
+        let msg = "Confirmar aÃ§Ã£o em lote para as comissÃµes selecionadas?";
+        if (acao === "pagar_lote") {
+          msg = "Confirmar pagamento em lote das comissÃµes selecionadas?";
+        } else if (acao === "cancelar_lote") {
+          msg = "Confirmar cancelamento em lote das comissÃµes selecionadas?";
+        } else if (acao === "liberar_lote") {
+          msg = "Confirmar liberaÃ§Ã£o em lote das comissÃµes selecionadas?";
+        }
+        if (!confirmar(msg)) {
+          return;
+        }
+      }
+
+      formLote.querySelectorAll("input[name='comissao_ids']").forEach(function (el) {
+        el.remove();
+      });
+      selecionadas.forEach(function (el) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "comissao_ids";
+        input.value = el.value;
+        formLote.appendChild(input);
+      });
+      acaoLoteInput.value = acao;
+      formLote.submit();
+    });
+  });
+
+  atualizarResumoSelecao();
+});
+</script>
+{% endblock %}
+
+
+

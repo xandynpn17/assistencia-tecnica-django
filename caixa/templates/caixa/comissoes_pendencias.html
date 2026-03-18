@@ -1,0 +1,282 @@
+{% extends 'core/base.html' %}
+
+{% block extra_css %}
+<style>
+.pendencias-page {
+  background: linear-gradient(180deg, #f5f8fb 0%, #ffffff 46%);
+  border: 1px solid #d9e4ec;
+  border-radius: 14px;
+  padding: 16px;
+}
+.painel-card {
+  border: 1px solid #d9e4ec;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+.painel-card .card-header {
+  background: #f6fafd;
+  border-bottom: 1px solid #d9e4ec;
+}
+.risk-card {
+  border: 1px solid #dce7ef;
+  border-left: 4px solid #8aa5b6;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  height: 100%;
+}
+.risk-card .label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #5c6f7d;
+}
+.risk-card .value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #17384d;
+  line-height: 1.1;
+}
+.risk-card.critical { border-left-color: #cc3a3a; background: #fff8f8; }
+.risk-card.high { border-left-color: #e67e22; background: #fffbf5; }
+.risk-card.medium { border-left-color: #c89f34; }
+.risk-card.info { border-left-color: #2f86c9; }
+.secao-tag {
+  display: inline-block;
+  border: 1px solid #d3e1ea;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.76rem;
+  color: #355262;
+  background: #fff;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'caixa/_subnav_caixa.html' %}
+<div class="pendencias-page">
+  <div class="card painel-card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
+      <div>
+        <h3 class="card-title mb-0">Pendências de comissões</h3>
+        <small class="text-muted">Monitoramento operacional da competência</small>
+      </div>
+      <span class="secao-tag">Competência {{ competencia_mes }}/{{ competencia_ano }}</span>
+    </div>
+    <div class="card-body">
+      <form method="get" class="form-row">
+        <div class="col-md-2">
+          <label>Mês</label>
+          <input type="number" name="competencia_mes" min="1" max="12" value="{{ competencia_mes }}" class="form-control">
+        </div>
+        <div class="col-md-2">
+          <label>Ano</label>
+          <input type="number" name="competencia_ano" min="2000" max="2100" value="{{ competencia_ano }}" class="form-control">
+        </div>
+        <div class="col-md-3">
+          <label>Critério referência</label>
+          <select name="criterio" class="form-control">
+            <option value="servicos_finalizados" {% if criterio_filtro == 'servicos_finalizados' %}selected{% endif %}>Serviços finalizados</option>
+            <option value="retirado_pago" {% if criterio_filtro == 'retirado_pago' %}selected{% endif %}>Retirado e pago</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <button class="btn btn-primary btn-block" type="submit">Atualizar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-lg-3 col-md-6 mb-2">
+      <div class="risk-card critical">
+        <div class="label">Duplicidades</div>
+        <div class="value">{{ total_duplicidades_assinatura }}</div>
+      </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-2">
+      <div class="risk-card critical">
+        <div class="label">Pagas sem lote</div>
+        <div class="value">{{ total_comissoes_pagas_sem_lote }}</div>
+      </div>
+    </div>
+    <div class="col-lg-2 col-md-6 mb-2">
+      <div class="risk-card high">
+        <div class="label">Sem fonte</div>
+        <div class="value">{{ total_comissoes_sem_fonte }}</div>
+      </div>
+    </div>
+    <div class="col-lg-2 col-md-6 mb-2">
+      <div class="risk-card medium">
+        <div class="label">Itens sem técnico</div>
+        <div class="value">{{ total_itens_sem_tecnico }}</div>
+      </div>
+    </div>
+    <div class="col-lg-2 col-md-6 mb-2">
+      <div class="risk-card info">
+        <div class="label">OS sem relatório</div>
+        <div class="value">{{ total_ordens_sem_relatorio }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-6">
+      <div class="card painel-card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h3 class="card-title mb-0">Comissões pagas sem lote</h3>
+          <span class="secao-tag">{{ total_comissoes_pagas_sem_lote }}</span>
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>ID</th><th>OS</th><th>Técnico</th><th>Valor</th></tr></thead>
+            <tbody>
+              {% for c in comissoes_pagas_sem_lote %}
+              <tr>
+                <td>#{{ c.id }}</td>
+                <td>{{ c.ordem_servico.numero_os|default:"-" }}</td>
+                <td>{{ c.tecnico.username|default:"-" }}</td>
+                <td>R$ {{ c.valor_comissao|floatformat:2 }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted">Sem pendências.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card painel-card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h3 class="card-title mb-0">Duplicidades por assinatura</h3>
+          <span class="secao-tag">{{ total_duplicidades_assinatura }}</span>
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>Técnico</th><th>OS</th><th>Tipo</th><th>Fonte</th><th>Qtd</th></tr></thead>
+            <tbody>
+              {% for row in duplicidades_assinatura %}
+              <tr>
+                <td>{{ row.tecnico__username|default:"-" }}</td>
+                <td>{{ row.ordem_servico__numero_os|default:"-" }}</td>
+                <td>{{ row.tipo }}</td>
+                <td>{{ row.fonte_referencia }}</td>
+                <td>{{ row.quantidade }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" class="text-center text-muted">Sem pendências.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-6">
+      <div class="card painel-card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h3 class="card-title mb-0">Comissões sem fonte</h3>
+          <span class="secao-tag">{{ total_comissoes_sem_fonte }}</span>
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>ID</th><th>Tipo</th><th>OS</th><th>Técnico</th></tr></thead>
+            <tbody>
+              {% for c in comissoes_sem_fonte %}
+              <tr>
+                <td>#{{ c.id }}</td>
+                <td>{{ c.tipo }}</td>
+                <td>{{ c.ordem_servico.numero_os|default:"-" }}</td>
+                <td>{{ c.tecnico.username|default:"-" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted">Sem pendências.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card painel-card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h3 class="card-title mb-0">Itens aprovados sem técnico</h3>
+          <span class="secao-tag">{{ total_itens_sem_tecnico }}</span>
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>OS</th><th>Item</th><th>Valor</th></tr></thead>
+            <tbody>
+              {% for item in itens_sem_tecnico %}
+              <tr>
+                <td>{{ item.orcamento.ordem_servico.numero_os|default:"-" }}</td>
+                <td>{{ item.nome }}</td>
+                <td>R$ {{ item.valor|floatformat:2 }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-center text-muted">Sem pendências.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-6">
+      <div class="card painel-card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h3 class="card-title mb-0">OS sem relatório técnico</h3>
+          <span class="secao-tag">{{ total_ordens_sem_relatorio }}</span>
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>OS</th><th>Cliente</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for ordem in ordens_sem_relatorio %}
+              <tr>
+                <td>{{ ordem.numero_os }}</td>
+                <td>{{ ordem.cliente.nome|default:"-" }}</td>
+                <td>{{ ordem.get_status_display|default:ordem.status }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-center text-muted">Sem pendências.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card painel-card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h3 class="card-title mb-0">Serviços/peças sem técnico</h3>
+          <span class="secao-tag">{{ total_servicos_pecas_sem_tecnico }}</span>
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>OS</th><th>Tipo</th><th>Descrição</th></tr></thead>
+            <tbody>
+              {% for sp in servicos_pecas_sem_tecnico %}
+              <tr>
+                <td>{{ sp.ordem.numero_os|default:"-" }}</td>
+                <td>{{ sp.tipo }}</td>
+                <td>{{ sp.nome }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-center text-muted">Sem pendências.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

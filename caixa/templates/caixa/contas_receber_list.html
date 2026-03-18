@@ -1,86 +1,176 @@
-{% extends 'core/base.html' %}
+﻿{% extends 'core/base.html' %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h3 class="mb-0">Contas a receber</h3>
-  <a href="{% url 'caixa:criar_conta_receber' %}" class="btn btn-primary btn-sm">Nova conta</a>
-</div>
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
 
-<div class="card mb-3">
-  <div class="card-body">
-    <form method="get" class="form-row">
-      <div class="col-md-3">
-        <label>Busca</label>
-        <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Cliente, descrição ou OS">
-      </div>
-      <div class="col-md-2">
-        <label>Status</label>
-        <select name="status" class="form-control">
-          <option value="">Todos</option>
-          <option value="aberta" {% if status_filtro == 'aberta' %}selected{% endif %}>Aberta</option>
-          <option value="parcial" {% if status_filtro == 'parcial' %}selected{% endif %}>Parcial</option>
-          <option value="vencida" {% if status_filtro == 'vencida' %}selected{% endif %}>Vencida</option>
-          <option value="paga" {% if status_filtro == 'paga' %}selected{% endif %}>Paga</option>
-        </select>
-      </div>
-      <div class="col-md-2">
-        <label>Origem</label>
-        <select name="tipo_origem" class="form-control">
-          <option value="">Todas</option>
-          <option value="cliente_os" {% if tipo_origem_filtro == 'cliente_os' %}selected{% endif %}>Cliente OS</option>
-          <option value="garantia_fabricante" {% if tipo_origem_filtro == 'garantia_fabricante' %}selected{% endif %}>Garantia fabricante</option>
-          <option value="avulso" {% if tipo_origem_filtro == 'avulso' %}selected{% endif %}>Avulso</option>
-        </select>
-      </div>
-      <div class="col-md-3 d-flex align-items-end">
-        <div class="form-check form-check-inline">
-          <input class="form-check-input" type="checkbox" id="prontas_sem_recebimento" name="prontas_sem_recebimento" value="1" {% if prontas_filtro %}checked{% endif %}>
-          <label class="form-check-label" for="prontas_sem_recebimento">Só prontas sem recebimento</label>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Contas a receber</h3>
+    <a href="{% url 'caixa:criar_conta_receber' %}" class="btn btn-primary btn-sm">Nova conta</a>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-lg-3 col-md-6">
+      <div class="small-box bg-success">
+        <div class="inner">
+          <h4>R$ {{ total_aberto|floatformat:2 }}</h4>
+          <p>Total em aberto</p>
         </div>
       </div>
-      <div class="col-md-2 d-flex align-items-end" style="gap: 8px;">
-        <button type="submit" class="btn btn-outline-primary btn-block">Filtrar</button>
+    </div>
+    <div class="col-lg-3 col-md-6">
+      <div class="small-box bg-warning">
+        <div class="inner">
+          <h4>R$ {{ prontas_sem_recebimento_total|floatformat:2 }}</h4>
+          <p>Prontas sem recebimento</p>
+        </div>
       </div>
-    </form>
-    <div class="mt-3"><strong>Total em aberto:</strong> R$ {{ total_aberto|floatformat:2 }}</div>
-    <div><strong>Prontas sem recebimento:</strong> R$ {{ prontas_sem_recebimento_total|floatformat:2 }} ({{ prontas_sem_recebimento_qtd }} OS)</div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+      <div class="small-box bg-info">
+        <div class="inner">
+          <h4>{{ total_status_aberta|add:total_status_parcial|add:total_status_vencida }}</h4>
+          <p>Contas pendentes</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+      <div class="small-box bg-secondary">
+        <div class="inner">
+          <h4>{{ total_status_paga }}</h4>
+          <p>Contas pagas no filtro</p>
+        </div>
+      </div>
+    </div>
   </div>
-</div>
 
-<div class="card">
-  <div class="card-body table-responsive p-0">
-    <table class="table table-hover mb-0">
-      <thead>
-      <tr>
-        <th>ID</th>
-        <th>OS</th>
-        <th>Descrição</th>
-        <th>Cliente</th>
-        <th>Origem</th>
-        <th>Vencimento</th>
-        <th>Status</th>
-        <th>Em aberto</th>
-        <th></th>
-      </tr>
-      </thead>
-      <tbody>
-      {% for c in contas %}
-      <tr>
-        <td>#{{ c.id }}</td>
-        <td>{% if c.ordem_servico %}{{ c.ordem_servico.numero_os }}{% else %}-{% endif %}</td>
-        <td>{{ c.descricao }}</td>
-        <td>{{ c.cliente_nome|default:"-" }}</td>
-        <td>{{ c.get_tipo_origem_display }}</td>
-        <td>{{ c.vencimento|date:"d/m/Y" }}</td>
-        <td>{{ c.get_status_display }}</td>
-        <td>R$ {{ c.valor_aberto|floatformat:2 }}</td>
-        <td><a href="{% url 'caixa:detalhe_conta_receber' c.id %}" class="btn btn-sm btn-outline-primary">Detalhes</a></td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="9" class="text-center">Nenhuma conta encontrada.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="form-row align-items-end">
+        <div class="col-lg-3 col-md-6">
+          <label>Busca</label>
+          <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Cliente, descricao ou OS">
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label>Status</label>
+          <select name="status" class="form-control">
+            <option value="">Todos</option>
+            <option value="aberta" {% if status_filtro == 'aberta' %}selected{% endif %}>Aberta</option>
+            <option value="parcial" {% if status_filtro == 'parcial' %}selected{% endif %}>Parcial</option>
+            <option value="vencida" {% if status_filtro == 'vencida' %}selected{% endif %}>Vencida</option>
+            <option value="paga" {% if status_filtro == 'paga' %}selected{% endif %}>Paga</option>
+          </select>
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label>Origem</label>
+          <select name="tipo_origem" class="form-control">
+            <option value="">Todas</option>
+            <option value="cliente_os" {% if tipo_origem_filtro == 'cliente_os' %}selected{% endif %}>Cliente OS</option>
+            <option value="garantia_fabricante" {% if tipo_origem_filtro == 'garantia_fabricante' %}selected{% endif %}>Garantia fabricante</option>
+            <option value="avulso" {% if tipo_origem_filtro == 'avulso' %}selected{% endif %}>Avulso</option>
+          </select>
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label>Vencimento inicio</label>
+          <input type="date" name="vencimento_inicio" value="{{ vencimento_inicio }}" class="form-control">
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label>Vencimento fim</label>
+          <input type="date" name="vencimento_fim" value="{{ vencimento_fim }}" class="form-control">
+        </div>
+        <div class="col-lg-1 col-md-6 d-flex" style="gap: 8px;">
+          <button type="submit" class="btn btn-outline-primary btn-block">Filtrar</button>
+        </div>
+
+        <div class="col-lg-2 col-md-6 mt-2">
+          <label>Preset</label>
+          <select name="preset_vencimento" class="form-control">
+            <option value="" {% if not preset_vencimento %}selected{% endif %}>Personalizado</option>
+            <option value="hoje" {% if preset_vencimento == 'hoje' %}selected{% endif %}>Hoje</option>
+            <option value="7d" {% if preset_vencimento == '7d' %}selected{% endif %}>7 dias</option>
+            <option value="30d" {% if preset_vencimento == '30d' %}selected{% endif %}>30 dias</option>
+            <option value="mes_atual" {% if preset_vencimento == 'mes_atual' %}selected{% endif %}>Mes atual</option>
+            <option value="mes_anterior" {% if preset_vencimento == 'mes_anterior' %}selected{% endif %}>Mes anterior</option>
+          </select>
+        </div>
+
+        <div class="col-12 mt-2 d-flex flex-wrap align-items-center" style="gap: 12px;">
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" id="prontas_sem_recebimento" name="prontas_sem_recebimento" value="1" {% if prontas_filtro %}checked{% endif %}>
+            <label class="form-check-label" for="prontas_sem_recebimento">Somente prontas sem recebimento ({{ prontas_sem_recebimento_qtd }} OS)</label>
+          </div>
+          <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-sm btn-outline-success">Exportar CSV</a>
+          <a href="?{{ request.GET.urlencode }}&export=pdf" class="btn btn-sm btn-outline-danger">Exportar PDF</a>
+          <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm btn-outline-secondary">Limpar filtros</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body table-responsive p-0">
+      <table class="table table-hover mb-0">
+        <thead>
+        <tr>
+          <th>ID</th>
+          <th>OS</th>
+          <th>Descricao</th>
+          <th>Cliente</th>
+          <th>Origem</th>
+          <th>Vencimento</th>
+          <th>Status</th>
+          <th class="text-right">Em aberto</th>
+          <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for c in contas %}
+        <tr>
+          <td>#{{ c.id }}</td>
+          <td>{% if c.ordem_servico %}{{ c.ordem_servico.numero_os }}{% else %}-{% endif %}</td>
+          <td>{{ c.descricao }}</td>
+          <td>{{ c.cliente_nome|default:"-" }}</td>
+          <td>{{ c.get_tipo_origem_display }}</td>
+          <td>{{ c.vencimento|date:"d/m/Y" }}</td>
+          <td>
+            {% if c.status == "paga" %}
+            <span class="badge badge-success">Paga</span>
+            {% elif c.status == "vencida" %}
+            <span class="badge badge-danger">Vencida</span>
+            {% elif c.status == "parcial" %}
+            <span class="badge badge-warning">Parcial</span>
+            {% else %}
+            <span class="badge badge-info">{{ c.get_status_display }}</span>
+            {% endif %}
+          </td>
+          <td class="text-right">R$ {{ c.valor_aberto|floatformat:2 }}</td>
+          <td><a href="{% url 'caixa:detalhe_conta_receber' c.id %}" class="btn btn-sm btn-outline-primary">Detalhes</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-center">Nenhuma conta encontrada.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if contas_page and contas_page.paginator.num_pages > 1 %}
+    <div class="card-footer d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
+      <small class="text-muted">Pagina {{ contas_page.number }} de {{ contas_page.paginator.num_pages }}</small>
+      <ul class="pagination pagination-sm mb-0">
+        {% if contas_page.has_previous %}
+        <li class="page-item"><a class="page-link" href="?{{ querystring_paginacao }}&page={{ contas_page.previous_page_number }}">Anterior</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+        {% endif %}
+
+        {% if contas_page.has_next %}
+        <li class="page-item"><a class="page-link" href="?{{ querystring_paginacao }}&page={{ contas_page.next_page_number }}">Proxima</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">Proxima</span></li>
+        {% endif %}
+      </ul>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

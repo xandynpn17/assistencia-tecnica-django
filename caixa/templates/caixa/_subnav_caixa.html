@@ -1,0 +1,57 @@
+<div class="card mb-3 shadow-sm border-0">
+  <div class="card-body py-2 d-flex flex-wrap" style="gap: 8px;">
+    <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm {% if menu_sub == 'dashboard_caixa' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+      Dashboard
+    </a>
+    <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-sm {% if menu_sub == 'registrar_pagamento' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+      Pagamentos
+    </a>
+    <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-sm {% if menu_sub == 'registrar_saida' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+      Saídas
+    </a>
+
+    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+    <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm {% if menu_sub == 'contas_receber' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      Contas a receber
+    </a>
+    <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm {% if menu_sub == 'contas_pagar' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      Contas a pagar
+    </a>
+    <a href="{% url 'caixa:aging_receber' %}" class="btn btn-sm {% if menu_sub == 'aging_receber' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      Aging
+    </a>
+
+    <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-sm {% if menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_pendencias' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'meu_desempenho' %}btn-info{% else %}btn-outline-info{% endif %}">
+      Comissões
+    </a>
+    <a href="{% url 'caixa:relatorios' %}" class="btn btn-sm {% if menu_sub == 'relatorios' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+      Relatórios
+    </a>
+    <a href="{% url 'caixa:dre' %}" class="btn btn-sm {% if menu_sub == 'dre' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+      DRE
+    </a>
+    <a href="{% url 'caixa:fluxo_projetado' %}" class="btn btn-sm {% if menu_sub == 'fluxo_projetado' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+      Fluxo
+    </a>
+    <a href="{% url 'caixa:taloes' %}" class="btn btn-sm {% if menu_sub == 'taloes' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+      Talões
+    </a>
+
+    <a href="{% url 'caixa:formas_pagamento' %}" class="btn btn-sm {% if menu_sub == 'formas_pagamento' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      Formas
+    </a>
+    <a href="{% url 'caixa:centros_custo' %}" class="btn btn-sm {% if menu_sub == 'centros_custo' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      Centros
+    </a>
+    <a href="{% url 'caixa:categorias_financeiras' %}" class="btn btn-sm {% if menu_sub == 'categorias_financeiras' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      Categorias
+    </a>
+    <a href="{% url 'caixa:garantias_fabricante' %}" class="btn btn-sm {% if menu_sub == 'garantias_fabricante' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      Garantias
+    </a>
+    <a href="{% url 'caixa:premios_meta' %}" class="btn btn-sm {% if menu_sub == 'premios_meta' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      Prêmios
+    </a>
+    {% endif %}
+  </div>
+</div>
