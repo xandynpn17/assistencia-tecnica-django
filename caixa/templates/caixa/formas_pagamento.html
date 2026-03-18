@@ -2,51 +2,82 @@
 {% load widget_tweaks %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h3 class="mb-0">Formas de Pagamento</h3>
-  <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
-</div>
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
 
-<div class="row">
-  <div class="col-md-4">
-    <div class="card">
-      <div class="card-header"><strong>Nova forma</strong></div>
-      <div class="card-body">
-        <form method="post">
-          {% csrf_token %}
-          {% for field in form %}
-          <div class="mb-2">
-            <label>{{ field.label }}</label>
-            {{ field|add_class:"form-control" }}
-          </div>
-          {% endfor %}
-          <button type="submit" class="btn btn-primary">Salvar</button>
-        </form>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Formas de pagamento</h3>
+    <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar ao dashboard</a>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="small-box bg-info">
+        <div class="inner">
+          <h4>{{ total_formas }}</h4>
+          <p>Total de formas cadastradas</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="small-box bg-success">
+        <div class="inner">
+          <h4>{{ total_formas_ativas }}</h4>
+          <p>Formas ativas</p>
+        </div>
       </div>
     </div>
   </div>
-  <div class="col-md-8">
-    <div class="card">
-      <div class="card-body table-responsive p-0">
-        <table class="table table-hover mb-0">
-          <thead>
-            <tr><th>Nome</th><th>Código</th><th>Tipo</th><th>Taxa %</th><th>Dias</th><th>Ativa</th></tr>
-          </thead>
-          <tbody>
-          {% for f in formas %}
-            <tr>
-              <td>{{ f.nome }}</td>
-              <td>{{ f.codigo }}</td>
-              <td>{{ f.get_tipo_display }}</td>
-              <td>{{ f.taxa_percentual|floatformat:2 }}</td>
-              <td>{{ f.dias_recebimento }}</td>
-              <td>{% if f.ativa %}Sim{% else %}Não{% endif %}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="6" class="text-center">Nenhuma forma cadastrada.</td></tr>
-          {% endfor %}
-          </tbody>
-        </table>
+
+  <div class="row">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white"><strong>Nova forma</strong></div>
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            {% for field in form %}
+            <div class="mb-2">
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field|add_class:"form-control" }}
+              {% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary">Salvar</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white"><strong>Formas cadastradas</strong></div>
+        <div class="card-body table-responsive p-0">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr><th>Nome</th><th>Código</th><th>Tipo</th><th class="text-right">Taxa %</th><th class="text-center">Dias</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+            {% for f in formas %}
+              <tr>
+                <td>{{ f.nome }}</td>
+                <td>{{ f.codigo }}</td>
+                <td>{{ f.get_tipo_display }}</td>
+                <td class="text-right">{{ f.taxa_percentual|floatformat:2 }}</td>
+                <td class="text-center">{{ f.dias_recebimento }}</td>
+                <td>
+                  {% if f.ativa %}
+                  <span class="badge badge-success">Ativa</span>
+                  {% else %}
+                  <span class="badge badge-secondary">Inativa</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="6" class="text-center">Nenhuma forma cadastrada.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

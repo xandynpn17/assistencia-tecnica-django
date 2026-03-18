@@ -3,11 +3,12 @@
 
 {% block content %}
 <div class="container-fluid mt-3">
+    {% include 'caixa/_subnav_caixa.html' %}
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h1 class="h3 mb-0">Registrar Pagamento (POS)</h1>
         <div class="d-flex gap-2">
-            <a href="{% url 'caixa:taloes' %}" class="btn btn-outline-dark btn-sm">Consultar Taloes</a>
-            <a href="{% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}{% url 'caixa:dashboard_caixa' %}{% else %}{% url 'caixa:registrar_pagamento' %}{% endif %}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+            <a href="{% url 'caixa:taloes' %}" class="btn btn-outline-dark btn-sm">Consultar talões</a>
+            <a href="{% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}{% url 'caixa:dashboard_caixa' %}{% else %}{% url 'caixa:registrar_pagamento' %}{% endif %}" class="btn btn-outline-secondary btn-sm">Voltar ao dashboard</a>
         </div>
     </div>
 

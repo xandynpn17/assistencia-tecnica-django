@@ -454,10 +454,17 @@
                   </a>
                 </li>
                 <li class="nav-item">
-                  <a href="{% url 'caixa:comissoes_tecnicos' %}"
-                     class="nav-link {% if menu_sub == 'comissoes_tecnicos' %}active{% endif %}">
+                  <a href="{% url 'caixa:comissoes_pagamento' %}"
+                     class="nav-link {% if menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'comissoes_pendencias' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Administrar Comissoes</p>
+                    <p>Pagamento de Comissoes</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'caixa:comissoes_pendencias' %}"
+                     class="nav-link {% if menu_sub == 'comissoes_pendencias' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Pendencias de Comissoes</p>
                   </a>
                 </li>
                 <li class="nav-item">

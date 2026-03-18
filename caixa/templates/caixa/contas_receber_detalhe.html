@@ -2,78 +2,145 @@
 {% load widget_tweaks %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h3 class="mb-0">Conta #{{ conta.id }}</h3>
-  <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
-</div>
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
 
-<div class="row">
-  <div class="col-md-7">
-    <div class="card mb-3">
-      <div class="card-body">
-        <p><strong>Descrição:</strong> {{ conta.descricao }}</p>
-        <p><strong>Cliente:</strong> {{ conta.cliente_nome }}</p>
-        <p><strong>Status:</strong> {{ conta.get_status_display }}</p>
-        <p><strong>Vencimento:</strong> {{ conta.vencimento|date:"d/m/Y" }}</p>
-        <p><strong>Valor original:</strong> R$ {{ conta.valor_original|floatformat:2 }}</p>
-        <p><strong>Valor em aberto:</strong> R$ {{ conta.valor_aberto|floatformat:2 }}</p>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Conta a receber #{{ conta.id }}</h3>
+    <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-3">
+      <div class="small-box bg-info">
+        <div class="inner">
+          <h4>R$ {{ conta.valor_original|floatformat:2 }}</h4>
+          <p>Valor original</p>
+        </div>
       </div>
     </div>
-
-    <div class="card">
-      <div class="card-header"><strong>Histórico de recebimentos</strong></div>
-      <div class="card-body table-responsive p-0">
-        <table class="table table-hover mb-0">
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Valor</th>
-              <th>Desconto</th>
-              <th>Juros</th>
-              <th>Referência</th>
-              <th>Usuário</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in recebimentos %}
-            <tr>
-              <td>{{ r.data|date:"d/m/Y H:i" }}</td>
-              <td>R$ {{ r.valor|floatformat:2 }}</td>
-              <td>R$ {{ r.desconto|floatformat:2 }}</td>
-              <td>R$ {{ r.juros|floatformat:2 }}</td>
-              <td>{{ r.referencia }}</td>
-              <td>{{ r.usuario.username|default:"-" }}</td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="6" class="text-center">Sem recebimentos.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+    <div class="col-md-3">
+      <div class="small-box bg-warning">
+        <div class="inner">
+          <h4>R$ {{ conta.valor_aberto|floatformat:2 }}</h4>
+          <p>Valor em aberto</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="small-box bg-success">
+        <div class="inner">
+          <h4>R$ {{ valor_quitado|floatformat:2 }}</h4>
+          <p>Valor quitado</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="small-box bg-secondary">
+        <div class="inner">
+          <h4>{{ recebimentos|length }}</h4>
+          <p>Baixas registradas</p>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="col-md-5">
-    <div class="card">
-      <div class="card-header"><strong>Registrar baixa</strong></div>
-      <div class="card-body">
-        <div class="alert alert-info py-2">
-          <small>
-            Regra da baixa: <strong>valor principal</strong> reduz a conta, <strong>desconto</strong> complementa a quitação
-            e <strong>juros</strong> aumenta apenas o valor recebido em caixa.
-          </small>
-        </div>
-        <form method="post">
-          {% csrf_token %}
-          {% for field in form %}
-          <div class="mb-2">
-            <label>{{ field.label }}</label>
-            {{ field|add_class:"form-control" }}
-            {% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}
+  <div class="row">
+    <div class="col-lg-7">
+      <div class="card mb-3">
+        <div class="card-header bg-white"><strong>Dados da conta</strong></div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-8">
+              <p class="mb-2"><strong>Descrição:</strong> {{ conta.descricao }}</p>
+              <p class="mb-2"><strong>Cliente:</strong> {{ conta.cliente_nome|default:"-" }}</p>
+              <p class="mb-2"><strong>Vencimento:</strong> {{ conta.vencimento|date:"d/m/Y" }}</p>
+              <p class="mb-0"><strong>Origem:</strong> {{ conta.get_tipo_origem_display }}</p>
+            </div>
+            <div class="col-md-4">
+              <p class="mb-1"><strong>Status</strong></p>
+              {% if conta.status == "paga" %}
+              <span class="badge badge-success p-2">Paga</span>
+              {% elif conta.status == "vencida" %}
+              <span class="badge badge-danger p-2">Vencida</span>
+              {% elif conta.status == "parcial" %}
+              <span class="badge badge-warning p-2">Parcial</span>
+              {% elif conta.status == "cancelada" %}
+              <span class="badge badge-secondary p-2">Cancelada</span>
+              {% else %}
+              <span class="badge badge-info p-2">{{ conta.get_status_display }}</span>
+              {% endif %}
+            </div>
           </div>
-          {% endfor %}
-          <button type="submit" class="btn btn-success">Registrar</button>
-        </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <strong>Histórico de recebimentos</strong>
+          <small class="text-muted">{{ recebimentos|length }} registro(s)</small>
+        </div>
+        <div class="card-body table-responsive p-0">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th class="text-right">Valor</th>
+                <th class="text-right">Desconto</th>
+                <th class="text-right">Juros</th>
+                <th>Referência</th>
+                <th>Usuário</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in recebimentos %}
+              <tr>
+                <td>{{ r.data|date:"d/m/Y H:i" }}</td>
+                <td class="text-right">R$ {{ r.valor|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ r.desconto|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ r.juros|floatformat:2 }}</td>
+                <td>{{ r.referencia|default:"-" }}</td>
+                <td>{{ r.usuario.username|default:"-" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center">Sem recebimentos.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card">
+        <div class="card-header bg-white"><strong>Registrar baixa</strong></div>
+        <div class="card-body">
+          <div class="alert alert-info py-2">
+            <small>
+              Regra da baixa: <strong>valor principal</strong> reduz a conta,
+              <strong>desconto</strong> complementa a quitação e
+              <strong>juros</strong> aumenta apenas o valor recebido em caixa.
+            </small>
+          </div>
+
+          {% if conta.status == "paga" or conta.status == "cancelada" %}
+          <div class="alert alert-warning mb-0">
+            Esta conta está com status <strong>{{ conta.get_status_display }}</strong> e não permite nova baixa.
+          </div>
+          {% else %}
+          <form method="post">
+            {% csrf_token %}
+            {% for field in form %}
+            <div class="mb-2">
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field|add_class:"form-control" }}
+              {% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-success">Registrar baixa</button>
+          </form>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>

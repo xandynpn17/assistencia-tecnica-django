@@ -2,49 +2,168 @@
 {% load widget_tweaks %}
 
 {% block content %}
-<div class="container mt-4">
-    <h1>Registrar saída</h1>
+<div class="container-fluid mt-3">
+    {% include 'caixa/_subnav_caixa.html' %}
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">Registrar saída</h1>
+        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-outline-secondary btn-sm">Voltar ao dashboard</a>
+    </div>
 
     {% if not caixa %}
         <div class="alert alert-danger">
             Nenhum caixa aberto. <a href="{% url 'caixa:abrir_caixa' %}">Abra um caixa</a> primeiro.
         </div>
     {% else %}
-        <p><strong>Saldo atual:</strong> R$ {{ saldo|floatformat:2 }}</p>
-
-        <form method="post" class="card">
-            {% csrf_token %}
-            <div class="card-body">
-                {{ form.non_field_errors }}
-
-                <div class="form-group">
-                    <label for="{{ form.descricao.id_for_label }}">Descrição</label>
-                    {{ form.descricao|add_class:"form-control" }}
-                    {% if form.descricao.errors %}<small class="text-danger">{{ form.descricao.errors|striptags }}</small>{% endif %}
-                </div>
-
-                <div class="form-group">
-                    <label for="{{ form.centro_custo.id_for_label }}">Centro de custo</label>
-                    {{ form.centro_custo|add_class:"form-control" }}
-                    {% if form.centro_custo.errors %}<small class="text-danger">{{ form.centro_custo.errors|striptags }}</small>{% endif %}
-                    <small class="text-muted">Os centros padrão são criados automaticamente. Se precisar, ajuste em "Centros de custo".</small>
-                </div>
-
-                <div class="form-group mb-0">
-                    <label for="{{ form.valor.id_for_label }}">Valor</label>
-                    {{ form.valor|add_class:"form-control" }}
-                    {% if form.valor.errors %}<small class="text-danger">{{ form.valor.errors|striptags }}</small>{% endif %}
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h4>R$ {{ saldo|floatformat:2 }}</h4>
+                        <p>Saldo atual</p>
+                    </div>
+                    <div class="icon"><i class="fas fa-wallet"></i></div>
                 </div>
             </div>
-            <div class="card-footer">
-                <button type="submit" class="btn btn-danger">
-                    <i class="fas fa-minus-circle"></i> Registrar saída
-                </button>
-                <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-secondary">
-                    Voltar
-                </a>
+            <div class="col-md-4">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h4>R$ {{ total_saidas_hoje|floatformat:2 }}</h4>
+                        <p>Total de saídas hoje</p>
+                    </div>
+                    <div class="icon"><i class="fas fa-arrow-up"></i></div>
+                </div>
             </div>
-        </form>
+            <div class="col-md-4">
+                <div class="small-box bg-secondary">
+                    <div class="inner">
+                        <h4>{{ quantidade_saidas_hoje }}</h4>
+                        <p>Lançamentos de saída hoje</p>
+                    </div>
+                    <div class="icon"><i class="fas fa-list"></i></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-7">
+                <form method="post" class="card shadow-sm border-0" id="form-saida">
+                    {% csrf_token %}
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Nova saída</strong>
+                        <small class="text-muted">F2 valor | F3 centro de custo | F4 salvar</small>
+                    </div>
+                    <div class="card-body">
+                        {{ form.non_field_errors }}
+
+                        <div class="form-group">
+                            <label for="{{ form.descricao.id_for_label }}"><strong>Descrição</strong></label>
+                            {{ form.descricao|add_class:"form-control form-control-lg"|attr:"placeholder:Ex: compra de materiais, combustível, frete" }}
+                            {% if form.descricao.errors %}<small class="text-danger">{{ form.descricao.errors|striptags }}</small>{% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="{{ form.centro_custo.id_for_label }}"><strong>Centro de custo</strong></label>
+                            {{ form.centro_custo|add_class:"form-control form-control-lg"|attr:"id:id_centro_saida" }}
+                            {% if form.centro_custo.errors %}<small class="text-danger">{{ form.centro_custo.errors|striptags }}</small>{% endif %}
+                            <small class="text-muted">Centros padrão são criados automaticamente. Ajuste em "Centros de custo" se necessário.</small>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="{{ form.valor.id_for_label }}"><strong>Valor</strong></label>
+                            {{ form.valor|add_class:"form-control form-control-lg"|attr:"id:id_valor_saida" }}
+                            {% if form.valor.errors %}<small class="text-danger">{{ form.valor.errors|striptags }}</small>{% endif %}
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="d-block mb-2"><strong>Valores rápidos</strong></label>
+                            <div class="btn-group btn-group-sm flex-wrap" role="group">
+                                <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="20.00">20,00</button>
+                                <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="50.00">50,00</button>
+                                <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="100.00">100,00</button>
+                                <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="150.00">150,00</button>
+                                <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="200.00">200,00</button>
+                                <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="300.00">300,00</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between">
+                        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-outline-secondary">Cancelar</a>
+                        <button type="submit" id="btn-salvar-saida" class="btn btn-danger">
+                            <i class="fas fa-minus-circle"></i> Registrar saída
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-white">
+                        <strong>Últimas saídas do caixa</strong>
+                    </div>
+                    <div class="card-body p-0 table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Descrição</th>
+                                    <th>Centro</th>
+                                    <th class="text-right">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for saida in saidas_recentes %}
+                                <tr>
+                                    <td>{{ saida.data|date:"d/m H:i" }}</td>
+                                    <td>{{ saida.descricao|default:"-" }}</td>
+                                    <td>{{ saida.centro_custo.nome|default:"-" }}</td>
+                                    <td class="text-right text-danger">R$ {{ saida.valor|floatformat:2 }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">Nenhuma saída registrada neste caixa.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const valorInput = document.getElementById("id_valor_saida");
+    const centroInput = document.getElementById("id_centro_saida");
+    const formSaida = document.getElementById("form-saida");
+    const btnSalvar = document.getElementById("btn-salvar-saida");
+
+    document.querySelectorAll(".js-valor-rapido").forEach(function (botao) {
+        botao.addEventListener("click", function () {
+            if (!valorInput) return;
+            valorInput.value = botao.getAttribute("data-value");
+            valorInput.focus();
+        });
+    });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "F2") {
+            event.preventDefault();
+            if (valorInput) valorInput.focus();
+        }
+        if (event.key === "F3") {
+            event.preventDefault();
+            if (centroInput) centroInput.focus();
+        }
+        if (event.key === "F4") {
+            event.preventDefault();
+            if (formSaida && btnSalvar) formSaida.requestSubmit(btnSalvar);
+        }
+    });
+});
+</script>
 {% endblock %}

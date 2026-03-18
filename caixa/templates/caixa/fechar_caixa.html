@@ -1,9 +1,13 @@
 {% extends 'core/base.html' %}
-{% load widget_tweaks %}
 
 {% block content %}
-<div class="container mt-4">
-    <h1>Fechar caixa</h1>
+<div class="container-fluid mt-3">
+    {% include 'caixa/_subnav_caixa.html' %}
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">Fechar caixa</h3>
+        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar ao dashboard</a>
+    </div>
 
     {% if not caixa %}
         <div class="alert alert-danger">
@@ -11,36 +15,60 @@
         </div>
         <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-primary">Abrir caixa</a>
     {% else %}
-        <div class="card mb-3">
-            <div class="card-body">
-                <p><strong>Data:</strong> {{ caixa.data|date:"d/m/Y" }}</p>
-                <p><strong>Saldo inicial:</strong> R$ {{ caixa.saldo_inicial|floatformat:2 }}</p>
-                <p><strong>Total de entradas:</strong> R$ {{ total_entradas|floatformat:2 }}</p>
-                <p><strong>Total de saidas:</strong> R$ {{ total_saidas|floatformat:2 }}</p>
-                <p class="mb-0"><strong>Saldo atual:</strong> R$ {{ saldo|floatformat:2 }}</p>
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h4>{{ caixa.data|date:"d/m/Y" }}</h4>
+                        <p>Data</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h4>R$ {{ total_entradas|floatformat:2 }}</h4>
+                        <p>Total de entradas</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h4>R$ {{ total_saidas|floatformat:2 }}</h4>
+                        <p>Total de saídas</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h4>R$ {{ saldo|floatformat:2 }}</h4>
+                        <p>Saldo atual</p>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <form method="post" class="card">
+        <form method="post" class="card shadow-sm border-0">
             {% csrf_token %}
+            <div class="card-header bg-white"><strong>Conferência de fechamento</strong></div>
             <div class="card-body">
                 <div class="form-group">
-                    <label for="id_valor_contado_fisico">Valor contado fisicamente</label>
-                    <input type="number" step="0.01" min="0" class="form-control" id="id_valor_contado_fisico" name="valor_contado_fisico" value="{{ valor_contado_fisico|default:saldo }}">
+                    <label for="id_valor_contado_fisico"><strong>Valor contado fisicamente</strong></label>
+                    <input type="number" step="0.01" min="0" class="form-control form-control-lg" id="id_valor_contado_fisico" name="valor_contado_fisico" value="{{ valor_contado_fisico|default:saldo }}">
                 </div>
                 <div class="form-group mb-0">
-                    <label for="id_justificativa_diferenca">Justificativa da diferenca</label>
+                    <label for="id_justificativa_diferenca"><strong>Justificativa da diferença</strong></label>
                     <textarea class="form-control" id="id_justificativa_diferenca" name="justificativa_diferenca" rows="3">{{ caixa.justificativa_diferenca }}</textarea>
-                    <small class="text-muted">Obrigatoria quando houver diferenca no fechamento.</small>
+                    <small class="text-muted">Obrigatória quando houver diferença no fechamento.</small>
                 </div>
             </div>
-            <div class="card-footer">
+            <div class="card-footer d-flex justify-content-between">
+                <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-outline-secondary">Cancelar</a>
                 <button type="submit" class="btn btn-danger">
                     <i class="fas fa-stop"></i> Fechar caixa
                 </button>
-                <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-secondary">
-                    Cancelar
-                </a>
             </div>
         </form>
     {% endif %}

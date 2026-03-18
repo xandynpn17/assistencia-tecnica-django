@@ -2,24 +2,30 @@
 {% load widget_tweaks %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h3 class="mb-0">Nova Conta a Pagar</h3>
-  <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
-</div>
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
 
-<div class="card">
-  <div class="card-body">
-    <form method="post">
-      {% csrf_token %}
-      {% for field in form %}
-      <div class="mb-2">
-        <label>{{ field.label }}</label>
-        {{ field|add_class:"form-control" }}
-        {% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}
-      </div>
-      {% endfor %}
-      <button type="submit" class="btn btn-primary">Salvar</button>
-    </form>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Nova conta a pagar</h3>
+    <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-white"><strong>Dados da conta</strong></div>
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="mb-2">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field|add_class:"form-control" }}
+          {% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-outline-secondary">Cancelar</a>
+      </form>
+    </div>
   </div>
 </div>
 {% endblock %}

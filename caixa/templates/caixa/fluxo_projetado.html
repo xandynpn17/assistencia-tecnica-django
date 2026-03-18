@@ -1,51 +1,149 @@
-﻿{% extends 'core/base.html' %}
+{% extends 'core/base.html' %}
+{% load widget_tweaks %}
 
 {% block content %}
-<div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Despesa Recorrente</h3></div>
-  <div class="card-body">
-    <form method="post" class="row">
-      {% csrf_token %}
-      <div class="col-md-3">{{ form.nome.label_tag }}{{ form.nome }}</div>
-      <div class="col-md-2">{{ form.valor_mensal.label_tag }}{{ form.valor_mensal }}</div>
-      <div class="col-md-2">{{ form.dia_vencimento.label_tag }}{{ form.dia_vencimento }}</div>
-      <div class="col-md-3">{{ form.ponto_operacional.label_tag }}{{ form.ponto_operacional }}</div>
-      <div class="col-md-1">{{ form.ativo.label_tag }}{{ form.ativo }}</div>
-      <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary btn-sm" type="submit">Salvar</button></div>
-    </form>
-  </div>
-</div>
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
 
-<div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Fluxo Projetado (6 meses)</h3></div>
-  <div class="card-body p-0">
-    <table class="table table-bordered mb-0">
-      <thead><tr><th>Competencia</th><th>Entradas Previstas</th><th>Despesas Previstas</th><th>Saldo Previsto</th></tr></thead>
-      <tbody>
-      {% for mes in meses %}
-      <tr>
-        <td>{{ mes.competencia }}</td>
-        <td>R$ {{ mes.entradas_previstas|floatformat:2 }}</td>
-        <td>R$ {{ mes.despesas_previstas|floatformat:2 }}</td>
-        <td><strong>R$ {{ mes.saldo_previsto|floatformat:2 }}</strong></td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Fluxo projetado (6 meses)</h3>
+    <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar ao dashboard</a>
   </div>
-</div>
 
-<div class="card">
-  <div class="card-header"><h3 class="card-title">Despesas Cadastradas</h3></div>
-  <div class="card-body p-0">
-    <table class="table table-sm mb-0">
-      <thead><tr><th>Nome</th><th>Valor Mensal</th><th>Dia</th><th>Ponto</th><th>Ativa</th></tr></thead>
-      <tbody>
-      {% for d in despesas_recorrentes %}
-      <tr><td>{{ d.nome }}</td><td>{{ d.valor_mensal|floatformat:2 }}</td><td>{{ d.dia_vencimento }}</td><td>{{ d.ponto_operacional|default:'-' }}</td><td>{{ d.ativo|yesno:'Sim,Não' }}</td></tr>
-      {% empty %}<tr><td colspan="5" class="text-center text-muted">Sem despesas recorrentes.</td></tr>{% endfor %}
-      </tbody>
-    </table>
+  <div class="row mb-3">
+    <div class="col-md-3">
+      <div class="small-box bg-success">
+        <div class="inner">
+          <h4>R$ {{ total_entradas_previstas|floatformat:2 }}</h4>
+          <p>Entradas previstas (6 meses)</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="small-box bg-danger">
+        <div class="inner">
+          <h4>R$ {{ total_despesas_previstas|floatformat:2 }}</h4>
+          <p>Despesas previstas (6 meses)</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="small-box {% if saldo_total_previsto < 0 %}bg-warning{% else %}bg-info{% endif %}">
+        <div class="inner">
+          <h4>R$ {{ saldo_total_previsto|floatformat:2 }}</h4>
+          <p>Saldo projetado (6 meses)</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="small-box bg-secondary">
+        <div class="inner">
+          <h4>{{ quantidade_despesas_ativas }}</h4>
+          <p>Despesas recorrentes ativas</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header bg-white"><strong>Cadastrar despesa recorrente</strong></div>
+    <div class="card-body">
+      <form method="post" class="form-row align-items-end">
+        {% csrf_token %}
+        <div class="col-md-3">
+          <label for="{{ form.nome.id_for_label }}">{{ form.nome.label }}</label>
+          {{ form.nome|add_class:"form-control"|attr:"placeholder:Ex: aluguel, internet, energia" }}
+        </div>
+        <div class="col-md-2">
+          <label for="{{ form.valor_mensal.id_for_label }}">{{ form.valor_mensal.label }}</label>
+          {{ form.valor_mensal|add_class:"form-control" }}
+        </div>
+        <div class="col-md-2">
+          <label for="{{ form.dia_vencimento.id_for_label }}">{{ form.dia_vencimento.label }}</label>
+          {{ form.dia_vencimento|add_class:"form-control" }}
+        </div>
+        <div class="col-md-3">
+          <label for="{{ form.ponto_operacional.id_for_label }}">{{ form.ponto_operacional.label }}</label>
+          {{ form.ponto_operacional|add_class:"form-control" }}
+        </div>
+        <div class="col-md-1">
+          <div class="form-check mb-2">
+            {{ form.ativo|add_class:"form-check-input" }}
+            <label for="{{ form.ativo.id_for_label }}" class="form-check-label">{{ form.ativo.label }}</label>
+          </div>
+        </div>
+        <div class="col-md-1 d-flex">
+          <button class="btn btn-primary btn-block" type="submit">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header bg-white"><strong>Projeção mensal</strong></div>
+    <div class="card-body p-0">
+      <table class="table table-bordered mb-0">
+        <thead>
+          <tr>
+            <th>Competência</th>
+            <th class="text-right">Entradas previstas</th>
+            <th class="text-right">Despesas previstas</th>
+            <th class="text-right">Saldo previsto</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for mes in meses %}
+        <tr>
+          <td>{{ mes.competencia }}</td>
+          <td class="text-right">R$ {{ mes.entradas_previstas|floatformat:2 }}</td>
+          <td class="text-right">R$ {{ mes.despesas_previstas|floatformat:2 }}</td>
+          <td class="text-right {% if mes.saldo_previsto < 0 %}text-danger{% else %}text-success{% endif %}">
+            <strong>R$ {{ mes.saldo_previsto|floatformat:2 }}</strong>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+      <strong>Despesas cadastradas</strong>
+      <small class="text-muted">{{ despesas_recorrentes|length }} registro(s)</small>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th class="text-right">Valor mensal</th>
+            <th class="text-center">Dia</th>
+            <th>Ponto operacional</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for d in despesas_recorrentes %}
+        <tr>
+          <td>{{ d.nome }}</td>
+          <td class="text-right">R$ {{ d.valor_mensal|floatformat:2 }}</td>
+          <td class="text-center">{{ d.dia_vencimento }}</td>
+          <td>{{ d.ponto_operacional|default:'-' }}</td>
+          <td>
+            {% if d.ativo %}
+            <span class="badge badge-success">Ativa</span>
+            {% else %}
+            <span class="badge badge-secondary">Inativa</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-muted">Sem despesas recorrentes.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 {% endblock %}
