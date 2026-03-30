@@ -1,9 +1,9 @@
 {% extends "core/base.html" %}
 
-{% block title %}Reposicao Inteligente{% endblock %}
+{% block title %}Reposição Inteligente{% endblock %}
 
 {% block header %}
-<h1 class="m-0 text-dark">Reposicao Inteligente (PO2 -> PO3)</h1>
+<h1 class="m-0 text-dark">Reposição Inteligente (PO2 -> PO3)</h1>
 {% endblock %}
 
 {% block content %}
@@ -16,7 +16,7 @@
           <th>Saldo {{ po3.codigo }}</th>
           <th>Mínimo</th>
           <th>Saldo {{ po2.codigo }}</th>
-          <th>Sugestao</th>
+          <th>Sugestão</th>
           <th>Repor Agora</th>
           <th>Faltante Compra</th>
           <th>Ação</th>
@@ -46,7 +46,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="text-center text-muted">Sem itens para reposicao no momento.</td></tr>
+        <tr><td colspan="8" class="text-center text-muted">Sem itens para reposição no momento.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -26,6 +26,8 @@
     <p><strong>Equipamento:</strong> {{ ordem.get_tipo_equipamento_display }} - {{ ordem.marca_equipamento }} {{ ordem.modelo_equipamento }}</p>
     <p><strong>Defeito relatado:</strong> {{ ordem.defeito }}</p>
     <p><strong>Data de abertura:</strong> {{ ordem.data_abertura|date:"d/m/Y H:i" }}</p>
+    <p><strong>Atendente:</strong> {% if ordem.atendente_abertura %}{{ ordem.atendente_abertura.get_full_name|default:ordem.atendente_abertura.username }}{% else %}-{% endif %}</p>
+    <p><strong>Técnico responsável:</strong> {% if ordem.tecnico_responsavel_valido %}{{ ordem.tecnico_responsavel_valido.get_full_name|default:ordem.tecnico_responsavel_valido.username }}{% else %}Sem técnico{% endif %}</p>
   </div>
 
   <div class="box">

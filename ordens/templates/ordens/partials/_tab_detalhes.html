@@ -1,0 +1,125 @@
+<!-- Aba Detalhes -->
+<div class="tab-pane fade {% if active_tab == 'detalhes' %}show active{% endif %}" id="detalhes">
+    <div class="card-modern">
+        <!-- Header -->
+        <div class="card-modern-header">
+            <i class="fas fa-info-circle mr-2"></i> Detalhes do Equipamento
+        </div>
+
+        <!-- Card Body -->
+        <div class="card-modern-body">
+            <div class="row align-items-stretch">
+                <!-- Conteudo principal (esquerda) -->
+                <div class="col-md-8 d-flex flex-column h-100" id="detalhesColunaEsquerda">
+
+                    <!-- Caixa Defeito -->
+                    <div class="border rounded bg-light p-3 mb-3 bloco-detalhe bloco-defeito">
+                        <h6 class="font-weight-bold mb-2">Defeito Reclamado</h6>
+                        <p class="bloco-detalhe-conteudo">{{ ordem.defeito|default:"-" }}</p>
+                    </div>
+
+                    <!-- Caixa Acessorios -->
+                    <div class="border rounded bg-light p-3 mb-3 bloco-detalhe bloco-acessorios">
+                        <h6 class="font-weight-bold mb-2">Acessorios</h6>
+                        <p class="bloco-detalhe-conteudo">{{ ordem.acessorios|default:"-" }}</p>
+                    </div>
+
+                    <!-- Caixa Peritagem -->
+                    <div class="border rounded bg-light p-3 bloco-detalhe bloco-peritagem" id="blocoPeritagem">
+                        <h6 class="font-weight-bold mb-2">Peritagem</h6>
+                        <p class="bloco-detalhe-conteudo">
+                            {% if ordem.peritagem %}
+                            {{ ordem.peritagem }}
+                            {% else %}
+                            <span class="text-muted">Não informado</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Barra lateral (direita) -->
+                <div class="col-md-4">
+                    <div class="border rounded bg-white p-3 h-100 d-flex flex-column" id="painelDetalhesLateral">
+
+                        <!-- Dados do equipamento -->
+                        <div class="mb-3">
+                            <p class="mb-1"><strong>Tipo:</strong> {{ ordem.get_tipo_equipamento_display }}</p>
+                            <p class="mb-1"><strong>Marca:</strong> {{ ordem.marca_equipamento }}</p>
+                            <p class="mb-1"><strong>Modelo:</strong> {{ ordem.modelo_equipamento }}</p>
+                            <p class="mb-1">
+                                <strong>Nº Série:</strong>
+                                <span id="serie-view"
+                                      class="{% if pode_editar_serie %}text-primary{% endif %}"
+                                      {% if pode_editar_serie %}style="cursor:pointer;" title="Duplo clique para editar"{% endif %}>
+                                    {{ ordem.numero_serie_equipamento|default:"-" }}
+                                </span>
+                                {% if pode_editar_serie %}
+                                <span id="serie-editor" class="d-none ml-2">
+                                    <input type="text" id="serie-input" class="form-control form-control-sm d-inline-block" style="width:220px;" value="{{ ordem.numero_serie_equipamento|default:'' }}">
+                                    <button type="button" id="serie-save" class="btn btn-sm btn-success ml-1">Salvar</button>
+                                    <button type="button" id="serie-cancel" class="btn btn-sm btn-outline-secondary ml-1">Cancelar</button>
+                                </span>
+                                {% endif %}
+                            </p>
+                            <div id="serie-feedback" class="small"></div>
+                            <p class="mb-1 mt-2">
+                                <strong>Processo anterior:</strong>
+                                {% if processo_anterior_sn %}
+                                    <a href="{% url 'ordens:detalhes_ordem' processo_anterior_sn.id %}">#{{ processo_anterior_sn.numero_os }}</a>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </p>
+                            <p class="mb-1">
+                                <strong>Referência parceiro:</strong> {{ ordem.referencia_parceiro|default:"-" }}
+                            </p>
+                        </div>
+
+                        <!-- Observações Internas -->
+                        <div class="observacoes-wrap">
+                            <label class="font-weight-bold mb-1" for="observacoes">Observações (internas)</label>
+                            <textarea id="observacoes"
+                                      class="form-control form-control-sm"
+                                      rows="5"
+                                      data-os-id="{{ ordem.id }}"
+                                      placeholder="Somente visivel internamente...">{{ ordem.notas_internas|default:"" }}</textarea>
+                            <div id="observacoes-feedback" class="small mt-1"></div>
+                        </div>
+
+                        <div class="detalhes-footer-meta">
+                            <div class="mb-2">
+                                <div class="meta-stacked">
+                                    <label class="meta-label" for="tecnicoResponsavel">Técnico responsável:</label>
+                                    <select id="tecnicoResponsavel"
+                                            class="form-control form-control-sm"
+                                            style="height: 31px;"
+                                            data-os-id="{{ ordem.id }}">
+                                        <option value="">-- Selecione --</option>
+                                        {% for user in tecnicos %}
+                                            <option value="{{ user.id }}" {% if ordem.tecnico_responsavel_id == user.id %}selected{% endif %}>
+                                                {{ user.username }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div id="tecnico-feedback" class="small mt-1"></div>
+                            </div>
+                            <div>
+                                <div class="meta-stacked">
+                                    <label class="meta-label" for="localArmazenamento">Local de armazenamento:</label>
+                                    <input type="text" id="localArmazenamento"
+                                           class="form-control form-control-sm"
+                                           style="height: 31px;"
+                                           value="{{ ordem.local_armazenamento|default:'' }}"
+                                           data-os-id="{{ ordem.id }}"
+                                           placeholder="Local...">
+                                </div>
+                                <div id="local-feedback" class="small mt-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

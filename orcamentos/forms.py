@@ -43,7 +43,7 @@ class ItemOrcamentoForm(forms.ModelForm):
                 'class': 'form-control'
             }),
             'valor_unitario': forms.NumberInput(attrs={
-                'placeholder': '0.00',
+                'placeholder': 'R$ 0,00',
                 'step': '0.01',
                 'class': 'form-control'
             }),
@@ -62,6 +62,7 @@ class ItemOrcamentoForm(forms.ModelForm):
             is_active=True,
             tipo_usuario="tecnico",
         ).order_by("username")
+        self.fields["valor_unitario"].label = "Valor unitário (R$)"
 
     def clean(self):
         """

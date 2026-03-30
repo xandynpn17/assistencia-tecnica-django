@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}Detalhes do Usuario{% endblock %}
+{% block title %}Detalhes do Usuário{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -15,7 +15,7 @@
           {% endif %}
         </div>
         <p class="mb-1"><strong>Nome:</strong> {{ usuario_obj.nome_exibicao }}</p>
-        <p class="mb-1"><strong>Usuario:</strong> {{ usuario_obj.username }}</p>
+        <p class="mb-1"><strong>Usuário:</strong> {{ usuario_obj.username }}</p>
         <p class="mb-1"><strong>Perfil:</strong> {{ usuario_obj.get_tipo_usuario_display }}</p>
         <p class="mb-1"><strong>Email:</strong> {{ usuario_obj.email|default:"-" }}</p>
         <p class="mb-1"><strong>Telefone:</strong> {{ usuario_obj.telefone|default:"-" }}</p>

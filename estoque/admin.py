@@ -1,12 +1,16 @@
 from django.contrib import admin
 from .models import (
     CategoriaProduto,
+    ConfiguracaoRateioCustoFixo,
     MovimentacaoEstoque,
     PontoOperacional,
     Produto,
+    ProdutoHistorico,
     ProdutoEquivalente,
     ProdutoKitItem,
     ProdutoPrecoTabela,
+    RateioCustoFixoCompetencia,
+    RateioCustoFixoItemCompetencia,
     SaldoEstoquePonto,
     ServicoReferencia,
     TabelaPreco,
@@ -15,8 +19,8 @@ from .models import (
 
 @admin.register(Produto)
 class ProdutoAdmin(admin.ModelAdmin):
-    list_display = ["nome", "tipo_item", "ean", "sku", "categoria", "quantidade", "preco_final", "ativo"]
-    list_filter = ["tipo_item", "ativo", "permite_os", "categoria_config", "marca"]
+    list_display = ["nome", "tipo_item", "ean", "sku", "categoria", "quantidade", "preco_final", "custo_rateio_fixo", "ativo"]
+    list_filter = ["tipo_item", "ativo", "permite_os", "categoria_config", "marca", "incluir_rateio_custo_fixo"]
     search_fields = ["nome", "ean", "sku", "modelos_compativeis", "fornecedor"]
 
 
@@ -85,3 +89,29 @@ class ProdutoEquivalenteAdmin(admin.ModelAdmin):
 class ProdutoKitItemAdmin(admin.ModelAdmin):
     list_display = ["produto_kit", "componente", "quantidade"]
     search_fields = ["produto_kit__nome", "componente__nome"]
+
+
+@admin.register(ProdutoHistorico)
+class ProdutoHistoricoAdmin(admin.ModelAdmin):
+    list_display = ["produto", "acao", "usuario", "criado_em"]
+    list_filter = ["acao", "criado_em"]
+    search_fields = ["produto__nome", "observacao", "usuario__username"]
+
+
+@admin.register(ConfiguracaoRateioCustoFixo)
+class ConfiguracaoRateioCustoFixoAdmin(admin.ModelAdmin):
+    list_display = ["criterio_rateio", "ativo", "atualizado_em"]
+
+
+@admin.register(RateioCustoFixoCompetencia)
+class RateioCustoFixoCompetenciaAdmin(admin.ModelAdmin):
+    list_display = ["competencia", "criterio_rateio", "total_custos_fixos", "total_base_rateio", "total_produtos", "gerado_por", "fechado_em"]
+    list_filter = ["criterio_rateio", "competencia"]
+    search_fields = ["observacao", "gerado_por__username"]
+
+
+@admin.register(RateioCustoFixoItemCompetencia)
+class RateioCustoFixoItemCompetenciaAdmin(admin.ModelAdmin):
+    list_display = ["snapshot", "produto_nome", "previsao_venda_mensal", "participacao_percentual", "custo_rateio_unitario", "custo_rateio_total"]
+    list_filter = ["snapshot__competencia"]
+    search_fields = ["produto_nome", "produto__nome"]

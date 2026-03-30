@@ -1,16 +1,16 @@
 {% extends "core/base.html" %}
 
-{% block title %}Ubicacoes de Estoque{% endblock %}
+{% block title %}Ubicações de Estoque{% endblock %}
 
 {% block header %}
-<h1 class="m-0 text-dark">Ubicacoes / Localizacoes</h1>
+<h1 class="m-0 text-dark">Ubicações / Localizações</h1>
 {% endblock %}
 
 {% block content %}
 <div class="row">
   <div class="col-md-4">
     <div class="card">
-      <div class="card-header"><strong>Nova Ubicacao</strong></div>
+      <div class="card-header"><strong>Nova Ubicação</strong></div>
       <div class="card-body">
         <form method="post">
           {% csrf_token %}
@@ -37,7 +37,7 @@
   </div>
   <div class="col-md-8">
     <div class="card">
-      <div class="card-header"><strong>Ubicacoes cadastradas</strong></div>
+      <div class="card-header"><strong>Ubicações cadastradas</strong></div>
       <div class="card-body table-responsive">
         <table class="table table-sm table-bordered">
           <thead>

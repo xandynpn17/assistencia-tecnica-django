@@ -1,12 +1,12 @@
 {% extends "core/base.html" %}
-{% block title %}Usuarios{% endblock %}
+{% block title %}Usuários{% endblock %}
 
 {% block content %}
 <div class="card card-modern">
   <div class="card-modern-header d-flex justify-content-between align-items-center">
-    <span><i class="fas fa-users"></i> Usuarios do Sistema</span>
+    <span><i class="fas fa-users"></i> Usuários do Sistema</span>
     <a href="{% url 'configuracoes:adicionar_usuario' %}" class="btn btn-success btn-sm">
-      <i class="fas fa-plus"></i> Novo Usuario
+      <i class="fas fa-plus"></i> Novo Usuário
     </a>
   </div>
   <div class="card-modern-body">
@@ -38,7 +38,7 @@
       <table class="table table-hover align-middle">
         <thead>
           <tr>
-            <th>Usuario</th>
+            <th>Usuário</th>
             <th>Nome</th>
             <th>Perfil</th>
             <th>Documento</th>

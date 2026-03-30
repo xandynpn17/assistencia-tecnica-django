@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count
+from django.db.models import Count, Prefetch, Q
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from datetime import timedelta
@@ -12,7 +12,7 @@ from django.utils import timezone
 from clientes.models import Cliente
 from configuracoes.models import Empresa
 from configuracoes.permissions import ORDER_ROLES, has_role
-from ordens.models import OrdemServico
+from ordens.models import LinhaTrabalho, OrdemServico
 
 
 # ---------------------
@@ -31,6 +31,7 @@ def dashboard(request):
     total_ordens = OrdemServico.objects.count()
     total_ordens_abertas = OrdemServico.objects.filter(fechada=False).count()
     total_ordens_finalizadas = OrdemServico.objects.filter(fechada=True).count()
+    sem_tecnico_q = Q(tecnico_responsavel__isnull=True) | ~Q(tecnico_responsavel__tipo_usuario="tecnico")
 
     status_counts = (
         OrdemServico.objects.filter(fechada=False)
@@ -43,7 +44,7 @@ def dashboard(request):
             "status": status,
             "label": label,
             "total": status_dict.get(status, 0),
-            "url": f"{reverse('ordens:lista_ordens')}?status={status}",
+            "url": f"{reverse('ordens:lista_ordens')}?carregar=1&status={status}",
         }
         for status, label in OrdemServico.STATUS_CHOICES
         if status != "concluida"
@@ -58,17 +59,23 @@ def dashboard(request):
         "status_cards": status_cards,
         "is_operational": is_operational,
         "is_managerial": is_managerial,
+        "dashboard_links": {
+            "abertas": f"{reverse('ordens:lista_ordens')}?carregar=1",
+            "fechadas": f"{reverse('ordens:lista_ordens')}?carregar=1&status=concluida",
+            "sem_tecnico": f"{reverse('ordens:lista_ordens')}?carregar=1&quick=sem_tecnico",
+            "prontas": f"{reverse('ordens:lista_ordens')}?carregar=1&quick=prontas",
+            "criticas": f"{reverse('ordens:lista_ordens')}?carregar=1&quick=criticas",
+            "paradas": f"{reverse('ordens:lista_ordens')}?carregar=1&quick=paradas_15",
+        },
         "menu_app": "core",
         "menu_sub": "dashboard",
     }
 
     if is_managerial:
         today = timezone.localdate()
-        ordens_sem_tecnico = OrdemServico.objects.filter(
-            fechada=False, tecnico_responsavel__isnull=True
-        ).count()
+        ordens_sem_tecnico = OrdemServico.objects.filter(fechada=False).filter(sem_tecnico_q).count()
         ordens_prontas = OrdemServico.objects.filter(
-            fechada=False, status__in={"pronto_contactado", "pronto_contactar"}
+            fechada=False, status="pronto_contactado"
         ).count()
         ordens_criticas = OrdemServico.objects.filter(
             fechada=False,
@@ -83,6 +90,12 @@ def dashboard(request):
 
         ordens_recentes = (
             OrdemServico.objects.select_related("cliente", "tecnico_responsavel")
+            .prefetch_related(
+                Prefetch(
+                    "linhas_trabalho",
+                    queryset=LinhaTrabalho.objects.select_related("usuario").order_by("id"),
+                )
+            )
             .filter(fechada=False)
             .order_by("-data_abertura")[:5]
         )
@@ -147,3 +160,4 @@ def painel(request):
     }
     return render(request, "configuracoes/painel.html", context)
 
+    sem_tecnico_q = Q(tecnico_responsavel__isnull=True) | ~Q(tecnico_responsavel__tipo_usuario="tecnico")

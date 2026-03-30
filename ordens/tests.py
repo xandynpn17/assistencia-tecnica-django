@@ -1,22 +1,28 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Q
 from django.test import TestCase
+from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from reportlab.lib.styles import getSampleStyleSheet
 
 from caixa.models import Caixa, Pagamento
 from caixa.models import AuditoriaGarantia
 from clientes.models import Cliente
-from configuracoes.models import ConfiguracaoSistema
+from configuracoes.models import ConfiguracaoSistema, Empresa
 from configuracoes.models import FornecedorGarantia, MarcaGarantia, ModeloMensagem
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.forms import LinhaTrabalhoForm
-from ordens.models import OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, ServicoPeca
+from ordens.models import LogOS, OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, PedidoCompra, ServicoPeca
+from ordens.view_modules import impressao
 
 
 class VerificarClienteOSViewTests(TestCase):
@@ -59,6 +65,7 @@ class VerificarClienteOSViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Digite pelo menos 5 números para buscar.")
+        self.assertNotContains(response, "Nenhum Cliente Encontrado")
 
     def test_busca_por_cpf_encontra_cliente(self):
         cliente = Cliente.objects.create(
@@ -305,6 +312,11 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
         self.assertEqual(linhas[1].tipo_evento, "automatico")
 
     def test_resumo_ordem_exibe_dados_principais(self):
+        tecnico = get_user_model().objects.create_user(
+            username="tecnico_resumo_os",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+        )
         ordem = OrdemServico.objects.create(
             cliente=self.cliente,
             tipo_equipamento="celular",
@@ -314,12 +326,24 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
             defeito="Nao liga",
             tipo_reparo="Fora de Garantia",
             status="diagnosticar",
+            tecnico_responsavel=tecnico,
+        )
+        LinhaTrabalho.objects.create(
+            ordem=ordem,
+            usuario=self.user,
+            status="criada",
+            descricao="Ordem criada",
+            tipo_evento="manual",
         )
         response = self.client.get(reverse("ordens:resumo_ordem", args=[ordem.id]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.cliente.nome)
         self.assertContains(response, ordem.marca_equipamento)
         self.assertContains(response, ordem.modelo_equipamento)
+        self.assertContains(response, "Atendente")
+        self.assertContains(response, self.user.username)
+        self.assertContains(response, "Técnico responsável")
+        self.assertContains(response, tecnico.username)
 
     def test_criacao_os_com_marca_outros_preenche_marca_manual(self):
         fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor Marca")
@@ -352,6 +376,29 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
         self.assertEqual(response.status_code, 302)
         ordem = OrdemServico.objects.latest("id")
         self.assertEqual(ordem.marca_equipamento, "Marca Nova")
+
+    def test_criacao_os_salva_referencia_parceiro(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        response = self.client.post(
+            url,
+            {
+                "tipo_equipamento": "celular",
+                "marca_catalogo": "__outros__",
+                "marca_manual": "Marca Parceiro",
+                "marca_equipamento": "",
+                "modelo_equipamento": "Modelo PX",
+                "numero_serie_equipamento": "SN-PARC-1",
+                "defeito": "Sem imagem",
+                "acessorios": "",
+                "tipo_reparo": "Fora de Garantia",
+                "referencia_parceiro": "PARC-2026-001",
+                "status": "diagnosticar",
+                "peritagem": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        ordem = OrdemServico.objects.latest("id")
+        self.assertEqual(ordem.referencia_parceiro, "PARC-2026-001")
 
     def test_criacao_os_nao_aceita_marca_manual_sem_escolher_outros(self):
         url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
@@ -418,11 +465,213 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "informe a data da compra")
 
+
+class OrdemServicoListagemTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_lista_os",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Lista OS",
+            documento="12345678909",
+            telefone="11987654321",
+            estado="SP",
+        )
+
+    def _criar_ordem(self, sufixo, status="diagnosticar"):
+        return OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento=f"Marca {sufixo}",
+            modelo_equipamento=f"Modelo {sufixo}",
+            numero_serie_equipamento=f"SN-{sufixo}",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status=status,
+        )
+
+    def test_lista_ordens_sem_filtros_nao_carrega_resultados(self):
+        self._criar_ordem("001")
+
+        response = self.client.get(reverse("ordens:lista_ordens"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Selecione um status para listar ordens")
+        self.assertFalse(response.context["filtros_aplicados"])
+        self.assertEqual(response.context["total_filtrado"], 0)
+        self.assertEqual(len(response.context["ordens"]), 0)
+
+    def test_lista_ordens_com_status_aplica_paginacao(self):
+        for indice in range(27):
+            self._criar_ordem(f"{indice:03d}", status="diagnosticar")
+        self._criar_ordem("fechada", status="concluida")
+
+        response = self.client.get(reverse("ordens:lista_ordens"), {"status": "diagnosticar"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["filtros_aplicados"])
+        self.assertEqual(response.context["total_filtrado"], 27)
+        self.assertTrue(response.context["is_paginated"])
+        self.assertEqual(len(response.context["ordens"]), 25)
+
+    def test_lista_ordens_com_carregar_sem_status_mostra_abertas(self):
+        ordem_aberta = self._criar_ordem("aberta", status="diagnosticar")
+        ordem_fechada = self._criar_ordem("fechada", status="concluida")
+        ordem_fechada.fechada = True
+        ordem_fechada.save(update_fields=["fechada"])
+
+        response = self.client.get(reverse("ordens:lista_ordens"), {"carregar": "1"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["filtros_aplicados"])
+        self.assertTrue(response.context["carregar_lista"])
+        self.assertEqual(list(response.context["ordens"]), [ordem_aberta])
+
+    def test_lista_ordens_concluidas_mostra_apenas_fechadas(self):
+        ordem_fechada = self._criar_ordem("concluida", status="concluida")
+        ordem_fechada.fechada = True
+        ordem_fechada.save(update_fields=["fechada"])
+
+        self._criar_ordem("reaberta", status="concluida")
+
+        response = self.client.get(reverse("ordens:lista_ordens"), {"status": "concluida"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["ordens"]), [ordem_fechada])
+
+    def test_lista_ordens_com_filtro_rapido_sem_tecnico(self):
+        ordem_sem_tecnico = self._criar_ordem("sem-tech")
+        ordem_com_atendente_no_campo_tecnico = self._criar_ordem("com-atendente", status="diagnosticar")
+        ordem_com_atendente_no_campo_tecnico.tecnico_responsavel = self.user
+        ordem_com_atendente_no_campo_tecnico.save(update_fields=["tecnico_responsavel"])
+        outro_user = get_user_model().objects.create_user(
+            username="tecnico_lista_os",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+        )
+        ordem_com_tecnico = self._criar_ordem("com-tech", status="diagnosticar")
+        ordem_com_tecnico.tecnico_responsavel = outro_user
+        ordem_com_tecnico.save(update_fields=["tecnico_responsavel"])
+
+        response = self.client.get(reverse("ordens:lista_ordens"), {"quick": "sem_tecnico"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["filtros_aplicados"])
+        self.assertEqual(response.context["quick_filter"], "sem_tecnico")
+        self.assertEqual(
+            list(response.context["ordens"]),
+            [ordem_com_atendente_no_campo_tecnico, ordem_sem_tecnico],
+        )
+
+    def test_lista_ordens_com_filtro_rapido_minhas_os(self):
+        ordem_minha = self._criar_ordem("minha", status="diagnosticar")
+        ordem_minha.tecnico_responsavel = self.user
+        ordem_minha.save(update_fields=["tecnico_responsavel"])
+
+        outro_user = get_user_model().objects.create_user(
+            username="tecnico_outra_os",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+        )
+        ordem_outra = self._criar_ordem("outra", status="diagnosticar")
+        ordem_outra.tecnico_responsavel = outro_user
+        ordem_outra.save(update_fields=["tecnico_responsavel"])
+
+        response = self.client.get(reverse("ordens:lista_ordens"), {"quick": "minhas"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["filtros_aplicados"])
+        self.assertEqual(response.context["quick_filter"], "minhas")
+        self.assertEqual(list(response.context["ordens"]), [ordem_minha])
+
+
+class DashboardPedidosCompraTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_pedidos_dashboard",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.tecnico = user_model.objects.create_user(
+            username="tecnico_dashboard",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+        )
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Pedidos",
+            documento="39053344705",
+            telefone="11999999999",
+            estado="SP",
+        )
+
+    def _criar_ordem(self, sufixo, status="diagnosticar", tecnico=None):
+        return OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento=f"Marca {sufixo}",
+            modelo_equipamento=f"Modelo {sufixo}",
+            numero_serie_equipamento=f"SN-PED-{sufixo}",
+            defeito="Sem imagem",
+            tipo_reparo="Fora de Garantia",
+            status=status,
+            tecnico_responsavel=tecnico,
+        )
+
+    def _criar_pedido(self, ordem, titulo, status="contactar", dias_atras=0):
+        pedido = PedidoCompra.objects.create(
+            ordem=ordem,
+            titulo=titulo,
+            status=status,
+            criado_por=self.user,
+        )
+        if dias_atras:
+            PedidoCompra.objects.filter(pk=pedido.pk).update(
+                criado_em=timezone.now() - timedelta(days=dias_atras)
+            )
+            pedido.refresh_from_db()
+        return pedido
+
+    def test_dashboard_pedidos_filtro_rapido_sem_tecnico(self):
+        ordem_sem_tecnico = self._criar_ordem("sem", tecnico=None)
+        ordem_com_tecnico = self._criar_ordem("com", tecnico=self.tecnico)
+        pedido_sem = self._criar_pedido(ordem_sem_tecnico, "Pedido sem tecnico")
+        self._criar_pedido(ordem_com_tecnico, "Pedido com tecnico")
+
+        response = self.client.get(reverse("ordens:dashboard_pedidos"), {"quick": "sem_tecnico"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["quick_filter"], "sem_tecnico")
+        self.assertEqual(list(response.context["pedidos"]), [pedido_sem])
+
+    def test_dashboard_pedidos_filtro_rapido_atrasados(self):
+        ordem = self._criar_ordem("atr", tecnico=self.tecnico)
+        pedido_atrasado = self._criar_pedido(ordem, "Pedido atrasado", dias_atras=8)
+        self._criar_pedido(ordem, "Pedido recente", dias_atras=2)
+
+        response = self.client.get(reverse("ordens:dashboard_pedidos"), {"quick": "atrasados"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["quick_filter"], "atrasados")
+        self.assertEqual(list(response.context["pedidos"]), [pedido_atrasado])
+
 class LinhaTrabalhoFormTests(TestCase):
     def test_status_criada_nao_aparece_para_selecao_manual(self):
         form = LinhaTrabalhoForm()
         valores = [valor for valor, _ in form.fields["status"].choices if valor]
         self.assertNotIn("criada", valores)
+        self.assertNotIn("concluida", valores)
+
+    def test_novos_status_operacionais_aparecem_para_selecao_manual(self):
+        form = LinhaTrabalhoForm()
+        valores = [valor for valor, _ in form.fields["status"].choices if valor]
+        self.assertIn("transito_outdoor", valores)
+        self.assertIn("enviado_parceiro", valores)
 
 
 class IntegracaoFluxoOSCaixaTests(TestCase):
@@ -738,13 +987,13 @@ class LinhaTrabalhoAjaxAtualizaStatusTests(TestCase):
         url = reverse("ordens:adicionar_linha", args=[self.ordem.id])
         response = self.client.post(
             url,
-            {"status": "orcamentado", "descricao": "Equipamento orcamentado"},
+            {"status": "autorizado", "descricao": "Equipamento autorizado"},
         )
 
         self.assertEqual(response.status_code, 200)
         self.ordem.refresh_from_db()
-        self.assertEqual(self.ordem.status, "orcamentado")
-        self.assertTrue(LinhaTrabalho.objects.filter(ordem=self.ordem, status="orcamentado").exists())
+        self.assertEqual(self.ordem.status, "autorizado")
+        self.assertTrue(LinhaTrabalho.objects.filter(ordem=self.ordem, status="autorizado").exists())
         self.assertFalse(
             LinhaTrabalho.objects.filter(
                 ordem=self.ordem,
@@ -753,13 +1002,13 @@ class LinhaTrabalhoAjaxAtualizaStatusTests(TestCase):
             ).exists()
         )
 
-    def test_status_bancada_atualiza_os_com_mesmo_status(self):
+    def test_status_em_bancada_atualiza_os_com_mesmo_status(self):
         url = reverse("ordens:adicionar_linha", args=[self.ordem.id])
-        response = self.client.post(url, {"status": "bancada", "descricao": "Bancada"})
+        response = self.client.post(url, {"status": "em_andamento", "descricao": "Em bancada"})
         self.assertEqual(response.status_code, 200)
         self.ordem.refresh_from_db()
-        self.assertEqual(self.ordem.status, "bancada")
-        self.assertTrue(LinhaTrabalho.objects.filter(ordem=self.ordem, status="bancada").exists())
+        self.assertEqual(self.ordem.status, "em_andamento")
+        self.assertTrue(LinhaTrabalho.objects.filter(ordem=self.ordem, status="em_andamento").exists())
 
     def test_status_pendente_cliente_atualiza_os_com_mesmo_status(self):
         url = reverse("ordens:adicionar_linha", args=[self.ordem.id])
@@ -777,13 +1026,13 @@ class LinhaTrabalhoAjaxAtualizaStatusTests(TestCase):
         self.assertEqual(self.ordem.status, "devolucao")
         self.assertTrue(LinhaTrabalho.objects.filter(ordem=self.ordem, status="devolucao").exists())
 
-    def test_concluida_sem_campos_obrigatorios_nao_quebra_adicao_da_linha(self):
+    def test_concluida_nao_pode_ser_adicionada_manual_via_ajax(self):
         url = reverse("ordens:adicionar_linha", args=[self.ordem.id])
         response = self.client.post(url, {"status": "concluida", "descricao": "Tentativa de conclusao"})
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 400)
         self.ordem.refresh_from_db()
         self.assertEqual(self.ordem.status, "diagnosticar")
-        self.assertTrue(LinhaTrabalho.objects.filter(ordem=self.ordem, status="concluida").exists())
+        self.assertFalse(LinhaTrabalho.objects.filter(ordem=self.ordem, status="concluida").exists())
 
 
 class PortalClienteTests(TestCase):
@@ -811,12 +1060,30 @@ class PortalClienteTests(TestCase):
         )
 
     def test_portal_cliente_consulta_por_codigo(self):
+        tecnico = get_user_model().objects.create_user(
+            username="tecnico_portal_os",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+        )
+        self.ordem.tecnico_responsavel = tecnico
+        self.ordem.save(update_fields=["tecnico_responsavel"])
+        LinhaTrabalho.objects.create(
+            ordem=self.ordem,
+            usuario=self.user,
+            status="criada",
+            descricao="Ordem criada",
+            tipo_evento="manual",
+        )
         response = self.client.get(
             reverse("ordens:portal_cliente"),
             {"codigo": self.ordem.codigo_portal, "cpf": self.cliente.documento},
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.ordem.numero_os)
+        self.assertContains(response, "Atendente:")
+        self.assertContains(response, self.user.username)
+        self.assertContains(response, "Técnico responsável:")
+        self.assertContains(response, tecnico.username)
 
     def test_portal_cliente_documento_invalido_bloqueia(self):
         response = self.client.get(
@@ -1097,25 +1364,30 @@ class BuscarOrdensPrefixosTests(TestCase):
             self.assertTrue(payload["resultados"])
             self.assertEqual(payload["resultados"][0]["id"], self.ordem.id)
 
-    def test_busca_sem_prefixo_por_cpf_retorna_resultado(self):
+    def test_busca_por_os_exata_retorna_resultado(self):
+        response = self.client.get(reverse("ordens:buscar_ordens"), {"q": self.ordem.numero_os})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["resultados"])
+        self.assertEqual(payload["resultados"][0]["id"], self.ordem.id)
+
+    def test_busca_sem_prefixo_por_cpf_nao_retorna_resultado(self):
         response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "390.533.447-05"})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        if "redirect" in payload:
-            self.assertIn(f"/ordens/{self.ordem.id}/detalhes/", payload["redirect"])
-        else:
-            self.assertTrue(payload["resultados"])
-            self.assertEqual(payload["resultados"][0]["id"], self.ordem.id)
+        self.assertEqual(payload["resultados"], [])
 
-    def test_busca_sem_prefixo_por_telefone_retorna_resultado(self):
+    def test_busca_sem_prefixo_por_telefone_nao_retorna_resultado(self):
         response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "(11) 93333-4444"})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        if "redirect" in payload:
-            self.assertIn(f"/ordens/{self.ordem.id}/detalhes/", payload["redirect"])
-        else:
-            self.assertTrue(payload["resultados"])
-            self.assertEqual(payload["resultados"][0]["id"], self.ordem.id)
+        self.assertEqual(payload["resultados"], [])
+
+    def test_busca_curta_sem_prefixo_nao_retorna_resultado(self):
+        response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "10"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["resultados"], [])
 
 
 class FluxoCriticoE2ETests(TestCase):
@@ -1160,6 +1432,34 @@ class FluxoCriticoE2ETests(TestCase):
         self.assertEqual(ordem.tipo_reparo, "Garantia")
         self.assertEqual(str(ordem.data_compra), "2026-02-10")
         self.assertEqual(ordem.numero_nota_fiscal, "NF-E2E-001")
+        self.assertIsNone(ordem.tecnico_responsavel)
+
+    def test_abertura_os_sem_confirmacao_digital_nao_envia_whatsapp_automatico(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.usar_confirmacao_assinatura_digital = False
+        config.save(update_fields=["usar_confirmacao_assinatura_digital"])
+
+        response = self.client.post(
+            reverse("ordens:nova_ordem_cliente", args=[self.cliente.id]),
+            {
+                "tipo_equipamento": "celular",
+                "marca_catalogo": "__outros__",
+                "marca_manual": "Marca Sem Link",
+                "marca_equipamento": "",
+                "modelo_equipamento": "Modelo Sem Link",
+                "numero_serie_equipamento": "SN-SEM-LINK-001",
+                "peritagem": "Sem avarias",
+                "tipo_reparo": "Fora de Garantia",
+                "defeito": "Nao liga",
+                "acessorios": "Carregador",
+                "notas_internas": "Sem confirmacao digital",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        ordem = OrdemServico.objects.latest("id")
+        self.assertEqual(response.url, reverse("ordens:resumo_ordem", args=[ordem.id]))
+        self.assertFalse(NotificacaoCliente.objects.filter(ordem=ordem, canal="whatsapp").exists())
+        self.assertIsNone(ordem.tecnico_responsavel)
 
     def test_e2e_orcamento_aprovado_migrado_para_servicos_e_pecas(self):
         tecnico = get_user_model().objects.create_user(
@@ -1580,9 +1880,95 @@ class ConfirmacaoPublicaTemplateTests(TestCase):
         response = self.client.get(reverse("confirmar_os_publico", kwargs={"token": self.ordem.token_confirmacao}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Confirma\u00e7\u00e3o da Ordem de Servi\u00e7o")
+        self.assertContains(response, "Cliente")
+        self.assertContains(response, "Equipamento")
+        self.assertContains(response, "Atendimento")
+        self.assertContains(response, "Atendente")
+        self.assertContains(response, "T&eacute;cnico respons&aacute;vel")
         self.assertContains(response, "Termo publico de teste da OS.")
         self.assertContains(response, "Condicao geral publica para o cliente.")
         self.assertNotContains(response, "main-sidebar")
+
+
+class DetalhesOrdemCabecalhoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="gerente_detalhes_os",
+            password="senha-forte-123",
+            tipo_usuario="gerente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Detalhes",
+            documento="39053344705",
+            telefone="11970000000",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca D",
+            modelo_equipamento="Modelo D",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+        self.ordem.data_abertura = timezone.now() - timedelta(days=3)
+        self.ordem.save(update_fields=["data_abertura"])
+        LogOS.objects.create(
+            ordem_servico=self.ordem,
+            tipo_evento="alteracao_status",
+            descricao="Teste de log operacional.",
+            usuario_responsavel=self.user,
+        )
+
+    def test_detalhes_exibe_botao_de_logs_e_dias_em_aberto_sem_tab_logs(self):
+        response = self.client.get(reverse("ordens:detalhes_ordem", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Dias aberta:")
+        self.assertContains(response, 'data-target="#modalLogsOS"', html=False)
+        self.assertNotContains(response, "?tab=logs")
+
+    def test_detalhes_exibe_status_operacional_padronizado(self):
+        self.ordem.status = "em_andamento"
+        self.ordem.save(update_fields=["status"])
+
+        response = self.client.get(reverse("ordens:detalhes_ordem", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Bancada")
+
+    def test_detalhes_exibe_aba_relatorio_tecnico(self):
+        response = self.client.get(reverse("ordens:detalhes_ordem", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Relatório Técnico")
+        self.assertContains(response, 'id="relatorio_tecnico"', html=False)
+
+
+class ImpressaoLogoEmpresaTests(TestCase):
+    def test_logo_pdf_configurado_da_empresa_tem_prioridade_no_pdf(self):
+        with TemporaryDirectory() as tmp_dir:
+            with override_settings(MEDIA_ROOT=tmp_dir):
+                empresa = Empresa.objects.create(nome="Empresa Logo")
+                empresa.logo_pdf = SimpleUploadedFile("logo-pdf.png", b"logo-configurado", content_type="image/png")
+                empresa.save(update_fields=["logo_pdf"])
+                style = getSampleStyleSheet()["Normal"]
+
+                with patch("ordens.view_modules.impressao.Image", side_effect=lambda path, width, height: path) as image_mock:
+                    logo = impressao._logo_or_paragraph(empresa, style, "<b>LOGO</b>", 10, 10)
+
+                self.assertEqual(logo, empresa.logo_pdf.path)
+                self.assertEqual(image_mock.call_args.args[0], empresa.logo_pdf.path)
+
+    def test_pdf_sem_logo_exibe_nome_da_empresa(self):
+        empresa = Empresa.objects.create(nome="Empresa sem Logo PDF")
+        style = getSampleStyleSheet()["Normal"]
+
+        logo = impressao._logo_or_paragraph(empresa, style, "<b>LOGO</b>", 10, 10)
+
+        self.assertEqual(logo.text, "<b>Empresa sem Logo PDF</b>")
 
 
 class AgendamentoOrdemServicoTests(TestCase):

@@ -20,6 +20,7 @@ urlpatterns = [
     path("categorias-financeiras/", views.categorias_financeiras, name="categorias_financeiras"),
     path("formas-pagamento/", views.formas_pagamento, name="formas_pagamento"),
     path("centros-custo/", views.centros_custo, name="centros_custo"),
+    path("custos-fixos/", views.custos_fixos, name="custos_fixos"),
     path("taloes/", views.taloes, name="taloes"),
     path("taloes/<int:pagamento_id>/imprimir/", views.imprimir_talao, name="imprimir_talao"),
     path("garantias-fabricante/", views.garantias_fabricante, name="garantias_fabricante"),

@@ -5,7 +5,7 @@
     {% include 'caixa/_subnav_caixa.html' %}
 
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3 class="mb-0">Relatorios do caixa</h3>
+        <h3 class="mb-0">Relatórios do caixa</h3>
         <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar ao dashboard</a>
     </div>
 
@@ -13,7 +13,7 @@
         <div class="card-body">
             <form method="get" class="form-row align-items-end">
                 <div class="col-md-2">
-                    <label for="id_data_inicio">Data inicio</label>
+                    <label for="id_data_inicio">Data início</label>
                     <input id="id_data_inicio" type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
                 </div>
                 <div class="col-md-2">
@@ -27,8 +27,8 @@
                         <option value="hoje" {% if preset_periodo == 'hoje' %}selected{% endif %}>Hoje</option>
                         <option value="7d" {% if preset_periodo == '7d' %}selected{% endif %}>7 dias</option>
                         <option value="30d" {% if preset_periodo == '30d' %}selected{% endif %}>30 dias</option>
-                        <option value="mes_atual" {% if preset_periodo == 'mes_atual' %}selected{% endif %}>Mes atual</option>
-                        <option value="mes_anterior" {% if preset_periodo == 'mes_anterior' %}selected{% endif %}>Mes anterior</option>
+                        <option value="mes_atual" {% if preset_periodo == 'mes_atual' %}selected{% endif %}>Mês atual</option>
+                        <option value="mes_anterior" {% if preset_periodo == 'mes_anterior' %}selected{% endif %}>Mês anterior</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -50,11 +50,11 @@
                     </select>
                 </div>
                 <div class="col-md-2 mt-2">
-                    <label>Tipo de lancamento</label>
+                    <label>Tipo de lançamento</label>
                     <select name="tipo_lancamento" class="form-control">
                         <option value="">Todos</option>
                         <option value="entrada" {% if tipo_lancamento_filtro == 'entrada' %}selected{% endif %}>Entrada</option>
-                        <option value="saida" {% if tipo_lancamento_filtro == 'saida' %}selected{% endif %}>Saida</option>
+                        <option value="saida" {% if tipo_lancamento_filtro == 'saida' %}selected{% endif %}>Saída</option>
                     </select>
                 </div>
                 <div class="col-md-3 mt-2">
@@ -70,8 +70,8 @@
                 <div class="col-12 mt-2 d-flex flex-wrap" style="gap:8px;">
                     <a class="btn btn-sm btn-outline-success" href="?{{ request.GET.urlencode }}&export=csv&dataset=pagamentos">CSV pagamentos</a>
                     <a class="btn btn-sm btn-outline-danger" href="?{{ request.GET.urlencode }}&export=pdf&dataset=pagamentos">PDF pagamentos</a>
-                    <a class="btn btn-sm btn-outline-success" href="?{{ request.GET.urlencode }}&export=csv&dataset=lancamentos">CSV lancamentos</a>
-                    <a class="btn btn-sm btn-outline-danger" href="?{{ request.GET.urlencode }}&export=pdf&dataset=lancamentos">PDF lancamentos</a>
+                    <a class="btn btn-sm btn-outline-success" href="?{{ request.GET.urlencode }}&export=csv&dataset=lancamentos">CSV lançamentos</a>
+                    <a class="btn btn-sm btn-outline-danger" href="?{{ request.GET.urlencode }}&export=pdf&dataset=lancamentos">PDF lançamentos</a>
                     <a class="btn btn-sm btn-outline-dark" href="?{{ request.GET.urlencode }}&export=pdf&dataset=resumo">PDF resumo</a>
                 </div>
             </form>
@@ -99,7 +99,7 @@
             <div class="small-box bg-warning">
                 <div class="inner">
                     <h4>R$ {{ entradas_orfas_pagamento|floatformat:2 }}</h4>
-                    <p>Entradas sem lancamento</p>
+                    <p>Entradas sem lançamento</p>
                 </div>
             </div>
         </div>
@@ -107,7 +107,7 @@
             <div class="small-box bg-danger">
                 <div class="inner">
                     <h4>R$ {{ total_saidas|floatformat:2 }}</h4>
-                    <p>Saidas totais</p>
+                    <p>Saídas totais</p>
                 </div>
             </div>
         </div>
@@ -146,7 +146,7 @@
         </div>
         <div class="col-lg-6">
             <div class="card mb-3">
-                <div class="card-header bg-white"><strong>Saidas por centro de custo</strong></div>
+                <div class="card-header bg-white"><strong>Saídas por centro de custo</strong></div>
                 <div class="card-body p-0">
                     <table class="table table-sm mb-0">
                         <thead><tr><th>Centro de custo</th><th class="text-center">Qtde.</th><th class="text-right">Total</th></tr></thead>
@@ -158,7 +158,7 @@
                                 <td class="text-right">R$ {{ row.total|floatformat:2 }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="3" class="text-center text-muted">Sem saidas.</td></tr>
+                            <tr><td colspan="3" class="text-center text-muted">Sem saídas.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -178,8 +178,10 @@
                 <thead>
                     <tr>
                         <th>OS</th>
+                        <th>Atendente</th>
+                        <th>Técnico responsável</th>
                         <th class="text-right">Valor</th>
-                        <th>Metodo</th>
+                        <th>Método</th>
                         <th>Data</th>
                     </tr>
                 </thead>
@@ -187,6 +189,8 @@
                     {% for p in pagamentos_page %}
                     <tr>
                         <td>{{ p.ordem_servico|default:"Avulso" }}</td>
+                        <td>{% if p.ordem_servico and p.ordem_servico.atendente_abertura %}{{ p.ordem_servico.atendente_abertura.get_full_name|default:p.ordem_servico.atendente_abertura.username }}{% else %}-{% endif %}</td>
+                        <td>{% if p.ordem_servico and p.ordem_servico.tecnico_responsavel_valido %}{{ p.ordem_servico.tecnico_responsavel_valido.get_full_name|default:p.ordem_servico.tecnico_responsavel_valido.username }}{% else %}-{% endif %}</td>
                         <td class="text-right">R$ {{ p.valor|floatformat:2 }}</td>
                         <td>{{ p.metodo_display }}</td>
                         <td>{{ p.data|date:"d/m/Y H:i" }}</td>
@@ -204,9 +208,9 @@
                 <li class="page-item disabled"><span class="page-link">Anterior</span></li>
                 {% endif %}
                 {% if pagamentos_page.has_next %}
-                <li class="page-item"><a class="page-link" href="?{{ querystring_pagamentos }}&page_pagamentos={{ pagamentos_page.next_page_number }}">Proxima</a></li>
+                <li class="page-item"><a class="page-link" href="?{{ querystring_pagamentos }}&page_pagamentos={{ pagamentos_page.next_page_number }}">Próxima</a></li>
                 {% else %}
-                <li class="page-item disabled"><span class="page-link">Proxima</span></li>
+                <li class="page-item disabled"><span class="page-link">Próxima</span></li>
                 {% endif %}
             </ul>
         </div>
@@ -215,14 +219,14 @@
 
     <div class="card">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <strong>Lancamentos</strong>
+            <strong>Lançamentos</strong>
             <small class="text-muted">{{ lancamentos_page.paginator.count|default:0 }} registro(s)</small>
         </div>
         <div class="card-body p-0 table-responsive">
             <table class="table table-hover text-nowrap mb-0">
                 <thead>
                     <tr>
-                        <th>Descricao</th>
+                        <th>Descrição</th>
                         <th>Centro de custo</th>
                         <th class="text-right">Valor</th>
                         <th>Tipo</th>
@@ -239,7 +243,7 @@
                             {% if l.tipo == "entrada" %}
                             <span class="badge badge-success">Entrada</span>
                             {% else %}
-                            <span class="badge badge-danger">Saida</span>
+                            <span class="badge badge-danger">Saída</span>
                             {% endif %}
                         </td>
                         <td>{{ l.data|date:"d/m/Y H:i" }}</td>
@@ -257,9 +261,9 @@
                 <li class="page-item disabled"><span class="page-link">Anterior</span></li>
                 {% endif %}
                 {% if lancamentos_page.has_next %}
-                <li class="page-item"><a class="page-link" href="?{{ querystring_lancamentos }}&page_lancamentos={{ lancamentos_page.next_page_number }}">Proxima</a></li>
+                <li class="page-item"><a class="page-link" href="?{{ querystring_lancamentos }}&page_lancamentos={{ lancamentos_page.next_page_number }}">Próxima</a></li>
                 {% else %}
-                <li class="page-item disabled"><span class="page-link">Proxima</span></li>
+                <li class="page-item disabled"><span class="page-link">Próxima</span></li>
                 {% endif %}
             </ul>
         </div>
@@ -267,7 +271,7 @@
     </div>
     {% else %}
     <div class="alert alert-info">
-        Nenhum lancamento ou pagamento encontrado para o periodo.
+        Nenhum lançamento ou pagamento encontrado para o período.
     </div>
     {% endif %}
 </div>

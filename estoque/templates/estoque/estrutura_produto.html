@@ -9,7 +9,7 @@
   <div class="card-body">
     <div class="row">
       <div class="col-lg-4">
-        <h6>Precos por tabela</h6>
+        <h6>Preços por tabela</h6>
         <form method="post" class="mb-3">
           {% csrf_token %}
           <input type="hidden" name="acao" value="adicionar_preco_tabela">
@@ -18,7 +18,7 @@
           <button type="submit" class="btn btn-primary btn-sm">Adicionar/Atualizar</button>
         </form>
         <table class="table table-sm table-bordered">
-          <thead><tr><th>Tabela</th><th>Preco</th><th></th></tr></thead>
+          <thead><tr><th>Tabela</th><th>Preço</th><th></th></tr></thead>
           <tbody>
           {% for item in precos_tabela %}
             <tr>
@@ -73,7 +73,7 @@
       </div>
 
       <div class="col-lg-4">
-        <h6>Composicao de kit</h6>
+        <h6>Composição de kit</h6>
         <form method="post" class="mb-3">
           {% csrf_token %}
           <input type="hidden" name="acao" value="adicionar_kit_item">
@@ -106,5 +106,36 @@
     </div>
   </div>
 </div>
-{% endblock %}
 
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title mb-0">Histórico recente do produto</h3>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Ação</th>
+            <th>Usuário</th>
+            <th>Observação</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for item in historicos %}
+          <tr>
+            <td>{{ item.criado_em|date:"d/m/Y H:i" }}</td>
+            <td>{{ item.get_acao_display }}</td>
+            <td>{% if item.usuario %}{{ item.usuario.username }}{% else %}-{% endif %}</td>
+            <td>{{ item.observacao|default:"-" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="text-center text-muted">Sem histórico registrado.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

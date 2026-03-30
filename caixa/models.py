@@ -6,6 +6,8 @@ from django.db.models import Q
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
+from .services.pagamentos import gerar_numero_talao_pagamento
+
 
 class Caixa(models.Model):
     data = models.DateField(auto_now_add=True)
@@ -76,17 +78,12 @@ class Pagamento(models.Model):
         return f"{origem} - {self.metodo} - {self.valor}"
 
     def _gerar_numero_talao(self):
-        data_ref = self.data or timezone.now()
-        numero_loja = "01"
-        try:
-            from configuracoes.models import ConfiguracaoSistema
+        from configuracoes.models import ConfiguracaoSistema
 
-            config = ConfiguracaoSistema.get_configuracao()
-            numero_loja = (config.numero_loja_talao or "01").zfill(2)[:2]
-        except Exception:
-            numero_loja = "01"
-        # Padrao: 00 + loja(2) + 00 + data(YYYYMMDD) + numero_operacao(6)
-        return f"00{numero_loja}00{data_ref:%Y%m%d}{self.pk:06d}"
+        return gerar_numero_talao_pagamento(
+            pagamento=self,
+            configuracao_sistema_model=ConfiguracaoSistema,
+        )
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -541,6 +538,98 @@ class DespesaRecorrente(models.Model):
 
     def __str__(self):
         return f"{self.nome} - {self.valor_mensal}"
+
+
+class CustoFixoMensal(models.Model):
+    STATUS_CHOICES = [
+        ("pendente", "Pendente"),
+        ("parcial", "Parcial"),
+        ("pago", "Pago"),
+        ("cancelado", "Cancelado"),
+    ]
+
+    competencia = models.DateField(help_text="Informe o primeiro dia do mes de referencia.")
+    descricao = models.CharField(max_length=140)
+    categoria = models.CharField(max_length=80, blank=True)
+    centro_custo = models.ForeignKey(
+        "CentroCusto",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="custos_fixos_mensais",
+    )
+    valor_previsto = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valor_pago = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    vencimento = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="pendente")
+    observacao = models.CharField(max_length=200, blank=True)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-competencia", "descricao", "-id"]
+        indexes = [
+            models.Index(fields=["competencia", "status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.descricao} ({self.competencia:%m/%Y})"
+
+    def atualizar_status_automatico(self):
+        if self.status == "cancelado":
+            return
+        valor_previsto = Decimal(self.valor_previsto or Decimal("0.00"))
+        valor_pago = Decimal(self.valor_pago or Decimal("0.00"))
+        if valor_pago <= Decimal("0.00"):
+            self.status = "pendente"
+        elif valor_pago < valor_previsto:
+            self.status = "parcial"
+        else:
+            self.status = "pago"
+
+    def clean(self):
+        super().clean()
+        if self.competencia:
+            self.competencia = self.competencia.replace(day=1)
+        if (self.valor_previsto or Decimal("0.00")) < Decimal("0.00"):
+            raise ValidationError({"valor_previsto": "Valor previsto nao pode ser negativo."})
+        if (self.valor_pago or Decimal("0.00")) < Decimal("0.00"):
+            raise ValidationError({"valor_pago": "Valor pago nao pode ser negativo."})
+        if (
+            self.vencimento
+            and self.competencia
+            and (
+                self.vencimento.year != self.competencia.year
+                or self.vencimento.month != self.competencia.month
+            )
+        ):
+            raise ValidationError({"vencimento": "Vencimento deve estar no mesmo mes da competencia."})
+        self.atualizar_status_automatico()
+
+    def _recalcular_produtos_rateio(self):
+        try:
+            from estoque.models import Produto
+        except Exception:
+            return
+        produtos_rateio = Produto.objects.filter(
+            ativo=True,
+            is_servico=False,
+            incluir_rateio_custo_fixo=True,
+        )
+        for produto in produtos_rateio:
+            produto.save(_skip_rateio_refresh=True)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        result = super().save(*args, **kwargs)
+        self._recalcular_produtos_rateio()
+        return result
+
+    def delete(self, *args, **kwargs):
+        result = super().delete(*args, **kwargs)
+        self._recalcular_produtos_rateio()
+        return result
 
 
 class AuditoriaGarantia(models.Model):

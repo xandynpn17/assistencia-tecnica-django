@@ -1,0 +1,49 @@
+<div class="tab-pane fade {% if active_tab == 'alertas' %}show active{% endif %}" id="alertas">
+    <div class="card-modern">
+        <div class="card-modern-header">Alertas da OS</div>
+        <div class="card-modern-body">
+            <h6 class="text-danger">Alertas ativos</h6>
+            {% for alerta in alertas_ativos %}
+            <div class="alert alert-danger alerta-fixo d-flex justify-content-between align-items-center">
+                <div>
+                    {{ alerta.mensagem|linebreaksbr }}
+                    <div class="small">Criado em {{ alerta.criado_em|date:"d/m/Y H:i" }}</div>
+                </div>
+                <form method="post" class="mb-0">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="encerrar_alerta">
+                    <input type="hidden" name="alerta_id" value="{{ alerta.id }}">
+                    <button type="submit" class="btn btn-sm btn-light">Encerrar</button>
+                </form>
+            </div>
+            {% empty %}
+            <p class="text-muted">Nenhum alerta ativo.</p>
+            {% endfor %}
+
+            <hr>
+            <h6>Histórico de alertas encerrados</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Mensagem</th>
+                            <th>Criado</th>
+                            <th>Encerrado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for alerta in alertas_encerrados %}
+                        <tr>
+                            <td>{{ alerta.mensagem|linebreaksbr }}</td>
+                            <td>{{ alerta.criado_em|date:"d/m/Y H:i" }}</td>
+                            <td>{{ alerta.encerrado_em|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted">Sem alertas encerrados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

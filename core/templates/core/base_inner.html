@@ -88,7 +88,7 @@
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a href="{% url 'ordens:lista_ordens' %}" class="nav-link {% if request.resolver_match.url_name == 'lista_ordens' %}active{% endif %}">
+                                <a href="{% url 'ordens:lista_ordens' %}?carregar=1" class="nav-link {% if request.resolver_match.url_name == 'lista_ordens' %}active{% endif %}">
                                     <i class="far fa-circle nav-icon"></i>
                                     <p>Listar Ordens</p>
                                 </a>

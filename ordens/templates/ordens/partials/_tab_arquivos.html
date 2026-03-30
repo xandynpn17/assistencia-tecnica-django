@@ -1,0 +1,52 @@
+<div class="tab-pane fade {% if active_tab == 'arquivos' %}show active{% endif %}" id="arquivos">
+    <div class="card-modern">
+        <div class="card-modern-header d-flex justify-content-between align-items-center">
+            <span>Anexos da OS</span>
+            {% if not ordem.fechada %}
+            <button class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarArquivo">
+                <i class="fas fa-paperclip mr-1"></i>Anexar arquivos
+            </button>
+            {% else %}
+            <span class="text-light"><i class="fas fa-lock mr-1"></i>Edição bloqueada</span>
+            {% endif %}
+        </div>
+        <div class="card-modern-body">
+            <div class="mb-2">
+                <span class="badge badge-info">Fotos: {{ fotos_count }}</span>
+                {% if pode_incluir_fotos_relatorio %}
+                <span class="badge badge-success">Já é possível incluir fotos no relatório técnico</span>
+                {% else %}
+                <span class="badge badge-secondary">Anexe mais fotos (mínimo 4) para habilitar inclusão no relatório</span>
+                {% endif %}
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Arquivo</th>
+                            <th>Descrição</th>
+                            <th>Tipo</th>
+                            <th>Incluir no Relatório</th>
+                            <th>Enviado por</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for a in arquivos_os %}
+                        <tr>
+                            <td><a href="{{ a.arquivo.url }}" target="_blank">{{ a.arquivo.name|default:"arquivo" }}</a></td>
+                            <td>{{ a.descricao|default:"-" }}</td>
+                            <td>{% if a.eh_imagem %}Imagem{% else %}Documento{% endif %}</td>
+                            <td>{% if a.incluir_relatorio %}Sim{% else %}Não{% endif %}</td>
+                            <td>{% if a.enviado_por %}{{ a.enviado_por.username }}{% else %}-{% endif %}</td>
+                            <td>{{ a.criado_em|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted">Sem arquivos anexados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

@@ -18,6 +18,7 @@ from caixa.models import (
     ComissaoItemOrcamento,
     ContaPagar,
     ContaReceber,
+    CustoFixoMensal,
     FaixaPremioMeta,
     FormaPagamento,
     LancamentoCaixa,
@@ -30,7 +31,7 @@ from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema, FornecedorGarantia, MarcaGarantia, RegraGarantiaMarca
 from estoque.models import MovimentacaoEstoque, PontoOperacional, Produto, SaldoEstoquePonto, VendaRapidaEstoque
 from orcamentos.models import ItemOrcamento, Orcamento
-from ordens.models import OrdemServico, ServicoPeca
+from ordens.models import LinhaTrabalho, OrdemServico, ServicoPeca
 from caixa.services.comissao_status import ComissaoStatusError, aplicar_acao_comissao
 from caixa.services.comissoes import (
     cancelar_comissoes_por_ordem,
@@ -150,6 +151,57 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(resp_dre.status_code, 200)
         self.assertEqual(resp_fluxo.status_code, 200)
 
+    def test_atendente_sem_acesso_a_custos_fixos(self):
+        self.client.force_login(self.atendente)
+        response = self.client.get(reverse("caixa:custos_fixos"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_gerente_cadastra_custo_fixo_mensal(self):
+        self.client.force_login(self.gerente)
+        competencia = timezone.localdate().replace(day=1).isoformat()
+        response = self.client.post(
+            reverse("caixa:custos_fixos"),
+            {
+                "action": "salvar",
+                "competencia": competencia,
+                "descricao": "Aluguel loja",
+                "categoria": "Infraestrutura",
+                "valor_previsto": "2500.00",
+                "valor_pago": "1000.00",
+                "vencimento": competencia,
+                "observacao": "Pagamento parcial",
+                "ativo": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        custo = CustoFixoMensal.objects.filter(descricao="Aluguel loja").first()
+        self.assertIsNotNone(custo)
+        self.assertEqual(custo.status, "parcial")
+
+    def test_dashboard_exibe_resumo_custos_fixos_mes(self):
+        self.client.force_login(self.gerente)
+        competencia = timezone.localdate().replace(day=1)
+        CustoFixoMensal.objects.create(
+            competencia=competencia,
+            descricao="Internet",
+            categoria="Infraestrutura",
+            valor_previsto=Decimal("300.00"),
+            valor_pago=Decimal("100.00"),
+            ativo=True,
+        )
+        response = self.client.get(reverse("caixa:dashboard_caixa"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["custos_fixos_previsto_mes"], Decimal("300.00"))
+        self.assertEqual(response.context["custos_fixos_pago_mes"], Decimal("100.00"))
+        self.assertEqual(response.context["custos_fixos_diferenca_mes"], Decimal("200.00"))
+
+    def test_dashboard_exibe_acoes_do_dia(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("caixa:dashboard_caixa"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ações do dia")
+        self.assertContains(response, reverse("caixa:registrar_pagamento"))
+
     def test_gerente_com_acesso_a_pagamento_comissoes(self):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("caixa:comissoes_pagamento"))
@@ -162,6 +214,27 @@ class CaixaPermissoesTests(TestCase):
         response = self.client.get(reverse("caixa:comissoes_pendencias"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Pendências de comissões")
+
+    def test_pendencias_comissoes_exibe_atendente_e_tecnico_da_os_sem_relatorio(self):
+        self.client.force_login(self.gerente)
+        self.ordem.status = "autorizado"
+        self.ordem.tecnico_responsavel = self.tecnico
+        self.ordem.relatorio_tecnico = ""
+        self.ordem.save(update_fields=["status", "tecnico_responsavel", "relatorio_tecnico"])
+        LinhaTrabalho.objects.create(
+            ordem=self.ordem,
+            usuario=self.atendente,
+            status="criada",
+            descricao="Ordem criada",
+            tipo_evento="manual",
+        )
+
+        response = self.client.get(reverse("caixa:comissoes_pendencias"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Atendente")
+        self.assertContains(response, "Técnico responsável")
+        self.assertContains(response, self.atendente.username)
+        self.assertContains(response, self.tecnico.username)
 
     def test_pagamento_comissoes_nao_carrega_lista_sem_filtro(self):
         Comissao.objects.create(
@@ -2418,6 +2491,35 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(bonus.count(), 1)
         self.assertEqual(str(bonus.first().valor_comissao), "10.00")
 
+    def test_registrar_pagamento_exibe_resumo_financeiro_da_os(self):
+        self.client.force_login(self.atendente)
+        self.ordem.tecnico_responsavel = self.tecnico
+        self.ordem.save(update_fields=["tecnico_responsavel"])
+        LinhaTrabalho.objects.create(
+            ordem=self.ordem,
+            usuario=self.atendente,
+            status="criada",
+            descricao="Ordem criada",
+            tipo_evento="manual",
+        )
+        Pagamento.objects.create(
+            caixa=Caixa.objects.filter(aberto=True).first(),
+            ordem_servico=self.ordem,
+            valor=Decimal("40.00"),
+            metodo="pix",
+        )
+        response = self.client.get(reverse("caixa:registrar_pagamento") + f"?os={self.ordem.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["ordem_total_os"], Decimal("100.00"))
+        self.assertEqual(response.context["ordem_total_pago"], Decimal("40.00"))
+        self.assertEqual(response.context["ordem_valor_aberto"], Decimal("60.00"))
+        self.assertContains(response, "Saldo aberto")
+        self.assertContains(response, "Pronto contactado")
+        self.assertContains(response, "Atendente:")
+        self.assertContains(response, self.atendente.username)
+        self.assertContains(response, "T&eacute;cnico respons&aacute;vel:")
+        self.assertContains(response, self.tecnico.username)
+
     def test_historico_comissao_e_preservado_ao_excluir_os_e_tecnico(self):
         comissao = Comissao.objects.create(
             tecnico=self.tecnico,
@@ -2626,6 +2728,27 @@ class CaixaPermissoesTests(TestCase):
         response = self.client.get(reverse("caixa:relatorios"), {"data_inicio": hoje, "data_fim": hoje})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["total_entradas_pagamentos"], Decimal("30.00"))
+
+    def test_relatorios_exibe_atendente_e_tecnico_responsavel_da_os(self):
+        self.client.force_login(self.gerente)
+        caixa = Caixa.objects.filter(aberto=True).first()
+        self.ordem.tecnico_responsavel = self.tecnico
+        self.ordem.save(update_fields=["tecnico_responsavel"])
+        LinhaTrabalho.objects.create(
+            ordem=self.ordem,
+            usuario=self.atendente,
+            status="criada",
+            descricao="Ordem criada",
+            tipo_evento="manual",
+        )
+        Pagamento.objects.create(caixa=caixa, ordem_servico=self.ordem, valor=Decimal("10.00"), metodo="pix")
+
+        response = self.client.get(reverse("caixa:relatorios"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Atendente")
+        self.assertContains(response, "Técnico responsável")
+        self.assertContains(response, self.atendente.username)
+        self.assertContains(response, self.tecnico.username)
 
     def test_pagamento_os_garantia_prioriza_regra_por_tipo_produto(self):
         self.client.force_login(self.atendente)

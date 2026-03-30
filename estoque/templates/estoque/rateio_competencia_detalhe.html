@@ -1,0 +1,78 @@
+{% extends "core/base.html" %}
+
+{% block title %}Snapshot de Rateio{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Snapshot de Rateio {{ snapshot.competencia|date:"m/Y" }}</h1>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong>Resumo da Competência</strong>
+    <div>
+      <a href="{% url 'estoque:exportar_rateio_competencia' snapshot.id %}" class="btn btn-outline-primary btn-sm">Exportar CSV</a>
+      <a href="{% url 'estoque:exportar_rateio_competencia_excel' snapshot.id %}" class="btn btn-outline-success btn-sm">Exportar Excel</a>
+      <a href="{% url 'estoque:indicadores_estoque' %}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-3"><strong>Critério:</strong> {{ snapshot.get_criterio_rateio_display }}</div>
+      <div class="col-md-3"><strong>Custos fixos:</strong> R$ {{ snapshot.total_custos_fixos|floatformat:2 }}</div>
+      <div class="col-md-3"><strong>Base total:</strong> {{ snapshot.total_base_rateio|floatformat:2 }}</div>
+      <div class="col-md-3"><strong>Produtos:</strong> {{ snapshot.total_produtos }}</div>
+    </div>
+    <div class="row mt-2">
+      <div class="col-md-4"><strong>Quantidade realizada:</strong> {{ totais.quantidade_realizada }}</div>
+      <div class="col-md-4"><strong>Faturamento realizado:</strong> R$ {{ totais.faturamento_realizado|floatformat:2 }}</div>
+      <div class="col-md-4"><strong>Margem realizada:</strong> R$ {{ totais.margem_realizada|floatformat:2 }}</div>
+    </div>
+    {% if snapshot.observacao %}
+    <div class="mt-2"><strong>Observação:</strong> {{ snapshot.observacao }}</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><strong>Itens do Snapshot</strong></div>
+  <div class="card-body table-responsive p-0">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th>Previsto</th>
+          <th>Realizado</th>
+          <th>Base</th>
+          <th>Participação</th>
+          <th>Rateio unitário</th>
+          <th>Rateio total</th>
+          <th>Preço ref.</th>
+          <th>Lucro ref.</th>
+          <th>Fat. realizado</th>
+          <th>Margem realizada</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in itens %}
+        <tr>
+          <td>{{ item.produto_nome }}</td>
+          <td>{{ item.previsao_venda_mensal }}</td>
+          <td>{{ item.quantidade_realizada }}</td>
+          <td>{{ item.base_rateio|floatformat:2 }}</td>
+          <td>{{ item.participacao_percentual|floatformat:2 }}%</td>
+          <td>R$ {{ item.custo_rateio_unitario|floatformat:2 }}</td>
+          <td>R$ {{ item.custo_rateio_total|floatformat:2 }}</td>
+          <td>R$ {{ item.preco_referencia|floatformat:2 }}</td>
+          <td>R$ {{ item.lucro_unitario_referencia|floatformat:2 }}</td>
+          <td>R$ {{ item.faturamento_realizado|floatformat:2 }}</td>
+          <td>R$ {{ item.margem_realizada|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="11" class="text-center text-muted py-3">Sem itens neste snapshot.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

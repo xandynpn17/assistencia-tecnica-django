@@ -1,0 +1,222 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  {% include "caixa/_subnav_caixa.html" %}
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Custos fixos mensais</h3>
+    <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar ao dashboard</a>
+  </div>
+
+  <form method="get" class="card card-body mb-3">
+    <div class="form-row align-items-end">
+      <div class="col-md-2">
+        <label class="small mb-1">Mês</label>
+        <select name="mes" class="form-control form-control-sm">
+          {% for mes_num, mes_nome in meses_opcoes %}
+          <option value="{{ mes_num }}" {% if mes_filtro == mes_num %}selected{% endif %}>{{ mes_nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="small mb-1">Ano</label>
+        <select name="ano" class="form-control form-control-sm">
+          {% for ano in anos_disponiveis %}
+          <option value="{{ ano }}" {% if ano_filtro == ano %}selected{% endif %}>{{ ano }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+      </div>
+      <div class="col-md-6 text-md-right text-muted small">
+        Competência atual: {{ competencia|date:"m/Y" }}
+      </div>
+    </div>
+  </form>
+
+  <div class="row mb-3">
+    <div class="col-md-3">
+      <div class="small-box bg-info">
+        <div class="inner">
+          <h4>R$ {{ total_previsto|floatformat:2 }}</h4>
+          <p>Total previsto</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="small-box bg-success">
+        <div class="inner">
+          <h4>R$ {{ total_pago|floatformat:2 }}</h4>
+          <p>Total pago</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="small-box {% if diferenca > 0 %}bg-warning{% else %}bg-primary{% endif %}">
+        <div class="inner">
+          <h4>R$ {{ diferenca|floatformat:2 }}</h4>
+          <p>Diferença</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="small-box bg-secondary">
+        <div class="inner">
+          <h4>{{ qtd_pendentes }}</h4>
+          <p>Pendentes/parciais</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header bg-white">
+      <strong>{% if form.instance.pk %}Editar custo fixo{% else %}Novo custo fixo{% endif %}</strong>
+    </div>
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="salvar">
+        {% if form.instance.pk %}
+        <input type="hidden" name="item_id" value="{{ form.instance.pk }}">
+        {% endif %}
+        <div class="form-row">
+          <div class="col-md-2">
+            <label>{{ form.competencia.label }}</label>
+            {{ form.competencia }}
+          </div>
+          <div class="col-md-3">
+            <label>{{ form.descricao.label }}</label>
+            {{ form.descricao }}
+          </div>
+          <div class="col-md-2">
+            <label>{{ form.categoria.label }}</label>
+            {{ form.categoria }}
+          </div>
+          <div class="col-md-2">
+            <label>{{ form.centro_custo.label }}</label>
+            {{ form.centro_custo }}
+          </div>
+          <div class="col-md-1">
+            <label>{{ form.valor_previsto.label }}</label>
+            {{ form.valor_previsto }}
+          </div>
+          <div class="col-md-1">
+            <label>{{ form.valor_pago.label }}</label>
+            {{ form.valor_pago }}
+          </div>
+          <div class="col-md-1">
+            <label>{{ form.vencimento.label }}</label>
+            {{ form.vencimento }}
+          </div>
+        </div>
+        <div class="form-row mt-2">
+          <div class="col-md-8">
+            <label>{{ form.observacao.label }}</label>
+            {{ form.observacao }}
+          </div>
+          <div class="col-md-2 d-flex align-items-center">
+            <div class="form-check mt-4">
+              {{ form.ativo }}
+              <label class="form-check-label" for="{{ form.ativo.id_for_label }}">{{ form.ativo.label }}</label>
+            </div>
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary btn-block">Salvar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+      <strong>Lançamentos da competência</strong>
+      <small class="text-muted">{{ custos_fixos|length }} registro(s)</small>
+    </div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Descrição</th>
+            <th>Categoria</th>
+            <th>Centro de custo</th>
+            <th class="text-right">Previsto</th>
+            <th class="text-right">Pago</th>
+            <th>Vencimento</th>
+            <th>Status</th>
+            <th class="text-right">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for item in custos_fixos %}
+          <tr>
+            <td>{{ item.descricao }}</td>
+            <td>{{ item.categoria|default:"-" }}</td>
+            <td>{{ item.centro_custo|default:"-" }}</td>
+            <td class="text-right">R$ {{ item.valor_previsto|floatformat:2 }}</td>
+            <td class="text-right">R$ {{ item.valor_pago|floatformat:2 }}</td>
+            <td>{% if item.vencimento %}{{ item.vencimento|date:"d/m/Y" }}{% else %}-{% endif %}</td>
+            <td>
+              {% if item.status == "pago" %}
+              <span class="badge badge-success">Pago</span>
+              {% elif item.status == "parcial" %}
+              <span class="badge badge-warning">Parcial</span>
+              {% elif item.status == "cancelado" %}
+              <span class="badge badge-secondary">Cancelado</span>
+              {% else %}
+              <span class="badge badge-danger">Pendente</span>
+              {% endif %}
+            </td>
+            <td class="text-right text-nowrap">
+              <a href="?mes={{ mes_filtro }}&ano={{ ano_filtro }}&editar={{ item.id }}" class="btn btn-sm btn-outline-primary">Editar</a>
+              <form method="post" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <input type="hidden" name="action" value="marcar_pago">
+                <button type="submit" class="btn btn-sm btn-outline-success">Pago</button>
+              </form>
+              <form method="post" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <input type="hidden" name="action" value="reabrir">
+                <button type="submit" class="btn btn-sm btn-outline-warning">Reabrir</button>
+              </form>
+              <form method="post" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <input type="hidden" name="action" value="cancelar">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Cancelar</button>
+              </form>
+              <form method="post" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <input type="hidden" name="action" value="excluir">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
+              </form>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="8" class="bg-light">
+              <form method="post" class="form-inline">
+                {% csrf_token %}
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <input type="hidden" name="action" value="atualizar_pago">
+                <label class="mr-2 mb-0">Atualizar valor pago:</label>
+                <input type="number" step="0.01" min="0" name="valor_pago" value="{{ item.valor_pago }}" class="form-control form-control-sm mr-2">
+                <button type="submit" class="btn btn-sm btn-primary">Salvar valor pago</button>
+                <span class="ml-2 text-muted small">{{ item.observacao|default:"" }}</span>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="text-center text-muted">Sem custos fixos cadastrados nesta competência.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

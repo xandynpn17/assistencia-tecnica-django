@@ -5,6 +5,7 @@ from .models import (
     ComissaoTecnico,
     ContaPagar,
     PagamentoContaPagar,
+    CustoFixoMensal,
     DespesaRecorrente,
     CategoriaFinanceira,
     CentroCusto,
@@ -134,6 +135,33 @@ class DespesaRecorrenteForm(forms.ModelForm):
     class Meta:
         model = DespesaRecorrente
         fields = ["nome", "valor_mensal", "dia_vencimento", "ativo", "ponto_operacional"]
+
+
+class CustoFixoMensalForm(forms.ModelForm):
+    class Meta:
+        model = CustoFixoMensal
+        fields = [
+            "competencia",
+            "descricao",
+            "categoria",
+            "centro_custo",
+            "valor_previsto",
+            "valor_pago",
+            "vencimento",
+            "observacao",
+            "ativo",
+        ]
+        widgets = {
+            "competencia": forms.DateInput(attrs={"type": "date"}),
+            "vencimento": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
+        for field_name in self.fields:
+            css_class = "form-check-input" if field_name == "ativo" else "form-control form-control-sm"
+            self.fields[field_name].widget.attrs.setdefault("class", css_class)
 
 
 class RegraPremioMetaForm(forms.ModelForm):

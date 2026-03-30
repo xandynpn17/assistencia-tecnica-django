@@ -5,6 +5,8 @@ from django.core.validators import RegexValidator
 from django.utils import timezone
 from django.utils.text import slugify
 
+from .services import salvar_usuario_com_numero_vendedor
+
 
 class Empresa(models.Model):
     REGIME_TRIBUTARIO_CHOICES = [
@@ -30,6 +32,7 @@ class Empresa(models.Model):
     telefone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     logo = models.ImageField(upload_to="logos/", blank=True, null=True)
+    logo_pdf = models.ImageField(upload_to="logos/pdf/", blank=True, null=True)
     regime_tributario = models.CharField(
         max_length=10,
         choices=REGIME_TRIBUTARIO_CHOICES,
@@ -319,27 +322,10 @@ class User(AbstractUser):
         return str(candidato)
 
     def save(self, *args, **kwargs):
-        numero_vendedor = (self.numero_vendedor or "").strip()
-        if numero_vendedor:
-            if not numero_vendedor.isdigit():
-                raise ValueError("Número de vendedor deve conter apenas dígitos.")
-            if len(numero_vendedor) == 1:
-                numero_vendedor = numero_vendedor.zfill(2)
-            self.numero_vendedor = numero_vendedor
-            return super().save(*args, **kwargs)
-
-        tentativas = 6
-        ultima_excecao = None
-        for _ in range(tentativas):
-            self.numero_vendedor = self._gerar_numero_vendedor_disponivel(excluir_usuario_id=self.pk)
-            try:
-                return super().save(*args, **kwargs)
-            except IntegrityError as exc:
-                ultima_excecao = exc
-                self.numero_vendedor = None
-        if ultima_excecao:
-            raise ultima_excecao
-        return super().save(*args, **kwargs)
+        return salvar_usuario_com_numero_vendedor(
+            self,
+            lambda: super(User, self).save(*args, **kwargs),
+        )
 
 
 class UsuarioArquivo(models.Model):
@@ -588,6 +574,10 @@ class ConfiguracaoSistema(models.Model):
     lgpd_mascarar_documento = models.BooleanField(
         default=True,
         verbose_name="Mascarar documentos em telas de consulta",
+    )
+    usar_confirmacao_assinatura_digital = models.BooleanField(
+        default=True,
+        verbose_name="Usar confirmação/assinatura digital na OS",
     )
     mensagem_orcamento_email = models.TextField(
         blank=True,

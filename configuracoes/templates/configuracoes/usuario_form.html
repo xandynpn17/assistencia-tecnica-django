@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}{% if editando %}Editar{% else %}Novo{% endif %} Usuario{% endblock %}
+{% block title %}{% if editando %}Editar{% else %}Novo{% endif %} Usuário{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -44,7 +44,7 @@
   <div class="card-modern">
     <div class="card-modern-header">
       <i class="fas fa-id-card mr-2"></i>
-      {% if editando %}Editar{% else %}Cadastrar{% endif %} Usuario
+      {% if editando %}Editar{% else %}Cadastrar{% endif %} Usuário
     </div>
     <div class="card-modern-body">
       <form method="post" enctype="multipart/form-data" autocomplete="off">

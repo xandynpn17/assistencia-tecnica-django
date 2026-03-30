@@ -1,6 +1,39 @@
-﻿{% extends "core/base.html" %}
+{% extends "core/base.html" %}
 
 {% block title %}Portal do Cliente{% endblock %}
+
+{% block extra_css %}
+<style>
+  .portal-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .portal-card {
+    border: 1px solid #e7ebf0;
+    border-radius: 10px;
+    background: #fafbfd;
+    padding: 14px;
+  }
+  .portal-label {
+    display: block;
+    font-size: .76rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #6c757d;
+    margin-bottom: 2px;
+  }
+  .portal-value {
+    font-weight: 600;
+    color: #243746;
+  }
+  @media (max-width: 767.98px) {
+    .portal-summary {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
 
 {% block header %}
 <h1 class="m-0 text-dark">Portal do Cliente</h1>
@@ -30,8 +63,25 @@
         {% if ordem %}
             <hr>
             <h5>OS {{ ordem.numero_os }}</h5>
-            <p><strong>Status atual:</strong> {{ ordem.get_status_display }}</p>
-            <p><strong>Data de abertura:</strong> {{ ordem.data_abertura|date:"d/m/Y H:i" }}</p>
+
+            <div class="portal-summary mb-3">
+                <div class="portal-card">
+                    <span class="portal-label">Status atual</span>
+                    <div class="portal-value">{{ ordem.status_listagem_label }}</div>
+                </div>
+                <div class="portal-card">
+                    <span class="portal-label">Data de abertura</span>
+                    <div class="portal-value">{{ ordem.data_abertura|date:"d/m/Y H:i" }}</div>
+                </div>
+                <div class="portal-card">
+                    <span class="portal-label">Atendente:</span>
+                    <div class="portal-value">{% if ordem.atendente_abertura %}{{ ordem.atendente_abertura.get_full_name|default:ordem.atendente_abertura.username }}{% else %}-{% endif %}</div>
+                </div>
+                <div class="portal-card">
+                    <span class="portal-label">Técnico responsável:</span>
+                    <div class="portal-value">{% if ordem.tecnico_responsavel_valido %}{{ ordem.tecnico_responsavel_valido.get_full_name|default:ordem.tecnico_responsavel_valido.username }}{% else %}Sem técnico{% endif %}</div>
+                </div>
+            </div>
 
             <h6 class="mt-3">Andamento</h6>
             <ul class="list-group">
@@ -41,7 +91,7 @@
                         <small>{{ linha.criado_em|date:"d/m/Y H:i" }}</small>
                     </li>
                 {% empty %}
-                    <li class="list-group-item text-muted">Sem atualizacoes registradas.</li>
+                    <li class="list-group-item text-muted">Sem atualizações registradas.</li>
                 {% endfor %}
             </ul>
         {% endif %}

@@ -13,6 +13,7 @@
         <div>
             <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-info btn-sm"><i class="fas fa-exchange-alt"></i> Movimentações</a>
             <a href="{% url 'estoque:tabelas_preco' %}" class="btn btn-outline-secondary btn-sm">Tabelas de preço</a>
+            <a href="{% url 'estoque:importar_produtos' %}" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-import"></i> Importar</a>
             <a href="{% url 'estoque:criar_produto' %}" class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Novo Produto</a>
         </div>
     </div>
@@ -32,7 +33,7 @@
         </form>
 
         <div class="alert alert-light border small mb-3">
-            Mostrando visão resumida. Clique em <strong>Detalhes</strong> para ver informações completas do item.
+            Mostrando visão resumida. Clique em <strong>Detalhes</strong> para ver as informações completas.
         </div>
 
         <div class="table-responsive p-0">
@@ -68,8 +69,9 @@
                             Detalhes
                         </button>
                         <a href="{% url 'estoque:estrutura_produto' produto.id %}" class="btn btn-sm btn-outline-dark">Estrutura</a>
-                        <a href="{% url 'estoque:editar_produto' produto.id %}" class="btn btn-sm btn-primary"><i class="fas fa-edit"></i></a>
-                        <a href="{% url 'estoque:excluir_produto' produto.id %}" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></a>
+                        <a href="{% url 'estoque:duplicar_produto' produto.id %}" class="btn btn-sm btn-outline-primary" title="Duplicar"><i class="fas fa-copy"></i></a>
+                        <a href="{% url 'estoque:editar_produto' produto.id %}" class="btn btn-sm btn-primary" title="Editar"><i class="fas fa-edit"></i></a>
+                        <a href="{% url 'estoque:excluir_produto' produto.id %}" class="btn btn-sm btn-danger" title="Excluir"><i class="fas fa-trash"></i></a>
                     </td>
                 </tr>
                 <tr>
@@ -104,6 +106,26 @@
                 </tbody>
             </table>
         </div>
+
+        {% if produtos_page and produtos_page.paginator.num_pages > 1 %}
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <small class="text-muted">
+                Página {{ produtos_page.number }} de {{ produtos_page.paginator.num_pages }}
+            </small>
+            <div class="btn-group">
+                {% if produtos_page.has_previous %}
+                <a class="btn btn-sm btn-outline-secondary" href="?tipo={{ filtro }}&ponto={{ ponto_filtro }}&page={{ produtos_page.previous_page_number }}">Anterior</a>
+                {% else %}
+                <button class="btn btn-sm btn-outline-secondary" disabled>Anterior</button>
+                {% endif %}
+                {% if produtos_page.has_next %}
+                <a class="btn btn-sm btn-outline-secondary" href="?tipo={{ filtro }}&ponto={{ ponto_filtro }}&page={{ produtos_page.next_page_number }}">Próxima</a>
+                {% else %}
+                <button class="btn btn-sm btn-outline-secondary" disabled>Próxima</button>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

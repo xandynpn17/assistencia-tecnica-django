@@ -31,7 +31,7 @@
       <table class="table table-sm table-hover mb-0">
         <thead>
           <tr>
-            <th>Código</th><th>Cliente</th><th>Telefone</th><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Válido até</th><th>Status</th><th>OS</th><th>Ações</th>
+            <th>Código</th><th>Cliente</th><th>Telefone</th><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Válido até</th><th>Status</th><th>OS</th><th>Atendente</th><th>Técnico responsável</th><th>Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -46,6 +46,8 @@
             <td>{{ r.valido_ate|date:"d/m/Y" }}</td>
             <td>{{ r.get_status_display }}</td>
             <td>{% if r.ordem_servico %}{{ r.ordem_servico.numero_os }}{% else %}-{% endif %}</td>
+            <td>{% if r.ordem_servico and r.ordem_servico.atendente_abertura %}{{ r.ordem_servico.atendente_abertura.get_full_name|default:r.ordem_servico.atendente_abertura.username }}{% else %}-{% endif %}</td>
+            <td>{% if r.ordem_servico and r.ordem_servico.tecnico_responsavel_valido %}{{ r.ordem_servico.tecnico_responsavel_valido.get_full_name|default:r.ordem_servico.tecnico_responsavel_valido.username }}{% else %}Sem técnico{% endif %}</td>
             <td>
               <form method="post" action="{% url 'estoque:associar_reserva_ordem' r.codigo_reserva %}" class="form-inline mb-1">
                 {% csrf_token %}
@@ -65,11 +67,28 @@
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="10" class="text-center text-muted">Sem reservas encontradas.</td></tr>
+          <tr><td colspan="12" class="text-center text-muted">Sem reservas encontradas.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+  {% if reservas_page and reservas_page.paginator.num_pages > 1 %}
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <small class="text-muted">Página {{ reservas_page.number }} de {{ reservas_page.paginator.num_pages }}</small>
+    <div class="btn-group">
+      {% if reservas_page.has_previous %}
+      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&status={{ status_filtro }}&page={{ reservas_page.previous_page_number }}">Anterior</a>
+      {% else %}
+      <button class="btn btn-sm btn-outline-secondary" disabled>Anterior</button>
+      {% endif %}
+      {% if reservas_page.has_next %}
+      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&status={{ status_filtro }}&page={{ reservas_page.next_page_number }}">Próxima</a>
+      {% else %}
+      <button class="btn btn-sm btn-outline-secondary" disabled>Próxima</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

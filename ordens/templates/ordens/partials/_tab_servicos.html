@@ -1,0 +1,365 @@
+<!-- Serviços & Peças -->
+<div class="tab-pane fade {% if active_tab == 'servicos' %}show active{% endif %}" id="servicos">
+    <div class="card-modern">
+        <div class="card-modern-header d-flex justify-content-between align-items-center">
+            <span>Serviços & Peças</span>
+            {% if not ordem.fechada %}
+            <div class="d-flex">
+                <button type="button" class="btn btn-sm btn-light mr-2" data-toggle="modal" data-target="#modalAdicionarServicoPeca">
+                    <i class="fas fa-barcode mr-1"></i>Adicionar EAN/Produto
+                </button>
+                <button type="button" class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarTalao">
+                    <i class="fas fa-receipt mr-1"></i>Adicionar Talões
+                </button>
+            </div>
+            {% else %}
+            <span class="text-light"><i class="fas fa-lock mr-1"></i>Edição bloqueada</span>
+            {% endif %}
+        </div>
+        <div class="card-modern-body">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="border rounded p-2 bg-light">
+                        <small class="text-muted">Valor total OS</small>
+                        <div><strong>R$ {{ total_os|floatformat:2 }}</strong></div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-2 bg-light">
+                        <small class="text-muted">Valor pago</small>
+                        <div><strong>R$ {{ total_pago_os|floatformat:2 }}</strong></div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-2 bg-light">
+                        <small class="text-muted">Saldo</small>
+                        <div><strong>R$ {{ saldo_financeiro_os|floatformat:2 }}</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert {% if os_pago %}alert-success{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Pago?</strong> {% if os_pago %}Sim{% else %}Não{% endif %}
+                    <br>
+                    <small>
+                        <strong>Referências:</strong>
+                        {% if referencias_pagamento %}
+                            {{ referencias_pagamento|join:", " }}
+                        {% else %}
+                            Nenhuma referência registrada
+                        {% endif %}
+                    </small>
+                </div>
+                <a class="btn btn-sm btn-primary"
+                   href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ saldo_financeiro_os|floatformat:2 }}">
+                    Registrar pagamento
+                </a>
+            </div>
+
+            {% if ordem.tipo_reparo == 'Garantia' %}
+            <div class="border rounded p-3 mb-3 bg-light">
+                <h6 class="mb-2"><i class="fas fa-file-invoice-dollar mr-1"></i>Resumo Financeiro da Garantia</h6>
+                {% if auditoria_garantia %}
+                <p class="mb-1"><strong>Fornecedor:</strong> {{ auditoria_garantia.fornecedor.nome|default:"-" }}</p>
+                <p class="mb-1"><strong>Marca:</strong> {{ auditoria_garantia.marca.nome|default:"-" }}</p>
+                <p class="mb-1"><strong>Valor previsto fabricante:</strong> R$ {{ auditoria_garantia.valor_previsto_fabricante|floatformat:2 }}</p>
+                <p class="mb-1"><strong>Comissão prevista técnica:</strong> R$ {{ auditoria_garantia.comissao_prevista_tecnica|floatformat:2 }}</p>
+                <p class="mb-0"><strong>Status faturamento:</strong> {{ auditoria_garantia.get_status_faturamento_display }}</p>
+                {% else %}
+                <p class="mb-0 text-muted">Feche a OS para gerar auditoria financeira da garantia.</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if itens %}
+            <div class="list-group mb-3">
+                {% for item in itens %}
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div class="w-100">
+                        <h6>{{ item.nome }} <span class="badge badge-light border">{{ item.get_tipo_display }}</span></h6>
+                        <p class="mb-1">R$ {{ item.valor_unitario|floatformat:2 }} x {{ item.quantidade }} = R$ {{ item.total|floatformat:2 }}</p>
+                        {% if item.produto_estoque %}
+                        <small class="text-muted">Estoque vinculado: {{ item.produto_estoque.nome }}{% if item.estoque_consumido_em %} | Baixado{% endif %}</small><br>
+                        {% endif %}
+                        <small class="text-muted">Responsável: {{ item.tecnico_responsavel.username|default:"-" }}</small>
+                        {% if item.garantia_dias %}
+                        <br><small class="text-muted">Garantia da peça: {{ item.garantia_dias }} dias</small>
+                        {% endif %}
+                    </div>
+                    {% if not ordem.fechada %}
+                    <form method="post" class="ml-2 mb-0" onsubmit="return window.AppMessages.confirmSync('Excluir este item de Serviços e Peças?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="excluir_servico_peca">
+                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir item">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            <p class="text-end fw-bold">Total OS: R$ {{ total_os }}</p>
+            {% else %}
+            <p class="text-muted text-center py-3">Nenhum serviço ou peça registrado.</p>
+            {% endif %}
+
+            <hr>
+            <h6 class="mb-2">Talões da OS</h6>
+            {% if taloes_os %}
+            <div class="d-flex flex-wrap">
+                {% for talao in taloes_os %}
+                    <a href="#" class="badge badge-light border mr-2 mb-2 p-2"
+                       data-toggle="modal"
+                       data-target="#modalTalao{{ talao.id }}">
+                        {{ talao.numero }}
+                    </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">Nenhum talão registrado.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% for talao in taloes_os %}
+<div class="modal fade" id="modalTalao{{ talao.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Talão {{ talao.numero }}</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="border rounded p-3 bg-light">
+                    <h6 class="mb-2">RECIBO</h6>
+                    <p class="mb-1"><strong>Talão:</strong> {{ talao.numero }}</p>
+                    <p class="mb-1"><strong>Data:</strong> {{ talao.criado_em|date:"d/m/Y H:i" }}</p>
+                    <p class="mb-1"><strong>OS:</strong> {{ ordem.numero_os }}</p>
+                    <p class="mb-1"><strong>Cliente:</strong> {{ ordem.cliente.nome }}</p>
+                    <p class="mb-1"><strong>Tipo:</strong> {{ talao.get_origem_display }}</p>
+                    <p class="mb-1"><strong>Produto/Serviço:</strong> {{ talao.item_referencia|default:"-" }}</p>
+                    <p class="mb-2"><strong>Valor:</strong> {% if talao.valor %}R$ {{ talao.valor|floatformat:2 }}{% else %}-{% endif %}</p>
+                    <hr>
+                    <p class="mb-1"><strong>Empresa:</strong> {{ empresa_talao.nome|default:"-" }}</p>
+                    <p class="mb-1"><strong>CNPJ:</strong> {{ empresa_talao.cnpj|default:"-" }}</p>
+                    <p class="mb-1"><strong>Telefone:</strong> {{ empresa_talao.telefone|default:"-" }}</p>
+                    <p class="mb-0"><strong>Endereço:</strong> {{ empresa_talao.endereco|default:"-" }}</p>
+                </div>
+                {% if talao.criado_por %}<p class="mt-2 mb-2"><strong>Usuário:</strong> {{ talao.criado_por.username }}</p>{% endif %}
+                {% if talao.descricao %}
+                <p class="mb-2"><strong>Descrição:</strong><br>{{ talao.descricao|linebreaksbr }}</p>
+                {% endif %}
+                {% if talao.imagem %}
+                <a href="{{ talao.imagem.url }}" target="_blank">
+                    <img src="{{ talao.imagem.url }}" alt="Imagem talao" style="max-width:100%;height:auto;border-radius:8px;border:1px solid #ddd;">
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<div class="modal fade" id="modalAdicionarServicoPeca" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-plus-circle mr-2"></i>Adicionar Serviço/Peça</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="servico_peca">
+                <div class="modal-body">
+                    <input type="hidden" name="produto_estoque_id" id="sp_produto_estoque_id">
+                    <div class="row mb-3">
+                        <div class="col-md-10">
+                            <input type="text" id="sp_produto_busca" class="form-control" placeholder="Buscar por EAN ou nome do produto">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" id="sp_btn_buscar" class="btn btn-primary btn-block"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+                    <div id="sp_resultado_busca" class="mb-3" style="max-height:180px;overflow-y:auto;"></div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label>Tipo</label>
+                            <select name="tipo" class="form-control" id="sp_tipo">
+                                <option value="peca">Peça</option>
+                                <option value="servico">Serviço</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-8">
+                            <label>Nome</label>
+                            <input type="text" name="nome" id="sp_nome" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Descrição</label>
+                        <textarea name="descricao" id="sp_descricao" rows="2" class="form-control"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label>Quantidade</label>
+                            <input type="number" name="quantidade" id="sp_quantidade" class="form-control" min="1" value="1" required>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Valor unitário</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend"><span class="input-group-text">R$</span></div>
+                                <input type="number" step="0.01" name="valor_unitario" id="sp_valor" class="form-control" required>
+                            </div>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Garantia (dias)</label>
+                            <input type="number" name="garantia_dias" id="sp_garantia" class="form-control" min="0" value="">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label>Responsável da comissão</label>
+                            <select name="tecnico_responsavel" class="form-control">
+                                <option value="">-- Selecione --</option>
+                                {% for user in tecnicos %}
+                                <option value="{{ user.id }}" {% if ordem.tecnico_responsavel_id == user.id %}selected{% endif %}>{{ user.username }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success">Salvar</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAdicionarTalao" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-receipt mr-2"></i>Adicionar Talão</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="adicionar_talao">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Número do talão</label>
+                        <input type="text" name="numero_talao" class="form-control" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Valor</label>
+                            <input type="number" step="0.01" min="0" name="valor_talao" class="form-control">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Produto/Serviço</label>
+                            <input type="text" name="item_talao" class="form-control" placeholder="Ex: Mão de obra">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Descrição</label>
+                        <textarea name="descricao_talao" rows="3" class="form-control"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Imagem (opcional)</label>
+                        <input type="file" name="imagem_talao" class="form-control-file" accept="image/*">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success">Salvar talão</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const btnBuscar = document.getElementById('sp_btn_buscar');
+    const inputBusca = document.getElementById('sp_produto_busca');
+    const resultado = document.getElementById('sp_resultado_busca');
+    const modal = $('#modalAdicionarServicoPeca');
+    const modeloOS = '{{ ordem.modelo_equipamento|default:""|escapejs }}';
+    const defeitoOS = '{{ ordem.defeito|default:""|escapejs }}';
+    const tipoEquipamentoOS = '{{ ordem.tipo_equipamento|default:""|escapejs }}';
+
+    if (!btnBuscar) return;
+
+    function aplicarProdutoNoFormulario(produto) {
+        document.getElementById('sp_tipo').value = 'peca';
+        document.getElementById('sp_nome').value = produto.nome || '';
+        document.getElementById('sp_descricao').value = produto.descricao || '';
+        document.getElementById('sp_valor').value = produto.preco || '';
+        document.getElementById('sp_garantia').value = produto.garantia_peca_dias || '';
+        document.getElementById('sp_quantidade').value = 1;
+        resultado.innerHTML = '';
+    }
+
+    function renderResultados(data) {
+        resultado.innerHTML = '';
+        if (!data || data.length === 0) {
+            resultado.innerHTML = '<div class="text-muted">Nenhum produto encontrado.</div>';
+            return;
+        }
+        data.forEach((produto) => {
+            const row = document.createElement('div');
+            row.className = 'border rounded p-2 mb-1';
+            row.style.cursor = 'pointer';
+            const motivos = (produto.motivos || []).join(' | ');
+            const historico = Number(produto.frequencia_historica || 0);
+            const score = Number(produto.score || 0);
+            row.innerHTML = `
+                <div><strong>${produto.ean || '-'} - ${produto.nome}</strong> (R$ ${produto.preco})</div>
+                <small class="text-muted">SKU: ${produto.sku || '-'} | Estoque: ${produto.quantidade ?? '-'}</small>
+                ${historico > 0 || score > 0 ? `<br><small class="text-info">Ranking: ${score} | Histórico: ${historico}x ${motivos ? `| ${motivos}` : ''}</small>` : ''}
+            `;
+            row.addEventListener('click', function () {
+                aplicarProdutoNoFormulario(produto);
+            });
+            resultado.appendChild(row);
+        });
+    }
+
+    function buscarComRanking() {
+        const q = (inputBusca.value || '').trim();
+        const servicoAtual = (document.getElementById('sp_nome')?.value || '').trim();
+        const params = new URLSearchParams({
+            q: q,
+            modelo: modeloOS,
+            servico: servicoAtual,
+            defeito: defeitoOS,
+            tipo_equipamento: tipoEquipamentoOS,
+        });
+        return fetch(`{% url 'estoque:api_sugerir_pecas_os' %}?${params.toString()}`)
+            .then(r => r.json())
+            .then(data => renderResultados(data.resultados || []))
+            .catch(() => {
+                resultado.innerHTML = '<div class="text-danger">Erro ao carregar sugestões automáticas.</div>';
+            });
+    }
+
+    btnBuscar.addEventListener('click', function () {
+        buscarComRanking();
+    });
+
+    inputBusca.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            buscarComRanking();
+        }
+    });
+
+    modal.on('shown.bs.modal', function () {
+        buscarComRanking();
+    });
+});
+</script>

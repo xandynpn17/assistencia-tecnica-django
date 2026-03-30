@@ -1,8 +1,18 @@
+from datetime import timedelta
 from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
+from django.db.models import Sum
 from django.utils import timezone
+
+from .services_produto import (
+    aplicar_custos_base_produto,
+    aplicar_politica_tipo_item_produto,
+    aplicar_precificacao_produto,
+    atualizar_produtos_relacionados_rateio,
+    preparar_cadastro_produto,
+)
 
 
 class PontoOperacional(models.Model):
@@ -128,6 +138,9 @@ class Produto(models.Model):
     custo_impostos = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     custo_comissao = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     custo_marketplace = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    custo_cac = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    custo_rateio_fixo = models.DecimalField(max_digits=10, decimal_places=2, default=0, editable=False)
+    competencia_rateio = models.DateField(null=True, blank=True, editable=False)
     custo_medio = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     margem_lucro = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     margem_minima = models.DecimalField(
@@ -152,6 +165,8 @@ class Produto(models.Model):
     preco = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     quantidade = models.PositiveIntegerField(default=0)
     estoque_minimo = models.PositiveIntegerField(default=0)
+    previsao_venda_mensal = models.PositiveIntegerField(default=0)
+    incluir_rateio_custo_fixo = models.BooleanField(default=False)
     ativo = models.BooleanField(default=True)
     data_entrada = models.DateField(default=timezone.now, blank=True)
     is_servico = models.BooleanField(default=False, verbose_name="É um serviço")
@@ -217,77 +232,115 @@ class Produto(models.Model):
 
         return Decimal(str((self.icms or 0) + (self.ipi or 0) + (self.pis or 0) + (self.cofins or 0) or (self.pis_cofins or 0)))
 
+    def _competencia_rateio_atual(self):
+        hoje = timezone.localdate()
+        return hoje.replace(day=1)
+
+    def custo_operacional_sem_rateio(self):
+        custos_detalhados = (
+            Decimal(str(self.custo_frete or 0))
+            + Decimal(str(self.custo_impostos or 0))
+            + Decimal(str(self.custo_comissao or 0))
+            + Decimal(str(self.custo_marketplace or 0))
+            + Decimal(str(self.custo_cac or 0))
+        )
+        if custos_detalhados > 0:
+            return custos_detalhados
+        return max(Decimal("0.00"), Decimal(str(self.custo_operacional or 0)) - Decimal(str(self.custo_rateio_fixo or 0)))
+
+    def preco_referencia_rateio(self):
+        preco = Decimal(str(self.preco_final or 0))
+        if preco > 0:
+            return preco
+        preco_sugerido = Decimal(str(self.preco_sugerido or 0))
+        if preco_sugerido > 0:
+            return preco_sugerido
+        return Decimal(str(self.custo_unitario or 0)) + self.custo_operacional_sem_rateio()
+
+    def lucro_unitario_referencia_rateio(self):
+        return max(
+            Decimal("0.00"),
+            self.preco_referencia_rateio() - (Decimal(str(self.custo_unitario or 0)) + self.custo_operacional_sem_rateio()),
+        )
+
+    def base_rateio_custo_fixo(self, criterio=None, previsao_override=None, incluir_override=None):
+        criterio = criterio or ConfiguracaoRateioCustoFixo.get_solo().criterio_rateio
+        incluir = self.incluir_rateio_custo_fixo if incluir_override is None else bool(incluir_override)
+        previsao_atual = int(previsao_override if previsao_override is not None else (self.previsao_venda_mensal or 0))
+        if self.tipo_item == "servico" or not incluir or previsao_atual <= 0:
+            return Decimal("0.00")
+
+        previsao_decimal = Decimal(str(previsao_atual))
+        if criterio == ConfiguracaoRateioCustoFixo.CRITERIO_FATURAMENTO:
+            return self.preco_referencia_rateio() * previsao_decimal
+        if criterio == ConfiguracaoRateioCustoFixo.CRITERIO_MARGEM:
+            return self.lucro_unitario_referencia_rateio() * previsao_decimal
+        return previsao_decimal
+
+    def calcular_rateio_custo_fixo_unitario(
+        self,
+        competencia=None,
+        previsao_override=None,
+        incluir_override=None,
+        criterio_override=None,
+    ):
+        competencia = competencia or self._competencia_rateio_atual()
+        previsao_atual = int(previsao_override if previsao_override is not None else (self.previsao_venda_mensal or 0))
+        criterio = criterio_override or ConfiguracaoRateioCustoFixo.get_solo().criterio_rateio
+        base_atual = self.base_rateio_custo_fixo(
+            criterio=criterio,
+            previsao_override=previsao_override,
+            incluir_override=incluir_override,
+        )
+        if base_atual <= 0 or previsao_atual <= 0:
+            return Decimal("0.00")
+
+        try:
+            from caixa.models import CustoFixoMensal
+        except Exception:
+            return Decimal("0.00")
+
+        total_fixos = (
+            CustoFixoMensal.objects.filter(
+                competencia=competencia,
+                ativo=True,
+            )
+            .exclude(status="cancelado")
+            .aggregate(total=Sum("valor_previsto"))["total"]
+            or Decimal("0.00")
+        )
+        if total_fixos <= 0:
+            return Decimal("0.00")
+
+        produtos_rateio = Produto.objects.filter(
+            ativo=True,
+            is_servico=False,
+            incluir_rateio_custo_fixo=True,
+            previsao_venda_mensal__gt=0,
+        )
+        if self.pk:
+            produtos_rateio = produtos_rateio.exclude(pk=self.pk)
+
+        total_base = Decimal("0.00")
+        for produto_rateio in produtos_rateio:
+            total_base += produto_rateio.base_rateio_custo_fixo(criterio=criterio)
+
+        total_base += base_atual
+        if total_base <= 0:
+            return Decimal("0.00")
+        alocacao_total = Decimal(total_fixos) * (base_atual / total_base)
+        return alocacao_total / Decimal(str(previsao_atual))
+
     def save(self, *args, **kwargs):
-        if not self.ponto_operacional:
-            po3, _ = PontoOperacional.objects.get_or_create(codigo="PO3", defaults={"nome": "Loja", "ativo": True})
-            self.ponto_operacional = po3
-
-        self.sku = self._gerar_sku()
-
-        ean_digits = "".join(ch for ch in str(self.ean or "") if ch.isdigit())
-        if not ean_digits:
-            self.ean = self._gerar_codigo_ean()
-        else:
-            self.ean = ean_digits.zfill(13)[:13]
-
-        if self.marca and not self.fornecedor_config and self.marca.fornecedor_id:
-            self.fornecedor_config = self.marca.fornecedor
-        if self.fornecedor_config:
-            self.fornecedor = self.fornecedor_config.nome
-        elif self.fornecedor_manual:
-            self.fornecedor = self.fornecedor_manual
-        if self.categoria_config:
-            self.categoria = self.categoria_config.nome
-
-        custo_operacional_detalhado = (self.custo_frete or 0) + (self.custo_impostos or 0) + (self.custo_comissao or 0) + (self.custo_marketplace or 0)
-        if custo_operacional_detalhado > 0:
-            self.custo_operacional = custo_operacional_detalhado
-
-        if (self.custo_medio or 0) <= 0 and (self.custo_unitario or 0) > 0:
-            self.custo_medio = self.custo_unitario
-
-        if self.categoria_config and (self.margem_lucro or 0) <= 0 and (self.categoria_config.margem_padrao or 0) > 0:
-            self.margem_lucro = self.categoria_config.margem_padrao
-
-        if self.tipo_item == "servico":
-            self.is_servico = True
-            self.quantidade = 0
-            self.estoque_minimo = 0
-            self.permite_comissao_peca = False
-            self.percentual_comissao_peca = 0
-        else:
-            self.is_servico = False
-
-        custo_total = Decimal(str((self.custo_unitario or 0) + (self.custo_operacional or 0)))
-        margem_percent = Decimal(str(self.margem_lucro or 0))
-        taxa_cartao_percent = Decimal(str(self.taxa_cartao or 0))
-
-        if self.modo_preco == "simples":
-            self.preco_sugerido = custo_total * (Decimal("1") + (margem_percent / Decimal("100")))
-        else:
-            aliquota_percent = self._aliquota_percentual()
-            fator = Decimal("1") - (aliquota_percent / Decimal("100")) - (taxa_cartao_percent / Decimal("100")) - (margem_percent / Decimal("100"))
-            if fator <= Decimal("0"):
-                self.preco_sugerido = custo_total
-            else:
-                self.preco_sugerido = custo_total / fator
-
-        margem_min = Decimal(str(self.margem_minima or 0))
-        if margem_min <= Decimal("0"):
-            self.preco_minimo = custo_total
-        else:
-            fator_min = Decimal("1") - (margem_min / Decimal("100"))
-            self.preco_minimo = custo_total if fator_min <= 0 else (custo_total / fator_min)
-
-        if not self.preco_final or self.preco_final <= 0:
-            self.preco_final = self.preco_sugerido
-
-        self.preco = self.preco_final
-
-        if not self.data_entrada:
-            self.data_entrada = timezone.now().date()
+        skip_rateio_refresh = kwargs.pop("_skip_rateio_refresh", False)
+        preparar_cadastro_produto(self)
+        aplicar_custos_base_produto(self)
+        aplicar_politica_tipo_item_produto(self)
+        aplicar_precificacao_produto(self)
 
         super().save(*args, **kwargs)
+        if not skip_rateio_refresh:
+            atualizar_produtos_relacionados_rateio(self)
 
     def __str__(self):
         return self.nome
@@ -339,6 +392,231 @@ class Produto(models.Model):
         return (self.lucro_reais / self.preco_sugerido_sem_margem) * 100
 
 
+class ConfiguracaoRateioCustoFixo(models.Model):
+    CRITERIO_UNIDADES = "unidades"
+    CRITERIO_FATURAMENTO = "faturamento"
+    CRITERIO_MARGEM = "margem"
+    CRITERIO_CHOICES = [
+        (CRITERIO_UNIDADES, "Unidades previstas"),
+        (CRITERIO_FATURAMENTO, "Faturamento previsto"),
+        (CRITERIO_MARGEM, "Margem prevista"),
+    ]
+
+    criterio_rateio = models.CharField(max_length=20, choices=CRITERIO_CHOICES, default=CRITERIO_UNIDADES)
+    ativo = models.BooleanField(default=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Configuracao de rateio de custo fixo"
+        verbose_name_plural = "Configuracoes de rateio de custo fixo"
+
+    def __str__(self):
+        return f"Rateio por {self.get_criterio_rateio_display()}"
+
+    @classmethod
+    def get_solo(cls):
+        configuracao, _ = cls.objects.get_or_create(pk=1, defaults={"criterio_rateio": cls.CRITERIO_UNIDADES, "ativo": True})
+        return configuracao
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        result = super().save(*args, **kwargs)
+        produtos_rateio = Produto.objects.filter(
+            ativo=True,
+            is_servico=False,
+            incluir_rateio_custo_fixo=True,
+        )
+        for produto in produtos_rateio:
+            produto.save(_skip_rateio_refresh=True)
+        return result
+
+
+class RateioCustoFixoCompetencia(models.Model):
+    competencia = models.DateField(unique=True)
+    criterio_rateio = models.CharField(
+        max_length=20,
+        choices=ConfiguracaoRateioCustoFixo.CRITERIO_CHOICES,
+        default=ConfiguracaoRateioCustoFixo.CRITERIO_UNIDADES,
+    )
+    total_custos_fixos = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_base_rateio = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_produtos = models.PositiveIntegerField(default=0)
+    observacao = models.CharField(max_length=180, blank=True)
+    gerado_por = models.ForeignKey("configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    fechado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-competencia", "-id"]
+
+    def __str__(self):
+        return f"Rateio {self.competencia:%m/%Y}"
+
+    @staticmethod
+    def _intervalo_competencia(competencia):
+        inicio = competencia.replace(day=1)
+        proximo_mes = (inicio + timedelta(days=32)).replace(day=1)
+        return inicio, proximo_mes
+
+    @classmethod
+    def _realizado_por_produto(cls, competencia):
+        inicio, proximo_mes = cls._intervalo_competencia(competencia)
+        realizado = {}
+
+        vendas = VendaRapidaEstoque.objects.select_related("produto").filter(status="vendida")
+        for venda in vendas:
+            data_ref = timezone.localtime(venda.concluido_em or venda.criado_em).date()
+            if not (inicio <= data_ref < proximo_mes) or not venda.produto_id:
+                continue
+            custo_sem_rateio = Decimal(str(venda.produto.custo_unitario or 0)) + venda.produto.custo_operacional_sem_rateio()
+            registro = realizado.setdefault(
+                venda.produto_id,
+                {"quantidade": 0, "faturamento": Decimal("0.00"), "margem": Decimal("0.00")},
+            )
+            registro["quantidade"] += int(venda.quantidade or 0)
+            registro["faturamento"] += Decimal(str(venda.valor_total or 0))
+            registro["margem"] += Decimal(str(venda.valor_total or 0)) - (custo_sem_rateio * Decimal(str(venda.quantidade or 0)))
+
+        try:
+            from ordens.models import ServicoPeca
+        except Exception:
+            return realizado
+
+        itens_os = ServicoPeca.objects.select_related("produto_estoque").filter(
+            tipo="peca",
+            produto_estoque__isnull=False,
+        )
+        for item in itens_os:
+            data_base = item.estoque_consumido_em or item.criado_em
+            data_ref = timezone.localtime(data_base).date()
+            if not (inicio <= data_ref < proximo_mes) or not item.produto_estoque_id:
+                continue
+            produto = item.produto_estoque
+            custo_sem_rateio = Decimal(str(produto.custo_unitario or 0)) + produto.custo_operacional_sem_rateio()
+            receita = Decimal(str(item.valor_unitario or 0)) * Decimal(str(item.quantidade or 0))
+            registro = realizado.setdefault(
+                item.produto_estoque_id,
+                {"quantidade": 0, "faturamento": Decimal("0.00"), "margem": Decimal("0.00")},
+            )
+            registro["quantidade"] += int(item.quantidade or 0)
+            registro["faturamento"] += receita
+            registro["margem"] += receita - (custo_sem_rateio * Decimal(str(item.quantidade or 0)))
+        return realizado
+
+    @classmethod
+    def gerar_snapshot(cls, *, competencia, usuario=None, observacao="", sobrescrever=False):
+        competencia = competencia.replace(day=1)
+        from caixa.models import CustoFixoMensal
+
+        configuracao = ConfiguracaoRateioCustoFixo.get_solo()
+        realizado_por_produto = cls._realizado_por_produto(competencia)
+        snapshot = cls.objects.filter(competencia=competencia).first()
+        criado = False
+        if snapshot and not sobrescrever:
+            return snapshot, False
+        if not snapshot:
+            snapshot = cls(competencia=competencia)
+            criado = True
+
+        total_fixos = (
+            CustoFixoMensal.objects.filter(competencia=competencia, ativo=True)
+            .exclude(status="cancelado")
+            .aggregate(total=Sum("valor_previsto"))["total"]
+            or Decimal("0.00")
+        )
+        produtos = list(
+            Produto.objects.filter(
+                ativo=True,
+                is_servico=False,
+                incluir_rateio_custo_fixo=True,
+                previsao_venda_mensal__gt=0,
+            ).order_by("nome")
+        )
+
+        itens = []
+        total_base = Decimal("0.00")
+        for produto in produtos:
+            base_rateio = produto.base_rateio_custo_fixo(criterio=configuracao.criterio_rateio)
+            if base_rateio <= 0:
+                continue
+            total_base += base_rateio
+            itens.append(
+                {
+                    "produto": produto,
+                    "produto_nome": produto.nome,
+                    "previsao_venda_mensal": int(produto.previsao_venda_mensal or 0),
+                    "base_rateio": base_rateio,
+                    "preco_referencia": produto.preco_referencia_rateio(),
+                    "lucro_unitario_referencia": produto.lucro_unitario_referencia_rateio(),
+                }
+            )
+
+        with transaction.atomic():
+            snapshot.criterio_rateio = configuracao.criterio_rateio
+            snapshot.total_custos_fixos = total_fixos
+            snapshot.total_base_rateio = total_base
+            snapshot.total_produtos = len(itens)
+            snapshot.observacao = observacao
+            snapshot.gerado_por = usuario
+            snapshot.fechado_em = timezone.now()
+            snapshot.save()
+            snapshot.itens.all().delete()
+
+            itens_modelo = []
+            for item in itens:
+                participacao = Decimal("0.00") if total_base <= 0 else (item["base_rateio"] / total_base) * Decimal("100")
+                custo_total = Decimal("0.00") if total_base <= 0 else total_fixos * (item["base_rateio"] / total_base)
+                previsao = Decimal(str(item["previsao_venda_mensal"] or 0))
+                custo_unitario = Decimal("0.00") if previsao <= 0 else custo_total / previsao
+                itens_modelo.append(
+                    RateioCustoFixoItemCompetencia(
+                        snapshot=snapshot,
+                        produto=item["produto"],
+                        produto_nome=item["produto_nome"],
+                        previsao_venda_mensal=item["previsao_venda_mensal"],
+                        base_rateio=item["base_rateio"],
+                        participacao_percentual=participacao,
+                        custo_rateio_unitario=custo_unitario,
+                        custo_rateio_total=custo_total,
+                        preco_referencia=item["preco_referencia"],
+                        lucro_unitario_referencia=item["lucro_unitario_referencia"],
+                        quantidade_realizada=realizado_por_produto.get(item["produto"].id, {}).get("quantidade", 0),
+                        faturamento_realizado=realizado_por_produto.get(item["produto"].id, {}).get("faturamento", Decimal("0.00")),
+                        margem_realizada=realizado_por_produto.get(item["produto"].id, {}).get("margem", Decimal("0.00")),
+                    )
+                )
+            if itens_modelo:
+                RateioCustoFixoItemCompetencia.objects.bulk_create(itens_modelo)
+
+        return snapshot, criado
+
+
+class RateioCustoFixoItemCompetencia(models.Model):
+    snapshot = models.ForeignKey(
+        RateioCustoFixoCompetencia,
+        on_delete=models.CASCADE,
+        related_name="itens",
+    )
+    produto = models.ForeignKey(Produto, on_delete=models.SET_NULL, null=True, blank=True, related_name="rateios_competencia")
+    produto_nome = models.CharField(max_length=120)
+    previsao_venda_mensal = models.PositiveIntegerField(default=0)
+    base_rateio = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    participacao_percentual = models.DecimalField(max_digits=7, decimal_places=2, default=0)
+    custo_rateio_unitario = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    custo_rateio_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    preco_referencia = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    lucro_unitario_referencia = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    quantidade_realizada = models.PositiveIntegerField(default=0)
+    faturamento_realizado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    margem_realizada = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["-custo_rateio_total", "produto_nome"]
+
+    def __str__(self):
+        return f"{self.snapshot.competencia:%m/%Y} - {self.produto_nome}"
+
+
 class TabelaPreco(models.Model):
     nome = models.CharField(max_length=80, unique=True)
     ativo = models.BooleanField(default=True)
@@ -354,6 +632,29 @@ class TabelaPreco(models.Model):
 
     def __str__(self):
         return self.nome
+
+
+class ProdutoHistorico(models.Model):
+    ACAO_CHOICES = [
+        ("CRIACAO", "Criação"),
+        ("EDICAO", "Edição"),
+        ("DUPLICACAO", "Duplicação"),
+        ("IMPORTACAO", "Importação"),
+    ]
+
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="historicos")
+    acao = models.CharField(max_length=20, choices=ACAO_CHOICES)
+    dados_antes = models.JSONField(default=dict, blank=True)
+    dados_depois = models.JSONField(default=dict, blank=True)
+    observacao = models.CharField(max_length=200, blank=True)
+    usuario = models.ForeignKey("configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+
+    def __str__(self):
+        return f"{self.produto.nome} - {self.get_acao_display()} ({self.criado_em:%d/%m/%Y %H:%M})"
 
 
 class ProdutoPrecoTabela(models.Model):

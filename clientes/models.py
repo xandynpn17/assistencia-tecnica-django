@@ -4,6 +4,12 @@ import random
 from django.db.models import Index
 import re
 
+from .services import (
+    gerar_numero_cliente_disponivel,
+    normalizar_documentos_cliente,
+    validar_documento_cliente,
+)
+
 # Validador para CPF/CNPJ (aceita 11 ou 14 dígitos) - NOVO
 documento_validator = RegexValidator(
     regex=r'^\d{11}$|^\d{14}$',
@@ -127,48 +133,14 @@ class Cliente(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.numero_cliente:
-            while True:
-                numero = f"CLI-{random.randint(10000, 99999)}"
-                if not Cliente.objects.filter(numero_cliente=numero).exists():
-                    self.numero_cliente = numero
-                    break
+            self.numero_cliente = gerar_numero_cliente_disponivel(Cliente)
 
-        # Se veio do formulário novo com campo 'documento'
-        if self.documento:
-            # Limpa formatação
-            doc_limpo = ''.join(filter(str.isdigit, self.documento))
-            self.documento = doc_limpo
-
-            # Determina tipo automaticamente baseado no tamanho
-            if len(doc_limpo) == 11:
-                self.tipo_cliente = 'pf'
-                self.cpf = doc_limpo  # Mantém no campo antigo para compatibilidade
-                self.cnpj = None
-            elif len(doc_limpo) == 14:
-                self.tipo_cliente = 'pj'
-                self.cnpj = doc_limpo  # Mantém no campo antigo para compatibilidade
-                self.cpf = None
-
-        # Se veio de um formulário antigo (com cpf ou cnpj separados)
-        elif self.cpf or self.cnpj:
-            if self.cpf:
-                cpf_limpo = ''.join(filter(str.isdigit, self.cpf))
-                self.documento = cpf_limpo
-                self.tipo_cliente = 'pf'
-                self.cpf = cpf_limpo
-            elif self.cnpj:
-                cnpj_limpo = ''.join(filter(str.isdigit, self.cnpj))
-                self.documento = cnpj_limpo
-                self.tipo_cliente = 'pj'
-                self.cnpj = cnpj_limpo
-
-        # Valida CPF/CNPJ (opcional, pode remover se quiser validar só no form)
-        if self.documento and len(self.documento) == 11:
-            if not self.validar_cpf(self.documento):
-                raise ValueError("CPF inválido")
-        elif self.documento and len(self.documento) == 14:
-            if not self.validar_cnpj(self.documento):
-                raise ValueError("CNPJ inválido")
+        normalizar_documentos_cliente(self)
+        validar_documento_cliente(
+            self,
+            validar_cpf=self.validar_cpf,
+            validar_cnpj=self.validar_cnpj,
+        )
 
         super().save(*args, **kwargs)
 

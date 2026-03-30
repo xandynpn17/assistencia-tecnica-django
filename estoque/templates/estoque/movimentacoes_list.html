@@ -2,40 +2,105 @@
 
 {% block header %}<h1 class="m-0 text-dark">Movimentações de Estoque</h1>{% endblock %}
 
+{% block extra_css %}
+<style>
+  .filters-panel { border: 1px solid #e8edf3; border-radius: 12px; background: linear-gradient(180deg, #fafcff 0%, #f4f8fb 100%); padding: 18px; }
+  .filters-title { font-weight: 700; color: #1f2937; margin-bottom: 4px; }
+  .filters-help { color: #667085; font-size: .92rem; }
+  .summary-box { border: 1px solid #e5ebf2; border-radius: 12px; background: #fff; padding: 14px; height: 100%; }
+  .summary-box .value { font-size: 1.6rem; font-weight: 700; color: #111827; }
+  .summary-chip { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #eef4f8; color: #243447; font-size: 12px; font-weight: 600; margin-right: 8px; margin-bottom: 8px; }
+  .table thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; border-top: none; }
+  .table-hover tbody tr:hover { background: #f8fbff; }
+  .tipo-badge { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; background: #f1f5f9; font-size: 12px; font-weight: 700; color: #334155; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>Histórico de movimentações</span>
     <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm">Nova movimentação</a>
   </div>
+
   <div class="card-body border-bottom">
-    <form method="get" class="form-inline">
-      <label class="mr-2">Tipo</label>
-      <select name="tipo" class="form-control form-control-sm mr-2">
-        <option value="">Todos</option>
-        {% for valor, label in tipos_mov %}
-          <option value="{{ valor }}" {% if tipo_filtro == valor %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <label class="mr-2">Ponto</label>
-      <select name="ponto" class="form-control form-control-sm mr-2">
-        <option value="">Todos</option>
-        {% for p in pontos %}
-          <option value="{{ p.id }}" {% if ponto_filtro == p.id|stringformat:'s' %}selected{% endif %}>{{ p.codigo }} - {{ p.nome }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
-    </form>
+    <div class="filters-panel">
+      <div class="row mb-3">
+        <div class="col-lg-8">
+          <div class="filters-title">Filtros de movimentação</div>
+          <div class="filters-help">
+            Use os filtros para limitar por tipo e ponto operacional. Isso facilita a auditoria e evita leitura excessiva de histórico.
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="summary-box">
+            <div class="small text-muted text-uppercase mb-1">Resultado</div>
+            <div class="value">{{ movimentacoes|length }}</div>
+            <div class="small text-muted">movimentação(ões) nesta página</div>
+          </div>
+        </div>
+      </div>
+
+      <form method="get" class="form-row align-items-end">
+        <div class="col-lg-4 col-md-6 mb-2">
+          <label>Tipo</label>
+          <select name="tipo" class="form-control">
+            <option value="">Todos</option>
+            {% for valor, label in tipos_mov %}
+              <option value="{{ valor }}" {% if tipo_filtro == valor %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-lg-4 col-md-6 mb-2">
+          <label>Ponto operacional</label>
+          <select name="ponto" class="form-control">
+            <option value="">Todos</option>
+            {% for p in pontos %}
+              <option value="{{ p.id }}" {% if ponto_filtro == p.id|stringformat:'s' %}selected{% endif %}>{{ p.codigo }} - {{ p.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-lg-2 col-md-6 mb-2">
+          <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+        </div>
+        <div class="col-lg-2 col-md-6 mb-2">
+          <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-outline-secondary btn-block">Limpar</a>
+        </div>
+      </form>
+
+      {% if tipo_filtro or ponto_filtro %}
+      <div class="mt-3">
+        {% if tipo_filtro %}
+        <span class="summary-chip">Tipo<strong class="ml-1">{{ tipo_filtro }}</strong></span>
+        {% endif %}
+        {% if ponto_filtro %}
+        <span class="summary-chip">Ponto<strong class="ml-1">{{ ponto_filtro }}</strong></span>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
   </div>
-  <div class="card-body p-0">
-    <table class="table table-sm table-bordered mb-0">
-      <thead><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Qtd</th><th>Origem</th><th>Destino</th><th>Obs</th><th>Usuario</th></tr></thead>
+
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th class="pl-4">Data</th>
+          <th>Produto</th>
+          <th>Tipo</th>
+          <th>Qtd</th>
+          <th>Origem</th>
+          <th>Destino</th>
+          <th>Observação</th>
+          <th>Usuário</th>
+        </tr>
+      </thead>
       <tbody>
       {% for m in movimentacoes %}
       <tr>
-        <td>{{ m.criado_em|date:"d/m/Y H:i" }}</td>
+        <td class="pl-4">{{ m.criado_em|date:"d/m/Y H:i" }}</td>
         <td>{{ m.produto.nome }}</td>
-        <td>{{ m.get_tipo_display }}</td>
+        <td><span class="tipo-badge">{{ m.get_tipo_display }}</span></td>
         <td>{{ m.quantidade }}</td>
         <td>{{ m.origem|default:"-" }}</td>
         <td>{{ m.destino|default:"-" }}</td>
@@ -43,10 +108,30 @@
         <td>{{ m.usuario|default:"-" }}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="8" class="text-center text-muted">Sem movimentacoes.</td></tr>
+      <tr>
+        <td colspan="8" class="text-center text-muted py-4">Sem movimentações para os filtros informados.</td>
+      </tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
+
+  {% if movimentacoes_page and movimentacoes_page.paginator.num_pages > 1 %}
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <small class="text-muted">Página {{ movimentacoes_page.number }} de {{ movimentacoes_page.paginator.num_pages }}</small>
+    <div class="btn-group">
+      {% if movimentacoes_page.has_previous %}
+      <a class="btn btn-sm btn-outline-secondary" href="?tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&page={{ movimentacoes_page.previous_page_number }}">Anterior</a>
+      {% else %}
+      <button class="btn btn-sm btn-outline-secondary" disabled>Anterior</button>
+      {% endif %}
+      {% if movimentacoes_page.has_next %}
+      <a class="btn btn-sm btn-outline-secondary" href="?tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&page={{ movimentacoes_page.next_page_number }}">Próxima</a>
+      {% else %}
+      <button class="btn btn-sm btn-outline-secondary" disabled>Próxima</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

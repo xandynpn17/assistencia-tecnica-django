@@ -15,15 +15,160 @@
         <div class="col-md-3">{{ form.telefone.label_tag }} {{ form.telefone }}</div>
       </div>
       <div class="row mt-2">
-        <div class="col-md-6">{{ form.email.label_tag }} {{ form.email }}</div>
-        <div class="col-md-6">{{ form.logo.label_tag }} {{ form.logo }}</div>
+        <div class="col-md-4">{{ form.email.label_tag }} {{ form.email }}</div>
+        <div class="col-md-4">
+          <div
+            class="logo-card"
+            data-logo-card
+            data-label="{{ form.logo.label }}"
+            data-input-id="id_logo"
+            data-preview-id="logo-novo-preview"
+            data-preview-shell-id="logo-novo-shell"
+            data-empty-id="logo-novo-vazio"
+            data-current-url="{% if form.instance.logo %}{{ form.instance.logo.url }}{% endif %}"
+            data-current-state-id="logo-status-atual"
+            data-ratio="2"
+            data-crop-x-id="id_logo_crop_x"
+            data-crop-y-id="id_logo_crop_y"
+            data-crop-w-id="id_logo_crop_w"
+            data-crop-h-id="id_logo_crop_h"
+            data-zoom-id="id_logo_zoom"
+            data-focus-x-id="id_logo_focus_x"
+            data-focus-y-id="id_logo_focus_y"
+          >
+            <div class="logo-card-header">
+              <div>
+                <div class="logo-card-title">{{ form.logo.label }}</div>
+                <div class="logo-card-subtitle">Aceita PNG, JPG/JPEG e WEBP.</div>
+              </div>
+              <span id="logo-status-atual" class="logo-card-state">
+                {% if form.instance.logo %}Configurado{% else %}Sem logo{% endif %}
+              </span>
+            </div>
+
+            {{ form.logo.errors }}
+            <div class="logo-card-body">
+              <div class="logo-current-block">
+                <div class="logo-mini-title">Atual</div>
+                <div class="logo-thumb-frame">
+                  {% if form.instance.logo %}
+                  <img src="{{ form.instance.logo.url }}" alt="Logo atual do sistema" class="logo-thumb-image">
+                  {% else %}
+                  <div class="logo-thumb-empty">Sem logo</div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="logo-actions-block">
+                {{ form.logo }}
+                {% if form.logo.help_text %}<small class="form-text text-muted">{{ form.logo.help_text }}</small>{% endif %}
+                <small class="form-text text-muted">Ao escolher uma imagem, o editor abre antes de salvar.</small>
+
+                <label class="logo-remove-toggle mt-2">
+                  {{ form.remover_logo }}
+                  <span>{{ form.remover_logo.label }}</span>
+                </label>
+
+                <div id="logo-novo-shell" class="logo-new-shell d-none">
+                  <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="logo-mini-title mb-0">Novo arquivo preparado</div>
+                    <button type="button" class="btn btn-xs btn-outline-secondary" data-logo-edit>
+                      Ajustar novamente
+                    </button>
+                  </div>
+                  <div class="logo-thumb-frame">
+                    <img id="logo-novo-preview" alt="Novo logo do sistema" class="logo-thumb-image">
+                  </div>
+                </div>
+
+                <div id="logo-novo-vazio" class="logo-empty-note">Nenhum novo arquivo preparado.</div>
+              </div>
+            </div>
+
+            {{ form.logo_zoom }}{{ form.logo_focus_x }}{{ form.logo_focus_y }}
+            {{ form.logo_crop_x }}{{ form.logo_crop_y }}{{ form.logo_crop_w }}{{ form.logo_crop_h }}
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div
+            class="logo-card"
+            data-logo-card
+            data-label="{{ form.logo_pdf.label }}"
+            data-input-id="id_logo_pdf"
+            data-preview-id="logo-pdf-novo-preview"
+            data-preview-shell-id="logo-pdf-novo-shell"
+            data-empty-id="logo-pdf-novo-vazio"
+            data-current-url="{% if form.instance.logo_pdf %}{{ form.instance.logo_pdf.url }}{% endif %}"
+            data-current-state-id="logo-pdf-status-atual"
+            data-ratio="2.181818"
+            data-crop-x-id="id_logo_pdf_crop_x"
+            data-crop-y-id="id_logo_pdf_crop_y"
+            data-crop-w-id="id_logo_pdf_crop_w"
+            data-crop-h-id="id_logo_pdf_crop_h"
+            data-zoom-id="id_logo_pdf_zoom"
+            data-focus-x-id="id_logo_pdf_focus_x"
+            data-focus-y-id="id_logo_pdf_focus_y"
+          >
+            <div class="logo-card-header">
+              <div>
+                <div class="logo-card-title">{{ form.logo_pdf.label }}</div>
+                <div class="logo-card-subtitle">Aceita PNG, JPG/JPEG e WEBP.</div>
+              </div>
+              <span id="logo-pdf-status-atual" class="logo-card-state">
+                {% if form.instance.logo_pdf %}Configurado{% else %}Usa nome da empresa{% endif %}
+              </span>
+            </div>
+
+            {{ form.logo_pdf.errors }}
+            <div class="logo-card-body">
+              <div class="logo-current-block">
+                <div class="logo-mini-title">Atual</div>
+                <div class="logo-thumb-frame logo-thumb-frame-pdf">
+                  {% if form.instance.logo_pdf %}
+                  <img src="{{ form.instance.logo_pdf.url }}" alt="Logo atual dos PDFs" class="logo-thumb-image">
+                  {% else %}
+                  <div class="logo-thumb-empty">Nome da empresa</div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="logo-actions-block">
+                {{ form.logo_pdf }}
+                {% if form.logo_pdf.help_text %}<small class="form-text text-muted">{{ form.logo_pdf.help_text }}</small>{% endif %}
+                <small class="form-text text-muted">Ao escolher uma imagem, o editor abre antes de salvar.</small>
+
+                <label class="logo-remove-toggle mt-2">
+                  {{ form.remover_logo_pdf }}
+                  <span>{{ form.remover_logo_pdf.label }}</span>
+                </label>
+
+                <div id="logo-pdf-novo-shell" class="logo-new-shell d-none">
+                  <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="logo-mini-title mb-0">Novo arquivo preparado</div>
+                    <button type="button" class="btn btn-xs btn-outline-secondary" data-logo-edit>
+                      Ajustar novamente
+                    </button>
+                  </div>
+                  <div class="logo-thumb-frame logo-thumb-frame-pdf">
+                    <img id="logo-pdf-novo-preview" alt="Novo logo dos PDFs" class="logo-thumb-image">
+                  </div>
+                </div>
+
+                <div id="logo-pdf-novo-vazio" class="logo-empty-note">Se não enviar um logo, o PDF usa o nome da empresa.</div>
+              </div>
+            </div>
+
+            {{ form.logo_pdf_zoom }}{{ form.logo_pdf_focus_x }}{{ form.logo_pdf_focus_y }}
+            {{ form.logo_pdf_crop_x }}{{ form.logo_pdf_crop_y }}{{ form.logo_pdf_crop_w }}{{ form.logo_pdf_crop_h }}
+          </div>
+        </div>
       </div>
       <div class="row mt-2">
         <div class="col-md-12">{{ form.endereco.label_tag }} {{ form.endereco }}</div>
       </div>
 
       <hr>
-      <h5>Configuração Tributaria</h5>
+      <h5>Configuração Tributária</h5>
       <div class="row">
         <div class="col-md-4">{{ form.regime_tributario.label_tag }} {{ form.regime_tributario }}</div>
         <div class="col-md-4">{{ form.anexo_simples.label_tag }} {{ form.anexo_simples }}</div>
@@ -51,6 +196,322 @@
     </form>
   </div>
 </div>
+
+<div class="modal fade" id="logoCropModal" tabindex="-1" role="dialog" aria-labelledby="logoCropModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+    <div class="modal-content logo-modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title" id="logoCropModalLabel">Ajustar logo</h5>
+          <small class="text-muted">Arraste a imagem, ajuste o zoom e confirme o resultado final.</small>
+        </div>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="logo-modal-layout">
+          <div class="logo-modal-stage-shell">
+            <div id="logo-editor-stage" class="logo-modal-stage">
+              <div id="logo-crop-frame" class="logo-crop-frame">
+                <img id="logo-editor-image" class="logo-editor-image d-none" alt="Prévia do recorte do logo">
+                <div id="logo-editor-placeholder" class="logo-editor-placeholder">
+                  Selecione uma imagem para ajustar.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="logo-modal-sidebar">
+            <div class="logo-side-card">
+              <div class="logo-side-title">Controles</div>
+              <div class="logo-zoom-row">
+                <button type="button" class="btn btn-light btn-sm" id="logo-zoom-out">-</button>
+                <input id="logo-zoom-slider" type="range" class="custom-range" min="20" max="800" step="5" value="100">
+                <button type="button" class="btn btn-light btn-sm" id="logo-zoom-in">+</button>
+              </div>
+              <div class="logo-editor-actions">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="logo-center-btn">Centralizar</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="logo-reset-btn">Resetar</button>
+              </div>
+            </div>
+            <div class="logo-side-card">
+              <div class="logo-side-title">Como ficará</div>
+              <div class="logo-final-preview">
+                <img id="logo-final-preview-image" class="logo-editor-image d-none" alt="Prévia final do logo">
+                <div id="logo-final-preview-placeholder" class="logo-editor-placeholder">
+                  A prévia final aparece aqui.
+                </div>
+              </div>
+              <small class="form-text text-muted mb-0">O arquivo salvo ficará igual ao enquadramento mostrado nesta área.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="logo-cancel-btn" data-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="logo-confirm-btn">Usar este ajuste</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .logo-card {
+    border: 1px solid #d8dee6;
+    border-radius: 14px;
+    background: #fff;
+    padding: 0.9rem;
+    height: 100%;
+  }
+
+  .logo-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .logo-card-title {
+    font-size: 0.94rem;
+    font-weight: 700;
+    color: #111827;
+  }
+
+  .logo-card-subtitle {
+    font-size: 0.76rem;
+    color: #6b7280;
+    margin-top: 0.15rem;
+  }
+
+  .logo-card-state {
+    white-space: nowrap;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #4b5563;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.3rem 0.65rem;
+  }
+
+  .logo-card-body {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 0.85rem;
+    align-items: flex-start;
+  }
+
+  .logo-mini-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #4b5563;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.45rem;
+  }
+
+  .logo-thumb-frame {
+    width: 92px;
+    aspect-ratio: 2 / 1;
+    border-radius: 12px;
+    border: 1px solid #d8dee6;
+    background:
+      linear-gradient(45deg, rgba(197, 208, 221, 0.16) 25%, transparent 25%, transparent 75%, rgba(197, 208, 221, 0.16) 75%),
+      linear-gradient(45deg, rgba(197, 208, 221, 0.16) 25%, transparent 25%, transparent 75%, rgba(197, 208, 221, 0.16) 75%);
+    background-size: 18px 18px;
+    background-position: 0 0, 9px 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .logo-thumb-frame-pdf {
+    aspect-ratio: 24 / 11;
+  }
+
+  .logo-thumb-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .logo-thumb-empty {
+    color: #6b7280;
+    font-size: 0.72rem;
+    text-align: center;
+    padding: 0 0.4rem;
+  }
+
+  .logo-actions-block .form-control-file {
+    font-size: 0.82rem;
+  }
+
+  .logo-remove-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    color: #7c2d12;
+    cursor: pointer;
+  }
+
+  .logo-remove-toggle input {
+    margin: 0;
+  }
+
+  .logo-new-shell {
+    margin-top: 0.65rem;
+    padding: 0.65rem;
+    border: 1px solid #d8dee6;
+    border-radius: 12px;
+    background: #f8fafc;
+  }
+
+  .logo-empty-note {
+    margin-top: 0.65rem;
+    font-size: 0.78rem;
+    color: #6b7280;
+  }
+
+  .logo-modal-content {
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .logo-modal-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 1rem;
+  }
+
+  .logo-modal-stage-shell {
+    border: 1px solid #d8dee6;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #fbfcfe 0%, #f3f6fa 100%);
+    padding: 1rem;
+  }
+
+  .logo-modal-stage {
+    position: relative;
+    min-height: 420px;
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      linear-gradient(45deg, rgba(197, 208, 221, 0.2) 25%, transparent 25%, transparent 75%, rgba(197, 208, 221, 0.2) 75%),
+      linear-gradient(45deg, rgba(197, 208, 221, 0.2) 25%, transparent 25%, transparent 75%, rgba(197, 208, 221, 0.2) 75%);
+    background-size: 18px 18px;
+    background-position: 0 0, 9px 9px;
+  }
+
+  .logo-crop-frame {
+    position: absolute;
+    inset: 50%;
+    width: min(92%, 760px);
+    transform: translate(-50%, -50%);
+    aspect-ratio: var(--crop-ratio, 2 / 1);
+    border-radius: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.98);
+    box-shadow:
+      0 0 0 9999px rgba(15, 23, 42, 0.45),
+      inset 0 0 0 1px rgba(31, 41, 55, 0.16);
+    overflow: hidden;
+    cursor: grab;
+  }
+
+  .logo-crop-frame.is-dragging {
+    cursor: grabbing;
+  }
+
+  .logo-editor-image {
+    position: absolute;
+    max-width: none;
+    user-select: none;
+    pointer-events: none;
+    transform-origin: top left;
+  }
+
+  .logo-editor-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #6b7280;
+    font-size: 0.9rem;
+    padding: 1rem;
+  }
+
+  .logo-modal-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .logo-side-card {
+    border: 1px solid #d8dee6;
+    border-radius: 16px;
+    background: #fff;
+    padding: 0.9rem;
+  }
+
+  .logo-side-title {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: #4b5563;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.65rem;
+  }
+
+  .logo-zoom-row {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) 36px;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .logo-zoom-row .custom-range {
+    margin: 0;
+  }
+
+  .logo-editor-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+
+  .logo-final-preview {
+    position: relative;
+    width: 100%;
+    aspect-ratio: var(--crop-ratio, 2 / 1);
+    border-radius: 14px;
+    border: 1px solid #d8dee6;
+    overflow: hidden;
+    background:
+      linear-gradient(45deg, rgba(197, 208, 221, 0.2) 25%, transparent 25%, transparent 75%, rgba(197, 208, 221, 0.2) 75%),
+      linear-gradient(45deg, rgba(197, 208, 221, 0.2) 25%, transparent 25%, transparent 75%, rgba(197, 208, 221, 0.2) 75%);
+    background-size: 18px 18px;
+    background-position: 0 0, 9px 9px;
+  }
+
+  @media (max-width: 991.98px) {
+    .logo-card-body {
+      grid-template-columns: 1fr;
+    }
+
+    .logo-modal-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .logo-modal-stage {
+      min-height: 300px;
+    }
+  }
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -63,17 +524,480 @@ document.addEventListener("DOMContentLoaded", function() {
   const anexo = document.getElementById("id_anexo_simples");
 
   function atualizarVisibilidade() {
-    const regimeVal = (regime?.value || "simples");
-    const modoVal = (modo?.value || "basico");
+    const regimeVal = regime ? (regime.value || "simples") : "simples";
+    const modoVal = modo ? (modo.value || "basico") : "basico";
     const simplesBasico = regimeVal === "simples" && modoVal === "basico";
     if (blocoBasico) blocoBasico.style.display = simplesBasico ? "block" : "none";
     if (blocoAvancado) blocoAvancado.style.display = simplesBasico ? "none" : "block";
-    if (anexo) anexo.closest(".col-md-4").style.display = regimeVal === "simples" ? "block" : "none";
+    if (anexo && anexo.closest(".col-md-4")) {
+      anexo.closest(".col-md-4").style.display = regimeVal === "simples" ? "block" : "none";
+    }
   }
 
-  regime?.addEventListener("change", atualizarVisibilidade);
-  modo?.addEventListener("change", atualizarVisibilidade);
+  if (regime) regime.addEventListener("change", atualizarVisibilidade);
+  if (modo) modo.addEventListener("change", atualizarVisibilidade);
   atualizarVisibilidade();
+
+  const modalEl = document.getElementById("logoCropModal");
+  const modalTitle = document.getElementById("logoCropModalLabel");
+  const stage = document.getElementById("logo-editor-stage");
+  const cropFrame = document.getElementById("logo-crop-frame");
+  const editorImage = document.getElementById("logo-editor-image");
+  const editorPlaceholder = document.getElementById("logo-editor-placeholder");
+  const finalPreviewShell = document.querySelector(".logo-final-preview");
+  const finalPreview = document.getElementById("logo-final-preview-image");
+  const finalPlaceholder = document.getElementById("logo-final-preview-placeholder");
+  const zoomSlider = document.getElementById("logo-zoom-slider");
+  const zoomOutBtn = document.getElementById("logo-zoom-out");
+  const zoomInBtn = document.getElementById("logo-zoom-in");
+  const centerBtn = document.getElementById("logo-center-btn");
+  const resetBtn = document.getElementById("logo-reset-btn");
+  const confirmBtn = document.getElementById("logo-confirm-btn");
+  const cancelBtn = document.getElementById("logo-cancel-btn");
+  const LOGO_ZOOM_MIN = 20;
+  const LOGO_ZOOM_MAX = 800;
+  const LOGO_ZOOM_STEP = 10;
+
+  const editors = Array.from(document.querySelectorAll("[data-logo-card]")).map(function(card) {
+    const editor = {
+      card: card,
+      label: card.dataset.label,
+      ratio: parseFloat(card.dataset.ratio || "2"),
+      input: document.getElementById(card.dataset.inputId),
+      preview: document.getElementById(card.dataset.previewId),
+      previewShell: document.getElementById(card.dataset.previewShellId),
+      emptyNote: document.getElementById(card.dataset.emptyId),
+      status: document.getElementById(card.dataset.currentStateId),
+      currentUrl: card.dataset.currentUrl || "",
+      cropX: document.getElementById(card.dataset.cropXId),
+      cropY: document.getElementById(card.dataset.cropYId),
+      cropW: document.getElementById(card.dataset.cropWId),
+      cropH: document.getElementById(card.dataset.cropHId),
+      zoom: document.getElementById(card.dataset.zoomId),
+      focusX: document.getElementById(card.dataset.focusXId),
+      focusY: document.getElementById(card.dataset.focusYId),
+      removeToggle: card.querySelector("input[type='checkbox']"),
+      editButton: card.querySelector("[data-logo-edit]"),
+      pendingUrl: "",
+      confirmed: false,
+    };
+
+    function updateSummary() {
+      if (editor.pendingUrl && editor.confirmed) {
+        if (editor.preview) editor.preview.src = editor.pendingUrl;
+        if (editor.previewShell) editor.previewShell.classList.remove("d-none");
+        if (editor.emptyNote) editor.emptyNote.classList.add("d-none");
+      } else {
+        if (editor.previewShell) editor.previewShell.classList.add("d-none");
+        if (editor.emptyNote) editor.emptyNote.classList.remove("d-none");
+      }
+
+      if (!editor.status) return;
+      if (editor.removeToggle && editor.removeToggle.checked && !editor.pendingUrl) {
+        editor.status.textContent = card.dataset.inputId === "id_logo_pdf" ? "Nome da empresa" : "Sem logo";
+        return;
+      }
+      if (editor.pendingUrl && editor.confirmed) {
+        editor.status.textContent = "Novo arquivo pronto";
+        return;
+      }
+      editor.status.textContent = editor.currentUrl ? "Configurado" : (card.dataset.inputId === "id_logo_pdf" ? "Usa nome da empresa" : "Sem logo");
+    }
+
+    editor.resetCrop = function() {
+      if (editor.cropX) editor.cropX.value = "0";
+      if (editor.cropY) editor.cropY.value = "0";
+      if (editor.cropW) editor.cropW.value = "1";
+      if (editor.cropH) editor.cropH.value = "1";
+      if (editor.zoom) editor.zoom.value = "1";
+      if (editor.focusX) editor.focusX.value = "0.5";
+      if (editor.focusY) editor.focusY.value = "0.5";
+    };
+
+    editor.clearPending = function(clearInput) {
+      if (editor.pendingUrl) {
+        URL.revokeObjectURL(editor.pendingUrl);
+      }
+      editor.pendingUrl = "";
+      editor.confirmed = false;
+      editor.resetCrop();
+      if (clearInput && editor.input) {
+        editor.input.value = "";
+      }
+      updateSummary();
+    };
+
+    editor.setPending = function(url) {
+      if (editor.pendingUrl && editor.pendingUrl !== url) {
+        URL.revokeObjectURL(editor.pendingUrl);
+      }
+      editor.pendingUrl = url;
+      editor.confirmed = false;
+      updateSummary();
+    };
+
+    if (editor.removeToggle) {
+      editor.removeToggle.addEventListener("change", updateSummary);
+    }
+
+    if (editor.input) {
+      editor.input.addEventListener("change", function() {
+        const file = editor.input.files && editor.input.files[0];
+        if (!file) {
+          editor.clearPending(false);
+          return;
+        }
+        const objectUrl = URL.createObjectURL(file);
+        editor.setPending(objectUrl);
+        openModal(editor, objectUrl, true);
+      });
+    }
+
+    if (editor.editButton) {
+      editor.editButton.addEventListener("click", function() {
+        if (editor.pendingUrl) {
+          openModal(editor, editor.pendingUrl, false);
+        }
+      });
+    }
+
+    editor.resetCrop();
+    updateSummary();
+    return editor;
+  });
+
+  const modalState = {
+    editor: null,
+    sourceUrl: "",
+    freshSelection: false,
+    pendingImage: null,
+    naturalWidth: 0,
+    naturalHeight: 0,
+    baseScale: 1,
+    zoom: 1,
+    scale: 1,
+    imageWidth: 0,
+    imageHeight: 0,
+    imageLeft: 0,
+    imageTop: 0,
+    dragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    startLeft: 0,
+    startTop: 0,
+  };
+
+  function showModal() {
+    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.modal) {
+      window.jQuery(modalEl).modal("show");
+    } else {
+      modalEl.classList.add("show");
+      modalEl.style.display = "block";
+    }
+  }
+
+  function hideModal() {
+    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.modal) {
+      window.jQuery(modalEl).modal("hide");
+    } else {
+      modalEl.classList.remove("show");
+      modalEl.style.display = "none";
+    }
+  }
+
+  function getFrameMetrics() {
+    const frameRect = cropFrame.getBoundingClientRect();
+    const previewRect = finalPreviewShell.getBoundingClientRect();
+    return {
+      frameWidth: frameRect.width,
+      frameHeight: frameRect.height,
+      previewWidth: previewRect.width,
+      previewHeight: previewRect.height,
+    };
+  }
+
+  function clampPosition() {
+    const metrics = getFrameMetrics();
+    const minLeft = Math.min(0, metrics.frameWidth - modalState.imageWidth);
+    const minTop = Math.min(0, metrics.frameHeight - modalState.imageHeight);
+    const maxLeft = Math.max(0, metrics.frameWidth - modalState.imageWidth);
+    const maxTop = Math.max(0, metrics.frameHeight - modalState.imageHeight);
+
+    modalState.imageLeft = Math.min(maxLeft, Math.max(minLeft, modalState.imageLeft));
+    modalState.imageTop = Math.min(maxTop, Math.max(minTop, modalState.imageTop));
+  }
+
+  function renderModal() {
+    if (!modalState.sourceUrl || !modalState.naturalWidth || !modalState.naturalHeight) {
+      editorImage.classList.add("d-none");
+      finalPreview.classList.add("d-none");
+      editorPlaceholder.classList.remove("d-none");
+      finalPlaceholder.classList.remove("d-none");
+      return;
+    }
+
+    editorImage.classList.remove("d-none");
+    finalPreview.classList.remove("d-none");
+    editorPlaceholder.classList.add("d-none");
+    finalPlaceholder.classList.add("d-none");
+
+    editorImage.src = modalState.sourceUrl;
+    finalPreview.src = modalState.sourceUrl;
+
+    editorImage.style.width = modalState.imageWidth + "px";
+    editorImage.style.height = modalState.imageHeight + "px";
+    editorImage.style.left = modalState.imageLeft + "px";
+    editorImage.style.top = modalState.imageTop + "px";
+
+    const metrics = getFrameMetrics();
+    const previewScale = metrics.frameWidth ? (metrics.previewWidth / metrics.frameWidth) : 1;
+    finalPreview.style.width = (modalState.imageWidth * previewScale) + "px";
+    finalPreview.style.height = (modalState.imageHeight * previewScale) + "px";
+    finalPreview.style.left = (modalState.imageLeft * previewScale) + "px";
+    finalPreview.style.top = (modalState.imageTop * previewScale) + "px";
+
+    zoomSlider.value = String(Math.round(modalState.zoom * 100));
+  }
+
+  function centerImage() {
+    const metrics = getFrameMetrics();
+    modalState.imageLeft = (metrics.frameWidth - modalState.imageWidth) / 2;
+    modalState.imageTop = (metrics.frameHeight - modalState.imageHeight) / 2;
+    clampPosition();
+    renderModal();
+  }
+
+  function applyZoom(nextZoom, preserveCenter) {
+    if (!modalState.naturalWidth || !modalState.naturalHeight) {
+      return;
+    }
+    const metrics = getFrameMetrics();
+    const clampedZoom = Math.max(LOGO_ZOOM_MIN / 100, Math.min(LOGO_ZOOM_MAX / 100, nextZoom));
+
+    let focusX = 0.5;
+    let focusY = 0.5;
+    if (preserveCenter) {
+      focusX = ((metrics.frameWidth / 2) - modalState.imageLeft) / (modalState.imageWidth || 1);
+      focusY = ((metrics.frameHeight / 2) - modalState.imageTop) / (modalState.imageHeight || 1);
+    }
+
+    modalState.zoom = clampedZoom;
+    modalState.scale = modalState.baseScale * modalState.zoom;
+    modalState.imageWidth = modalState.naturalWidth * modalState.scale;
+    modalState.imageHeight = modalState.naturalHeight * modalState.scale;
+
+    if (preserveCenter) {
+      const desiredCenterX = metrics.frameWidth / 2;
+      const desiredCenterY = metrics.frameHeight / 2;
+      modalState.imageLeft = desiredCenterX - (focusX * modalState.imageWidth);
+      modalState.imageTop = desiredCenterY - (focusY * modalState.imageHeight);
+      clampPosition();
+      renderModal();
+      return;
+    }
+
+    centerImage();
+  }
+
+  function syncHiddenCrop() {
+    const editor = modalState.editor;
+    if (!editor) {
+      return;
+    }
+
+    const metrics = getFrameMetrics();
+    const visibleLeft = Math.max(0, -modalState.imageLeft);
+    const visibleTop = Math.max(0, -modalState.imageTop);
+    const visibleRight = Math.min(modalState.imageWidth, metrics.frameWidth - modalState.imageLeft);
+    const visibleBottom = Math.min(modalState.imageHeight, metrics.frameHeight - modalState.imageTop);
+
+    const cropPixelLeft = Math.max(0, visibleLeft / modalState.scale);
+    const cropPixelTop = Math.max(0, visibleTop / modalState.scale);
+    const cropPixelWidth = Math.max(1, (visibleRight - visibleLeft) / modalState.scale);
+    const cropPixelHeight = Math.max(1, (visibleBottom - visibleTop) / modalState.scale);
+
+    editor.cropX.value = (cropPixelLeft / modalState.naturalWidth).toFixed(6);
+    editor.cropY.value = (cropPixelTop / modalState.naturalHeight).toFixed(6);
+    editor.cropW.value = Math.min(1, cropPixelWidth / modalState.naturalWidth).toFixed(6);
+    editor.cropH.value = Math.min(1, cropPixelHeight / modalState.naturalHeight).toFixed(6);
+    editor.zoom.value = modalState.zoom.toFixed(4);
+    editor.focusX.value = "0.5";
+    editor.focusY.value = "0.5";
+  }
+
+  function resetModalState() {
+    modalState.naturalWidth = 0;
+    modalState.naturalHeight = 0;
+    modalState.baseScale = 1;
+    modalState.zoom = 1;
+    modalState.scale = 1;
+    modalState.imageWidth = 0;
+    modalState.imageHeight = 0;
+    modalState.imageLeft = 0;
+    modalState.imageTop = 0;
+    modalState.dragging = false;
+    cropFrame.classList.remove("is-dragging");
+    editorImage.removeAttribute("style");
+    finalPreview.removeAttribute("style");
+    editorImage.classList.add("d-none");
+    finalPreview.classList.add("d-none");
+    editorPlaceholder.classList.remove("d-none");
+    finalPlaceholder.classList.remove("d-none");
+  }
+
+  function openModal(editor, sourceUrl, freshSelection) {
+    modalState.editor = editor;
+    modalState.sourceUrl = sourceUrl;
+    modalState.freshSelection = freshSelection;
+    cropFrame.style.setProperty("--crop-ratio", String(editor.ratio));
+    finalPreviewShell.style.setProperty("--crop-ratio", String(editor.ratio));
+    modalTitle.textContent = "Ajustar " + editor.label;
+    resetModalState();
+    const image = new Image();
+    image.onload = function() {
+      modalState.pendingImage = image;
+      initializeModalImage();
+    };
+    image.src = sourceUrl;
+    showModal();
+  }
+
+  function initializeModalImage() {
+    const image = modalState.pendingImage;
+    if (!image || !modalState.sourceUrl) {
+      return;
+    }
+    const metrics = getFrameMetrics();
+    if (!metrics.frameWidth || !metrics.frameHeight) {
+      return;
+    }
+    modalState.naturalWidth = image.naturalWidth;
+    modalState.naturalHeight = image.naturalHeight;
+    modalState.baseScale = Math.max(
+      metrics.frameWidth / modalState.naturalWidth,
+      metrics.frameHeight / modalState.naturalHeight
+    );
+    modalState.zoom = 1;
+    modalState.scale = modalState.baseScale;
+    modalState.imageWidth = modalState.naturalWidth * modalState.scale;
+    modalState.imageHeight = modalState.naturalHeight * modalState.scale;
+    modalState.pendingImage = null;
+    centerImage();
+  }
+
+  zoomSlider.addEventListener("input", function() {
+    applyZoom(parseInt(zoomSlider.value, 10) / 100, true);
+  });
+
+  zoomOutBtn.addEventListener("click", function() {
+    const nextValue = Math.max(LOGO_ZOOM_MIN, parseInt(zoomSlider.value, 10) - LOGO_ZOOM_STEP);
+    zoomSlider.value = String(nextValue);
+    zoomSlider.dispatchEvent(new Event("input"));
+  });
+
+  zoomInBtn.addEventListener("click", function() {
+    const nextValue = Math.min(LOGO_ZOOM_MAX, parseInt(zoomSlider.value, 10) + LOGO_ZOOM_STEP);
+    zoomSlider.value = String(nextValue);
+    zoomSlider.dispatchEvent(new Event("input"));
+  });
+
+  centerBtn.addEventListener("click", function() {
+    centerImage();
+  });
+
+  resetBtn.addEventListener("click", function() {
+    applyZoom(1, false);
+  });
+
+  cropFrame.addEventListener("mousedown", function(event) {
+    if (!modalState.sourceUrl) {
+      return;
+    }
+    modalState.dragging = true;
+    modalState.dragStartX = event.clientX;
+    modalState.dragStartY = event.clientY;
+    modalState.startLeft = modalState.imageLeft;
+    modalState.startTop = modalState.imageTop;
+    cropFrame.classList.add("is-dragging");
+    event.preventDefault();
+  });
+
+  document.addEventListener("mousemove", function(event) {
+    if (!modalState.dragging) {
+      return;
+    }
+    modalState.imageLeft = modalState.startLeft + (event.clientX - modalState.dragStartX);
+    modalState.imageTop = modalState.startTop + (event.clientY - modalState.dragStartY);
+    clampPosition();
+    renderModal();
+  });
+
+  document.addEventListener("mouseup", function() {
+    modalState.dragging = false;
+    cropFrame.classList.remove("is-dragging");
+  });
+
+  cropFrame.addEventListener("wheel", function(event) {
+    if (!modalState.sourceUrl) {
+      return;
+    }
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? LOGO_ZOOM_STEP : -LOGO_ZOOM_STEP;
+    const nextValue = Math.max(LOGO_ZOOM_MIN, Math.min(LOGO_ZOOM_MAX, parseInt(zoomSlider.value, 10) + delta));
+    zoomSlider.value = String(nextValue);
+    zoomSlider.dispatchEvent(new Event("input"));
+  }, { passive: false });
+
+  confirmBtn.addEventListener("click", function() {
+    if (!modalState.editor || !modalState.sourceUrl) {
+      hideModal();
+      return;
+    }
+    syncHiddenCrop();
+    modalState.editor.confirmed = true;
+    if (modalState.editor.preview) {
+      modalState.editor.preview.src = modalState.sourceUrl;
+    }
+    if (modalState.editor.previewShell) {
+      modalState.editor.previewShell.classList.remove("d-none");
+    }
+    if (modalState.editor.emptyNote) {
+      modalState.editor.emptyNote.classList.add("d-none");
+    }
+    if (modalState.editor.status) {
+      modalState.editor.status.textContent = "Novo arquivo pronto";
+    }
+    hideModal();
+  });
+
+  cancelBtn.addEventListener("click", function() {
+    if (modalState.freshSelection && modalState.editor && !modalState.editor.confirmed) {
+      modalState.editor.clearPending(true);
+    }
+  });
+
+  if (window.jQuery && window.jQuery.fn && window.jQuery.fn.modal) {
+    window.jQuery(modalEl).on("shown.bs.modal", function() {
+      initializeModalImage();
+    });
+    window.jQuery(modalEl).on("hidden.bs.modal", function() {
+      if (modalState.freshSelection && modalState.editor && !modalState.editor.confirmed) {
+        modalState.editor.clearPending(true);
+      }
+      modalState.editor = null;
+      modalState.sourceUrl = "";
+      modalState.freshSelection = false;
+      modalState.pendingImage = null;
+      resetModalState();
+    });
+  } else {
+    const observer = new MutationObserver(function() {
+      if (modalEl.classList.contains("show")) {
+        initializeModalImage();
+      }
+    });
+    observer.observe(modalEl, { attributes: true, attributeFilter: ["class", "style"] });
+  }
 });
 </script>
 {% endblock %}

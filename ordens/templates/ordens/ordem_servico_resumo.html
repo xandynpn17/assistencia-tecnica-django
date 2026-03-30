@@ -28,7 +28,7 @@
           <span class="os-code">{{ ordem.numero_os }}</span>
         </h5>
         <div class="d-flex flex-wrap align-items-center">
-          <span class="badge badge-light text-dark mr-2 status-badge">{{ ordem.get_status_display }}</span>
+          <span class="badge badge-light text-dark mr-2 status-badge">{{ ordem.status_listagem_label }}</span>
           <span class="badge badge-warning status-badge">{{ ordem.tipo_reparo }}</span>
         </div>
       </div>
@@ -94,6 +94,14 @@
                   <div class="resume-label">Método confirmação</div>
                   <div class="resume-value">{{ ordem.get_tipo_confirmacao_display|default:"-" }}</div>
                 </div>
+                <div class="col-md-6 mb-2">
+                  <div class="resume-label">Atendente</div>
+                  <div class="resume-value">{{ ordem.atendente_abertura|default:"-" }}</div>
+                </div>
+                <div class="col-md-6 mb-2">
+                  <div class="resume-label">Técnico responsável</div>
+                  <div class="resume-value">{{ ordem.tecnico_responsavel_valido|default:"-" }}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -111,7 +119,7 @@
         <hr>
         <div class="row">
           <div class="col-md-8 mb-3">
-            <h6 class="text-muted mb-2">Validacao presencial da OS</h6>
+            <h6 class="text-muted mb-2">Validação presencial da OS</h6>
             <p class="mb-2">Fluxo presencial: imprima a OS, colete assinatura física e registre a validação manual.</p>
             <div class="d-flex flex-wrap">
               <a class="btn btn-outline-primary mr-2 mb-2" href="{% url 'ordens:imprimir_ordem_servico_impressao' ordem.id %}" target="_blank" rel="noopener">

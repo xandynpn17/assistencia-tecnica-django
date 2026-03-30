@@ -11,6 +11,7 @@ from .models import (
     ComissaoTecnico,
     ContaPagar,
     ContaReceber,
+    CustoFixoMensal,
     DespesaRecorrente,
     FaixaPremioMeta,
     FormaPagamento,
@@ -50,4 +51,5 @@ admin.site.register(RegraPremioMeta)
 admin.site.register(FaixaPremioMeta)
 admin.site.register(PremioColaboradorCompetencia)
 admin.site.register(DespesaRecorrente)
+admin.site.register(CustoFixoMensal)
 admin.site.register(AuditoriaGarantia)

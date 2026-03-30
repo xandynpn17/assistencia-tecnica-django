@@ -20,12 +20,16 @@
   .search-container {
       position: relative;
       display: inline-block;
+      width: 240px;
   }
   #search-input {
       padding: 5px 8px;
       border-radius: 4px;
       border: 1px solid #ccc;
-      width: 220px;
+      width: 100%;
+  }
+  .search-main {
+      position: relative;
   }
   .search-results {
       position: absolute;
@@ -58,17 +62,20 @@
       color: #888;
   }
   .search-feedback {
-      margin-top: 4px;
+      margin-top: 8px;
       font-size: 12px;
-      color: #dc3545;
-      min-height: 16px;
-      opacity: 0;
-      transition: opacity .2s ease;
+      color: #7a2518;
+      background: #fff1ee;
+      border: 1px solid #f3c0b6;
+      border-radius: 8px;
+      padding: 8px 10px;
+      min-height: 0;
+      display: none;
   }
   .search-feedback.show {
-      opacity: 1;
+      display: block;
   }
-  .navbar .search-container { max-width: 320px; }
+  .navbar .search-container { width: 240px; }
   </style>
   {% endblock %}
   <style>
@@ -126,10 +133,12 @@
       <!-- Barra de Pesquisa -->
       <li class="nav-item">
         <div class="search-container">
-          <input type="text" id="search-input" class="form-control form-control-sm"
-                 placeholder="Pesquisar por OS, CPF, telefone, cliente ou série" autocomplete="off">
-          <div id="search-results" class="search-results"></div>
-          <div id="search-feedback" class="search-feedback"></div>
+          <div class="search-main">
+            <input type="text" id="search-input" class="form-control form-control-sm"
+                   placeholder="Buscar por OS exata ou use cpf:, tel:, sn:" autocomplete="off">
+            <div id="search-results" class="search-results"></div>
+            <div id="search-feedback" class="search-feedback"></div>
+          </div>
         </div>
       </li>
 
@@ -159,7 +168,7 @@
              class="brand-image-lg"
              style="max-height: 100px; width: auto;">
         {% else %}
-        <span class="brand-text font-weight-light">Assistência</span>
+        <span class="brand-text font-weight-light">{{ empresa.nome|default:"Assistência" }}</span>
         {% endif %}
       </a>
 
@@ -206,7 +215,7 @@
                   </a>
                 </li>
                 <li class="nav-item">
-                  <a href="{% url 'ordens:lista_ordens' %}"
+                  <a href="{% url 'ordens:lista_ordens' %}?carregar=1"
                      class="nav-link {% if menu_sub == 'lista_ordens' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Listar Ordens</p>
@@ -235,7 +244,7 @@
                 <li class="nav-item">
                   <a href="{% url 'agenda:calendario_agenda' %}" class="nav-link {% if menu_sub == 'calendario_agenda' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Calendario</p>
+                    <p>Calendário</p>
                   </a>
                 </li>
                 <li class="nav-item">
@@ -292,7 +301,7 @@
                   <a href="{% url 'estoque:movimentacoes' %}"
                      class="nav-link {% if menu_sub == 'movimentacoes' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Movimentacoes</p>
+                    <p>Movimentações</p>
                   </a>
                 </li>
                 <li class="nav-item">
@@ -314,7 +323,7 @@
                   <a href="{% url 'estoque:reposicao_estoque' %}"
                      class="nav-link {% if menu_sub == 'reposicao_estoque' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Reposicao Inteligente</p>
+                    <p>Reposição Inteligente</p>
                   </a>
                 </li>
                 <li class="nav-item">
@@ -328,14 +337,14 @@
                   <a href="{% url 'estoque:tabelas_preco' %}"
                      class="nav-link {% if menu_sub == 'tabelas_preco' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Tabelas de Preco</p>
+                    <p>Tabelas de Preço</p>
                   </a>
                 </li>
                 <li class="nav-item">
                   <a href="{% url 'estoque:relatorio_divergencias' %}"
                      class="nav-link {% if menu_sub == 'relatorio_divergencias' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Divergencias</p>
+                    <p>Divergências</p>
                   </a>
                 </li>
                 {% endif %}
@@ -351,7 +360,7 @@
                   <a href="{% url 'estoque:ubicacoes_estoque' %}"
                      class="nav-link {% if menu_sub == 'ubicacoes_estoque' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Ubicacoes</p>
+                    <p>Ubicações</p>
                   </a>
                 </li>
                 {% endif %}
@@ -372,7 +381,7 @@
               <a href="{% url 'caixa:meu_desempenho' %}"
                  class="nav-link {% if menu_sub == 'meu_desempenho' %}active{% endif %}">
                 <i class="nav-icon fas fa-trophy"></i>
-                <p>Prêmios e Comissoes</p>
+                <p>Prêmios e Comissões</p>
               </a>
             </li>
             {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
@@ -428,7 +437,7 @@
                   <a href="{% url 'caixa:registrar_saida' %}"
                      class="nav-link {% if menu_sub == 'registrar_saida' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Registrar Saida</p>
+                    <p>Registrar Saída</p>
                   </a>
                 </li>
                 {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
@@ -457,14 +466,14 @@
                   <a href="{% url 'caixa:comissoes_pagamento' %}"
                      class="nav-link {% if menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'comissoes_pendencias' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Pagamento de Comissoes</p>
+                    <p>Pagamento de Comissões</p>
                   </a>
                 </li>
                 <li class="nav-item">
                   <a href="{% url 'caixa:comissoes_pendencias' %}"
                      class="nav-link {% if menu_sub == 'comissoes_pendencias' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Pendencias de Comissoes</p>
+                    <p>Pendências de Comissões</p>
                   </a>
                 </li>
                 <li class="nav-item">
@@ -687,11 +696,46 @@ document.addEventListener("DOMContentLoaded", function () {
         feedbackTimer = setTimeout(limparFeedback, 2400);
     }
 
+    function buscaValida(query) {
+        const termo = (query || "").trim();
+        if (!termo) return { ok: true, mensagem: "" };
+        const lower = termo.toLowerCase();
+        const digits = termo.replace(/\D/g, "");
+
+        if (lower.startsWith("cpf:") || lower.startsWith("tel:")) {
+            if (digits.length < 3) {
+                return { ok: false, mensagem: "Use pelo menos 3 números após cpf: ou tel:." };
+            }
+            return { ok: true, mensagem: "" };
+        }
+
+        if (lower.startsWith("sn:")) {
+            const serial = termo.slice(3).trim();
+            if (serial.length < 3) {
+                return { ok: false, mensagem: "Use pelo menos 3 caracteres após sn:." };
+            }
+            return { ok: true, mensagem: "" };
+        }
+
+        if (/^os-\d{4,}$/i.test(termo) || /^\d{4,}$/.test(termo)) {
+            return { ok: true, mensagem: "" };
+        }
+
+        return { ok: false, mensagem: "Use OS exata ou os prefixos cpf:, tel: ou sn:." };
+    }
+
     function executarBusca() {
         const query = input.value.trim();
         if (!query) {
             resultsBox.innerHTML = "";
             limparFeedback();
+            return;
+        }
+
+        const validacao = buscaValida(query);
+        if (!validacao.ok) {
+            resultsBox.innerHTML = "";
+            mostrarFeedback(validacao.mensagem);
             return;
         }
 

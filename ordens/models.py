@@ -7,6 +7,7 @@ from django.utils import timezone
 from clientes.models import Cliente
 from django.conf import settings
 from configuracoes.models import SequenciaOS, ConfiguracaoOrdemServico
+from ordens.services.numeracao import gerar_codigo_portal_disponivel, gerar_numero_ordem_servico
 
 
 
@@ -16,6 +17,13 @@ from configuracoes.models import SequenciaOS, ConfiguracaoOrdemServico
 # ORDEM DE SERVIÇO
 # ===========================
 class OrdemServico(models.Model):
+    STATUS_ALIASES = {
+        "bancada": "em_andamento",
+        "reparo": "em_andamento",
+        "orcamentado": "autorizado",
+        "pronto_contactar": "pronto_contactado",
+    }
+
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='ordens')
     numero_os = models.CharField(max_length=10, unique=True, blank=True, editable=False)
     codigo_portal = models.CharField(max_length=12, unique=True, blank=True, editable=False)
@@ -38,20 +46,16 @@ class OrdemServico(models.Model):
 
     STATUS_CHOICES = [
         ('diagnosticar', 'Diagnosticar'),
-        ('bancada', 'Bancada'),
-        ('reparo', 'Reparo em andamento'),
+        ('em_andamento', 'Bancada'),
         ('pendente_tecnico', 'Pendente Técnico'),
         ('pendente_cliente', 'Pendente cliente'),
         ('pendente_marca', 'Pendente Marca'),
         ('pendente_pecas', 'Pendente Peças'),
         ('pendente_orcamento', 'Pendente Orçamento'),
-        ('orcamentado', 'Orçamentado'),
-        ('autorizado', 'Autorizado'),
+        ('autorizado', 'Orçamentado / Autorizado'),
         ('recusado', 'Recusado'),
         ('devolucao', 'Devolução sem reparação'),
-        ('em_andamento', 'Em Andamento'),
-        ('pronto_contactado', 'Pronto Contactado'),
-        ('pronto_contactar', 'Pronto Contactar'),
+        ('pronto_contactado', 'Pronto contactado'),
         ('concluida', 'Concluída'),
     ]
 
@@ -105,6 +109,7 @@ class OrdemServico(models.Model):
     peritagem = models.TextField(blank=True, null=False)
     data_compra = models.DateField(blank=True, null=True)
     numero_nota_fiscal = models.CharField(max_length=60, blank=True)
+    referencia_parceiro = models.CharField(max_length=120, blank=True)
     manutencao_preventiva_meses = models.PositiveSmallIntegerField(
         blank=True,
         null=True,
@@ -133,6 +138,41 @@ class OrdemServico(models.Model):
     def __str__(self):
         return f"{self.numero_os} - {self.cliente.nome} - {self.marca_equipamento} {self.modelo_equipamento}"
 
+    @property
+    def status_listagem_codigo(self):
+        status = self.normalizar_status_os(self.status)
+        if self.fechada:
+            return "concluida"
+        if status == "concluida":
+            return "reaberta"
+        return status
+
+    @property
+    def status_listagem_label(self):
+        status = self.normalizar_status_os(self.status)
+        if self.fechada:
+            return "Concluída"
+        if status == "concluida":
+            return "Reaberta"
+        return dict(self.STATUS_CHOICES).get(status, status)
+
+    @property
+    def tecnico_responsavel_valido(self):
+        tecnico = self.tecnico_responsavel
+        if tecnico and getattr(tecnico, "tipo_usuario", "") == "tecnico":
+            return tecnico
+        return None
+
+    @property
+    def atendente_abertura(self):
+        linhas = getattr(self, "_prefetched_objects_cache", {}).get("linhas_trabalho")
+        if linhas is None:
+            linhas = self.linhas_trabalho.select_related("usuario").order_by("id")
+        for linha in linhas:
+            if linha.usuario_id:
+                return linha.usuario
+        return None
+
     def get_tipo_equipamento_display(self):
         valor = (self.tipo_equipamento or "").strip()
         if not valor:
@@ -155,29 +195,15 @@ class OrdemServico(models.Model):
         return reverse("ordens:detalhes_ordem", kwargs={"pk": self.pk})
 
     def save(self, *args, **kwargs):
+        self.status = self.normalizar_status_os(self.status)
         if not self.codigo_portal:
-            self.codigo_portal = self.gerar_codigo_portal()
+            self.codigo_portal = gerar_codigo_portal_disponivel(type(self))
 
         if not self.numero_os:
-            with transaction.atomic():
-                # Busca configuração principal
-                config = ConfiguracaoOrdemServico.objects.first()
-                prefixo = config.prefixo_os if config and config.prefixo_os else "OS"
-                inicio = config.inicio_id_ordem if config else 1
-
-                # Garante que a sequência começa no valor correto
-                # Se a SequenciaOS ainda não existe, cria com ultimo = inicio - 1
-                seq, created = SequenciaOS.objects.select_for_update().get_or_create(
-                    pk=1, defaults={'ultimo': inicio - 1}
-                )
-
-                # Incrementa o número
-                novo_numero = seq.ultimo + 1
-                seq.ultimo = novo_numero
-                seq.save()
-
-                # Formata o número final
-                self.numero_os = f"{prefixo}-{novo_numero:04d}"
+            self.numero_os = gerar_numero_ordem_servico(
+                configuracao_model=ConfiguracaoOrdemServico,
+                sequencia_model=SequenciaOS,
+            )
 
         super().save(*args, **kwargs)
 
@@ -252,7 +278,7 @@ class OrdemServico(models.Model):
 
     @classmethod
     def normalizar_status_os(cls, status):
-        return status
+        return cls.STATUS_ALIASES.get(status, status)
 
     def pode_transicionar_para(self, novo_status):
         # Fluxo livre entre status validos da OS.
@@ -384,12 +410,13 @@ class LinhaTrabalho(models.Model):
     STATUS_CHOICES = [
         ("criada", "Ordem criada"),
         ("diagnosticar", "Diagnosticar"),
-        ("bancada", "Bancada"),
-        ("reparo", "Reparo em andamento"),
+        ("em_andamento", "Bancada"),
         ("pendente_pecas", "Pendente peças"),
         ("pendente_cliente", "Pendente cliente"),
         ("pendente_marca", "Pendente marca"),
-        ("orcamentado", "Orçamentado"),
+        ("autorizado", "Orçamentado / Autorizado"),
+        ("transito_outdoor", "Trânsito outdoor"),
+        ("enviado_parceiro", "Enviado ao parceiro"),
         ("pronto_contactado", "Pronto contactado"),
         ("devolucao", "Devolução sem reparação"),
         ("concluida", "Concluído")
@@ -410,6 +437,10 @@ class LinhaTrabalho(models.Model):
     def __str__(self):
         usuario_nome = self.usuario.username if self.usuario else "Sem usuário"
         return f"{self.get_status_display()} - {usuario_nome} - {self.criado_em.strftime('%d/%m/%Y %H:%M')}"
+
+    def save(self, *args, **kwargs):
+        self.status = OrdemServico.normalizar_status_os(self.status)
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['id']

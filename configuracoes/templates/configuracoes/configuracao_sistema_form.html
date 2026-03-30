@@ -16,6 +16,15 @@
           <h5 class="mb-0"><i class="fas fa-map-marker-alt mr-2"></i> Localização Padrão</h5>
         </div>
         <div class="card-body">
+          <div class="form-group form-check">
+            {{ form.usar_confirmacao_assinatura_digital }}
+            <label class="form-check-label" for="{{ form.usar_confirmacao_assinatura_digital.id_for_label }}">
+              {{ form.usar_confirmacao_assinatura_digital.label }}
+            </label>
+            <small class="form-text text-muted">
+              Quando desmarcado, a abertura da OS não envia automaticamente o WhatsApp com link de confirmação; o sistema exibe apenas o número da ordem.
+            </small>
+          </div>
           <div class="row">
             <div class="col-md-4">
               <div class="form-group">
@@ -33,7 +42,7 @@
               <div class="form-group">
                 <label>{{ form.numero_loja_talao.label }}</label>
                 {{ form.numero_loja_talao }}
-                <small class="form-text text-muted">Usado no numero do talao (2 digitos).</small>
+                <small class="form-text text-muted">Usado no número do talão (2 dígitos).</small>
               </div>
             </div>
           </div>
@@ -115,7 +124,7 @@
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-boxes mr-2"></i> Estoque, Inventario e Backup</h5>
+          <h5 class="mb-0"><i class="fas fa-boxes mr-2"></i> Estoque, Inventário e Backup</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -153,7 +162,7 @@
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-stopwatch mr-2"></i> Bonus por Retirada Rapida</h5>
+          <h5 class="mb-0"><i class="fas fa-stopwatch mr-2"></i> Bônus por Retirada Rápida</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -188,7 +197,7 @@
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-percentage mr-2"></i> Percentuais Padrao (Meu Desempenho)</h5>
+          <h5 class="mb-0"><i class="fas fa-percentage mr-2"></i> Percentuais Padrão (Meu Desempenho)</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -201,19 +210,19 @@
               {{ form.percentual_padrao_desempenho_peca }}
             </div>
           </div>
-          <small class="text-muted">Esses valores preencherao automaticamente a tela Meu Desempenho e podem ser alterados no filtro.</small>
+          <small class="text-muted">Esses valores preencherão automaticamente a tela Meu Desempenho e podem ser alterados no filtro.</small>
         </div>
       </div>
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens Padrao</h5>
+          <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens Padrão</h5>
         </div>
         <div class="card-body">
           <p class="text-muted">Variáveis disponíveis: <code>{cliente_nome}</code>, <code>{numero_os}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>.</p>
           <div class="row">
             <div class="col-md-6 form-group">
-              <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orçamento (Email)" }}</label>
+              <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orçamento (E-mail)" }}</label>
               {{ form.mensagem_orcamento_email }}
             </div>
             <div class="col-md-6 form-group">
@@ -221,7 +230,7 @@
               {{ form.mensagem_orcamento_whatsapp }}
             </div>
             <div class="col-md-6 form-group">
-              <label>{{ form.mensagem_pronto_email.label|default:"Mensagem Pronto (Email)" }}</label>
+              <label>{{ form.mensagem_pronto_email.label|default:"Mensagem Pronto (E-mail)" }}</label>
               {{ form.mensagem_pronto_email }}
             </div>
             <div class="col-md-6 form-group">
@@ -235,7 +244,7 @@
             <div class="col-md-12 form-group">
               <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Serviço" }}</label>
               {{ form.termos_ordem_servico }}
-              <small class="form-text text-muted">Usado nos PDFs de OS (digital e impressao).</small>
+              <small class="form-text text-muted">Usado nos PDFs de OS (digital e impressão).</small>
             </div>
           </div>
         </div>

@@ -16,11 +16,51 @@
     .brand-note { border: 1px dashed #ced4da; border-radius: 8px; padding: 10px 12px; background: #f8f9fa; min-height: 58px; }
     .brand-note strong { display: block; margin-bottom: 4px; }
     .brand-note-garantia { border-color: #e0a800; background: #fff3cd; }
+    .brand-note-alert { border-color: #dc3545; background: #fff5f5; }
     .form-grid .form-group label { font-weight: 600; font-size: .9rem; }
     .surface-soft { border: 1px solid #eef1f4; border-radius: 10px; padding: 14px; background: #fbfcfd; }
+    .surface-soft + .surface-soft { margin-top: 14px; }
     .select2-container .select2-selection--single { height: 38px; border: 1px solid #ced4da; }
     .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 36px; }
     .select2-container--default .select2-selection--single .select2-selection__arrow { height: 36px; }
+    .garantia-warning { display: none; margin-bottom: 0; }
+    .context-panel { border: 1px solid #d7e3ef; border-radius: 10px; background: linear-gradient(180deg, #f8fbff 0%, #f3f7fb 100%); padding: 14px; }
+    .context-panel-title { font-weight: 700; color: #1f2937; margin-bottom: 4px; }
+    .context-panel-text { margin-bottom: 0; color: #5b6777; font-size: .92rem; }
+    .context-badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #e2e8f0; color: #334155; }
+    .context-badge.warning { background: #fff3cd; color: #7c5a00; }
+    .context-badge.success { background: #e7f7ec; color: #146c43; }
+    .field-note { display: block; margin-top: 6px; color: #6b7280; font-size: .82rem; }
+    .brand-status { display: inline-flex; margin-bottom: 8px; }
+    .sidebar-stack { display: grid; gap: 14px; }
+    .support-card { border: 1px solid #e4ebf3; border-radius: 10px; background: #ffffff; padding: 14px; }
+    .support-card-title { font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #5f6f82; margin-bottom: 8px; }
+    .support-card p:last-child { margin-bottom: 0; }
+    .partner-field .form-control { max-width: 280px; }
+    .step-two-layout .surface-soft { padding: 12px; }
+    .quick-fields-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .quick-fields-grid .form-group { margin-bottom: 0; }
+    .full-span { grid-column: 1 / -1; }
+    .step-two-layout textarea.form-control { min-height: 88px; }
+    .step-two-layout #id_defeito { min-height: 139px; }
+    .step-two-layout #id_acessorios { min-height: 72px; }
+    .step-two-layout #id_notas_internas { min-height: 82px; }
+    .compact-note { font-size: .8rem; color: #64748b; margin-top: 6px; }
+    .sidebar-stack.align-top { align-content: start; }
+    @media (max-width: 991.98px) {
+        .quick-fields-grid { grid-template-columns: 1fr; }
+        .partner-field .form-control { max-width: 100%; }
+    }
+    @media (max-width: 767.98px) {
+        .card-modern-header,
+        .card-modern-body { padding: 14px; }
+        .wizard-actions-top,
+        .card-footer { gap: 8px; }
+        .wizard-actions-top .btn,
+        .card-footer .btn { width: 100%; }
+        .card-footer { flex-direction: column-reverse; }
+        .section-title { font-size: 0.9rem; }
+    }
 </style>
 {% endblock %}
 
@@ -90,6 +130,7 @@
                                 </div>
                                 <div class="col-lg-4 form-group">
                                     <div class="brand-note h-100" id="brand-note-box">
+                                        <span class="brand-status context-badge" id="brand-note-status">Aguardando marca</span>
                                         <strong>Detalhes da marca</strong>
                                         <span id="brand-note-text" class="text-muted">Selecione uma marca para visualizar procedimentos.</span>
                                     </div>
@@ -101,15 +142,45 @@
                     </div>
 
                     <div class="wizard-step" id="step-2">
-                        <div class="section-title">Dados de Reparação e Atendimento</div>
-                        <div class="surface-soft">
-                            <div class="row form-grid">
-                                <div class="col-md-4 form-group">{{ form.tipo_reparo.label_tag }}{{ form.tipo_reparo }}{{ form.tipo_reparo.errors }}</div>
-                                <div class="col-md-4 form-group">{{ form.data_compra.label_tag }}{{ form.data_compra }}{{ form.data_compra.errors }}</div>
-                                <div class="col-md-4 form-group">{{ form.numero_nota_fiscal.label_tag }}{{ form.numero_nota_fiscal }}{{ form.numero_nota_fiscal.errors }}</div>
-                                <div class="col-md-12 form-group">{{ form.defeito.label_tag }}{{ form.defeito }}{{ form.defeito.errors }}</div>
-                                <div class="col-md-4 form-group">{{ form.acessorios.label_tag }}{{ form.acessorios }}{{ form.acessorios.errors }}</div>
-                                <div class="col-md-12 form-group">{{ form.notas_internas.label_tag }}{{ form.notas_internas }}{{ form.notas_internas.errors }}</div>
+                        <div class="section-title">Dados de reparo e atendimento</div>
+                        <div class="row step-two-layout">
+                            <div class="col-lg-7">
+                                <div class="surface-soft step-two-card">
+                                    <div class="section-title mb-3">Diagnóstico interno</div>
+                                    <div class="row form-grid">
+                                        <div class="col-md-12 form-group">{{ form.defeito.label_tag }}{{ form.defeito }}{{ form.defeito.errors }}</div>
+                                        <div class="col-md-12 form-group">{{ form.acessorios.label_tag }}{{ form.acessorios }}{{ form.acessorios.errors }}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-5">
+                                <div class="sidebar-stack align-top">
+                                    <div class="surface-soft step-two-card">
+                                        <div class="section-title mb-3">Atendimento</div>
+                                        <div class="quick-fields-grid">
+                                            <div class="form-group">{{ form.tipo_reparo.label_tag }}{{ form.tipo_reparo }}{{ form.tipo_reparo.errors }}</div>
+                                            <div class="form-group">{{ form.data_compra.label_tag }}{{ form.data_compra }}{{ form.data_compra.errors }}</div>
+                                            <div class="form-group">{{ form.numero_nota_fiscal.label_tag }}{{ form.numero_nota_fiscal }}{{ form.numero_nota_fiscal.errors }}</div>
+                                            <div class="form-group partner-field">
+                                                {{ form.referencia_parceiro.label_tag }}
+                                                {{ form.referencia_parceiro }}
+                                                {{ form.referencia_parceiro.errors }}
+                                                <small class="compact-note">Somente para OS externa ou parceiro.</small>
+                                            </div>
+                                            <div class="form-group full-span">
+                                                {{ form.notas_internas.label_tag }}
+                                                {{ form.notas_internas }}
+                                                {{ form.notas_internas.errors }}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="alert alert-warning garantia-warning" id="garantia-warning-box" role="alert">
+                                        <strong>Alerta de garantia</strong><br>
+                                        <span id="garantia-warning-text">A marca selecionada não possui contrato de garantia ativo.</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -134,9 +205,15 @@ document.addEventListener("DOMContentLoaded", function () {
     const marcaEquipamento = document.getElementById("id_marca_equipamento");
     const noteText = document.getElementById("brand-note-text");
     const noteBox = document.getElementById("brand-note-box");
+    const noteStatus = document.getElementById("brand-note-status");
     const tipoReparo = document.getElementById("id_tipo_reparo");
     const dataCompra = document.getElementById("id_data_compra");
     const numeroNotaFiscal = document.getElementById("id_numero_nota_fiscal");
+    const garantiaWarningBox = document.getElementById("garantia-warning-box");
+    const garantiaWarningText = document.getElementById("garantia-warning-text");
+    const garantiaContextTitle = document.getElementById("garantia-context-title");
+    const garantiaContextBadge = document.getElementById("garantia-context-badge");
+    const garantiaContextText = document.getElementById("garantia-context-text");
     const marcasInfo = {{ marcas_info_json|default:'{}'|safe }};
 
     const steps = [document.getElementById("step-1"), document.getElementById("step-2")];
@@ -209,6 +286,32 @@ document.addEventListener("DOMContentLoaded", function () {
         return tipoReparo && tipoReparo.value === "Garantia";
     }
 
+    function atualizarPainelContexto() {
+        if (!garantiaContextTitle || !garantiaContextBadge || !garantiaContextText) return;
+        const tipo = tipoReparo ? (tipoReparo.value || "") : "";
+        garantiaContextBadge.className = "context-badge";
+
+        if (tipo === "Garantia") {
+            garantiaContextTitle.textContent = "Garantia do fabricante";
+            garantiaContextBadge.textContent = "Exige nota e data da compra";
+            garantiaContextBadge.classList.add("warning");
+            garantiaContextText.textContent = "Use marca parceira sempre que existir contrato ativo. Se a marca não tiver cobertura, o sistema vai alertar sem bloquear a abertura da OS.";
+            return;
+        }
+
+        if (tipo === "Garantia de serviço") {
+            garantiaContextTitle.textContent = "Garantia de serviço";
+            garantiaContextBadge.textContent = "Fluxo interno";
+            garantiaContextBadge.classList.add("success");
+            garantiaContextText.textContent = "Use este tipo quando o retorno estiver coberto pela própria assistência, sem exigir nota fiscal de compra do cliente.";
+            return;
+        }
+
+        garantiaContextTitle.textContent = "Fluxo padrão";
+        garantiaContextBadge.textContent = "Sem exigência extra";
+        garantiaContextText.textContent = "Para OS fora de garantia, os dados de compra não são obrigatórios. Se houver terceirização, preencha a referência do parceiro.";
+    }
+
     function syncGarantiaUI() {
         const garantia = isGarantia();
         if (noteBox) {
@@ -219,6 +322,33 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         if (numeroNotaFiscal) {
             numeroNotaFiscal.required = garantia;
+        }
+        atualizarPainelContexto();
+        syncGarantiaMarcaWarning();
+    }
+
+    function syncGarantiaMarcaWarning() {
+        if (!garantiaWarningBox) return;
+        let showWarning = false;
+        let mensagem = "A marca selecionada não possui contrato de garantia ativo.";
+
+        if (isGarantia()) {
+            const val = marcaSelect ? (marcaSelect.value || "") : "";
+            if (val === "__outros__") {
+                showWarning = true;
+                mensagem = "Marca informada manualmente. Verifique se existe contrato de garantia antes de seguir.";
+            } else if (val && marcasInfo[val] && marcasInfo[val].parceira_garantia === false) {
+                showWarning = true;
+                mensagem = `A marca ${marcasInfo[val].nome || "selecionada"} não possui contrato de garantia ativo.`;
+            }
+        }
+
+        garantiaWarningBox.style.display = showWarning ? "block" : "none";
+        if (garantiaWarningText) {
+            garantiaWarningText.textContent = mensagem;
+        }
+        if (noteBox) {
+            noteBox.classList.toggle("brand-note-alert", showWarning);
         }
     }
 
@@ -250,10 +380,25 @@ document.addEventListener("DOMContentLoaded", function () {
             marcaEquipamento.value = "";
         }
 
+        if (noteStatus) {
+            noteStatus.className = "brand-status context-badge";
+            if (isOutros) {
+                noteStatus.textContent = "Marca manual";
+            } else if (val && marcasInfo[val] && marcasInfo[val].parceira_garantia) {
+                noteStatus.textContent = "Garantia ativa";
+                noteStatus.classList.add("success");
+            } else if (val && marcasInfo[val]) {
+                noteStatus.textContent = "Sem contrato";
+                noteStatus.classList.add("warning");
+            } else {
+                noteStatus.textContent = "Aguardando marca";
+            }
+        }
+
         if (isOutros) {
             noteText.textContent = "Marca manual selecionada. Preencha o campo de marca.";
         } else if (val && marcasInfo[val]) {
-            noteText.textContent = marcasInfo[val];
+            noteText.textContent = marcasInfo[val].procedimentos || "Marca sem procedimentos cadastrados.";
         } else {
             noteText.textContent = "Selecione uma marca para visualizar procedimentos.";
         }
@@ -287,7 +432,6 @@ document.addEventListener("DOMContentLoaded", function () {
         showStep(0);
     }
 
-    // Evita avanço/submissão acidental ao pressionar Enter durante o preenchimento.
     if (ordemForm) {
         ordemForm.addEventListener("keydown", function (event) {
             if (event.key !== "Enter") return;
@@ -304,7 +448,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (semDataCompra || semNota) {
                 event.preventDefault();
                 showStep(1);
-                mostrarMensagemWizard("Para OS de garantia, informe a data da compra e o número da nota fiscal.", "danger");
+                mostrarMensagemWizard("Para OS de garantia, informe a data da compra e o numero da nota fiscal.", "danger");
                 if (semDataCompra && dataCompra) {
                     dataCompra.focus();
                 } else if (semNota && numeroNotaFiscal) {

@@ -1,13 +1,59 @@
 {% extends 'core/base.html' %}
 {% load widget_tweaks %}
 
+{% block extra_css %}
+<style>
+  .pagamento-helper {
+    border: 1px solid #e4e8ee;
+    border-radius: 10px;
+    background: #f8fafc;
+    padding: 12px 14px;
+  }
+  .pagamento-helper p:last-child {
+    margin-bottom: 0;
+  }
+  .resumo-os-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+  }
+  .resumo-os-item {
+    border-bottom: 1px solid #eef1f4;
+    padding-bottom: 8px;
+  }
+  .resumo-os-label {
+    display: block;
+    font-size: .76rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #6c757d;
+    margin-bottom: 2px;
+  }
+  .resumo-os-value {
+    font-weight: 600;
+    color: #243746;
+    line-height: 1.25;
+  }
+  .resumo-os-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  @media (max-width: 575.98px) {
+    .resumo-os-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-3">
     {% include 'caixa/_subnav_caixa.html' %}
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h1 class="h3 mb-0">Registrar Pagamento (POS)</h1>
         <div class="d-flex gap-2">
-            <a href="{% url 'caixa:taloes' %}" class="btn btn-outline-dark btn-sm">Consultar talões</a>
+            <a href="{% url 'caixa:taloes' %}" class="btn btn-outline-dark btn-sm">Consultar tal&otilde;es</a>
             <a href="{% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}{% url 'caixa:dashboard_caixa' %}{% else %}{% url 'caixa:registrar_pagamento' %}{% endif %}" class="btn btn-outline-secondary btn-sm">Voltar ao dashboard</a>
         </div>
     </div>
@@ -21,13 +67,13 @@
             <div class="col-lg-8">
                 <div class="card shadow-sm border-0 mb-3">
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <strong>1) Validar Ordem de Serviço</strong>
+                        <strong>1) Validar Ordem de Servi&ccedil;o</strong>
                         <small class="text-muted">Digite OS-0123 ou somente 123</small>
                     </div>
                     <div class="card-body">
                         <form method="get" class="form-row align-items-end">
                             <div class="col-md-9">
-                                <label for="id_os_numero_busca"><strong>Número da OS</strong></label>
+                                <label for="id_os_numero_busca"><strong>N&uacute;mero da OS</strong></label>
                                 <input type="text"
                                        id="id_os_numero_busca"
                                        name="os_numero"
@@ -42,6 +88,10 @@
                                 </button>
                             </div>
                         </form>
+                        <div class="pagamento-helper mt-3">
+                            <p class="mb-1"><strong>Fluxo rápido:</strong> valide a OS, confirme valor e forma de pagamento e finalize no mesmo ecrã.</p>
+                            <p class="text-muted mb-0">Se precisar confirmar dados técnicos ou históricos da OS antes do recebimento, use o atalho do resumo lateral.</p>
+                        </div>
                     </div>
                 </div>
 
@@ -73,15 +123,18 @@
                                     {% if form.forma_pagamento.errors %}<small class="text-danger">{{ form.forma_pagamento.errors|striptags }}</small>{% endif %}
                                 </div>
                                 <div class="form-group col-md-3">
-                                    <label for="{{ form.referencia.id_for_label }}"><strong>Referência</strong></label>
+                                    <label for="{{ form.referencia.id_for_label }}"><strong>Refer&ecirc;ncia</strong></label>
                                     {{ form.referencia|add_class:"form-control form-control-lg" }}
                                     {% if form.referencia.errors %}<small class="text-danger">{{ form.referencia.errors|striptags }}</small>{% endif %}
                                 </div>
                             </div>
 
                             <div class="mb-3">
-                                <label class="d-block mb-2"><strong>Valores rapidos</strong></label>
+                                <label class="d-block mb-2"><strong>Valores r&aacute;pidos</strong></label>
                                 <div class="btn-group btn-group-sm flex-wrap" role="group">
+                                    {% if ordem and ordem_valor_aberto > 0 %}
+                                    <button type="button" class="btn btn-outline-primary js-valor-rapido" data-value="{{ ordem_valor_aberto|floatformat:2 }}">Saldo aberto</button>
+                                    {% endif %}
                                     <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="30.00">30,00</button>
                                     <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="50.00">50,00</button>
                                     <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="100.00">100,00</button>
@@ -89,6 +142,9 @@
                                     <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="200.00">200,00</button>
                                     <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="300.00">300,00</button>
                                 </div>
+                                {% if ordem and ordem_valor_aberto > 0 %}
+                                <small class="text-muted d-block mt-2">Saldo atual da OS: <strong>R$ {{ ordem_valor_aberto|floatformat:2 }}</strong></small>
+                                {% endif %}
                             </div>
 
                             <div class="d-flex justify-content-end">
@@ -103,20 +159,62 @@
 
             <div class="col-lg-4">
                 <div class="card shadow-sm border-0 mb-3">
-                    <div class="card-header bg-white"><strong>Resumo Rapido</strong></div>
+                    <div class="card-header bg-white"><strong>Resumo R&aacute;pido</strong></div>
                     <div class="card-body">
                         <p class="mb-2"><strong>Caixa:</strong> {% if caixa.aberto %}Aberto{% else %}Fechado{% endif %}</p>
                         {% if ordem %}
-                            <div class="alert alert-success py-2 mb-2">OS valida</div>
-                            <p class="mb-1"><strong>OS:</strong> {{ ordem.numero_os }}</p>
-                            <p class="mb-1"><strong>Cliente:</strong> {{ ordem.cliente.nome }}</p>
-                            <p class="mb-1"><strong>Status:</strong> {{ ordem.get_status_display }}</p>
+                            <div class="alert alert-success py-2 mb-2">OS v&aacute;lida</div>
+                            <div class="resumo-os-grid">
+                                <div class="resumo-os-item">
+                                    <span class="resumo-os-label">OS</span>
+                                    <div class="resumo-os-value">{{ ordem.numero_os }}</div>
+                                </div>
+                                <div class="resumo-os-item">
+                                    <span class="resumo-os-label">Status</span>
+                                    <div class="resumo-os-value">{{ ordem.status_listagem_label }}</div>
+                                </div>
+                                <div class="resumo-os-item">
+                                    <span class="resumo-os-label">Cliente</span>
+                                    <div class="resumo-os-value">{{ ordem.cliente.nome }}</div>
+                                </div>
+                                <div class="resumo-os-item">
+                                    <span class="resumo-os-label">Abertura</span>
+                                    <div class="resumo-os-value">{{ ordem.data_abertura|date:"d/m/Y H:i" }}</div>
+                                </div>
+                                <div class="resumo-os-item">
+                                    <span class="resumo-os-label">Atendente:</span>
+                                    <div class="resumo-os-value">{{ ordem.atendente_abertura|default:"-" }}</div>
+                                </div>
+                                <div class="resumo-os-item">
+                                    <span class="resumo-os-label">T&eacute;cnico respons&aacute;vel:</span>
+                                    <div class="resumo-os-value">{{ ordem.tecnico_responsavel_valido|default:"-" }}</div>
+                                </div>
+                                <div class="resumo-os-item">
+                                    <span class="resumo-os-label">Total da OS</span>
+                                    <div class="resumo-os-value">R$ {{ ordem_total_os|floatformat:2 }}</div>
+                                </div>
+                                <div class="resumo-os-item">
+                                    <span class="resumo-os-label">Total pago</span>
+                                    <div class="resumo-os-value">R$ {{ ordem_total_pago|floatformat:2 }}</div>
+                                </div>
+                                <div class="resumo-os-item">
+                                    <span class="resumo-os-label">Saldo aberto</span>
+                                    <div class="resumo-os-value">R$ {{ ordem_valor_aberto|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="resumo-os-actions mt-3">
+                                <a href="{% url 'ordens:detalhes_ordem' ordem.id %}" class="btn btn-sm btn-outline-secondary">Abrir OS</a>
+                                {% if ordem.fechada %}
+                                <span class="btn btn-sm btn-light disabled">OS conclu&iacute;da</span>
+                                {% endif %}
+                            </div>
                             {% if garantia_sugerida %}
-                            <p class="mb-1 text-info">OS de garantia detectada</p>
-                            <p class="mb-0 text-warning"><strong>Garantia:</strong> R$ {{ garantia_sugerida|floatformat:2 }} sugerido</p>
+                            <div class="alert alert-warning py-2 mt-3 mb-0">
+                                <strong>Garantia:</strong> OS de garantia detectada. Sugest&atilde;o: R$ {{ garantia_sugerida|floatformat:2 }}
+                            </div>
                             {% endif %}
                         {% elif numero_os_busca %}
-                            <div class="alert alert-danger py-2 mb-0">OS não encontrada</div>
+                            <div class="alert alert-danger py-2 mb-0">OS n&atilde;o encontrada</div>
                         {% elif venda %}
                             <p class="mb-1"><strong>Pre-reserva:</strong> #{{ venda.id }}</p>
                             <p class="mb-1"><strong>Produto:</strong> {{ venda.produto.nome }}</p>

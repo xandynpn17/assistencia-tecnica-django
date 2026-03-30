@@ -1,0 +1,90 @@
+<!-- Linhas de Trabalho -->
+<div class="tab-pane fade {% if active_tab == 'linhas' %}show active{% endif %}" id="linhas">
+    <div class="card-modern">
+        <div class="card-modern-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <span id="toggleOrderBtn" style="cursor: pointer; font-size: 1.2rem; margin-right: 8px;">↓</span>
+                <span>Histórico de Trabalho</span>
+            </div>
+
+            {% if not ordem.fechada %}
+            <span class="toggle-form-btn" data-toggle="modal" data-target="#modalAdicionarLinha"
+                  style="cursor: pointer;">
+                <i class="fas fa-plus-circle mr-1"></i> Adicionar Linha
+            </span>
+            {% else %}
+            <span class="text-muted"><i class="fas fa-lock mr-1"></i>Adição bloqueada</span>
+            {% endif %}
+        </div>
+
+        <div class="card-modern-body">
+            {% if linhas %}
+            <div class="list-group mb-3" id="linhasList">
+                {% for linha in linhas %}
+                <div class="list-group-item">
+                    <span class="linha-status badge badge-primary">{{ linha.get_status_display }}</span>
+                    <span class="badge badge-light border ml-1">{{ linha.get_tipo_evento_display }}</span>
+                    <small class="linha-data float-right">
+                        {{ linha.criado_em|date:"d/m/Y H:i" }}
+                        {% if linha.usuario %}- {{ linha.usuario.username }}{% endif %}
+                    </small>
+                    {% if linha.descricao %}
+                    <p class="linha-descricao">{{ linha.descricao }}</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted text-center py-3">Nenhuma linha registrada.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    const toggleBtn = document.getElementById("toggleOrderBtn");
+    const linhasList = document.getElementById("linhasList");
+
+    if (toggleBtn && linhasList) {
+        toggleBtn.addEventListener("click", () => {
+            linhasList.classList.toggle("list-group-inverted");
+            toggleBtn.textContent = linhasList.classList.contains("list-group-inverted") ? "↓" : "↑";
+        });
+    }
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const select = document.getElementById("tecnicoResponsavel");
+    const feedback = document.getElementById("tecnico-feedback");
+
+    if (select) {
+        select.addEventListener("change", () => {
+            const tecnicoId = select.value;
+            const osId = select.dataset.osId;
+
+            fetch(`/ordens/${osId}/atualizar_tecnico/`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}",
+                },
+                body: JSON.stringify({ tecnico_id: tecnicoId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.success === false) {
+                    feedback.textContent = data.message || "Erro ao salvar.";
+                    feedback.className = "small text-danger";
+                    return;
+                }
+                feedback.textContent = "";
+                feedback.className = "small";
+            })
+            .catch(() => {
+                feedback.textContent = "Erro ao salvar.";
+                feedback.className = "small text-danger";
+            });
+        });
+    }
+});
+</script>

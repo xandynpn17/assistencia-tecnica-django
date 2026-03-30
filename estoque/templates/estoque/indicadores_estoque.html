@@ -6,11 +6,39 @@
 <h1 class="m-0 text-dark">Indicadores de Estoque</h1>
 {% endblock %}
 
+{% block extra_css %}
+{{ block.super }}
+<style>
+  .rateio-track {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    background: #e9ecef;
+    overflow: hidden;
+  }
+  .rateio-bar-previsto {
+    height: 10px;
+    background: linear-gradient(90deg, #0d6efd, #6ea8fe);
+  }
+  .rateio-bar-realizado {
+    height: 10px;
+    background: linear-gradient(90deg, #198754, #71dd8a);
+  }
+  .rateio-bar-wrap {
+    min-width: 160px;
+  }
+  .rateio-mini-label {
+    font-size: .78rem;
+    color: #6c757d;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
   <div class="col-md-2">
     <div class="small-box bg-info">
-      <div class="inner"><h3>{{ kpis.total_itens }}</h3><p>Itens Ativos</p></div>
+      <div class="inner"><h3>{{ kpis.total_itens }}</h3><p>Itens ativos</p></div>
     </div>
   </div>
   <div class="col-md-2">
@@ -20,17 +48,278 @@
   </div>
   <div class="col-md-2">
     <div class="small-box bg-warning">
-      <div class="inner"><h3>{{ kpis.abaixo_minimo }}</h3><p>Abaixo Mínimo</p></div>
+      <div class="inner"><h3>{{ kpis.abaixo_minimo }}</h3><p>Abaixo do mínimo</p></div>
     </div>
   </div>
   <div class="col-md-2">
     <div class="small-box bg-secondary">
-      <div class="inner"><h3>{{ kpis.parados_60 }}</h3><p>Parados 60d</p></div>
+      <div class="inner"><h3>{{ kpis.parados_60 }}</h3><p>Parados há 60 dias</p></div>
     </div>
   </div>
   <div class="col-md-4">
     <div class="small-box bg-success">
-      <div class="inner"><h3>R$ {{ kpis.valor_estoque|floatformat:2 }}</h3><p>Valor Estoque (positivo)</p></div>
+      <div class="inner"><h3>R$ {{ kpis.valor_estoque|floatformat:2 }}</h3><p>Valor do estoque positivo</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><strong>Configuração do Rateio</strong></div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="acao_rateio" value="salvar_configuracao">
+          <div class="form-group">
+            {{ rateio_config_form.criterio_rateio.label_tag }}
+            {% if pode_gerenciar_rateio %}
+            {{ rateio_config_form.criterio_rateio }}
+            {% else %}
+            <input type="text" class="form-control" value="{{ rateio_resumo.configuracao.get_criterio_rateio_display }}" readonly>
+            {% endif %}
+            <small class="form-text text-muted">
+              Unidades previstas é a regra mais estável. Faturamento e margem usam a referência atual de preço do produto.
+            </small>
+          </div>
+          {% if pode_gerenciar_rateio %}
+          <button type="submit" class="btn btn-primary btn-sm">Salvar regra</button>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Resumo do Rateio Atual</strong>
+        <span class="badge badge-light">{{ rateio_resumo.competencia|date:"m/Y" }}</span>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-3">
+            <div class="border rounded p-2 mb-2">
+              <div class="text-muted small">Critério</div>
+              <div><strong>{{ rateio_resumo.configuracao.get_criterio_rateio_display }}</strong></div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-2 mb-2">
+              <div class="text-muted small">Custos fixos do mês</div>
+              <div><strong>R$ {{ rateio_resumo.total_fixos|floatformat:2 }}</strong></div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-2 mb-2">
+              <div class="text-muted small">Base total de rateio</div>
+              <div><strong>{{ rateio_resumo.total_base_rateio|floatformat:2 }}</strong></div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-2 mb-2">
+              <div class="text-muted small">Produtos participantes</div>
+              <div><strong>{{ rateio_resumo.total_produtos }}</strong></div>
+            </div>
+          </div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-md-3">
+            <div class="border rounded p-2 mb-2">
+              <div class="text-muted small">Previsto</div>
+              <div><strong>{{ rateio_resumo.total_previsto }}</strong></div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-2 mb-2">
+              <div class="text-muted small">Realizado</div>
+              <div><strong>{{ rateio_resumo.total_realizado }}</strong></div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-2 mb-2">
+              <div class="text-muted small">Faturamento realizado</div>
+              <div><strong>R$ {{ rateio_resumo.total_faturamento_realizado|floatformat:2 }}</strong></div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-2 mb-2">
+              <div class="text-muted small">Margem realizada</div>
+              <div><strong>R$ {{ rateio_resumo.total_margem_realizada|floatformat:2 }}</strong></div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-2">
+          <div class="d-flex justify-content-between rateio-mini-label">
+            <span>Atingimento do previsto</span>
+            <span>{{ rateio_resumo.percentual_realizado_total|floatformat:2 }}%</span>
+          </div>
+          <div class="rateio-track">
+            <div class="rateio-bar-realizado" style="width: {% if rateio_resumo.percentual_realizado_total > 100 %}100{% else %}{{ rateio_resumo.percentual_realizado_total|floatformat:2 }}{% endif %}%"></div>
+          </div>
+        </div>
+        {% if rateio_resumo.snapshot_atual %}
+        <div class="alert alert-success py-2 mt-3 mb-0">
+          Já existe snapshot fechado para esta competência.
+          <a href="{% url 'estoque:detalhe_rateio_competencia' rateio_resumo.snapshot_atual.id %}" class="alert-link">Ver detalhe</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header"><strong>Produtos com Maior Impacto no Rateio</strong></div>
+      <div class="card-body table-responsive p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th>Previsto</th>
+              <th>Realizado</th>
+              <th>Atingimento</th>
+              <th>Fat. real</th>
+              <th>Base</th>
+              <th>Participação</th>
+              <th>Rateio unitário</th>
+              <th>Rateio mensal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in rateio_resumo.produtos %}
+            <tr>
+              <td>{{ item.produto.nome }}</td>
+              <td>{{ item.produto.previsao_venda_mensal }}</td>
+              <td>{{ item.quantidade_realizada }}</td>
+              <td class="rateio-bar-wrap">
+                <div class="d-flex justify-content-between rateio-mini-label">
+                  <span>{{ item.percentual_realizado|floatformat:1 }}%</span>
+                </div>
+                <div class="rateio-track">
+                  <div class="rateio-bar-realizado" style="width: {% if item.percentual_realizado > 100 %}100{% else %}{{ item.percentual_realizado|floatformat:2 }}{% endif %}%"></div>
+                </div>
+              </td>
+              <td>R$ {{ item.faturamento_realizado|floatformat:2 }}</td>
+              <td>{{ item.base_rateio|floatformat:2 }}</td>
+              <td>{{ item.participacao_percentual|floatformat:2 }}%</td>
+              <td>R$ {{ item.custo_rateio_unitario|floatformat:2 }}</td>
+              <td>R$ {{ item.custo_rateio_total|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="9" class="text-center text-muted py-3">Nenhum produto participa do rateio neste mês.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header"><strong>Fechar Competência</strong></div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="acao_rateio" value="gerar_snapshot">
+          <div class="form-group">
+            {{ rateio_snapshot_form.competencia.label_tag }}
+            {% if pode_gerenciar_rateio %}
+            {{ rateio_snapshot_form.competencia }}
+            {% else %}
+            <input type="text" class="form-control" value="{{ rateio_resumo.competencia|date:'d/m/Y' }}" readonly>
+            {% endif %}
+          </div>
+          <div class="form-group">
+            {{ rateio_snapshot_form.observacao.label_tag }}
+            {% if pode_gerenciar_rateio %}
+            {{ rateio_snapshot_form.observacao }}
+            {% else %}
+            <input type="text" class="form-control" value="Somente usuários com permissão de gestão podem fechar a competência." readonly>
+            {% endif %}
+          </div>
+          {% if pode_gerenciar_rateio %}
+          <button type="submit" class="btn btn-outline-primary btn-sm">Gerar snapshot fechado</button>
+          {% endif %}
+          <small class="form-text text-muted">
+            O snapshot congela o histórico da competência para consulta futura.
+          </small>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><strong>Snapshots Recentes</strong></div>
+      <div class="card-body table-responsive p-0">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Competência</th>
+              <th>Critério</th>
+              <th>Fixos</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for snapshot in rateio_resumo.snapshots %}
+            <tr>
+              <td>{{ snapshot.competencia|date:"m/Y" }}</td>
+              <td>{{ snapshot.get_criterio_rateio_display }}</td>
+              <td>R$ {{ snapshot.total_custos_fixos|floatformat:2 }}</td>
+              <td class="text-right">
+                <a href="{% url 'estoque:detalhe_rateio_competencia' snapshot.id %}" class="btn btn-outline-secondary btn-sm">Ver</a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum snapshot gerado até agora.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header"><strong>Evolução Previsto x Realizado</strong></div>
+      <div class="card-body">
+        {% for linha in rateio_resumo.historico_competencias %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between">
+            <strong>{{ linha.snapshot.competencia|date:"m/Y" }}</strong>
+            <span class="rateio-mini-label">
+              Previsto {{ linha.previstos }} | Realizado {{ linha.realizados }} | {{ linha.percentual_realizado|floatformat:2 }}%
+            </span>
+          </div>
+          <div class="rateio-track mt-1">
+            <div class="rateio-bar-previsto" style="width: 100%"></div>
+          </div>
+          <div class="rateio-track mt-1">
+            <div class="rateio-bar-realizado" style="width: {% if linha.percentual_realizado > 100 %}100{% else %}{{ linha.percentual_realizado|floatformat:2 }}{% endif %}%"></div>
+          </div>
+          <div class="d-flex justify-content-between rateio-mini-label mt-1">
+            <span>Faturamento real: R$ {{ linha.faturamento|floatformat:2 }}</span>
+            <span>Margem real: R$ {{ linha.margem|floatformat:2 }}</span>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-muted">Gere snapshots para visualizar a evolução por competência.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><strong>Leitura do Gráfico</strong></div>
+      <div class="card-body">
+        <div class="mb-2"><span class="badge badge-primary">Azul</span> previsto fechado na competência</div>
+        <div class="mb-2"><span class="badge badge-success">Verde</span> realizado apurado</div>
+        <small class="text-muted">
+          O realizado considera venda a mostrador e peças consumidas em ordens de serviço no mês da competência.
+        </small>
+      </div>
     </div>
   </div>
 </div>
@@ -38,7 +327,7 @@
 <div class="row">
   <div class="col-md-6">
     <div class="card">
-      <div class="card-header"><strong>Top Saidas (30 dias)</strong></div>
+      <div class="card-header"><strong>Top saídas (30 dias)</strong></div>
       <div class="card-body table-responsive">
         <table class="table table-sm table-bordered">
           <thead><tr><th>Produto</th><th>Unidades</th></tr></thead>
@@ -46,7 +335,7 @@
             {% for item in top_saidas %}
             <tr><td>{{ item.produto }}</td><td>{{ item.unidades }}</td></tr>
             {% empty %}
-            <tr><td colspan="2" class="text-center text-muted">Sem dados de saida.</td></tr>
+            <tr><td colspan="2" class="text-center text-muted">Sem dados de saída.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -55,7 +344,7 @@
   </div>
   <div class="col-md-6">
     <div class="card">
-      <div class="card-header"><strong>Saldos Negativos por Ponto</strong></div>
+      <div class="card-header"><strong>Saldos negativos por ponto</strong></div>
       <div class="card-body table-responsive">
         <table class="table table-sm table-bordered">
           <thead><tr><th>Ponto</th><th>Produto</th><th>Quantidade</th></tr></thead>

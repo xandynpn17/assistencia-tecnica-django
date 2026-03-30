@@ -155,14 +155,14 @@
     <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
       <div>
         <h3 class="card-title mb-0">Pagamento de comissões</h3>
-        <p class="subtitle-muted">GestÃ£o mensal por colaborador, com lote e validaÃ§Ã£o de duplicidade.</p>
+        <p class="subtitle-muted">Gestão mensal por colaborador, com lote e validação de duplicidade.</p>
       </div>
       <small class="text-muted">Registros no filtro: {{ total_registros }}</small>
     </div>
     <div class="card-body">
       <form method="get" class="form-row">
         <div class="col-lg-2 col-md-4">
-          <label>MÃªs</label>
+          <label>Mês</label>
           <input type="number" name="competencia_mes" min="1" max="12" value="{{ competencia_mes }}" class="form-control">
         </div>
         <div class="col-lg-2 col-md-4">
@@ -192,16 +192,16 @@
           <label>Tipo</label>
           <select name="tipo" class="form-control">
             <option value="" {% if not tipo_filtro %}selected{% endif %}>Todos</option>
-            <option value="SERVICO" {% if tipo_filtro == 'SERVICO' %}selected{% endif %}>ServiÃ§os</option>
-            <option value="PECA" {% if tipo_filtro == 'PECA' %}selected{% endif %}>PeÃ§as</option>
+            <option value="SERVICO" {% if tipo_filtro == 'SERVICO' %}selected{% endif %}>Serviços</option>
+            <option value="PECA" {% if tipo_filtro == 'PECA' %}selected{% endif %}>Peças</option>
             <option value="COMISSAO_VENDAS" {% if tipo_filtro == 'COMISSAO_VENDAS' %}selected{% endif %}>Vendas</option>
-            <option value="BONUS" {% if tipo_filtro == 'BONUS' %}selected{% endif %}>BÃ´nus</option>
+            <option value="BONUS" {% if tipo_filtro == 'BONUS' %}selected{% endif %}>Bônus</option>
           </select>
         </div>
         <div class="col-lg-3 col-md-6 mt-2">
-          <label>CritÃ©rio do lote</label>
+          <label>Critério do lote</label>
           <select name="criterio" class="form-control">
-            <option value="servicos_finalizados" {% if criterio_filtro == 'servicos_finalizados' %}selected{% endif %}>ServiÃ§os finalizados</option>
+            <option value="servicos_finalizados" {% if criterio_filtro == 'servicos_finalizados' %}selected{% endif %}>Serviços finalizados</option>
             <option value="retirado_pago" {% if criterio_filtro == 'retirado_pago' %}selected{% endif %}>Retirado e pago</option>
           </select>
         </div>
@@ -210,7 +210,7 @@
           <input type="text" name="os" value="{{ os_filtro }}" class="form-control" placeholder="Ex.: OS-0022">
         </div>
         <div class="col-lg-2 col-md-6 mt-2">
-          <label>Data inÃ­cio</label>
+          <label>Data início</label>
           <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
         </div>
         <div class="col-lg-2 col-md-6 mt-2">
@@ -231,10 +231,10 @@
 
   {% if filtro_aplicado %}
   <div class="chip-row">
-    <span class="chip"><strong>CompetÃªncia:</strong> {{ competencia_mes }}/{{ competencia_ano }}</span>
-    <span class="chip"><strong>PerÃ­odo:</strong> {{ data_inicio }} a {{ data_fim }}</span>
+    <span class="chip"><strong>Competência:</strong> {{ competencia_mes }}/{{ competencia_ano }}</span>
+    <span class="chip"><strong>Período:</strong> {{ data_inicio }} a {{ data_fim }}</span>
     <span class="chip"><strong>Status:</strong> {{ status_filtro }}</span>
-    <span class="chip"><strong>CritÃ©rio:</strong> {{ criterio_filtro }}</span>
+    <span class="chip"><strong>Critério:</strong> {{ criterio_filtro }}</span>
   </div>
 
   <div class="row mb-3">
@@ -275,10 +275,10 @@
             <div>
               <p class="folha-nome">{{ folha.nome }}</p>
               <div class="totais-inline mt-1">
-                <span class="chip">ServiÃ§os: <strong>R$ {{ folha.servicos.total|floatformat:2 }}</strong></span>
-                <span class="chip">PeÃ§as: <strong>R$ {{ folha.pecas.total|floatformat:2 }}</strong></span>
+                <span class="chip">Serviços: <strong>R$ {{ folha.servicos.total|floatformat:2 }}</strong></span>
+                <span class="chip">Peças: <strong>R$ {{ folha.pecas.total|floatformat:2 }}</strong></span>
                 <span class="chip">Vendas: <strong>R$ {{ folha.vendas.total|floatformat:2 }}</strong></span>
-                <span class="chip">BÃ´nus: <strong>R$ {{ folha.bonus.total|floatformat:2 }}</strong></span>
+                <span class="chip">Bônus: <strong>R$ {{ folha.bonus.total|floatformat:2 }}</strong></span>
               </div>
             </div>
             <strong>R$ {{ folha.total|floatformat:2 }}</strong>
@@ -314,9 +314,9 @@
                       <tr>
                         <th>Data</th>
                         <th>OS</th>
-                        <th>DescriÃ§Ã£o</th>
+                        <th>Descrição</th>
                         <th class="text-right">Base</th>
-                        <th class="text-right">ComissÃ£o</th>
+                        <th class="text-right">Comissão</th>
                         <th>Status</th>
                       </tr>
                     </thead>
@@ -361,7 +361,7 @@
 
   <div class="card secao-card mb-3">
     <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
-      <h3 class="card-title mb-0">ComissÃµes no filtro</h3>
+      <h3 class="card-title mb-0">Comissões no filtro</h3>
       <small class="resumo-count">
         Selecionadas: <strong id="selecionadasCount">0</strong>
         | Valor: <strong id="selecionadasValor">R$ 0,00</strong>
@@ -384,15 +384,15 @@
         <input type="hidden" name="aplicar_pecas" value="1">
         <input type="hidden" name="aplicar_vendas" value="1">
         <div class="col-lg-4 col-md-6 mb-2">
-          <label>ReferÃªncia pagamento em lote</label>
+          <label>Referência pagamento em lote</label>
           <input type="text" name="referencia_pagamento_lote" class="form-control form-control-sm" placeholder="Ex.: LOTE-MAR-001">
         </div>
         <div class="col-lg-4 col-md-6 mb-2">
           <label>Motivo cancelamento lote</label>
-          <input type="text" name="motivo_cancelamento_lote" class="form-control form-control-sm" placeholder="ObrigatÃ³rio para cancelamento">
+          <input type="text" name="motivo_cancelamento_lote" class="form-control form-control-sm" placeholder="Obrigatório para cancelamento">
         </div>
         <div class="col-lg-4 col-md-12 mb-2 d-flex align-items-end">
-          <span class="text-muted small">As aÃ§Ãµes em lote aparecem no rodapÃ© quando houver seleÃ§Ã£o.</span>
+          <span class="text-muted small">As ações em lote aparecem no rodapé quando houver seleção.</span>
         </div>
       </form>
     </div>
@@ -403,12 +403,12 @@
             <th style="width:36px;"><input type="checkbox" id="selecionarTodasComissoes" title="Selecionar todas"></th>
             <th>Data</th>
             <th>OS</th>
-            <th>TÃ©cnico</th>
+            <th>Técnico</th>
             <th>Tipo</th>
-            <th class="text-right">ComissÃ£o</th>
+            <th class="text-right">Comissão</th>
             <th>Status</th>
             <th>Lote</th>
-            <th>AÃ§Ãµes</th>
+            <th>Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -471,7 +471,7 @@
           <tr class="row-detail collapse" id="detalheComissao{{ c.id }}">
             <td colspan="9">
               <div class="d-flex flex-wrap" style="gap:14px;">
-                <span><strong>DescriÃ§Ã£o:</strong> {{ c.descricao|default:"-" }}</span>
+                <span><strong>Descrição:</strong> {{ c.descricao|default:"-" }}</span>
                 <span><strong>Base:</strong> R$ {{ c.valor_base|floatformat:2 }}</span>
                 <span><strong>Percentual:</strong> {{ c.percentual|floatformat:2 }}%</span>
                 <span><strong>Fonte:</strong> {{ c.fonte_referencia|default:"-" }}</span>
@@ -480,7 +480,7 @@
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="9" class="text-center text-muted">Sem comissÃµes no filtro informado.</td></tr>
+          <tr><td colspan="9" class="text-center text-muted">Sem comissões no filtro informado.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -511,7 +511,7 @@
         <thead>
           <tr>
             <th>Lote</th>
-            <th>CompetÃªncia</th>
+            <th>Competência</th>
             <th>Status</th>
             <th class="text-center">Itens</th>
             <th class="text-right">Valor</th>
@@ -545,10 +545,10 @@
         <thead>
           <tr>
             <th>Colaborador</th>
-            <th class="text-right">ServiÃ§os %</th>
-            <th class="text-right">PeÃ§as %</th>
+            <th class="text-right">Serviços %</th>
+            <th class="text-right">Peças %</th>
             <th class="text-right">Vendas %</th>
-            <th>AÃ§Ã£o</th>
+            <th>Ação</th>
           </tr>
         </thead>
         <tbody>
@@ -595,7 +595,7 @@
       | Valor: <strong id="selecionadasValorBar">R$ 0,00</strong>
     </div>
     <div class="d-flex flex-wrap" style="gap:6px;">
-      <button type="button" class="btn btn-outline-secondary btn-sm" data-acao-lote="prever_lote">PrÃ©via do lote</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-acao-lote="prever_lote">Prévia do lote</button>
       <button type="button" class="btn btn-outline-primary btn-sm" data-acao-lote="liberar_lote">Liberar</button>
       <button type="button" class="btn btn-success btn-sm" data-acao-lote="pagar_lote">Pagar</button>
       <button type="button" class="btn btn-outline-danger btn-sm" data-acao-lote="cancelar_lote">Cancelar</button>
@@ -707,17 +707,17 @@ document.addEventListener("DOMContentLoaded", function () {
       const acao = btn.getAttribute("data-acao-lote");
       const selecionadas = selecionadosAtuais();
       if (!selecionadas.length) {
-        alertar("Selecione ao menos uma comissÃ£o para executar a aÃ§Ã£o em lote.");
+        alertar("Selecione ao menos uma comissão para executar a ação em lote.");
         return;
       }
       if (acao !== "prever_lote") {
-        let msg = "Confirmar aÃ§Ã£o em lote para as comissÃµes selecionadas?";
+        let msg = "Confirmar ação em lote para as comissões selecionadas?";
         if (acao === "pagar_lote") {
-          msg = "Confirmar pagamento em lote das comissÃµes selecionadas?";
+          msg = "Confirmar pagamento em lote das comissões selecionadas?";
         } else if (acao === "cancelar_lote") {
-          msg = "Confirmar cancelamento em lote das comissÃµes selecionadas?";
+          msg = "Confirmar cancelamento em lote das comissões selecionadas?";
         } else if (acao === "liberar_lote") {
-          msg = "Confirmar liberaÃ§Ã£o em lote das comissÃµes selecionadas?";
+          msg = "Confirmar liberação em lote das comissões selecionadas?";
         }
         if (!confirmar(msg)) {
           return;

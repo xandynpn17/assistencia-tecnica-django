@@ -48,7 +48,7 @@ class DashboardTests(TestCase):
 
     def test_dashboard_operacional_exibe_acoes_rapidas_e_status(self):
         self.client.force_login(self.atendente)
-        self._criar_ordem(status="bancada", fechada=False)
+        self._criar_ordem(status="em_andamento", fechada=False)
 
         response = self.client.get(reverse("core:dashboard"))
 
@@ -56,8 +56,9 @@ class DashboardTests(TestCase):
         self.assertTrue(response.context["is_operational"])
         self.assertContains(response, "Abrir Nova Ordem")
         self.assertContains(response, "Registrar Pagamento")
-        self.assertContains(response, "Consultar Stock")
+        self.assertContains(response, "Consultar Estoque")
         self.assertContains(response, "Ordens por Status (Abertas)")
+        self.assertIn("?carregar=1&amp;status=em_andamento", response.content.decode())
 
     def test_dashboard_gerencial_exibe_status_e_acesso_caixa(self):
         self.client.force_login(self.gerente)
@@ -68,13 +69,27 @@ class DashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.context["is_operational"])
         self.assertTrue(response.context["is_managerial"])
-        self.assertContains(response, "Teclas Rapidas")
+        self.assertContains(response, "Teclas Rápidas")
         self.assertContains(response, "Dashboard Caixa")
         self.assertContains(response, "Ordens por Status (Abertas)")
-        self.assertContains(response, "Ultimas 5 Ordens Abertas")
+        self.assertContains(response, "Últimas 5 Ordens Abertas")
+        self.assertContains(response, "Atendente")
+        self.assertContains(response, "Técnico responsável")
+        self.assertIn("?carregar=1&amp;status=pronto_contactado", response.content.decode())
         self.assertNotContains(response, "Faturamento Total")
         self.assertNotContains(response, "A Receber")
         self.assertNotContains(response, "Periodo de Analise")
+
+    def test_dashboard_gerencial_conta_sem_tecnico_quando_campo_tem_atendente(self):
+        self.client.force_login(self.gerente)
+        ordem = self._criar_ordem(status="diagnosticar", fechada=False)
+        ordem.tecnico_responsavel = self.atendente
+        ordem.save(update_fields=["tecnico_responsavel"])
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["gerencial_cards"]["sem_tecnico"], 1)
 
     def test_dashboard_gerencial_limita_ultimas_ordens_abertas(self):
         self.client.force_login(self.gerente)
@@ -100,7 +115,7 @@ class DashboardTests(TestCase):
         self.client.force_login(self.gerente)
         ordem_antiga_pendente = self._criar_ordem(status="pendente_cliente", fechada=False)
         ordem_recente_pendente = self._criar_ordem(status="pendente_tecnico", fechada=False)
-        self._criar_ordem(status="bancada", fechada=False)
+        self._criar_ordem(status="em_andamento", fechada=False)
 
         agora = timezone.now()
         OrdemServico.objects.filter(pk=ordem_antiga_pendente.pk).update(data_abertura=agora - timedelta(days=20))

@@ -1,7 +1,12 @@
-from django import forms
+from io import BytesIO
 import re
+
+from django import forms
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
+from django.utils.text import slugify
+from PIL import Image
 from .models import (
     Aliquota,
     ConfiguracaoOrdemServico,
@@ -19,10 +24,37 @@ from django.contrib.auth.models import Group
 
 
 class EmpresaForm(forms.ModelForm):
+    IMAGE_CONTENT_TYPES = {
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+    }
+    IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+    LOGO_TARGETS = {
+        "logo": (640, 320),
+        "logo_pdf": (960, 440),
+    }
+    logo_zoom = forms.FloatField(required=False, initial=1.0, widget=forms.HiddenInput())
+    logo_focus_x = forms.FloatField(required=False, initial=0.5, widget=forms.HiddenInput())
+    logo_focus_y = forms.FloatField(required=False, initial=0.5, widget=forms.HiddenInput())
+    logo_pdf_zoom = forms.FloatField(required=False, initial=1.0, widget=forms.HiddenInput())
+    logo_pdf_focus_x = forms.FloatField(required=False, initial=0.5, widget=forms.HiddenInput())
+    logo_pdf_focus_y = forms.FloatField(required=False, initial=0.5, widget=forms.HiddenInput())
+    logo_crop_x = forms.FloatField(required=False, initial=0.0, widget=forms.HiddenInput())
+    logo_crop_y = forms.FloatField(required=False, initial=0.0, widget=forms.HiddenInput())
+    logo_crop_w = forms.FloatField(required=False, initial=1.0, widget=forms.HiddenInput())
+    logo_crop_h = forms.FloatField(required=False, initial=1.0, widget=forms.HiddenInput())
+    logo_pdf_crop_x = forms.FloatField(required=False, initial=0.0, widget=forms.HiddenInput())
+    logo_pdf_crop_y = forms.FloatField(required=False, initial=0.0, widget=forms.HiddenInput())
+    logo_pdf_crop_w = forms.FloatField(required=False, initial=1.0, widget=forms.HiddenInput())
+    logo_pdf_crop_h = forms.FloatField(required=False, initial=1.0, widget=forms.HiddenInput())
+    remover_logo = forms.BooleanField(required=False)
+    remover_logo_pdf = forms.BooleanField(required=False)
+
     class Meta:
         model = Empresa
         fields = [
-            'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logo',
+            'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logo', 'logo_pdf',
             'regime_tributario', 'anexo_simples', 'modo_tributario',
             'aliquota_comercio', 'aliquota_servico',
             'icms', 'ipi', 'pis', 'cofins',
@@ -33,6 +65,8 @@ class EmpresaForm(forms.ModelForm):
             'endereco': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'telefone': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'logo': forms.ClearableFileInput(attrs={'class': 'form-control-file', 'accept': '.png,.jpg,.jpeg,.webp'}),
+            'logo_pdf': forms.ClearableFileInput(attrs={'class': 'form-control-file', 'accept': '.png,.jpg,.jpeg,.webp'}),
             'regime_tributario': forms.Select(attrs={'class': 'form-control'}),
             'anexo_simples': forms.Select(attrs={'class': 'form-control'}),
             'modo_tributario': forms.Select(attrs={'class': 'form-control'}),
@@ -43,6 +77,150 @@ class EmpresaForm(forms.ModelForm):
             'pis': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
             'cofins': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["logo"].label = "Logo do sistema"
+        self.fields["logo"].help_text = "Aceita PNG, JPG/JPEG ou WEBP. Ao selecionar, o editor abre antes de salvar."
+        self.fields["logo_pdf"].label = "Logo dos PDFs"
+        self.fields["logo_pdf"].help_text = "Aceita PNG, JPG/JPEG ou WEBP. Ao selecionar, o editor abre antes de salvar."
+        self.fields["remover_logo"].label = "Remover logo atual"
+        self.fields["remover_logo_pdf"].label = "Remover logo atual"
+
+    @classmethod
+    def _validar_arquivo_imagem(cls, arquivo, nome_campo):
+        if not arquivo:
+            return arquivo
+        if getattr(arquivo, "path", None) and not getattr(arquivo, "content_type", None):
+            return arquivo
+        nome = (getattr(arquivo, "name", "") or "").lower()
+        extensao = nome[nome.rfind("."):] if "." in nome else ""
+        content_type = getattr(arquivo, "content_type", "") or ""
+        if extensao not in cls.IMAGE_EXTENSIONS or content_type not in cls.IMAGE_CONTENT_TYPES:
+            raise forms.ValidationError(f"{nome_campo} deve estar em PNG, JPG/JPEG ou WEBP.")
+        return arquivo
+
+    @staticmethod
+    def _normalizar_range(valor, padrao, minimo, maximo):
+        try:
+            valor = float(valor)
+        except (TypeError, ValueError):
+            valor = padrao
+        return max(minimo, min(maximo, valor))
+
+    def clean_logo(self):
+        return self._validar_arquivo_imagem(self.cleaned_data.get("logo"), "O logo do sistema")
+
+    def clean_logo_pdf(self):
+        return self._validar_arquivo_imagem(self.cleaned_data.get("logo_pdf"), "O logo dos PDFs")
+
+    def _processar_logo(self, campo_modelo, campo_form):
+        arquivo = self.cleaned_data.get(campo_form)
+        if not arquivo:
+            return
+
+        largura_alvo, altura_alvo = self.LOGO_TARGETS[campo_form]
+
+        imagem = Image.open(arquivo)
+        imagem = imagem.convert("RGBA")
+        largura, altura = imagem.size
+        crop_x = self._normalizar_range(self.cleaned_data.get(f"{campo_form}_crop_x"), 0.0, 0.0, 1.0)
+        crop_y = self._normalizar_range(self.cleaned_data.get(f"{campo_form}_crop_y"), 0.0, 0.0, 1.0)
+        crop_w_ratio = self._normalizar_range(self.cleaned_data.get(f"{campo_form}_crop_w"), 1.0, 0.01, 1.0)
+        crop_h_ratio = self._normalizar_range(self.cleaned_data.get(f"{campo_form}_crop_h"), 1.0, 0.01, 1.0)
+        usar_crop_explicito = any(
+            abs(valor - padrao) > 0.0001
+            for valor, padrao in (
+                (crop_x, 0.0),
+                (crop_y, 0.0),
+                (crop_w_ratio, 1.0),
+                (crop_h_ratio, 1.0),
+            )
+        )
+
+        if usar_crop_explicito:
+            crop_w = max(1, largura * crop_w_ratio)
+            crop_h = max(1, altura * crop_h_ratio)
+            esquerda = max(0, min(largura - crop_w, largura * crop_x))
+            topo = max(0, min(altura - crop_h, altura * crop_y))
+            direita = esquerda + crop_w
+            base = topo + crop_h
+        else:
+            zoom = self._normalizar_range(self.cleaned_data.get(f"{campo_form}_zoom"), 1.0, 1.0, 3.0)
+            focus_x = self._normalizar_range(self.cleaned_data.get(f"{campo_form}_focus_x"), 0.5, 0.0, 1.0)
+            focus_y = self._normalizar_range(self.cleaned_data.get(f"{campo_form}_focus_y"), 0.5, 0.0, 1.0)
+            aspecto_alvo = largura_alvo / float(altura_alvo)
+            aspecto_imagem = largura / float(altura or 1)
+
+            if aspecto_imagem >= aspecto_alvo:
+                crop_h = altura
+                crop_w = altura * aspecto_alvo
+            else:
+                crop_w = largura
+                crop_h = largura / aspecto_alvo
+
+            crop_w = max(1, crop_w / zoom)
+            crop_h = max(1, crop_h / zoom)
+
+            centro_x = largura * focus_x
+            centro_y = altura * focus_y
+            esquerda = max(0, min(largura - crop_w, centro_x - crop_w / 2))
+            topo = max(0, min(altura - crop_h, centro_y - crop_h / 2))
+            direita = esquerda + crop_w
+            base = topo + crop_h
+
+        imagem = imagem.crop((int(round(esquerda)), int(round(topo)), int(round(direita)), int(round(base))))
+        imagem.thumbnail((largura_alvo, altura_alvo), Image.Resampling.LANCZOS)
+
+        formato = "PNG"
+        extensao = "png"
+        fundo = (255, 255, 255, 0)
+        if getattr(arquivo, "content_type", "") == "image/webp":
+            formato = "WEBP"
+            extensao = "webp"
+        elif getattr(arquivo, "content_type", "") == "image/jpeg":
+            formato = "JPEG"
+            extensao = "jpg"
+            fundo = (255, 255, 255)
+
+        modo_saida = "RGBA" if formato != "JPEG" else "RGB"
+        canvas = Image.new(modo_saida, (largura_alvo, altura_alvo), fundo)
+        if modo_saida == "RGB":
+            imagem = imagem.convert("RGB")
+            mascara = None
+        else:
+            mascara = imagem if imagem.mode == "RGBA" else None
+
+        offset_x = (largura_alvo - imagem.width) // 2
+        offset_y = (altura_alvo - imagem.height) // 2
+        canvas.paste(imagem, (offset_x, offset_y), mascara)
+        imagem = canvas
+
+        buffer = BytesIO()
+        imagem.save(buffer, format=formato, quality=95)
+        nome_base = slugify(self.cleaned_data.get("nome") or getattr(self.instance, "nome", "") or "empresa")
+        nome_arquivo = f"{nome_base}-{campo_form}.{extensao}"
+        getattr(self.instance, campo_modelo).save(nome_arquivo, ContentFile(buffer.getvalue()), save=False)
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        self.instance = instance
+        novo_logo = self.cleaned_data.get("logo")
+        novo_logo_pdf = self.cleaned_data.get("logo_pdf")
+        tem_upload_logo = bool(getattr(novo_logo, "content_type", None))
+        tem_upload_logo_pdf = bool(getattr(novo_logo_pdf, "content_type", None))
+        if self.cleaned_data.get("remover_logo") and not tem_upload_logo and instance.logo:
+            instance.logo.delete(save=False)
+            instance.logo = None
+        if self.cleaned_data.get("remover_logo_pdf") and not tem_upload_logo_pdf and instance.logo_pdf:
+            instance.logo_pdf.delete(save=False)
+            instance.logo_pdf = None
+        self._processar_logo("logo", "logo")
+        self._processar_logo("logo_pdf", "logo_pdf")
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
 
 
 class AliquotaForm(forms.ModelForm):
@@ -271,6 +449,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'inventario_ultima_execucao',
             'backup_retencao_dias',
             'lgpd_mascarar_documento',
+            'usar_confirmacao_assinatura_digital',
             'mensagem_orcamento_email',
             'mensagem_orcamento_whatsapp',
             'mensagem_pronto_email',

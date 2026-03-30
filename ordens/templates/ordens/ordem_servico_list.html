@@ -1,53 +1,172 @@
 {% extends 'core/base.html' %}
 {% block title %}Lista de Ordens de Serviço{% endblock %}
 
+{% block extra_css %}
+<style>
+    .filters-panel { border: 1px solid #e8edf3; border-radius: 12px; background: linear-gradient(180deg, #fafcff 0%, #f4f8fb 100%); padding: 14px; }
+    .filters-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+    .filters-intro { flex: 1 1 480px; min-width: 0; }
+    .filters-title { font-weight: 700; color: #1f2937; margin-bottom: 2px; font-size: .98rem; }
+    .filters-help { color: #667085; font-size: .88rem; line-height: 1.35; }
+    .guide-chip { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; background: #fff; border: 1px solid #dbe5ee; color: #243447; font-size: 12px; margin-right: 6px; margin-bottom: 6px; }
+    .summary-chip { display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 999px; background: #eef4f8; color: #243447; font-size: 11px; font-weight: 600; margin-right: 6px; margin-bottom: 6px; }
+    .summary-chip strong { margin-left: 4px; }
+    .help-trigger { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; border: 1px solid #cfe0eb; background: #fff; color: #36536b; padding: 0; }
+    .help-trigger:hover { color: #243447; border-color: #b9cfde; text-decoration: none; }
+    .guide-box { border: 1px dashed #d5e2ec; border-radius: 10px; background: #f8fbfd; padding: 12px 14px; }
+    .list-card { border: none; border-radius: 14px; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08); }
+    .list-card .card-header { background: #fff; border-bottom: 1px solid #edf2f7; padding: 14px 18px; }
+    .list-card .card-body { padding: 14px 18px; }
+    .compact-header-copy { font-size: .84rem; line-height: 1.35; }
+    .status-strip { display: flex; flex-wrap: wrap; gap: 6px; }
+    .status-chip-link { text-decoration: none; color: inherit; }
+    .status-chip-link:hover { text-decoration: none; color: inherit; }
+    .status-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; border: 1px solid #dbe5ee; background: #fff; color: #243447; font-size: 11px; line-height: 1.1; }
+    .status-chip.active { background: #1f5f8b; border-color: #1f5f8b; color: #fff; }
+    .status-chip-label { font-weight: 700; }
+    .status-chip-total { opacity: .78; font-weight: 600; }
+    .results-panel { border: 1px solid #d8e4ed; border-radius: 10px; background: #fff; padding: 10px 12px; min-width: 170px; }
+    .results-panel .h4 { font-size: 1.35rem; margin-bottom: 0; line-height: 1; }
+    .filters-panel label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 4px; font-weight: 700; }
+    .filters-panel .form-control { height: 36px; font-size: .92rem; }
+    .filters-panel .form-check { min-height: 36px; display: flex; align-items: center; margin-bottom: 0; }
+    .filters-panel .form-check-label { font-size: .9rem; }
+    .filters-panel .btn { height: 36px; }
+    .list-row-main { display: flex; flex-direction: column; gap: 2px; }
+    .list-row-main a { font-size: .94rem; line-height: 1.2; }
+    .list-row-meta { font-size: 11px; color: #64748b; line-height: 1.25; }
+    .status-pill { display: inline-flex; align-items: center; padding: 4px 9px; border-radius: 999px; background: #f1f5f9; font-size: 11px; font-weight: 700; color: #334155; }
+    .status-pill.diagnosticar { background: #e0f2fe; color: #075985; }
+    .status-pill.pendente_cliente,
+    .status-pill.pendente_orcamento { background: #fff7d6; color: #8a6300; }
+    .status-pill.pendente_pecas,
+    .status-pill.pendente_marca,
+    .status-pill.pendente_tecnico { background: #fff1e8; color: #9a3412; }
+    .status-pill.pronto_contactar,
+    .status-pill.pronto_contactado { background: #e7f5ec; color: #166534; }
+    .status-pill.concluida { background: #e5e7eb; color: #374151; }
+    .status-pill.reaberta { background: #f4e8ff; color: #6b21a8; }
+    .table thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; border-top: none; }
+    .table-hover tbody tr:hover { background: #f8fbff; }
+    .orders-table tbody td { padding-top: .55rem; padding-bottom: .55rem; vertical-align: middle; }
+    .empty-state { padding: 22px 16px; text-align: center; color: #64748b; }
+    .idle-state { padding: 30px 22px; text-align: center; color: #526172; }
+    .idle-state-icon { width: 54px; height: 54px; margin: 0 auto 14px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: #eef4f8; color: #36536b; font-size: 22px; }
+    .pagination-meta { color: #64748b; font-size: 12px; }
+    @media (max-width: 991.98px) {
+        .filters-top { gap: 10px; }
+        .results-panel { width: 100%; }
+        .orders-table thead { display: none; }
+        .orders-table tbody tr { display: block; border-top: 1px solid #edf2f7; padding: 10px 14px; }
+        .orders-table tbody td { display: flex; justify-content: space-between; gap: 12px; border: 0; padding: 6px 0; }
+        .orders-table tbody td::before { content: attr(data-label); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; font-weight: 700; }
+        .orders-table tbody td.pl-4 { padding-left: 0 !important; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h3 class="card-title mb-0">Ordens de Serviço</h3>
-                <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-success btn-sm">
+        <div class="card list-card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 10px;">
+                <div>
+                    <h3 class="card-title mb-1">Ordens de Serviço</h3>
+                    <div class="text-muted compact-header-copy">A lista só é carregada depois da aplicação de ao menos um filtro.</div>
+                </div>
+                <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-success btn-sm px-3">
                     Nova Ordem
                 </a>
             </div>
 
             <div class="card-body border-bottom">
-                <form method="get" class="form-row align-items-end">
-                    <div class="col-md-5 mb-2">
-                        <label>Busca</label>
-                        <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="OS, cliente, documento ou telefone">
-                    </div>
-                    <div class="col-md-3 mb-2">
-                        <label>Status</label>
-                        <select class="form-control" name="status">
-                            <option value="">Todos</option>
-                            {% for key, label in view.model.STATUS_CHOICES %}
-                            <option value="{{ key }}" {% if status_filtro == key %}selected{% endif %}>{{ label }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2 mb-2">
-                        <div class="form-check mt-4">
-                            <input class="form-check-input" type="checkbox" id="incluir_fechadas" name="incluir_fechadas" value="1" {% if incluir_fechadas %}checked{% endif %}>
-                            <label class="form-check-label" for="incluir_fechadas">Incluir fechadas</label>
+                <div class="filters-panel">
+                    <div class="filters-top">
+                        <div class="filters-intro">
+                            <div class="filters-title">Busca e filtros</div>
+                            <div class="d-flex align-items-center" style="gap: 8px;">
+                            <div class="filters-help mb-0">Selecione o status para carregar a lista. Ordens fechadas aparecem em concluídas.</div>
+                                <button type="button" class="help-trigger" data-toggle="modal" data-target="#modalGuiaBuscaOrdens" aria-label="Como buscar" title="Como buscar">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="results-panel">
+                            <div class="small text-muted text-uppercase mb-1">Resultado</div>
+                            <div class="h4">{{ total_filtrado }}</div>
+                            <div class="small text-muted">{% if filtros_aplicados %}ordem(ns) no filtro atual{% else %}aguardando filtros{% endif %}</div>
                         </div>
                     </div>
-                    <div class="col-md-2 mb-2">
-                        <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+
+                    <form method="get" class="form-row align-items-end mt-2">
+                        <div class="col-lg-6 col-md-8 mb-2 mb-lg-0">
+                            <label>Status</label>
+                            <select class="form-control" name="status">
+                                <option value="">Ordens abertas</option>
+                                {% for key, label in view.model.STATUS_CHOICES %}
+                                <option value="{{ key }}" {% if status_filtro == key %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-md-2 mb-2 mb-lg-0">
+                            <button type="submit" class="btn btn-primary btn-block">Aplicar filtros</button>
+                        </div>
+                        <div class="col-lg-3 col-md-2 mb-2 mb-lg-0">
+                            <a href="{% url 'ordens:lista_ordens' %}" class="btn btn-outline-secondary btn-block">Limpar</a>
+                        </div>
+                    </form>
+
+                    {% if busca_erro %}
+                    <div class="alert alert-warning mt-2 mb-0 py-2 px-3 small">
+                        <strong>Busca não aplicada:</strong> {{ busca_erro }}
                     </div>
-                </form>
+                    {% endif %}
+
+                    {% if status_filtro %}
+                    <div class="mt-2">
+                        {% if status_filtro %}
+                        <span class="summary-chip">Status<strong>{{ status_filtro_label }}</strong></span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if filtros_aplicados and status_cards %}
+                    <div class="mt-2">
+                        <div class="small text-muted text-uppercase mb-2">Distribuição por status</div>
+                        <div class="status-strip">
+                            {% for item in status_cards %}
+                            <a
+                                href="?carregar=1{% if item.codigo %}&status={{ item.codigo }}{% endif %}"
+                                class="status-chip-link"
+                            >
+                                <span class="status-chip{% if item.ativo %} active{% endif %}">
+                                    <span class="status-chip-label">{{ item.rotulo }}</span>
+                                    <span class="status-chip-total">{{ item.total }}</span>
+                                </span>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
 
-            <div class="card-body table-responsive">
-                <table class="table table-bordered table-hover">
+            <div class="card-body table-responsive p-0">
+                {% if not filtros_aplicados %}
+                <div class="idle-state">
+                    <div class="idle-state-icon">
+                        <i class="fas fa-filter"></i>
+                    </div>
+                    <h5 class="mb-2">Selecione um status para listar ordens</h5>
+                    <p class="mb-0">Sem filtro, a tela fica vazia para manter a operação leve.</p>
+                </div>
+                {% else %}
+                <table class="table table-hover mb-0 orders-table">
                     <thead>
                         <tr>
-                            <th>OS</th>
-                            <th>Cliente</th>
-                            <th>Tipo Equipamento</th>
-                            <th>Marca</th>
-                            <th>Modelo</th>
+                            <th class="pl-4">OS / Cliente</th>
+                            <th>Equipamento</th>
+                            <th>Marca / Modelo</th>
                             <th>Status</th>
                             <th>Criada em</th>
                         </tr>
@@ -55,45 +174,88 @@
                     <tbody>
                         {% for os in ordens %}
                         <tr class="os-row" data-detalhes-url="{% url 'ordens:detalhes_ordem' os.id %}">
-                            <td>
-                                <a href="{% url 'ordens:detalhes_ordem' os.id %}" class="font-weight-bold text-dark">
-                                    {{ os.numero_os }}
-                                </a>
+                            <td class="pl-4" data-label="OS / Cliente">
+                                <div class="list-row-main">
+                                    <a href="{% url 'ordens:detalhes_ordem' os.id %}" class="font-weight-bold text-dark">
+                                        {{ os.numero_os }}
+                                    </a>
+                                    <span class="list-row-meta">{{ os.cliente.nome }} • Atend.: {% if os.atendente_abertura %}{{ os.atendente_abertura.username }}{% else %}-{% endif %} • Téc.: {% if os.tecnico_responsavel_valido %}{{ os.tecnico_responsavel_valido.username }}{% else %}sem técnico{% endif %}</span>
+                                </div>
                             </td>
-                            <td>{{ os.cliente.nome }}</td>
-                            <td>{{ os.tipo_equipamento|title }}</td>
-                            <td>{{ os.marca_equipamento }}</td>
-                            <td>{{ os.modelo_equipamento }}</td>
-                            <td>{{ os.get_status_display }}</td>
-                            <td>{{ os.data_abertura|date:"d/m/Y H:i" }}</td>
+                            <td data-label="Equipamento">
+                                <div class="font-weight-600">{{ os.get_tipo_equipamento_display }}</div>
+                                <div class="small text-muted">{{ os.numero_serie_equipamento|default:"Sem série" }}</div>
+                            </td>
+                            <td data-label="Marca / Modelo">
+                                <div class="font-weight-600">{{ os.marca_equipamento }}</div>
+                                <div class="small text-muted">{{ os.modelo_equipamento }}</div>
+                            </td>
+                            <td data-label="Status"><span class="status-pill {{ os.status_listagem_codigo }}">{{ os.status_listagem_label }}</span></td>
+                            <td data-label="Criada em">{{ os.data_abertura|date:"d/m/Y H:i" }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center">Nenhuma ordem encontrada.</td>
+                            <td colspan="5" class="empty-state">
+                                Nenhuma ordem encontrada com os filtros informados.
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
 
                 {% if is_paginated %}
-                <nav aria-label="Paginacao de ordens">
-                    <ul class="pagination pagination-sm mt-3 mb-0">
-                        {% if page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?q={{ q }}&status={{ status_filtro }}{% if incluir_fechadas %}&incluir_fechadas=1{% endif %}&page={{ page_obj.previous_page_number }}">Anterior</a>
-                        </li>
-                        {% endif %}
-                        <li class="page-item disabled">
-                            <span class="page-link">Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
-                        </li>
-                        {% if page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?q={{ q }}&status={{ status_filtro }}{% if incluir_fechadas %}&incluir_fechadas=1{% endif %}&page={{ page_obj.next_page_number }}">Proxima</a>
-                        </li>
-                        {% endif %}
-                    </ul>
-                </nav>
+                <div class="p-3 border-top">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap: 12px;">
+                        <div class="pagination-meta">
+                            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} • {{ total_filtrado }} resultado(s)
+                        </div>
+                        <nav aria-label="Paginação de ordens">
+                            <ul class="pagination pagination-sm mb-0">
+                                {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?carregar=1{% if status_filtro %}&status={{ status_filtro }}{% endif %}&page={{ page_obj.previous_page_number }}">Anterior</a>
+                                </li>
+                                {% endif %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                                </li>
+                                {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?carregar=1{% if status_filtro %}&status={{ status_filtro }}{% endif %}&page={{ page_obj.next_page_number }}">Próxima</a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
                 {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="modalGuiaBuscaOrdens" tabindex="-1" role="dialog" aria-labelledby="modalGuiaBuscaOrdensLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalGuiaBuscaOrdensLabel">Como buscar</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="guide-box">
+                    <div class="filters-help mb-2">
+                        Para evitar resultados errados, a busca aceita apenas OS exata ou os prefixos <code>cpf:</code>, <code>tel:</code> e <code>sn:</code>.
+                    </div>
+                    <div>
+                        <span class="guide-chip">OS-1001</span>
+                        <span class="guide-chip">1001</span>
+                        <span class="guide-chip">cpf:39053344705</span>
+                        <span class="guide-chip">tel:11999999999</span>
+                        <span class="guide-chip">sn:ABC123</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

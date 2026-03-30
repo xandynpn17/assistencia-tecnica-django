@@ -237,16 +237,18 @@
         </div>
         <div class="card-body p-0 table-responsive">
           <table class="table table-sm table-bordered mb-0">
-            <thead><tr><th>OS</th><th>Cliente</th><th>Status</th></tr></thead>
+            <thead><tr><th>OS</th><th>Cliente</th><th>Atendente</th><th>Técnico responsável</th><th>Status</th></tr></thead>
             <tbody>
               {% for ordem in ordens_sem_relatorio %}
               <tr>
                 <td>{{ ordem.numero_os }}</td>
                 <td>{{ ordem.cliente.nome|default:"-" }}</td>
-                <td>{{ ordem.get_status_display|default:ordem.status }}</td>
+                <td>{% if ordem.atendente_abertura %}{{ ordem.atendente_abertura.get_full_name|default:ordem.atendente_abertura.username }}{% else %}-{% endif %}</td>
+                <td>{% if ordem.tecnico_responsavel_valido %}{{ ordem.tecnico_responsavel_valido.get_full_name|default:ordem.tecnico_responsavel_valido.username }}{% else %}Sem técnico{% endif %}</td>
+                <td>{{ ordem.status_listagem_label }}</td>
               </tr>
               {% empty %}
-              <tr><td colspan="3" class="text-center text-muted">Sem pendências.</td></tr>
+              <tr><td colspan="5" class="text-center text-muted">Sem pendências.</td></tr>
               {% endfor %}
             </tbody>
           </table>

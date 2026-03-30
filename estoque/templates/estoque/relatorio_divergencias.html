@@ -1,12 +1,25 @@
 {% extends "core/base.html" %}
 
-{% block title %}Divergencias de Estoque{% endblock %}
+{% block title %}Divergências de Estoque{% endblock %}
 
 {% block header %}
-<h1 class="m-0 text-dark">Divergencias de Estoque</h1>
+<h1 class="m-0 text-dark">Divergências de Estoque</h1>
 {% endblock %}
 
 {% block content %}
+{% if total_pre_reservas_antigas > 0 %}
+<div class="alert alert-warning d-flex justify-content-between align-items-center">
+  <div>
+    Existem <strong>{{ total_pre_reservas_antigas }}</strong> pré-reservas antigas pendentes.
+    Recomendação: executar limpeza diária automática.
+  </div>
+  <form method="post" action="{% url 'estoque:limpar_pre_reservas_antigas_web' %}" class="mb-0">
+    {% csrf_token %}
+    <input type="hidden" name="dias" value="{{ dias_limpeza_pre_reserva|default:1 }}">
+    <button type="submit" class="btn btn-sm btn-outline-dark">Limpar agora</button>
+  </form>
+</div>
+{% endif %}
 <div class="row">
   <div class="col-md-4">
     <div class="card">
@@ -16,7 +29,7 @@
           {% for v in pre_reservas_antigas %}
             <li>#{{ v.id }} - {{ v.produto.nome }} ({{ v.quantidade }})</li>
           {% empty %}
-            <li class="text-muted">Sem pendencias</li>
+            <li class="text-muted">Sem pendências</li>
           {% endfor %}
         </ul>
       </div>
@@ -30,7 +43,7 @@
           {% for r in reservas_vencidas_ativas %}
             <li>{{ r.codigo_reserva }} - {{ r.produto.nome }}</li>
           {% empty %}
-            <li class="text-muted">Sem pendencias</li>
+            <li class="text-muted">Sem pendências</li>
           {% endfor %}
         </ul>
       </div>
@@ -44,7 +57,7 @@
           {% for p in produtos_abaixo %}
             <li>{{ p.nome }}: {{ p.quantidade }} / min {{ p.estoque_minimo }}</li>
           {% empty %}
-            <li class="text-muted">Sem pendencias</li>
+            <li class="text-muted">Sem pendências</li>
           {% endfor %}
         </ul>
       </div>
@@ -60,7 +73,7 @@
           {% for s in negativos_ponto %}
             <li>{{ s.ponto_operacional.codigo }} - {{ s.produto.nome }}: {{ s.quantidade }}</li>
           {% empty %}
-            <li class="text-muted">Sem pendencias</li>
+            <li class="text-muted">Sem pendências</li>
           {% endfor %}
         </ul>
       </div>
@@ -68,13 +81,13 @@
   </div>
   <div class="col-md-6">
     <div class="card">
-      <div class="card-header">Transferencias para PO2 sem ubicacao</div>
+      <div class="card-header">Transferências para PO2 sem ubicação</div>
       <div class="card-body">
         <ul class="mb-0">
           {% for m in mov_po2_sem_ubicacao %}
             <li>{{ m.produto.nome }} - qtd {{ m.quantidade }} em {{ m.criado_em|date:"d/m/Y H:i" }}</li>
           {% empty %}
-            <li class="text-muted">Sem pendencias</li>
+            <li class="text-muted">Sem pendências</li>
           {% endfor %}
         </ul>
       </div>

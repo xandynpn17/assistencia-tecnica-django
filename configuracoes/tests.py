@@ -3,15 +3,17 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test.utils import override_settings
 from django.utils import timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import csv
 import gzip
-from io import StringIO
-from configuracoes.models import FornecedorGarantia, MarcaGarantia
-from configuracoes.forms import MarcaGarantiaForm, RegraGarantiaMarcaForm
+from io import BytesIO, StringIO
+from PIL import Image
+from configuracoes.models import Empresa, FornecedorGarantia, MarcaGarantia
+from configuracoes.forms import EmpresaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm
 from django.conf import settings
 from clientes.models import Cliente
 from estoque.models import CategoriaProduto, Produto
@@ -389,6 +391,122 @@ class PermissoesConfiguracoesTests(TestCase):
                 response_cep = self.client.get(reverse("configuracoes:buscar_cep"), {"cep": "123"})
                 self.assertEqual(response_cep.status_code, 400)
                 self.assertIn("CEP", response_cep.json().get("erro", ""))
+
+
+class EmpresaFormLogoTests(TestCase):
+    @staticmethod
+    def _arquivo_imagem(nome="logo.png", tamanho=(900, 450), color=(24, 72, 128, 255)):
+        buffer = BytesIO()
+        Image.new("RGBA", tamanho, color).save(buffer, format="PNG")
+        return SimpleUploadedFile(nome, buffer.getvalue(), content_type="image/png")
+
+    def test_form_processa_logo_e_logo_pdf_com_tamanho_padrao(self):
+        with TemporaryDirectory() as tmp_dir:
+            with override_settings(MEDIA_ROOT=tmp_dir):
+                form = EmpresaForm(
+                    data={
+                        "nome": "Empresa QA",
+                        "cnpj": "",
+                        "endereco": "",
+                        "telefone": "",
+                        "email": "",
+                        "regime_tributario": "simples",
+                        "anexo_simples": "I",
+                        "modo_tributario": "basico",
+                        "aliquota_comercio": "0",
+                        "aliquota_servico": "0",
+                        "icms": "0",
+                        "ipi": "0",
+                        "pis": "0",
+                        "cofins": "0",
+                        "logo_zoom": "1.4",
+                        "logo_focus_x": "0.5",
+                        "logo_focus_y": "0.5",
+                        "logo_pdf_zoom": "1.2",
+                        "logo_pdf_focus_x": "0.5",
+                        "logo_pdf_focus_y": "0.5",
+                    },
+                    files={
+                        "logo": self._arquivo_imagem("sistema.png", tamanho=(1000, 500)),
+                        "logo_pdf": self._arquivo_imagem("pdf.png", tamanho=(1200, 600)),
+                    },
+                )
+
+                self.assertTrue(form.is_valid(), form.errors)
+                empresa = form.save()
+
+                with Image.open(empresa.logo.path) as logo_sistema:
+                    self.assertEqual(logo_sistema.size, (640, 320))
+                with Image.open(empresa.logo_pdf.path) as logo_pdf:
+                    self.assertEqual(logo_pdf.size, (960, 440))
+
+    def test_form_rejeita_formato_nao_suportado(self):
+        form = EmpresaForm(
+            data={
+                "nome": "Empresa QA",
+                "regime_tributario": "simples",
+                "anexo_simples": "I",
+                "modo_tributario": "basico",
+                "aliquota_comercio": "0",
+                "aliquota_servico": "0",
+                "icms": "0",
+                "ipi": "0",
+                "pis": "0",
+                "cofins": "0",
+            },
+            files={
+                "logo": SimpleUploadedFile("logo.svg", b"<svg></svg>", content_type="image/svg+xml"),
+            },
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("logo", form.errors)
+
+    def test_form_remove_logo_atual_sem_novo_upload(self):
+        with TemporaryDirectory() as tmp_dir:
+            with override_settings(MEDIA_ROOT=tmp_dir):
+                empresa = Empresa.objects.create(nome="Empresa Remocao")
+                empresa.logo = self._arquivo_imagem("sistema.png")
+                empresa.logo_pdf = self._arquivo_imagem("pdf.png")
+                empresa.save(update_fields=["logo", "logo_pdf"])
+
+                caminho_logo = empresa.logo.path
+                caminho_logo_pdf = empresa.logo_pdf.path
+
+                form = EmpresaForm(
+                    data={
+                        "nome": "Empresa Remocao",
+                        "cnpj": "",
+                        "endereco": "",
+                        "telefone": "",
+                        "email": "",
+                        "regime_tributario": "simples",
+                        "anexo_simples": "I",
+                        "modo_tributario": "basico",
+                        "aliquota_comercio": "0",
+                        "aliquota_servico": "0",
+                        "icms": "0",
+                        "ipi": "0",
+                        "pis": "0",
+                        "cofins": "0",
+                        "remover_logo": "on",
+                        "remover_logo_pdf": "on",
+                    },
+                    instance=empresa,
+                )
+
+                self.assertTrue(form.is_valid(), form.errors)
+                empresa = form.save()
+                empresa.refresh_from_db()
+
+                self.assertFalse(bool(empresa.logo))
+                self.assertFalse(bool(empresa.logo_pdf))
+                self.assertFalse(Path(caminho_logo).exists())
+                self.assertFalse(Path(caminho_logo_pdf).exists())
+                if empresa.logo:
+                    empresa.logo.close()
+                if empresa.logo_pdf:
+                    empresa.logo_pdf.close()
 
 
 class ComandosConfiguracoesTests(TestCase):

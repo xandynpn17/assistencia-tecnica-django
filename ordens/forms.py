@@ -66,6 +66,8 @@ class OrdemServicoForm(forms.ModelForm):
         if marca_catalogo == "__outros__":
             if marca_manual:
                 cleaned_data["marca_equipamento"] = marca_manual
+                cleaned_data["marca_garantia"] = None
+                self.instance.marca_garantia = None
             else:
                 self.add_error("marca_manual", "Informe a marca manualmente ao selecionar Outros.")
         elif marca_catalogo:
@@ -75,8 +77,12 @@ class OrdemServicoForm(forms.ModelForm):
             else:
                 cleaned_data["marca_equipamento"] = marca.nome
                 cleaned_data["marca_manual"] = ""
+                cleaned_data["marca_garantia"] = marca
+                self.instance.marca_garantia = marca
         else:
             self.add_error("marca_catalogo", "Selecione uma marca ou escolha Outros.")
+            cleaned_data["marca_garantia"] = None
+            self.instance.marca_garantia = None
 
         if not (cleaned_data.get("marca_equipamento") or "").strip():
             self.add_error("marca_equipamento", "Informe a marca do equipamento.")
@@ -102,6 +108,7 @@ class OrdemServicoForm(forms.ModelForm):
             "tipo_reparo",
             "data_compra",
             "numero_nota_fiscal",
+            "referencia_parceiro",
             "defeito",
             "acessorios",
             "notas_internas",
@@ -115,6 +122,7 @@ class OrdemServicoForm(forms.ModelForm):
             "tipo_reparo": forms.Select(attrs={"class": "form-control"}),
             "data_compra": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
             "numero_nota_fiscal": forms.TextInput(attrs={"class": "form-control", "placeholder": "Número da nota fiscal"}),
+            "referencia_parceiro": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex: OS externa, parceiro ou referência interna"}),
             "defeito": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Descreva o defeito"}),
             "acessorios": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "Acessórios inclusos"}),
             "notas_internas": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Notas internas (somente sistema)"}),
@@ -124,6 +132,7 @@ class OrdemServicoForm(forms.ModelForm):
             "numero_serie_equipamento": "Número de série",
             "tipo_reparo": "Tipo de reparo",
             "numero_nota_fiscal": "Número da nota fiscal",
+            "referencia_parceiro": "Referência parceiro",
             "acessorios": "Acessórios",
             "notas_internas": "Notas internas",
         }
@@ -146,7 +155,7 @@ class LinhaTrabalhoForm(forms.ModelForm):
         self.fields["status"].choices = [
             (value, label)
             for value, label in self.fields["status"].choices
-            if value != "criada"
+            if value not in {"criada", "concluida"}
         ]
 
     class Meta:
@@ -211,7 +220,7 @@ class ServicoPecaForm(forms.ModelForm):
             "nome": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nome do serviço/peça"}),
             "descricao": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "Descrição opcional"}),
             "quantidade": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
-            "valor_unitario": forms.NumberInput(attrs={"class": "form-control", "step": 0.01}),
+            "valor_unitario": forms.NumberInput(attrs={"class": "form-control", "step": 0.01, "placeholder": "0,00"}),
             "garantia_dias": forms.NumberInput(attrs={"class": "form-control", "min": 0, "placeholder": "Dias de garantia"}),
             "tecnico_responsavel": forms.Select(attrs={"class": "form-control"}),
             "numeros_taloes": forms.TextInput(
@@ -220,6 +229,9 @@ class ServicoPecaForm(forms.ModelForm):
                     "placeholder": "Ex: 00010020260302000123, 00010020260302000124",
                 }
             ),
+        }
+        labels = {
+            "valor_unitario": "Valor unitário (R$)",
         }
 
 
@@ -232,4 +244,3 @@ class NotificacaoClienteForm(forms.ModelForm):
             "canal": forms.Select(attrs={"class": "form-control"}),
             "mensagem": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
-

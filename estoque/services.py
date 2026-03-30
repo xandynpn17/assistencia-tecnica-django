@@ -1,9 +1,11 @@
+from datetime import timedelta
+
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from .models import MovimentacaoEstoque, Produto, ReservaEstoque, SaldoEstoquePonto
+from .models import MovimentacaoEstoque, Produto, ReservaEstoque, SaldoEstoquePonto, VendaRapidaEstoque
 
 
 def saldo_disponivel(produto, ponto_operacional):
@@ -135,6 +137,22 @@ def expirar_reservas_vencidas(usuario=None):
         reserva.motivo_status = "Expirada automaticamente por data."
         reserva.save(update_fields=["status", "expirada_em", "motivo_status"])
         total += 1
+    return total
+
+
+def limpar_pre_reservas_antigas(*, dias=1):
+    try:
+        dias = int(dias or 1)
+    except (TypeError, ValueError):
+        dias = 1
+    dias = max(1, dias)
+
+    agora = timezone.now()
+    limite = agora - timedelta(days=dias)
+    qs = VendaRapidaEstoque.objects.filter(status="pre_reserva", criado_em__lt=limite)
+    total = qs.count()
+    if total:
+        qs.update(status="cancelada", concluido_em=agora)
     return total
 
 

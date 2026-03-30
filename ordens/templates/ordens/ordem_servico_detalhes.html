@@ -110,13 +110,51 @@
     flex: 1 1 auto;
     margin-bottom: 0 !important;
 }
+.os-header-compact .page-title {
+    font-size: 1.4rem;
+    margin-bottom: 0.25rem;
+}
+.os-header-compact .text-muted {
+    font-size: 0.92rem;
+}
+.os-header-meta {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 0.9rem;
+}
+.os-header-meta strong {
+    font-weight: 600;
+}
+.os-header-actions {
+    gap: 6px;
+}
+.os-header-actions .btn,
+.os-header-actions .dropdown-toggle {
+    padding: 0.28rem 0.6rem;
+    font-size: 0.82rem;
+    line-height: 1.2;
+}
+.os-header-actions .dropdown-menu {
+    font-size: 0.9rem;
+}
+@media (max-width: 767.98px) {
+    .fab-menu {
+        right: 18px;
+        bottom: 20px;
+    }
+    .os-header-meta {
+        gap: 8px;
+    }
+}
 
 </style>
 {% endblock %}
 
 {% block header %}
-<div class="row mb-4">
-    <div class="col-12 d-flex justify-content-between align-items-center">
+<div class="row mb-2 os-header-compact">
+    <div class="col-12 d-flex justify-content-between align-items-start flex-wrap" style="gap: 16px;">
         <div>
             <h1 class="page-title"><i class="fas fa-clipboard-check mr-2"></i>#{{ ordem.numero_os }}
             </h1>
@@ -126,33 +164,30 @@
                 </button>
                 Cliente: <strong>{{ ordem.cliente.nome }}</strong>
             </p>
+            <div class="os-header-meta mt-2">
+                <div><strong>Status:</strong>
+                    {% with status_codigo=ordem.status_listagem_codigo status_label=ordem.status_listagem_label %}
+                        <span class="badge
+                            {% if status_codigo == 'concluida' %}badge-danger
+                            {% elif status_codigo == 'reaberta' %}badge-secondary
+                            {% elif status_codigo == 'em_andamento' %}badge-warning
+                            {% elif status_codigo == 'pronto_contactado' %}badge-success
+                            {% else %}badge-info{% endif %}">
+                            {{ status_label }}
+                        </span>
+                    {% endwith %}
+                </div>
+                <div><strong>Abertura:</strong> {{ ordem.data_abertura|date:"d/m/Y H:i" }}</div>
+                <div><strong>Dias aberta:</strong> {{ dias_em_aberto }}</div>
+            </div>
         </div>
-        <!-- Status e Abertura -->
-        <div class="d-flex justify-content-start align-items-center mb-3">
-          <p class="mr-4 mb-0">
-            <strong>Status:</strong>
 
-            {% if ordem.fechada %}
-              <span class="badge badge-danger">
-                <i class="fas fa-check-circle mr-1"></i> Fechada
-              </span>
-            {% elif ordem.status == 'em_andamento' %}
-              <span class="badge badge-warning">
-                <i class="fas fa-tools mr-1"></i> Em andamento
-              </span>
-            {% else %}
-              <span class="badge badge-success">
-                <i class="fas fa-hourglass-start mr-1"></i> Aberta
-              </span>
+        <div class="d-flex align-items-center flex-wrap justify-content-end os-header-actions ml-auto">
+            {% if pode_ver_logs and logs_os or pode_ver_logs and logs_confirmacao %}
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-toggle="modal" data-target="#modalLogsOS">
+                <i class="fas fa-history mr-1"></i> Logs
+            </button>
             {% endif %}
-          </p>
-
-          <p class="mb-0">
-            <strong>Abertura:</strong> {{ ordem.data_abertura|date:"d/m/Y H:i" }}
-          </p>
-        </div>
-
-        <div class="d-flex align-items-center">
             <div class="dropdown">
               <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-toggle="dropdown" aria-expanded="false">
                 <i class="fas fa-print mr-1"></i> Imprimir
@@ -160,7 +195,7 @@
               <ul class="dropdown-menu dropdown-menu-right">
                 <li>
                   <a class="dropdown-item" href="{% url 'ordens:imprimir_ordem_servico_impressao' ordem.id %}" target="_blank">
-                    Ordem de Serviço (Impressao)
+                    Ordem de Serviço (Impressão)
                   </a>
                 </li>
                 <li>
@@ -184,21 +219,24 @@
             </div>
             {% if ordem.fechada %}
             <a href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ total_os|floatformat:2 }}"
-               class="btn btn-success btn-sm ml-2">
+               class="btn btn-success btn-sm">
                 <i class="fas fa-cash-register mr-1"></i> Registrar no Caixa
             </a>
             {% endif %}
             {% if not ordem.confirmado %}
-            <button type="button" class="btn btn-outline-primary btn-sm ml-2" data-toggle="modal" data-target="#modalConfirmacaoImpresso">
+            <button type="button" class="btn btn-outline-primary btn-sm" data-toggle="modal" data-target="#modalConfirmacaoImpresso">
                 <i class="fas fa-file-signature mr-1"></i> Registrar confirmação presencial/impresso
             </button>
             {% endif %}
             {% if ordem.fechada %}
-            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-warning btn-sm ml-2">
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-warning btn-sm">
                 <i class="fas fa-lock mr-1"></i> Reabrir
             </a>
             {% else %}
-            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-danger btn-sm ml-2">
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-outline-success btn-sm">
+                <i class="fas fa-cash-register mr-1"></i> Fechar e ir ao Caixa
+            </a>
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-danger btn-sm">
                 <i class="fas fa-lock-open mr-1"></i> Fechar
             </a>
             {% endif %}
@@ -233,7 +271,7 @@
 {% endblock %}
 
 {% block content %}
-<div id="page-system-messages" class="mb-3"></div>
+<div id="page-system-messages" class="mb-2"></div>
 
 
 
@@ -249,7 +287,7 @@
         {% endfor %}
     </ul>
 
-<div class="tab-content mt-4">
+<div class="tab-content mt-3">
     {% if ordem.fechada %}
     <div class="alert alert-warning">
         OS fechada: para adicionar linhas ou alterar orçamento/itens, reabra a ordem.
@@ -295,1289 +333,18 @@
     </script>
     {% endif %}
 
-    <!-- Aba Detalhes -->
-    <div class="tab-pane fade {% if active_tab == 'detalhes' %}show active{% endif %}" id="detalhes">
-        <div class="card-modern">
-            <!-- Header -->
-            <div class="card-modern-header">
-                <i class="fas fa-info-circle mr-2"></i> Detalhes do Equipamento
-            </div>
-
-            <!-- Card Body -->
-            <div class="card-modern-body">
-                <div class="row align-items-stretch">
-                    <!-- Conteudo principal (esquerda) -->
-                    <div class="col-md-8 d-flex flex-column h-100" id="detalhesColunaEsquerda">
-
-                        <!-- Caixa Defeito -->
-                        <div class="border rounded bg-light p-3 mb-3 bloco-detalhe bloco-defeito">
-                            <h6 class="font-weight-bold mb-2">Defeito Reclamado</h6>
-                            <p class="bloco-detalhe-conteudo">{{ ordem.defeito|default:"-" }}</p>
-                        </div>
-
-                        <!-- Caixa Acessorios -->
-                        <div class="border rounded bg-light p-3 mb-3 bloco-detalhe bloco-acessorios">
-                            <h6 class="font-weight-bold mb-2">Acessorios</h6>
-                            <p class="bloco-detalhe-conteudo">{{ ordem.acessorios|default:"-" }}</p>
-                        </div>
-
-                        <!-- Caixa Peritagem -->
-                        <div class="border rounded bg-light p-3 bloco-detalhe bloco-peritagem" id="blocoPeritagem">
-                            <h6 class="font-weight-bold mb-2">Peritagem</h6>
-                            <p class="bloco-detalhe-conteudo">
-                                {% if ordem.peritagem %}
-                                {{ ordem.peritagem }}
-                                {% else %}
-                                <span class="text-muted">Não informado</span>
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Barra lateral (direita) -->
-                    <div class="col-md-4">
-                        <div class="border rounded bg-white p-3 h-100 d-flex flex-column" id="painelDetalhesLateral">
-
-                            <!-- Dados do equipamento -->
-                            <div class="mb-3">
-                                <p class="mb-1"><strong>Tipo:</strong> {{ ordem.get_tipo_equipamento_display }}</p>
-                                <p class="mb-1"><strong>Marca:</strong> {{ ordem.marca_equipamento }}</p>
-                                <p class="mb-1"><strong>Modelo:</strong> {{ ordem.modelo_equipamento }}</p>
-                                <p class="mb-1">
-                                    <strong>Nº Série:</strong>
-                                    <span id="série-view"
-                                          class="{% if pode_editar_série %}text-primary{% endif %}"
-                                          {% if pode_editar_série %}style="cursor:pointer;" title="Duplo clique para editar"{% endif %}>
-                                        {{ ordem.numero_serie_equipamento|default:"-" }}
-                                    </span>
-                                    {% if pode_editar_série %}
-                                    <span id="série-editor" class="d-none ml-2">
-                                        <input type="text" id="série-input" class="form-control form-control-sm d-inline-block" style="width:220px;" value="{{ ordem.numero_serie_equipamento|default:'' }}">
-                                        <button type="button" id="série-save" class="btn btn-sm btn-success ml-1">Salvar</button>
-                                        <button type="button" id="série-cancel" class="btn btn-sm btn-outline-secondary ml-1">Cancelar</button>
-                                    </span>
-                                    {% endif %}
-                                </p>
-                                <div id="série-feedback" class="small"></div>
-                                <p class="mb-1 mt-2">
-                                    <strong>Preventiva:</strong> definida no agendamento da OS
-                                </p>
-                                <p class="mb-1 mt-2">
-                                    <strong>Processo anterior:</strong>
-                                    {% if processo_anterior_sn %}
-                                        <a href="{% url 'ordens:detalhes_ordem' processo_anterior_sn.id %}">#{{ processo_anterior_sn.numero_os }}</a>
-                                    {% endif %}
-                                </p>
-                            </div>
-
-                            <!-- Observações Internas -->
-                            <div class="observacoes-wrap">
-                                <label class="font-weight-bold mb-1" for="observacoes">Observações (internas)</label>
-                                <textarea id="observacoes"
-                                          class="form-control form-control-sm"
-                                          rows="5"
-                                          data-os-id="{{ ordem.id }}"
-                                          placeholder="Somente visivel internamente...">{{ ordem.notas_internas|default:"" }}</textarea>
-                                <div id="observacoes-feedback" class="small mt-1"></div>
-                            </div>
-
-                            <div class="detalhes-footer-meta">
-                                <div class="mb-2">
-                                    <div class="meta-stacked">
-                                        <label class="meta-label" for="tecnicoResponsavel">Técnico responsável:</label>
-                                        <select id="tecnicoResponsavel"
-                                                class="form-control form-control-sm"
-                                                style="height: 31px;"
-                                                data-os-id="{{ ordem.id }}">
-                                            <option value="">-- Selecione --</option>
-                                            {% for user in tecnicos %}
-                                                <option value="{{ user.id }}" {% if ordem.tecnico_responsavel_id == user.id %}selected{% endif %}>
-                                                    {{ user.username }}
-                                                </option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div id="tecnico-feedback" class="small mt-1"></div>
-                                </div>
-                                <div>
-                                    <div class="meta-stacked">
-                                        <label class="meta-label" for="localArmazenamento">Local de armazenamento:</label>
-                                        <input type="text" id="localArmazenamento"
-                                               class="form-control form-control-sm"
-                                               style="height: 31px;"
-                                               value="{{ ordem.local_armazenamento|default:'' }}"
-                                               data-os-id="{{ ordem.id }}"
-                                               placeholder="Local...">
-                                    </div>
-                                    <div id="local-feedback" class="small mt-1"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div> <!-- fim row -->
-            </div> <!-- fim card-modern-body -->
-        </div> <!-- fim card-modern -->
-    </div> <!-- fim tab-pane detalhes -->
-
-    <!-- Linhas de Trabalho -->
-    <div class="tab-pane fade {% if active_tab == 'linhas' %}show active{% endif %}" id="linhas">
-            <div class="card-modern">
-                <div class="card-modern-header d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center">
-                        <!-- Botao de seta a esquerda -->
-                        <span id="toggleOrderBtn" style="cursor: pointer; font-size: 1.2rem; margin-right: 8px;">
-                            ↓
-                       </span>
-                        <!-- Titulo -->
-                        <span>  Histórico de Trabalho</span>
-                    </div>
-
-                    <!-- Botao adicionar linha a direita -->
-                    {% if not ordem.fechada %}
-                    <span class="toggle-form-btn" data-toggle="modal" data-target="#modalAdicionarLinha"
-                          style="cursor: pointer;">
-                        <i class="fas fa-plus-circle mr-1"></i> Adicionar Linha
-                    </span>
-                    {% else %}
-                    <span class="text-muted"><i class="fas fa-lock mr-1"></i> Adicao bloqueada</span>
-                    {% endif %}
-                </div>
-
-                <div class="card-modern-body">
-                    {% if linhas %}
-                    <div class="list-group mb-3" id="linhasList">
-                        {% for linha in linhas %}
-                        <div class="list-group-item">
-                            <span class="linha-status badge badge-primary">{{ linha.get_status_display }}</span>
-                            <span class="badge badge-light border ml-1">{{ linha.get_tipo_evento_display }}</span>
-                            <small class="linha-data float-right">
-                                {{ linha.criado_em|date:"d/m/Y H:i" }}
-                                {% if linha.usuario %}- {{ linha.usuario.username }}{% endif %}
-                            </small>
-                            {% if linha.descricao %}
-                            <p class="linha-descricao">{{ linha.descricao }}</p>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <p class="text-muted text-center py-3">Nenhuma linha registrada.</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <script>
-            const toggleBtn = document.getElementById("toggleOrderBtn");
-            const linhasList = document.getElementById("linhasList");
-
-            if (toggleBtn && linhasList) {
-                toggleBtn.addEventListener("click", () => {
-                    linhasList.classList.toggle("list-group-inverted");
-                    if (linhasList.classList.contains("list-group-inverted")) {
-                        toggleBtn.textContent = "↓";
-                    } else {
-                        toggleBtn.textContent = "↑";
-                    }
-                });
-            }
-        </script>
-        <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const select = document.getElementById("tecnicoResponsavel");
-        const feedback = document.getElementById("tecnico-feedback");
-
-        if (select) {
-            select.addEventListener("change", () => {
-                const tecnicoId = select.value;
-                const osId = select.dataset.osId;
-
-                fetch(`/ordens/${osId}/atualizar_tecnico/`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-CSRFToken": "{{ csrf_token }}",
-                    },
-                    body: JSON.stringify({ tecnico_id: tecnicoId })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data && data.success === false) {
-                        feedback.textContent = data.message || "Erro ao salvar.";
-                        feedback.className = "small text-danger";
-                        return;
-                    }
-                    feedback.textContent = "";
-                    feedback.className = "small";
-                })
-                .catch(() => {
-                    feedback.textContent = "Erro ao salvar.";
-                    feedback.className = "small text-danger";
-                });
-            });
-        }
-    });
-    </script>
-
-
-<!-- Serviços & Peças -->
-<div class="tab-pane fade {% if active_tab == 'servicos' %}show active{% endif %}" id="servicos">
-    <div class="card-modern">
-        <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span>Serviços & Peças</span>
-            {% if not ordem.fechada %}
-            <div class="d-flex">
-                <button type="button" class="btn btn-sm btn-light mr-2" data-toggle="modal" data-target="#modalAdicionarServicoPeca">
-                    <i class="fas fa-barcode mr-1"></i>Adicionar EAN/Produto
-                </button>
-                <button type="button" class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarTalão">
-                    <i class="fas fa-receipt mr-1"></i>Adicionar Taloes
-                </button>
-            </div>
-            {% else %}
-            <span class="text-light"><i class="fas fa-lock mr-1"></i>Edicao bloqueada</span>
-            {% endif %}
-        </div>
-        <div class="card-modern-body">
-            <div class="row mb-3">
-                <div class="col-md-4">
-                    <div class="border rounded p-2 bg-light">
-                        <small class="text-muted">Valor total OS</small>
-                        <div><strong>R$ {{ total_os|floatformat:2 }}</strong></div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="border rounded p-2 bg-light">
-                        <small class="text-muted">Valor pago</small>
-                        <div><strong>R$ {{ total_pago_os|floatformat:2 }}</strong></div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="border rounded p-2 bg-light">
-                        <small class="text-muted">Saldo</small>
-                        <div><strong>R$ {{ saldo_financeiro_os|floatformat:2 }}</strong></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="alert {% if os_pago %}alert-success{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center">
-                <div>
-                    <strong>Pago?</strong> {% if os_pago %}Sim{% else %}Não{% endif %}
-                    <br>
-                    <small>
-                        <strong>Referências:</strong>
-                        {% if referencias_pagamento %}
-                            {{ referencias_pagamento|join:", " }}
-                        {% else %}
-                            Nenhuma referencia registrada
-                        {% endif %}
-                    </small>
-                </div>
-                <a class="btn btn-sm btn-primary"
-                   href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ saldo_financeiro_os|floatformat:2 }}">
-                    Registrar pagamento
-                </a>
-            </div>
-
-            {% if ordem.tipo_reparo == 'Garantia' %}
-            <div class="border rounded p-3 mb-3 bg-light">
-                <h6 class="mb-2"><i class="fas fa-file-invoice-dollar mr-1"></i>Resumo Financeiro da Garantia</h6>
-                {% if auditoria_garantia %}
-                <p class="mb-1"><strong>Fornecedor:</strong> {{ auditoria_garantia.fornecedor.nome|default:"-" }}</p>
-                <p class="mb-1"><strong>Marca:</strong> {{ auditoria_garantia.marca.nome|default:"-" }}</p>
-                <p class="mb-1"><strong>Valor previsto fabricante:</strong> R$ {{ auditoria_garantia.valor_previsto_fabricante|floatformat:2 }}</p>
-                <p class="mb-1"><strong>Comissão prevista tecnica:</strong> R$ {{ auditoria_garantia.comissao_prevista_tecnica|floatformat:2 }}</p>
-                <p class="mb-0"><strong>Status faturamento:</strong> {{ auditoria_garantia.get_status_faturamento_display }}</p>
-                {% else %}
-                <p class="mb-0 text-muted">Feche a OS para gerar auditoria financeira da garantia.</p>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            {% if itens %}
-            <div class="list-group mb-3">
-                {% for item in itens %}
-                <div class="list-group-item d-flex justify-content-between align-items-center">
-                    <div class="w-100">
-                        <h6>{{ item.nome }} <span class="badge badge-light border">{{ item.get_tipo_display }}</span></h6>
-                        <p class="mb-1">R$ {{ item.valor_unitario }} x {{ item.quantidade }} = R$ {{ item.total }}</p>
-                        {% if item.produto_estoque %}
-                        <small class="text-muted">Estoque vinculado: {{ item.produto_estoque.nome }}{% if item.estoque_consumido_em %} | Baixado{% endif %}</small><br>
-                        {% endif %}
-                        <small class="text-muted">Responsavel: {{ item.tecnico_responsavel.username|default:"-" }}</small>
-                        {% if item.garantia_dias %}
-                        <br><small class="text-muted">Garantia da peca: {{ item.garantia_dias }} dias</small>
-                        {% endif %}
-                    </div>
-                    {% if not ordem.fechada %}
-                    <form method="post" class="ml-2 mb-0" onsubmit="return window.AppMessages.confirmSync('Excluir este item de Serviços e Peças?');">
-                        {% csrf_token %}
-                        <input type="hidden" name="form_type" value="excluir_servico_peca">
-                        <input type="hidden" name="item_id" value="{{ item.id }}">
-                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir item">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </form>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-            <p class="text-end fw-bold">Total OS: R$ {{ total_os }}</p>
-            {% else %}
-            <p class="text-muted text-center py-3">Nenhum Serviço ou Peca registrado.</p>
-            {% endif %}
-
-            <hr>
-            <h6 class="mb-2">Taloes da OS</h6>
-            {% if taloes_os %}
-            <div class="d-flex flex-wrap">
-                {% for talao in taloes_os %}
-                    <a href="#" class="badge badge-light border mr-2 mb-2 p-2"
-                       data-toggle="modal"
-                       data-target="#modalTalão{{ talao.id }}">
-                        {{ talao.numero }}
-                    </a>
-                {% endfor %}
-            </div>
-            {% else %}
-            <p class="text-muted mb-0">Nenhum talao registrado.</p>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-{% for talao in taloes_os %}
-<div class="modal fade" id="modalTalão{{ talao.id }}" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Talão {{ talao.numero }}</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
-            </div>
-            <div class="modal-body">
-                <div class="border rounded p-3 bg-light">
-                    <h6 class="mb-2">RECIBO</h6>
-                    <p class="mb-1"><strong>Talão:</strong> {{ talao.numero }}</p>
-                    <p class="mb-1"><strong>Data:</strong> {{ talao.criado_em|date:"d/m/Y H:i" }}</p>
-                    <p class="mb-1"><strong>OS:</strong> {{ ordem.numero_os }}</p>
-                    <p class="mb-1"><strong>Cliente:</strong> {{ ordem.cliente.nome }}</p>
-                    <p class="mb-1"><strong>Tipo:</strong> {{ talao.get_origem_display }}</p>
-                    <p class="mb-1"><strong>Produto/Serviço:</strong> {{ talao.item_referencia|default:"-" }}</p>
-                    <p class="mb-2"><strong>Valor:</strong> {% if talao.valor %}R$ {{ talao.valor|floatformat:2 }}{% else %}-{% endif %}</p>
-                    <hr>
-                    <p class="mb-1"><strong>Empresa:</strong> {{ empresa_talao.nome|default:"-" }}</p>
-                    <p class="mb-1"><strong>CNPJ:</strong> {{ empresa_talao.cnpj|default:"-" }}</p>
-                    <p class="mb-1"><strong>Telefone:</strong> {{ empresa_talao.telefone|default:"-" }}</p>
-                    <p class="mb-0"><strong>Endereço:</strong> {{ empresa_talao.endereco|default:"-" }}</p>
-                </div>
-                {% if talao.criado_por %}<p class="mt-2 mb-2"><strong>Usuario:</strong> {{ talao.criado_por.username }}</p>{% endif %}
-                {% if talao.descricao %}
-                <p class="mb-2"><strong>Descrição:</strong><br>{{ talao.descricao|linebreaksbr }}</p>
-                {% endif %}
-                {% if talao.imagem %}
-                <a href="{{ talao.imagem.url }}" target="_blank">
-                    <img src="{{ talao.imagem.url }}" alt="Imagem talao" style="max-width:100%;height:auto;border-radius:8px;border:1px solid #ddd;">
-                </a>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-{% endfor %}
-
-<div class="modal fade" id="modalAdicionarServicoPeca" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-plus-circle mr-2"></i>Adicionar Serviço/Peca</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
-            </div>
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="form_type" value="servico_peca">
-                <div class="modal-body">
-                    <input type="hidden" name="produto_estoque_id" id="sp_produto_estoque_id">
-                    <div class="row mb-3">
-                        <div class="col-md-10">
-                            <input type="text" id="sp_produto_busca" class="form-control" placeholder="Buscar por EAN ou nome do produto">
-                        </div>
-                        <div class="col-md-2">
-                            <button type="button" id="sp_btn_buscar" class="btn btn-primary btn-block"><i class="fas fa-search"></i></button>
-                        </div>
-                    </div>
-                    <div id="sp_resultado_busca" class="mb-3" style="max-height:180px;overflow-y:auto;"></div>
-                    <div class="form-row">
-                        <div class="form-group col-md-4">
-                            <label>Tipo</label>
-                            <select name="tipo" class="form-control" id="sp_tipo">
-                                <option value="peca">Peca</option>
-                                <option value="servico">Serviço</option>
-                            </select>
-                        </div>
-                        <div class="form-group col-md-8">
-                            <label>Nome</label>
-                            <input type="text" name="nome" id="sp_nome" class="form-control" required>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Descrição</label>
-                        <textarea name="descricao" id="sp_descricao" rows="2" class="form-control"></textarea>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-4">
-                            <label>Quantidade</label>
-                            <input type="number" name="quantidade" id="sp_quantidade" class="form-control" min="1" value="1" required>
-                        </div>
-                        <div class="form-group col-md-4">
-                            <label>Valor unitario</label>
-                            <input type="number" step="0.01" name="valor_unitario" id="sp_valor" class="form-control" required>
-                        </div>
-                        <div class="form-group col-md-4">
-                            <label>Garantia (dias)</label>
-                            <input type="number" name="garantia_dias" id="sp_garantia" class="form-control" min="0" value="">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-4">
-                            <label>Responsavel da comissao</label>
-                            <select name="tecnico_responsavel" class="form-control">
-                                <option value="">-- Selecione --</option>
-                                {% for user in tecnicos %}
-                                <option value="{{ user.id }}" {% if ordem.tecnico_responsavel_id == user.id %}selected{% endif %}>{{ user.username }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-success">Salvar</button>
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="modalAdicionarTalão" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-receipt mr-2"></i>Adicionar Talão</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
-            </div>
-            <form method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="form_type" value="adicionar_talao">
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>Número do talao</label>
-                        <input type="text" name="numero_talao" class="form-control" required>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label>Valor</label>
-                            <input type="number" step="0.01" min="0" name="valor_talao" class="form-control">
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label>Produto/Serviço</label>
-                            <input type="text" name="item_talao" class="form-control" placeholder="Ex: Mão de obra">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Descrição</label>
-                        <textarea name="descricao_talao" rows="3" class="form-control"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Imagem (opcional)</label>
-                        <input type="file" name="imagem_talao" class="form-control-file" accept="image/*">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-success">Salvar talao</button>
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const btnBuscar = document.getElementById('sp_btn_buscar');
-    const inputBusca = document.getElementById('sp_produto_busca');
-    const resultado = document.getElementById('sp_resultado_busca');
-    const modal = $('#modalAdicionarServicoPeca');
-    const modeloOS = '{{ ordem.modelo_equipamento|default:""|escapejs }}';
-    const defeitoOS = '{{ ordem.defeito|default:""|escapejs }}';
-    const tipoEquipamentoOS = '{{ ordem.tipo_equipamento|default:""|escapejs }}';
-
-    if (!btnBuscar) return;
-
-    function aplicarProdutoNoFormulario(produto) {
-        document.getElementById('sp_tipo').value = 'peca';
-        document.getElementById('sp_nome').value = produto.nome || '';
-        document.getElementById('sp_descricao').value = produto.descricao || '';
-        document.getElementById('sp_valor').value = produto.preco || '';
-        document.getElementById('sp_garantia').value = produto.garantia_peca_dias || '';
-        document.getElementById('sp_quantidade').value = 1;
-        resultado.innerHTML = '';
-    }
-
-    function renderResultados(data) {
-        resultado.innerHTML = '';
-        if (!data || data.length === 0) {
-            resultado.innerHTML = '<div class="text-muted">Nenhum produto encontrado.</div>';
-            return;
-        }
-        data.forEach((produto) => {
-            const row = document.createElement('div');
-            row.className = 'border rounded p-2 mb-1';
-            row.style.cursor = 'pointer';
-            const motivos = (produto.motivos || []).join(' | ');
-            const historico = Number(produto.frequencia_historica || 0);
-            const score = Number(produto.score || 0);
-            row.innerHTML = `
-                <div><strong>${produto.ean || '-'} - ${produto.nome}</strong> (R$ ${produto.preco})</div>
-                <small class="text-muted">SKU: ${produto.sku || '-'} | Estoque: ${produto.quantidade ?? '-'}</small>
-                ${historico > 0 || score > 0 ? `<br><small class="text-info">Ranking: ${score} | Histórico: ${historico}x ${motivos ? `| ${motivos}` : ''}</small>` : ''}
-            `;
-            row.addEventListener('click', function () {
-                aplicarProdutoNoFormulario(produto);
-            });
-            resultado.appendChild(row);
-        });
-    }
-
-    function buscarComRanking() {
-        const q = (inputBusca.value || '').trim();
-        const servicoAtual = (document.getElementById('sp_nome')?.value || '').trim();
-        const params = new URLSearchParams({
-            q: q,
-            modelo: modeloOS,
-            servico: servicoAtual,
-            defeito: defeitoOS,
-            tipo_equipamento: tipoEquipamentoOS,
-        });
-        return fetch(`{% url 'estoque:api_sugerir_pecas_os' %}?${params.toString()}`)
-            .then(r => r.json())
-            .then(data => renderResultados(data.resultados || []))
-            .catch(() => {
-                resultado.innerHTML = '<div class="text-danger">Erro ao carregar sugestoes automáticas.</div>';
-            });
-    }
-
-    btnBuscar.addEventListener('click', function () {
-        buscarComRanking();
-    });
-
-    inputBusca.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            buscarComRanking();
-        }
-    });
-
-    modal.on('shown.bs.modal', function () {
-        buscarComRanking();
-    });
-});
-</script>
-
-<!-- Pedidos -->
-<div class="tab-pane fade {% if active_tab == 'pedidos' %}show active{% endif %}" id="pedidos">
-    <div class="card-modern">
-        <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span>R$ Pedidos</span>
-            {% if not ordem.fechada %}
-            <button class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarPedido">
-                <i class="fas fa-plus mr-1"></i>Novo pedido
-            </button>
-            {% else %}
-            <span class="text-light"><i class="fas fa-lock mr-1"></i>OS fechada</span>
-            {% endif %}
-        </div>
-        <div class="card-modern-body">
-            {% if pedidos_compra %}
-                {% for pedido in pedidos_compra %}
-                <div class="border rounded p-3 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-1">{{ pedido.numero_oc|default:"OC sem numero" }} - {{ pedido.titulo }}</h6>
-                            <div class="small text-muted">
-                                Status atual: <strong>{{ pedido.get_status_display }}</strong> |
-                                Criado em {{ pedido.criado_em|date:"d/m/Y H:i" }}
-                            </div>
-                            {% if pedido.tipo_peca %}
-                            <div class="small"><strong>Tipo de peca:</strong> {{ pedido.tipo_peca }}</div>
-                            {% endif %}
-                            {% if pedido.descricao %}
-                            <div class="mt-1">{{ pedido.descricao }}</div>
-                            {% endif %}
-                            {% if pedido.fotos.all %}
-                            <div class="mt-2 d-flex flex-wrap">
-                                {% for foto in pedido.fotos.all %}
-                                <a href="{{ foto.imagem.url }}" target="_blank" class="mr-2 mb-2">
-                                    <img src="{{ foto.imagem.url }}" alt="Foto pedido" style="width:72px;height:72px;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
-                                </a>
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="mt-3">
-                        <h6>Linhas do pedido</h6>
-                        <div class="list-group mb-3">
-                            {% for linha in pedido.linhas.all %}
-                            <div class="list-group-item">
-                                <span class="badge badge-primary">{{ linha.get_status_display }}</span>
-                                <small class="float-right">{{ linha.criado_em|date:"d/m/Y H:i" }}{% if linha.usuario %} - {{ linha.usuario.username }}{% endif %}</small>
-                                <div class="mt-1">{{ linha.descricao|default:"-" }}</div>
-                            </div>
-                            {% empty %}
-                            <div class="list-group-item text-muted">Sem atualizacoes.</div>
-                            {% endfor %}
-                        </div>
-
-                        {% if not ordem.fechada %}
-                        <form method="post" class="border rounded p-3 bg-light">
-                            {% csrf_token %}
-                            <input type="hidden" name="form_type" value="pedido_compra_linha">
-                            <input type="hidden" name="pedido_id" value="{{ pedido.id }}">
-                            <div class="form-row">
-                                <div class="col-md-4">
-                                    <label>Status</label>
-                                    <select name="status" class="form-control form-control-sm" required>
-                                        {% for value, label in pedido_status_choices %}
-                                        <option value="{{ value }}" {% if pedido.status == value %}selected{% endif %}>{{ label }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-8">
-                                    <label>Observacao</label>
-                                    <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Detalhe da atualizacao">
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-sm btn-primary mt-2">Adicionar linha</button>
-                        </form>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-            <p class="text-muted mb-0">Nenhum pedido de compra criado para esta OS.</p>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<!-- Orçamento -->
-<div class="tab-pane fade {% if active_tab == 'orcamentos' %}show active{% endif %}" id="orcamentos">
-    <div class="card-modern flex-fill mt-3">
-
-        <!-- Cabecalho -->
-        <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span>Orçamentos</span>
-            <div class="d-flex">
-                {% if not ordem.fechada %}
-                <button type="button" class="btn btn-primary btn-sm mr-2" data-toggle="modal"
-                        data-target="#modalAdicionarItem2">
-                    <i class="fas fa-plus"></i> Inserir Item
-                </button>
-                {% else %}
-                <span class="text-light"><i class="fas fa-lock mr-1"></i> Edicao bloqueada</span>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Formulario unico para Ações -->
-        <form id="formOrcamentoAcoes" method="post">
-            {% csrf_token %}
-            <input type="hidden" name="orcamento_id" value="{{ orcamento.id }}">
-
-            <!-- Botoes de acao -->
-            <div class="d-flex justify-content-end mb-3 mt-2">
-                {% if not ordem.fechada %}
-                <button type="submit" formaction="{% url 'orcamentos:aceitar_orcamento' orcamento.id %}"
-                        class="btn btn-success btn-sm mr-2" onclick="return validarSelecao('aprovar');">
-                    <i class="fas fa-check"></i> Aprovar Selecionados
-                </button>
-
-                <button type="submit" formaction="{% url 'orcamentos:recusar_orcamento' orcamento.id %}"
-                        class="btn btn-danger btn-sm mr-2" onclick="return validarSelecao('recusar');">
-                    <i class="fas fa-times"></i> Recusar Selecionados
-                </button>
-
-                <button type="submit" formaction="{% url 'orcamentos:migrar_para_servicos' orcamento.id %}"
-                        class="btn btn-success btn-sm" onclick="return validarSelecao('migrar');">
-                    <i class="fas fa-arrow-down"></i> Migrar Selecionados
-                </button>
-                <button type="submit" formaction="{% url 'orcamentos:excluir_orcamento' orcamento.id %}"
-                        class="btn btn-outline-danger btn-sm ml-2"
-                        onclick="return window.AppMessages.confirmSync('Excluir este orçamento e todos os itens?');">
-                    <i class="fas fa-trash"></i> Excluir Orçamento
-                </button>
-                {% else %}
-                <span class="text-muted"><i class="fas fa-lock mr-1"></i> Ações bloqueadas com OS fechada</span>
-                {% endif %}
-            </div>
-
-            <!-- Corpo -->
-            <div class="card-modern-body">
-                <p><strong>Descrição:</strong> {{ orcamento.descricao|default:"-" }}</p>
-                <p><strong>Total:</strong> R$ {{ orcamento.valor_total|default:0|floatformat:2 }}</p>
-
-                <table class="table table-sm table-bordered">
-                    <thead>
-                        <tr>
-                            <th><input type="checkbox" id="checkAll"></th>
-                            <th>EAN / Serviço</th>
-                            <th>Nome</th>
-                            <th>Descrição</th>
-                            <th>Valor Unit.</th>
-                            <th>Qtd</th>
-                            <th>Total</th>
-                            <th>Tipo</th>
-                            <th>Origem</th>
-                            <th>Responsavel</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in orcamento.itens.all %}
-                        <tr>
-                            <td><input type="checkbox" name="itens_selecionados" value="{{ item.id }}"></td>
-                            <td>{{ item.ean }}</td>
-                            <td>{{ item.nome }}</td>
-                            <td>{{ item.descricao }}</td>
-                            <td>{{ item.valor_unitario|floatformat:2 }}</td>
-                            <td>{{ item.quantidade }}</td>
-                            <td>{{ item.total|floatformat:2 }}</td>
-                            <td>{{ item.get_tipo_item_display|default:"Serviço" }}</td>
-                            <td>{{ item.origem }}</td>
-                            <td>{{ item.tecnico_responsavel.username|default:"-" }}</td>
-                            <td class="text-center">
-                                {% if not ordem.fechada %}
-                                <button type="button" class="btn btn-sm btn-info" onclick="editarItem({{ item.id }})">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button type="submit"
-                                        formmethod="post"
-                                        formaction="{% url 'orcamentos:excluir_item' item.id %}"
-                                        class="btn btn-sm btn-danger"
-                                        onclick="return window.AppMessages.confirmSync('Excluir este item?');">
-                                    {% csrf_token %}
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                                {% else %}
-                                <span class="badge badge-secondary">Bloqueado</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="11" class="text-center text-muted">Nenhum item adicionado</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Script de validacao e selecao -->
-<script>
-function mostrarMensagemPagina(mensagem, tipo = 'warning') {
-    const container = document.getElementById('page-system-messages');
-    if (!container) return;
-    const nivel = tipo === 'error' ? 'danger' : tipo;
-    const icone = nivel === 'danger'
-        ? 'exclamation-triangle'
-        : nivel === 'success'
-            ? 'check-circle'
-            : 'info-circle';
-    container.innerHTML = `
-        <div class="alert alert-${nivel} alert-dismissible fade show" role="alert">
-            <i class="fas fa-${icone} mr-2"></i>${mensagem}
-            <button type="button" class="close" data-dismiss="alert" aria-label="Fechar">
-                <span aria-hidden="true">&times;</span>
-            </button>
-        </div>
-    `;
-}
-
-function validarSelecao(acao) {
-    const selecionados = document.querySelectorAll('input[name="itens_selecionados"]:checked');
-    if (selecionados.length === 0) {
-        mostrarMensagemPagina(`Selecione ao menos um item antes de ${acao === 'migrar' ? 'migrar' : acao + ' o Orçamento'}.`, 'warning');
-        return false;
-    }
-    return window.AppMessages.confirmSync(`Tem certeza que deseja ${acao} os itens selecionados?`);
-}
-
-document.getElementById('checkAll').addEventListener('change', function() {
-    document.querySelectorAll('input[name="itens_selecionados"]').forEach(cb => cb.checked = this.checked);
-});
-</script>
-
-
-<!-- Modal Adicionar Item Orçamento -->
-<div class="modal fade" id="modalAdicionarItem2" tabindex="-1" role="dialog"
-     aria-labelledby="modalAdicionarItem2Label" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalAdicionarItem2Label">
-                    <i class="fas fa-plus-circle mr-2"></i>Adicionar Item ao Orçamento
-                </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-
-            <form method="post" action="{% url 'orcamentos:adicionar_item' orcamento.id %}">
-                {% csrf_token %}
-                <div class="modal-body">
-
-                    <!-- Campo de busca de produtos -->
-                    <div class="row mb-3">
-                        <div class="col-md-10">
-                            <input type="text" id="produto_busca" class="form-control"
-                                   placeholder="Buscar produto por nome ou EAN">
-                        </div>
-                        <div class="col-md-2">
-                            <button type="button" class="btn btn-primary btn-block" id="btnBuscarProduto">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Resultado da busca -->
-                    <div id="resultado_busca_produto" class="mt-2" style="max-height:200px; overflow-y:auto;">
-                        <!-- Produtos encontrados aparecerao aqui -->
-                    </div>
-
-                    <!-- Campos do Formulario ja existentes -->
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="id_ean2">EAN / Código</label>
-                            <input type="text" name="ean" id="id_ean2" class="form-control"
-                                   value="{{ item_form.ean.value|default_if_none:'' }}">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="id_nome2">Nome</label>
-                            <input type="text" name="nome" id="id_nome2" class="form-control"
-                                   value="{{ item_form.nome.value|default_if_none:'' }}">
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="id_descricao2">Descrição</label>
-                        <textarea name="descricao" id="id_descricao2" rows="3" class="form-control">{{ item_form.descricao.value|default_if_none:'' }}</textarea>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label for="id_valor_unitario2">Valor Unitario</label>
-                            <input type="number" step="0.01" name="valor_unitario" id="id_valor_unitario2"
-                                   class="form-control"
-                                   value="{{ item_form.valor_unitario.value|default_if_none:'' }}">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label for="id_quantidade2">Quantidade</label>
-                            <input type="number" name="quantidade" id="id_quantidade2" class="form-control"
-                                   value="{{ item_form.quantidade.value|default_if_none:'' }}">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label for="id_tipo_item2">Tipo do Item</label>
-                            <select name="tipo_item" id="id_tipo_item2" class="form-control" required>
-                                <option value="" selected>Selecione</option>
-                                <option value="servico">Serviço</option>
-                                <option value="peca">Peça</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label>Origem</label>
-                            <div>
-                                <span id="id_origem_badge" class="badge badge-secondary">Manual</span>
-                                <small class="form-text text-muted">Detectada automaticamente por EAN/nome.</small>
-                            </div>
-                            <input type="hidden" name="origem" id="id_origem2" value="manual">
-                        </div>
-                        <div class="col-md-8 mb-3">
-                            <label for="id_tecnico_responsavel2">Responsavel da Comissão</label>
-                            <select name="tecnico_responsavel" id="id_tecnico_responsavel2" class="form-control">
-                                <option value="">-- Selecione --</option>
-                                {% for user in tecnicos %}
-                                <option value="{{ user.id }}">{{ user.username }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-success"><i class="fas fa-save mr-1"></i> Salvar Item
-                    </button>
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal"><i
-                            class="fas fa-times mr-1"></i> Cancelar
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-<script>
-const formItemOrcamento = document.querySelector('#modalAdicionarItem2 form');
-const actionAdicionarItem = formItemOrcamento ? formItemOrcamento.action : '';
-
-function editarItem(id) {
-    fetch(`/orcamentos/item/${id}/editar/`)
-        .then(res => res.json())
-        .then(data => {
-            // Preenche os campos do modal de adicionar item
-            document.querySelector('#modalAdicionarItem2 input[name="ean"]').value = data.ean || '';
-            document.querySelector('#modalAdicionarItem2 input[name="nome"]').value = data.nome || '';
-            document.querySelector('#modalAdicionarItem2 textarea[name="descricao"]').value = data.descricao || '';
-            document.querySelector('#modalAdicionarItem2 input[name="valor_unitario"]').value = data.valor_unitario || '';
-            document.querySelector('#modalAdicionarItem2 input[name="quantidade"]').value = data.quantidade || '';
-            document.querySelector('#modalAdicionarItem2 select[name="tipo_item"]').value = data.tipo_item || '';
-            document.querySelector('#modalAdicionarItem2 input[name="origem"]').value = data.origem || 'manual';
-            document.querySelector('#modalAdicionarItem2 select[name="tecnico_responsavel"]').value = data.tecnico_responsavel || '';
-            atualizarOrigemBadge(data.origem || 'manual');
-
-            // Altera a action do form para enviar para o editar_item
-            if (formItemOrcamento) {
-                formItemOrcamento.action = `/orcamentos/item/${id}/editar/`;
-            }
-
-            // Abre o modal
-            $('#modalAdicionarItem2').modal('show');
-        })
-        .catch(() => mostrarMensagemPagina('Erro ao carregar dados do item.', 'danger'));
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    $('#modalAdicionarItem2').on('hidden.bs.modal', function () {
-        if (!formItemOrcamento) return;
-        formItemOrcamento.action = actionAdicionarItem;
-        formItemOrcamento.reset();
-        const tipoItem = document.getElementById('id_tipo_item2');
-        if (tipoItem) tipoItem.value = '';
-        atualizarOrigemBadge('manual');
-    });
-
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('open_modal') === 'adicionar_item' && urlParams.get('tab') === 'orcamentos') {
-        $('#modalAdicionarItem2').modal('show');
-        urlParams.delete('open_modal');
-        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
-        window.history.replaceState({}, document.title, newUrl.endsWith('?') ? window.location.pathname : newUrl);
-    }
-});
-</script>
-
-
-
-<!-- Script de busca -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const btnBuscar = document.getElementById('btnBuscarProduto');
-    const inputBusca = document.getElementById('produto_busca');
-    const resultado = document.getElementById('resultado_busca_produto');
-
-    btnBuscar.addEventListener('click', function() {
-        const query = inputBusca.value.trim();
-        if (!query) return;
-
-        fetch(`/estoque/buscar_produto/?q=${encodeURIComponent(query)}`)
-            .then(response => response.json())
-            .then(data => {
-                resultado.innerHTML = '';
-                if (data.length === 0) {
-                    resultado.innerHTML = '<div class="text-muted">Nenhum produto encontrado</div>';
-                    return;
-                }
-
-                data.forEach(produto => {
-                    const div = document.createElement('div');
-                    div.classList.add('border', 'p-2', 'mb-1', 'cursor-pointer');
-                    div.style.cursor = 'pointer';
-                    div.textContent = `${produto.ean} - ${produto.nome} (R$ ${produto.preco})`;
-                    div.addEventListener('click', () => {
-                        document.getElementById('id_ean2').value = produto.ean;
-                        document.getElementById('id_nome2').value = produto.nome;
-                        document.getElementById('id_descricao2').value = produto.descricao || '';
-                        document.getElementById('id_valor_unitario2').value = produto.preco;
-                        document.getElementById('id_tipo_item2').value = 'peca';
-                        document.getElementById('id_origem2').value = 'estoque';
-                        atualizarOrigemBadge('estoque');
-                        resultado.innerHTML = '';
-                    });
-                    resultado.appendChild(div);
-                });
-            });
-    });
-});
-</script>
-<script>
-function atualizarOrigemBadge(origem) {
-    const badge = document.getElementById('id_origem_badge');
-    const origemInput = document.getElementById('id_origem2');
-    if (!badge || !origemInput) return;
-    const isEstoque = origem === 'estoque';
-    origemInput.value = isEstoque ? 'estoque' : 'manual';
-    const tipoItem = document.getElementById('id_tipo_item2');
-    if (tipoItem && isEstoque) {
-        tipoItem.value = 'peca';
-    }
-    badge.className = isEstoque ? 'badge badge-primary' : 'badge badge-secondary';
-    badge.textContent = isEstoque ? 'Estoque (auto)' : 'Manual';
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    const ean = document.getElementById('id_ean2');
-    const nome = document.getElementById('id_nome2');
-    if (ean) {
-        ean.addEventListener('input', function() {
-            if (!ean.value.trim()) atualizarOrigemBadge('manual');
-        });
-    }
-    if (nome) {
-        nome.addEventListener('input', function() {
-            if (!nome.value.trim() && !(ean && ean.value.trim())) atualizarOrigemBadge('manual');
-        });
-    }
-});
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const btnBuscarServicoPeca = document.getElementById('sp_btn_buscar');
-    const inputBuscaServicoPeca = document.getElementById('sp_produto_busca');
-    const resultadoServicoPeca = document.getElementById('sp_resultado_busca');
-    const produtoIdInput = document.getElementById('sp_produto_estoque_id');
-    const tipoInput = document.getElementById('sp_tipo');
-    const nomeInput = document.getElementById('sp_nome');
-    const descricaoInput = document.getElementById('sp_descricao');
-    const valorInput = document.getElementById('sp_valor');
-    const garantiaInput = document.getElementById('sp_garantia');
-
-    if (!btnBuscarServicoPeca || !inputBuscaServicoPeca || !resultadoServicoPeca) return;
-
-    function limparVinculoEstoqueServicoPeca() {
-        if (produtoIdInput) produtoIdInput.value = '';
-    }
-
-    if (nomeInput) {
-        nomeInput.addEventListener('input', limparVinculoEstoqueServicoPeca);
-    }
-
-    btnBuscarServicoPeca.addEventListener('click', function() {
-        const query = inputBuscaServicoPeca.value.trim();
-        if (!query) return;
-
-        fetch(`/estoque/buscar_produto/?q=${encodeURIComponent(query)}`)
-            .then(response => response.json())
-            .then(data => {
-                resultadoServicoPeca.innerHTML = '';
-                if (data.length === 0) {
-                    resultadoServicoPeca.innerHTML = '<div class="text-muted">Nenhum item encontrado</div>';
-                    return;
-                }
-
-                data.forEach(produto => {
-                    const div = document.createElement('div');
-                    div.classList.add('border', 'p-2', 'mb-1');
-                    div.style.cursor = 'pointer';
-                    div.textContent = `${produto.ean || '-'} - ${produto.nome} (R$ ${produto.preco})`;
-                    div.addEventListener('click', () => {
-                        if (produtoIdInput) produtoIdInput.value = produto.id;
-                        if (tipoInput) tipoInput.value = produto.tipo_item === 'servico' ? 'servico' : 'peca';
-                        if (nomeInput) nomeInput.value = produto.nome || '';
-                        if (descricaoInput) descricaoInput.value = produto.descricao || '';
-                        if (valorInput) valorInput.value = produto.preco || '';
-                        if (garantiaInput) garantiaInput.value = produto.garantia_peca_dias || '';
-                        resultadoServicoPeca.innerHTML = '';
-                    });
-                    resultadoServicoPeca.appendChild(div);
-                });
-            });
-    });
-});
-</script>
-<div class="tab-pane fade {% if active_tab == 'arquivos' %}show active{% endif %}" id="arquivos">
-    <div class="card-modern">
-        <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span>Anexos da OS</span>
-            {% if not ordem.fechada %}
-            <button class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarArquivo">
-                <i class="fas fa-paperclip mr-1"></i>Anexar arquivos
-            </button>
-            {% else %}
-            <span class="text-light"><i class="fas fa-lock mr-1"></i>Edicao bloqueada</span>
-            {% endif %}
-        </div>
-        <div class="card-modern-body">
-            <div class="mb-2">
-                <span class="badge badge-info">Fotos: {{ fotos_count }}</span>
-                {% if pode_incluir_fotos_relatorio %}
-                <span class="badge badge-success">Já é possível incluir fotos no relatório técnico</span>
-                {% else %}
-                <span class="badge badge-secondary">Anexe mais fotos (mínimo 4) para habilitar inclusão no relatório</span>
-                {% endif %}
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm table-bordered">
-                    <thead>
-                        <tr>
-                            <th>Arquivo</th>
-                            <th>Descrição</th>
-                            <th>Tipo</th>
-                            <th>Incluir no Relatório</th>
-                            <th>Enviado por</th>
-                            <th>Data</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for a in arquivos_os %}
-                        <tr>
-                            <td><a href="{{ a.arquivo.url }}" target="_blank">{{ a.arquivo.name|default:"arquivo" }}</a></td>
-                            <td>{{ a.descricao|default:"-" }}</td>
-                            <td>{% if a.eh_imagem %}Imagem{% else %}Documento{% endif %}</td>
-                            <td>{% if a.incluir_relatorio %}Sim{% else %}Não{% endif %}</td>
-                            <td>{% if a.enviado_por %}{{ a.enviado_por.username }}{% else %}-{% endif %}</td>
-                            <td>{{ a.criado_em|date:"d/m/Y H:i" }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="6" class="text-center text-muted">Sem arquivos anexados.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-    <div class="tab-pane fade {% if active_tab == 'alertas' %}show active{% endif %}" id="alertas">
-        <div class="card-modern">
-            <div class="card-modern-header">Alertas da OS</div>
-            <div class="card-modern-body">
-                <h6 class="text-danger">Alertas ativos</h6>
-                {% for alerta in alertas_ativos %}
-                <div class="alert alert-danger alerta-fixo d-flex justify-content-between align-items-center">
-                    <div>
-                        {{ alerta.mensagem|linebreaksbr }}
-                        <div class="small">Criado em {{ alerta.criado_em|date:"d/m/Y H:i" }}</div>
-                    </div>
-                    <form method="post" class="mb-0">
-                        {% csrf_token %}
-                        <input type="hidden" name="form_type" value="encerrar_alerta">
-                        <input type="hidden" name="alerta_id" value="{{ alerta.id }}">
-                        <button type="submit" class="btn btn-sm btn-light">Encerrar</button>
-                    </form>
-                </div>
-                {% empty %}
-                <p class="text-muted">Nenhum alerta ativo.</p>
-                {% endfor %}
-
-                <hr>
-                <h6>Histórico de alertas encerrados</h6>
-                <div class="table-responsive">
-                    <table class="table table-sm table-bordered">
-                        <thead>
-                            <tr>
-                                <th>Mensagem</th>
-                                <th>Criado</th>
-                                <th>Encerrado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for alerta in alertas_encerrados %}
-                            <tr>
-                                <td>{{ alerta.mensagem|linebreaksbr }}</td>
-                                <td>{{ alerta.criado_em|date:"d/m/Y H:i" }}</td>
-                                <td>{{ alerta.encerrado_em|date:"d/m/Y H:i" }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="3" class="text-center text-muted">Sem alertas encerrados.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-<div class="tab-pane fade {% if active_tab == 'relatorio' %}show active{% endif %}" id="relatorio">
-        <div class="card-modern">
-            <div class="card-modern-header">
-                <i class="fas fa-file-alt mr-2"></i>Relatório Técnico
-            </div>
-            <div class="card-modern-body">
-                <form method="post">
-                    {% csrf_token %}
-                    <input type="hidden" name="form_type" value="relatorio">
-
-                    <div class="form-group">
-                        <label for="relatorio_tecnico">Descrição</label>
-                        <textarea name="relatorio_tecnico" id="relatorio_tecnico" rows="5" class="form-control">{{ relatorio_tecnico_display|default_if_none:"" }}</textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="tipo_reparacao">Tipo de Reparacao</label>
-                        <select name="tipo_reparacao" id="tipo_reparacao" class="form-control">
-                            <option value="">-- Selecione --</option>
-                            {% for key, value in tipos_reparacao %}
-                            <option value="{{ key }}" {% if ordem.tipo_reparacao == key %}selected{% endif %}>{{ value }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <button type="submit" class="btn btn-success"><i class="fas fa-save mr-2"></i> Salvar Relatório
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-    {% if pode_ver_logs %}
-    <div class="tab-pane fade {% if active_tab == 'logs' %}show active{% endif %}" id="logs">
-        <div class="card-modern">
-            <div class="card-modern-header">
-                <i class="fas fa-clipboard-list mr-2"></i>Logs da OS
-            </div>
-            <div class="card-modern-body">
-                {% if logs_os %}
-                <div class="table-responsive">
-                    <table class="table table-sm table-bordered">
-                        <thead>
-                            <tr>
-                                <th>Data</th>
-                                <th>Evento</th>
-                                <th>Descrição</th>
-                                <th>Usuario</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for log in logs_os %}
-                            <tr>
-                                <td>{{ log.data_evento|date:"d/m/Y H:i" }}</td>
-                                <td>{{ log.get_tipo_evento_display|default:log.tipo_evento }}</td>
-                                <td>{{ log.descricao|linebreaksbr }}</td>
-                                <td>{% if log.usuario_responsavel %}{{ log.usuario_responsavel.username }}{% else %}-{% endif %}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <p class="text-muted mb-0">Sem logs operacionais.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
+    {% include "ordens/partials/_tab_detalhes.html" %}
+    {% include "ordens/partials/_tab_linhas.html" %}
+    {% include "ordens/partials/_tab_servicos.html" %}
+
+    {% include "ordens/partials/_tab_pedidos.html" %}
+    {% include "ordens/partials/_tab_orcamentos.html" %}
+    {% include "ordens/partials/_tab_relatorio_logs.html" %}
+    {% include "ordens/partials/_tab_arquivos.html" %}
+    {% include "ordens/partials/_tab_alertas.html" %}
 </div>
 </div>
+
 <!-- Modal Adicionar Linha -->
 <div class="modal fade" id="modalAdicionarLinha" tabindex="-1" role="dialog" aria-labelledby="modalAdicionarLinhaLabel"
      aria-hidden="true">
@@ -1679,6 +446,75 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 </div>
+
+{% if pode_ver_logs and logs_os or pode_ver_logs and logs_confirmacao %}
+<div class="modal fade" id="modalLogsOS" tabindex="-1" role="dialog" aria-labelledby="modalLogsOSLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLogsOSLabel">Logs da OS</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                {% if logs_os %}
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Evento</th>
+                                <th>Descrição</th>
+                                <th>Usuário</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs_os %}
+                            <tr>
+                                <td>{{ log.data_evento|date:"d/m/Y H:i" }}</td>
+                                <td>{{ log.get_tipo_evento_display|default:log.tipo_evento }}</td>
+                                <td>{{ log.descricao|linebreaksbr }}</td>
+                                <td>{% if log.usuario_responsavel %}{{ log.usuario_responsavel.username }}{% else %}-{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                {% if logs_confirmacao %}
+                <h6 class="mb-2">Confirmações</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Tipo</th>
+                                <th>Descrição</th>
+                                <th>Usuário</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs_confirmacao %}
+                            <tr>
+                                <td>{{ log.data_evento|date:"d/m/Y H:i" }}</td>
+                                <td>{{ log.get_tipo_evento_display|default:log.tipo_evento }}</td>
+                                <td>{{ log.descricao|linebreaksbr }}</td>
+                                <td>{% if log.usuario_responsavel %}{{ log.usuario_responsavel.username }}{% else %}-{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% elif not logs_os %}
+                <p class="text-muted mb-0">Sem logs operacionais.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <div class="modal fade" id="modalAdicionarPedido" tabindex="-1" role="dialog" aria-labelledby="modalAdicionarPedidoLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -2024,12 +860,12 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const view = document.getElementById("série-view");
-    const editor = document.getElementById("série-editor");
-    const input = document.getElementById("série-input");
-    const btnSave = document.getElementById("série-save");
-    const btnCancel = document.getElementById("série-cancel");
-    const feedback = document.getElementById("série-feedback");
+    const view = document.getElementById("serie-view");
+    const editor = document.getElementById("serie-editor");
+    const input = document.getElementById("serie-input");
+    const btnSave = document.getElementById("serie-save");
+    const btnCancel = document.getElementById("serie-cancel");
+    const feedback = document.getElementById("serie-feedback");
 
     if (!view || !editor || !input || !btnSave || !btnCancel) {
         return;
@@ -2115,6 +951,15 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(ajustarAlturaDetalhes, 150);
 });
 </script>
+{% if abrir_logs and pode_ver_logs and logs_os or abrir_logs and pode_ver_logs and logs_confirmacao %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const modalLogs = document.getElementById("modalLogsOS");
+    if (!modalLogs || typeof window.jQuery === "undefined") return;
+    window.jQuery(modalLogs).modal("show");
+});
+</script>
+{% endif %}
 {% endblock extra_js %}
 
 

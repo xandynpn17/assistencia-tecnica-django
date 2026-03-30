@@ -7,7 +7,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3" style="gap: 12px;">
         <div>
             <h3 class="mb-1">Auditoria operacional</h3>
-            <div class="text-muted small">Pendencias financeiras e operacionais para conferencia diaria.</div>
+            <div class="text-muted small">Pendências financeiras e operacionais para conferência diária.</div>
         </div>
         <form method="get" class="form-inline" style="gap: 8px;">
             <div>
@@ -27,9 +27,9 @@
     <div class="row mb-3">
         <div class="col-md-2"><div class="small-box bg-warning"><div class="inner"><h4>{{ total_ordens_prontas_sem_recebimento }}</h4><p>Prontas sem recebimento</p></div></div></div>
         <div class="col-md-2"><div class="small-box bg-danger"><div class="inner"><h4>{{ total_contas_vencidas }}</h4><p>Contas vencidas</p></div></div></div>
-        <div class="col-md-2"><div class="small-box bg-secondary"><div class="inner"><h4>{{ total_caixas_com_diferenca }}</h4><p>Caixas com diferenca</p></div></div></div>
-        <div class="col-md-2"><div class="small-box bg-info"><div class="inner"><h4>{{ total_pagamentos_sem_talao }}</h4><p>Pagamentos sem talao</p></div></div></div>
-        <div class="col-md-2"><div class="small-box bg-dark"><div class="inner"><h4>{{ total_saidas_sem_centro }}</h4><p>Saidas sem centro</p></div></div></div>
+        <div class="col-md-2"><div class="small-box bg-secondary"><div class="inner"><h4>{{ total_caixas_com_diferenca }}</h4><p>Caixas com diferença</p></div></div></div>
+        <div class="col-md-2"><div class="small-box bg-info"><div class="inner"><h4>{{ total_pagamentos_sem_talao }}</h4><p>Pagamentos sem talão</p></div></div></div>
+        <div class="col-md-2"><div class="small-box bg-dark"><div class="inner"><h4>{{ total_saidas_sem_centro }}</h4><p>Saídas sem centro</p></div></div></div>
         <div class="col-md-2"><div class="small-box bg-primary"><div class="inner"><h4>{{ total_garantias_pendentes }}</h4><p>Garantias pendentes</p></div></div></div>
     </div>
 
@@ -61,7 +61,7 @@
                 <div class="card-header bg-white"><strong>Contas vencidas</strong></div>
                 <div class="card-body p-0 table-responsive">
                     <table class="table table-sm mb-0">
-                        <thead><tr><th>Descricao</th><th>OS</th><th>Vencimento</th><th class="text-right">Valor</th></tr></thead>
+                        <thead><tr><th>Descrição</th><th>OS</th><th>Vencimento</th><th class="text-right">Valor</th></tr></thead>
                         <tbody>
                             {% for conta in contas_vencidas %}
                             <tr>
@@ -80,10 +80,10 @@
         </div>
         <div class="col-lg-6">
             <div class="card mb-3">
-                <div class="card-header bg-white"><strong>Caixas com diferenca</strong></div>
+                <div class="card-header bg-white"><strong>Caixas com diferença</strong></div>
                 <div class="card-body p-0 table-responsive">
                     <table class="table table-sm mb-0">
-                        <thead><tr><th>Data</th><th class="text-right">Saldo final</th><th class="text-right">Contado</th><th class="text-right">Diferenca</th></tr></thead>
+                        <thead><tr><th>Data</th><th class="text-right">Saldo final</th><th class="text-right">Contado</th><th class="text-right">Diferença</th></tr></thead>
                         <tbody>
                             {% for item in caixas_com_diferenca %}
                             <tr>
@@ -93,7 +93,7 @@
                                 <td class="text-right">R$ {{ item.diferenca_fechamento|floatformat:2 }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="4" class="text-center text-muted">Nenhum caixa com diferenca.</td></tr>
+                            <tr><td colspan="4" class="text-center text-muted">Nenhum caixa com diferença.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -105,7 +105,7 @@
     <div class="row">
         <div class="col-lg-6">
             <div class="card mb-3">
-                <div class="card-header bg-white"><strong>Pagamentos sem talao</strong></div>
+                <div class="card-header bg-white"><strong>Pagamentos sem talão</strong></div>
                 <div class="card-body p-0 table-responsive">
                     <table class="table table-sm mb-0">
                         <thead><tr><th>OS</th><th class="text-right">Valor</th><th>Forma</th><th>Data</th><th></th></tr></thead>
@@ -122,12 +122,12 @@
                                         <input type="hidden" name="action" value="gerar_talao">
                                         <input type="hidden" name="pagamento_id" value="{{ pagamento.id }}">
                                         <input type="hidden" name="return_query" value="{{ querystring_auditoria }}">
-                                        <button class="btn btn-sm btn-outline-primary" type="submit">Gerar talao</button>
+                                        <button class="btn btn-sm btn-outline-primary" type="submit">Gerar talão</button>
                                     </form>
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="5" class="text-center text-muted">Nenhum pagamento sem talao.</td></tr>
+                            <tr><td colspan="5" class="text-center text-muted">Nenhum pagamento sem talão.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -136,10 +136,10 @@
         </div>
         <div class="col-lg-6">
             <div class="card mb-3">
-                <div class="card-header bg-white"><strong>Saidas sem centro de custo</strong></div>
+                <div class="card-header bg-white"><strong>Saídas sem centro de custo</strong></div>
                 <div class="card-body p-0 table-responsive">
                     <table class="table table-sm mb-0">
-                        <thead><tr><th>Descricao</th><th class="text-right">Valor</th><th>Data</th><th></th></tr></thead>
+                        <thead><tr><th>Descrição</th><th class="text-right">Valor</th><th>Data</th><th></th></tr></thead>
                         <tbody>
                             {% for lancamento in saidas_sem_centro %}
                             <tr>
@@ -163,7 +163,7 @@
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="4" class="text-center text-muted">Nenhuma saida sem centro.</td></tr>
+                            <tr><td colspan="4" class="text-center text-muted">Nenhuma saída sem centro.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>

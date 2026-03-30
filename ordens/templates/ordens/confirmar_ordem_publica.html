@@ -23,7 +23,7 @@
       background: linear-gradient(180deg, #eef3f9 0%, var(--bg) 100%);
     }
     .container {
-      max-width: 900px;
+      max-width: 980px;
       margin: 0 auto;
     }
     .card {
@@ -43,17 +43,48 @@
       font-size: 1.2rem;
       font-weight: 700;
     }
+    .header p {
+      margin: 6px 0 0;
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 0.95rem;
+    }
     .body {
-      padding: 20px 22px 22px;
+      padding: 22px;
     }
-    .grid {
+    .summary {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px 20px;
-      margin-bottom: 16px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
     }
-    .item strong { font-weight: 700; }
-    .item span { color: var(--muted); }
+    .summary-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      background: #f9fbfe;
+    }
+    .summary-card h2 {
+      margin: 0 0 10px;
+      font-size: 0.98rem;
+    }
+    .item {
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .item:last-child {
+      margin-bottom: 0;
+    }
+    .label {
+      display: block;
+      font-size: 0.78rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .value {
+      font-size: 0.96rem;
+    }
     .section-title {
       margin: 18px 0 8px;
       font-size: 1rem;
@@ -64,11 +95,15 @@
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 14px;
-      line-height: 1.5;
+      line-height: 1.55;
       white-space: normal;
     }
-    .terms p { margin: 0; }
-    .messages { margin-bottom: 14px; }
+    .terms p {
+      margin: 0;
+    }
+    .messages {
+      margin-bottom: 14px;
+    }
     .alert {
       border-radius: 8px;
       padding: 10px 12px;
@@ -105,8 +140,8 @@
       color: var(--muted);
       font-size: 0.92rem;
     }
-    @media (max-width: 760px) {
-      .grid {
+    @media (max-width: 860px) {
+      .summary {
         grid-template-columns: 1fr;
       }
     }
@@ -117,6 +152,7 @@
     <div class="card">
       <div class="header">
         <h1>Confirmação da Ordem de Serviço {{ ordem.numero_os }}</h1>
+        <p>Confira os dados da ordem, do equipamento e os termos antes de confirmar.</p>
       </div>
       <div class="body">
         {% if messages %}
@@ -129,11 +165,70 @@
           </div>
         {% endif %}
 
-        <div class="grid">
-          <div class="item"><strong>Cliente:</strong> <span>{{ ordem.cliente.nome }}</span></div>
-          <div class="item"><strong>Equipamento:</strong> <span>{{ ordem.get_tipo_equipamento_display }} - {{ ordem.marca_equipamento }} {{ ordem.modelo_equipamento }}</span></div>
-          <div class="item"><strong>Número de série:</strong> <span>{{ ordem.numero_serie_equipamento|default:"Não informado" }}</span></div>
-          <div class="item"><strong>Defeito relatado:</strong> <span>{{ ordem.defeito|default:"Não informado" }}</span></div>
+        <div class="summary">
+          <section class="summary-card">
+            <h2>Cliente</h2>
+            <div class="item">
+              <span class="label">Nome</span>
+              <div class="value">{{ ordem.cliente.nome }}</div>
+            </div>
+            <div class="item">
+              <span class="label">Documento</span>
+              <div class="value">{{ ordem.cliente.documento|default:"N&atilde;o informado" }}</div>
+            </div>
+            <div class="item">
+              <span class="label">Telefone</span>
+              <div class="value">{{ ordem.cliente.telefone|default:"N&atilde;o informado" }}</div>
+            </div>
+          </section>
+
+          <section class="summary-card">
+            <h2>Equipamento</h2>
+            <div class="item">
+              <span class="label">Tipo</span>
+              <div class="value">{{ ordem.get_tipo_equipamento_display|default:"N&atilde;o informado" }}</div>
+            </div>
+            <div class="item">
+              <span class="label">Marca / Modelo</span>
+              <div class="value">{{ ordem.marca_equipamento|default:"-" }} {{ ordem.modelo_equipamento|default:"" }}</div>
+            </div>
+            <div class="item">
+              <span class="label">N&uacute;mero de s&eacute;rie</span>
+              <div class="value">{{ ordem.numero_serie_equipamento|default:"N&atilde;o informado" }}</div>
+            </div>
+            <div class="item">
+              <span class="label">Acess&oacute;rios</span>
+              <div class="value">{{ ordem.acessorios|default:"N&atilde;o informado" }}</div>
+            </div>
+          </section>
+
+          <section class="summary-card">
+            <h2>Atendimento</h2>
+            <div class="item">
+              <span class="label">Data de abertura</span>
+              <div class="value">{{ ordem.data_abertura|date:"d/m/Y H:i" }}</div>
+            </div>
+            <div class="item">
+              <span class="label">Tipo de reparo</span>
+              <div class="value">{{ ordem.tipo_reparo|default:"N&atilde;o informado" }}</div>
+            </div>
+            <div class="item">
+              <span class="label">Defeito relatado</span>
+              <div class="value">{{ ordem.defeito|default:"N&atilde;o informado" }}</div>
+            </div>
+            <div class="item">
+              <span class="label">Peritagem</span>
+              <div class="value">{{ ordem.peritagem|default:"N&atilde;o informada" }}</div>
+            </div>
+            <div class="item">
+              <span class="label">Atendente</span>
+              <div class="value">{{ ordem.atendente_abertura|default:"N&atilde;o informado" }}</div>
+            </div>
+            <div class="item">
+              <span class="label">T&eacute;cnico respons&aacute;vel</span>
+              <div class="value">{{ ordem.tecnico_responsavel_valido|default:"N&atilde;o informado" }}</div>
+            </div>
+          </section>
         </div>
 
         <h2 class="section-title">Termos e Condições da Ordem de Serviço</h2>
@@ -141,12 +236,12 @@
           {% if termos_os %}
             <p>{{ termos_os|linebreaksbr }}</p>
           {% else %}
-            <p>Não há termos cadastrados no momento.</p>
+            <p>N&atilde;o h&aacute; termos cadastrados no momento.</p>
           {% endif %}
         </div>
 
         {% if condicoes_os %}
-          <h2 class="section-title">Condições Gerais</h2>
+          <h2 class="section-title">Condi&ccedil;&otilde;es gerais</h2>
           <div class="terms">
             <p>{{ condicoes_os|linebreaksbr }}</p>
           </div>
@@ -155,14 +250,14 @@
         <div class="footer">
           {% if ja_confirmada %}
             <div class="alert alert-success">
-              Esta OS já foi confirmada em {{ ordem.data_confirmacao|date:"d/m/Y H:i" }}.
+              Esta OS j&aacute; foi confirmada em {{ ordem.data_confirmacao|date:"d/m/Y H:i" }}.
             </div>
           {% else %}
             <form method="post">
               {% csrf_token %}
               <button type="submit" class="btn">Li e concordo com os termos</button>
             </form>
-            <span class="note">Ao confirmar, o aceite ficará registrado com data e hora.</span>
+            <span class="note">Ao confirmar, o aceite ficar&aacute; registrado com data e hora.</span>
           {% endif %}
         </div>
       </div>
