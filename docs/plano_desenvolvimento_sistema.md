@@ -37,7 +37,7 @@ Status: concluida
 ## Etapas pendentes
 
 ### Fase 1 - Mapa oficial do fluxo da OS
-Status: pendente
+Status: diagnostico concluido / implementacao pendente
 Prioridade: alta
 
 Objetivo:
@@ -94,7 +94,7 @@ Resultado esperado:
 - menor risco de inconsistencias.
 
 ### Fase 3 - Permissoes granulares
-Status: pendente
+Status: diagnostico concluido / implementacao pendente
 Prioridade: alta
 
 Objetivo:
@@ -248,6 +248,8 @@ Entrega 1:
 - mapear status da OS e acoes permitidas;
 - mapear permissoes sensiveis;
 - definir estrutura tecnica das novas permissoes granulares.
+Status: concluida em diagnostico/documentacao.
+Referencia: `docs/entrega_1_fluxo_permissoes.md`
 
 Entrega 2:
 - implementar permissoes granulares nas acoes mais delicadas da OS e do caixa;
