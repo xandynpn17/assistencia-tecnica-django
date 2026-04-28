@@ -1,5 +1,7 @@
 from . import fluxo_support as _support
 from ..services.anexos import EXTENSOES_IMAGEM, MAX_FOTOS_POR_OS, preparar_arquivo_anexo
+from django.core.exceptions import PermissionDenied
+from configuracoes.permissions import has_sensitive_permission, require_sensitive_permission
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
@@ -152,9 +154,25 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             tabs.append({"id": "alertas", "label": "Alertas", "icon": "bi bi-exclamation-triangle"})
         context["tabs"] = tabs
         context["tecnicos"] = User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username")
-        context["pode_editar_serie"] = bool(
-            self.request.user.is_superuser
-            or getattr(self.request.user, "tipo_usuario", "") in ORDER_ROLES
+        context["pode_editar_serie"] = has_sensitive_permission(
+            self.request.user,
+            "perm_os_editar_numero_serie",
+        )
+        context["pode_alterar_tecnico"] = has_sensitive_permission(
+            self.request.user,
+            "perm_os_alterar_tecnico",
+        )
+        context["pode_concluir_os"] = has_sensitive_permission(
+            self.request.user,
+            "perm_os_concluir",
+        )
+        context["pode_reabrir_os"] = has_sensitive_permission(
+            self.request.user,
+            "perm_os_reabrir",
+        )
+        context["pode_excluir_item_orcamento"] = has_sensitive_permission(
+            self.request.user,
+            "perm_orcamento_excluir_item",
         )
         serial = (ordem.numero_serie_equipamento or "").strip()
         if serial:
@@ -331,6 +349,15 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
         # Finalizar OS e registrar no Caixa
         elif form_type == "finalizar_caixa":
+            try:
+                require_sensitive_permission(
+                    request.user,
+                    "perm_os_concluir",
+                    message="Voce nao tem permissao para concluir ou fechar esta OS.",
+                )
+            except PermissionDenied as exc:
+                messages.error(request, str(exc) or "Permissao insuficiente.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
             itens_migrados = _migrar_itens_aprovados_para_servicos_pecas(self.object, usuario=request.user)
             total_os = sum(item.total() for item in self.object.servicos_pecas.all())
             try:

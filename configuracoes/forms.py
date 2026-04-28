@@ -276,6 +276,15 @@ class UserForm(forms.ModelForm):
             'acesso_caixa_operacional_extra',
             'acesso_caixa_financeiro_extra',
             'acesso_configuracoes_extra',
+            'perm_os_editar_numero_serie',
+            'perm_os_alterar_tecnico',
+            'perm_os_concluir',
+            'perm_os_reabrir',
+            'perm_orcamento_excluir_item',
+            'perm_caixa_excluir_pagamento',
+            'perm_caixa_ver_dre',
+            'perm_caixa_gerir_comissoes',
+            'perm_caixa_ver_auditoria',
             'data_admissao',
             'data_demissao',
             'pis_pasep',
@@ -340,6 +349,15 @@ class UserForm(forms.ModelForm):
             "acesso_caixa_operacional_extra",
             "acesso_caixa_financeiro_extra",
             "acesso_configuracoes_extra",
+            "perm_os_editar_numero_serie",
+            "perm_os_alterar_tecnico",
+            "perm_os_concluir",
+            "perm_os_reabrir",
+            "perm_orcamento_excluir_item",
+            "perm_caixa_excluir_pagamento",
+            "perm_caixa_ver_dre",
+            "perm_caixa_gerir_comissoes",
+            "perm_caixa_ver_auditoria",
         ):
             self.fields[field_name].required = False
             self.fields[field_name].widget.attrs.update({"class": "form-check-input"})
@@ -348,6 +366,16 @@ class UserForm(forms.ModelForm):
         self.fields["acesso_caixa_operacional_extra"].label = "Caixa operacional"
         self.fields["acesso_caixa_financeiro_extra"].label = "Caixa financeiro"
         self.fields["acesso_configuracoes_extra"].label = "Configurações"
+
+        self.fields["perm_os_editar_numero_serie"].label = "Editar numero de serie"
+        self.fields["perm_os_alterar_tecnico"].label = "Alterar tecnico responsavel"
+        self.fields["perm_os_concluir"].label = "Concluir e fechar OS"
+        self.fields["perm_os_reabrir"].label = "Reabrir OS fechada"
+        self.fields["perm_orcamento_excluir_item"].label = "Excluir item de orcamento"
+        self.fields["perm_caixa_excluir_pagamento"].label = "Excluir pagamento"
+        self.fields["perm_caixa_ver_dre"].label = "Ver DRE"
+        self.fields["perm_caixa_gerir_comissoes"].label = "Gerir comissoes"
+        self.fields["perm_caixa_ver_auditoria"].label = "Ver auditoria operacional"
 
     @staticmethod
     def _somente_digitos(value):

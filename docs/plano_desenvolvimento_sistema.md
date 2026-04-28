@@ -94,7 +94,7 @@ Resultado esperado:
 - menor risco de inconsistencias.
 
 ### Fase 3 - Permissoes granulares
-Status: diagnostico concluido / implementacao pendente
+Status: implementacao inicial concluida / ampliacao pendente
 Prioridade: alta
 
 Objetivo:
@@ -117,6 +117,28 @@ O que implementar:
 - formulario de usuario com secoes claras de permissoes;
 - helpers centralizados para checagem de permissao sensivel;
 - remocao gradual de condicoes hardcoded em templates.
+
+Feito nesta etapa:
+- novos campos de permissao sensivel no usuario;
+- formulario de usuario atualizado com permissoes sensiveis;
+- helper central `has_sensitive_permission` / `require_sensitive_permission`;
+- protecao aplicada em:
+  - editar numero de serie da OS;
+  - alterar tecnico responsavel;
+  - concluir/fechar OS;
+  - reabrir OS;
+  - excluir item de orcamento;
+  - excluir pagamento;
+  - acessar DRE;
+  - gerir comissoes;
+  - acessar auditoria operacional;
+- menus e botoes criticos ajustados para refletir as novas permissoes;
+- migration `0038` aplicada com preenchimento inicial compativel ao acesso que ja existia.
+
+Ainda pendente nesta fase:
+- granularizar outras acoes sensiveis da OS e do caixa;
+- reduzir mais verificacoes hardcoded em templates;
+- adicionar testes especificos das novas permissoes granulares.
 
 Permissoes sensiveis sugeridas:
 - editar numero de serie;
@@ -254,10 +276,13 @@ Referencia: `docs/entrega_1_fluxo_permissoes.md`
 Entrega 2:
 - implementar permissoes granulares nas acoes mais delicadas da OS e do caixa;
 - bloquear operacoes sensiveis por helper central.
+Status: concluida nesta rodada.
 
 Entrega 3:
 - extrair service de fechamento/reabertura da OS;
 - extrair service do fluxo de orcamento.
+Status: pendente.
 
 Entrega 4:
 - revisar encoding e limpar referencias restantes ao legado.
+Status: pendente.

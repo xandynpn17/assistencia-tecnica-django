@@ -30,6 +30,26 @@ CAIXA_OPERATIONAL_ROLES = RoleSpec({"adm", "gerente", "atendente"}, capability="
 CAIXA_ROLES = CAIXA_OPERATIONAL_ROLES
 PERFORMANCE_VIEW_ROLES = RoleSpec({"adm", "gerente", "atendente", "tecnico"}, capability="acesso_caixa_financeiro_extra")
 
+SENSITIVE_PERMISSION_MESSAGES = {
+    "perm_os_editar_numero_serie": "Voce nao tem permissao para editar o numero de serie desta OS.",
+    "perm_os_alterar_tecnico": "Voce nao tem permissao para alterar o tecnico responsavel desta OS.",
+    "perm_os_concluir": "Voce nao tem permissao para concluir ou fechar esta OS.",
+    "perm_os_reabrir": "Voce nao tem permissao para reabrir esta OS.",
+    "perm_orcamento_excluir_item": "Voce nao tem permissao para excluir itens do orcamento.",
+    "perm_caixa_excluir_pagamento": "Voce nao tem permissao para excluir pagamentos.",
+    "perm_caixa_ver_dre": "Voce nao tem permissao para acessar o DRE.",
+    "perm_caixa_gerir_comissoes": "Voce nao tem permissao para gerir comissoes.",
+    "perm_caixa_ver_auditoria": "Voce nao tem permissao para acessar a auditoria operacional.",
+}
+
+
+def is_management_user(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser:
+        return True
+    return getattr(user, "tipo_usuario", None) in MANAGER_ROLES
+
 
 def has_role(user, allowed_roles):
     if not user.is_authenticated:
@@ -42,6 +62,20 @@ def has_role(user, allowed_roles):
     if capability:
         return bool(getattr(user, capability, False))
     return False
+
+
+def has_sensitive_permission(user, permission_name):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if is_management_user(user):
+        return True
+    return bool(getattr(user, permission_name, False))
+
+
+def require_sensitive_permission(user, permission_name, message=None):
+    if has_sensitive_permission(user, permission_name):
+        return True
+    raise PermissionDenied(message or SENSITIVE_PERMISSION_MESSAGES.get(permission_name) or "Permissao insuficiente.")
 
 
 def role_required(allowed_roles, login_url="core:login"):

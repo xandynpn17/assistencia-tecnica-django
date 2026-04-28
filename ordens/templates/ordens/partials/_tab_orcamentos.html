@@ -87,6 +87,7 @@
                                 <button type="button" class="btn btn-sm btn-info" onclick="editarItem({{ item.id }})">
                                     <i class="fas fa-edit"></i>
                                 </button>
+                                {% if pode_excluir_item_orcamento %}
                                 <button type="submit"
                                         formmethod="post"
                                         formaction="{% url 'orcamentos:excluir_item' item.id %}"
@@ -95,6 +96,7 @@
                                     {% csrf_token %}
                                     <i class="fas fa-trash"></i>
                                 </button>
+                                {% endif %}
                                 {% else %}
                                 <span class="badge badge-secondary">Bloqueado</span>
                                 {% endif %}

@@ -234,11 +234,11 @@
                 {% if assinatura_saida_data %}Atualizar{% else %}Registrar{% endif %} assinatura de saída
             </button>
             {% endif %}
-            {% if ordem.fechada %}
+            {% if ordem.fechada and pode_reabrir_os %}
             <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-warning btn-sm">
                 <i class="fas fa-lock mr-1"></i> Reabrir
             </a>
-            {% else %}
+            {% elif not ordem.fechada and pode_concluir_os %}
             <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-outline-success btn-sm">
                 <i class="fas fa-cash-register mr-1"></i> Fechar e ir ao Caixa
             </a>

@@ -2,12 +2,18 @@ from django.db.models import Prefetch
 from urllib.parse import urlencode
 
 from . import comissoes_support as _support
+from configuracoes.permissions import require_sensitive_permission
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def comissoes_pendencias(request):
+    require_sensitive_permission(
+        request.user,
+        "perm_caixa_gerir_comissoes",
+        message="Voce nao tem permissao para gerir comissoes.",
+    )
     from orcamentos.models import ItemOrcamento
     from ordens.models import LinhaTrabalho, ServicoPeca
 
@@ -132,6 +138,11 @@ def comissoes_pendencias(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def comissoes_tecnicos(request):
+    require_sensitive_permission(
+        request.user,
+        "perm_caixa_gerir_comissoes",
+        message="Voce nao tem permissao para gerir comissoes.",
+    )
     from orcamentos.models import ItemOrcamento
 
     def _ordens_por_intervalo(data_inicio, data_fim):

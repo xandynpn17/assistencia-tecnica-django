@@ -110,7 +110,8 @@
                                     <select id="tecnicoResponsavel"
                                             class="form-control form-control-sm"
                                             style="height: 31px;"
-                                            data-os-id="{{ ordem.id }}">
+                                            data-os-id="{{ ordem.id }}"
+                                            {% if not pode_alterar_tecnico %}disabled{% endif %}>
                                         <option value="">-- Selecione --</option>
                                         {% for user in tecnicos %}
                                             <option value="{{ user.id }}" {% if ordem.tecnico_responsavel_id == user.id %}selected{% endif %}>
@@ -118,6 +119,9 @@
                                             </option>
                                         {% endfor %}
                                     </select>
+                                    {% if not pode_alterar_tecnico %}
+                                    <small class="text-muted d-block mt-1">Alteracao do tecnico controlada por permissao.</small>
+                                    {% endif %}
                                 </div>
                                 <div id="tecnico-feedback" class="small mt-1"></div>
                             </div>

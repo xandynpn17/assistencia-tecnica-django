@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, role_required
+from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, require_sensitive_permission, role_required
 
 from ..forms import FaixaPremioMetaForm, RegraPremioMetaForm
 from ..models import Comissao, ComissaoLotePagamento, PremioColaboradorCompetencia, RegraComissaoTecnico, RegraPremioMeta
@@ -29,6 +29,11 @@ from .helpers import _exportar_csv, _exportar_pdf_tabela, _fmt_decimal, _paginar
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def comissoes_pagamento(request):
+    require_sensitive_permission(
+        request.user,
+        "perm_caixa_gerir_comissoes",
+        message="Voce nao tem permissao para gerir comissoes.",
+    )
     session_key = "caixa_comissoes_pagamento_filtros"
     if request.GET.get("restaurar") == "1":
         filtros_salvos = request.session.get(session_key) or {}
@@ -469,6 +474,11 @@ def comissoes_pagamento(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def premios_meta(request):
+    require_sensitive_permission(
+        request.user,
+        "perm_caixa_gerir_comissoes",
+        message="Voce nao tem permissao para gerir comissoes.",
+    )
     if request.method == "POST":
         if request.POST.get("action") == "regra_premio":
             regra_premio_form = RegraPremioMetaForm(request.POST)

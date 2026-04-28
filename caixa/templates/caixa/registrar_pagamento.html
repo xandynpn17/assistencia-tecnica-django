@@ -141,7 +141,7 @@
                 <a href="{{ emitir_fiscal_url }}" class="btn btn-sm btn-outline-dark">Emitir documento fiscal</a>
                 {% endif %}
                 {% endif %}
-                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+                {% if pode_excluir_pagamento %}
                 <a href="{% url 'caixa:excluir_pagamento' pagamento_sucesso.id %}" class="btn btn-sm btn-outline-danger">Excluir pagamento</a>
                 {% endif %}
             </div>

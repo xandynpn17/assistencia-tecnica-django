@@ -163,6 +163,55 @@
           </div>
         </div>
 
+        <div class="section-title mt-3">Permissoes Sensiveis</div>
+        <div class="module-grid">
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_os_editar_numero_serie }} {{ form.perm_os_editar_numero_serie.label }}</label>
+            <small>Permite alterar o numero de serie do equipamento dentro da OS.</small>
+            {{ form.perm_os_editar_numero_serie.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_os_alterar_tecnico }} {{ form.perm_os_alterar_tecnico.label }}</label>
+            <small>Permite trocar o tecnico responsavel depois da abertura da OS.</small>
+            {{ form.perm_os_alterar_tecnico.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_os_concluir }} {{ form.perm_os_concluir.label }}</label>
+            <small>Permite concluir, fechar a OS e acionar o fluxo para caixa.</small>
+            {{ form.perm_os_concluir.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_os_reabrir }} {{ form.perm_os_reabrir.label }}</label>
+            <small>Permite reabrir OS ja fechada.</small>
+            {{ form.perm_os_reabrir.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_orcamento_excluir_item }} {{ form.perm_orcamento_excluir_item.label }}</label>
+            <small>Permite excluir item individual do orcamento.</small>
+            {{ form.perm_orcamento_excluir_item.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_caixa_excluir_pagamento }} {{ form.perm_caixa_excluir_pagamento.label }}</label>
+            <small>Permite excluir pagamentos ja lancados no caixa.</small>
+            {{ form.perm_caixa_excluir_pagamento.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_caixa_ver_dre }} {{ form.perm_caixa_ver_dre.label }}</label>
+            <small>Permite abrir o DRE e leitura financeira consolidada.</small>
+            {{ form.perm_caixa_ver_dre.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_caixa_gerir_comissoes }} {{ form.perm_caixa_gerir_comissoes.label }}</label>
+            <small>Permite gerir calculo, liberacao e pagamento de comissoes.</small>
+            {{ form.perm_caixa_gerir_comissoes.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_caixa_ver_auditoria }} {{ form.perm_caixa_ver_auditoria.label }}</label>
+            <small>Permite abrir a auditoria operacional do caixa.</small>
+            {{ form.perm_caixa_ver_auditoria.errors }}
+          </div>
+        </div>
+
         <div class="mt-2">
           <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i>Salvar</button>
           {% if editando and usuario_obj %}

@@ -2,10 +2,11 @@ import json
 import logging
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.utils.timezone import localtime
 
-from configuracoes.permissions import ORDER_ROLES, RoleRequiredMixin, role_required
+from configuracoes.permissions import ORDER_ROLES, RoleRequiredMixin, require_sensitive_permission, role_required
 
 from ..models import LinhaTrabalho, OrdemServico
 from ..services.os_policy_service import OSAccessPolicyService
@@ -171,8 +172,15 @@ def atualizar_tecnico(request, os_id):
         ordem = OrdemServico.objects.get(id=os_id)
         try:
             OSAccessPolicyService.ensure_can_edit(ordem, "edicao_tecnico", usuario=request.user)
+            require_sensitive_permission(
+                request.user,
+                "perm_os_alterar_tecnico",
+                message="Voce nao tem permissao para alterar o tecnico responsavel desta OS.",
+            )
         except ValueError as exc:
             return JsonResponse({"success": False, "message": str(exc)}, status=400)
+        except PermissionDenied as exc:
+            return JsonResponse({"success": False, "message": str(exc) or "Permissao insuficiente."}, status=403)
 
         if tecnico_id:
             tecnico = User.objects.get(id=tecnico_id, is_active=True, tipo_usuario="tecnico")
@@ -227,8 +235,15 @@ def atualizar_numero_serie(request, os_id):
         ordem = OrdemServico.objects.get(id=os_id)
         try:
             OSAccessPolicyService.ensure_can_edit(ordem, "edicao_serie", usuario=request.user)
+            require_sensitive_permission(
+                request.user,
+                "perm_os_editar_numero_serie",
+                message="Voce nao tem permissao para editar o numero de serie desta OS.",
+            )
         except ValueError as exc:
             return JsonResponse({"success": False, "message": str(exc)}, status=400)
+        except PermissionDenied as exc:
+            return JsonResponse({"success": False, "message": str(exc) or "Permissao insuficiente."}, status=403)
 
         serie_antiga = (ordem.numero_serie_equipamento or "").strip()
         if numero_serie == serie_antiga:

@@ -2,6 +2,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.core.exceptions import PermissionDenied
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta
 import random
@@ -25,7 +26,7 @@ from configuracoes.models import ConfiguracaoSistema, Empresa
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from estoque.services import cancelar_reserva
 from caixa.services.comissoes import cancelar_comissoes_por_item, processar_evento_servico_finalizado
-from configuracoes.permissions import ORDER_ROLES, role_required
+from configuracoes.permissions import ORDER_ROLES, require_sensitive_permission, role_required
 from core.pdf_preview import apply_document_preview_overrides, apply_preview_xframe_headers
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
 from core.pdf_theme import get_document_profile, get_document_theme, resolve_layout_preset
@@ -363,6 +364,15 @@ def excluir_item(request, item_id):
     if not _garantir_ordem_editavel(request, ordem, "orcamento_item"):
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
+        try:
+            require_sensitive_permission(
+                request.user,
+                "perm_orcamento_excluir_item",
+                message="Voce nao tem permissao para excluir itens do orcamento.",
+            )
+        except PermissionDenied as exc:
+            messages.error(request, str(exc) or "Permissao insuficiente.")
+            return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
         reservas_item = list(item.reservas_estoque.all())
         cancelar_comissoes_por_item(item, motivo="Item removido do orçamento.", evento="CANCELAMENTO_ITEM")
         item.delete()

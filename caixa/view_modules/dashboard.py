@@ -13,7 +13,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from configuracoes.models import ConfiguracaoSistema, MarcaGarantia, RegraGarantiaMarca
-from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, CAIXA_OPERATIONAL_ROLES, role_required
+from configuracoes.permissions import (
+    CAIXA_FINANCIAL_ROLES,
+    CAIXA_OPERATIONAL_ROLES,
+    has_sensitive_permission,
+    require_sensitive_permission,
+    role_required,
+)
 
 from caixa.services.comissoes import (
     processar_evento_retirada_cliente,
@@ -660,6 +666,9 @@ def _dashboard_caixa_context(request, menu_sub):
         "contas_pagar_vencidas": contas_pagar_vencidas,
         "eventos_criticos_recentes": eventos_criticos_recentes,
         "saidas_sem_categoria_qtd": saidas_sem_categoria_qtd,
+        "pode_ver_dre": has_sensitive_permission(request.user, "perm_caixa_ver_dre"),
+        "pode_gerir_comissoes": has_sensitive_permission(request.user, "perm_caixa_gerir_comissoes"),
+        "pode_ver_auditoria": has_sensitive_permission(request.user, "perm_caixa_ver_auditoria"),
         "menu_app": "caixa",
         "menu_sub": menu_sub,
     }
@@ -861,6 +870,7 @@ def registrar_pagamento(request):
             ],
             "pagamento_sucesso": pagamento_sucesso,
             "emitir_fiscal_url": emitir_fiscal_url,
+            "pode_excluir_pagamento": has_sensitive_permission(request.user, "perm_caixa_excluir_pagamento"),
             "troco_sugerido": troco_sugerido,
             "valor_recebido": valor_recebido,
             "valor_base_pagamento": ordem_valor_aberto if ordem else (guia_total if vendas_guia else (venda.valor_total if venda else None)),
@@ -1082,6 +1092,11 @@ def registrar_pagamento(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def excluir_pagamento(request, pagamento_id):
+    require_sensitive_permission(
+        request.user,
+        "perm_caixa_excluir_pagamento",
+        message="Voce nao tem permissao para excluir pagamentos.",
+    )
     pagamento = get_object_or_404(Pagamento.objects.select_related("ordem_servico", "forma_pagamento"), id=pagamento_id)
     if request.method == "POST":
         justificativa = (request.POST.get("justificativa") or "").strip()

@@ -13,7 +13,7 @@
       Saídas
     </a>
 
-    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.acesso_caixa_financeiro_extra %}
     <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm {% if menu_sub == 'contas_receber' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
       Contas a receber
     </a>
@@ -27,15 +27,19 @@
       Aging pagar
     </a>
 
+    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_caixa_gerir_comissoes %}
     <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-sm {% if menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_pendencias' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'meu_desempenho' %}btn-info{% else %}btn-outline-info{% endif %}">
       Comissões
     </a>
+    {% endif %}
     <a href="{% url 'caixa:relatorios' %}" class="btn btn-sm {% if menu_sub == 'relatorios' %}btn-dark{% else %}btn-outline-dark{% endif %}">
       Relatórios
     </a>
+    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_caixa_ver_dre %}
     <a href="{% url 'caixa:dre' %}" class="btn btn-sm {% if menu_sub == 'dre' %}btn-dark{% else %}btn-outline-dark{% endif %}">
       DRE
     </a>
+    {% endif %}
     <a href="{% url 'caixa:fluxo_projetado' %}" class="btn btn-sm {% if menu_sub == 'fluxo_projetado' %}btn-dark{% else %}btn-outline-dark{% endif %}">
       Fluxo
     </a>
@@ -58,9 +62,11 @@
     <a href="{% url 'caixa:garantias_fabricante' %}" class="btn btn-sm {% if menu_sub == 'garantias_fabricante' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
       Garantias
     </a>
+    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_caixa_gerir_comissoes %}
     <a href="{% url 'caixa:premios_meta' %}" class="btn btn-sm {% if menu_sub == 'premios_meta' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
       Prêmios
     </a>
+    {% endif %}
     {% endif %}
   </div>
 </div>

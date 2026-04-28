@@ -1,6 +1,8 @@
 from django.db.models import Prefetch
+from django.core.exceptions import PermissionDenied
 
 from . import fluxo_support as _support
+from configuracoes.permissions import require_sensitive_permission
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
@@ -365,6 +367,15 @@ def toggle_fechamento_os(request, pk):
     ordem = get_object_or_404(OrdemServico, id=pk)
     try:
         fechando = not ordem.fechada
+        require_sensitive_permission(
+            request.user,
+            "perm_os_concluir" if fechando else "perm_os_reabrir",
+            message=(
+                "Voce nao tem permissao para concluir ou fechar esta OS."
+                if fechando
+                else "Voce nao tem permissao para reabrir esta OS."
+            ),
+        )
         itens_migrados = 0
         if fechando:
             itens_migrados = _migrar_itens_aprovados_para_servicos_pecas(ordem, usuario=request.user)
@@ -419,6 +430,9 @@ def toggle_fechamento_os(request, pk):
             )
         else:
             messages.success(request, "Ordem atualizada com sucesso!")
+        return redirect(f"{ordem.get_absolute_url()}?tab=detalhes")
+    except PermissionDenied as exc:
+        messages.error(request, str(exc) or "Permissao insuficiente.")
         return redirect(f"{ordem.get_absolute_url()}?tab=detalhes")
     except ValueError as e:
         messages.error(request, str(e))

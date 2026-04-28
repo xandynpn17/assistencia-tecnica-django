@@ -447,11 +447,17 @@
     <a href="{% url 'caixa:centros_custo' %}" class="btn btn-outline-dark"><i class="fas fa-sitemap"></i> Centros de custo</a>
     <a href="{% url 'caixa:custos_fixos' %}" class="btn btn-outline-dark"><i class="fas fa-building"></i> Custos fixos</a>
     <a href="{% url 'caixa:taloes' %}" class="btn btn-outline-dark"><i class="fas fa-receipt"></i> Talões</a>
+    {% if pode_gerir_comissoes %}
     <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-info"><i class="fas fa-user-cog"></i> Comissões</a>
     <a href="{% url 'caixa:comissoes_pendencias' %}" class="btn btn-outline-info"><i class="fas fa-exclamation-circle"></i> Pendências comissões</a>
+    {% endif %}
+    {% if pode_ver_dre %}
     <a href="{% url 'caixa:dre' %}" class="btn btn-outline-primary"><i class="fas fa-chart-line"></i> DRE</a>
+    {% endif %}
     <a href="{% url 'caixa:relatorios' %}" class="btn btn-outline-primary"><i class="fas fa-file-alt"></i> Relatórios</a>
+    {% if pode_ver_auditoria %}
     <a href="{% url 'caixa:auditoria_operacional' %}" class="btn btn-outline-danger"><i class="fas fa-search-dollar"></i> Auditoria operacional</a>
+    {% endif %}
     <a href="{% url 'caixa:fluxo_projetado' %}" class="btn btn-outline-secondary"><i class="fas fa-calendar-alt"></i> Fluxo projetado</a>
   </div>
 </div>

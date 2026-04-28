@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from configuracoes.models import FornecedorGarantia
-from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, role_required
+from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, require_sensitive_permission, role_required
 from ordens.models import LinhaTrabalho, OrdemServico
 
 from ..forms import DespesaRecorrenteForm
@@ -32,6 +32,11 @@ from .helpers import (
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def dre(request):
+    require_sensitive_permission(
+        request.user,
+        "perm_caixa_ver_dre",
+        message="Voce nao tem permissao para acessar o DRE.",
+    )
     def _comparativo(atual, anterior):
         variacao = (atual or Decimal("0.00")) - (anterior or Decimal("0.00"))
         percentual = Decimal("0.00")
@@ -557,6 +562,11 @@ def relatorios(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def auditoria_operacional(request):
+    require_sensitive_permission(
+        request.user,
+        "perm_caixa_ver_auditoria",
+        message="Voce nao tem permissao para acessar a auditoria operacional.",
+    )
     session_key = "caixa_auditoria_operacional_filtros"
     if request.GET.get("restaurar") == "1":
         filtros_salvos = request.session.get(session_key) or {}

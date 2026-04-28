@@ -280,6 +280,15 @@ class User(AbstractUser):
     acesso_caixa_operacional_extra = models.BooleanField(default=False)
     acesso_caixa_financeiro_extra = models.BooleanField(default=False)
     acesso_configuracoes_extra = models.BooleanField(default=False)
+    perm_os_editar_numero_serie = models.BooleanField(default=False)
+    perm_os_alterar_tecnico = models.BooleanField(default=False)
+    perm_os_concluir = models.BooleanField(default=False)
+    perm_os_reabrir = models.BooleanField(default=False)
+    perm_orcamento_excluir_item = models.BooleanField(default=False)
+    perm_caixa_excluir_pagamento = models.BooleanField(default=False)
+    perm_caixa_ver_dre = models.BooleanField(default=False)
+    perm_caixa_gerir_comissoes = models.BooleanField(default=False)
+    perm_caixa_ver_auditoria = models.BooleanField(default=False)
     numero_vendedor = models.CharField(
         max_length=10,
         blank=True,
@@ -484,6 +493,7 @@ class ConfiguracaoSistema(models.Model):
     LAYOUT_DOCUMENTOS_CHOICES = [
         ("classico", "Clássico"),
         ("clean", "Clean"),
+        ("tecnico", "Técnico"),
         ("compacto", "Compacto"),
         ("executivo", "Executivo"),
     ]
@@ -758,3 +768,4 @@ class ModeloMensagem(models.Model):
 
     def __str__(self):
         return self.nome
+
