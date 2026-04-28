@@ -214,7 +214,7 @@ class ServicoPecaForm(forms.ModelForm):
 
     class Meta:
         model = ServicoPeca
-        fields = ["tipo", "nome", "descricao", "quantidade", "valor_unitario", "garantia_dias", "tecnico_responsavel", "numeros_taloes"]
+        fields = ["tipo", "nome", "descricao", "quantidade", "valor_unitario", "garantia_dias", "tecnico_responsavel", "comissionavel", "numeros_taloes"]
         widgets = {
             "tipo": forms.Select(attrs={"class": "form-control"}),
             "nome": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nome do serviço/peça"}),
@@ -223,6 +223,7 @@ class ServicoPecaForm(forms.ModelForm):
             "valor_unitario": forms.NumberInput(attrs={"class": "form-control", "step": 0.01, "placeholder": "0,00"}),
             "garantia_dias": forms.NumberInput(attrs={"class": "form-control", "min": 0, "placeholder": "Dias de garantia"}),
             "tecnico_responsavel": forms.Select(attrs={"class": "form-control"}),
+            "comissionavel": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "numeros_taloes": forms.TextInput(
                 attrs={
                     "class": "form-control",

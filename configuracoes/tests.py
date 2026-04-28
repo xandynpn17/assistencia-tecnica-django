@@ -6,18 +6,22 @@ from django.core.management.base import CommandError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test.utils import override_settings
 from django.utils import timezone
+from urllib.parse import parse_qs, urlparse
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from html import unescape
 import csv
 import gzip
 from io import BytesIO, StringIO
 from PIL import Image
-from configuracoes.models import Empresa, FornecedorGarantia, MarcaGarantia
-from configuracoes.forms import EmpresaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm
+from configuracoes.models import ConfiguracaoSistema, Empresa, FornecedorGarantia, MarcaGarantia
+from configuracoes.forms import ConfiguracaoSistemaForm, EmpresaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm
 from django.conf import settings
 from clientes.models import Cliente
 from estoque.models import CategoriaProduto, Produto
 from configuracoes.models import RegraGarantiaMarca, TipoEquipamentoConfig
+from ordens.models import OrdemServico
+from orcamentos.models import Orcamento
 
 
 class PermissoesConfiguracoesTests(TestCase):
@@ -107,6 +111,13 @@ class PermissoesConfiguracoesTests(TestCase):
         response = self.client.get(reverse("configuracoes:painel"))
         self.assertEqual(response.status_code, 200)
 
+    def test_painel_permite_funcao_extra_configuracoes(self):
+        self.atendente.acesso_configuracoes_extra = True
+        self.atendente.save(update_fields=["acesso_configuracoes_extra"])
+        self.client.force_login(self.atendente)
+        response = self.client.get(reverse("configuracoes:painel"))
+        self.assertEqual(response.status_code, 200)
+
     def test_lista_usuarios_permitem_gerente(self):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:lista_usuarios"))
@@ -121,6 +132,33 @@ class PermissoesConfiguracoesTests(TestCase):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:adicionar_usuario"))
         self.assertEqual(response.status_code, 200)
+
+    def test_cadastro_usuario_salva_funcoes_extras(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            reverse("configuracoes:adicionar_usuario"),
+            {
+                "username": "usuario_funcoes_extras",
+                "email": "extras@teste.com",
+                "password": "Senha@123",
+                "tipo_vinculo": "FUNCIONARIO",
+                "percentual_comissao_servico": "0",
+                "percentual_comissao_peca": "0",
+                "percentual_comissao_vendas": "0",
+                "is_active": "on",
+                "is_staff": "on",
+                "tipo_usuario": "tecnico",
+                "numero_vendedor": "",
+                "acesso_caixa_financeiro_extra": "on",
+                "acesso_configuracoes_extra": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        user_model = get_user_model()
+        usuario = user_model.objects.get(username="usuario_funcoes_extras")
+        self.assertTrue(usuario.acesso_caixa_financeiro_extra)
+        self.assertTrue(usuario.acesso_configuracoes_extra)
+        self.assertFalse(usuario.acesso_estoque_extra)
 
     def test_gerente_nao_pode_criar_admin(self):
         self.client.force_login(self.gerente)
@@ -174,6 +212,13 @@ class PermissoesConfiguracoesTests(TestCase):
         self.client.force_login(self.atendente)
         response = self.client.get(reverse("configuracoes:backup_banco"))
         self.assertEqual(response.status_code, 403)
+
+    def test_caixa_financeiro_permite_funcao_extra(self):
+        self.tecnico.acesso_caixa_financeiro_extra = True
+        self.tecnico.save(update_fields=["acesso_caixa_financeiro_extra"])
+        self.client.force_login(self.tecnico)
+        response = self.client.get(reverse("caixa:contas_receber"))
+        self.assertEqual(response.status_code, 200)
 
     def test_gerente_acessa_marcas_fornecedores(self):
         self.client.force_login(self.gerente)
@@ -509,6 +554,41 @@ class EmpresaFormLogoTests(TestCase):
                     empresa.logo_pdf.close()
 
 
+class ConfiguracaoSistemaFormTests(TestCase):
+    def _base_data(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        form = ConfiguracaoSistemaForm(instance=config)
+        data = {}
+        for nome in form.fields:
+            valor = form.initial.get(nome)
+            if valor is None:
+                valor = ""
+            data[nome] = valor
+        return data
+
+    def test_form_rejeita_termos_ordem_servico_acima_do_limite(self):
+        data = self._base_data()
+        data["condicoes_orcamento"] = "Ok"
+        data["termos_ordem_servico"] = "A" * 1801
+        form = ConfiguracaoSistemaForm(
+            data=data,
+            instance=ConfiguracaoSistema.get_configuracao(),
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("termos_ordem_servico", form.errors)
+
+    def test_form_rejeita_condicoes_orcamento_acima_do_limite(self):
+        data = self._base_data()
+        data["condicoes_orcamento"] = "B" * 501
+        data["termos_ordem_servico"] = "Texto curto"
+        form = ConfiguracaoSistemaForm(
+            data=data,
+            instance=ConfiguracaoSistema.get_configuracao(),
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("condicoes_orcamento", form.errors)
+
+
 class ComandosConfiguracoesTests(TestCase):
     def test_preencher_numero_vendedor_preenche_usuarios_sem_numero(self):
         user_model = get_user_model()
@@ -658,3 +738,62 @@ class GarantiaTiposEquipamentoTests(TestCase):
             prazo_pagamento_dias=30,
         )
         self.assertEqual(regra.tipo_produto_label, "Secador Profissional")
+
+
+class PreviewDocumentoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.admin = user_model.objects.create_user(
+            username="admin_preview_pdf",
+            password="senha123",
+            tipo_usuario="adm",
+        )
+        self.client.force_login(self.admin)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Preview",
+            documento="39053344705",
+            telefone="11999998888",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Preview",
+            modelo_equipamento="Modelo Preview",
+            defeito="Teste preview",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+        self.orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem)
+
+    def test_preview_documento_repassa_preview_e_layout_para_pdf(self):
+        response = self.client.get(
+            reverse("configuracoes:preview_documento"),
+            {
+                "tipo": "orcamento",
+                "orcamento_id": str(self.orcamento.id),
+                "_preview": "1",
+                "layout_documentos_preset": "executivo",
+                "layout_documentos_cor": "pb",
+                "layout_os_exibir_etiqueta_corte": "0",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(response.get("X-Frame-Options"))
+
+        destino = urlparse(response["Location"])
+        self.assertEqual(destino.path, reverse("orcamentos:imprimir_orcamento", args=[self.orcamento.id]))
+        qs = parse_qs(destino.query)
+        self.assertEqual(qs.get("_preview"), ["1"])
+        self.assertEqual(qs.get("layout_documentos_preset"), ["executivo"])
+        self.assertEqual(qs.get("layout_documentos_cor"), ["pb"])
+        self.assertEqual(qs.get("layout_os_exibir_etiqueta_corte"), ["0"])
+
+    def test_configuracao_sistema_renderiza_preview_sem_mojibake(self):
+        response = self.client.get(reverse("configuracoes:configuracao_sistema"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("charset=utf-8", response.get("Content-Type", "").lower())
+        html = response.content.decode(response.charset or "utf-8")
+        texto = unescape(html)
+        self.assertIn("Pré-visualização dos Layouts", texto)
+        self.assertNotIn("PrÃ©-visualizaÃ§Ã£o dos Layouts", texto)

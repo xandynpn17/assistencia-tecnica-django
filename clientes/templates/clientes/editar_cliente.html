@@ -57,15 +57,21 @@
                                     {{ form.ddd }}
                                     {{ form.ddd.errors }}
                                 </div>
-                                <div class="col-md-4 form-group">
+                                <div class="col-md-3 form-group">
                                     <label for="id_telefone_numero">Telefone</label>
                                     {{ form.telefone_numero }}
                                     {{ form.telefone_numero.errors }}
                                 </div>
-                                <div class="col-md-6 form-group">
+                                <div class="col-md-4 form-group">
                                     <label for="id_email">Email</label>
                                     {{ form.email }}
                                     {{ form.email.errors }}
+                                </div>
+                                <div class="col-md-3 form-group">
+                                    <label for="id_origem_cliente">Origem do cliente</label>
+                                    {{ form.origem_cliente }}
+                                    {{ form.origem_cliente.errors }}
+                                    <small class="form-text text-muted">Ajuda a medir aquisição e canais de entrada.</small>
                                 </div>
                             </div>
 

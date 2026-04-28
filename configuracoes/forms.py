@@ -271,6 +271,11 @@ class UserForm(forms.ModelForm):
             'percentual_comissao_servico',
             'percentual_comissao_peca',
             'percentual_comissao_vendas',
+            'acesso_ordens_extra',
+            'acesso_estoque_extra',
+            'acesso_caixa_operacional_extra',
+            'acesso_caixa_financeiro_extra',
+            'acesso_configuracoes_extra',
             'data_admissao',
             'data_demissao',
             'pis_pasep',
@@ -329,6 +334,20 @@ class UserForm(forms.ModelForm):
         else:
             self.fields['password'].required = True
             self.fields['password'].help_text = "Senha obrigatoria para novo usuario."
+        for field_name in (
+            "acesso_ordens_extra",
+            "acesso_estoque_extra",
+            "acesso_caixa_operacional_extra",
+            "acesso_caixa_financeiro_extra",
+            "acesso_configuracoes_extra",
+        ):
+            self.fields[field_name].required = False
+            self.fields[field_name].widget.attrs.update({"class": "form-check-input"})
+        self.fields["acesso_ordens_extra"].label = "Ordens"
+        self.fields["acesso_estoque_extra"].label = "Estoque"
+        self.fields["acesso_caixa_operacional_extra"].label = "Caixa operacional"
+        self.fields["acesso_caixa_financeiro_extra"].label = "Caixa financeiro"
+        self.fields["acesso_configuracoes_extra"].label = "Configurações"
 
     @staticmethod
     def _somente_digitos(value):
@@ -431,6 +450,9 @@ class ConfiguracaoOrdemServicoForm(forms.ModelForm):
 
 # NOVO FORMULÁRIO
 class ConfiguracaoSistemaForm(forms.ModelForm):
+    MAX_CARACTERES_TERMOS_OS = 1800
+    MAX_CARACTERES_CONDICOES_ORCAMENTO = 500
+
     class Meta:
         model = ConfiguracaoSistema
         fields = [
@@ -464,6 +486,14 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'percentual_padrao_desempenho_servico',
             'percentual_padrao_desempenho_peca',
             'termos_ordem_servico',
+            'layout_os_impressao',
+            'layout_os_frente_espaco_assinaturas_cm',
+            'layout_os_verso_espaco_assinatura_cm',
+            'layout_os_data_fonte_pt',
+            'layout_os_digital_exibir_validacao',
+            'layout_os_exibir_etiqueta_corte',
+            'layout_documentos_preset',
+            'layout_documentos_cor',
         ]
         widgets = {
             'estado_padrao': forms.Select(attrs={'class': 'form-control'}),
@@ -478,7 +508,13 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'mensagem_orcamento_whatsapp': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'mensagem_pronto_email': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'mensagem_pronto_whatsapp': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'condicoes_orcamento': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'condicoes_orcamento': forms.Textarea(
+                attrs={
+                    'class': 'form-control',
+                    'rows': 2,
+                    'maxlength': 500,
+                }
+            ),
             'dias_bonus_retirada_1': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
             'valor_bonus_1': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
             'dias_bonus_retirada_2': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
@@ -487,7 +523,19 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'valor_bonus_3': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
             'percentual_padrao_desempenho_servico': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
             'percentual_padrao_desempenho_peca': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
-            'termos_ordem_servico': forms.Textarea(attrs={'class': 'form-control', 'rows': 8}),
+            'termos_ordem_servico': forms.Textarea(
+                attrs={
+                    'class': 'form-control',
+                    'rows': 8,
+                    'maxlength': 1800,
+                }
+            ),
+            'layout_os_impressao': forms.Select(attrs={'class': 'form-control'}),
+            'layout_os_frente_espaco_assinaturas_cm': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.05', 'min': -1, 'max': 2}),
+            'layout_os_verso_espaco_assinatura_cm': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.05', 'min': -1, 'max': 2}),
+            'layout_os_data_fonte_pt': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': 6, 'max': 10}),
+            'layout_documentos_preset': forms.Select(attrs={'class': 'form-control'}),
+            'layout_documentos_cor': forms.Select(attrs={'class': 'form-control'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -496,6 +544,35 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         for field_name in self.fields:
             if isinstance(self.fields[field_name], forms.BooleanField):
                 self.fields[field_name].widget.attrs.update({'class': 'form-check-input'})
+        self.fields["condicoes_orcamento"].help_text = (
+            f"Máximo recomendado: {self.MAX_CARACTERES_CONDICOES_ORCAMENTO} caracteres."
+        )
+        self.fields["termos_ordem_servico"].help_text = (
+            f"Máximo recomendado para não comprometer a impressão: {self.MAX_CARACTERES_TERMOS_OS} caracteres."
+        )
+        self.fields["layout_os_impressao"].help_text = "Preset base para organizar espaços na OS de impressão."
+        self.fields["layout_os_frente_espaco_assinaturas_cm"].help_text = "Ajuste fino em cm no bloco de assinatura da frente."
+        self.fields["layout_os_verso_espaco_assinatura_cm"].help_text = "Ajuste fino em cm para descer/subir assinatura abaixo dos termos."
+        self.fields["layout_os_data_fonte_pt"].help_text = "Tamanho da fonte das datas (bloco de assinatura)."
+        self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com número da OS na linha de recorte."
+        self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressão, relatório e orçamento)."
+        self.fields["layout_documentos_cor"].help_text = "Escolha se os PDFs saem em colorido ou escala de cinza (preto e branco)."
+
+    def clean_condicoes_orcamento(self):
+        valor = (self.cleaned_data.get("condicoes_orcamento") or "").strip()
+        if len(valor) > self.MAX_CARACTERES_CONDICOES_ORCAMENTO:
+            raise forms.ValidationError(
+                f"As condições do orçamento podem ter no máximo {self.MAX_CARACTERES_CONDICOES_ORCAMENTO} caracteres."
+            )
+        return valor
+
+    def clean_termos_ordem_servico(self):
+        valor = (self.cleaned_data.get("termos_ordem_servico") or "").strip()
+        if len(valor) > self.MAX_CARACTERES_TERMOS_OS:
+            raise forms.ValidationError(
+                f"Os termos da OS podem ter no máximo {self.MAX_CARACTERES_TERMOS_OS} caracteres."
+            )
+        return valor
 
 
 class FornecedorGarantiaForm(forms.ModelForm):

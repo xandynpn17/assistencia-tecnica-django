@@ -93,6 +93,7 @@ def reservas_clientes(request):
 
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
+    quick = (request.GET.get("quick") or "").strip()
     page_number = request.GET.get("page")
     reservas = (
         ReservaEstoque.objects.select_related("produto", "ponto_operacional", "ordem_servico", "ordem_servico__tecnico_responsavel")
@@ -107,6 +108,23 @@ def reservas_clientes(request):
         reservas = reservas.filter(Q(codigo_reserva__icontains=q) | Q(nome_contato__icontains=q) | Q(telefone_contato__icontains=q) | Q(produto__nome__icontains=q))
     if status:
         reservas = reservas.filter(status=status)
+    hoje = timezone.localdate()
+    resumo_qs = reservas
+    resumo = {
+        "total": resumo_qs.count(),
+        "ativas": resumo_qs.filter(status="ativa").count(),
+        "vencidas": resumo_qs.filter(status="ativa", valido_ate__lt=hoje).count(),
+        "sem_os": resumo_qs.filter(ordem_servico__isnull=True).count(),
+        "com_os": resumo_qs.filter(ordem_servico__isnull=False).count(),
+    }
+    if quick == "ativas":
+        reservas = reservas.filter(status="ativa")
+    elif quick == "vencidas":
+        reservas = reservas.filter(status="ativa", valido_ate__lt=hoje)
+    elif quick == "sem_os":
+        reservas = reservas.filter(ordem_servico__isnull=True)
+    elif quick == "com_os":
+        reservas = reservas.filter(ordem_servico__isnull=False)
     reservas = reservas.order_by("-criado_em", "-id")
     reservas_page = Paginator(reservas, 40).get_page(page_number)
     return render(
@@ -117,6 +135,8 @@ def reservas_clientes(request):
             "reservas_page": reservas_page,
             "q": q,
             "status_filtro": status,
+            "quick": quick,
+            "resumo": resumo,
             "status_choices": ReservaEstoque.STATUS_CHOICES,
             "can_manage": has_role(request.user, STOCK_MANAGE_ROLES),
             "menu_app": "estoque",
@@ -130,12 +150,12 @@ def associar_reserva_ordem(request, codigo_reserva):
     if request.method != "POST":
         return redirect("estoque:reservas_clientes")
     reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
-    ordem_id = request.POST.get("ordem_id")
-    if not ordem_id:
-        messages.error(request, "Informe o numero da ordem (ID).")
+    ordem_ref = (request.POST.get("ordem_id") or "").strip()
+    if not ordem_ref:
+        messages.error(request, "Informe o ID ou numero da ordem.")
         return redirect("estoque:reservas_clientes")
     from ordens.models import OrdemServico
-    ordem = OrdemServico.objects.filter(id=ordem_id).first()
+    ordem = OrdemServico.objects.filter(Q(numero_os__iexact=ordem_ref) | Q(id=ordem_ref if ordem_ref.isdigit() else None)).first()
     if not ordem:
         messages.error(request, "Ordem nao encontrada.")
         return redirect("estoque:reservas_clientes")

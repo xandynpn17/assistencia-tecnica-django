@@ -1,0 +1,192 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+{% include 'caixa/_subnav_caixa.html' %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3" style="gap: 12px;">
+  <div>
+    <h1 class="mb-1">Histórico do caixa de {{ caixa.data|date:"d/m/Y" }}</h1>
+    <div class="text-muted small">
+      Caixa #{{ caixa.id }} {% if caixa.aberto %}<span class="badge badge-success">Aberto</span>{% else %}<span class="badge badge-secondary">Fechado</span>{% endif %}
+    </div>
+  </div>
+  <div class="d-flex flex-wrap" style="gap: 8px;">
+    <a href="{% url 'caixa:dashboard_financeiro' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-arrow-left"></i> Voltar ao financeiro
+    </a>
+    {% if caixa.diferenca_fechamento != 0 %}
+    <a href="{% url 'caixa:auditoria_operacional' %}" class="btn btn-outline-danger btn-sm">
+      <i class="fas fa-search-dollar"></i> Ver auditoria
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-md-2"><div class="small-box bg-info"><div class="inner"><h4>R$ {{ caixa.saldo_inicial|floatformat:2 }}</h4><p>Saldo inicial</p></div></div></div>
+  <div class="col-md-2"><div class="small-box bg-success"><div class="inner"><h4>R$ {{ total_entradas|floatformat:2 }}</h4><p>Entradas</p></div></div></div>
+  <div class="col-md-2"><div class="small-box bg-danger"><div class="inner"><h4>R$ {{ total_saidas|floatformat:2 }}</h4><p>Saídas</p></div></div></div>
+  <div class="col-md-2"><div class="small-box bg-warning"><div class="inner"><h4>R$ {{ saldo_apurado|floatformat:2 }}</h4><p>Saldo apurado</p></div></div></div>
+  <div class="col-md-2"><div class="small-box bg-primary"><div class="inner"><h4>R$ {{ caixa.valor_contado_fisico|floatformat:2 }}</h4><p>Valor contado</p></div></div></div>
+  <div class="col-md-2"><div class="small-box {% if caixa.diferenca_fechamento == 0 %}bg-secondary{% elif caixa.diferenca_fechamento > 0 %}bg-warning{% else %}bg-danger{% endif %}"><div class="inner"><h4>R$ {{ caixa.diferenca_fechamento|floatformat:2 }}</h4><p>Diferença</p></div></div></div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header bg-white">
+        <strong>Conferência por forma de pagamento</strong>
+      </div>
+      <div class="card-body p-0 table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Forma</th>
+              <th class="text-right">Apurado</th>
+              <th class="text-right">Conferido</th>
+              <th class="text-right">Diferença</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in conferencia_formas %}
+            <tr>
+              <td>{{ item.nome }}</td>
+              <td class="text-right">R$ {{ item.apurado }}</td>
+              <td class="text-right">R$ {{ item.contado }}</td>
+              <td class="text-right {% if item.diferenca != '0.00' and item.diferenca != '0' %}font-weight-bold{% endif %}">R$ {{ item.diferenca }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-3">Sem conferência por forma registrada neste caixa.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if caixa.justificativa_diferenca %}
+      <div class="card-footer bg-light">
+        <strong>Justificativa da diferença:</strong>
+        <div class="small mt-1">{{ caixa.justificativa_diferenca|linebreaksbr }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header bg-white">
+        <strong>Resumo do fechamento</strong>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><th>Data</th><td class="text-right">{{ caixa.data|date:"d/m/Y" }}</td></tr>
+            <tr><th>Status</th><td class="text-right">{% if caixa.aberto %}Aberto{% else %}Fechado{% endif %}</td></tr>
+            <tr><th>Saldo inicial</th><td class="text-right">R$ {{ caixa.saldo_inicial|floatformat:2 }}</td></tr>
+            <tr><th>Total de entradas</th><td class="text-right">R$ {{ total_entradas|floatformat:2 }}</td></tr>
+            <tr><th>Total de saídas</th><td class="text-right">R$ {{ total_saidas|floatformat:2 }}</td></tr>
+            <tr><th>Saldo apurado</th><td class="text-right">R$ {{ saldo_apurado|floatformat:2 }}</td></tr>
+            <tr><th>Valor contado</th><td class="text-right">R$ {{ caixa.valor_contado_fisico|floatformat:2 }}</td></tr>
+            <tr><th>Diferença</th><td class="text-right">R$ {{ caixa.diferenca_fechamento|floatformat:2 }}</td></tr>
+            <tr><th>Pagamentos listados</th><td class="text-right">{{ pagamentos|length }}</td></tr>
+            <tr><th>Lançamentos listados</th><td class="text-right">{{ lancamentos|length }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header bg-white">
+        <strong>Pagamentos do caixa</strong>
+      </div>
+      <div class="card-body p-0 table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead>
+            <tr>
+              <th>OS</th>
+              <th>Forma</th>
+              <th class="text-right">Valor</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pagamento in pagamentos %}
+            <tr>
+              <td>{% if pagamento.ordem_servico %}OS {{ pagamento.ordem_servico.numero_os }}{% else %}Avulso{% endif %}</td>
+              <td>{{ pagamento.metodo_display }}</td>
+              <td class="text-right">R$ {{ pagamento.valor|floatformat:2 }}</td>
+              <td>{{ pagamento.data|date:"d/m/Y H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum pagamento vinculado a este caixa.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header bg-white">
+        <strong>Lançamentos do caixa</strong>
+      </div>
+      <div class="card-body p-0 table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Descrição</th>
+              <th>Categoria</th>
+              <th class="text-right">Valor</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for lancamento in lancamentos %}
+            <tr>
+              <td>{{ lancamento.descricao|default:"-" }}</td>
+              <td>{{ lancamento.categoria.nome|default:"-" }}</td>
+              <td class="text-right">R$ {{ lancamento.valor|floatformat:2 }}</td>
+              <td>{{ lancamento.data|date:"d/m/Y H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum lançamento vinculado a este caixa.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header bg-white">
+    <strong>Eventos financeiros do caixa</strong>
+  </div>
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Quando</th>
+          <th>Evento</th>
+          <th>Descrição</th>
+          <th class="text-right">Valor</th>
+          <th>Usuário</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for evento in eventos_caixa %}
+        <tr>
+          <td>{{ evento.criado_em|date:"d/m/Y H:i" }}</td>
+          <td>{{ evento.evento }}</td>
+          <td>{{ evento.descricao|default:"-" }}</td>
+          <td class="text-right">{% if evento.valor is not None %}R$ {{ evento.valor|floatformat:2 }}{% else %}-{% endif %}</td>
+          <td>{{ evento.usuario.username|default:"-" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-3">Nenhum evento financeiro relevante neste caixa.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

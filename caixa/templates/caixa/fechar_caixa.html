@@ -4,9 +4,12 @@
 <div class="container-fluid mt-3">
     {% include 'caixa/_subnav_caixa.html' %}
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3 class="mb-0">Fechar caixa</h3>
-        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar ao dashboard</a>
+    <div class="d-flex justify-content-between align-items-start flex-wrap mb-3" style="gap: 12px;">
+        <div>
+            <h3 class="mb-1">Fechar caixa</h3>
+            <div class="text-muted small">Conferir o apurado, informar o valor contado e justificar qualquer diferença antes de encerrar o dia.</div>
+        </div>
+        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar a Operação</a>
     </div>
 
     {% if not caixa %}
@@ -22,55 +25,284 @@
                         <h4>{{ caixa.data|date:"d/m/Y" }}</h4>
                         <p>Data</p>
                     </div>
+                    <div class="icon"><i class="fas fa-calendar-day"></i></div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="small-box bg-secondary">
+                    <div class="inner">
+                        <h4>R$ {{ caixa.saldo_inicial|floatformat:2 }}</h4>
+                        <p>Saldo inicial</p>
+                    </div>
+                    <div class="icon"><i class="fas fa-wallet"></i></div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="small-box bg-success">
                     <div class="inner">
                         <h4>R$ {{ total_entradas|floatformat:2 }}</h4>
-                        <p>Total de entradas</p>
+                        <p>Entradas registradas</p>
                     </div>
+                    <div class="icon"><i class="fas fa-arrow-down"></i></div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="small-box bg-danger">
                     <div class="inner">
                         <h4>R$ {{ total_saidas|floatformat:2 }}</h4>
-                        <p>Total de saídas</p>
+                        <p>Saídas registradas</p>
                     </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="small-box bg-warning">
-                    <div class="inner">
-                        <h4>R$ {{ saldo|floatformat:2 }}</h4>
-                        <p>Saldo atual</p>
-                    </div>
+                    <div class="icon"><i class="fas fa-arrow-up"></i></div>
                 </div>
             </div>
         </div>
 
-        <form method="post" class="card shadow-sm border-0">
-            {% csrf_token %}
-            <div class="card-header bg-white"><strong>Conferência de fechamento</strong></div>
-            <div class="card-body">
-                <div class="form-group">
-                    <label for="id_valor_contado_fisico"><strong>Valor contado fisicamente</strong></label>
-                    <input type="number" step="0.01" min="0" class="form-control form-control-lg" id="id_valor_contado_fisico" name="valor_contado_fisico" value="{{ valor_contado_fisico|default:saldo }}">
+        <div class="row">
+            <div class="col-lg-7">
+                <form method="post" class="card shadow-sm border-0" id="form-fechar-caixa">
+                    {% csrf_token %}
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Conferência do fechamento</strong>
+                        <small class="text-muted">Etapa 3 de 3: encerrar com conferência</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-light">
+                            Saldo esperado para fecho: <strong>R$ {{ saldo|floatformat:2 }}</strong>. Use esse valor como referência para a contagem física.
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="small text-muted mb-1 d-block">Saldo esperado</label>
+                                <div class="form-control bg-light" id="saldo-esperado" data-valor="{{ saldo }}">R$ {{ saldo|floatformat:2 }}</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="id_valor_contado_fisico"><strong>Valor contado fisicamente</strong></label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    class="form-control form-control-lg"
+                                    id="id_valor_contado_fisico"
+                                    name="valor_contado_fisico"
+                                    value="{{ valor_contado_fisico }}"
+                                    placeholder="{{ saldo|floatformat:2 }}"
+                                >
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <div class="border rounded p-3 h-100">
+                                    <div class="text-muted small mb-1">Pagamentos lançados</div>
+                                    <div class="h4 mb-0">{{ quantidade_pagamentos }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <div class="border rounded p-3 h-100">
+                                    <div class="text-muted small mb-1">Saídas lançadas</div>
+                                    <div class="h4 mb-0">{{ quantidade_saidas }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border rounded p-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
+                                <div>
+                                    <div class="text-muted small mb-1">Diferença apurada</div>
+                                    <div class="h4 mb-0 text-{{ diferenca_classe }}" id="diferenca-fechamento">R$ {{ diferenca_fechamento|floatformat:2 }}</div>
+                                </div>
+                                <span class="badge badge-{{ diferenca_classe }} px-3 py-2" id="diferenca-badge">
+                                    {% if diferenca_fechamento == 0 %}Fecho conferido{% elif diferenca_fechamento > 0 %}Sobra no caixa{% else %}Falta no caixa{% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-0">
+                            <label for="id_justificativa_diferenca"><strong>Justificativa da diferença</strong></label>
+                            <textarea class="form-control" id="id_justificativa_diferenca" name="justificativa_diferenca" rows="3">{{ justificativa_diferenca }}</textarea>
+                            <small class="text-muted" id="hint-justificativa">Obrigatória quando houver diferença no fechamento.</small>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between bg-white">
+                        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-outline-secondary">Cancelar</a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-stop"></i> Confirmar fecho
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-header bg-white"><strong>Conferência rápida</strong></div>
+                    <div class="card-body">
+                        <ol class="pl-3 mb-0">
+                            <li>Conferir pagamentos e saídas do dia.</li>
+                            <li>Contar o numerário real do caixa.</li>
+                            <li>Justificar qualquer diferença antes de fechar.</li>
+                        </ol>
+                    </div>
                 </div>
-                <div class="form-group mb-0">
-                    <label for="id_justificativa_diferenca"><strong>Justificativa da diferença</strong></label>
-                    <textarea class="form-control" id="id_justificativa_diferenca" name="justificativa_diferenca" rows="3">{{ caixa.justificativa_diferenca }}</textarea>
-                    <small class="text-muted">Obrigatória quando houver diferença no fechamento.</small>
+
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-header bg-white"><strong>Formas de pagamento no caixa</strong></div>
+                    <div class="card-body p-0 table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Forma</th>
+                                    <th class="text-right">Apurado</th>
+                                    <th class="text-right">Conferido</th>
+                                    <th class="text-right">Diferença</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in conferencia_formas %}
+                                <tr>
+                                    <td>{{ row.nome }}</td>
+                                    <td class="text-right">R$ {{ row.apurado|floatformat:2 }}</td>
+                                    <td class="text-right" style="min-width: 150px;">
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            name="{{ row.campo }}"
+                                            value="{{ row.contado|floatformat:2 }}"
+                                            class="form-control form-control-sm text-right js-conferencia-forma"
+                                            form="form-fechar-caixa"
+                                            data-apurado="{{ row.apurado }}"
+                                            data-target="#{{ row.campo }}_diferenca"
+                                        >
+                                    </td>
+                                    <td class="text-right">
+                                        <span id="{{ row.campo }}_diferenca" class="{% if row.diferenca == 0 %}text-success{% elif row.diferenca > 0 %}text-warning{% else %}text-danger{% endif %}">
+                                            R$ {{ row.diferenca|floatformat:2 }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="4" class="text-center text-muted">Sem pagamentos registrados.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white"><strong>Últimos movimentos do caixa</strong></div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Movimento</th>
+                                    <th>Descrição</th>
+                                    <th class="text-right">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if pagamentos_recentes or saidas_recentes %}
+                                    {% for pagamento in pagamentos_recentes %}
+                                    <tr>
+                                        <td><span class="badge badge-success">Entrada</span></td>
+                                        <td>{{ pagamento.ordem_servico|default:"Avulso" }}</td>
+                                        <td class="text-right">R$ {{ pagamento.valor|floatformat:2 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                    {% for saida in saidas_recentes %}
+                                    <tr>
+                                        <td><span class="badge badge-danger">Saída</span></td>
+                                        <td>{{ saida.descricao|default:"-" }}</td>
+                                        <td class="text-right">R$ {{ saida.valor|floatformat:2 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-center text-muted">Nenhum movimento registrado.</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-            <div class="card-footer d-flex justify-content-between">
-                <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-outline-secondary">Cancelar</a>
-                <button type="submit" class="btn btn-danger">
-                    <i class="fas fa-stop"></i> Fechar caixa
-                </button>
-            </div>
-        </form>
+        </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const saldoEsperadoEl = document.getElementById("saldo-esperado");
+    const valorContadoEl = document.getElementById("id_valor_contado_fisico");
+    const diferencaEl = document.getElementById("diferenca-fechamento");
+    const badgeEl = document.getElementById("diferenca-badge");
+    const hintEl = document.getElementById("hint-justificativa");
+    const conferenciaInputs = document.querySelectorAll(".js-conferencia-forma");
+
+    if (!saldoEsperadoEl || !valorContadoEl || !diferencaEl || !badgeEl) {
+        return;
+    }
+
+    function atualizarDiferenca() {
+        const saldoEsperado = parseFloat(String(saldoEsperadoEl.dataset.valor || "0").replace(",", ".")) || 0;
+        const bruto = String(valorContadoEl.value || "").trim();
+        if (!bruto) {
+            diferencaEl.textContent = "R$ 0,00";
+            diferencaEl.classList.remove("text-success", "text-warning", "text-danger");
+            diferencaEl.classList.add("text-secondary");
+            badgeEl.classList.remove("badge-success", "badge-warning", "badge-danger");
+            badgeEl.classList.add("badge-secondary");
+            badgeEl.textContent = "Aguardando contagem";
+            if (hintEl) hintEl.textContent = "Informe o valor contado fisicamente para concluir o fecho.";
+            return;
+        }
+        const valorContado = parseFloat(bruto.replace(",", ".")) || 0;
+        const diferenca = valorContado - saldoEsperado;
+
+        diferencaEl.textContent = "R$ " + diferenca.toFixed(2).replace(".", ",");
+        diferencaEl.classList.remove("text-secondary", "text-success", "text-warning", "text-danger");
+        badgeEl.classList.remove("badge-secondary", "badge-success", "badge-warning", "badge-danger");
+
+        if (Math.abs(diferenca) < 0.005) {
+            diferencaEl.classList.add("text-success");
+            badgeEl.classList.add("badge-success");
+            badgeEl.textContent = "Fecho conferido";
+            if (hintEl) hintEl.textContent = "Sem diferença: justificativa opcional.";
+        } else if (diferenca > 0) {
+            diferencaEl.classList.add("text-warning");
+            badgeEl.classList.add("badge-warning");
+            badgeEl.textContent = "Sobra no caixa";
+            if (hintEl) hintEl.textContent = "Obrigatória quando houver diferença no fechamento.";
+        } else {
+            diferencaEl.classList.add("text-danger");
+            badgeEl.classList.add("badge-danger");
+            badgeEl.textContent = "Falta no caixa";
+            if (hintEl) hintEl.textContent = "Obrigatória quando houver diferença no fechamento.";
+        }
+    }
+
+    valorContadoEl.addEventListener("input", atualizarDiferenca);
+    atualizarDiferenca();
+
+    conferenciaInputs.forEach(function (input) {
+        input.addEventListener("input", function () {
+            const apurado = parseFloat(String(input.dataset.apurado || "0").replace(",", ".")) || 0;
+            const conferido = parseFloat(String(input.value || "0").replace(",", ".")) || 0;
+            const diferenca = conferido - apurado;
+            const alvo = document.querySelector(input.dataset.target);
+            if (!alvo) return;
+            alvo.textContent = "R$ " + diferenca.toFixed(2).replace(".", ",");
+            alvo.classList.remove("text-success", "text-warning", "text-danger");
+            if (Math.abs(diferenca) < 0.005) {
+                alvo.classList.add("text-success");
+            } else if (diferenca > 0) {
+                alvo.classList.add("text-warning");
+            } else {
+                alvo.classList.add("text-danger");
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

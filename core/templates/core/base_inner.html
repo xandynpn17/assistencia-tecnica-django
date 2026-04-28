@@ -64,6 +64,14 @@
                             <p>Dashboard</p>
                         </a>
                     </li>
+                    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+                    <li class="nav-item">
+                        <a href="{% url 'core:dashboard_indicadores' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard_indicadores' %}active{% endif %} bg-secondary text-white">
+                            <i class="nav-icon fas fa-chart-line"></i>
+                            <p>Indicadores</p>
+                        </a>
+                    </li>
+                    {% endif %}
 
                     <li class="nav-item">
                         <a href="{% url 'clientes:lista_clientes' %}" class="nav-link {% if request.resolver_match.app_name == 'clientes' %}active{% endif %} bg-secondary text-white">

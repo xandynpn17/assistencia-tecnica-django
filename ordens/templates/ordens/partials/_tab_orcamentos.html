@@ -57,6 +57,8 @@
                             <th>Nome</th>
                             <th>Descrição</th>
                             <th>Valor Unit.</th>
+                            <th>Desconto (R$)</th>
+                            <th>Desconto (%)</th>
                             <th>Qtd</th>
                             <th>Total</th>
                             <th>Tipo</th>
@@ -73,6 +75,8 @@
                             <td>{{ item.nome }}</td>
                             <td>{{ item.descricao }}</td>
                             <td>R$ {{ item.valor_unitario|floatformat:2 }}</td>
+                            <td>R$ {{ item.desconto_valor|floatformat:2 }}</td>
+                            <td>{{ item.desconto_percentual|floatformat:2 }}%</td>
                             <td>{{ item.quantidade }}</td>
                             <td>{{ item.total|floatformat:2 }}</td>
                             <td>{{ item.get_tipo_item_display|default:"Serviço" }}</td>
@@ -98,7 +102,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="11" class="text-center text-muted">Nenhum item adicionado</td>
+                            <td colspan="13" class="text-center text-muted">Nenhum item adicionado</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -137,9 +141,12 @@ function validarSelecao(acao) {
     return window.AppMessages.confirmSync(`Tem certeza que deseja ${acao} os itens selecionados?`);
 }
 
-document.getElementById('checkAll').addEventListener('change', function() {
-    document.querySelectorAll('input[name="itens_selecionados"]').forEach(cb => cb.checked = this.checked);
-});
+const checkAll = document.getElementById('checkAll');
+if (checkAll) {
+    checkAll.addEventListener('change', function() {
+        document.querySelectorAll('input[name="itens_selecionados"]').forEach(cb => cb.checked = this.checked);
+    });
+}
 </script>
 
 <div class="modal fade" id="modalAdicionarItem2" tabindex="-1" role="dialog"
@@ -190,8 +197,12 @@ document.getElementById('checkAll').addEventListener('change', function() {
                         <textarea name="descricao" id="id_descricao2" rows="3" class="form-control">{{ item_form.descricao.value|default_if_none:"" }}</textarea>
                     </div>
 
+                    <div class="alert alert-light border mb-3 py-2">
+                        <strong>Desconto do item:</strong> informe por valor <strong>ou</strong> por percentual.
+                    </div>
+
                     <div class="row">
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
                             <label for="id_valor_unitario2">Valor unitário</label>
                             <div class="input-group">
                                 <div class="input-group-prepend"><span class="input-group-text">R$</span></div>
@@ -200,11 +211,23 @@ document.getElementById('checkAll').addEventListener('change', function() {
                                        value="{{ item_form.valor_unitario.value|default_if_none:'' }}">
                             </div>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
                             <label for="id_quantidade2">Quantidade</label>
                             <input type="number" name="quantidade" id="id_quantidade2" class="form-control"
                                    value="{{ item_form.quantidade.value|default_if_none:'' }}">
                         </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="id_desconto_valor2">Desconto (R$)</label>
+                            <input type="number" step="0.01" min="0" name="desconto_valor" id="id_desconto_valor2" class="form-control" value="0.00">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="id_desconto_percentual2">Desconto (%)</label>
+                            <input type="number" step="0.01" min="0" max="100" name="desconto_percentual" id="id_desconto_percentual2" class="form-control" value="0.00">
+                            <small class="form-text text-muted">Use valor ou percentual, não os dois.</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
                         <div class="col-md-4 mb-3">
                             <label for="id_tipo_item2">Tipo do Item</label>
                             <select name="tipo_item" id="id_tipo_item2" class="form-control" required>
@@ -221,7 +244,7 @@ document.getElementById('checkAll').addEventListener('change', function() {
                             </div>
                             <input type="hidden" name="origem" id="id_origem2" value="manual">
                         </div>
-                        <div class="col-md-8 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label for="id_tecnico_responsavel2">Responsável da Comissão</label>
                             <select name="tecnico_responsavel" id="id_tecnico_responsavel2" class="form-control">
                                 <option value="">-- Selecione --</option>
@@ -257,6 +280,8 @@ function editarItem(id) {
             document.querySelector('#modalAdicionarItem2 textarea[name="descricao"]').value = data.descricao || '';
             document.querySelector('#modalAdicionarItem2 input[name="valor_unitario"]').value = data.valor_unitario || '';
             document.querySelector('#modalAdicionarItem2 input[name="quantidade"]').value = data.quantidade || '';
+            document.querySelector('#modalAdicionarItem2 input[name="desconto_valor"]').value = data.desconto_valor || '0.00';
+            document.querySelector('#modalAdicionarItem2 input[name="desconto_percentual"]').value = data.desconto_percentual || '0.00';
             document.querySelector('#modalAdicionarItem2 select[name="tipo_item"]').value = data.tipo_item || '';
             document.querySelector('#modalAdicionarItem2 input[name="origem"]').value = data.origem || 'manual';
             document.querySelector('#modalAdicionarItem2 select[name="tecnico_responsavel"]').value = data.tecnico_responsavel || '';
@@ -278,6 +303,10 @@ document.addEventListener('DOMContentLoaded', function() {
         formItemOrcamento.reset();
         const tipoItem = document.getElementById('id_tipo_item2');
         if (tipoItem) tipoItem.value = '';
+        const descontoValor = document.getElementById('id_desconto_valor2');
+        const descontoPercentual = document.getElementById('id_desconto_percentual2');
+        if (descontoValor) descontoValor.value = '0.00';
+        if (descontoPercentual) descontoPercentual.value = '0.00';
         atualizarOrigemBadge('manual');
     });
 

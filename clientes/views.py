@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q, Sum
 from django.http import JsonResponse
 import logging
+from decimal import Decimal
 from ordens.models import OrdemServico, LinhaTrabalho
 from caixa.models import Pagamento
 from configuracoes.permissions import has_role, role_required, STAFF_ROLES
@@ -93,7 +94,9 @@ def detalhes_cliente(request, pk):
     cliente = get_object_or_404(Cliente, pk=pk)
 
     ordens = list(
-        OrdemServico.objects.filter(cliente=cliente).order_by("-data_abertura")
+        OrdemServico.objects.filter(cliente=cliente)
+        .prefetch_related("servicos_pecas")
+        .order_by("-data_abertura")
     )
     ordens_ativas_lista = [ordem for ordem in ordens if not ordem.fechada]
     ordens_concluidas_lista = [ordem for ordem in ordens if ordem.fechada]
@@ -106,12 +109,9 @@ def detalhes_cliente(request, pk):
     total_ordens = len(ordens)
     ordens_ativas = len(ordens_ativas_lista)
     ordens_concluidas = len(ordens_concluidas_lista)
-    total_gasto = (
-        Pagamento.objects.filter(ordem_servico__cliente=cliente)
-        .aggregate(total=Sum("valor"))
-        .get("total")
-        or 0
-    )
+    pagamentos_cliente = Pagamento.objects.filter(ordem_servico__cliente=cliente)
+    total_gasto = pagamentos_cliente.aggregate(total=Sum("valor")).get("total") or Decimal("0.00")
+    ultimo_pagamento = pagamentos_cliente.order_by("-data").first()
 
     totais_por_ordem = {
         row["ordem_servico_id"]: row["total"] or 0
@@ -121,8 +121,22 @@ def detalhes_cliente(request, pk):
             .annotate(total=Sum("valor"))
         )
     }
+    total_em_aberto = Decimal("0.00")
+    total_os = Decimal("0.00")
     for ordem in ordens:
         ordem.total_pago = totais_por_ordem.get(ordem.id, 0)
+        ordem.total_os = sum((item.total() for item in ordem.servicos_pecas.all()), Decimal("0.00"))
+        ordem.saldo_aberto = max(Decimal("0.00"), ordem.total_os - Decimal(ordem.total_pago or 0))
+        total_em_aberto += ordem.saldo_aberto
+        total_os += ordem.total_os
+
+    ordens_com_pagamento = [ordem for ordem in ordens if Decimal(ordem.total_pago or 0) > 0]
+    ticket_medio = (
+        (total_gasto / len(ordens_com_pagamento)).quantize(Decimal("0.01"))
+        if ordens_com_pagamento
+        else Decimal("0.00")
+    )
+    ultima_ordem = ordens[0] if ordens else None
 
     tempos_segundos = []
     for ordem in ordens_concluidas_lista:
@@ -175,7 +189,12 @@ def detalhes_cliente(request, pk):
             "ordens_ativas": ordens_ativas,
             "ordens_concluidas": ordens_concluidas,
             "total_gasto": total_gasto,
+            "total_em_aberto": total_em_aberto,
+            "ticket_medio": ticket_medio,
+            "total_os_cliente": total_os,
             "tempo_medio_retirada": tempo_medio_retirada,
+            "ultimo_pagamento": ultimo_pagamento,
+            "ultima_ordem": ultima_ordem,
         },
     )
 

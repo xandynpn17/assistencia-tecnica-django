@@ -1,3 +1,5 @@
+"""Arquivo legado arquivado. O fluxo ativo de caixa usa `caixa.views` e `caixa.view_modules`."""
+
 from decimal import Decimal
 from calendar import monthrange
 from datetime import date, timedelta
@@ -166,52 +168,9 @@ def _exportar_csv(filename, cabecalhos, linhas):
 
 
 def _exportar_pdf_tabela(filename, titulo, cabecalhos, linhas):
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.pdfgen import canvas
+    from .view_modules.helpers import _exportar_pdf_tabela as _exportar_pdf_tabela_modular
 
-    response = HttpResponse(content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-
-    pagina = landscape(A4)
-    largura, altura = pagina
-    margem_x = 24
-    topo = altura - 28
-    linha_altura = 14
-    col_largura = max(70, int((largura - (margem_x * 2)) / max(1, len(cabecalhos))))
-
-    pdf = canvas.Canvas(response, pagesize=pagina)
-    y = topo
-    pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawString(margem_x, y, titulo[:110])
-    y -= 18
-
-    def _nova_pagina():
-        nonlocal y
-        pdf.showPage()
-        pdf.setFont("Helvetica-Bold", 11)
-        pdf.drawString(margem_x, topo, titulo[:110])
-        y = topo - 18
-
-    pdf.setFont("Helvetica-Bold", 8)
-    for idx, cabecalho in enumerate(cabecalhos):
-        pdf.drawString(margem_x + idx * col_largura, y, str(cabecalho)[:34])
-    y -= linha_altura
-    pdf.setFont("Helvetica", 8)
-
-    for linha in linhas:
-        if y < 28:
-            _nova_pagina()
-            pdf.setFont("Helvetica-Bold", 8)
-            for idx, cabecalho in enumerate(cabecalhos):
-                pdf.drawString(margem_x + idx * col_largura, y, str(cabecalho)[:34])
-            y -= linha_altura
-            pdf.setFont("Helvetica", 8)
-        for idx, coluna in enumerate(linha):
-            pdf.drawString(margem_x + idx * col_largura, y, str(coluna or "")[:34])
-        y -= linha_altura
-
-    pdf.save()
-    return response
+    return _exportar_pdf_tabela_modular(filename, titulo, cabecalhos, linhas)
 
 
 def _calcular_comparativo_periodo(valor_atual, valor_anterior):

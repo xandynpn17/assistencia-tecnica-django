@@ -4,72 +4,267 @@
 <div class="container-fluid mt-3">
     {% include 'caixa/_subnav_caixa.html' %}
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3 class="mb-0">Abrir caixa</h3>
-        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar ao dashboard</a>
+    <div class="d-flex justify-content-between align-items-start flex-wrap mb-3" style="gap: 12px;">
+        <div>
+            <h3 class="mb-1">Abrir caixa</h3>
+            <div class="text-muted small">Inicie o caixa do dia com saldo inicial conferido e pronto para pagamentos e saídas.</div>
+        </div>
+        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar a Operação</a>
     </div>
 
     {% if mensagem %}
-        <div class="alert {% if pode_abrir %}alert-info{% else %}alert-warning{% endif %}">
+        <div class="alert {% if pode_abrir %}alert-info{% else %}alert-warning{% endif %} py-2">
             {{ mensagem }}
         </div>
     {% endif %}
 
-    {% if not pode_abrir %}
-        <div class="row mb-3">
-            <div class="col-md-4">
-                <div class="small-box {% if caixa.aberto %}bg-success{% else %}bg-secondary{% endif %}">
-                    <div class="inner">
-                        <h4>{% if caixa.aberto %}Aberto{% else %}Fechado{% endif %}</h4>
-                        <p>Status do caixa de hoje</p>
-                    </div>
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="small-box {% if caixa and caixa.aberto %}bg-success{% else %}bg-secondary{% endif %}">
+                <div class="inner">
+                    <h4>{% if caixa and caixa.aberto %}Aberto{% elif caixa_hoje %}Registrado{% else %}Disponível{% endif %}</h4>
+                    <p>Status do caixa de hoje</p>
                 </div>
-            </div>
-            <div class="col-md-4">
-                <div class="small-box bg-info">
-                    <div class="inner">
-                        <h4>{{ caixa.data|date:"d/m/Y" }}</h4>
-                        <p>Data do caixa</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="small-box bg-warning">
-                    <div class="inner">
-                        <h4>R$ {{ caixa.saldo_inicial|floatformat:2 }}</h4>
-                        <p>Saldo inicial</p>
-                    </div>
-                </div>
+                <div class="icon"><i class="fas fa-cash-register"></i></div>
             </div>
         </div>
-        <div class="card">
-            <div class="card-body">
-                <p class="mb-0">A regra atual permite apenas um caixa por dia.</p>
+        <div class="col-md-3">
+            <div class="small-box bg-info">
+                <div class="inner">
+                    <h4>{% now "d/m/Y" %}</h4>
+                    <p>Data operacional</p>
+                </div>
+                <div class="icon"><i class="fas fa-calendar-day"></i></div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="small-box bg-warning">
+                <div class="inner">
+                    <h4>R$ {{ saldo_sugerido_abertura|floatformat:2 }}</h4>
+                    <p>Sugestão de saldo inicial</p>
+                </div>
+                <div class="icon"><i class="fas fa-lightbulb"></i></div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="small-box bg-dark">
+                <div class="inner">
+                    <h4>{% if ultimo_caixa %}{{ ultimo_caixa.data|date:"d/m" }}{% else %}-{% endif %}</h4>
+                    <p>Último caixa fechado</p>
+                </div>
+                <div class="icon"><i class="fas fa-history"></i></div>
+            </div>
+        </div>
+    </div>
+
+    {% if not pode_abrir %}
+        <div class="row">
+            <div class="col-lg-7">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Caixa do dia</strong>
+                        <span class="badge {% if caixa and caixa.aberto %}badge-success{% else %}badge-secondary{% endif %}">
+                            {% if caixa and caixa.aberto %}Em operação{% else %}Sem nova abertura{% endif %}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <div class="border rounded p-3 h-100">
+                                    <div class="text-muted small mb-1">Data</div>
+                                    <div class="font-weight-bold">{{ caixa.data|date:"d/m/Y" }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="border rounded p-3 h-100">
+                                    <div class="text-muted small mb-1">Saldo inicial</div>
+                                    <div class="font-weight-bold">R$ {{ caixa.saldo_inicial|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="border rounded p-3 h-100">
+                                    <div class="text-muted small mb-1">Situação</div>
+                                    <div class="font-weight-bold">{% if caixa.aberto %}Caixa aberto{% else %}Caixa já encerrado{% endif %}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="alert alert-light mb-0">
+                            A regra atual mantém apenas um caixa por dia. Para continuar a operação, siga para a próxima etapa abaixo.
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white d-flex flex-wrap" style="gap: 8px;">
+                        {% if caixa.aberto %}
+                            <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary">Ir para pagamentos</a>
+                            <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-outline-warning">Registrar saída</a>
+                            <a href="{% url 'caixa:fechar_caixa' %}" class="btn btn-outline-danger">Fechar caixa</a>
+                        {% else %}
+                            <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-primary">Voltar para Operação</a>
+                            <a href="{% url 'caixa:dashboard_financeiro' %}" class="btn btn-outline-dark">Ver Financeiro</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-white"><strong>Último fechamento</strong></div>
+                    <div class="card-body">
+                        {% if ultimo_caixa %}
+                            <div class="mb-3">
+                                <div class="text-muted small">Resumo do último caixa encerrado</div>
+                                <div class="font-weight-bold">{{ ultimo_caixa.data|date:"d/m/Y" }}</div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <div class="border rounded p-3 h-100">
+                                        <div class="text-muted small mb-1">Apurado</div>
+                                        <div class="font-weight-bold">R$ {{ ultimo_caixa.saldo_final|floatformat:2 }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <div class="border rounded p-3 h-100">
+                                        <div class="text-muted small mb-1">Contado</div>
+                                        <div class="font-weight-bold">R$ {{ ultimo_caixa.valor_contado_fisico|floatformat:2 }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="border rounded p-3 h-100">
+                                        <div class="text-muted small mb-1">Diferença</div>
+                                        <div class="font-weight-bold">R$ {{ ultimo_caixa.diferenca_fechamento|floatformat:2 }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="border rounded p-3 h-100">
+                                        <div class="text-muted small mb-1">Movimento</div>
+                                        <div class="font-weight-bold">R$ {{ resumo_ultimo_caixa.saldo|floatformat:2 }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-light mb-0">Ainda não existe um fechamento anterior para usar como referência.</div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
     {% else %}
         <div class="row">
-            <div class="col-lg-6">
+            <div class="col-lg-7">
                 <form method="post" class="card shadow-sm border-0">
                     {% csrf_token %}
-                    <div class="card-header bg-white"><strong>Abertura do caixa</strong></div>
-                    <div class="card-body">
-                        <div class="form-group mb-2">
-                            <label for="saldo_inicial"><strong>Saldo inicial (R$)</strong></label>
-                            <input type="number" step="0.01" min="0" name="saldo_inicial" id="saldo_inicial"
-                                   class="form-control form-control-lg" placeholder="0,00" required autofocus>
-                        </div>
-                        <small class="text-muted">A regra atual permite apenas um caixa por dia.</small>
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Abertura do caixa</strong>
+                        <small class="text-muted">Etapa 1 de 3: abrir, operar e fechar</small>
                     </div>
-                    <div class="card-footer d-flex justify-content-between">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="small text-muted mb-1 d-block">Data do caixa</label>
+                                <div class="form-control bg-light">{% now "d/m/Y" %}</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="small text-muted mb-1 d-block">Sugestão de abertura</label>
+                                <div class="input-group">
+                                    <div class="form-control bg-light">R$ {{ saldo_sugerido_abertura|floatformat:2 }}</div>
+                                    <div class="input-group-append">
+                                        <button type="button" class="btn btn-outline-secondary" id="btn-usar-sugestao">Usar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="saldo_inicial"><strong>Saldo inicial (R$)</strong></label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                name="saldo_inicial"
+                                id="saldo_inicial"
+                                class="form-control form-control-lg"
+                                placeholder="0,00"
+                                value="{{ saldo_inicial_digitado }}"
+                                required
+                                autofocus
+                            >
+                            <small class="text-muted">Informe apenas o valor realmente separado para iniciar o caixa.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="d-block mb-2"><strong>Valores rápidos</strong></label>
+                            <div class="btn-group btn-group-sm flex-wrap" role="group">
+                                <button type="button" class="btn btn-outline-secondary js-saldo-rapido" data-value="50.00">50,00</button>
+                                <button type="button" class="btn btn-outline-secondary js-saldo-rapido" data-value="100.00">100,00</button>
+                                <button type="button" class="btn btn-outline-secondary js-saldo-rapido" data-value="200.00">200,00</button>
+                                <button type="button" class="btn btn-outline-secondary js-saldo-rapido" data-value="300.00">300,00</button>
+                                <button type="button" class="btn btn-outline-secondary js-saldo-rapido" data-value="500.00">500,00</button>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-light mb-0">
+                            Depois de abrir, o próximo passo é registrar pagamentos e saídas do dia. O fecho só deve acontecer no encerramento do expediente.
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between bg-white">
                         <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-outline-secondary">Cancelar</a>
                         <button type="submit" class="btn btn-success">
-                            <i class="fas fa-play"></i> Abrir caixa
+                            <i class="fas fa-play"></i> Confirmar abertura
                         </button>
                     </div>
                 </form>
             </div>
+
+            <div class="col-lg-5">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-white"><strong>Checklist da abertura</strong></div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="text-muted small mb-1">Fluxo recomendado</div>
+                            <ol class="pl-3 mb-0">
+                                <li>Conferir o numerário inicial.</li>
+                                <li>Registrar o saldo real de abertura.</li>
+                                <li>Seguir para pagamentos e saídas do dia.</li>
+                            </ol>
+                        </div>
+                        {% if ultimo_caixa %}
+                            <div class="border rounded p-3">
+                                <div class="text-muted small mb-1">Último fechamento</div>
+                                <div class="font-weight-bold mb-2">{{ ultimo_caixa.data|date:"d/m/Y" }}</div>
+                                <div class="small">Apurado: <strong>R$ {{ ultimo_caixa.saldo_final|floatformat:2 }}</strong></div>
+                                <div class="small">Contado: <strong>R$ {{ ultimo_caixa.valor_contado_fisico|floatformat:2 }}</strong></div>
+                                <div class="small">Diferença: <strong>R$ {{ ultimo_caixa.diferenca_fechamento|floatformat:2 }}</strong></div>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-light mb-0">Sem histórico anterior. Esta abertura servirá como base do primeiro fecho.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
         </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const saldoInput = document.getElementById("saldo_inicial");
+    const btnSugestao = document.getElementById("btn-usar-sugestao");
+    const saldoSugerido = "{{ saldo_sugerido_abertura|floatformat:2 }}".replace(",", ".");
+
+    if (btnSugestao && saldoInput) {
+        btnSugestao.addEventListener("click", function () {
+            saldoInput.value = saldoSugerido === "0.00" ? "" : saldoSugerido;
+            saldoInput.focus();
+        });
+    }
+
+    document.querySelectorAll(".js-saldo-rapido").forEach(function (botao) {
+        botao.addEventListener("click", function () {
+            if (!saldoInput) return;
+            saldoInput.value = botao.getAttribute("data-value");
+            saldoInput.focus();
+        });
+    });
+});
+</script>
 {% endblock %}

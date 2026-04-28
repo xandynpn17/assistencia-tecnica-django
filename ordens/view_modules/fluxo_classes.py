@@ -1,4 +1,6 @@
 from . import fluxo_support as _support
+import uuid
+from datetime import timedelta
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
@@ -9,6 +11,153 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
     form_class = OrdemServicoForm
     template_name = "ordens/ordem_servico_form.html"
     success_url = reverse_lazy("ordens:lista_ordens")
+    SESSION_NONCE_KEY = "ordens_create_nonce_map"
+    DUPLICATE_WINDOW_MINUTES = 3
+
+    def _nonce_map(self):
+        return self.request.session.get(self.SESSION_NONCE_KEY, {})
+
+    def _get_or_make_create_nonce(self):
+        posted_nonce = (self.request.POST.get("create_nonce") or "").strip()
+        if posted_nonce:
+            return posted_nonce
+        return uuid.uuid4().hex
+
+    def _buscar_ordem_por_nonce(self, nonce):
+        if not nonce:
+            return None
+        try:
+            ordem_id = int(self._nonce_map().get(nonce) or 0)
+        except (TypeError, ValueError):
+            return None
+        if not ordem_id:
+            return None
+        return OrdemServico.objects.filter(id=ordem_id).first()
+
+    def _registrar_nonce_usado(self, nonce, ordem_id):
+        if not nonce:
+            return
+        nonce_map = self._nonce_map()
+        nonce_map[nonce] = int(ordem_id)
+        # Limite simples para evitar crescimento indefinido em sessao.
+        while len(nonce_map) > 80:
+            nonce_map.pop(next(iter(nonce_map)))
+        self.request.session[self.SESSION_NONCE_KEY] = nonce_map
+        self.request.session.modified = True
+
+    def _buscar_ordem_duplicada_recente(self, cleaned_data):
+        cliente_id = self.kwargs.get("cliente_id")
+        if not cliente_id:
+            return None
+
+        def _txt(valor):
+            return (valor or "").strip()
+
+        numero_serie = _txt(cleaned_data.get("numero_serie_equipamento"))
+        if not numero_serie:
+            return None
+
+        filtros = {
+            "cliente_id": cliente_id,
+            "fechada": False,
+            "data_abertura__gte": timezone.now() - timedelta(minutes=self.DUPLICATE_WINDOW_MINUTES),
+            "numero_serie_equipamento__iexact": numero_serie,
+        }
+        return OrdemServico.objects.filter(**filtros).order_by("-id").first()
+
+    def post(self, request, *args, **kwargs):
+        self.object = None
+        create_nonce = (request.POST.get("create_nonce") or "").strip()
+
+        if request.POST.get("confirmar_criacao") == "1" and create_nonce:
+            ordem_existente = self._buscar_ordem_por_nonce(create_nonce)
+            if ordem_existente:
+                messages.info(
+                    request,
+                    f"Esta OS ja foi criada anteriormente (OS {ordem_existente.numero_os}).",
+                )
+                return redirect("ordens:resumo_ordem", pk=ordem_existente.pk)
+
+        if request.POST.get("reeditar") == "1":
+            form = self.get_form()
+            return self.render_to_response(self.get_context_data(form=form))
+
+        form = self.get_form()
+        if not form.is_valid():
+            return self.form_invalid(form)
+
+        if request.POST.get("confirmar_criacao") != "1":
+            return self._render_revisao_criacao(form)
+
+        ordem_duplicada = self._buscar_ordem_duplicada_recente(form.cleaned_data)
+        if ordem_duplicada:
+            self._registrar_nonce_usado(create_nonce, ordem_duplicada.pk)
+            messages.warning(
+                request,
+                f"Ja existe uma OS identica criada recentemente ({ordem_duplicada.numero_os}).",
+            )
+            return redirect("ordens:resumo_ordem", pk=ordem_duplicada.pk)
+
+        return self.form_valid(form)
+
+    def _render_revisao_criacao(self, form):
+        context = self.get_context_data(form=form)
+        context["revisao_criacao"] = True
+        context["revisao_resumo"] = self._montar_resumo_revisao(form.cleaned_data, form)
+        context["revisao_payload"] = self._montar_payload_revisao(self.request.POST, form)
+        return self.render_to_response(context)
+
+    @staticmethod
+    def _valor_choice(form, field_name, value):
+        choices = dict(form.fields[field_name].choices)
+        return choices.get(value, value)
+
+    def _cliente_selecionado(self):
+        cliente_id = self.kwargs.get("cliente_id")
+        if not cliente_id:
+            return None
+        return Cliente.objects.filter(id=cliente_id).first()
+
+    def _montar_resumo_revisao(self, dados, form):
+        tipo_equipamento = self._valor_choice(form, "tipo_equipamento", dados.get("tipo_equipamento"))
+        tipo_reparo = self._valor_choice(form, "tipo_reparo", dados.get("tipo_reparo"))
+        data_compra = dados.get("data_compra")
+        data_compra_txt = data_compra.strftime("%d/%m/%Y") if data_compra else "-"
+        cliente = self._cliente_selecionado()
+        return {
+            "cliente": {
+                "nome": getattr(cliente, "nome", "-") or "-",
+                "documento": getattr(cliente, "documento", "-") or "-",
+                "telefone": getattr(cliente, "telefone", "-") or "-",
+            },
+            "equipamento": {
+                "tipo": tipo_equipamento or "-",
+                "marca": (dados.get("marca_equipamento") or "").strip() or "-",
+                "modelo": (dados.get("modelo_equipamento") or "").strip() or "-",
+                "serie": (dados.get("numero_serie_equipamento") or "").strip() or "-",
+                "peritagem": (dados.get("peritagem") or "").strip() or "-",
+            },
+            "atendimento": {
+                "tipo_reparo": tipo_reparo or "-",
+                "data_compra": data_compra_txt,
+                "nota_fiscal": (dados.get("numero_nota_fiscal") or "").strip() or "-",
+                "referencia_parceiro": (dados.get("referencia_parceiro") or "").strip() or "-",
+            },
+            "tecnico": {
+                "defeito": (dados.get("defeito") or "").strip() or "-",
+                "acessorios": (dados.get("acessorios") or "").strip() or "-",
+                "notas_internas": (dados.get("notas_internas") or "").strip() or "-",
+            },
+        }
+
+    @staticmethod
+    def _montar_payload_revisao(post_data, form):
+        payload = {}
+        for campo in form.fields.keys():
+            payload[campo] = post_data.get(campo, "")
+        payload["wizard_step"] = post_data.get("wizard_step", "2")
+        payload["create_nonce"] = post_data.get("create_nonce", "")
+        return payload
 
     def form_valid(self, form):
         cliente_id = self.kwargs.get("cliente_id")
@@ -20,6 +169,10 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
         form.instance.status = "diagnosticar"
 
         super().form_valid(form)
+        self._registrar_nonce_usado(
+            (self.request.POST.get("create_nonce") or "").strip(),
+            self.object.pk,
+        )
 
         LinhaTrabalho.objects.create(
             ordem=self.object,
@@ -103,6 +256,7 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
         context["menu_sub"] = "nova_ordem_cliente"
         context["criar_orcamento_form"] = OrcamentoForm()
         context["tecnicos"] = User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username")
+        context["create_nonce"] = self._get_or_make_create_nonce()
         context["marcas_info_json"] = json.dumps(
             {
                 str(m.id): {
@@ -164,9 +318,73 @@ class OrdemServicoResumoView(RoleRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        ordem = self.object
+        config = ConfiguracaoSistema.get_configuracao()
+        usar_confirmacao_digital = bool(config.usar_confirmacao_assinatura_digital)
+
+        notificacao_confirmacao = (
+            ordem.notificacoes.filter(tipo="manual", canal="whatsapp").order_by("-id").first()
+        )
+        if ordem.confirmado:
+            confirmacao_status = "Confirmada"
+            confirmacao_status_class = "success"
+            confirmacao_evento_em = ordem.data_confirmacao
+        elif notificacao_confirmacao and notificacao_confirmacao.status == "enviada":
+            confirmacao_status = "Link enviado"
+            confirmacao_status_class = "info"
+            confirmacao_evento_em = notificacao_confirmacao.enviado_em or notificacao_confirmacao.criado_em
+        elif notificacao_confirmacao and notificacao_confirmacao.status == "erro":
+            confirmacao_status = "Falha no envio"
+            confirmacao_status_class = "danger"
+            confirmacao_evento_em = notificacao_confirmacao.criado_em
+        else:
+            confirmacao_status = "Pendente"
+            confirmacao_status_class = "warning"
+            confirmacao_evento_em = None
+
+        dias_aberta = 0
+        if ordem.data_abertura:
+            dias_aberta = max((timezone.localdate() - ordem.data_abertura.date()).days, 0)
+
+        resumo_alertas = []
+        if not (ordem.cliente.telefone or "").strip():
+            resumo_alertas.append("Cliente sem telefone. O envio digital depende desse dado.")
+        if not ordem.tecnico_responsavel_valido:
+            resumo_alertas.append("Tecnico responsavel ainda nao definido.")
+        if not (ordem.numero_serie_equipamento or "").strip():
+            resumo_alertas.append("Numero de serie nao informado.")
+
+        proxima_acao_por_status = {
+            "diagnosticar": "Registrar diagnostico inicial e atualizar a linha de trabalho.",
+            "em_andamento": "Seguir execucao tecnica e registrar evolucao na OS.",
+            "pendente_tecnico": "Aguardar retorno tecnico e manter cliente informado.",
+            "pendente_cliente": "Cobrar retorno/aprovacao do cliente.",
+            "pendente_marca": "Acompanhar posicao da marca/parceiro.",
+            "pendente_pecas": "Acompanhar chegada de pecas para continuar o reparo.",
+            "pendente_orcamento": "Concluir e enviar orcamento ao cliente.",
+            "autorizado": "Executar servico autorizado e registrar pecas/servicos.",
+            "pronto_contactado": "Organizar retirada e fechamento financeiro.",
+            "recusado": "Registrar devolucao e finalizar tratativas.",
+            "devolucao": "Concluir entrega sem reparo e fechar quando aplicavel.",
+            "concluida": "Ordem finalizada.",
+        }
+        proxima_acao = proxima_acao_por_status.get(ordem.status, "Validar dados da OS e seguir fluxo operacional.")
+
+        link_confirmacao_publico = self.request.build_absolute_uri(
+            reverse("confirmar_os_publico", kwargs={"token": ordem.token_confirmacao})
+        )
+
         context["menu_app"] = "ordens"
         context["menu_sub"] = "lista_ordens"
         context["tecnicos"] = User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username")
+        context["usar_confirmacao_digital"] = usar_confirmacao_digital
+        context["confirmacao_status"] = confirmacao_status
+        context["confirmacao_status_class"] = confirmacao_status_class
+        context["confirmacao_evento_em"] = confirmacao_evento_em
+        context["dias_aberta"] = dias_aberta
+        context["resumo_alertas"] = resumo_alertas
+        context["proxima_acao"] = proxima_acao
+        context["link_confirmacao_publico"] = link_confirmacao_publico
         return context
 
 

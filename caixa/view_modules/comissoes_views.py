@@ -1,4 +1,5 @@
 from django.db.models import Prefetch
+from urllib.parse import urlencode
 
 from . import comissoes_support as _support
 
@@ -10,6 +11,11 @@ def comissoes_pendencias(request):
     from orcamentos.models import ItemOrcamento
     from ordens.models import LinhaTrabalho, ServicoPeca
 
+    session_key = "caixa_comissoes_pendencias_filtros"
+    if request.GET.get("restaurar") == "1":
+        filtros_salvos = request.session.get(session_key) or {}
+        if filtros_salvos:
+            return redirect(f"{reverse('caixa:comissoes_pendencias')}?{urlencode(filtros_salvos)}")
     hoje = timezone.localdate()
     competencia_ref = _normalizar_competencia(request.GET.get("competencia_mes"), request.GET.get("competencia_ano"), referencia=hoje)
     data_inicio, data_fim = _periodo_competencia(competencia_ref)
@@ -52,6 +58,25 @@ def comissoes_pendencias(request):
         status="PAGA",
         lote_pagamento__isnull=True,
     )
+    comissoes_competencia_qs = Comissao.objects.filter(competencia=competencia_ref)
+    resumo_status_map = {
+        "GERADA": {"label": "Geradas", "quantidade": 0, "total": Decimal("0.00")},
+        "LIBERADA": {"label": "Liberadas", "quantidade": 0, "total": Decimal("0.00")},
+        "PAGA": {"label": "Pagas", "quantidade": 0, "total": Decimal("0.00")},
+        "CANCELADA": {"label": "Canceladas", "quantidade": 0, "total": Decimal("0.00")},
+    }
+    for row in comissoes_competencia_qs.values("status").annotate(quantidade=Count("id"), total=Sum("valor_comissao")):
+        status = row.get("status") or ""
+        if status in resumo_status_map:
+            resumo_status_map[status]["quantidade"] = row.get("quantidade") or 0
+            resumo_status_map[status]["total"] = row.get("total") or Decimal("0.00")
+    resumo_competencia = [
+        resumo_status_map["GERADA"],
+        resumo_status_map["LIBERADA"],
+        resumo_status_map["PAGA"],
+        resumo_status_map["CANCELADA"],
+    ]
+    total_competencia = comissoes_competencia_qs.exclude(status="CANCELADA").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
     duplicidades_qs = (
         Comissao.objects.select_related("tecnico", "ordem_servico")
         .filter(competencia=competencia_ref, tipo__in=["SERVICO", "PECA", "BONUS_PRODUTO", "COMISSAO_VENDAS"])
@@ -70,6 +95,11 @@ def comissoes_pendencias(request):
         .order_by("-quantidade", "tecnico__username", "ordem_servico__numero_os")
     )
 
+    request.session[session_key] = {
+        "competencia_mes": f"{competencia_ref.month:02d}",
+        "competencia_ano": f"{competencia_ref.year}",
+        "criterio": criterio_filtro,
+    }
     return render(
         request,
         "caixa/comissoes_pendencias.html",
@@ -91,6 +121,9 @@ def comissoes_pendencias(request):
             "total_comissoes_sem_fonte": comissoes_sem_fonte_qs.count(),
             "total_comissoes_pagas_sem_lote": comissoes_pagas_sem_lote_qs.count(),
             "total_duplicidades_assinatura": duplicidades_qs.count(),
+            "resumo_competencia": resumo_competencia,
+            "total_competencia": total_competencia,
+            "filtros_salvos_existem": True,
             "menu_app": "caixa",
             "menu_sub": "comissoes_pendencias",
         },
@@ -356,6 +389,12 @@ def comissoes_tecnicos(request):
         .annotate(quantidade=Count("id"), total=Sum("valor_comissao"))
         .order_by("-total", "tecnico__username")[:12]
     )
+    resumo_mensal_tecnicos = (
+        comissoes_qs.exclude(status="CANCELADA")
+        .values("competencia", "tecnico__username")
+        .annotate(quantidade=Count("id"), total=Sum("valor_comissao"))
+        .order_by("-competencia", "-total", "tecnico__username")[:24]
+    )
 
     if exportar in {"csv", "pdf"}:
         cabecalhos = ["Data", "OS", "Tecnico", "Tipo", "Base", "%", "Comissao", "Status"]
@@ -405,6 +444,7 @@ def comissoes_tecnicos(request):
             "resumo_tipos": resumo_tipos,
             "resumo_status": resumo_status,
             "resumo_tecnicos": resumo_tecnicos,
+            "resumo_mensal_tecnicos": resumo_mensal_tecnicos,
             "querystring_paginacao": querystring_paginacao,
             "usa_motor_legado": False,
             "menu_app": "caixa",
@@ -452,6 +492,11 @@ def premios_meta(request):
 
 @role_required(PERFORMANCE_VIEW_ROLES)
 def meu_desempenho(request):
+    session_key = "caixa_meu_desempenho_filtros"
+    if request.GET.get("restaurar") == "1":
+        filtros_salvos = request.session.get(session_key) or {}
+        if filtros_salvos:
+            return redirect(f"{reverse('caixa:meu_desempenho')}?{urlencode(filtros_salvos)}")
     from caixa.services.comissoes import _fontes_comissionaveis
 
     tipo_usuario = getattr(request.user, "tipo_usuario", "")
@@ -1046,6 +1091,24 @@ def meu_desempenho(request):
             }
         )
 
+    filtros_para_salvar = {
+        "tecnico": tecnico_filtro,
+        "status": status_filtro,
+        "criterio": criterio_filtro,
+        "data_inicio": data_inicio_raw,
+        "data_fim": data_fim_raw,
+        "percentual_servicos": f"{percentual_servicos:.2f}",
+        "percentual_pecas": f"{percentual_pecas:.2f}",
+        "percentual_vendas": f"{percentual_vendas:.2f}",
+        "aplicar_servicos": "1" if aplicar_servicos else "",
+        "aplicar_pecas": "1" if aplicar_pecas else "",
+        "aplicar_vendas": "1" if aplicar_vendas else "",
+        "somente_fechadas": "1" if somente_fechadas else "",
+    }
+    filtros_para_salvar = {k: v for k, v in filtros_para_salvar.items() if v not in {"", None}}
+    if filtros_para_salvar:
+        request.session[session_key] = filtros_para_salvar
+
     return render(
         request,
         "caixa/meu_desempenho.html",
@@ -1092,6 +1155,7 @@ def meu_desempenho(request):
             "total_comissao_itens": total_comissao_relatorio,
             "folhas_colaboradores": folhas_colaboradores,
             "pode_filtrar_tecnicos": pode_filtrar_tecnicos,
+            "filtros_salvos_existem": bool(request.session.get(session_key)),
             "menu_app": "caixa",
             "menu_sub": "meu_desempenho",
         },

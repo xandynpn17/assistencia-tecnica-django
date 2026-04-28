@@ -38,6 +38,7 @@ class ClienteForm(forms.ModelForm):
         model = Cliente
         fields = [
             'nome', 'documento',
+            'origem_cliente',
             'email', 'codigo_postal',
             'logradouro', 'numero', 'complemento',
             'bairro', 'cidade', 'estado', 'observacoes'
@@ -59,6 +60,10 @@ class ClienteForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'email@exemplo.com'
+            }),
+            'origem_cliente': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_origem_cliente'
             }),
             'codigo_postal': forms.TextInput(attrs={
                 'class': 'form-control',

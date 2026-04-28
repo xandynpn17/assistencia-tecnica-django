@@ -7,101 +7,199 @@
 {% endblock %}
 
 {% block content %}
+<style>
+    .produto-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(150px, .55fr));
+        gap: 10px;
+        align-items: end;
+    }
+    .produto-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .produto-summary-card {
+        border: 1px solid #d9e2ec;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #fbfdff 0%, #f2f7fb 100%);
+        padding: 12px;
+    }
+    .produto-summary-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #627487;
+        margin-bottom: 4px;
+    }
+    .produto-summary-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #183247;
+    }
+    .produto-quick-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .produto-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 4px;
+        font-size: 12px;
+        color: #6b7280;
+    }
+    .produto-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .produto-stock {
+        font-weight: 700;
+    }
+    .produto-stock-note {
+        display: block;
+        font-size: 12px;
+        color: #6b7280;
+    }
+    @media (max-width: 991.98px) {
+        .produto-toolbar,
+        .produto-summary {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
 <div class="card-modern">
     <div class="card-modern-header d-flex justify-content-between align-items-center">
         Produtos cadastrados
         <div>
-            <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-info btn-sm"><i class="fas fa-exchange-alt"></i> Movimentações</a>
-            <a href="{% url 'estoque:tabelas_preco' %}" class="btn btn-outline-secondary btn-sm">Tabelas de preço</a>
+            <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-info btn-sm"><i class="fas fa-exchange-alt"></i> Movimentacoes</a>
+            <a href="{% url 'estoque:tabelas_preco' %}" class="btn btn-outline-secondary btn-sm">Tabelas de preco</a>
             <a href="{% url 'estoque:importar_produtos' %}" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-import"></i> Importar</a>
             <a href="{% url 'estoque:criar_produto' %}" class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Novo Produto</a>
         </div>
     </div>
     <div class="card-modern-body">
-        <form method="get" class="form-inline mb-3">
-            <a href="?tipo=todos&ponto={{ ponto_filtro }}" class="btn btn-sm {% if filtro == 'todos' %}btn-primary{% else %}btn-outline-primary{% endif %} mr-1">Todos</a>
-            <a href="?tipo=produtos&ponto={{ ponto_filtro }}" class="btn btn-sm {% if filtro == 'produtos' %}btn-primary{% else %}btn-outline-primary{% endif %} mr-1">Produtos</a>
-            <a href="?tipo=servicos&ponto={{ ponto_filtro }}" class="btn btn-sm {% if filtro == 'servicos' %}btn-primary{% else %}btn-outline-primary{% endif %} mr-3">Serviços</a>
-            <label class="mr-2">Ponto:</label>
-            <select name="ponto" class="form-control form-control-sm mr-2">
-                <option value="">Todos</option>
-                {% for p in pontos %}
-                    <option value="{{ p.id }}" {% if ponto_filtro == p.id|stringformat:'s' %}selected{% endif %}>{{ p.codigo }} - {{ p.nome }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-sm btn-secondary">Filtrar</button>
+        <div class="produto-summary">
+            <div class="produto-summary-card">
+                <div class="produto-summary-label">Resultado</div>
+                <div class="produto-summary-value">{{ resumo.total }}</div>
+            </div>
+            <div class="produto-summary-card">
+                <div class="produto-summary-label">Baixo estoque</div>
+                <div class="produto-summary-value">{{ resumo.baixo_estoque }}</div>
+            </div>
+            <div class="produto-summary-card">
+                <div class="produto-summary-label">Sem saldo</div>
+                <div class="produto-summary-value">{{ resumo.sem_saldo }}</div>
+            </div>
+            <div class="produto-summary-card">
+                <div class="produto-summary-label">Permite OS</div>
+                <div class="produto-summary-value">{{ resumo.permite_os }}</div>
+            </div>
+        </div>
+
+        <form method="get" class="mb-3">
+            <div class="produto-toolbar">
+                <div>
+                    <label class="mb-1">Busca rapida</label>
+                    <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Nome, SKU, EAN, marca ou fornecedor">
+                </div>
+                <div>
+                    <label class="mb-1">Tipo</label>
+                    <select name="tipo" class="form-control form-control-sm">
+                        <option value="todos" {% if filtro == "todos" %}selected{% endif %}>Todos</option>
+                        <option value="produtos" {% if filtro == "produtos" %}selected{% endif %}>Produtos</option>
+                        <option value="servicos" {% if filtro == "servicos" %}selected{% endif %}>Servicos</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-1">Ponto</label>
+                    <select name="ponto" class="form-control form-control-sm">
+                        <option value="">Todos</option>
+                        {% for p in pontos %}
+                            <option value="{{ p.id }}" {% if ponto_filtro == p.id|stringformat:'s' %}selected{% endif %}>{{ p.codigo }} - {{ p.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-1">Acao</label>
+                    <div class="d-flex">
+                        <button type="submit" class="btn btn-sm btn-primary mr-2 flex-fill">Aplicar</button>
+                        <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-sm btn-outline-secondary flex-fill">Limpar</a>
+                    </div>
+                </div>
+            </div>
         </form>
 
-        <div class="alert alert-light border small mb-3">
-            Mostrando visão resumida. Clique em <strong>Detalhes</strong> para ver as informações completas.
+        <div class="produto-quick-filters">
+            <a href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=" class="btn btn-sm {% if not quick %}btn-primary{% else %}btn-outline-primary{% endif %}">Todos</a>
+            <a href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=baixo_estoque" class="btn btn-sm {% if quick == 'baixo_estoque' %}btn-warning{% else %}btn-outline-warning{% endif %}">Baixo estoque</a>
+            <a href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=sem_saldo" class="btn btn-sm {% if quick == 'sem_saldo' %}btn-danger{% else %}btn-outline-danger{% endif %}">Sem saldo</a>
+            <a href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=permite_os" class="btn btn-sm {% if quick == 'permite_os' %}btn-success{% else %}btn-outline-success{% endif %}">Permite OS</a>
         </div>
 
         <div class="table-responsive p-0">
             <table class="table table-hover">
                 <thead>
                 <tr>
-                    <th>Nome</th>
-                    <th>EAN</th>
-                    <th>Marca</th>
-                    <th>Preço</th>
+                    <th>Produto</th>
+                    <th>Preco</th>
                     <th>Ponto</th>
                     <th>Estoque</th>
-                    <th>Ações</th>
+                    <th>Perfil</th>
+                    <th>Acoes</th>
                 </tr>
                 </thead>
                 <tbody>
                 {% for produto in produtos %}
                 <tr>
-                    <td class="font-weight-bold">{{ produto.nome }}</td>
-                    <td>{{ produto.ean|default:"-" }}</td>
-                    <td>{% if produto.marca %}{{ produto.marca.nome }}{% else %}-{% endif %}</td>
+                    <td>
+                        <div class="font-weight-bold">{{ produto.nome }}</div>
+                        <div class="produto-meta">
+                            <span>SKU: {{ produto.sku|default:"-" }}</span>
+                            <span>EAN: {{ produto.ean|default:"-" }}</span>
+                            <span>Marca: {% if produto.marca %}{{ produto.marca.nome }}{% else %}-{% endif %}</span>
+                        </div>
+                    </td>
                     <td>R$ {{ produto.preco_final|floatformat:2 }}</td>
                     <td>{% if produto.ponto_operacional %}{{ produto.ponto_operacional.codigo }} - {{ produto.ponto_operacional.nome }}{% else %}-{% endif %}</td>
                     <td>
-                        {% if produto.quantidade <= produto.estoque_minimo %}
-                            <span class="badge badge-warning">{{ produto.quantidade }}</span>
+                        {% if produto.quantidade <= 0 %}
+                            <span class="badge badge-danger produto-stock">{{ produto.quantidade }}</span>
+                        {% elif produto.quantidade <= produto.estoque_minimo %}
+                            <span class="badge badge-warning produto-stock">{{ produto.quantidade }}</span>
                         {% else %}
-                            {{ produto.quantidade }}
+                            <span class="produto-stock">{{ produto.quantidade }}</span>
                         {% endif %}
+                        <span class="produto-stock-note">Minimo: {{ produto.estoque_minimo|default:"0" }}</span>
+                    </td>
+                    <td>
+                        <div class="produto-badges">
+                            {% if produto.permite_os %}
+                                <span class="badge badge-success">Permite OS</span>
+                            {% endif %}
+                            <span class="badge badge-light">{{ produto.get_tipo_item_display }}</span>
+                            {% if produto.quantidade <= 0 %}
+                                <span class="badge badge-danger">Sem saldo</span>
+                            {% elif produto.quantidade <= produto.estoque_minimo %}
+                                <span class="badge badge-warning">Baixo estoque</span>
+                            {% endif %}
+                        </div>
                     </td>
                     <td class="text-nowrap">
-                        <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#detalhes-{{ produto.id }}" aria-expanded="false" aria-controls="detalhes-{{ produto.id }}">
-                            Detalhes
-                        </button>
                         <a href="{% url 'estoque:estrutura_produto' produto.id %}" class="btn btn-sm btn-outline-dark">Estrutura</a>
                         <a href="{% url 'estoque:duplicar_produto' produto.id %}" class="btn btn-sm btn-outline-primary" title="Duplicar"><i class="fas fa-copy"></i></a>
                         <a href="{% url 'estoque:editar_produto' produto.id %}" class="btn btn-sm btn-primary" title="Editar"><i class="fas fa-edit"></i></a>
                         <a href="{% url 'estoque:excluir_produto' produto.id %}" class="btn btn-sm btn-danger" title="Excluir"><i class="fas fa-trash"></i></a>
                     </td>
                 </tr>
-                <tr>
-                    <td colspan="7" class="p-0 border-top-0">
-                        <div class="collapse" id="detalhes-{{ produto.id }}">
-                            <div class="p-3 bg-light border-top">
-                                <div class="row">
-                                    <div class="col-md-3"><strong>SKU:</strong> {{ produto.sku|default:"-" }}</div>
-                                    <div class="col-md-3"><strong>Tipo:</strong> {{ produto.get_tipo_item_display }}</div>
-                                    <div class="col-md-3"><strong>Categoria:</strong> {{ produto.categoria|default:"-" }}</div>
-                                    <div class="col-md-3"><strong>Fornecedor:</strong> {% if produto.fornecedor_config %}{{ produto.fornecedor_config.nome }}{% else %}{{ produto.fornecedor|default:"-" }}{% endif %}</div>
-                                </div>
-                                <div class="row mt-2">
-                                    <div class="col-md-3"><strong>Estoque mínimo:</strong> {{ produto.estoque_minimo }}</div>
-                                    <div class="col-md-3"><strong>Localização:</strong> {{ produto.localizacao|default:"-" }}</div>
-                                    <div class="col-md-3"><strong>Garantia (dias):</strong> {{ produto.garantia_peca_dias|default:"-" }}</div>
-                                    <div class="col-md-3"><strong>Ativo:</strong> {% if produto.ativo %}Sim{% else %}Não{% endif %}</div>
-                                </div>
-                                <div class="row mt-2">
-                                    <div class="col-md-12"><strong>Modelos compatíveis:</strong> {{ produto.modelos_compativeis|default:"-" }}</div>
-                                </div>
-                                <div class="row mt-2">
-                                    <div class="col-md-12"><strong>Descrição:</strong> {{ produto.descricao|default:"-" }}</div>
-                                </div>
-                            </div>
-                        </div>
-                    </td>
-                </tr>
                 {% empty %}
-                <tr><td colspan="7" class="text-center">Nenhum produto cadastrado.</td></tr>
+                <tr><td colspan="6" class="text-center">Nenhum produto cadastrado.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -110,18 +208,18 @@
         {% if produtos_page and produtos_page.paginator.num_pages > 1 %}
         <div class="d-flex justify-content-between align-items-center mt-3">
             <small class="text-muted">
-                Página {{ produtos_page.number }} de {{ produtos_page.paginator.num_pages }}
+                Pagina {{ produtos_page.number }} de {{ produtos_page.paginator.num_pages }}
             </small>
             <div class="btn-group">
                 {% if produtos_page.has_previous %}
-                <a class="btn btn-sm btn-outline-secondary" href="?tipo={{ filtro }}&ponto={{ ponto_filtro }}&page={{ produtos_page.previous_page_number }}">Anterior</a>
+                <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick={{ quick }}&page={{ produtos_page.previous_page_number }}">Anterior</a>
                 {% else %}
                 <button class="btn btn-sm btn-outline-secondary" disabled>Anterior</button>
                 {% endif %}
                 {% if produtos_page.has_next %}
-                <a class="btn btn-sm btn-outline-secondary" href="?tipo={{ filtro }}&ponto={{ ponto_filtro }}&page={{ produtos_page.next_page_number }}">Próxima</a>
+                <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick={{ quick }}&page={{ produtos_page.next_page_number }}">Proxima</a>
                 {% else %}
-                <button class="btn btn-sm btn-outline-secondary" disabled>Próxima</button>
+                <button class="btn btn-sm btn-outline-secondary" disabled>Proxima</button>
                 {% endif %}
             </div>
         </div>

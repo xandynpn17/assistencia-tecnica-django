@@ -4,162 +4,206 @@
 
 {% block extra_css %}
 <style>
-  .resume-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
-  .resume-card { border-radius: 12px; }
-  .resume-label { color: #6b7280; font-size: 0.85rem; text-transform: uppercase; letter-spacing: .02em; }
-  .resume-value { font-weight: 600; }
-  .status-badge { font-size: .85rem; }
-  .os-code { font-family: "Consolas", "Courier New", monospace; font-weight: 700; }
-  @media (max-width: 991.98px) { .resume-grid { grid-template-columns: 1fr; } }
+  .resume-shell { max-width: 1240px; margin: 0 auto; }
+  .resume-card { border-radius: 12px; overflow: hidden; }
+  .resume-header { padding: 14px 16px; }
+  .resume-subtitle { opacity: .92; font-size: .95rem; margin: 4px 0 0; }
+  .resume-code { font-family: "Consolas", "Courier New", monospace; font-weight: 700; letter-spacing: .02em; }
+  .resume-actions { gap: 8px; }
+  .resume-main-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; }
+  .resume-block { border-radius: 10px; border: 1px solid #e9ecef; background: #fff; }
+  .resume-block .block-header { padding: 10px 12px; border-bottom: 1px solid #edf1f4; font-weight: 700; font-size: .95rem; }
+  .resume-block .block-body { padding: 12px; }
+  .resume-label { color: #6b7280; font-size: .76rem; text-transform: uppercase; letter-spacing: .02em; }
+  .resume-value { font-weight: 600; font-size: .95rem; }
+  .defect-highlight { background: #f8fbff; border: 1px solid #dce8f8; border-radius: 8px; padding: 10px 12px; }
+  .alert-compact { padding: 8px 12px; margin-bottom: 12px; }
+  @media (max-width: 991.98px) { .resume-main-grid { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="row">
-  <div class="col-12">
-    <div class="card resume-card">
-      <div class="card-header bg-success text-white d-flex flex-wrap justify-content-between align-items-center">
-        <h5 class="mb-1 mb-md-0">
-          {% if ordem.fechada %}
-          Ordem finalizada:
-          {% else %}
-          Ordem criada com sucesso:
-          {% endif %}
-          <span class="os-code">{{ ordem.numero_os }}</span>
-        </h5>
+<div class="resume-shell">
+  <div class="card resume-card">
+    <div class="resume-header bg-success text-white">
+      <div class="d-flex flex-column flex-lg-row justify-content-lg-between align-items-lg-start">
+        <div class="mb-2 mb-lg-0">
+          <h5 class="mb-1">
+            {% if ordem.fechada %}
+            Ordem finalizada
+            {% else %}
+            Ordem criada com sucesso
+            {% endif %}
+            <span class="resume-code">{{ ordem.numero_os }}</span>
+          </h5>
+          <p class="resume-subtitle mb-0">Proxima acao: {{ proxima_acao }}</p>
+        </div>
         <div class="d-flex flex-wrap align-items-center">
-          <span class="badge badge-light text-dark mr-2 status-badge">{{ ordem.status_listagem_label }}</span>
-          <span class="badge badge-warning status-badge">{{ ordem.tipo_reparo }}</span>
+          <span class="badge badge-light text-dark mr-2 mb-1">{{ ordem.status_listagem_label }}</span>
+          <span class="badge badge-warning mr-2 mb-1">{{ ordem.tipo_reparo }}</span>
+          <span class="badge badge-{% if confirmacao_status_class == 'success' %}success{% elif confirmacao_status_class == 'info' %}info{% elif confirmacao_status_class == 'danger' %}danger{% else %}warning{% endif %} mb-1">
+            Confirmacao: {{ confirmacao_status }}
+          </span>
         </div>
       </div>
-      <div class="card-body">
-        <div class="resume-grid mb-3">
-          <div class="card border-0 bg-light resume-card">
-            <div class="card-body">
-              <h6 class="mb-3">Cliente e Equipamento</h6>
-              <div class="row">
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Cliente</div>
-                  <div class="resume-value">{{ ordem.cliente.nome }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Telefone</div>
-                  <div class="resume-value">{{ ordem.cliente.telefone|default:"-" }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Tipo de equipamento</div>
-                  <div class="resume-value">{{ ordem.get_tipo_equipamento_display }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Marca / Modelo</div>
-                  <div class="resume-value">{{ ordem.marca_equipamento }} / {{ ordem.modelo_equipamento }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Número de série</div>
-                  <div class="resume-value">{{ ordem.numero_serie_equipamento|default:"-" }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">CPF/CNPJ</div>
-                  <div class="resume-value">{{ ordem.cliente.get_documento_formatado|default:ordem.cliente.documento|default:"-" }}</div>
-                </div>
-              </div>
-            </div>
-          </div>
+    </div>
 
-          <div class="card border-0 bg-light resume-card">
-            <div class="card-body">
-              <h6 class="mb-3">Resumo Rápido da OS</h6>
-              <div class="row">
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Abertura</div>
-                  <div class="resume-value">{{ ordem.data_abertura|date:"d/m/Y H:i" }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Tipo de reparo</div>
-                  <div class="resume-value">{{ ordem.tipo_reparo }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Data da compra</div>
-                  <div class="resume-value">{{ ordem.data_compra|date:"d/m/Y"|default:"-" }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Nota fiscal</div>
-                  <div class="resume-value">{{ ordem.numero_nota_fiscal|default:"-" }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Confirmação</div>
-                  <div class="resume-value">{% if ordem.confirmado %}Confirmada{% else %}Pendente{% endif %}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Método confirmação</div>
-                  <div class="resume-value">{{ ordem.get_tipo_confirmacao_display|default:"-" }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Atendente</div>
-                  <div class="resume-value">{{ ordem.atendente_abertura|default:"-" }}</div>
-                </div>
-                <div class="col-md-6 mb-2">
-                  <div class="resume-label">Técnico responsável</div>
-                  <div class="resume-value">{{ ordem.tecnico_responsavel_valido|default:"-" }}</div>
-                </div>
+    <div class="card-body p-3">
+      <div class="d-flex flex-wrap resume-actions mb-3">
+        <a class="btn btn-primary btn-sm" href="{% url 'ordens:detalhes_ordem' ordem.id %}">
+          Abrir detalhes da OS
+        </a>
+        <a class="btn btn-outline-primary btn-sm" href="{% url 'ordens:imprimir_ordem_servico_impressao' ordem.id %}" target="_blank" rel="noopener">
+          Imprimir OS
+        </a>
+        {% if not ordem.confirmado %}
+        <form method="post" action="{% url 'ordens:confirmar_manual_resumo' ordem.id %}" class="mb-0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success btn-sm">Validar manualmente</button>
+        </form>
+        {% endif %}
+        {% if usar_confirmacao_digital %}
+        <a class="btn btn-outline-secondary btn-sm" href="{% url 'ordens:reenviar_confirmacao_whatsapp' ordem.id %}" title="Enviar PDF e link por WhatsApp">
+          Reenviar WhatsApp
+        </a>
+        <a class="btn btn-outline-secondary btn-sm" href="{% url 'confirmar_os_publico' ordem.token_confirmacao %}" target="_blank" rel="noopener">
+          Abrir link de confirmacao
+        </a>
+        {% endif %}
+        <button type="button" class="btn btn-outline-dark btn-sm" data-copy-text="{{ ordem.numero_os }}">
+          Copiar no. OS
+        </button>
+        {% if usar_confirmacao_digital %}
+        <button type="button" class="btn btn-outline-dark btn-sm" data-copy-text="{{ link_confirmacao_publico }}">
+          Copiar link
+        </button>
+        {% endif %}
+        <a class="btn btn-outline-secondary btn-sm" href="{% url 'ordens:verificar_cliente_os' %}">
+          Abrir nova ordem
+        </a>
+        <a class="btn btn-outline-secondary btn-sm" href="{% url 'ordens:lista_ordens' %}">
+          Voltar para listagem
+        </a>
+      </div>
+
+      {% if resumo_alertas %}
+      <div class="alert alert-warning alert-compact">
+        {% for alerta in resumo_alertas %}
+        <div>{{ alerta }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="resume-main-grid mb-3">
+        <div class="resume-block">
+          <div class="block-header">Cliente e equipamento</div>
+          <div class="block-body">
+            <div class="row">
+              <div class="col-md-6 mb-2">
+                <div class="resume-label">Cliente</div>
+                <div class="resume-value">{{ ordem.cliente.nome }}</div>
+              </div>
+              <div class="col-md-6 mb-2">
+                <div class="resume-label">Telefone</div>
+                <div class="resume-value">{{ ordem.cliente.telefone|default:"-" }}</div>
+              </div>
+              <div class="col-md-6 mb-2">
+                <div class="resume-label">CPF/CNPJ</div>
+                <div class="resume-value">{{ ordem.cliente.get_documento_formatado|default:ordem.cliente.documento|default:"-" }}</div>
+              </div>
+              <div class="col-md-6 mb-2">
+                <div class="resume-label">Tipo equipamento</div>
+                <div class="resume-value">{{ ordem.get_tipo_equipamento_display }}</div>
+              </div>
+              <div class="col-md-6 mb-2">
+                <div class="resume-label">Marca / modelo</div>
+                <div class="resume-value">{{ ordem.marca_equipamento }} / {{ ordem.modelo_equipamento }}</div>
+              </div>
+              <div class="col-md-6 mb-2">
+                <div class="resume-label">Numero serie</div>
+                <div class="resume-value">{{ ordem.numero_serie_equipamento|default:"-" }}</div>
+              </div>
+              <div class="col-md-4 mb-2">
+                <div class="resume-label">Abertura</div>
+                <div class="resume-value">{{ ordem.data_abertura|date:"d/m/Y H:i" }}</div>
+              </div>
+              <div class="col-md-4 mb-2">
+                <div class="resume-label">Dias aberta</div>
+                <div class="resume-value">{{ dias_aberta }}</div>
+              </div>
+              <div class="col-md-4 mb-2">
+                <div class="resume-label">Status</div>
+                <div class="resume-value">{{ ordem.status_listagem_label }}</div>
+              </div>
+              <div class="col-md-6 mb-2">
+                <div class="resume-label">Atendente</div>
+                <div class="resume-value">{{ ordem.atendente_abertura|default:"-" }}</div>
+              </div>
+              <div class="col-md-6 mb-2">
+                <div class="resume-label">Tecnico responsavel</div>
+                <div class="resume-value">{{ ordem.tecnico_responsavel_valido|default:"-" }}</div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="card border-0 bg-white mb-3">
-          <div class="card-body px-0 pb-0">
-            <h6 class="mb-2">Dados Técnicos Iniciais</h6>
-            <p class="mb-1"><strong>Defeito informado:</strong> {{ ordem.defeito|default:"-" }}</p>
-            <p class="mb-1"><strong>Acessórios:</strong> {{ ordem.acessorios|default:"-" }}</p>
-            <p class="mb-0"><strong>Peritagem:</strong> {{ ordem.peritagem|default:"-" }}</p>
+        <div class="resume-block">
+          <div class="block-header">Dados tecnicos iniciais</div>
+          <div class="block-body">
+            <div class="defect-highlight mb-2">
+              <div class="resume-label">Defeito informado</div>
+              <div class="resume-value">{{ ordem.defeito|default:"-" }}</div>
+            </div>
+            <div class="mb-2">
+              <div class="resume-label">Acessorios</div>
+              <div class="resume-value">{{ ordem.acessorios|default:"-" }}</div>
+            </div>
+            <div class="mb-0">
+              <div class="resume-label">Peritagem</div>
+              <div class="resume-value">{{ ordem.peritagem|default:"-" }}</div>
+            </div>
           </div>
         </div>
+      </div>
 
-        <hr>
-        <div class="row">
-          <div class="col-md-8 mb-3">
-            <h6 class="text-muted mb-2">Validação presencial da OS</h6>
-            <p class="mb-2">Fluxo presencial: imprima a OS, colete assinatura física e registre a validação manual.</p>
-            <div class="d-flex flex-wrap">
-              <a class="btn btn-outline-primary mr-2 mb-2" href="{% url 'ordens:imprimir_ordem_servico_impressao' ordem.id %}" target="_blank" rel="noopener">
-                Imprimir OS
-              </a>
-              {% if not ordem.confirmado %}
-              <form method="post" action="{% url 'ordens:confirmar_manual_resumo' ordem.id %}" class="mr-2 mb-2">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-success">Validar Manualmente</button>
-              </form>
+      <div class="row">
+        <div class="col-md-6 mb-2">
+          <div class="resume-block h-100">
+            <div class="block-header">Validacao presencial</div>
+            <div class="block-body">
+              <p class="mb-2">Fluxo presencial: imprimir OS, coletar assinatura fisica e validar no sistema.</p>
+              {% if ordem.confirmado %}
+              <small class="text-muted">
+                Confirmada em {{ ordem.data_confirmacao|date:"d/m/Y H:i"|default:"-" }}
+                por {{ ordem.confirmado_por.username|default:"-" }}.
+              </small>
+              {% else %}
+              <small class="text-muted">Confirmacao manual ainda pendente.</small>
               {% endif %}
             </div>
-            {% if ordem.confirmado %}
-            <small class="text-muted">
-              OS validada em {{ ordem.data_confirmacao|date:"d/m/Y H:i"|default:"-" }}
-              por {{ ordem.confirmado_por.username|default:"-" }} ({{ ordem.get_tipo_confirmacao_display|default:"-" }}).
-            </small>
-            {% endif %}
           </div>
-          <div class="col-md-4 mb-3">
-            <h6 class="text-muted mb-2">Canal online (opcional)</h6>
-            <p class="mb-2 text-muted">Para uso futuro em produção/web.</p>
-            <div class="d-flex flex-wrap">
-              <a class="btn btn-outline-secondary mr-2 mb-2" href="{% url 'ordens:reenviar_confirmacao_whatsapp' ordem.id %}" title="Envia PDF + link por WhatsApp">
-                WhatsApp com Link
-              </a>
-              <a class="btn btn-outline-secondary mr-2 mb-2" href="{% url 'confirmar_os_publico' ordem.token_confirmacao %}" target="_blank" rel="noopener">
-                Abrir Link
-              </a>
+        </div>
+
+        {% if usar_confirmacao_digital %}
+        <div class="col-md-6 mb-2">
+          <div class="resume-block h-100">
+            <div class="block-header">Canal digital</div>
+            <div class="block-body">
+              <p class="mb-2">
+                Status do envio digital:
+                <span class="badge badge-{% if confirmacao_status_class == 'success' %}success{% elif confirmacao_status_class == 'info' %}info{% elif confirmacao_status_class == 'danger' %}danger{% else %}warning{% endif %}">
+                  {{ confirmacao_status }}
+                </span>
+              </p>
+              {% if confirmacao_evento_em %}
+              <small class="text-muted">Ultimo evento em {{ confirmacao_evento_em|date:"d/m/Y H:i" }}.</small>
+              {% else %}
+              <small class="text-muted">Ainda sem envio registrado.</small>
+              {% endif %}
             </div>
           </div>
         </div>
-      </div>
-      <div class="card-footer d-flex flex-wrap">
-        <a class="btn btn-primary mr-2 mb-2" href="{% url 'ordens:detalhes_ordem' ordem.id %}">
-          Abrir Detalhes da OS
-        </a>
-        <a class="btn btn-outline-secondary mr-2 mb-2" href="{% url 'ordens:verificar_cliente_os' %}">
-          Abrir Nova Ordem
-        </a>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -168,6 +212,50 @@
 
 {% block extra_js %}
 {{ block.super }}
+<script>
+  (function () {
+    function setButtonFeedback(button, originalLabel, feedbackLabel) {
+      button.textContent = feedbackLabel;
+      window.setTimeout(function () {
+        button.textContent = originalLabel;
+      }, 1200);
+    }
+
+    async function copyTextToClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+      const temp = document.createElement("textarea");
+      temp.value = text;
+      temp.style.position = "fixed";
+      temp.style.left = "-9999px";
+      document.body.appendChild(temp);
+      temp.focus();
+      temp.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(temp);
+      return ok;
+    }
+
+    document.querySelectorAll("[data-copy-text]").forEach(function (button) {
+      const originalLabel = button.textContent;
+      button.addEventListener("click", async function () {
+        const text = button.getAttribute("data-copy-text") || "";
+        if (!text) {
+          return;
+        }
+        try {
+          const copied = await copyTextToClipboard(text);
+          setButtonFeedback(button, originalLabel, copied ? "Copiado" : "Falhou");
+        } catch (error) {
+          setButtonFeedback(button, originalLabel, "Falhou");
+        }
+      });
+    });
+  })();
+</script>
+
 {% if request.GET.wa or request.GET.wa_app %}
 <script>
   (function () {

@@ -228,6 +228,12 @@
                 <i class="fas fa-file-signature mr-1"></i> Registrar confirmação presencial/impresso
             </button>
             {% endif %}
+            {% if ordem.confirmado %}
+            <button type="button" class="btn btn-outline-info btn-sm" data-toggle="modal" data-target="#modalAssinaturaSaida">
+                <i class="fas fa-pen-fancy mr-1"></i>
+                {% if assinatura_saida_data %}Atualizar{% else %}Registrar{% endif %} assinatura de saída
+            </button>
+            {% endif %}
             {% if ordem.fechada %}
             <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-warning btn-sm">
                 <i class="fas fa-lock mr-1"></i> Reabrir
@@ -386,8 +392,8 @@
                 <div class="modal-body">
                     <div class="form-group">
                         <label for="arquivos_upload">Fotos / PDFs</label>
-                        <input type="file" id="arquivos_upload" name="arquivos" class="form-control-file" multiple required>
-                        <small class="form-text text-muted">Suporta imagens e documentos. Pode enviar mais de um arquivo.</small>
+                        <input type="file" id="arquivos_upload" name="arquivos" class="form-control-file" accept="image/jpeg,image/png,image/webp,.pdf" multiple required>
+                        <small class="form-text text-muted">Aceita JPG, PNG, WEBP e PDF. Máximo de 6 fotos por OS. Imagens até 10 MB e PDF até 8 MB.</small>
                     </div>
                     <div class="form-group">
                         <label for="descricao_arquivo">Descrição (opcional)</label>
@@ -441,6 +447,41 @@
                 </div>
                 <div class="modal-footer">
                     <button type="submit" class="btn btn-primary">Confirmar OS</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAssinaturaSaida" tabindex="-1" role="dialog" aria-labelledby="modalAssinaturaSaidaLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAssinaturaSaidaLabel">Registrar assinatura de saída</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="assinatura_saida">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="data_assinatura_saida">Data/hora da entrega</label>
+                        <input type="datetime-local"
+                               class="form-control"
+                               id="data_assinatura_saida"
+                               name="data_assinatura_saida"
+                               value="{{ assinatura_saida_data|date:'Y-m-d\\TH:i' }}">
+                        <small class="form-text text-muted">Se deixar em branco, o sistema grava a data/hora atual.</small>
+                    </div>
+                    <div class="form-group mb-0">
+                        <label for="assinatura_saida_imagem">Upload da assinatura de saída (opcional)</label>
+                        <input type="file" class="form-control-file" id="assinatura_saida_imagem" name="assinatura_saida_imagem" accept="image/*">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Salvar assinatura de saída</button>
                 </div>
             </form>
         </div>

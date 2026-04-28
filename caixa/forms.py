@@ -1,54 +1,115 @@
+from decimal import Decimal
+from uuid import uuid4
+
 from django import forms
 
 from .models import (
+    CategoriaFinanceira,
+    CentroCusto,
     ComissaoItemOrcamento,
     ComissaoTecnico,
     ContaPagar,
-    PagamentoContaPagar,
+    ContaReceber,
     CustoFixoMensal,
     DespesaRecorrente,
-    CategoriaFinanceira,
-    CentroCusto,
-    ContaReceber,
+    FaixaPremioMeta,
     FormaPagamento,
     LancamentoCaixa,
     Pagamento,
-    FaixaPremioMeta,
+    PagamentoContaPagar,
     PremioColaboradorCompetencia,
-    RegraPremioMeta,
     RegraComissaoTecnico,
+    RegraPremioMeta,
 )
 
 
 class PagamentoForm(forms.ModelForm):
     metodo = forms.CharField(required=False, widget=forms.HiddenInput())
+    chave_idempotencia = forms.CharField(required=False, widget=forms.HiddenInput())
+    valor_recebido = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+    )
+    desconto_valor = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+    )
+    desconto_percentual = forms.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+    )
 
     class Meta:
         model = Pagamento
-        fields = ["ordem_servico", "valor", "forma_pagamento", "referencia", "metodo"]
+        fields = ["ordem_servico", "valor", "forma_pagamento", "referencia", "observacao", "metodo"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["ordem_servico"].required = False
         self.fields["forma_pagamento"].required = True
         self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(ativa=True).order_by("nome")
+        self.fields["valor_recebido"].label = "Valor recebido"
+        self.fields["desconto_valor"].label = "Desconto em valor"
+        self.fields["desconto_percentual"].label = "Desconto em %"
+        self.fields["observacao"].label = "Mensagem adicional no talao"
+        self.fields["observacao"].required = False
+        self.fields["observacao"].widget = forms.Textarea(attrs={"rows": 2})
+        if not self.is_bound and not self.initial.get("chave_idempotencia"):
+            self.initial["chave_idempotencia"] = uuid4().hex
+
+    def clean(self):
+        cleaned_data = super().clean()
+        forma_pagamento = cleaned_data.get("forma_pagamento")
+        valor = cleaned_data.get("valor") or Decimal("0.00")
+        valor_recebido = cleaned_data.get("valor_recebido")
+        desconto_valor = cleaned_data.get("desconto_valor") or Decimal("0.00")
+        desconto_percentual = cleaned_data.get("desconto_percentual") or Decimal("0.00")
+        if forma_pagamento and forma_pagamento.codigo == "dinheiro" and valor_recebido is not None and valor_recebido < valor:
+            self.add_error(
+                "valor_recebido",
+                "O valor recebido nao pode ser menor que o valor do pagamento em dinheiro.",
+            )
+        if desconto_valor > Decimal("0.00") and desconto_percentual > Decimal("0.00"):
+            raise forms.ValidationError("Use desconto por valor ou por percentual, nao os dois ao mesmo tempo.")
+        if desconto_percentual > Decimal("100.00"):
+            self.add_error("desconto_percentual", "O desconto percentual nao pode ser maior que 100%.")
+        return cleaned_data
 
 
 class LancamentoCaixaForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+            tipo="saida",
+            ativa=True,
+        ).order_by("nome")
+        self.fields["categoria"].required = True
         self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
+        self.fields["categoria"].label = "Categoria"
         self.fields["centro_custo"].required = True
-        self.fields["descricao"].label = "Descrição"
+        self.fields["descricao"].label = "Descricao"
         self.fields["centro_custo"].label = "Centro de custo"
         self.fields["valor"].label = "Valor"
 
     class Meta:
         model = LancamentoCaixa
-        fields = ["descricao", "centro_custo", "valor"]
+        fields = ["descricao", "categoria", "centro_custo", "valor"]
 
 
 class ContaReceberForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+            tipo__in=["entrada", "receber"],
+            ativa=True,
+        ).order_by("nome")
+
     class Meta:
         model = ContaReceber
         fields = [
@@ -87,8 +148,8 @@ class BaixaContaReceberForm(forms.Form):
         self.fields["valor"].label = "Valor principal recebido"
         self.fields["desconto"].label = "Desconto concedido"
         self.fields["juros"].label = "Juros recebidos"
-        self.fields["referencia"].label = "Referência"
-        self.fields["observacao"].label = "Observação"
+        self.fields["referencia"].label = "Referencia"
+        self.fields["observacao"].label = "Observacao"
         self.fields["forma_pagamento"].label = "Forma de pagamento"
 
 
@@ -143,7 +204,7 @@ class CustoFixoMensalForm(forms.ModelForm):
         fields = [
             "competencia",
             "descricao",
-            "categoria",
+            "categoria_financeira",
             "centro_custo",
             "valor_previsto",
             "valor_pago",
@@ -158,6 +219,16 @@ class CustoFixoMensalForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["categoria_financeira"].queryset = CategoriaFinanceira.objects.filter(
+            tipo="saida",
+            ativa=True,
+        ).order_by("nome")
+        self.fields["categoria_financeira"].required = False
+        self.fields["categoria_financeira"].label = "Categoria"
+        if self.instance and self.instance.pk and self.instance.categoria and not self.instance.categoria_financeira_id:
+            categoria = CategoriaFinanceira.objects.filter(nome=self.instance.categoria, tipo="saida").first()
+            if categoria:
+                self.initial.setdefault("categoria_financeira", categoria.id)
         self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
         for field_name in self.fields:
             css_class = "form-check-input" if field_name == "ativo" else "form-control form-control-sm"
@@ -197,11 +268,18 @@ class FormaPagamentoForm(forms.ModelForm):
 class ContaPagarForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+            tipo="saida",
+            ativa=True,
+        ).order_by("nome")
+        self.fields["categoria"].required = True
         self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
+        self.fields["categoria"].label = "Categoria"
+        self.fields["centro_custo"].label = "Centro de custo"
 
     class Meta:
         model = ContaPagar
-        fields = ["fornecedor", "descricao", "valor_total", "vencimento", "centro_custo"]
+        fields = ["fornecedor", "descricao", "categoria", "valor_total", "vencimento", "centro_custo"]
         widgets = {
             "vencimento": forms.DateInput(attrs={"type": "date"}),
         }

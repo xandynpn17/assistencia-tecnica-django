@@ -7,66 +7,201 @@
 {% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="card-body">
-    <form method="get" class="form-inline mb-3">
-      <input type="text" name="q" value="{{ q }}" class="form-control mr-2" placeholder="Buscar por EAN, SKU ou descricao">
-      <button type="submit" class="btn btn-primary">Buscar artigo</button>
-    </form>
+<style>
+  .transfer-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+    gap: 14px;
+  }
+  .transfer-search-card,
+  .transfer-form-card,
+  .transfer-product-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 14px;
+    background: #fff;
+  }
+  .transfer-card-body { padding: 16px; }
+  .transfer-results { display: grid; gap: 10px; }
+  .transfer-result-item {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+  }
+  .transfer-result-item.is-active {
+    border-color: #7aa7d8;
+    background: #eef5fb;
+  }
+  .transfer-result-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+  }
+  .transfer-stock-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .transfer-stock-card {
+    border: 1px solid #e5ebf2;
+    border-radius: 12px;
+    padding: 12px;
+    background: #f8fbfd;
+  }
+  .transfer-stock-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #183247;
+  }
+  .transfer-help {
+    border: 1px dashed #d9e2ec;
+    border-radius: 12px;
+    padding: 14px;
+    color: #526170;
+    background: #fafcff;
+  }
+  @media (max-width: 991.98px) {
+    .transfer-grid,
+    .transfer-stock-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
 
-    <form method="post">
-      {% csrf_token %}
-      <div class="form-group mb-2">
-        <label>Artigo</label>
-        <select name="produto_id" class="form-control" required>
-          <option value="">Selecione</option>
+<div class="transfer-grid">
+  <div>
+    <div class="transfer-search-card mb-3">
+      <div class="transfer-card-body">
+        <form method="get" class="mb-3">
+          <label class="mb-1">Buscar artigo</label>
+          <div class="input-group">
+            <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Buscar por EAN, SKU ou descricao">
+            <div class="input-group-append">
+              <button type="submit" class="btn btn-primary">Buscar artigo</button>
+            </div>
+          </div>
+          {% if produto_selecionado %}
+          <input type="hidden" name="produto_id" value="{{ produto_selecionado.id }}">
+          {% endif %}
+        </form>
+
+        {% if produtos %}
+        <div class="transfer-results">
           {% for p in produtos %}
-            <option value="{{ p.id }}">{{ p.nome }} | EAN {{ p.ean|default:"-" }} | SKU {{ p.sku|default:"-" }}</option>
+          <div class="transfer-result-item {% if produto_selecionado and produto_selecionado.id == p.id %}is-active{% endif %}">
+            <div>
+              <div class="font-weight-bold">{{ p.nome }}</div>
+              <div class="transfer-result-meta">
+                <span>SKU: {{ p.sku|default:"-" }}</span>
+                <span>EAN: {{ p.ean|default:"-" }}</span>
+                <span>Ponto padrao: {% if p.ponto_operacional %}{{ p.ponto_operacional.codigo }}{% else %}-{% endif %}</span>
+              </div>
+            </div>
+            <a href="?q={{ q|urlencode }}&produto_id={{ p.id }}" class="btn btn-sm {% if produto_selecionado and produto_selecionado.id == p.id %}btn-primary{% else %}btn-outline-primary{% endif %}">
+              {% if produto_selecionado and produto_selecionado.id == p.id %}Selecionado{% else %}Selecionar{% endif %}
+            </a>
+          </div>
           {% endfor %}
-        </select>
+        </div>
+        {% elif q %}
+        <div class="transfer-help">Nenhum artigo encontrado para a busca informada.</div>
+        {% else %}
+        <div class="transfer-help">Pesquise primeiro o artigo que vai ser transferido. Depois selecione o item e confirme origem, destino e quantidade.</div>
+        {% endif %}
       </div>
-      <div class="form-row">
-        <div class="form-group col-md-4">
-          <label>Origem</label>
-          <select name="origem_id" class="form-control" required>
-            <option value="">Selecione</option>
-            {% for po in pontos %}
-              <option value="{{ po.id }}">{{ po.codigo }} - {{ po.nome }}</option>
-            {% endfor %}
-          </select>
+    </div>
+  </div>
+
+  <div>
+    {% if produto_selecionado %}
+    <div class="transfer-product-card mb-3">
+      <div class="transfer-card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="small text-muted text-uppercase">Artigo selecionado</div>
+            <div class="font-weight-bold">{{ produto_selecionado.nome }}</div>
+            <div class="small text-muted mt-1">
+              SKU {{ produto_selecionado.sku|default:"-" }} | EAN {{ produto_selecionado.ean|default:"-" }}
+            </div>
+          </div>
+          <a href="?q={{ q|urlencode }}" class="btn btn-sm btn-outline-secondary">Trocar</a>
         </div>
-        <div class="form-group col-md-4">
-          <label>Destino</label>
-          <select name="destino_id" class="form-control" required>
-            <option value="">Selecione</option>
-            {% for po in pontos %}
-              <option value="{{ po.id }}">{{ po.codigo }} - {{ po.nome }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="form-group col-md-2">
-          <label>Quantidade</label>
-          <input type="number" name="quantidade" min="1" class="form-control" required>
-        </div>
-        <div class="form-group col-md-2">
-          <label>Ubicacao (cadastro)</label>
-          <select name="destino_ubicacao_id" id="destino_ubicacao_id" class="form-control">
-            <option value="">Selecione</option>
-            {% for u in ubicacoes %}
-              <option value="{{ u.id }}" data-po="{{ u.ponto_operacional_id }}">{{ u.ponto_operacional.codigo }} - {{ u.codigo }}{% if u.descricao %} ({{ u.descricao }}){% endif %}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group col-md-6">
-          <label>Ubicacao destino (manual)</label>
-          <input type="text" name="destino_ubicacao" class="form-control" placeholder="Ex.: Corredor A / Prat. 2">
+        <div class="transfer-stock-grid">
+          {% for saldo in saldos_produto %}
+          <div class="transfer-stock-card">
+            <div class="small text-muted">{{ saldo.ponto.codigo }} - {{ saldo.ponto.nome }}</div>
+            <div class="transfer-stock-value {% if saldo.is_baixo %}text-danger{% endif %}">{{ saldo.quantidade }}</div>
+            <div class="small text-muted">disponivel neste ponto</div>
+          </div>
+          {% endfor %}
         </div>
       </div>
-      <button type="submit" class="btn btn-success">Registrar transpasse</button>
-      <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-secondary">Voltar</a>
-    </form>
+    </div>
+    {% endif %}
+
+    <div class="transfer-form-card">
+      <div class="transfer-card-body">
+        <div class="font-weight-bold mb-2">Registrar transpasse</div>
+        {% if not produto_selecionado %}
+        <div class="transfer-help mb-0">Selecione um artigo na busca ao lado para habilitar a transferencia.</div>
+        {% else %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="produto_id" value="{{ produto_selecionado.id }}">
+          <div class="form-row">
+            <div class="form-group col-md-4">
+              <label>Origem</label>
+              <select name="origem_id" class="form-control" required>
+                <option value="">Selecione</option>
+                {% for po in pontos %}
+                  <option value="{{ po.id }}">{{ po.codigo }} - {{ po.nome }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group col-md-4">
+              <label>Destino</label>
+              <select name="destino_id" class="form-control" required>
+                <option value="">Selecione</option>
+                {% for po in pontos %}
+                  <option value="{{ po.id }}">{{ po.codigo }} - {{ po.nome }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group col-md-4">
+              <label>Quantidade</label>
+              <input type="number" name="quantidade" min="1" class="form-control" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label>Ubicacao (cadastro)</label>
+              <select name="destino_ubicacao_id" id="destino_ubicacao_id" class="form-control">
+                <option value="">Selecione</option>
+                {% for u in ubicacoes %}
+                  <option value="{{ u.id }}" data-po="{{ u.ponto_operacional_id }}">{{ u.ponto_operacional.codigo }} - {{ u.codigo }}{% if u.descricao %} ({{ u.descricao }}){% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group col-md-6">
+              <label>Ubicacao destino (manual)</label>
+              <input type="text" name="destino_ubicacao" class="form-control" placeholder="Ex.: Corredor A / Prat. 2">
+            </div>
+          </div>
+          <div class="d-flex">
+            <button type="submit" class="btn btn-success mr-2">Registrar transpasse</button>
+            <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-secondary">Voltar</a>
+          </div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

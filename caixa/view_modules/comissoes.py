@@ -1,4 +1,5 @@
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -28,6 +29,12 @@ from .helpers import _exportar_csv, _exportar_pdf_tabela, _fmt_decimal, _paginar
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def comissoes_pagamento(request):
+    session_key = "caixa_comissoes_pagamento_filtros"
+    if request.GET.get("restaurar") == "1":
+        filtros_salvos = request.session.get(session_key) or {}
+        if filtros_salvos:
+            return redirect(f"{reverse('caixa:comissoes_pagamento')}?{urlencode(filtros_salvos)}")
+
     def _redirect_pos_post():
         return_query = (request.POST.get("return_query") or "").strip()
         base_url = reverse("caixa:comissoes_pagamento")
@@ -381,10 +388,47 @@ def comissoes_pagamento(request):
             ]
 
     tecnicos = get_user_model().objects.filter(is_active=True, tipo_usuario__in=["tecnico", "atendente"]).order_by("username")
-    lotes_recentes = ComissaoLotePagamento.objects.select_related("criado_por").order_by("-criado_em")
+    lotes_competencia_qs = ComissaoLotePagamento.objects.select_related("criado_por").order_by("-criado_em")
     if filtro_aplicado:
-        lotes_recentes = lotes_recentes.filter(competencia=competencia_ref)
-    lotes_recentes = lotes_recentes[:20]
+        lotes_competencia_qs = lotes_competencia_qs.filter(competencia=competencia_ref)
+    lotes_resumo = {
+        "quantidade": lotes_competencia_qs.count(),
+        "pagos": lotes_competencia_qs.filter(status="PAGO").count(),
+        "abertos": lotes_competencia_qs.exclude(status="PAGO").count(),
+        "itens": lotes_competencia_qs.aggregate(total=Sum("total_itens"))["total"] or 0,
+        "valor_total": lotes_competencia_qs.aggregate(total=Sum("total_valor"))["total"] or Decimal("0.00"),
+        "valor_pago": lotes_competencia_qs.filter(status="PAGO").aggregate(total=Sum("total_valor"))["total"] or Decimal("0.00"),
+    }
+    lotes_resumo["ticket_medio"] = (
+        lotes_resumo["valor_total"] / Decimal(lotes_resumo["quantidade"])
+        if lotes_resumo["quantidade"]
+        else Decimal("0.00")
+    )
+    lotes_recentes = lotes_competencia_qs[:20]
+    filtros_para_salvar = {
+        "tecnico": tecnico_id,
+        "status": status_filtro,
+        "os": os_filtro,
+        "tipo": tipo_filtro,
+        "criterio": criterio_filtro,
+        "data_inicio": data_inicio_raw,
+        "data_fim": data_fim_raw,
+        "competencia_mes": f"{competencia_ref.month:02d}",
+        "competencia_ano": f"{competencia_ref.year}",
+    }
+    filtros_para_salvar = {k: v for k, v in filtros_para_salvar.items() if v not in {"", None}}
+    if filtros_para_salvar:
+        request.session[session_key] = filtros_para_salvar
+    resumo_competencias_recentes = (
+        Comissao.objects.exclude(status="CANCELADA")
+        .values("competencia")
+        .annotate(
+            total=Sum("valor_comissao"),
+            quantidade=Count("id"),
+            pagas=Sum("valor_comissao", filter=Q(status="PAGA")),
+        )
+        .order_by("-competencia")[:6]
+    )
 
     return render(
         request,
@@ -412,8 +456,11 @@ def comissoes_pagamento(request):
             "resumo_tipos": resumo_tipos,
             "resumo_tecnicos": resumo_tecnicos,
             "folhas_pagamento": folhas_pagamento,
+            "lotes_resumo": lotes_resumo,
             "lotes_recentes": lotes_recentes,
+            "resumo_competencias_recentes": resumo_competencias_recentes,
             "querystring_paginacao": querystring_paginacao,
+            "filtros_salvos_existem": bool(request.session.get(session_key)),
             "menu_app": "caixa",
             "menu_sub": "comissoes_pagamento",
         },

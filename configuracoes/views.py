@@ -32,7 +32,9 @@ import requests
 import json
 import logging
 from pathlib import Path
-from django.http import JsonResponse
+from urllib.parse import urlencode
+from django.http import HttpResponse, JsonResponse
+from django.views.decorators.clickjacking import xframe_options_exempt
 from .permissions import role_required, ADM_ROLES, MANAGER_ROLES, ORDER_CREATION_ROLES, STAFF_ROLES
 
 User = get_user_model()
@@ -515,6 +517,77 @@ def configuracao_sistema_edit(request):
         'ddd_brasil': ConfiguracaoSistema.DDD_BRASIL,
     }
     return render(request, 'configuracoes/configuracao_sistema_form.html', context)
+
+
+@xframe_options_exempt
+@role_required(MANAGER_ROLES)
+def preview_documento(request):
+    tipo = (request.GET.get("tipo") or "os_impressao").strip().lower()
+    ordem_id = (request.GET.get("ordem_id") or "").strip()
+    orcamento_id = (request.GET.get("orcamento_id") or "").strip()
+    preview_ativo = (request.GET.get("_preview") or "").strip().lower() in {"1", "true", "on", "yes", "sim"}
+    preview_params = {}
+    for key in (
+        "layout_os_impressao",
+        "layout_documentos_preset",
+        "layout_documentos_cor",
+        "layout_os_frente_espaco_assinaturas_cm",
+        "layout_os_verso_espaco_assinatura_cm",
+        "layout_os_data_fonte_pt",
+        "layout_os_digital_exibir_validacao",
+        "layout_os_exibir_etiqueta_corte",
+    ):
+        value = (request.GET.get(key) or "").strip()
+        if value != "":
+            preview_params[key] = value
+    if preview_ativo or preview_params:
+        preview_params["_preview"] = "1"
+
+    def _build_url(route_name, kwargs):
+        url = reverse(route_name, kwargs=kwargs)
+        if preview_params:
+            url = f"{url}?{urlencode(preview_params)}"
+        return url
+
+    from ordens.models import OrdemServico
+    from orcamentos.models import Orcamento
+
+    ordem = None
+    orcamento = None
+
+    if ordem_id.isdigit():
+        ordem = OrdemServico.objects.filter(id=int(ordem_id)).first()
+    if orcamento_id.isdigit():
+        orcamento = Orcamento.objects.select_related("ordem_servico").filter(id=int(orcamento_id)).first()
+        if orcamento and not ordem:
+            ordem = orcamento.ordem_servico
+
+    if not ordem:
+        ordem = OrdemServico.objects.order_by("-id").first()
+    if not orcamento:
+        if ordem:
+            orcamento = Orcamento.objects.select_related("ordem_servico").filter(ordem_servico=ordem).order_by("-id").first()
+        if not orcamento:
+            orcamento = Orcamento.objects.select_related("ordem_servico").order_by("-id").first()
+            if orcamento and not ordem:
+                ordem = orcamento.ordem_servico
+
+    if tipo == "os_digital":
+        if not ordem:
+            return HttpResponse("Sem OS cadastrada para pré-visualização.", content_type="text/plain", status=404)
+        return redirect(_build_url("ordens:imprimir_ordem_servico", {"pk": ordem.pk}))
+    if tipo == "relatorio":
+        if not ordem:
+            return HttpResponse("Sem OS cadastrada para pré-visualização.", content_type="text/plain", status=404)
+        return redirect(_build_url("ordens:imprimir_relatorio_tecnico", {"pk": ordem.pk}))
+    if tipo == "orcamento":
+        if not orcamento:
+            return HttpResponse("Sem orçamento cadastrado para pré-visualização.", content_type="text/plain", status=404)
+        return redirect(_build_url("orcamentos:imprimir_orcamento", {"pk": orcamento.pk}))
+
+    if not ordem:
+        return HttpResponse("Sem OS cadastrada para pré-visualização.", content_type="text/plain", status=404)
+    return redirect(_build_url("ordens:imprimir_ordem_servico_impressao", {"pk": ordem.pk}))
 
 
 @role_required(MANAGER_ROLES)

@@ -25,5 +25,6 @@ urlpatterns = [
 
     # NOVA ROTA: Configurações do Sistema
     path('sistema/configuracao/', views.configuracao_sistema_edit, name='configuracao_sistema'),
+    path('sistema/preview-documento/', views.preview_documento, name='preview_documento'),
     path('buscar-cep/', views.buscar_cep, name='buscar_cep'),
 ]

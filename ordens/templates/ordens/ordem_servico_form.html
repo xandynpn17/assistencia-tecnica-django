@@ -9,7 +9,10 @@
     .card-modern { border: none; border-radius: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); margin-bottom: 25px; background: #ffffff; }
     .card-modern-header { background: #2c3e50; color: white; border-radius: 10px 10px 0 0; padding: 14px 18px; font-weight: 600; }
     .card-modern-body { padding: 20px; }
-    .wizard-actions-top { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
+    .wizard-actions-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .wizard-actions-group { display: flex; gap: 8px; align-items: center; }
+    .wizard-action-btn { padding: .2rem .55rem; font-size: .8rem; line-height: 1.2; }
+    .wizard-icon-btn { width: 34px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     .wizard-step { display: none; }
     .wizard-step.active { display: block; }
     .section-title { font-size: 0.95rem; font-weight: 700; color: #2c3e50; margin-bottom: 10px; border-left: 3px solid #3498db; padding-left: 8px; }
@@ -47,16 +50,25 @@
     .step-two-layout #id_notas_internas { min-height: 82px; }
     .compact-note { font-size: .8rem; color: #64748b; margin-top: 6px; }
     .sidebar-stack.align-top { align-content: start; }
+    .review-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 12px; }
+    .review-card { border: 1px solid #e9edf3; border-radius: 10px; background: #fff; }
+    .review-card-head { padding: 10px 12px; border-bottom: 1px solid #edf1f5; font-weight: 700; font-size: .92rem; }
+    .review-card-body { padding: 12px; }
+    .review-actions-top { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
+    .review-label { color: #6b7280; font-size: .74rem; text-transform: uppercase; letter-spacing: .03em; }
+    .review-value { font-weight: 600; color: #1f2937; font-size: .93rem; }
+    .review-highlight { border: 1px solid #dce8f8; background: #f8fbff; border-radius: 8px; padding: 10px 12px; }
     @media (max-width: 991.98px) {
         .quick-fields-grid { grid-template-columns: 1fr; }
         .partner-field .form-control { max-width: 100%; }
+        .review-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 767.98px) {
         .card-modern-header,
         .card-modern-body { padding: 14px; }
         .wizard-actions-top,
         .card-footer { gap: 8px; }
-        .wizard-actions-top .btn,
+        .wizard-actions-top .btn { width: auto; }
         .card-footer .btn { width: 100%; }
         .card-footer { flex-direction: column-reverse; }
         .section-title { font-size: 0.9rem; }
@@ -87,6 +99,116 @@
         </div>
         {% endif %}
 
+        {% if revisao_criacao %}
+        <div class="card-modern">
+            <div class="card-modern-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-check-circle mr-2"></i>Revisao antes de criar a OS</span>
+                <small>Confirme os dados</small>
+            </div>
+            <div class="card-modern-body">
+                <div class="review-actions-top">
+                    <form method="post" class="mb-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="reeditar" value="1">
+                        {% for campo, valor in revisao_payload.items %}
+                        <input type="hidden" name="{{ campo }}" value="{{ valor }}">
+                        {% endfor %}
+                        <button type="submit" class="btn btn-outline-secondary">
+                            <i class="fas fa-edit mr-2"></i>Editar
+                        </button>
+                    </form>
+                    <form method="post" class="mb-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="confirmar_criacao" value="1">
+                        {% for campo, valor in revisao_payload.items %}
+                        <input type="hidden" name="{{ campo }}" value="{{ valor }}">
+                        {% endfor %}
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-save mr-2"></i>Criar OS
+                        </button>
+                    </form>
+                </div>
+                <div class="alert alert-warning mb-3">
+                    Revise os dados abaixo. Se algo estiver errado, volte e corrija antes de criar.
+                </div>
+                <div class="review-grid">
+                    <div class="review-card">
+                        <div class="review-card-head">Cliente e equipamento</div>
+                        <div class="review-card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-2">
+                                    <div class="review-label">Cliente</div>
+                                    <div class="review-value">{{ revisao_resumo.cliente.nome }}</div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="review-label">Telefone</div>
+                                    <div class="review-value">{{ revisao_resumo.cliente.telefone }}</div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="review-label">Documento</div>
+                                    <div class="review-value">{{ revisao_resumo.cliente.documento }}</div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="review-label">Tipo de equipamento</div>
+                                    <div class="review-value">{{ revisao_resumo.equipamento.tipo }}</div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="review-label">Marca / Modelo</div>
+                                    <div class="review-value">{{ revisao_resumo.equipamento.marca }} / {{ revisao_resumo.equipamento.modelo }}</div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="review-label">Numero de serie</div>
+                                    <div class="review-value">{{ revisao_resumo.equipamento.serie }}</div>
+                                </div>
+                                <div class="col-md-12">
+                                    <div class="review-label">Peritagem</div>
+                                    <div class="review-value">{{ revisao_resumo.equipamento.peritagem }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="review-card">
+                        <div class="review-card-head">Atendimento e diagnostico inicial</div>
+                        <div class="review-card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-2">
+                                    <div class="review-label">Tipo de reparo</div>
+                                    <div class="review-value">{{ revisao_resumo.atendimento.tipo_reparo }}</div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="review-label">Data da compra</div>
+                                    <div class="review-value">{{ revisao_resumo.atendimento.data_compra }}</div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="review-label">Nota fiscal</div>
+                                    <div class="review-value">{{ revisao_resumo.atendimento.nota_fiscal }}</div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="review-label">Referencia parceiro</div>
+                                    <div class="review-value">{{ revisao_resumo.atendimento.referencia_parceiro }}</div>
+                                </div>
+                                <div class="col-md-12 mb-2">
+                                    <div class="review-highlight">
+                                        <div class="review-label">Defeito informado</div>
+                                        <div class="review-value">{{ revisao_resumo.tecnico.defeito }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-12 mb-2">
+                                    <div class="review-label">Acessorios</div>
+                                    <div class="review-value">{{ revisao_resumo.tecnico.acessorios }}</div>
+                                </div>
+                                <div class="col-md-12">
+                                    <div class="review-label">Notas internas</div>
+                                    <div class="review-value">{{ revisao_resumo.tecnico.notas_internas }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
         <div class="card-modern">
             <div class="card-modern-header d-flex justify-content-between align-items-center">
                 <span><i class="fas fa-clipboard-list mr-2"></i>Preenchimento da Ordem</span>
@@ -95,6 +217,7 @@
             <form method="post" novalidate id="ordem-form">
                 {% csrf_token %}
                 <input type="hidden" name="wizard_step" id="id_wizard_step" value="{{ request.POST.wizard_step|default:'1' }}">
+                <input type="hidden" name="create_nonce" id="id_create_nonce" value="{{ request.POST.create_nonce|default:create_nonce }}">
                 <div class="card-modern-body">
                     {% if form.non_field_errors %}
                     <div class="alert alert-danger">{{ form.non_field_errors }}</div>
@@ -102,8 +225,20 @@
                     <div id="wizard-feedback"></div>
 
                     <div class="wizard-actions-top">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-prev" style="display:none;">Voltar</button>
-                        <button type="button" class="btn btn-primary btn-sm" id="btn-next">Avançar</button>
+                        <div class="wizard-actions-group">
+                            <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-outline-secondary wizard-action-btn wizard-icon-btn" data-nav-back-client title="Voltar para selecao do cliente" aria-label="Voltar para selecao do cliente">
+                                <i class="fas fa-arrow-left"></i>
+                            </a>
+                        </div>
+                        <div class="wizard-actions-group">
+                            <button type="button" class="btn btn-outline-secondary wizard-action-btn wizard-icon-btn" data-nav-prev style="display:none;" title="Voltar para pagina 1" aria-label="Voltar para pagina 1">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button type="button" class="btn btn-primary wizard-action-btn" data-nav-next>Avançar</button>
+                            <button type="submit" class="btn btn-success wizard-action-btn wizard-icon-btn" data-nav-save style="display:none;" title="Revisar dados" aria-label="Revisar dados">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="wizard-step active" id="step-1">
@@ -185,17 +320,15 @@
                         </div>
                     </div>
                 </div>
-                <div class="card-footer d-flex justify-content-between" style="background:#f8f9fa; border-radius:0 0 10px 10px;">
-                    <a href="{% url 'ordens:lista_ordens' %}" class="btn btn-default"><i class="fas fa-times mr-2"></i>Cancelar</a>
-                    <button type="submit" class="btn btn-success" id="btn-save" style="display:none;"><i class="fas fa-save mr-2"></i>Salvar</button>
-                </div>
             </form>
         </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+{% if not revisao_criacao %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const ordemForm = document.getElementById("ordem-form");
@@ -217,9 +350,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const marcasInfo = {{ marcas_info_json|default:'{}'|safe }};
 
     const steps = [document.getElementById("step-1"), document.getElementById("step-2")];
-    const btnPrev = document.getElementById("btn-prev");
-    const btnNext = document.getElementById("btn-next");
-    const btnSave = document.getElementById("btn-save");
+    const btnPrev = Array.from(document.querySelectorAll("[data-nav-prev]"));
+    const btnNext = Array.from(document.querySelectorAll("[data-nav-next]"));
+    const btnSave = Array.from(document.querySelectorAll("[data-nav-save]"));
+    const btnBackClient = document.querySelector("[data-nav-back-client]");
     const stepLabel = document.getElementById("wizard-step-label");
     const wizardStepInput = document.getElementById("id_wizard_step");
     const wizardFeedback = document.getElementById("wizard-feedback");
@@ -252,9 +386,12 @@ document.addEventListener("DOMContentLoaded", function () {
             wizardStepInput.value = String(idx + 1);
         }
         steps.forEach((s, i) => s.classList.toggle("active", i === idx));
-        btnPrev.style.display = idx === 0 ? "none" : "inline-block";
-        btnNext.style.display = idx === steps.length - 1 ? "none" : "inline-block";
-        btnSave.style.display = idx === steps.length - 1 ? "inline-block" : "none";
+        if (btnBackClient) {
+            btnBackClient.style.display = idx === 0 ? "inline-flex" : "none";
+        }
+        btnPrev.forEach((btn) => { btn.style.display = idx === 0 ? "none" : "inline-block"; });
+        btnNext.forEach((btn) => { btn.style.display = idx === steps.length - 1 ? "none" : "inline-block"; });
+        btnSave.forEach((btn) => { btn.style.display = idx === steps.length - 1 ? "inline-block" : "none"; });
         stepLabel.textContent = `Página ${idx + 1} de ${steps.length}`;
     }
 
@@ -352,16 +489,20 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    btnNext.addEventListener("click", function () {
-        if (currentStep === 0 && !validateStep1()) {
-            mostrarMensagemWizard("Preencha os campos obrigatorios da pagina 1 antes de avancar.", "warning");
-            return;
-        }
-        showStep(Math.min(currentStep + 1, steps.length - 1));
+    btnNext.forEach((btn) => {
+        btn.addEventListener("click", function () {
+            if (currentStep === 0 && !validateStep1()) {
+                mostrarMensagemWizard("Preencha os campos obrigatorios da pagina 1 antes de avancar.", "warning");
+                return;
+            }
+            showStep(Math.min(currentStep + 1, steps.length - 1));
+        });
     });
 
-    btnPrev.addEventListener("click", function () {
-        showStep(Math.max(currentStep - 1, 0));
+    btnPrev.forEach((btn) => {
+        btn.addEventListener("click", function () {
+            showStep(Math.max(currentStep - 1, 0));
+        });
     });
 
     function syncBrandUI() {
@@ -440,6 +581,14 @@ document.addEventListener("DOMContentLoaded", function () {
             if (tag === "textarea") return;
             if (type === "submit" || type === "button") return;
             event.preventDefault();
+            if (currentStep >= steps.length - 1) {
+                return;
+            }
+            if (currentStep === 0 && !validateStep1()) {
+                mostrarMensagemWizard("Preencha os campos obrigatorios da pagina 1 antes de avancar.", "warning");
+                return;
+            }
+            showStep(Math.min(currentStep + 1, steps.length - 1));
         });
         ordemForm.addEventListener("submit", function (event) {
             if (!isGarantia()) return;
@@ -473,4 +622,5 @@ $(function () {
     }
 });
 </script>
+{% endif %}
 {% endblock %}

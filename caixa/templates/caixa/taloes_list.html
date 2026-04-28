@@ -50,6 +50,9 @@
                         <td>{{ p.data|date:"d/m/Y H:i" }}</td>
                         <td class="text-right">
                             <a href="{% url 'caixa:imprimir_talao' p.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">2a via</a>
+                            {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+                            <a href="{% url 'caixa:excluir_pagamento' p.id %}" class="btn btn-sm btn-outline-danger">Excluir</a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

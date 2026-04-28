@@ -23,9 +23,19 @@ class ConfirmacaoOSService:
         ordem.confirmado = True
         ordem.tipo_confirmacao = "link"
         ordem.data_confirmacao = timezone.now()
+        ordem.data_assinatura_entrada = ordem.data_confirmacao
         ordem.ip_confirmacao = ip_origem or ""
         ordem.confirmado_por = None
-        ordem.save(update_fields=["confirmado", "tipo_confirmacao", "data_confirmacao", "ip_confirmacao", "confirmado_por"])
+        ordem.save(
+            update_fields=[
+                "confirmado",
+                "tipo_confirmacao",
+                "data_confirmacao",
+                "data_assinatura_entrada",
+                "ip_confirmacao",
+                "confirmado_por",
+            ]
+        )
 
         cls.registrar_log(
             ordem,
@@ -47,16 +57,20 @@ class ConfirmacaoOSService:
         ordem.confirmado = True
         ordem.tipo_confirmacao = tipo_confirmacao
         ordem.data_confirmacao = timezone.now()
+        ordem.data_assinatura_entrada = ordem.data_confirmacao
         ordem.confirmado_por = usuario
         if assinatura_imagem:
             ordem.assinatura_imagem = assinatura_imagem
+            ordem.assinatura_entrada_imagem = assinatura_imagem
         ordem.save(
             update_fields=[
                 "confirmado",
                 "tipo_confirmacao",
                 "data_confirmacao",
+                "data_assinatura_entrada",
                 "confirmado_por",
                 "assinatura_imagem",
+                "assinatura_entrada_imagem",
             ]
         )
 

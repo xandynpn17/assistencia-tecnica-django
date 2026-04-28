@@ -77,6 +77,6 @@ def ordem_post_save_log(sender, instance, created, **kwargs):
             evento="CANCELAMENTO_OS",
         )
 
-    entrou_em_status_final = instance.status in {"pronto_contactar", "pronto_contactado", "concluida"} and status_alterado
+    entrou_em_status_final = instance.status in {"pronto_contactado", "concluida"} and status_alterado
     if entrou_em_status_final or relatorio_preenchido_agora:
         processar_evento_servico_finalizado(instance, evento="SERVICO_FINALIZADO")

@@ -21,6 +21,11 @@
             <div class="d-flex align-items-end">
                 <button type="submit" class="btn btn-sm btn-primary">Atualizar</button>
             </div>
+            {% if filtros_salvos_existem %}
+            <div class="d-flex align-items-end">
+                <a href="{% url 'caixa:auditoria_operacional' %}?restaurar=1" class="btn btn-sm btn-outline-dark">Últimos filtros</a>
+            </div>
+            {% endif %}
         </form>
     </div>
 
@@ -30,7 +35,9 @@
         <div class="col-md-2"><div class="small-box bg-secondary"><div class="inner"><h4>{{ total_caixas_com_diferenca }}</h4><p>Caixas com diferença</p></div></div></div>
         <div class="col-md-2"><div class="small-box bg-info"><div class="inner"><h4>{{ total_pagamentos_sem_talao }}</h4><p>Pagamentos sem talão</p></div></div></div>
         <div class="col-md-2"><div class="small-box bg-dark"><div class="inner"><h4>{{ total_saidas_sem_centro }}</h4><p>Saídas sem centro</p></div></div></div>
+        <div class="col-md-2"><div class="small-box bg-dark"><div class="inner"><h4>{{ total_saidas_sem_categoria }}</h4><p>Saídas sem categoria</p></div></div></div>
         <div class="col-md-2"><div class="small-box bg-primary"><div class="inner"><h4>{{ total_garantias_pendentes }}</h4><p>Garantias pendentes</p></div></div></div>
+        <div class="col-md-2"><div class="small-box bg-dark"><div class="inner"><h4>{{ total_eventos_criticos }}</h4><p>Eventos críticos</p></div></div></div>
     </div>
 
     <div class="card mb-3">
@@ -83,7 +90,7 @@
                 <div class="card-header bg-white"><strong>Caixas com diferença</strong></div>
                 <div class="card-body p-0 table-responsive">
                     <table class="table table-sm mb-0">
-                        <thead><tr><th>Data</th><th class="text-right">Saldo final</th><th class="text-right">Contado</th><th class="text-right">Diferença</th></tr></thead>
+                        <thead><tr><th>Data</th><th class="text-right">Saldo final</th><th class="text-right">Contado</th><th class="text-right">Diferença</th><th></th></tr></thead>
                         <tbody>
                             {% for item in caixas_com_diferenca %}
                             <tr>
@@ -91,9 +98,12 @@
                                 <td class="text-right">R$ {{ item.saldo_final|floatformat:2 }}</td>
                                 <td class="text-right">R$ {{ item.valor_contado_fisico|floatformat:2 }}</td>
                                 <td class="text-right">R$ {{ item.diferenca_fechamento|floatformat:2 }}</td>
+                                <td class="text-right">
+                                    <a href="{% url 'caixa:detalhe_caixa' item.id %}" class="btn btn-xs btn-outline-primary">Detalhes</a>
+                                </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="4" class="text-center text-muted">Nenhum caixa com diferença.</td></tr>
+                            <tr><td colspan="5" class="text-center text-muted">Nenhum caixa com diferença.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -169,6 +179,49 @@
                     </table>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header bg-white"><strong>Eventos críticos financeiros</strong></div>
+        <div class="card-body p-0 table-responsive">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Quando</th><th>Evento</th><th>Descrição</th><th class="text-right">Valor</th><th>Usuário</th></tr></thead>
+                <tbody>
+                    {% for evento in eventos_criticos %}
+                    <tr>
+                        <td>{{ evento.criado_em|date:'d/m/Y H:i' }}</td>
+                        <td>{{ evento.evento }}</td>
+                        <td>{{ evento.descricao|default:'-' }}</td>
+                        <td class="text-right">{% if evento.valor is not None %}R$ {{ evento.valor|floatformat:2 }}{% else %}-{% endif %}</td>
+                        <td>{{ evento.usuario.username|default:'-' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted">Nenhum evento crítico no período.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header bg-white"><strong>Saídas sem categoria</strong></div>
+        <div class="card-body p-0 table-responsive">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Descrição</th><th>Centro</th><th class="text-right">Valor</th><th>Data</th></tr></thead>
+                <tbody>
+                    {% for lancamento in saidas_sem_categoria %}
+                    <tr>
+                        <td>{{ lancamento.descricao }}</td>
+                        <td>{{ lancamento.centro_custo.nome|default:"-" }}</td>
+                        <td class="text-right">R$ {{ lancamento.valor|floatformat:2 }}</td>
+                        <td>{{ lancamento.data|date:'d/m/Y H:i' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="text-center text-muted">Nenhuma saída sem categoria.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 

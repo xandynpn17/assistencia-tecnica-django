@@ -1,7 +1,10 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from caixa.models import Caixa, Pagamento
 from clientes.models import Cliente
 from ordens.models import OrdemServico
 from orcamentos.models import Orcamento
@@ -114,3 +117,64 @@ class PermissoesClientesTests(TestCase):
         self.assertEqual(ordem.cliente_id, principal.id)
         self.assertEqual(orc.cliente_id, principal.id)
         self.assertFalse(Cliente.objects.filter(id=duplicado.id).exists())
+
+
+class DetalhesClienteTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_detalhes_cliente",
+            password="senha123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Detalhado",
+            tipo_cliente="pj",
+            documento="",
+            telefone="11999990000",
+            origem_cliente="google",
+            email="cliente@detalhes.com",
+            logradouro="Rua das Flores",
+            numero="123",
+            complemento="Sala 4",
+            bairro="Centro",
+            cidade="Lisboa",
+            estado="SP",
+            codigo_postal="01000-000",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca C",
+            modelo_equipamento="Modelo C",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="em_andamento",
+        )
+        caixa = Caixa.objects.create(aberto=True, saldo_inicial=Decimal("0.00"))
+        Pagamento.objects.create(
+            caixa=caixa,
+            ordem_servico=self.ordem,
+            valor=Decimal("75.00"),
+            metodo="pix",
+        )
+
+    def test_detalhes_cliente_exibe_tipo_e_endereco_montado(self):
+        response = self.client.get(reverse("clientes:detalhes_cliente", args=[self.cliente.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Google")
+        self.assertContains(response, "Pessoa Jurídica")
+        self.assertContains(response, "Rua das Flores 123")
+        self.assertContains(response, "Sala 4")
+        self.assertContains(response, "Centro, Lisboa")
+
+    def test_detalhes_cliente_exibe_resumo_financeiro(self):
+        response = self.client.get(reverse("clientes:detalhes_cliente", args=[self.cliente.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Total pago")
+        self.assertContains(response, "Em aberto")
+        self.assertContains(response, "Ticket médio")
+        self.assertContains(response, "75,00")

@@ -36,6 +36,23 @@
     align-items: center;
     padding-top: 8px;
   }
+  .user-form-wrap .module-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px 14px;
+  }
+  .user-form-wrap .module-option {
+    border: 1px solid #e6edf3;
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #f8fbfd;
+  }
+  .user-form-wrap .module-option small {
+    display: block;
+    color: #607487;
+    margin-top: 4px;
+    line-height: 1.35;
+  }
 </style>
 {% endblock %}
 
@@ -114,6 +131,35 @@
               <label class="mb-0">{{ form.is_active }} {{ form.is_active.label }}</label>
               <label class="mb-0">{{ form.is_staff }} {{ form.is_staff.label }}</label>
             </div>
+          </div>
+        </div>
+
+        <div class="section-title mt-3">Funções Extras por Módulo</div>
+        <div class="module-grid">
+          <div class="module-option">
+            <label class="mb-0">{{ form.acesso_ordens_extra }} {{ form.acesso_ordens_extra.label|default:"Ordens" }}</label>
+            <small>Liberar acesso ao fluxo de ordens além do perfil base.</small>
+            {{ form.acesso_ordens_extra.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.acesso_estoque_extra }} {{ form.acesso_estoque_extra.label|default:"Estoque" }}</label>
+            <small>Liberar consulta e operações de estoque para este usuário.</small>
+            {{ form.acesso_estoque_extra.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.acesso_caixa_operacional_extra }} {{ form.acesso_caixa_operacional_extra.label|default:"Caixa operacional" }}</label>
+            <small>Liberar recebimentos, saídas e rotinas operacionais do caixa.</small>
+            {{ form.acesso_caixa_operacional_extra.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.acesso_caixa_financeiro_extra }} {{ form.acesso_caixa_financeiro_extra.label|default:"Caixa financeiro" }}</label>
+            <small>Liberar contas, relatórios, DRE e rotinas financeiras.</small>
+            {{ form.acesso_caixa_financeiro_extra.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.acesso_configuracoes_extra }} {{ form.acesso_configuracoes_extra.label|default:"Configurações" }}</label>
+            <small>Liberar acesso ao painel de configurações além do perfil base.</small>
+            {{ form.acesso_configuracoes_extra.errors }}
           </div>
         </div>
 

@@ -393,6 +393,13 @@
           </div>
           <input type="hidden" name="aplicar_vendas" value="1">
         </div>
+        <div class="d-flex flex-wrap align-items-center mt-2" style="gap:8px;">
+          {% if filtros_salvos_existem %}
+          <a href="{% url 'caixa:meu_desempenho' %}?restaurar=1" class="btn btn-sm btn-outline-dark">Últimos filtros</a>
+          {% endif %}
+          <a href="{% url 'caixa:comissoes_pagamento' %}?status=PENDENTE" class="btn btn-sm btn-outline-primary">Ir para pagamento</a>
+          <a href="{% url 'caixa:comissoes_pendencias' %}" class="btn btn-sm btn-outline-danger">Ver pendências</a>
+        </div>
       </form>
     </div>
   </div>

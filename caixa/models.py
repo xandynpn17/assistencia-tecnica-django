@@ -17,6 +17,7 @@ class Caixa(models.Model):
     valor_contado_fisico = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     diferenca_fechamento = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     justificativa_diferenca = models.TextField(blank=True)
+    conferencia_formas_pagamento = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["-data", "-id"]
@@ -49,6 +50,8 @@ class Pagamento(models.Model):
     ordem_servico = models.ForeignKey("ordens.OrdemServico", on_delete=models.SET_NULL, null=True, blank=True)
     stock_item = models.ForeignKey("estoque.Produto", on_delete=models.SET_NULL, null=True, blank=True)
     valor = models.DecimalField(max_digits=10, decimal_places=2)
+    desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    desconto_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     forma_pagamento = models.ForeignKey(
         "FormaPagamento",
         on_delete=models.SET_NULL,
@@ -59,6 +62,7 @@ class Pagamento(models.Model):
     metodo = models.CharField(max_length=50, blank=True, default="")
     referencia = models.CharField(max_length=50, blank=True, null=True, help_text="Número do talão ou comprovante")
     numero_talao = models.CharField(max_length=32, unique=True, null=True, blank=True, db_index=True)
+    chave_idempotencia = models.CharField(max_length=64, unique=True, null=True, blank=True, db_index=True)
     data_emissao_talao = models.DateTimeField(null=True, blank=True)
     data = models.DateTimeField(auto_now_add=True)
     observacao = models.TextField(blank=True, null=True)
@@ -68,6 +72,10 @@ class Pagamento(models.Model):
         if self.forma_pagamento:
             return self.forma_pagamento.nome
         return self.metodo or "-"
+
+    @property
+    def valor_liquidado(self):
+        return (self.valor or Decimal("0.00")) + (self.desconto or Decimal("0.00"))
 
     def __str__(self):
         origem = (
@@ -210,6 +218,13 @@ class LancamentoCaixa(models.Model):
         related_name="lancamento_caixa",
     )
     descricao = models.CharField(max_length=200)
+    categoria = models.ForeignKey(
+        "CategoriaFinanceira",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lancamentos",
+    )
     centro_custo = models.ForeignKey(
         "CentroCusto",
         on_delete=models.SET_NULL,
@@ -224,6 +239,10 @@ class LancamentoCaixa(models.Model):
 
     def __str__(self):
         return f"{self.tipo} - R${self.valor}"
+
+    @property
+    def categoria_display(self):
+        return getattr(self.categoria, "nome", "") or "Sem categoria"
 
 
 class AuditoriaFinanceira(models.Model):
@@ -551,6 +570,13 @@ class CustoFixoMensal(models.Model):
     competencia = models.DateField(help_text="Informe o primeiro dia do mes de referencia.")
     descricao = models.CharField(max_length=140)
     categoria = models.CharField(max_length=80, blank=True)
+    categoria_financeira = models.ForeignKey(
+        "CategoriaFinanceira",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="custos_fixos_mensais",
+    )
     centro_custo = models.ForeignKey(
         "CentroCusto",
         on_delete=models.SET_NULL,
@@ -576,6 +602,10 @@ class CustoFixoMensal(models.Model):
     def __str__(self):
         return f"{self.descricao} ({self.competencia:%m/%Y})"
 
+    @property
+    def categoria_display(self):
+        return getattr(self.categoria_financeira, "nome", "") or self.categoria or "-"
+
     def atualizar_status_automatico(self):
         if self.status == "cancelado":
             return
@@ -592,6 +622,8 @@ class CustoFixoMensal(models.Model):
         super().clean()
         if self.competencia:
             self.competencia = self.competencia.replace(day=1)
+        if self.categoria_financeira:
+            self.categoria = self.categoria_financeira.nome
         if (self.valor_previsto or Decimal("0.00")) < Decimal("0.00"):
             raise ValidationError({"valor_previsto": "Valor previsto nao pode ser negativo."})
         if (self.valor_pago or Decimal("0.00")) < Decimal("0.00"):
@@ -672,6 +704,13 @@ class ContaPagar(models.Model):
     valor_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     valor_pago = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     vencimento = models.DateField()
+    categoria = models.ForeignKey(
+        CategoriaFinanceira,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contas_pagar",
+    )
     centro_custo = models.ForeignKey(CentroCusto, on_delete=models.SET_NULL, null=True, blank=True, related_name="contas_pagar")
     status = models.CharField(max_length=12, choices=STATUS, default="aberta")
     criado_em = models.DateTimeField(auto_now_add=True)

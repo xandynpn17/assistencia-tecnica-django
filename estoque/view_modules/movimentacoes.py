@@ -84,14 +84,91 @@ def listar_movimentacoes(request):
     movimentacoes = MovimentacaoEstoque.objects.select_related("produto", "origem", "destino", "usuario")
     tipo = (request.GET.get("tipo") or "").strip()
     ponto = (request.GET.get("ponto") or "").strip()
+    q = (request.GET.get("q") or "").strip()
+    data_inicio = (request.GET.get("data_inicio") or "").strip()
+    data_fim = (request.GET.get("data_fim") or "").strip()
+    quick = (request.GET.get("quick") or "").strip()
+    export = (request.GET.get("export") or "").strip().lower()
     page_number = request.GET.get("page")
+
+    if quick == "hoje":
+        hoje = timezone.localdate().isoformat()
+        data_inicio = hoje
+        data_fim = hoje
+    elif quick == "7_dias":
+        data_inicio = (timezone.localdate() - timedelta(days=6)).isoformat()
+        data_fim = timezone.localdate().isoformat()
+    elif quick == "30_dias":
+        data_inicio = (timezone.localdate() - timedelta(days=29)).isoformat()
+        data_fim = timezone.localdate().isoformat()
+
     if tipo:
         movimentacoes = movimentacoes.filter(tipo=tipo)
     if ponto:
         movimentacoes = movimentacoes.filter(Q(origem_id=ponto) | Q(destino_id=ponto))
+    if q:
+        movimentacoes = movimentacoes.filter(
+            Q(produto__nome__icontains=q)
+            | Q(produto__sku__icontains=q)
+            | Q(produto__ean__icontains=q)
+            | Q(observacao__icontains=q)
+            | Q(usuario__username__icontains=q)
+        )
+    if data_inicio:
+        movimentacoes = movimentacoes.filter(criado_em__date__gte=data_inicio)
+    if data_fim:
+        movimentacoes = movimentacoes.filter(criado_em__date__lte=data_fim)
     movimentacoes = movimentacoes.order_by("-criado_em", "-id")
+
+    resumo_qs = movimentacoes
+    resumo = {
+        "total": resumo_qs.count(),
+        "entradas": resumo_qs.filter(tipo="entrada").count(),
+        "transferencias": resumo_qs.filter(tipo="transferencia").count(),
+        "saidas": resumo_qs.filter(tipo__in=["venda", "consumo_os", "avaria"]).count(),
+    }
+
+    if export == "csv":
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="movimentacoes_estoque.csv"'
+        response.write("\ufeff")
+        writer = csv.writer(response, delimiter=";")
+        writer.writerow(["data", "produto", "tipo", "quantidade", "origem", "destino", "observacao", "usuario"])
+        for m in resumo_qs:
+            writer.writerow(
+                [
+                    timezone.localtime(m.criado_em).strftime("%d/%m/%Y %H:%M"),
+                    m.produto.nome,
+                    m.get_tipo_display(),
+                    m.quantidade,
+                    str(m.origem or "-"),
+                    str(m.destino or "-"),
+                    m.observacao or "-",
+                    str(m.usuario or "-"),
+                ]
+            )
+        return response
+
     movimentacoes_page = Paginator(movimentacoes, 50).get_page(page_number)
-    return render(request, "estoque/movimentacoes_list.html", {"movimentacoes": movimentacoes_page, "movimentacoes_page": movimentacoes_page, "tipos_mov": MovimentacaoEstoque.TIPO_CHOICES, "pontos": PontoOperacional.objects.filter(ativo=True), "tipo_filtro": tipo, "ponto_filtro": ponto, "menu_app": "estoque", "menu_sub": "movimentacoes"})
+    return render(
+        request,
+        "estoque/movimentacoes_list.html",
+        {
+            "movimentacoes": movimentacoes_page,
+            "movimentacoes_page": movimentacoes_page,
+            "tipos_mov": MovimentacaoEstoque.TIPO_CHOICES,
+            "pontos": PontoOperacional.objects.filter(ativo=True),
+            "tipo_filtro": tipo,
+            "ponto_filtro": ponto,
+            "q": q,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "quick": quick,
+            "resumo": resumo,
+            "menu_app": "estoque",
+            "menu_sub": "movimentacoes",
+        },
+    )
 
 
 @role_required(STOCK_MANAGE_ROLES)
@@ -123,12 +200,32 @@ def ubicacoes_estoque(request):
 @role_required(STOCK_MANAGE_ROLES)
 def transferir_estoque(request):
     q = (request.GET.get("q") or "").strip()
+    produto_id = (request.GET.get("produto_id") or request.POST.get("produto_id") or "").strip()
     produtos = Produto.objects.filter(ativo=True, is_servico=False)
     if q:
         produtos = produtos.filter(Q(nome__icontains=q) | Q(ean__icontains=q) | Q(sku__icontains=q))
     produtos = produtos.order_by("nome")[:50]
     pontos = PontoOperacional.objects.filter(ativo=True).order_by("codigo")
     ubicacoes = UbicacaoEstoque.objects.select_related("ponto_operacional").filter(ativo=True).order_by("ponto_operacional__codigo", "codigo")
+    produto_selecionado = None
+    if produto_id.isdigit():
+        produto_selecionado = (
+            Produto.objects.filter(id=int(produto_id), ativo=True, is_servico=False)
+            .select_related("marca", "ponto_operacional")
+            .first()
+        )
+
+    def _redirect_transferencia(*, produto=None):
+        params = []
+        if q:
+            params.append(f"q={q}")
+        if produto:
+            params.append(f"produto_id={produto.id}")
+        url = reverse("estoque:transferir_estoque")
+        if params:
+            url = f"{url}?{'&'.join(params)}"
+        return redirect(url)
+
     if request.method == "POST":
         produto = get_object_or_404(Produto, id=request.POST.get("produto_id"), ativo=True)
         origem = get_object_or_404(PontoOperacional, id=request.POST.get("origem_id"), ativo=True)
@@ -141,20 +238,20 @@ def transferir_estoque(request):
             quantidade = 0
         if quantidade <= 0:
             messages.error(request, "Quantidade invalida.")
-            return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
+            return _redirect_transferencia(produto=produto)
         if origem == destino:
             messages.error(request, "Origem e destino devem ser diferentes.")
-            return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
+            return _redirect_transferencia(produto=produto)
         if (destino.codigo or "").upper() == "PO2" and not destino_ubicacao_id and not destino_ubicacao_txt:
             messages.error(request, "Selecione ou informe a ubicacao de destino no PO2.")
-            return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
+            return _redirect_transferencia(produto=produto)
         destino_ubicacao = destino_ubicacao_txt
         if destino_ubicacao_id:
             ub = UbicacaoEstoque.objects.filter(id=destino_ubicacao_id, ativo=True).select_related("ponto_operacional").first()
             if ub:
                 if ub.ponto_operacional_id != destino.id:
                     messages.error(request, "A ubicacao selecionada nao pertence ao ponto de destino.")
-                    return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
+                    return _redirect_transferencia(produto=produto)
                 destino_ubicacao = ub.codigo if not ub.descricao else f"{ub.codigo} - {ub.descricao}"
         with transaction.atomic():
             SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=origem)
@@ -162,24 +259,48 @@ def transferir_estoque(request):
             disponivel = saldo_disponivel(produto, origem)
             if disponivel < quantidade:
                 messages.error(request, f"Saldo insuficiente na origem. Disponivel: {disponivel}.")
-                return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
+                return _redirect_transferencia(produto=produto)
             try:
                 ajustar_saldo(produto, origem, -quantidade)
                 ajustar_saldo(produto, destino, quantidade)
                 MovimentacaoEstoque.objects.create(produto=produto, tipo="transferencia", quantidade=quantidade, origem=origem, destino=destino, destino_ubicacao=destino_ubicacao, observacao=f"Transpasse por busca de artigo. {destino_ubicacao}".strip(), usuario=request.user)
             except ValueError as exc:
                 messages.error(request, str(exc))
-                return redirect(f"{reverse('estoque:transferir_estoque')}?q={q}")
+                return _redirect_transferencia(produto=produto)
         logger.info("transferencia_estoque", extra={"produto_id": produto.id, "origem_id": origem.id, "destino_id": destino.id, "quantidade": quantidade, "usuario_id": request.user.id})
         messages.success(request, "Transferencia registrada com sucesso.")
         return redirect("estoque:movimentacoes")
-    return render(request, "estoque/transferir_estoque.html", {"produtos": produtos, "pontos": pontos, "ubicacoes": ubicacoes, "q": q, "menu_app": "estoque", "menu_sub": "transferir_estoque"})
+    saldos_produto = []
+    if produto_selecionado:
+        saldos_map = {
+            saldo.ponto_operacional_id: saldo.quantidade
+            for saldo in SaldoEstoquePonto.objects.filter(produto=produto_selecionado).select_related("ponto_operacional")
+        }
+        for ponto in pontos:
+            quantidade = int(saldos_map.get(ponto.id, 0) or 0)
+            saldos_produto.append({"ponto": ponto, "quantidade": quantidade, "is_baixo": quantidade <= 0})
+    return render(
+        request,
+        "estoque/transferir_estoque.html",
+        {
+            "produtos": produtos,
+            "produto_selecionado": produto_selecionado,
+            "saldos_produto": saldos_produto,
+            "pontos": pontos,
+            "ubicacoes": ubicacoes,
+            "q": q,
+            "menu_app": "estoque",
+            "menu_sub": "transferir_estoque",
+        },
+    )
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def reposicao_estoque(request):
     po2 = PontoOperacional.objects.filter(codigo__iexact="PO2", ativo=True).first()
     po3 = PontoOperacional.objects.filter(codigo__iexact="PO3", ativo=True).first()
+    q = (request.GET.get("q") or "").strip()
+    quick = (request.GET.get("quick") or "").strip()
     if not po2 or not po3:
         messages.error(request, "Configure os pontos PO2 (Armazem) e PO3 (Loja) para usar reposicao inteligente.")
         return redirect("estoque:pontos_operacionais")
@@ -208,6 +329,8 @@ def reposicao_estoque(request):
         messages.success(request, f"Reposicao realizada: {quantidade} un de {produto.nome}.")
         return redirect("estoque:reposicao_estoque")
     produtos = Produto.objects.filter(ativo=True, is_servico=False).order_by("nome")
+    if q:
+        produtos = produtos.filter(Q(nome__icontains=q) | Q(sku__icontains=q) | Q(ean__icontains=q))
     linhas = []
     for p in produtos:
         saldo_po2 = SaldoEstoquePonto.objects.filter(produto=p, ponto_operacional=po2).values_list("quantidade", flat=True).first() or 0
@@ -217,7 +340,30 @@ def reposicao_estoque(request):
         if sugestao <= 0:
             continue
         linhas.append({"produto": p, "saldo_po2": int(saldo_po2), "saldo_po3": int(saldo_po3), "minimo": minimo, "sugestao": sugestao, "pode_repor": max(min(sugestao, int(saldo_po2)), 0), "faltante_compra": max(sugestao - int(saldo_po2), 0)})
-    return render(request, "estoque/reposicao_estoque.html", {"linhas": linhas, "po2": po2, "po3": po3, "menu_app": "estoque", "menu_sub": "reposicao_estoque"})
+    resumo = {
+        "itens": len(linhas),
+        "repor_agora": sum(1 for linha in linhas if linha["pode_repor"] > 0),
+        "faltante_compra": sum(1 for linha in linhas if linha["faltante_compra"] > 0),
+        "unidades_sugeridas": sum(linha["sugestao"] for linha in linhas),
+    }
+    if quick == "repor_agora":
+        linhas = [linha for linha in linhas if linha["pode_repor"] > 0]
+    elif quick == "faltante_compra":
+        linhas = [linha for linha in linhas if linha["faltante_compra"] > 0]
+    return render(
+        request,
+        "estoque/reposicao_estoque.html",
+        {
+            "linhas": linhas,
+            "po2": po2,
+            "po3": po3,
+            "q": q,
+            "quick": quick,
+            "resumo": resumo,
+            "menu_app": "estoque",
+            "menu_sub": "reposicao_estoque",
+        },
+    )
 
 
 @role_required(STOCK_VIEW_ROLES)

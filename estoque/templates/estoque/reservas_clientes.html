@@ -7,18 +7,112 @@
 {% endblock %}
 
 {% block content %}
+<style>
+  .reserva-summary {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .reserva-summary-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f2f7fb 100%);
+    padding: 12px;
+  }
+  .reserva-summary-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .reserva-summary-value {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #183247;
+  }
+  .reserva-quick-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .reserva-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+    color: #6b7280;
+  }
+  .reserva-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  @media (max-width: 991.98px) {
+    .reserva-summary { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 575.98px) {
+    .reserva-summary { grid-template-columns: 1fr; }
+  }
+</style>
+
 <div class="card">
   <div class="card-body border-bottom">
-    <form method="get" class="form-inline">
-      <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm mr-2" placeholder="Código, cliente, telefone, artigo">
-      <select name="status" class="form-control form-control-sm mr-2">
-        <option value="">Todos status</option>
-        {% for value, label in status_choices %}
-          <option value="{{ value }}" {% if status_filtro == value %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+    <div class="reserva-summary">
+      <div class="reserva-summary-card">
+        <div class="reserva-summary-label">Total</div>
+        <div class="reserva-summary-value">{{ resumo.total }}</div>
+      </div>
+      <div class="reserva-summary-card">
+        <div class="reserva-summary-label">Ativas</div>
+        <div class="reserva-summary-value">{{ resumo.ativas }}</div>
+      </div>
+      <div class="reserva-summary-card">
+        <div class="reserva-summary-label">Vencidas</div>
+        <div class="reserva-summary-value">{{ resumo.vencidas }}</div>
+      </div>
+      <div class="reserva-summary-card">
+        <div class="reserva-summary-label">Sem OS</div>
+        <div class="reserva-summary-value">{{ resumo.sem_os }}</div>
+      </div>
+      <div class="reserva-summary-card">
+        <div class="reserva-summary-label">Com OS</div>
+        <div class="reserva-summary-value">{{ resumo.com_os }}</div>
+      </div>
+    </div>
+
+    <div class="reserva-quick-filters">
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick=" class="btn btn-sm {% if not quick %}btn-primary{% else %}btn-outline-primary{% endif %}">Todas</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick=ativas" class="btn btn-sm {% if quick == 'ativas' %}btn-success{% else %}btn-outline-success{% endif %}">Ativas</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick=vencidas" class="btn btn-sm {% if quick == 'vencidas' %}btn-warning{% else %}btn-outline-warning{% endif %}">Vencidas</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick=sem_os" class="btn btn-sm {% if quick == 'sem_os' %}btn-info{% else %}btn-outline-info{% endif %}">Sem OS</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick=com_os" class="btn btn-sm {% if quick == 'com_os' %}btn-dark{% else %}btn-outline-dark{% endif %}">Com OS</a>
+    </div>
+
+    <form method="get" class="form-row align-items-end">
+      <div class="col-lg-5 col-md-6 mb-2">
+        <label>Busca</label>
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Codigo, cliente, telefone ou artigo">
+      </div>
+      <div class="col-lg-3 col-md-6 mb-2">
+        <label>Status</label>
+        <select name="status" class="form-control form-control-sm">
+          <option value="">Todos status</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status_filtro == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-lg-2 col-md-6 mb-2">
+        <button type="submit" class="btn btn-sm btn-primary btn-block">Filtrar</button>
+      </div>
+      <div class="col-lg-2 col-md-6 mb-2">
+        <a href="{% url 'estoque:reservas_clientes' %}" class="btn btn-sm btn-outline-secondary btn-block">Limpar</a>
+      </div>
     </form>
+
     {% if can_manage %}
       <form method="post" action="{% url 'estoque:expirar_reservas_web' %}" class="mt-2">
         {% csrf_token %}
@@ -31,43 +125,60 @@
       <table class="table table-sm table-hover mb-0">
         <thead>
           <tr>
-            <th>Código</th><th>Cliente</th><th>Telefone</th><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Válido até</th><th>Status</th><th>OS</th><th>Atendente</th><th>Técnico responsável</th><th>Ações</th>
+            <th>Reserva</th>
+            <th>Produto</th>
+            <th>Ponto/Qtd</th>
+            <th>Validade</th>
+            <th>OS / Responsaveis</th>
+            <th>Acoes</th>
           </tr>
         </thead>
         <tbody>
           {% for r in reservas %}
           <tr>
-            <td>{{ r.codigo_reserva }}</td>
-            <td>{{ r.nome_contato }}</td>
-            <td>{{ r.telefone_contato|default:"-" }}</td>
+            <td>
+              <div class="font-weight-bold">{{ r.codigo_reserva }}</div>
+              <div class="reserva-meta">
+                <span>{{ r.nome_contato }}</span>
+                <span>{{ r.telefone_contato|default:"-" }}</span>
+                <span>{{ r.get_status_display }}</span>
+              </div>
+            </td>
             <td>{{ r.produto.nome }}</td>
-            <td>{% if r.ponto_operacional %}{{ r.ponto_operacional.codigo }}{% else %}-{% endif %}</td>
-            <td>{{ r.quantidade }}</td>
+            <td>
+              <div>{% if r.ponto_operacional %}{{ r.ponto_operacional.codigo }}{% else %}-{% endif %}</div>
+              <small class="text-muted">Qtd {{ r.quantidade }}</small>
+            </td>
             <td>{{ r.valido_ate|date:"d/m/Y" }}</td>
-            <td>{{ r.get_status_display }}</td>
-            <td>{% if r.ordem_servico %}{{ r.ordem_servico.numero_os }}{% else %}-{% endif %}</td>
-            <td>{% if r.ordem_servico and r.ordem_servico.atendente_abertura %}{{ r.ordem_servico.atendente_abertura.get_full_name|default:r.ordem_servico.atendente_abertura.username }}{% else %}-{% endif %}</td>
-            <td>{% if r.ordem_servico and r.ordem_servico.tecnico_responsavel_valido %}{{ r.ordem_servico.tecnico_responsavel_valido.get_full_name|default:r.ordem_servico.tecnico_responsavel_valido.username }}{% else %}Sem técnico{% endif %}</td>
+            <td>
+              <div>{% if r.ordem_servico %}{{ r.ordem_servico.numero_os }}{% else %}<span class="text-muted">Sem OS</span>{% endif %}</div>
+              <div class="reserva-meta mt-1">
+                <span>Atend.: {% if r.ordem_servico and r.ordem_servico.atendente_abertura %}{{ r.ordem_servico.atendente_abertura.get_full_name|default:r.ordem_servico.atendente_abertura.username }}{% else %}-{% endif %}</span>
+                <span>Tec.: {% if r.ordem_servico and r.ordem_servico.tecnico_responsavel_valido %}{{ r.ordem_servico.tecnico_responsavel_valido.get_full_name|default:r.ordem_servico.tecnico_responsavel_valido.username }}{% else %}Sem tecnico{% endif %}</span>
+              </div>
+            </td>
             <td>
               <form method="post" action="{% url 'estoque:associar_reserva_ordem' r.codigo_reserva %}" class="form-inline mb-1">
                 {% csrf_token %}
-                <input type="number" name="ordem_id" class="form-control form-control-sm mr-1" placeholder="ID OS" style="width:90px;">
+                <input type="text" name="ordem_id" class="form-control form-control-sm mr-1" placeholder="ID ou numero OS" style="width:120px;">
                 <button class="btn btn-sm btn-outline-primary" type="submit">Associar</button>
               </form>
               {% if can_manage %}
-                <form method="post" action="{% url 'estoque:converter_reserva_web' r.codigo_reserva %}" class="d-inline">
+              <div class="reserva-actions">
+                <form method="post" action="{% url 'estoque:converter_reserva_web' r.codigo_reserva %}">
                   {% csrf_token %}
                   <button class="btn btn-sm btn-outline-success" type="submit">Converter</button>
                 </form>
-                <form method="post" action="{% url 'estoque:cancelar_reserva_web' r.codigo_reserva %}" class="d-inline">
+                <form method="post" action="{% url 'estoque:cancelar_reserva_web' r.codigo_reserva %}">
                   {% csrf_token %}
                   <button class="btn btn-sm btn-outline-danger" type="submit">Cancelar</button>
                 </form>
+              </div>
               {% endif %}
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="12" class="text-center text-muted">Sem reservas encontradas.</td></tr>
+          <tr><td colspan="6" class="text-center text-muted">Sem reservas encontradas.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -75,17 +186,17 @@
   </div>
   {% if reservas_page and reservas_page.paginator.num_pages > 1 %}
   <div class="card-footer d-flex justify-content-between align-items-center">
-    <small class="text-muted">Página {{ reservas_page.number }} de {{ reservas_page.paginator.num_pages }}</small>
+    <small class="text-muted">Pagina {{ reservas_page.number }} de {{ reservas_page.paginator.num_pages }}</small>
     <div class="btn-group">
       {% if reservas_page.has_previous %}
-      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&status={{ status_filtro }}&page={{ reservas_page.previous_page_number }}">Anterior</a>
+      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick={{ quick }}&page={{ reservas_page.previous_page_number }}">Anterior</a>
       {% else %}
       <button class="btn btn-sm btn-outline-secondary" disabled>Anterior</button>
       {% endif %}
       {% if reservas_page.has_next %}
-      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&status={{ status_filtro }}&page={{ reservas_page.next_page_number }}">Próxima</a>
+      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick={{ quick }}&page={{ reservas_page.next_page_number }}">Proxima</a>
       {% else %}
-      <button class="btn btn-sm btn-outline-secondary" disabled>Próxima</button>
+      <button class="btn btn-sm btn-outline-secondary" disabled>Proxima</button>
       {% endif %}
     </div>
   </div>

@@ -221,6 +221,11 @@
           <button class="btn btn-primary flex-fill" type="submit">Filtrar</button>
           <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-outline-secondary">Limpar</a>
         </div>
+        {% if filtros_salvos_existem %}
+        <div class="col-lg-2 col-md-6 mt-2 d-flex align-items-end">
+          <a href="{% url 'caixa:comissoes_pagamento' %}?restaurar=1" class="btn btn-outline-dark btn-block">Últimos filtros</a>
+        </div>
+        {% endif %}
         <div class="col-lg-3 col-md-12 mt-2 d-flex align-items-end" style="gap:8px;">
           <a class="btn btn-outline-success flex-fill" href="?{{ request.GET.urlencode }}&export=csv">Exportar CSV</a>
           <a class="btn btn-outline-danger flex-fill" href="?{{ request.GET.urlencode }}&export=pdf">Exportar PDF</a>
@@ -230,11 +235,69 @@
   </div>
 
   {% if filtro_aplicado %}
+  <div class="card secao-card mb-3">
+    <div class="card-body py-2 d-flex flex-wrap align-items-center" style="gap:8px;">
+      <strong class="mr-2">Atalhos:</strong>
+      <a href="?competencia_mes={{ competencia_mes }}&competencia_ano={{ competencia_ano }}&status=PENDENTE" class="btn btn-sm {% if status_filtro == 'PENDENTE' %}btn-primary{% else %}btn-outline-primary{% endif %}">Pendentes</a>
+      <a href="?competencia_mes={{ competencia_mes }}&competencia_ano={{ competencia_ano }}&status=LIBERADA" class="btn btn-sm {% if status_filtro == 'LIBERADA' %}btn-info{% else %}btn-outline-info{% endif %}">Liberadas</a>
+      <a href="?competencia_mes={{ competencia_mes }}&competencia_ano={{ competencia_ano }}&status=PAGA" class="btn btn-sm {% if status_filtro == 'PAGA' %}btn-success{% else %}btn-outline-success{% endif %}">Pagas</a>
+      <a href="{% url 'caixa:comissoes_pendencias' %}?competencia_mes={{ competencia_mes }}&competencia_ano={{ competencia_ano }}&criterio={{ criterio_filtro }}" class="btn btn-sm btn-outline-danger">Ver pendências</a>
+    </div>
+  </div>
+
   <div class="chip-row">
     <span class="chip"><strong>Competência:</strong> {{ competencia_mes }}/{{ competencia_ano }}</span>
     <span class="chip"><strong>Período:</strong> {{ data_inicio }} a {{ data_fim }}</span>
     <span class="chip"><strong>Status:</strong> {{ status_filtro }}</span>
     <span class="chip"><strong>Critério:</strong> {{ criterio_filtro }}</span>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-lg-3 col-md-6 col-6 mb-2">
+      <div class="kpi-card">
+        <div class="kpi-label">Lotes da competência</div>
+        <div class="kpi-value">{{ lotes_resumo.quantidade }}</div>
+      </div>
+    </div>
+    <div class="col-lg-3 col-md-6 col-6 mb-2">
+      <div class="kpi-card paga">
+        <div class="kpi-label">Valor em lotes pagos</div>
+        <div class="kpi-value">R$ {{ lotes_resumo.valor_pago|floatformat:2 }}</div>
+      </div>
+    </div>
+    <div class="col-lg-3 col-md-6 col-6 mb-2">
+      <div class="kpi-card liberada">
+        <div class="kpi-label">Itens em lote</div>
+        <div class="kpi-value">{{ lotes_resumo.itens }}</div>
+      </div>
+    </div>
+    <div class="col-lg-3 col-md-6 col-6 mb-2">
+      <div class="kpi-card">
+        <div class="kpi-label">Ticket médio por lote</div>
+        <div class="kpi-value">R$ {{ lotes_resumo.ticket_medio|floatformat:2 }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card secao-card mb-3">
+    <div class="card-header"><h3 class="card-title mb-0">Competências recentes</h3></div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-sm table-bordered mb-0">
+        <thead><tr><th>Competência</th><th class="text-center">Qtde</th><th class="text-right">Total</th><th class="text-right">Pagas</th></tr></thead>
+        <tbody>
+          {% for row in resumo_competencias_recentes %}
+          <tr>
+            <td>{{ row.competencia|date:"m/Y" }}</td>
+            <td class="text-center">{{ row.quantidade }}</td>
+            <td class="text-right">R$ {{ row.total|floatformat:2 }}</td>
+            <td class="text-right">R$ {{ row.pagas|default:0|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="text-center text-muted">Sem competências consolidadas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="row mb-3">
@@ -505,7 +568,12 @@
   </div>
 
   <div class="card secao-card mb-3">
-    <div class="card-header"><h3 class="card-title mb-0">Lotes recentes</h3></div>
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
+      <h3 class="card-title mb-0">Lotes recentes</h3>
+      <small class="text-muted">
+        Pagos: {{ lotes_resumo.pagos }} | Em aberto: {{ lotes_resumo.abertos }} | Total: R$ {{ lotes_resumo.valor_total|floatformat:2 }}
+      </small>
+    </div>
     <div class="card-body p-0 table-responsive">
       <table class="table table-sm table-bordered mb-0">
         <thead>

@@ -237,7 +237,27 @@ class OrdemServico(models.Model):
         related_name="ordens_confirmadas",
     )
     assinatura_imagem = models.ImageField(upload_to="ordens/assinaturas/", blank=True, null=True)
+    data_assinatura_entrada = models.DateTimeField(blank=True, null=True)
+    assinatura_entrada_imagem = models.ImageField(
+        upload_to="ordens/assinaturas/entrada/",
+        blank=True,
+        null=True,
+    )
+    data_assinatura_saida = models.DateTimeField(blank=True, null=True)
+    assinatura_saida_imagem = models.ImageField(
+        upload_to="ordens/assinaturas/saida/",
+        blank=True,
+        null=True,
+    )
     confirmado = models.BooleanField(default=False)
+
+    @property
+    def assinatura_entrada_registrada_em(self):
+        return self.data_assinatura_entrada or self.data_confirmacao
+
+    @property
+    def assinatura_entrada_arquivo(self):
+        return self.assinatura_entrada_imagem or self.assinatura_imagem
 
     def atualizar_status_fechamento(self, fechar=True, usuario=None):
         """
@@ -480,6 +500,7 @@ class ServicoPeca(models.Model):
         related_name="servicos_pecas_responsavel",
         limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
     )
+    comissionavel = models.BooleanField(default=True)
     numeros_taloes = models.CharField(max_length=255, blank=True, default="")
     estoque_consumido_em = models.DateTimeField(null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)

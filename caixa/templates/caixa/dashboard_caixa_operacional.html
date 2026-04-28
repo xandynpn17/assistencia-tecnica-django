@@ -1,0 +1,254 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+{% include 'caixa/_subnav_caixa.html' %}
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3" style="gap: 12px;">
+  <div>
+    {% if data_inicio == data_fim %}
+      <h1 class="mb-1">Operação do caixa - {{ data_inicio_ref|date:"d/m/Y" }}</h1>
+    {% else %}
+      <h1 class="mb-1">Operação do caixa por período</h1>
+      <div class="text-muted small">{{ data_inicio_ref|date:"d/m/Y" }} até {{ data_fim_ref|date:"d/m/Y" }}</div>
+    {% endif %}
+  </div>
+  <form method="get" class="card p-2 mb-0" style="min-width: 360px;">
+    <div class="form-row align-items-end">
+      <div class="col-md-4">
+        <label class="small mb-1">Data de início</label>
+        <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-4">
+        <label class="small mb-1">Data de fim</label>
+        <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-4">
+        <label class="small mb-1">Preset</label>
+        <select name="preset" class="form-control form-control-sm">
+          <option value="" {% if not preset_periodo %}selected{% endif %}>Personalizado</option>
+          <option value="hoje" {% if preset_periodo == 'hoje' %}selected{% endif %}>Hoje</option>
+          <option value="7d" {% if preset_periodo == '7d' %}selected{% endif %}>7 dias</option>
+          <option value="30d" {% if preset_periodo == '30d' %}selected{% endif %}>30 dias</option>
+          <option value="mes_atual" {% if preset_periodo == 'mes_atual' %}selected{% endif %}>Mês atual</option>
+          <option value="mes_anterior" {% if preset_periodo == 'mes_anterior' %}selected{% endif %}>Mês anterior</option>
+        </select>
+      </div>
+      <div class="col-12 mt-2 d-flex" style="gap: 6px;">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Hoje</a>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% if caixa %}
+  <div class="alert {% if caixa.aberto %}alert-success{% else %}alert-secondary{% endif %} py-2">
+    Caixa do dia: <strong>{% if caixa.aberto %}ABERTO{% else %}FECHADO{% endif %}</strong>
+    {% if caixa and not caixa.aberto %}
+      | Diferença no fechamento: <strong>R$ {{ caixa.diferenca_fechamento|floatformat:2 }}</strong>
+    {% endif %}
+  </div>
+{% elif filtro_aplicado %}
+  <div class="alert alert-info py-2">Nenhum caixa encontrado no período informado.</div>
+{% else %}
+  <div class="alert alert-warning py-2">Não existe caixa aberto para hoje.</div>
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-body py-2 d-flex flex-wrap align-items-center" style="gap: 8px;">
+    <span class="badge badge-{% if caixa and caixa.aberto %}success{% else %}secondary{% endif %} px-3 py-2">1. Abertura {% if caixa and caixa.aberto %}concluída{% else %}pendente{% endif %}</span>
+    <span class="badge badge-primary px-3 py-2">2. Operação do dia</span>
+    <span class="badge badge-{% if caixa and caixa.aberto %}warning{% else %}secondary{% endif %} px-3 py-2">3. Fecho com conferência</span>
+    <small class="text-muted ml-auto">{% if caixa and caixa.aberto %}Caixa aberto: siga com pagamentos, saídas e feche no fim do expediente.{% else %}Abra o caixa para começar a operação do dia.{% endif %}</small>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
+    <h3 class="card-title mb-0">Ações do dia</h3>
+    <small class="text-muted">
+      {% if caixa and caixa.aberto %}
+      Caixa pronto para operação
+      {% else %}
+      Abra o caixa para registrar pagamentos e saídas
+      {% endif %}
+    </small>
+  </div>
+  <div class="card-body d-flex flex-wrap align-items-center" style="gap: 8px;">
+    {% if caixa and caixa.aberto %}
+    <a href="{% url 'caixa:fechar_caixa' %}" class="btn btn-danger"><i class="fas fa-stop"></i> Fechar caixa</a>
+    {% else %}
+    <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-success"><i class="fas fa-play"></i> Abrir caixa</a>
+    {% endif %}
+    <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary"><i class="fas fa-plus"></i> Registrar pagamento</a>
+    <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-warning"><i class="fas fa-minus"></i> Registrar saída</a>
+    <a href="{% url 'caixa:contas_receber' %}?prontas_sem_recebimento=1" class="btn btn-outline-secondary">
+      <i class="fas fa-file-invoice-dollar"></i> Prontas sem recebimento ({{ prontas_sem_recebimento_qtd }})
+    </a>
+    <a href="{% url 'caixa:contas_receber' %}" class="btn btn-outline-secondary"><i class="fas fa-list"></i> Contas a receber</a>
+    <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-outline-secondary"><i class="fas fa-file-invoice"></i> Contas a pagar</a>
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-md-3"><div class="small-box bg-info"><div class="inner"><h4>R$ {{ saldo|floatformat:2 }}</h4><p>Saldo apurado</p></div><div class="icon"><i class="fas fa-wallet"></i></div></div></div>
+  <div class="col-md-3"><div class="small-box bg-success"><div class="inner"><h4>R$ {{ total_entradas|floatformat:2 }}</h4><p>Entradas do período</p></div><div class="icon"><i class="fas fa-arrow-down"></i></div></div></div>
+  <div class="col-md-3"><div class="small-box bg-danger"><div class="inner"><h4>R$ {{ total_saidas|floatformat:2 }}</h4><p>Saídas do período</p></div><div class="icon"><i class="fas fa-arrow-up"></i></div></div></div>
+  <div class="col-md-3"><div class="small-box bg-warning"><div class="inner"><h4>R$ {{ prontas_sem_recebimento_total|floatformat:2 }}</h4><p>Prontas sem recebimento</p></div><div class="icon"><i class="fas fa-hand-holding-usd"></i></div></div></div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-md-3"><div class="small-box bg-secondary"><div class="inner"><h4>R$ {{ vencidas_total|floatformat:2 }}</h4><p>Recebíveis vencidos</p></div></div></div>
+  <div class="col-md-3"><div class="small-box bg-secondary"><div class="inner"><h4>{{ contas_pagar_vencidas|length }}</h4><p>Contas a pagar vencidas</p></div></div></div>
+  <div class="col-md-3"><div class="small-box bg-secondary"><div class="inner"><h4>{{ saidas_sem_categoria_qtd }}</h4><p>Saídas sem categoria</p></div></div></div>
+  <div class="col-md-3"><div class="small-box bg-secondary"><div class="inner"><h4>R$ {{ diferenca_fechamento_total|floatformat:2 }}</h4><p>Diferenças de fechamento</p></div></div></div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">Fila de recebimento</h3></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Indicador</th><th class="text-right">Valor</th></tr></thead>
+          <tbody>
+            <tr><td>Prontas sem recebimento</td><td class="text-right">{{ prontas_sem_recebimento_qtd }} OS</td></tr>
+            <tr><td>Valor em aberto total</td><td class="text-right">R$ {{ a_receber_total|floatformat:2 }}</td></tr>
+            <tr><td>Recebíveis vencidos</td><td class="text-right">R$ {{ vencidas_total|floatformat:2 }}</td></tr>
+            <tr><td>Receita cliente</td><td class="text-right">R$ {{ receita_cliente|floatformat:2 }}</td></tr>
+            <tr><td>Receita garantia</td><td class="text-right">R$ {{ receita_garantia|floatformat:2 }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">Fila de saída e despesas</h3></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Conta</th><th>Categoria</th><th class="text-right">Aberto</th></tr></thead>
+          <tbody>
+            {% for conta in contas_pagar_vencidas %}
+            <tr>
+              <td>{{ conta.descricao }}</td>
+              <td>{{ conta.categoria.nome|default:"-" }}</td>
+              <td class="text-right">R$ {{ conta.valor_aberto|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-center text-muted">Nenhuma conta a pagar vencida.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">Pagamentos recentes</h3></div>
+      <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-sm mb-0">
+          <thead><tr><th>OS</th><th class="text-right">Valor</th><th>Forma</th><th>Data</th></tr></thead>
+          <tbody>
+            {% for p in pagamentos_recentes %}
+            <tr>
+              <td>{{ p.ordem_servico|default:"Avulso" }}</td>
+              <td class="text-right">R$ {{ p.valor|floatformat:2 }}</td>
+              <td>{{ p.metodo_display }}</td>
+              <td>{{ p.data|date:"d/m/Y H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center">Nenhum pagamento.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">Saídas recentes</h3></div>
+      <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-sm mb-0">
+          <thead><tr><th>Descrição</th><th>Categoria</th><th class="text-right">Valor</th><th>Data</th></tr></thead>
+          <tbody>
+            {% for l in saidas_recentes %}
+            <tr>
+              <td>{{ l.descricao|default:"-" }}</td>
+              <td>{{ l.categoria_display }}</td>
+              <td class="text-right">R$ {{ l.valor|floatformat:2 }}</td>
+              <td>{{ l.data|date:"d/m/Y H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center">Nenhuma saída.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h3 class="card-title mb-0">Eventos críticos recentes</h3>
+    <a href="{% url 'caixa:auditoria_operacional' %}" class="btn btn-xs btn-outline-danger">Ver auditoria</a>
+  </div>
+  <div class="card-body table-responsive p-0">
+    <table class="table table-sm table-hover mb-0">
+      <thead><tr><th>Quando</th><th>Evento</th><th>Resumo</th><th class="text-right">Valor</th><th>Usuário</th><th class="text-right">Ações</th></tr></thead>
+      <tbody>
+        {% for evento in eventos_criticos_recentes %}
+        <tr>
+          <td>{{ evento.quando|date:"d/m/Y H:i" }}</td>
+          <td>{{ evento.evento_label }}</td>
+          <td>{{ evento.resumo }}</td>
+          <td class="text-right">{% if evento.valor is not None %}R$ {{ evento.valor|floatformat:2 }}{% else %}-{% endif %}</td>
+          <td>{{ evento.usuario.username|default:"-" }}</td>
+          <td class="text-right">
+            {% if evento.descricao %}
+            <button type="button" class="btn btn-xs btn-outline-secondary" data-toggle="modal" data-target="#eventoCritico{{ evento.id }}">
+              Ver motivo
+            </button>
+            {% endif %}
+            {% if evento.acao %}
+            <a href="{{ evento.acao.url }}" class="btn btn-xs btn-outline-primary">{{ evento.acao.label }}</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted">Sem eventos críticos no período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% for evento in eventos_criticos_recentes %}
+  {% if evento.descricao %}
+  <div class="modal fade" id="eventoCritico{{ evento.id }}" tabindex="-1" role="dialog" aria-labelledby="eventoCriticoLabel{{ evento.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="eventoCriticoLabel{{ evento.id }}">{{ evento.evento_label }}</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="small text-muted mb-2">{{ evento.quando|date:"d/m/Y H:i" }}{% if evento.usuario %} · {{ evento.usuario.username }}{% endif %}</div>
+          <div>{{ evento.descricao }}</div>
+        </div>
+        <div class="modal-footer">
+          {% if evento.acao %}
+          <a href="{{ evento.acao.url }}" class="btn btn-sm btn-primary">{{ evento.acao.label }}</a>
+          {% endif %}
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+{% endblock %}

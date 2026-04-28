@@ -1,10 +1,10 @@
 {% extends "core/base.html" %}
-{% block title %}Configurações do Sistema{% endblock %}
+{% block title %}Configura&ccedil;&otilde;es do Sistema{% endblock %}
 
 {% block content %}
 <div class="card card-modern">
   <div class="card-modern-header">
-    <i class="fas fa-cogs"></i> Configurações do Sistema
+    <i class="fas fa-cogs"></i> Configura&ccedil;&otilde;es do Sistema
   </div>
   <div class="card-modern-body">
     <form method="post">
@@ -216,10 +216,10 @@
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens Padrão</h5>
+          <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens Automáticas</h5>
         </div>
         <div class="card-body">
-          <p class="text-muted">Variáveis disponíveis: <code>{cliente_nome}</code>, <code>{numero_os}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>.</p>
+          <p class="text-muted">Esses textos são usados pelo fluxo automático da OS, como envio de orçamento e aviso de pronto contactado. Variáveis disponíveis: <code>{cliente_nome}</code>, <code>{saudacao_cliente}</code>, <code>{numero_os}</code>, <code>{equipamento_resumo}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>, <code>{itens_orcamento}</code>, <code>{itens_orcamento_resumidos}</code>, <code>{quantidade_itens_orcamento}</code>, <code>{status_os}</code>, <code>{empresa_nome}</code>, <code>{telefone_loja}</code>, <code>{email_loja}</code>, <code>{link_orcamento_pdf}</code>, <code>{link_ordem_pdf}</code>.</p>
           <div class="row">
             <div class="col-md-6 form-group">
               <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orçamento (E-mail)" }}</label>
@@ -240,19 +240,276 @@
             <div class="col-md-12 form-group">
               <label>{{ form.condicoes_orcamento.label|default:"Condições do Orçamento" }}</label>
               {{ form.condicoes_orcamento }}
+              {% if form.condicoes_orcamento.help_text %}<small class="form-text text-muted">{{ form.condicoes_orcamento.help_text }}</small>{% endif %}
+              {{ form.condicoes_orcamento.errors }}
             </div>
             <div class="col-md-12 form-group">
               <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Serviço" }}</label>
               {{ form.termos_ordem_servico }}
               <small class="form-text text-muted">Usado nos PDFs de OS (digital e impressão).</small>
+              {% if form.termos_ordem_servico.help_text %}<small class="form-text text-muted">{{ form.termos_ordem_servico.help_text }}</small>{% endif %}
+              {{ form.termos_ordem_servico.errors }}
             </div>
           </div>
         </div>
       </div>
-      
+
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-print mr-2"></i> Layout de Impressão da OS</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-4 form-group">
+              <label>{{ form.layout_os_impressao.label }}</label>
+              {{ form.layout_os_impressao }}
+              {% if form.layout_os_impressao.help_text %}<small class="form-text text-muted">{{ form.layout_os_impressao.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-4 form-group">
+              <label>{{ form.layout_documentos_preset.label }}</label>
+              {{ form.layout_documentos_preset }}
+              {% if form.layout_documentos_preset.help_text %}<small class="form-text text-muted">{{ form.layout_documentos_preset.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-4 form-group">
+              <label>{{ form.layout_documentos_cor.label }}</label>
+              {{ form.layout_documentos_cor }}
+              {% if form.layout_documentos_cor.help_text %}<small class="form-text text-muted">{{ form.layout_documentos_cor.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-4 form-group">
+              <label>{{ form.layout_os_frente_espaco_assinaturas_cm.label }}</label>
+              {{ form.layout_os_frente_espaco_assinaturas_cm }}
+              {% if form.layout_os_frente_espaco_assinaturas_cm.help_text %}<small class="form-text text-muted">{{ form.layout_os_frente_espaco_assinaturas_cm.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-4 form-group">
+              <label>{{ form.layout_os_verso_espaco_assinatura_cm.label }}</label>
+              {{ form.layout_os_verso_espaco_assinatura_cm }}
+              {% if form.layout_os_verso_espaco_assinatura_cm.help_text %}<small class="form-text text-muted">{{ form.layout_os_verso_espaco_assinatura_cm.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-4 form-group">
+              <label>{{ form.layout_os_data_fonte_pt.label }}</label>
+              {{ form.layout_os_data_fonte_pt }}
+              {% if form.layout_os_data_fonte_pt.help_text %}<small class="form-text text-muted">{{ form.layout_os_data_fonte_pt.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-6 form-group">
+              <div class="form-check mt-4">
+                {{ form.layout_os_digital_exibir_validacao }}
+                <label class="form-check-label" for="{{ form.layout_os_digital_exibir_validacao.id_for_label }}">
+                  {{ form.layout_os_digital_exibir_validacao.label }}
+                </label>
+              </div>
+            </div>
+            <div class="col-md-6 form-group">
+              <div class="form-check mt-4">
+                {{ form.layout_os_exibir_etiqueta_corte }}
+                <label class="form-check-label" for="{{ form.layout_os_exibir_etiqueta_corte.id_for_label }}">
+                  {{ form.layout_os_exibir_etiqueta_corte.label }}
+                </label>
+              </div>
+              {% if form.layout_os_exibir_etiqueta_corte.help_text %}<small class="form-text text-muted">{{ form.layout_os_exibir_etiqueta_corte.help_text }}</small>{% endif %}
+            </div>
+          </div>
+          <small class="text-muted">Use esse bloco para ajustar o A4 com corte ao meio sem alterar código.</small>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="fas fa-eye mr-2"></i> Pr&eacute;-visualiza&ccedil;&atilde;o dos Layouts</h5>
+          <small class="text-muted">A pr&eacute;via usa os documentos mais recentes cadastrados.</small>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-lg-6 mb-3">
+              <label class="small text-muted">OS Impress&atilde;o</label>
+              <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_impressao&amp;_preview=1" width="100%" height="320" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+            </div>
+            <div class="col-lg-6 mb-3">
+              <label class="small text-muted">OS Digital</label>
+              <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1" width="100%" height="320" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+            </div>
+            <div class="col-lg-6 mb-3">
+              <label class="small text-muted">Relat&oacute;rio T&eacute;cnico</label>
+              <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=relatorio&amp;_preview=1" width="100%" height="320" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+            </div>
+            <div class="col-lg-6 mb-3">
+              <label class="small text-muted">Or&ccedil;amento</label>
+              <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=orcamento&amp;_preview=1" width="100%" height="320" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+            </div>
+          </div>
+          <small class="text-muted">Salve as configura&ccedil;&otilde;es e recarregue a p&aacute;gina para visualizar o novo formato.</small>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-columns mr-2"></i> Comparador de Presets</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-4 form-group">
+              <label class="small text-muted">Tipo de Documento</label>
+              <select id="preview_compare_tipo" class="form-control form-control-sm">
+                <option value="os_digital">OS Digital</option>
+                <option value="os_impressao">OS Impressão</option>
+                <option value="relatorio">Relatório Técnico</option>
+                <option value="orcamento">Orçamento</option>
+              </select>
+            </div>
+            <div class="col-md-4 form-group">
+              <label class="small text-muted">Preset A</label>
+              <select id="preview_compare_preset_a" class="form-control form-control-sm">
+                <option value="clean" selected>clean</option>
+                <option value="executivo">executivo</option>
+                <option value="classico">classico</option>
+                <option value="compacto">compacto</option>
+              </select>
+            </div>
+            <div class="col-md-4 form-group">
+              <label class="small text-muted">Preset B</label>
+              <select id="preview_compare_preset_b" class="form-control form-control-sm">
+                <option value="executivo" selected>executivo</option>
+                <option value="clean">clean</option>
+                <option value="classico">classico</option>
+                <option value="compacto">compacto</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-lg-6 mb-3">
+              <label class="small text-muted">Preview A</label>
+              <iframe id="preview_compare_frame_a" class="js-compare-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1&amp;layout_documentos_preset=clean" width="100%" height="360" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+            </div>
+            <div class="col-lg-6 mb-3">
+              <label class="small text-muted">Preview B</label>
+              <iframe id="preview_compare_frame_b" class="js-compare-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1&amp;layout_documentos_preset=executivo" width="100%" height="360" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+            </div>
+          </div>
+        </div>
+      </div>
+       
       <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
       <a href="{% url 'configuracoes:painel' %}" class="btn btn-secondary">Cancelar</a>
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const campos = [
+      "layout_os_impressao",
+      "layout_documentos_preset",
+      "layout_documentos_cor",
+      "layout_os_frente_espaco_assinaturas_cm",
+      "layout_os_verso_espaco_assinatura_cm",
+      "layout_os_data_fonte_pt",
+      "layout_os_digital_exibir_validacao",
+      "layout_os_exibir_etiqueta_corte"
+    ];
+    const previewFrames = Array.from(document.querySelectorAll("iframe.js-preview-frame"));
+    const compareFrameA = document.getElementById("preview_compare_frame_a");
+    const compareFrameB = document.getElementById("preview_compare_frame_b");
+    const compareTipo = document.getElementById("preview_compare_tipo");
+    const comparePresetA = document.getElementById("preview_compare_preset_a");
+    const comparePresetB = document.getElementById("preview_compare_preset_b");
+
+    function valorCampo(nome) {
+      const campo = document.getElementById("id_" + nome);
+      if (!campo) {
+        return "";
+      }
+      if (campo.type === "checkbox") {
+        return campo.checked ? "1" : "0";
+      }
+      return (campo.value || "").trim();
+    }
+
+    function buildOverrides(includeDocumentPreset) {
+      const overrides = new URLSearchParams();
+      campos.forEach((nome) => {
+        if (!includeDocumentPreset && nome === "layout_documentos_preset") {
+          return;
+        }
+        const valor = valorCampo(nome);
+        if (valor !== "") {
+          overrides.set(nome, valor);
+        }
+      });
+      overrides.set("_preview", "1");
+      return overrides;
+    }
+
+    function atualizarFrame(frame, tipo, overrides) {
+      if (!frame) {
+        return;
+      }
+      const atual = new URL(frame.src, window.location.origin);
+      const params = new URLSearchParams(overrides.toString());
+      params.set("tipo", tipo || atual.searchParams.get("tipo") || "os_impressao");
+      frame.src = atual.pathname + "?" + params.toString();
+    }
+
+    function atualizarPrevia() {
+      if (!previewFrames.length) {
+        return;
+      }
+      const overrides = buildOverrides(true);
+      previewFrames.forEach((frame) => {
+        const atual = new URL(frame.src, window.location.origin);
+        atualizarFrame(frame, atual.searchParams.get("tipo") || "os_impressao", overrides);
+      });
+    }
+
+    function atualizarComparador() {
+      if (!compareFrameA || !compareFrameB || !compareTipo || !comparePresetA || !comparePresetB) {
+        return;
+      }
+      const tipo = (compareTipo.value || "os_digital").trim();
+      const presetA = (comparePresetA.value || "clean").trim();
+      const presetB = (comparePresetB.value || "executivo").trim();
+
+      const overridesA = buildOverrides(false);
+      overridesA.set("layout_documentos_preset", presetA);
+      const overridesB = buildOverrides(false);
+      overridesB.set("layout_documentos_preset", presetB);
+
+      atualizarFrame(compareFrameA, tipo, overridesA);
+      atualizarFrame(compareFrameB, tipo, overridesB);
+    }
+
+    function atualizarTudo() {
+      atualizarPrevia();
+      atualizarComparador();
+    }
+
+    campos.forEach((nome) => {
+      const campo = document.getElementById("id_" + nome);
+      if (campo) {
+        campo.addEventListener("change", atualizarTudo);
+        campo.addEventListener("input", atualizarTudo);
+      }
+    });
+
+    [compareTipo, comparePresetA, comparePresetB].forEach((campo) => {
+      if (campo) {
+        campo.addEventListener("change", atualizarComparador);
+      }
+    });
+
+    const cardPreview = previewFrames.length ? previewFrames[0].closest(".card") : null;
+    const actions = cardPreview ? cardPreview.querySelector(".card-header") : null;
+    if (actions && !document.getElementById("btn-preview-refresh")) {
+      const btn = document.createElement("button");
+      btn.id = "btn-preview-refresh";
+      btn.type = "button";
+      btn.className = "btn btn-sm btn-outline-secondary";
+      btn.textContent = "Atualizar pr\u00e9via";
+      btn.addEventListener("click", atualizarTudo);
+      actions.appendChild(btn);
+    }
+
+    atualizarTudo();
+  })();
+</script>
 {% endblock %}

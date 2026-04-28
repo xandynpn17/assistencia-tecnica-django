@@ -1,7 +1,7 @@
 from django.db import IntegrityError, models, transaction
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-from django.core.validators import RegexValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -275,6 +275,11 @@ class User(AbstractUser):
     percentual_comissao_servico = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     percentual_comissao_peca = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     percentual_comissao_vendas = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    acesso_ordens_extra = models.BooleanField(default=False)
+    acesso_estoque_extra = models.BooleanField(default=False)
+    acesso_caixa_operacional_extra = models.BooleanField(default=False)
+    acesso_caixa_financeiro_extra = models.BooleanField(default=False)
+    acesso_configuracoes_extra = models.BooleanField(default=False)
     numero_vendedor = models.CharField(
         max_length=10,
         blank=True,
@@ -297,6 +302,17 @@ class User(AbstractUser):
     @property
     def nome_exibicao(self):
         return (self.nome_completo or "").strip() or self.get_full_name() or self.username
+
+    @property
+    def funcoes_extras_ativas(self):
+        opcoes = [
+            ("acesso_ordens_extra", "Ordens"),
+            ("acesso_estoque_extra", "Estoque"),
+            ("acesso_caixa_operacional_extra", "Caixa operacional"),
+            ("acesso_caixa_financeiro_extra", "Caixa financeiro"),
+            ("acesso_configuracoes_extra", "Configurações"),
+        ]
+        return [rotulo for campo, rotulo in opcoes if getattr(self, campo, False)]
 
     @classmethod
     def _gerar_numero_vendedor_disponivel(cls, *, excluir_usuario_id=None):
@@ -460,6 +476,23 @@ class SequenciaOS(models.Model):
 # ============================
 
 class ConfiguracaoSistema(models.Model):
+    LAYOUT_OS_IMPRESSAO_CHOICES = [
+        ("compacto", "Compacto"),
+        ("padrao", "Padrão"),
+        ("amplo", "Amplo"),
+    ]
+    LAYOUT_DOCUMENTOS_CHOICES = [
+        ("classico", "Clássico"),
+        ("clean", "Clean"),
+        ("compacto", "Compacto"),
+        ("executivo", "Executivo"),
+    ]
+
+    LAYOUT_DOCUMENTOS_COR_CHOICES = [
+        ("colorido", "Colorido"),
+        ("pb", "Preto e Branco"),
+    ]
+
     ESTADOS_BRASIL = [
         ('AC', 'Acre'), ('AL', 'Alagoas'), ('AP', 'Amapá'), ('AM', 'Amazonas'),
         ('BA', 'Bahia'), ('CE', 'Ceará'), ('DF', 'Distrito Federal'), ('ES', 'Espírito Santo'),
@@ -630,6 +663,54 @@ class ConfiguracaoSistema(models.Model):
             "ou vícios ocultos poderão apresentar agravamento de falhas durante o reparo, não sendo a assistência responsável por defeitos decorrentes de condições preexistentes."
         ),
         verbose_name="Termos e condições da Ordem de Serviço",
+    )
+    layout_os_impressao = models.CharField(
+        max_length=20,
+        choices=LAYOUT_OS_IMPRESSAO_CHOICES,
+        default="padrao",
+        verbose_name="Preset de layout da OS impressa",
+    )
+    layout_os_frente_espaco_assinaturas_cm = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(-1), MaxValueValidator(2)],
+        verbose_name="Ajuste de espaço das assinaturas na frente (cm)",
+    )
+    layout_os_verso_espaco_assinatura_cm = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(-1), MaxValueValidator(2)],
+        verbose_name="Ajuste de espaço da assinatura no verso (cm)",
+    )
+    layout_os_data_fonte_pt = models.DecimalField(
+        max_digits=3,
+        decimal_places=1,
+        default=7.0,
+        validators=[MinValueValidator(6), MaxValueValidator(10)],
+        verbose_name="Fonte das datas no bloco de assinatura (pt)",
+    )
+    layout_os_digital_exibir_validacao = models.BooleanField(
+        default=True,
+        verbose_name="Exibir bloco de validação na OS digital",
+    )
+    layout_os_exibir_etiqueta_corte = models.BooleanField(
+        default=True,
+        verbose_name="Exibir etiqueta com numero da OS na linha de corte",
+    )
+    layout_documentos_preset = models.CharField(
+        max_length=20,
+        choices=LAYOUT_DOCUMENTOS_CHOICES,
+        default="clean",
+        verbose_name="Preset visual dos documentos (OS/Relatório/Orçamento)",
+    )
+
+    layout_documentos_cor = models.CharField(
+        max_length=10,
+        choices=LAYOUT_DOCUMENTOS_COR_CHOICES,
+        default="colorido",
+        verbose_name="Modo de cor dos PDFs",
     )
 
     data_atualizacao = models.DateTimeField(auto_now=True)

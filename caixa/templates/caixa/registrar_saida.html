@@ -51,7 +51,7 @@
                     {% csrf_token %}
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
                         <strong>Nova saída</strong>
-                        <small class="text-muted">F2 valor | F3 centro de custo | F4 salvar</small>
+                        <small class="text-muted">F2 valor | F3 categoria | F4 centro de custo | F6 salvar</small>
                     </div>
                     <div class="card-body">
                         {{ form.non_field_errors }}
@@ -60,6 +60,12 @@
                             <label for="{{ form.descricao.id_for_label }}"><strong>Descrição</strong></label>
                             {{ form.descricao|add_class:"form-control form-control-lg"|attr:"placeholder:Ex: compra de materiais, combustível, frete" }}
                             {% if form.descricao.errors %}<small class="text-danger">{{ form.descricao.errors|striptags }}</small>{% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="{{ form.categoria.id_for_label }}"><strong>Categoria</strong></label>
+                            {{ form.categoria|add_class:"form-control form-control-lg"|attr:"id:id_categoria_saida" }}
+                            {% if form.categoria.errors %}<small class="text-danger">{{ form.categoria.errors|striptags }}</small>{% endif %}
                         </div>
 
                         <div class="form-group">
@@ -107,6 +113,7 @@
                                 <tr>
                                     <th>Data</th>
                                     <th>Descrição</th>
+                                    <th>Categoria</th>
                                     <th>Centro</th>
                                     <th class="text-right">Valor</th>
                                 </tr>
@@ -116,12 +123,13 @@
                                 <tr>
                                     <td>{{ saida.data|date:"d/m H:i" }}</td>
                                     <td>{{ saida.descricao|default:"-" }}</td>
+                                    <td>{{ saida.categoria_display }}</td>
                                     <td>{{ saida.centro_custo.nome|default:"-" }}</td>
                                     <td class="text-right text-danger">R$ {{ saida.valor|floatformat:2 }}</td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="4" class="text-center text-muted">Nenhuma saída registrada neste caixa.</td>
+                                    <td colspan="5" class="text-center text-muted">Nenhuma saída registrada neste caixa.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -138,6 +146,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const valorInput = document.getElementById("id_valor_saida");
+    const categoriaInput = document.getElementById("id_categoria_saida");
     const centroInput = document.getElementById("id_centro_saida");
     const formSaida = document.getElementById("form-saida");
     const btnSalvar = document.getElementById("btn-salvar-saida");
@@ -157,9 +166,13 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         if (event.key === "F3") {
             event.preventDefault();
-            if (centroInput) centroInput.focus();
+            if (categoriaInput) categoriaInput.focus();
         }
         if (event.key === "F4") {
+            event.preventDefault();
+            if (centroInput) centroInput.focus();
+        }
+        if (event.key === "F6") {
             event.preventDefault();
             if (formSaida && btnSalvar) formSaida.requestSubmit(btnSalvar);
         }

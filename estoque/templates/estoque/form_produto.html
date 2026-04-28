@@ -47,6 +47,58 @@
         margin-bottom: 0.2rem;
         font-size: 0.86rem;
     }
+    .produto-tabbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+    .produto-tab-btn {
+        border: 1px solid #d9e2ec;
+        border-radius: 999px;
+        background: #f8fafc;
+        color: #334155;
+        font-weight: 600;
+        padding: 8px 14px;
+    }
+    .produto-tab-btn.is-active {
+        background: #183247;
+        border-color: #183247;
+        color: #fff;
+    }
+    .produto-tab-pane {
+        display: none;
+    }
+    .produto-tab-pane.is-active {
+        display: block;
+    }
+    .produto-header-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .produto-header-card {
+        border: 1px solid #d9e2ec;
+        border-radius: 10px;
+        background: linear-gradient(180deg, #fbfdff 0%, #f2f7fb 100%);
+        padding: 12px;
+    }
+    .produto-header-label {
+        font-size: .75rem;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 4px;
+    }
+    .produto-header-value {
+        font-weight: 700;
+        color: #0f172a;
+    }
+    @media (max-width: 991.98px) {
+        .produto-header-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -91,189 +143,219 @@
                     <div class="secao-titulo mb-0">Modo de preenchimento</div>
                     <div>
                         <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-secondary" id="btn-modo-rapido">Rápido</button>
-                            <button type="button" class="btn btn-secondary" id="btn-modo-avancado">Avançado</button>
+                            <button type="button" class="btn btn-outline-secondary" id="btn-modo-rapido">Rapido</button>
+                            <button type="button" class="btn btn-secondary" id="btn-modo-avancado">Avancado</button>
                         </div>
                     </div>
                 </div>
                 <small class="text-muted">
-                    No modo rápido você vê só os campos essenciais. No avançado, inclui custos detalhados, tributos e campos complementares.
+                    No modo rapido voce ve so os campos essenciais. No avancado, inclui custos detalhados, tributos e campos complementares.
                 </small>
             </div>
 
-            <div class="secao">
-                <div class="secao-titulo">Dados principais</div>
-                <div class="row campo-compacto">
-                    <div class="col-md-4">{{ form.nome.label_tag }}{{ form.nome }}</div>
-                    <div class="col-md-2">{{ form.tipo_item.label_tag }}{{ form.tipo_item }}</div>
-                    <div class="col-md-2">{{ form.modo_preco.label_tag }}{{ form.modo_preco }}</div>
-                    <div class="col-md-2">{{ form.data_entrada.label_tag }}{{ form.data_entrada }}</div>
-                    <div class="col-md-2">{{ form.ponto_operacional.label_tag }}{{ form.ponto_operacional }}</div>
+            <div class="produto-header-grid">
+                <div class="produto-header-card">
+                    <div class="produto-header-label">Essencial</div>
+                    <div class="produto-header-value">Identificacao, classificacao e origem</div>
                 </div>
-                <div class="row mt-2 campo-compacto">
-                    <div class="col-md-3">{{ form.sku.label_tag }}{{ form.sku }}</div>
-                    <div class="col-md-5">
-                        {{ form.ean.label_tag }}
-                        <div class="input-group">
-                            {{ form.ean }}
-                            <div class="input-group-append">
-                                <button type="button" class="btn btn-outline-secondary" id="btn-gerar-ean">Gerar EAN</button>
+                <div class="produto-header-card">
+                    <div class="produto-header-label">Operacao</div>
+                    <div class="produto-header-value">Estoque e regras de venda em bloco proprio</div>
+                </div>
+                <div class="produto-header-card">
+                    <div class="produto-header-label">Precificacao</div>
+                    <div class="produto-header-value">Custos, KPIs e rateio ficam separados</div>
+                </div>
+            </div>
+
+            <div class="produto-tabbar" role="tablist" aria-label="Etapas do produto">
+                <button type="button" class="produto-tab-btn is-active" data-produto-tab-btn="essencial">Essencial</button>
+                <button type="button" class="produto-tab-btn" data-produto-tab-btn="estoque">Estoque e venda</button>
+                <button type="button" class="produto-tab-btn" data-produto-tab-btn="precos">Preco e rateio</button>
+                <button type="button" class="produto-tab-btn" data-produto-tab-btn="observacoes">Observacoes</button>
+            </div>
+
+            <div class="produto-tab-pane is-active" data-produto-tab="essencial">
+                <div class="secao">
+                    <div class="secao-titulo">Dados principais</div>
+                    <div class="row campo-compacto">
+                        <div class="col-md-4">{{ form.nome.label_tag }}{{ form.nome }}</div>
+                        <div class="col-md-2">{{ form.tipo_item.label_tag }}{{ form.tipo_item }}</div>
+                        <div class="col-md-2">{{ form.modo_preco.label_tag }}{{ form.modo_preco }}</div>
+                        <div class="col-md-2">{{ form.data_entrada.label_tag }}{{ form.data_entrada }}</div>
+                        <div class="col-md-2">{{ form.ponto_operacional.label_tag }}{{ form.ponto_operacional }}</div>
+                    </div>
+                    <div class="row mt-2 campo-compacto">
+                        <div class="col-md-3">{{ form.sku.label_tag }}{{ form.sku }}</div>
+                        <div class="col-md-5">
+                            {{ form.ean.label_tag }}
+                            <div class="input-group">
+                                {{ form.ean }}
+                                <div class="input-group-append">
+                                    <button type="button" class="btn btn-outline-secondary" id="btn-gerar-ean">Gerar EAN</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">{{ form.foto.label_tag }}{{ form.foto }}</div>
+                        <div class="col-md-2 form-check mt-4">{{ form.ativo }} {{ form.ativo.label_tag }}</div>
+                    </div>
+                </div>
+
+                <div class="secao">
+                    <div class="secao-titulo">Classificacao e origem</div>
+                    <div class="row campo-compacto">
+                        <div class="col-md-3">{{ form.categoria_config.label_tag }}{{ form.categoria_config }}</div>
+                        <div class="col-md-3 modo-avancado">{{ form.categoria.label_tag }}{{ form.categoria }}</div>
+                        <div class="col-md-3">{{ form.marca.label_tag }}{{ form.marca }}</div>
+                        <div class="col-md-3">{{ form.fornecedor_config.label_tag }}{{ form.fornecedor_config }}</div>
+                    </div>
+                    <div class="row mt-2 campo-compacto modo-avancado">
+                        <div class="col-md-4">{{ form.fornecedor_manual.label_tag }}{{ form.fornecedor_manual }}</div>
+                        <div class="col-md-4">{{ form.modelos_compativeis.label_tag }}{{ form.modelos_compativeis }}</div>
+                        <div class="col-md-4">{{ form.servicos_compativeis.label_tag }}{{ form.servicos_compativeis }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="produto-tab-pane" data-produto-tab="estoque">
+                <div class="secao" id="secao-estoque">
+                    <div class="secao-titulo">Estoque</div>
+                    {% if modo_edicao %}
+                    <div class="text-muted small mb-2">Nesta tela, o campo de estoque inicial funciona como <strong>entrada adicional</strong>.</div>
+                    {% endif %}
+                    <div class="row campo-compacto">
+                        <div class="col-md-2">{{ form.quantidade.label_tag }}{{ form.quantidade }}</div>
+                        <div class="col-md-2">{{ form.estoque_minimo.label_tag }}{{ form.estoque_minimo }}</div>
+                        <div class="col-md-2" id="campo-estoque-inicial">{{ form.estoque_inicial.label_tag }}{{ form.estoque_inicial }}</div>
+                        <div class="col-md-2" id="campo-custo-entrada">{{ form.custo_entrada_inicial.label_tag }}{{ form.custo_entrada_inicial }}</div>
+                        <div class="col-md-2">{{ form.localizacao.label_tag }}{{ form.localizacao }}</div>
+                        <div class="col-md-2">{{ form.garantia_peca_dias.label_tag }}{{ form.garantia_peca_dias }}</div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12 text-muted small">
+                            {{ form.estoque_inicial.help_text }}{% if form.custo_entrada_inicial.help_text %} {{ form.custo_entrada_inicial.help_text }}{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="secao" id="secao-comissao">
+                    <div class="secao-titulo">Comissao e venda</div>
+                    <div class="row campo-compacto">
+                        <div class="col-md-3 form-check mt-4">{{ form.permite_os }} {{ form.permite_os.label_tag }}</div>
+                        <div class="col-md-3 form-check mt-4">{{ form.permite_comissao_peca }} {{ form.permite_comissao_peca.label_tag }}</div>
+                        <div class="col-md-3">{{ form.percentual_comissao_peca.label_tag }}{{ form.percentual_comissao_peca }}</div>
+                        <div class="col-md-3">{{ form.bonus_venda.label_tag }}{{ form.bonus_venda }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="produto-tab-pane" data-produto-tab="precos">
+                <div class="secao">
+                    <div class="secao-titulo">Custos e precificacao</div>
+                    <div class="row campo-compacto">
+                        <div class="col-md-2">{{ form.custo_unitario.label_tag }}{{ form.custo_unitario }}</div>
+                        <div class="col-md-2">{{ form.custo_frete.label_tag }}{{ form.custo_frete }}</div>
+                        <div class="col-md-2">{{ form.custo_impostos.label_tag }}{{ form.custo_impostos }}</div>
+                        <div class="col-md-2">{{ form.custo_comissao.label_tag }}{{ form.custo_comissao }}</div>
+                        <div class="col-md-2">{{ form.custo_marketplace.label_tag }}{{ form.custo_marketplace }}</div>
+                        <div class="col-md-2">{{ form.custo_cac.label_tag }}{{ form.custo_cac }}</div>
+                    </div>
+                    <div class="row mt-2 campo-compacto">
+                        <div class="col-md-2">{{ form.custo_operacional.label_tag }}{{ form.custo_operacional }}</div>
+                        <div class="col-md-2">{{ form.previsao_venda_mensal.label_tag }}{{ form.previsao_venda_mensal }}</div>
+                        <div class="col-md-2 form-check mt-4">{{ form.incluir_rateio_custo_fixo }} {{ form.incluir_rateio_custo_fixo.label_tag }}</div>
+                        <div class="col-md-2">
+                            <label for="id_custo_rateio_fixo_ui">Rateio fixo unitario</label>
+                            <input
+                                id="id_custo_rateio_fixo_ui"
+                                class="form-control"
+                                readonly
+                                data-total-fixos="{{ rateio_context.total_fixos|floatformat:2 }}"
+                                data-total-base-rateio="{{ rateio_context.total_base_rateio|floatformat:2 }}"
+                                data-criterio-rateio="{{ rateio_context.criterio_rateio }}"
+                            >
+                        </div>
+                        <div class="col-md-2 modo-avancado">{{ form.custo_medio.label_tag }}{{ form.custo_medio }}</div>
+                        <div class="col-md-2">{{ form.margem_lucro.label_tag }}{{ form.margem_lucro }}</div>
+                    </div>
+                    <div class="row mt-2 campo-compacto">
+                        <div class="col-md-2 text-muted small">
+                            Competencia do rateio
+                            <div><strong>{{ rateio_context.competencia|date:"m/Y" }}</strong></div>
+                        </div>
+                        <div class="col-md-2 text-muted small">
+                            Criterio atual
+                            <div><strong>{{ rateio_context.criterio_rateio_display }}</strong></div>
+                        </div>
+                        <div class="col-md-2">{{ form.margem_minima.label_tag }}{{ form.margem_minima }}</div>
+                        <div class="col-md-2">{{ form.taxa_cartao.label_tag }}{{ form.taxa_cartao }}</div>
+                        <div class="col-md-2 form-check mt-4">{{ form.usar_aliquota_manual }} {{ form.usar_aliquota_manual.label_tag }}</div>
+                    </div>
+                    <div class="row mt-2 campo-compacto modo-avancado" id="bloco-tributos">
+                        <div class="col-md-2">{{ form.aliquota_manual.label_tag }}{{ form.aliquota_manual }}</div>
+                        <div class="col-md-2">{{ form.icms.label_tag }}{{ form.icms }}</div>
+                        <div class="col-md-2">{{ form.ipi.label_tag }}{{ form.ipi }}</div>
+                        <div class="col-md-2">{{ form.pis.label_tag }}{{ form.pis }}</div>
+                        <div class="col-md-2">{{ form.cofins.label_tag }}{{ form.cofins }}</div>
+                    </div>
+                    <div class="row mt-2 campo-compacto">
+                        <div class="col-md-3">
+                            <label for="id_preco_sugerido_ui">Preco sugerido</label>
+                            <input id="id_preco_sugerido_ui" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="id_preco_minimo_ui">Preco minimo</label>
+                            <input id="id_preco_minimo_ui" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.preco_final.label_tag }}{{ form.preco_final }}
+                        </div>
+                        <div class="col-md-3 form-check mt-4">{{ form.permitir_preco_abaixo_minimo }} {{ form.permitir_preco_abaixo_minimo.label_tag }}</div>
+                    </div>
+                    <div class="row mt-1">
+                        <div class="col-12 text-muted small">
+                            Base de custo: custo unitario + custos operacionais detalhados (frete, impostos, comissao, marketplace, CAC e, se marcado, rateio do custo fixo mensal).
+                        </div>
+                    </div>
+                    <div class="alert alert-warning mt-2 alerta-minimo" id="alerta-minimo">
+                        Preco final abaixo do minimo calculado.
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-3">
+                            <div class="kpi-box">
+                                <div class="kpi-label">Custo total</div>
+                                <div class="kpi-value" id="kpi-custo">R$ 0,00</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="kpi-box">
+                                <div class="kpi-label">Lucro estimado</div>
+                                <div class="kpi-value" id="kpi-lucro">R$ 0,00</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="kpi-box">
+                                <div class="kpi-label">Margem real</div>
+                                <div class="kpi-value" id="kpi-margem">0,00%</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="kpi-box">
+                                <div class="kpi-label">Lucro no cartao</div>
+                                <div class="kpi-value" id="kpi-lucro-cartao">R$ 0,00</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-2">{{ form.foto.label_tag }}{{ form.foto }}</div>
-                    <div class="col-md-2 form-check mt-4">{{ form.ativo }} {{ form.ativo.label_tag }}</div>
                 </div>
             </div>
 
-            <div class="secao">
-                <div class="secao-titulo">Classificação e origem</div>
-                <div class="row campo-compacto">
-                    <div class="col-md-3">{{ form.categoria_config.label_tag }}{{ form.categoria_config }}</div>
-                    <div class="col-md-3 modo-avancado">{{ form.categoria.label_tag }}{{ form.categoria }}</div>
-                    <div class="col-md-3">{{ form.marca.label_tag }}{{ form.marca }}</div>
-                    <div class="col-md-3">{{ form.fornecedor_config.label_tag }}{{ form.fornecedor_config }}</div>
-                </div>
-                <div class="row mt-2 campo-compacto modo-avancado">
-                    <div class="col-md-4">{{ form.fornecedor_manual.label_tag }}{{ form.fornecedor_manual }}</div>
-                    <div class="col-md-4">{{ form.modelos_compativeis.label_tag }}{{ form.modelos_compativeis }}</div>
-                    <div class="col-md-4">{{ form.servicos_compativeis.label_tag }}{{ form.servicos_compativeis }}</div>
-                </div>
-            </div>
-
-            <div class="secao" id="secao-estoque">
-                <div class="secao-titulo">Estoque</div>
-                {% if modo_edicao %}
-                <div class="text-muted small mb-2">Nesta tela, o campo de estoque inicial funciona como <strong>entrada adicional</strong>.</div>
-                {% endif %}
-                <div class="row campo-compacto">
-                    <div class="col-md-2">{{ form.quantidade.label_tag }}{{ form.quantidade }}</div>
-                    <div class="col-md-2">{{ form.estoque_minimo.label_tag }}{{ form.estoque_minimo }}</div>
-                    <div class="col-md-2" id="campo-estoque-inicial">{{ form.estoque_inicial.label_tag }}{{ form.estoque_inicial }}</div>
-                    <div class="col-md-2" id="campo-custo-entrada">{{ form.custo_entrada_inicial.label_tag }}{{ form.custo_entrada_inicial }}</div>
-                    <div class="col-md-2">{{ form.localizacao.label_tag }}{{ form.localizacao }}</div>
-                    <div class="col-md-2">{{ form.garantia_peca_dias.label_tag }}{{ form.garantia_peca_dias }}</div>
-                </div>
-                <div class="row mt-2">
-                    <div class="col-12 text-muted small">
-                        {{ form.estoque_inicial.help_text }}{% if form.custo_entrada_inicial.help_text %} {{ form.custo_entrada_inicial.help_text }}{% endif %}
+            <div class="produto-tab-pane" data-produto-tab="observacoes">
+                <div class="secao modo-avancado">
+                    <div class="secao-titulo">Observacoes</div>
+                    <div class="row campo-compacto">
+                        <div class="col-md-6">{{ form.descricao.label_tag }}{{ form.descricao }}</div>
+                        <div class="col-md-6">{{ form.observacao_interna.label_tag }}{{ form.observacao_interna }}</div>
                     </div>
-                </div>
-            </div>
-
-            <div class="secao" id="secao-comissao">
-                <div class="secao-titulo">Comissão e venda</div>
-                <div class="row campo-compacto">
-                    <div class="col-md-3 form-check mt-4">{{ form.permite_os }} {{ form.permite_os.label_tag }}</div>
-                    <div class="col-md-3 form-check mt-4">{{ form.permite_comissao_peca }} {{ form.permite_comissao_peca.label_tag }}</div>
-                    <div class="col-md-3">{{ form.percentual_comissao_peca.label_tag }}{{ form.percentual_comissao_peca }}</div>
-                    <div class="col-md-3">{{ form.bonus_venda.label_tag }}{{ form.bonus_venda }}</div>
-                </div>
-            </div>
-
-            <div class="secao">
-                <div class="secao-titulo">Custos e precificação</div>
-                <div class="row campo-compacto">
-                    <div class="col-md-2">{{ form.custo_unitario.label_tag }}{{ form.custo_unitario }}</div>
-                    <div class="col-md-2">{{ form.custo_frete.label_tag }}{{ form.custo_frete }}</div>
-                    <div class="col-md-2">{{ form.custo_impostos.label_tag }}{{ form.custo_impostos }}</div>
-                    <div class="col-md-2">{{ form.custo_comissao.label_tag }}{{ form.custo_comissao }}</div>
-                    <div class="col-md-2">{{ form.custo_marketplace.label_tag }}{{ form.custo_marketplace }}</div>
-                    <div class="col-md-2">{{ form.custo_cac.label_tag }}{{ form.custo_cac }}</div>
-                </div>
-                <div class="row mt-2 campo-compacto">
-                    <div class="col-md-2">{{ form.custo_operacional.label_tag }}{{ form.custo_operacional }}</div>
-                    <div class="col-md-2">{{ form.previsao_venda_mensal.label_tag }}{{ form.previsao_venda_mensal }}</div>
-                    <div class="col-md-2 form-check mt-4">{{ form.incluir_rateio_custo_fixo }} {{ form.incluir_rateio_custo_fixo.label_tag }}</div>
-                    <div class="col-md-2">
-                        <label for="id_custo_rateio_fixo_ui">Rateio fixo unitario</label>
-                        <input
-                            id="id_custo_rateio_fixo_ui"
-                            class="form-control"
-                            readonly
-                            data-total-fixos="{{ rateio_context.total_fixos|floatformat:2 }}"
-                            data-total-base-rateio="{{ rateio_context.total_base_rateio|floatformat:2 }}"
-                            data-criterio-rateio="{{ rateio_context.criterio_rateio }}"
-                        >
-                    </div>
-                    <div class="col-md-2 modo-avancado">{{ form.custo_medio.label_tag }}{{ form.custo_medio }}</div>
-                    <div class="col-md-2">{{ form.margem_lucro.label_tag }}{{ form.margem_lucro }}</div>
-                </div>
-                <div class="row mt-2 campo-compacto">
-                    <div class="col-md-2 text-muted small">
-                        Competencia do rateio
-                        <div><strong>{{ rateio_context.competencia|date:"m/Y" }}</strong></div>
-                    </div>
-                    <div class="col-md-2 text-muted small">
-                        Criterio atual
-                        <div><strong>{{ rateio_context.criterio_rateio_display }}</strong></div>
-                    </div>
-                    <div class="col-md-2">{{ form.margem_minima.label_tag }}{{ form.margem_minima }}</div>
-                    <div class="col-md-2">{{ form.taxa_cartao.label_tag }}{{ form.taxa_cartao }}</div>
-                    <div class="col-md-2 form-check mt-4">{{ form.usar_aliquota_manual }} {{ form.usar_aliquota_manual.label_tag }}</div>
-                </div>
-                <div class="row mt-2 campo-compacto modo-avancado" id="bloco-tributos">
-                    <div class="col-md-2">{{ form.aliquota_manual.label_tag }}{{ form.aliquota_manual }}</div>
-                    <div class="col-md-2">{{ form.icms.label_tag }}{{ form.icms }}</div>
-                    <div class="col-md-2">{{ form.ipi.label_tag }}{{ form.ipi }}</div>
-                    <div class="col-md-2">{{ form.pis.label_tag }}{{ form.pis }}</div>
-                    <div class="col-md-2">{{ form.cofins.label_tag }}{{ form.cofins }}</div>
-                </div>
-                <div class="row mt-2 campo-compacto">
-                    <div class="col-md-3">
-                        <label for="id_preco_sugerido_ui">Preço sugerido</label>
-                        <input id="id_preco_sugerido_ui" class="form-control" readonly>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="id_preco_minimo_ui">Preço mínimo</label>
-                        <input id="id_preco_minimo_ui" class="form-control" readonly>
-                    </div>
-                    <div class="col-md-3">
-                        {{ form.preco_final.label_tag }}{{ form.preco_final }}
-                    </div>
-                    <div class="col-md-3 form-check mt-4">{{ form.permitir_preco_abaixo_minimo }} {{ form.permitir_preco_abaixo_minimo.label_tag }}</div>
-                </div>
-                <div class="row mt-1">
-                    <div class="col-12 text-muted small">
-                        Base de custo: custo unitário + custos operacionais detalhados (frete, impostos, comissão, marketplace, CAC e, se marcado, rateio do custo fixo mensal).
-                    </div>
-                </div>
-                <div class="alert alert-warning mt-2 alerta-minimo" id="alerta-minimo">
-                    Preço final abaixo do mínimo calculado.
-                </div>
-                <div class="row mt-2">
-                    <div class="col-md-3">
-                        <div class="kpi-box">
-                            <div class="kpi-label">Custo total</div>
-                            <div class="kpi-value" id="kpi-custo">R$ 0,00</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="kpi-box">
-                            <div class="kpi-label">Lucro estimado</div>
-                            <div class="kpi-value" id="kpi-lucro">R$ 0,00</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="kpi-box">
-                            <div class="kpi-label">Margem real</div>
-                            <div class="kpi-value" id="kpi-margem">0,00%</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="kpi-box">
-                            <div class="kpi-label">Lucro no cartão</div>
-                            <div class="kpi-value" id="kpi-lucro-cartao">R$ 0,00</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="secao modo-avancado">
-                <div class="secao-titulo">Observações</div>
-                <div class="row campo-compacto">
-                    <div class="col-md-6">{{ form.descricao.label_tag }}{{ form.descricao }}</div>
-                    <div class="col-md-6">{{ form.observacao_interna.label_tag }}{{ form.observacao_interna }}</div>
                 </div>
             </div>
 
@@ -317,6 +399,15 @@ function definirModoAvancado(ativo) {
     document.getElementById("btn-modo-rapido").classList.toggle("btn-outline-secondary", ativo);
     document.getElementById("btn-modo-avancado").classList.toggle("btn-secondary", ativo);
     document.getElementById("btn-modo-avancado").classList.toggle("btn-outline-secondary", !ativo);
+}
+
+function selecionarAbaProduto(aba) {
+    document.querySelectorAll("[data-produto-tab]").forEach((el) => {
+        el.classList.toggle("is-active", el.dataset.produtoTab === aba);
+    });
+    document.querySelectorAll("[data-produto-tab-btn]").forEach((el) => {
+        el.classList.toggle("is-active", el.dataset.produtoTabBtn === aba);
+    });
 }
 
 function atualizarVisibilidadeTipoItem() {
@@ -532,9 +623,13 @@ document.addEventListener("DOMContentLoaded", () => {
         recalcularPreco();
     });
     document.getElementById("id_modo_preco")?.addEventListener("change", atualizarCamposTributarios);
+    document.querySelectorAll("[data-produto-tab-btn]").forEach((btn) => {
+        btn.addEventListener("click", () => selecionarAbaProduto(btn.dataset.produtoTabBtn));
+    });
 
     configurarGeracaoEAN();
     definirModoAvancado(true);
+    selecionarAbaProduto("essencial");
     atualizarVisibilidadeTipoItem();
     atualizarCamposTributarios();
     recalcularPreco();

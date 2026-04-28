@@ -1,5 +1,6 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.db import transaction
@@ -34,6 +35,7 @@ from .helpers import (
     _exportar_csv,
     _exportar_pdf_tabela,
     _fmt_decimal,
+    _garantir_categorias_financeiras_padrao,
     _garantir_centros_custo_padrao,
     _garantir_formas_pagamento_padrao,
     _log_financeiro,
@@ -48,10 +50,17 @@ from .helpers import (
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def contas_receber(request):
+    session_key = "caixa_contas_receber_filtros"
+    _garantir_categorias_financeiras_padrao()
     _atualizar_status_contas_abertas()
+    _garantir_formas_pagamento_padrao()
+    hoje = timezone.localdate()
     status = (request.GET.get("status") or "").strip()
     busca = (request.GET.get("q") or "").strip()
     tipo_origem = (request.GET.get("tipo_origem") or "").strip()
+    categoria_id = (request.GET.get("categoria") or "").strip()
+    prioridade = (request.GET.get("prioridade") or "").strip()
+    aging_filtro = (request.GET.get("aging") or "").strip()
     preset_vencimento = (request.GET.get("preset_vencimento") or "").strip()
     prontas_filtro = request.GET.get("prontas_sem_recebimento") == "1"
     exportar = (request.GET.get("export") or "").strip().lower()
@@ -60,6 +69,11 @@ def contas_receber(request):
     vencimento_inicio = None
     vencimento_fim = None
     filtro_vencimento_invalido = False
+
+    if request.GET.get("restaurar") == "1":
+        filtros_salvos = request.session.get(session_key) or {}
+        if filtros_salvos:
+            return redirect(f"{request.path}?{urlencode(filtros_salvos)}")
 
     if vencimento_inicio_raw:
         try:
@@ -76,7 +90,7 @@ def contas_receber(request):
     if vencimento_fim and not vencimento_inicio:
         vencimento_inicio = vencimento_fim
 
-    preset_inicio, preset_fim = _periodo_por_preset(preset_vencimento, referencia=timezone.localdate())
+    preset_inicio, preset_fim = _periodo_por_preset(preset_vencimento, referencia=hoje)
     if preset_inicio and preset_fim:
         vencimento_inicio = preset_inicio
         vencimento_fim = preset_fim
@@ -84,10 +98,25 @@ def contas_receber(request):
         vencimento_fim_raw = vencimento_fim.isoformat()
 
     queryset = ContaReceber.objects.select_related("ordem_servico", "ponto_operacional", "categoria").all()
+    pendentes_qs = queryset.filter(status__in=["aberta", "parcial", "vencida"])
+    receber_hoje_qtd = pendentes_qs.filter(vencimento=hoje).count()
+    receber_vencidas_qtd = pendentes_qs.filter(vencimento__lt=hoje).count()
+    receber_proximos_7d_qtd = pendentes_qs.filter(vencimento__gte=hoje, vencimento__lte=hoje + timedelta(days=7)).count()
+    receber_prontas_qtd = pendentes_qs.filter(ordem_servico__status="pronto_contactado", tipo_origem="cliente_os").count()
+    receber_hoje_total = pendentes_qs.filter(vencimento=hoje).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    receber_vencidas_total = pendentes_qs.filter(vencimento__lt=hoje).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    receber_proximos_7d_total = (
+        pendentes_qs.filter(vencimento__gte=hoje, vencimento__lte=hoje + timedelta(days=7)).aggregate(total=Sum("valor_aberto"))["total"]
+        or Decimal("0.00")
+    )
+    receber_garantia_qtd = pendentes_qs.filter(tipo_origem="garantia_fabricante").count()
+    receber_garantia_total = pendentes_qs.filter(tipo_origem="garantia_fabricante").aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     if status:
         queryset = queryset.filter(status=status)
     if tipo_origem in {"cliente_os", "garantia_fabricante", "avulso"}:
         queryset = queryset.filter(tipo_origem=tipo_origem)
+    if categoria_id.isdigit():
+        queryset = queryset.filter(categoria_id=int(categoria_id))
     if busca:
         queryset = queryset.filter(
             Q(cliente_nome__icontains=busca)
@@ -100,6 +129,30 @@ def contas_receber(request):
             status__in=["aberta", "parcial", "vencida"],
             ordem_servico__status__in=["pronto_contactado", "pronto_contactar"],
         )
+    if prioridade == "hoje":
+        queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"], vencimento=hoje)
+    elif prioridade == "vencidas":
+        queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"], vencimento__lt=hoje)
+    elif prioridade == "semana":
+        queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"], vencimento__gte=hoje, vencimento__lte=hoje + timedelta(days=7))
+    elif prioridade == "prontas":
+        queryset = queryset.filter(
+            tipo_origem="cliente_os",
+            status__in=["aberta", "parcial", "vencida"],
+            ordem_servico__status="pronto_contactado",
+        )
+    if aging_filtro in {"a_vencer", "vencidas_1_30", "vencidas_31_60", "vencidas_61_90", "vencidas_90_plus"}:
+        queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"])
+        if aging_filtro == "a_vencer":
+            queryset = queryset.filter(vencimento__gt=hoje)
+        elif aging_filtro == "vencidas_1_30":
+            queryset = queryset.filter(vencimento__lt=hoje, vencimento__gte=hoje - timedelta(days=30))
+        elif aging_filtro == "vencidas_31_60":
+            queryset = queryset.filter(vencimento__lt=hoje - timedelta(days=30), vencimento__gte=hoje - timedelta(days=60))
+        elif aging_filtro == "vencidas_61_90":
+            queryset = queryset.filter(vencimento__lt=hoje - timedelta(days=60), vencimento__gte=hoje - timedelta(days=90))
+        elif aging_filtro == "vencidas_90_plus":
+            queryset = queryset.filter(vencimento__lt=hoje - timedelta(days=90))
     if filtro_vencimento_invalido:
         messages.warning(request, "Filtro de vencimento invalido. Use datas no formato AAAA-MM-DD.")
     elif vencimento_inicio and vencimento_fim:
@@ -125,6 +178,7 @@ def contas_receber(request):
                     getattr(conta.ordem_servico, "numero_os", "") or "-",
                     conta.descricao or "-",
                     conta.cliente_nome or "-",
+                    getattr(conta.categoria, "nome", "") or "-",
                     conta.get_tipo_origem_display(),
                     conta.vencimento.strftime("%d/%m/%Y") if conta.vencimento else "-",
                     conta.get_status_display(),
@@ -132,14 +186,32 @@ def contas_receber(request):
                     _fmt_decimal(conta.valor_aberto),
                 ]
             )
-        cabecalhos = ["ID", "OS", "Descricao", "Cliente", "Origem", "Vencimento", "Status", "Valor original", "Valor aberto"]
+        cabecalhos = ["ID", "OS", "Descricao", "Cliente", "Categoria", "Origem", "Vencimento", "Status", "Valor original", "Valor aberto"]
         nome_arquivo = f"contas_receber_{timezone.localdate():%Y%m%d}.{'csv' if exportar == 'csv' else 'pdf'}"
         if exportar == "csv":
             return _exportar_csv(nome_arquivo, cabecalhos, linhas)
         return _exportar_pdf_tabela(nome_arquivo, "Contas a receber", cabecalhos, linhas)
 
     contas_page = _paginar_queryset(request, queryset, per_page=60, page_param="page")
+    for conta in contas_page.object_list:
+        conta.dias_atraso = max(0, (hoje - conta.vencimento).days) if conta.vencimento else 0
     querystring_paginacao = _querystring_sem_param(request, "page", "export")
+    filtros_para_salvar = {
+        "q": busca,
+        "status": status,
+        "tipo_origem": tipo_origem,
+        "categoria": categoria_id,
+        "prioridade": prioridade,
+        "aging": aging_filtro,
+        "preset_vencimento": preset_vencimento,
+        "vencimento_inicio": vencimento_inicio.isoformat() if vencimento_inicio else vencimento_inicio_raw,
+        "vencimento_fim": vencimento_fim.isoformat() if vencimento_fim else vencimento_fim_raw,
+        "prontas_sem_recebimento": "1" if prontas_filtro else "",
+    }
+    filtros_para_salvar = {k: v for k, v in filtros_para_salvar.items() if v not in {"", None}}
+    if filtros_para_salvar:
+        request.session[session_key] = filtros_para_salvar
+    filtros_salvos = request.session.get(session_key) or {}
 
     return render(
         request,
@@ -150,6 +222,10 @@ def contas_receber(request):
             "q": busca,
             "status_filtro": status,
             "tipo_origem_filtro": tipo_origem,
+            "categoria_filtro": categoria_id,
+            "prioridade_filtro": prioridade,
+            "aging_filtro": aging_filtro,
+            "categorias_financeiras": CategoriaFinanceira.objects.filter(ativa=True).order_by("nome"),
             "preset_vencimento": preset_vencimento,
             "prontas_filtro": prontas_filtro,
             "vencimento_inicio": vencimento_inicio.isoformat() if vencimento_inicio else vencimento_inicio_raw,
@@ -161,7 +237,20 @@ def contas_receber(request):
             "total_status_paga": resumo_status.get("paga", 0),
             "prontas_sem_recebimento_total": prontas_sem_recebimento_total,
             "prontas_sem_recebimento_qtd": prontas_sem_recebimento_qtd,
+            "receber_hoje_qtd": receber_hoje_qtd,
+            "receber_hoje_total": receber_hoje_total,
+            "receber_vencidas_qtd": receber_vencidas_qtd,
+            "receber_vencidas_total": receber_vencidas_total,
+            "receber_proximos_7d_qtd": receber_proximos_7d_qtd,
+            "receber_proximos_7d_total": receber_proximos_7d_total,
+            "receber_prontas_qtd": receber_prontas_qtd,
+            "receber_garantia_qtd": receber_garantia_qtd,
+            "receber_garantia_total": receber_garantia_total,
+            "hoje": hoje,
+            "limite_curto_prazo": hoje + timedelta(days=7),
             "querystring_paginacao": querystring_paginacao,
+            "filtros_salvos_existem": bool(filtros_salvos),
+            "baixa_rapida_form": BaixaContaReceberForm(),
             "menu_app": "caixa",
             "menu_sub": "contas_receber",
         },
@@ -170,6 +259,7 @@ def contas_receber(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def criar_conta_receber(request):
+    _garantir_categorias_financeiras_padrao()
     if request.method == "POST":
         form = ContaReceberForm(request.POST)
         if form.is_valid():
@@ -192,9 +282,11 @@ def criar_conta_receber(request):
 @role_required(CAIXA_FINANCIAL_ROLES)
 def detalhe_conta_receber(request, conta_id):
     _garantir_formas_pagamento_padrao()
-    conta = get_object_or_404(ContaReceber.objects.select_related("ordem_servico"), id=conta_id)
+    conta = get_object_or_404(ContaReceber.objects.select_related("ordem_servico", "categoria"), id=conta_id)
     recebimentos = conta.recebimentos.select_related("usuario", "pagamento")
     valor_quitado = max(Decimal("0.00"), (conta.valor_original or Decimal("0.00")) - (conta.valor_aberto or Decimal("0.00")))
+    hoje = timezone.localdate()
+    dias_atraso = max(0, (hoje - conta.vencimento).days) if conta.vencimento else 0
 
     if request.method == "POST":
         form = BaixaContaReceberForm(_payload_pagamento_normalizado(request))
@@ -274,6 +366,7 @@ def detalhe_conta_receber(request, conta_id):
             "form": form,
             "recebimentos": recebimentos,
             "valor_quitado": valor_quitado,
+            "dias_atraso": dias_atraso,
             "menu_app": "caixa",
             "menu_sub": "contas_receber",
         },
@@ -284,33 +377,57 @@ def detalhe_conta_receber(request, conta_id):
 def aging_receber(request):
     _atualizar_status_contas_abertas()
     hoje = timezone.localdate()
-    contas = ContaReceber.objects.filter(status__in=["aberta", "parcial", "vencida"])
+    contas = (
+        ContaReceber.objects.select_related("ordem_servico", "categoria")
+        .filter(status__in=["aberta", "parcial", "vencida"])
+        .order_by("vencimento", "-id")
+    )
 
-    buckets = {
-        "a_vencer": Decimal("0.00"),
-        "vencidas_1_30": Decimal("0.00"),
-        "vencidas_31_60": Decimal("0.00"),
-        "vencidas_61_90": Decimal("0.00"),
-        "vencidas_90_plus": Decimal("0.00"),
+    bucket_defs = [
+        ("a_vencer", "A vencer", "info"),
+        ("vencidas_1_30", "1 a 30 dias", "warning"),
+        ("vencidas_31_60", "31 a 60 dias", "warning"),
+        ("vencidas_61_90", "61 a 90 dias", "danger"),
+        ("vencidas_90_plus", "90+ dias", "danger"),
+    ]
+    buckets = {chave: Decimal("0.00") for chave, _, _ in bucket_defs}
+    bucket_rows = {
+        chave: {"chave": chave, "titulo": titulo, "classe": classe, "total": Decimal("0.00"), "quantidade": 0, "contas": []}
+        for chave, titulo, classe in bucket_defs
     }
     for conta in contas:
         dias = (hoje - conta.vencimento).days
         if dias < 0:
-            buckets["a_vencer"] += conta.valor_aberto
+            chave = "a_vencer"
         elif dias <= 30:
-            buckets["vencidas_1_30"] += conta.valor_aberto
+            chave = "vencidas_1_30"
         elif dias <= 60:
-            buckets["vencidas_31_60"] += conta.valor_aberto
+            chave = "vencidas_31_60"
         elif dias <= 90:
-            buckets["vencidas_61_90"] += conta.valor_aberto
+            chave = "vencidas_61_90"
         else:
-            buckets["vencidas_90_plus"] += conta.valor_aberto
+            chave = "vencidas_90_plus"
+        buckets[chave] += conta.valor_aberto
+        bucket_rows[chave]["total"] += conta.valor_aberto
+        bucket_rows[chave]["quantidade"] += 1
+        conta.dias_atraso = max(0, dias)
+        bucket_rows[chave]["contas"].append(conta)
+
+    total_aberto = sum((row["total"] for row in bucket_rows.values()), Decimal("0.00"))
+    bucket_rows_lista = []
+    for chave, titulo, classe in bucket_defs:
+        row = bucket_rows[chave]
+        row["percentual"] = ((row["total"] / total_aberto) * Decimal("100.00")) if total_aberto else Decimal("0.00")
+        row["contas"] = row["contas"][:8]
+        bucket_rows_lista.append(row)
 
     return render(
         request,
         "caixa/aging_receber.html",
         {
             "buckets": buckets,
+            "bucket_rows": bucket_rows_lista,
+            "total_aberto": total_aberto,
             "menu_app": "caixa",
             "menu_sub": "aging_receber",
         },
@@ -319,6 +436,7 @@ def aging_receber(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def categorias_financeiras(request):
+    _garantir_categorias_financeiras_padrao()
     if request.method == "POST":
         form = CategoriaFinanceiraForm(request.POST)
         if form.is_valid():
@@ -401,6 +519,7 @@ def centros_custo(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def custos_fixos(request):
+    _garantir_categorias_financeiras_padrao()
     _garantir_centros_custo_padrao()
     hoje = timezone.localdate()
     mes, ano, competencia, _ = _parse_mes_ano(request, referencia=hoje)
@@ -465,7 +584,7 @@ def custos_fixos(request):
                 messages.success(request, "Custo fixo excluido.")
             return redirect(redirect_url)
 
-    custos_qs = CustoFixoMensal.objects.select_related("centro_custo").filter(competencia=competencia).order_by("descricao", "id")
+    custos_qs = CustoFixoMensal.objects.select_related("categoria_financeira", "centro_custo").filter(competencia=competencia).order_by("descricao", "id")
     custos_ativos = custos_qs.exclude(status="cancelado")
     total_previsto = custos_ativos.aggregate(total=Sum("valor_previsto"))["total"] or Decimal("0.00")
     total_pago = custos_ativos.aggregate(total=Sum("valor_pago"))["total"] or Decimal("0.00")

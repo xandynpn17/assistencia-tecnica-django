@@ -41,12 +41,13 @@
                             <dt class="col-sm-5">Nome:</dt>
                             <dd class="col-sm-7">{{ cliente.nome }}</dd>
 
+                            <dt class="col-sm-5">Tipo:</dt>
+                            <dd class="col-sm-7">{{ cliente.tipo_cliente_exibicao }}</dd>
+
                             <dt class="col-sm-5">CPF/CNPJ:</dt>
                             <dd class="col-sm-7">
-                                {% if cliente.cpf %}
-                                    {{ cliente.cpf|slice:":3" }}.{{ cliente.cpf|slice:"3:6" }}.{{ cliente.cpf|slice:"6:9" }}-{{ cliente.cpf|slice:"9:" }}
-                                {% elif cliente.cnpj %}
-                                    {{ cliente.cnpj|slice:":2" }}.{{ cliente.cnpj|slice:"2:5" }}.{{ cliente.cnpj|slice:"5:8" }}/{{ cliente.cnpj|slice:"8:12" }}-{{ cliente.cnpj|slice:"12:" }}
+                                {% if cliente.get_documento_formatado %}
+                                    {{ cliente.get_documento_formatado }}
                                 {% else %}
                                     <span class="text-muted">Não informado</span>
                                 {% endif %}
@@ -58,8 +59,11 @@
                             <dt class="col-sm-5">Email:</dt>
                             <dd class="col-sm-7">{{ cliente.email|default:"-" }}</dd>
 
+                            <dt class="col-sm-5">Origem:</dt>
+                            <dd class="col-sm-7">{{ cliente.origem_cliente_exibicao }}</dd>
+
                             <dt class="col-sm-5">Endereço:</dt>
-                            <dd class="col-sm-7">{{ cliente.endereco|default:"-" }}</dd>
+                            <dd class="col-sm-7">{{ cliente.endereco_exibicao|default:"-" }}</dd>
 
                             <dt class="col-sm-5">CEP:</dt>
                             <dd class="col-sm-7">{{ cliente.codigo_postal|default:"-" }}</dd>
@@ -85,7 +89,7 @@
 
                 <div class="card card-info mt-3">
                     <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-chart-bar mr-1"></i>Estatisticas</h3>
+                        <h3 class="card-title"><i class="fas fa-chart-bar mr-1"></i>Estatísticas</h3>
                     </div>
                     <div class="card-body text-center">
                         <div class="row">
@@ -102,7 +106,7 @@
                                 <div class="info-box bg-gradient-success">
                                     <span class="info-box-icon"><i class="fas fa-check-circle"></i></span>
                                     <div class="info-box-content">
-                                        <span class="info-box-text">Concluidas</span>
+                                        <span class="info-box-text">Concluídas</span>
                                         <span class="info-box-number">{{ ordens_concluidas }}</span>
                                     </div>
                                 </div>
@@ -117,14 +121,50 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="mt-3">
-                            <h5>Total Gasto</h5>
-                            <h2 class="text-success">R$ {{ total_gasto|floatformat:2 }}</h2>
+
+                        <div class="row text-left mt-3">
+                            <div class="col-sm-6 mb-3">
+                                <div class="small text-muted">Total pago</div>
+                                <div class="h5 text-success mb-0">R$ {{ total_gasto|floatformat:2 }}</div>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <div class="small text-muted">Em aberto</div>
+                                <div class="h5 text-warning mb-0">R$ {{ total_em_aberto|floatformat:2 }}</div>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <div class="small text-muted">Ticket médio</div>
+                                <div class="h6 mb-0">R$ {{ ticket_medio|floatformat:2 }}</div>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <div class="small text-muted">Total OS</div>
+                                <div class="h6 mb-0">R$ {{ total_os_cliente|floatformat:2 }}</div>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <div class="small text-muted">Último pagamento</div>
+                                <div class="h6 mb-0">
+                                    {% if ultimo_pagamento %}
+                                        {{ ultimo_pagamento.data|date:"d/m/Y H:i" }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <div class="small text-muted">Última OS</div>
+                                <div class="h6 mb-0">
+                                    {% if ultima_ordem %}
+                                        {{ ultima_ordem.numero_os }} em {{ ultima_ordem.data_abertura|date:"d/m/Y" }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </div>
+                            </div>
                         </div>
-                        <div class="mt-3">
-                            <h6 class="mb-1">Tempo medio de retirada</h6>
+
+                        <div class="mt-2">
+                            <h6 class="mb-1">Tempo médio de retirada</h6>
                             <strong>{{ tempo_medio_retirada }}</strong>
-                            <div class="small text-muted">De pronto contactado ate concluida</div>
+                            <div class="small text-muted">De pronto contactado até concluída</div>
                         </div>
                     </div>
                 </div>
@@ -163,7 +203,7 @@
                                             {{ ordem.get_tipo_equipamento_display }}
                                             {% if ordem.marca_equipamento %}<br><small class="text-muted">{{ ordem.marca_equipamento }}</small>{% endif %}
                                         </td>
-                                        <td><span class="badge bg-info">{{ ordem.get_status_display }}</span></td>
+                                        <td><span class="badge bg-info">{{ ordem.status_listagem_label }}</span></td>
                                         <td>
                                             {% if ordem.total_pago > 0 %}
                                             <strong class="text-success">R$ {{ ordem.total_pago|floatformat:2 }}</strong>
@@ -213,7 +253,7 @@
                                             {{ ordem.get_tipo_equipamento_display }}
                                             {% if ordem.marca_equipamento %}<br><small class="text-muted">{{ ordem.marca_equipamento }}</small>{% endif %}
                                         </td>
-                                        <td><span class="badge bg-success">{{ ordem.get_status_display }}</span></td>
+                                        <td><span class="badge bg-success">{{ ordem.status_listagem_label }}</span></td>
                                         <td>
                                             {% if ordem.total_pago > 0 %}
                                             <strong class="text-success">R$ {{ ordem.total_pago|floatformat:2 }}</strong>

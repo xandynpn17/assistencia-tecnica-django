@@ -232,7 +232,7 @@
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="form-group">
                                         <label>Email</label>
                                         {{ form.email }}
@@ -243,7 +243,19 @@
                                         {% endif %}
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>Origem do cliente</label>
+                                        {{ form.origem_cliente }}
+                                        {% if form.origem_cliente.errors %}
+                                        <div class="text-danger small">
+                                            {{ form.origem_cliente.errors }}
+                                        </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">Ajuda a medir CAC e canais de entrada.</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
                                     <div class="form-group">
                                         <label>CEP</label>
                                         <div class="input-group">

@@ -501,7 +501,6 @@ class Command(BaseCommand):
             "pendente_orcamento",
             "orcamentado",
             "autorizado",
-            "pronto_contactar",
             "pronto_contactado",
             "concluida",
             "pendente_pecas",
@@ -524,7 +523,7 @@ class Command(BaseCommand):
             ordem = OrdemServico.objects.filter(notas_internas__icontains=marcador).first()
             relatorio = (
                 f"Relatório técnico seed para ordem {idx + 1:03d}. Troca de componentes e testes executados."
-                if status in {"autorizado", "pronto_contactar", "pronto_contactado", "concluida"}
+                if status in {"autorizado", "pronto_contactado", "concluida"}
                 else ""
             )
             defaults = {
@@ -588,7 +587,7 @@ class Command(BaseCommand):
 
             produto_peca = produtos_peca[idx % len(produtos_peca)]
             produto_servico = produtos_servico[idx % len(produtos_servico)] if produtos_servico else None
-            item_aprovado = status in {"autorizado", "pronto_contactar", "pronto_contactado", "concluida"}
+            item_aprovado = status in {"autorizado", "pronto_contactado", "concluida"}
             status_item = "aprovado" if item_aprovado else ("recusado" if idx % 5 == 0 else "pendente")
 
             item_servico = ItemOrcamento.objects.filter(orcamento=orcamento, nome__icontains="Mao de obra seed").first()

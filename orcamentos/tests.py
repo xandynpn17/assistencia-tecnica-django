@@ -1,13 +1,22 @@
-from django.contrib.auth import get_user_model
-from django.test import TestCase
-from django.urls import reverse
 from decimal import Decimal
+import re
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from reportlab.lib.styles import getSampleStyleSheet
 
 from caixa.models import ComissaoItemOrcamento, RegraComissaoTecnico
 from clientes.models import Cliente
+from configuracoes.models import Empresa
+from core.pdf_theme import get_document_theme as real_get_document_theme
 from estoque.models import Produto
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.models import OrdemServico
+from core.pdf_utils import logo_or_paragraph, make_numbered_canvas as real_make_numbered_canvas
 
 
 class ItemOrcamentoTecnicoTests(TestCase):
@@ -258,3 +267,223 @@ class ItemOrcamentoTecnicoTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.ordem.refresh_from_db()
         self.assertEqual(self.ordem.status, "autorizado")
+
+    def test_orcamento_aplica_desconto_percentual_no_total(self):
+        ItemOrcamento.objects.create(
+            orcamento=self.orcamento,
+            nome="Servico desconto",
+            descricao="Teste",
+            valor_unitario=Decimal("200.00"),
+            quantidade=1,
+            origem="manual",
+            tipo_item="servico",
+        )
+        self.orcamento.desconto_percentual = Decimal("10.00")
+        self.orcamento.save(update_fields=["desconto_percentual"])
+        self.orcamento.atualizar_total()
+        self.orcamento.refresh_from_db()
+        self.assertEqual(self.orcamento.subtotal_itens(), Decimal("200.00"))
+        self.assertEqual(self.orcamento.desconto_calculado(), Decimal("20.00"))
+        self.assertEqual(self.orcamento.valor_total, Decimal("180.00"))
+
+    def test_item_aplica_desconto_por_valor_no_total(self):
+        item = ItemOrcamento.objects.create(
+            orcamento=self.orcamento,
+            nome="Servico com desconto por valor",
+            descricao="Teste",
+            valor_unitario=Decimal("100.00"),
+            quantidade=2,
+            desconto_valor=Decimal("30.00"),
+            origem="manual",
+            tipo_item="servico",
+        )
+        self.assertEqual(item.subtotal(), Decimal("200.00"))
+        self.assertEqual(item.desconto_calculado(), Decimal("30.00"))
+        self.assertEqual(item.total(), Decimal("170.00"))
+
+    def test_adicionar_item_nao_aceita_desconto_valor_e_percentual_juntos(self):
+        response = self.client.post(
+            reverse("orcamentos:adicionar_item", args=[self.orcamento.id]),
+            {
+                "ean": "",
+                "nome": "Item com desconto inválido",
+                "descricao": "Teste",
+                "valor_unitario": "100.00",
+                "quantidade": "1",
+                "tipo_item": "servico",
+                "origem": "manual",
+                "desconto_valor": "10.00",
+                "desconto_percentual": "5.00",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ItemOrcamento.objects.filter(nome="Item com desconto inválido").exists())
+        mensagens = [str(message) for message in response.context["messages"]]
+        self.assertTrue(any("nunca os dois" in mensagem for mensagem in mensagens))
+
+    def test_garantia_de_servico_cria_item_sem_comissao_por_padrao(self):
+        self.ordem.tipo_reparo = "Garantia de serviço"
+        self.ordem.save(update_fields=["tipo_reparo"])
+        response = self.client.post(
+            reverse("orcamentos:adicionar_item", args=[self.orcamento.id]),
+            {
+                "ean": "",
+                "nome": "Retorno em garantia",
+                "descricao": "Retorno",
+                "valor_unitario": "80.00",
+                "quantidade": "1",
+                "tipo_item": "servico",
+                "origem": "manual",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        item = ItemOrcamento.objects.latest("id")
+        self.assertFalse(item.comissionavel)
+
+    def test_garantia_de_servico_permita_servico_extra_comissionavel(self):
+        self.ordem.tipo_reparo = "Garantia de serviço"
+        self.ordem.save(update_fields=["tipo_reparo"])
+        response = self.client.post(
+            reverse("orcamentos:adicionar_item", args=[self.orcamento.id]),
+            {
+                "ean": "",
+                "nome": "Servico extra",
+                "descricao": "Cobrança extra",
+                "valor_unitario": "80.00",
+                "quantidade": "1",
+                "tipo_item": "servico",
+                "origem": "manual",
+                "comissionavel": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        item = ItemOrcamento.objects.latest("id")
+        self.assertTrue(item.comissionavel)
+
+
+class ImpressaoLogoOrcamentoTests(TestCase):
+    def test_logo_pdf_configurado_da_empresa_tem_prioridade_no_pdf_orcamento(self):
+        with TemporaryDirectory() as tmp_dir:
+            with override_settings(MEDIA_ROOT=tmp_dir):
+                empresa = Empresa.objects.create(nome="Empresa Orcamento")
+                empresa.logo_pdf = SimpleUploadedFile("logo-pdf.png", b"logo-configurado", content_type="image/png")
+                empresa.save(update_fields=["logo_pdf"])
+                style = getSampleStyleSheet()["Normal"]
+
+                with patch("core.pdf_utils.Image", side_effect=lambda path, width, height: path) as image_mock:
+                    logo = logo_or_paragraph(empresa, style, "<b>LOGO</b>", 10, 10)
+
+                self.assertEqual(logo, empresa.logo_pdf.path)
+                self.assertEqual(image_mock.call_args.args[0], empresa.logo_pdf.path)
+
+    def test_pdf_orcamento_sem_logo_exibe_nome_da_empresa(self):
+        empresa = Empresa.objects.create(nome="Empresa sem Logo PDF")
+        style = getSampleStyleSheet()["Normal"]
+
+        logo = logo_or_paragraph(empresa, style, "<b>LOGO</b>", 10, 10)
+
+        self.assertEqual(logo.text, "<b>Empresa sem Logo PDF</b>")
+
+
+class ImpressaoOrcamentoPdfTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.atendente = user_model.objects.create_user(
+            username="atendente_orc_pdf",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.atendente)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Orc PDF",
+            documento="39053344705",
+            telefone="11999998888",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca O",
+            modelo_equipamento="Modelo O",
+            defeito="Teste",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+        self.orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem)
+        ItemOrcamento.objects.create(
+            orcamento=self.orcamento,
+            nome="Servico base",
+            descricao="Diagnostico",
+            valor_unitario=Decimal("100.00"),
+            quantidade=1,
+            origem="manual",
+            tipo_item="servico",
+        )
+
+    @staticmethod
+    def _pdf_page_counts(pdf_bytes):
+        return [int(value) for value in re.findall(br"/Count\s+(\d+)", pdf_bytes)]
+
+    def test_imprimir_orcamento_retorna_pdf_sameorigin(self):
+        response = self.client.get(reverse("orcamentos:imprimir_orcamento", args=[self.orcamento.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Type"].startswith("application/pdf"))
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertEqual(response.get("X-Frame-Options"), "SAMEORIGIN")
+
+    def test_imprimir_orcamento_preview_remove_x_frame_options(self):
+        response = self.client.get(
+            reverse("orcamentos:imprimir_orcamento", args=[self.orcamento.id]),
+            {"_preview": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertIsNone(response.get("X-Frame-Options"))
+
+    def test_imprimir_orcamento_exibe_paginacao_total(self):
+        with patch("orcamentos.views.make_numbered_canvas", wraps=real_make_numbered_canvas) as factory_mock:
+            response = self.client.get(reverse("orcamentos:imprimir_orcamento", args=[self.orcamento.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(factory_mock.called)
+        self.assertIn(1, self._pdf_page_counts(response.content))
+
+    def test_imprimir_orcamento_preview_aplica_layout_documentos(self):
+        observado = {}
+
+        def _theme_spy(config):
+            observado["preset"] = config.layout_documentos_preset
+            observado["cor"] = config.layout_documentos_cor
+            return real_get_document_theme(config)
+
+        with patch("orcamentos.views.get_document_theme", side_effect=_theme_spy):
+            response = self.client.get(
+                reverse("orcamentos:imprimir_orcamento", args=[self.orcamento.id]),
+                {"_preview": "1", "layout_documentos_preset": "executivo", "layout_documentos_cor": "pb"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(observado.get("preset"), "executivo")
+        self.assertEqual(observado.get("cor"), "pb")
+
+    def test_imprimir_orcamento_longo_gera_multiplas_paginas_com_total(self):
+        ItemOrcamento.objects.bulk_create(
+            [
+                ItemOrcamento(
+                    orcamento=self.orcamento,
+                    nome=f"Servico extra {i:03d}",
+                    descricao="Item longo para forcar quebra de pagina",
+                    valor_unitario=Decimal("19.90"),
+                    quantidade=1,
+                    origem="manual",
+                    tipo_item="servico" if i % 2 == 0 else "peca",
+                )
+                for i in range(1, 150)
+            ]
+        )
+        with patch("orcamentos.views.make_numbered_canvas", wraps=real_make_numbered_canvas) as factory_mock:
+            response = self.client.get(reverse("orcamentos:imprimir_orcamento", args=[self.orcamento.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertTrue(factory_mock.called)
+        self.assertTrue(any(total >= 2 for total in self._pdf_page_counts(response.content)))

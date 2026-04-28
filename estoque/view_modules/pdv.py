@@ -161,7 +161,12 @@ def api_cesto_item_remover(request, venda_id):
 
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def guia_pagamento(request, guia_codigo):
-    vendas_qs = VendaRapidaEstoque.objects.select_related("produto", "ponto_operacional", "usuario").filter(guia_pagamento=guia_codigo).order_by("id")
+    vendas_qs = (
+        VendaRapidaEstoque.objects.select_related("produto", "ponto_operacional", "usuario", "pagamento")
+        .filter(guia_pagamento=guia_codigo)
+        .exclude(status="cancelada")
+        .order_by("id")
+    )
     if not vendas_qs.exists():
         messages.error(request, "Guia nao encontrada.")
         return redirect("estoque:consulta_artigos")

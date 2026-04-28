@@ -5,16 +5,81 @@ from urllib.parse import quote
 
 from django.conf import settings
 from django.core.mail import send_mail
-from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 
 from configuracoes.models import ConfiguracaoSistema, Empresa
-
 from orcamentos.models import Orcamento
 
 from ..models import LinhaTrabalho, NotificacaoCliente
 from ..services.log_os_service import LogOSService
+
+
+LEGACY_MENSAGEM_ORCAMENTO_EMAIL = (
+    "Olá {cliente_nome}, seu orçamento da OS {numero_os} está disponível. Valor: {valor_orcamento}. "
+    "Condições: {condicoes}. Código: {codigo_portal}."
+)
+LEGACY_MENSAGEM_ORCAMENTO_WHATSAPP = (
+    "Olá, {cliente_nome}. Orçamento da OS {numero_os}: {valor_orcamento}. "
+    "Condições: {condicoes}. Código de acompanhamento: {codigo_portal}."
+)
+LEGACY_MENSAGEM_PRONTO_EMAIL = (
+    "Olá {cliente_nome}, seu equipamento da OS {numero_os} está pronto para retirada. Código: {codigo_portal}."
+)
+LEGACY_MENSAGEM_PRONTO_WHATSAPP = (
+    "Olá, {cliente_nome}. Seu equipamento da OS {numero_os} está pronto para retirada. Código: {codigo_portal}."
+)
+
+DEFAULT_MENSAGEM_ORCAMENTO_EMAIL = (
+    "Olá {cliente_nome},\n\n"
+    "Preparamos o orçamento da OS {numero_os}.\n"
+    "Equipamento: {equipamento_resumo}\n"
+    "Itens do orçamento:\n{itens_orcamento}\n\n"
+    "Valor total: R$ {valor_orcamento}\n"
+    "Condições: {condicoes}\n"
+    "{linha_link_orcamento}"
+    "Código de acompanhamento: {codigo_portal}\n\n"
+    "Se desejar aprovar, responda este e-mail ou fale conosco.\n"
+    "{empresa_nome}"
+)
+DEFAULT_MENSAGEM_ORCAMENTO_WHATSAPP = (
+    "Olá, {cliente_nome}.\n"
+    "Seu orçamento da OS {numero_os} já está disponível.\n"
+    "Equipamento: {equipamento_resumo}\n"
+    "Itens:\n{itens_orcamento}\n"
+    "Valor total: R$ {valor_orcamento}\n"
+    "Condições: {condicoes}\n"
+    "{linha_link_orcamento}"
+    "Código de acompanhamento: {codigo_portal}\n"
+    "Se aprovar, responda esta mensagem."
+)
+DEFAULT_MENSAGEM_PRONTO_EMAIL = (
+    "Olá {cliente_nome},\n\n"
+    "Seu equipamento da OS {numero_os} está pronto para retirada.\n"
+    "Status atual: {status_os}\n"
+    "Código de acompanhamento: {codigo_portal}."
+)
+DEFAULT_MENSAGEM_PRONTO_WHATSAPP = (
+    "Olá, {cliente_nome}. Seu equipamento da OS {numero_os} está pronto para retirada.\n"
+    "Status: {status_os}\n"
+    "Código de acompanhamento: {codigo_portal}."
+)
+
+
+def _primeiro_nome(nome):
+    nome_limpo = (nome or "").strip()
+    if not nome_limpo:
+        return ""
+    return nome_limpo.split()[0]
+
+
+def _link_absoluto(request, view_name, **kwargs):
+    if not request:
+        return ""
+    try:
+        return request.build_absolute_uri(reverse(view_name, kwargs=kwargs))
+    except Exception:
+        return ""
 
 
 def request_ip(request):
@@ -96,10 +161,10 @@ def enviar_notificacao(notif):
     return {"enviada": False, "url": ""}
 
 
-def contexto_variaveis_mensagem(ordem):
+def contexto_variaveis_mensagem(ordem, request=None):
     config = ConfiguracaoSistema.get_configuracao()
     empresa = Empresa.objects.first()
-    orcamento = Orcamento.objects.filter(ordem_servico=ordem).order_by("-id").first()
+    orcamento = Orcamento.objects.filter(ordem_servico=ordem).prefetch_related("itens").order_by("-id").first()
     linha_pronto = (
         LinhaTrabalho.objects.filter(ordem=ordem, status="pronto_contactado")
         .order_by("-criado_em")
@@ -109,14 +174,40 @@ def contexto_variaveis_mensagem(ordem):
     if linha_pronto:
         dias_parado = max((timezone.now() - linha_pronto.criado_em).days, 0)
 
+    itens_orcamento = []
+    if orcamento:
+        for item in orcamento.itens.all():
+            tipo = "Serviço" if item.tipo_item == "servico" else "Peça"
+            itens_orcamento.append(f"- {tipo}: {item.nome} x{item.quantidade}: R$ {item.total():.2f}")
+    itens_orcamento_texto = "\n".join(itens_orcamento) if itens_orcamento else "- Nenhum item detalhado no orçamento."
+
+    equipamento_partes = [
+        ordem.get_tipo_equipamento_display() or "",
+        ordem.marca_equipamento or "",
+        ordem.modelo_equipamento or "",
+    ]
+    equipamento_resumo = " ".join(parte.strip() for parte in equipamento_partes if parte and str(parte).strip()).strip()
+    equipamento_resumo = re.sub(r"\s+", " ", equipamento_resumo)
+
+    link_orcamento_pdf = _link_absoluto(request, "orcamentos:imprimir_orcamento", pk=orcamento.pk) if orcamento else ""
+    link_ordem_pdf = _link_absoluto(request, "ordens:imprimir_ordem_servico", pk=ordem.pk)
+    linha_link_orcamento = f"PDF do orçamento: {link_orcamento_pdf}\n" if link_orcamento_pdf else ""
+
     return {
+        "saudacao_cliente": _primeiro_nome(ordem.cliente.nome) or ordem.cliente.nome or "",
         "nome_cliente": ordem.cliente.nome or "",
         "cliente_nome": ordem.cliente.nome or "",
+        "empresa_nome": empresa.nome if empresa else "",
+        "telefone_loja": empresa.telefone if empresa else "",
+        "email_loja": empresa.email if empresa else "",
         "numero_os": ordem.numero_os or "",
         "equipamento": ordem.get_tipo_equipamento_display() or "",
+        "equipamento_resumo": equipamento_resumo,
+        "marca": ordem.marca_equipamento or "",
         "modelo": ordem.modelo_equipamento or "",
         "defeito": ordem.defeito or "",
         "valor_orcamento": f"{(orcamento.valor_total if orcamento else Decimal('0.00')):.2f}",
+        "desconto_orcamento": f"{(orcamento.desconto_calculado() if orcamento else Decimal('0.00')):.2f}",
         "prazo_reparo": "3 dias uteis",
         "prazo_diagnostico": "48h",
         "valor_diagnostico": "0.00",
@@ -130,6 +221,13 @@ def contexto_variaveis_mensagem(ordem):
         "motivo_nao_reparo": ordem.relatorio_tecnico or "",
         "codigo_portal": ordem.codigo_portal or "",
         "condicoes": (config.condicoes_orcamento or "").strip(),
+        "status_os": ordem.status_listagem_label,
+        "itens_orcamento": itens_orcamento_texto,
+        "itens_orcamento_resumidos": " | ".join(itens_orcamento) if itens_orcamento else "Nenhum item detalhado no orçamento.",
+        "quantidade_itens_orcamento": str(len(itens_orcamento)),
+        "link_orcamento_pdf": link_orcamento_pdf,
+        "link_ordem_pdf": link_ordem_pdf,
+        "linha_link_orcamento": linha_link_orcamento,
     }
 
 
@@ -157,6 +255,22 @@ def registrar_pendente_cliente_envio_orcamento(ordem, usuario, canal):
     )
 
 
+def registrar_pronto_contactado(ordem, usuario, canal):
+    if not ordem.fechada:
+        try:
+            ordem.aplicar_status_sem_historico("pronto_contactado")
+        except ValueError:
+            pass
+    canal_txt = "email" if canal == "email" else "WhatsApp"
+    LinhaTrabalho.objects.create(
+        ordem=ordem,
+        status="pronto_contactado",
+        descricao=f"Cliente avisado por {canal_txt} de que o equipamento está pronto para retirada.",
+        usuario=usuario,
+        tipo_evento="manual",
+    )
+
+
 def log_os(ordem, tipo_evento, descricao, usuario=None, dados_extras=None):
     LogOSService.registrar(
         ordem=ordem,
@@ -176,12 +290,21 @@ def recalcular_comissoes_itens_antecipado(ordem):
 
 
 __all__ = [
+    "DEFAULT_MENSAGEM_ORCAMENTO_EMAIL",
+    "DEFAULT_MENSAGEM_ORCAMENTO_WHATSAPP",
+    "DEFAULT_MENSAGEM_PRONTO_EMAIL",
+    "DEFAULT_MENSAGEM_PRONTO_WHATSAPP",
+    "LEGACY_MENSAGEM_ORCAMENTO_EMAIL",
+    "LEGACY_MENSAGEM_ORCAMENTO_WHATSAPP",
+    "LEGACY_MENSAGEM_PRONTO_EMAIL",
+    "LEGACY_MENSAGEM_PRONTO_WHATSAPP",
     "contexto_variaveis_mensagem",
     "enviar_notificacao",
     "log_os",
     "recalcular_comissoes_itens_antecipado",
     "registrar_notificacao",
     "registrar_pendente_cliente_envio_orcamento",
+    "registrar_pronto_contactado",
     "render_template_mensagem",
     "request_ip",
 ]

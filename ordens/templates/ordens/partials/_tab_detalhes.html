@@ -73,6 +73,23 @@
                             <p class="mb-1">
                                 <strong>Referência parceiro:</strong> {{ ordem.referencia_parceiro|default:"-" }}
                             </p>
+                            <hr class="my-2">
+                            <p class="mb-1"><strong>Assinatura de entrada:</strong>
+                                {% if assinatura_entrada_data %}
+                                    {{ assinatura_entrada_data|date:"d/m/Y H:i" }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </p>
+                            <p class="mb-1"><strong>Arquivo entrada:</strong> {% if assinatura_entrada_tem_arquivo %}Sim{% else %}Não{% endif %}</p>
+                            <p class="mb-1"><strong>Assinatura de saída:</strong>
+                                {% if assinatura_saida_data %}
+                                    {{ assinatura_saida_data|date:"d/m/Y H:i" }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </p>
+                            <p class="mb-0"><strong>Arquivo saída:</strong> {% if assinatura_saida_tem_arquivo %}Sim{% else %}Não{% endif %}</p>
                         </div>
 
                         <!-- Observações Internas -->

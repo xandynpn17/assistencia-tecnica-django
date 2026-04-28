@@ -1,5 +1,34 @@
 {% extends 'core/base.html' %}
 
+{% block extra_css %}
+<style>
+  .mini-chart-list {
+    display: grid;
+    gap: 10px;
+  }
+  .mini-chart-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 90px;
+    gap: 10px;
+    align-items: center;
+  }
+  .mini-chart-track {
+    height: 10px;
+    border-radius: 999px;
+    background: #e7eef4;
+    overflow: hidden;
+  }
+  .mini-chart-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #1f8b61 0%, #176a48 100%);
+  }
+  .mini-chart-fill.despesa {
+    background: linear-gradient(90deg, #d97706 0%, #b45309 100%);
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-3">
   {% include 'caixa/_subnav_caixa.html' %}
@@ -13,7 +42,7 @@
     <div class="card-body">
       <form method="get" class="form-row align-items-end">
         <div class="col-md-2">
-          <label>Período rápido</label>
+          <label>Periodo rapido</label>
           <select name="periodo" class="form-control">
             <option value="7" {% if periodo == '7' %}selected{% endif %}>7 dias</option>
             <option value="30" {% if periodo == '30' %}selected{% endif %}>30 dias</option>
@@ -21,7 +50,7 @@
           </select>
         </div>
         <div class="col-md-3">
-          <label>Data de início</label>
+          <label>Data de inicio</label>
           <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
         </div>
         <div class="col-md-3">
@@ -38,12 +67,17 @@
     </div>
   </div>
 
+  <div class="alert alert-light py-2">
+    Comparativo com o periodo anterior ({{ periodo_anterior_inicio|date:"d/m/Y" }} ate {{ periodo_anterior_fim|date:"d/m/Y" }}).
+  </div>
+
   <div class="row mb-3">
     <div class="col-md-3">
       <div class="small-box bg-success">
         <div class="inner">
           <h4>R$ {{ receita_bruta|floatformat:2 }}</h4>
           <p>Receita bruta</p>
+          <small>Var: R$ {{ comparativos_resumo.receita_bruta.variacao|floatformat:2 }} ({{ comparativos_resumo.receita_bruta.percentual|floatformat:2 }}%)</small>
         </div>
       </div>
     </div>
@@ -52,6 +86,7 @@
         <div class="inner">
           <h4>R$ {{ receita_cliente|floatformat:2 }}</h4>
           <p>Receita cliente</p>
+          <small>Var: R$ {{ comparativos_resumo.receita_cliente.variacao|floatformat:2 }} ({{ comparativos_resumo.receita_cliente.percentual|floatformat:2 }}%)</small>
         </div>
       </div>
     </div>
@@ -60,6 +95,7 @@
         <div class="inner">
           <h4>R$ {{ receita_garantia|floatformat:2 }}</h4>
           <p>Receita garantia</p>
+          <small>Var: R$ {{ comparativos_resumo.receita_garantia.variacao|floatformat:2 }} ({{ comparativos_resumo.receita_garantia.percentual|floatformat:2 }}%)</small>
         </div>
       </div>
     </div>
@@ -68,25 +104,73 @@
         <div class="inner">
           <h4>R$ {{ despesas_operacionais|floatformat:2 }}</h4>
           <p>Despesas operacionais</p>
+          <small>Var: R$ {{ comparativos_resumo.despesas_operacionais.variacao|floatformat:2 }} ({{ comparativos_resumo.despesas_operacionais.percentual|floatformat:2 }}%)</small>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="card mb-3">
-    <div class="card-header bg-white"><strong>Resultado do período</strong></div>
-    <div class="card-body p-0">
-      <table class="table mb-0">
-        <tr><th>Receita bruta</th><td class="text-right">R$ {{ receita_bruta|floatformat:2 }}</td></tr>
-        <tr><th>Despesas operacionais</th><td class="text-right">R$ {{ despesas_operacionais|floatformat:2 }}</td></tr>
-        <tr>
-          <th>Resultado operacional</th>
-          <td class="text-right {% if resultado_operacional < 0 %}text-danger{% else %}text-success{% endif %}">
-            <strong>R$ {{ resultado_operacional|floatformat:2 }}</strong>
-          </td>
-        </tr>
-        <tr><th>Margem</th><td class="text-right">{{ margem|floatformat:2 }}%</td></tr>
-      </table>
+  <div class="row mb-3">
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header bg-white"><strong>Resultado do periodo</strong></div>
+        <div class="card-body p-0">
+          <table class="table mb-0">
+            <tr><th>Receita bruta</th><td class="text-right">R$ {{ receita_bruta|floatformat:2 }}</td></tr>
+            <tr><th>Despesas operacionais</th><td class="text-right">R$ {{ despesas_operacionais|floatformat:2 }}</td></tr>
+            <tr>
+              <th>Resultado operacional</th>
+              <td class="text-right {% if resultado_operacional < 0 %}text-danger{% else %}text-success{% endif %}">
+                <strong>R$ {{ resultado_operacional|floatformat:2 }}</strong>
+              </td>
+            </tr>
+            <tr><th>Margem</th><td class="text-right">{{ margem|floatformat:2 }}%</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header bg-white"><strong>Leitura executiva</strong></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Indicador</th>
+                <th class="text-right">Atual</th>
+                <th class="text-right">Anterior</th>
+                <th class="text-right">Var.</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Receita bruta</td>
+                <td class="text-right">R$ {{ comparativos_resumo.receita_bruta.atual|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.receita_bruta.anterior|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.receita_bruta.variacao|floatformat:2 }}</td>
+              </tr>
+              <tr>
+                <td>Despesas</td>
+                <td class="text-right">R$ {{ comparativos_resumo.despesas_operacionais.atual|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.despesas_operacionais.anterior|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.despesas_operacionais.variacao|floatformat:2 }}</td>
+              </tr>
+              <tr>
+                <td>Resultado</td>
+                <td class="text-right">R$ {{ comparativos_resumo.resultado_operacional.atual|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.resultado_operacional.anterior|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.resultado_operacional.variacao|floatformat:2 }}</td>
+              </tr>
+              <tr>
+                <td>Margem</td>
+                <td class="text-right">{{ comparativos_resumo.margem.atual|floatformat:2 }}%</td>
+                <td class="text-right">{{ comparativos_resumo.margem.anterior|floatformat:2 }}%</td>
+                <td class="text-right">{{ comparativos_resumo.margem.variacao|floatformat:2 }} p.p.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -104,7 +188,7 @@
                 <td class="text-right">R$ {{ row.total|floatformat:2 }}</td>
               </tr>
               {% empty %}
-              <tr><td colspan="2" class="text-center text-muted">Sem receitas no período.</td></tr>
+              <tr><td colspan="2" class="text-center text-muted">Sem receitas no periodo.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -124,11 +208,114 @@
                 <td class="text-right">R$ {{ row.total|floatformat:2 }}</td>
               </tr>
               {% empty %}
-              <tr><td colspan="2" class="text-center text-muted">Sem despesas no período.</td></tr>
+              <tr><td colspan="2" class="text-center text-muted">Sem despesas no periodo.</td></tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card mb-3">
+        <div class="card-header bg-white"><strong>Despesas por categoria</strong></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Categoria</th><th class="text-right">Total</th></tr></thead>
+            <tbody>
+              {% for row in despesas_por_categoria %}
+              <tr>
+                <td>{{ row.categoria__nome|default:"Sem categoria" }}</td>
+                <td class="text-right">R$ {{ row.total|floatformat:2 }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="2" class="text-center text-muted">Sem despesas no periodo.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-6">
+      <div class="card mb-3">
+        <div class="card-header bg-white"><strong>Comparativo por categoria</strong></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr><th>Categoria</th><th class="text-right">Atual</th><th class="text-right">Anterior</th><th class="text-right">Var.</th></tr>
+            </thead>
+            <tbody>
+              {% for row in despesas_categoria_comparativo %}
+              <tr>
+                <td>{{ row.nome }}</td>
+                <td class="text-right">R$ {{ row.atual|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ row.anterior|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ row.variacao|floatformat:2 }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted">Sem dados para comparar.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card mb-3">
+        <div class="card-header bg-white"><strong>Comparativo por centro de custo</strong></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr><th>Centro</th><th class="text-right">Atual</th><th class="text-right">Anterior</th><th class="text-right">Var.</th></tr>
+            </thead>
+            <tbody>
+              {% for row in despesas_centro_comparativo %}
+              <tr>
+                <td>{{ row.nome }}</td>
+                <td class="text-right">R$ {{ row.atual|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ row.anterior|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ row.variacao|floatformat:2 }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted">Sem dados para comparar.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header bg-white"><strong>Série mensal do DRE</strong></div>
+    <div class="card-body">
+      <div class="mini-chart-list">
+        {% for row in dre_mensal %}
+        <div>
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <strong>{{ row.competencia|date:"m/Y" }}</strong>
+            <small class="{% if row.resultado < 0 %}text-danger{% else %}text-success{% endif %}">Resultado R$ {{ row.resultado|floatformat:2 }} | {{ row.margem|floatformat:2 }}%</small>
+          </div>
+          <div class="mini-chart-row mb-1">
+            <div class="small text-muted">Receita</div>
+            <div class="mini-chart-track">
+              <div class="mini-chart-fill" style="width:{% widthratio row.receita max_dre_total 100 %}%"></div>
+            </div>
+            <div class="text-right small">R$ {{ row.receita|floatformat:2 }}</div>
+          </div>
+          <div class="mini-chart-row">
+            <div class="small text-muted">Despesa</div>
+            <div class="mini-chart-track">
+              <div class="mini-chart-fill despesa" style="width:{% widthratio row.despesa max_dre_total 100 %}%"></div>
+            </div>
+            <div class="text-right small">R$ {{ row.despesa|floatformat:2 }}</div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted">Sem série mensal disponível.</div>
+        {% endfor %}
       </div>
     </div>
   </div>

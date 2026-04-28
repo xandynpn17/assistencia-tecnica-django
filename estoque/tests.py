@@ -79,6 +79,9 @@ class ConsultaArtigosTests(TestCase):
         response = self.client.get(reverse("estoque:consulta_artigos"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Consulta de Artigos")
+        self.assertContains(response, "Finalizar venda e gerar guia")
+        self.assertContains(response, "F4")
+        self.assertContains(response, "Match exato por EAN/SKU")
         self.assertTrue(response.context["pode_venda_mostrador"])
 
     def test_busca_por_sku(self):
@@ -138,6 +141,28 @@ class ConsultaArtigosTests(TestCase):
         response = self.client.get(reverse("estoque:lista_produtos"), {"tipo": "produtos", "page": 2})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["produtos_page"].number, 2)
+
+    def test_lista_produtos_filtra_por_busca_e_atalho(self):
+        Produto.objects.create(
+            nome="Bateria sem saldo",
+            sku="SKU-BAT-000",
+            ean="7899991110001",
+            preco_final=Decimal("12.00"),
+            preco=Decimal("12.00"),
+            quantidade=0,
+            estoque_minimo=1,
+            ponto_operacional=self.ponto_loja,
+            ativo=True,
+        )
+        response = self.client.get(
+            reverse("estoque:lista_produtos"),
+            {"q": "Bateria", "quick": "sem_saldo"},
+        )
+        self.assertEqual(response.status_code, 200)
+        produtos = list(response.context["produtos"])
+        self.assertEqual(len(produtos), 1)
+        self.assertEqual(produtos[0].nome, "Bateria sem saldo")
+        self.assertEqual(response.context["quick"], "sem_saldo")
 
     def test_busca_por_modelo_compativel(self):
         self.produto.modelos_compativeis = "A10, A20, A30"
@@ -566,6 +591,30 @@ class ConsultaArtigosTests(TestCase):
         self.assertTrue(data["ok"])
         self.assertTrue(data["guia"].startswith("GUIA-"))
 
+        response_pagina = self.client.get(reverse("estoque:guia_pagamento", args=[data["guia"]]))
+        self.assertEqual(response_pagina.status_code, 200)
+        self.assertContains(response_pagina, "Ir para Caixa")
+        self.assertContains(response_pagina, "Imprimir guia")
+
+    def test_guia_pagamento_continua_disponivel_apos_finalizacao_da_venda(self):
+        venda = VendaRapidaEstoque.objects.create(
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            valor_unitario=Decimal("150.00"),
+            valor_total=Decimal("150.00"),
+            funcionario_numero=self.vendedor_numero,
+            cesto_codigo="CES-VENDIDA-01",
+            guia_pagamento="GUIA-VENDIDA-01",
+            status="vendida",
+            usuario=self.user,
+            concluido_em=timezone.now(),
+        )
+        response = self.client.get(reverse("estoque:guia_pagamento", args=[venda.guia_pagamento]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "GUIA-VENDIDA-01")
+        self.assertContains(response, self.produto.nome)
+
     def test_venda_rapida_rejeita_cesto_ja_finalizado(self):
         response_item = self.client.post(
             reverse("estoque:api_venda_rapida"),
@@ -761,7 +810,7 @@ class ConsultaArtigosTests(TestCase):
         self.produto.save(update_fields=["estoque_minimo"])
         response = self.client.get(reverse("estoque:reposicao_estoque"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Reposição Inteligente")
+        self.assertContains(response, "Reposicao Inteligente")
 
     def test_reposicao_inteligente_post_transfere_po2_para_po3(self):
         po2 = PontoOperacional.objects.create(codigo="PO2", nome="Armazem")
@@ -779,6 +828,32 @@ class ConsultaArtigosTests(TestCase):
         self.assertEqual(s2.quantidade, 4)
         self.assertEqual(s3.quantidade, 4)
 
+    def test_reposicao_inteligente_filtra_por_faltante_compra(self):
+        po2 = PontoOperacional.objects.create(codigo="PO2", nome="Armazem")
+        SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=po2, quantidade=1)
+        saldo_loja = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_loja)
+        saldo_loja.quantidade = 0
+        saldo_loja.save(update_fields=["quantidade"])
+        self.produto.estoque_minimo = 5
+        self.produto.save(update_fields=["estoque_minimo"])
+        response = self.client.get(reverse("estoque:reposicao_estoque"), {"quick": "faltante_compra"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Faltante compra")
+        self.assertContains(response, self.produto.nome)
+
+    def test_transferir_estoque_exibe_artigo_selecionado_e_saldos_por_ponto(self):
+        po2 = PontoOperacional.objects.create(codigo="PO2", nome="Armazem")
+        SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=po2, quantidade=7)
+        response = self.client.get(
+            reverse("estoque:transferir_estoque"),
+            {"q": "Tela", "produto_id": self.produto.id},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["produto_selecionado"], self.produto)
+        self.assertContains(response, "Artigo selecionado")
+        self.assertContains(response, "PO2 - Armazem")
+        self.assertContains(response, "PO3 - Loja")
+
     def test_movimentacoes_com_paginacao(self):
         for i in range(65):
             MovimentacaoEstoque.objects.create(
@@ -792,6 +867,28 @@ class ConsultaArtigosTests(TestCase):
         response = self.client.get(reverse("estoque:movimentacoes"), {"page": 2})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["movimentacoes_page"].number, 2)
+
+    def test_movimentacoes_filtra_por_busca_periodo_e_exporta_csv(self):
+        MovimentacaoEstoque.objects.create(
+            produto=self.produto,
+            tipo="transferencia",
+            quantidade=2,
+            origem=self.ponto_loja,
+            observacao="Transfere motor principal",
+            usuario=self.user,
+        )
+        response = self.client.get(
+            reverse("estoque:movimentacoes"),
+            {
+                "q": "motor",
+                "data_inicio": timezone.localdate().isoformat(),
+                "data_fim": timezone.localdate().isoformat(),
+                "export": "csv",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/csv", response["Content-Type"])
+        self.assertIn("Tela A10", response.content.decode("utf-8"))
 
     def test_reservas_clientes_com_paginacao(self):
         for i in range(50):
@@ -847,9 +944,82 @@ class ConsultaArtigosTests(TestCase):
         response = self.client.get(reverse("estoque:reservas_clientes"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Atendente")
-        self.assertContains(response, "Técnico responsável")
+        self.assertContains(response, "Tec.:")
         self.assertContains(response, self.user.username)
         self.assertContains(response, self.tecnico.username)
+
+    def test_associar_reserva_ordem_aceita_numero_os(self):
+        ordem = OrdemServico.objects.create(
+            cliente=Cliente.objects.create(
+                nome="Cliente Numero OS",
+                documento="11144477735",
+                telefone="11912345679",
+                estado="SP",
+            ),
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Numero",
+            modelo_equipamento="Modelo Numero",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+        )
+        reserva = ReservaEstoque.objects.create(
+            codigo_reserva="RES-NUM-0001",
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            nome_contato="Cliente Numero",
+            valido_ate=timezone.localdate() + timedelta(days=5),
+            status="ativa",
+            usuario=self.user,
+        )
+        response = self.client.post(
+            reverse("estoque:associar_reserva_ordem", args=[reserva.codigo_reserva]),
+            {"ordem_id": ordem.numero_os},
+        )
+        self.assertEqual(response.status_code, 302)
+        reserva.refresh_from_db()
+        self.assertEqual(reserva.ordem_servico, ordem)
+
+    def test_reservas_clientes_filtra_sem_os(self):
+        ReservaEstoque.objects.create(
+            codigo_reserva="RES-SEM-0001",
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            nome_contato="Cliente Sem OS",
+            valido_ate=timezone.localdate() + timedelta(days=5),
+            status="ativa",
+            usuario=self.user,
+        )
+        ordem = OrdemServico.objects.create(
+            cliente=Cliente.objects.create(
+                nome="Cliente Com OS",
+                documento="93541134780",
+                telefone="11912345670",
+                estado="SP",
+            ),
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Com OS",
+            modelo_equipamento="Modelo Com OS",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+        )
+        ReservaEstoque.objects.create(
+            codigo_reserva="RES-COM-0001",
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            nome_contato="Cliente Com OS",
+            valido_ate=timezone.localdate() + timedelta(days=5),
+            status="ativa",
+            usuario=self.user,
+            ordem_servico=ordem,
+        )
+        response = self.client.get(reverse("estoque:reservas_clientes"), {"quick": "sem_os"})
+        self.assertEqual(response.status_code, 200)
+        reservas = list(response.context["reservas"])
+        self.assertEqual(len(reservas), 1)
+        self.assertEqual(reservas[0].codigo_reserva, "RES-SEM-0001")
 
     def test_limpeza_pre_reservas_antigas_via_web(self):
         venda_antiga = VendaRapidaEstoque.objects.create(
@@ -1133,6 +1303,14 @@ class ProdutoCadastroAprimoradoTests(TestCase):
                 acao="CRIACAO",
             ).exists()
         )
+
+    def test_form_produto_exibe_abas_operacionais(self):
+        response = self.client.get(reverse("estoque:criar_produto"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Essencial")
+        self.assertContains(response, "Estoque e venda")
+        self.assertContains(response, "Preco e rateio")
+        self.assertContains(response, "Observacoes")
 
     def test_form_rejeita_preco_abaixo_minimo_sem_confirmacao(self):
         form = ProdutoForm(

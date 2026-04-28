@@ -2,16 +2,74 @@
 
 {% block title %}Guia {{ guia_codigo }}{% endblock %}
 
+{% block extra_css %}
+<style>
+  .guia-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .guia-btn {
+    min-height: 52px;
+    border-radius: 12px;
+    font-weight: 700;
+  }
+  .guia-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .guia-summary-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: #f8fbfd;
+    padding: 12px;
+  }
+  .guia-summary-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .guia-summary-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #183247;
+  }
+  @media (max-width: 991.98px) {
+    .guia-actions,
+    .guia-summary {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
     <h5 class="mb-0">Guia de Pagamento {{ guia_codigo }}</h5>
-    <div>
-      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">Imprimir</button>
-      <a href="{% url 'caixa:registrar_pagamento' %}?guia={{ guia_codigo }}" class="btn btn-primary btn-sm">Enviar para Caixa</a>
+    <div class="guia-actions">
+      <button type="button" class="btn btn-outline-secondary guia-btn" onclick="window.print()">Imprimir guia</button>
+      <a href="{% url 'caixa:registrar_pagamento' %}?guia={{ guia_codigo }}" class="btn btn-primary guia-btn">Ir para Caixa</a>
     </div>
   </div>
   <div class="card-body">
+    <div class="guia-summary">
+      <div class="guia-summary-card">
+        <div class="guia-summary-label">Guia</div>
+        <div class="guia-summary-value">{{ guia_codigo }}</div>
+      </div>
+      <div class="guia-summary-card">
+        <div class="guia-summary-label">Itens</div>
+        <div class="guia-summary-value">{{ vendas|length }}</div>
+      </div>
+      <div class="guia-summary-card">
+        <div class="guia-summary-label">Total</div>
+        <div class="guia-summary-value">R$ {{ total }}</div>
+      </div>
+    </div>
     <div class="table-responsive">
       <table class="table table-sm table-striped">
         <thead>

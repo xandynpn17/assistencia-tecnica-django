@@ -92,8 +92,8 @@
             {{ form.descricao }}
           </div>
           <div class="col-md-2">
-            <label>{{ form.categoria.label }}</label>
-            {{ form.categoria }}
+            <label>{{ form.categoria_financeira.label }}</label>
+            {{ form.categoria_financeira }}
           </div>
           <div class="col-md-2">
             <label>{{ form.centro_custo.label }}</label>
@@ -154,7 +154,7 @@
         {% for item in custos_fixos %}
           <tr>
             <td>{{ item.descricao }}</td>
-            <td>{{ item.categoria|default:"-" }}</td>
+            <td>{{ item.categoria_display }}</td>
             <td>{{ item.centro_custo|default:"-" }}</td>
             <td class="text-right">R$ {{ item.valor_previsto|floatformat:2 }}</td>
             <td class="text-right">R$ {{ item.valor_pago|floatformat:2 }}</td>

@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
+from io import BytesIO
 from decimal import Decimal
+import re
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -11,18 +13,22 @@ from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph as reportlab_paragraph
 
 from caixa.models import Caixa, Pagamento
 from caixa.models import AuditoriaGarantia
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema, Empresa
+from core.pdf_theme import get_document_theme as real_get_document_theme
 from configuracoes.models import FornecedorGarantia, MarcaGarantia, ModeloMensagem
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.forms import LinhaTrabalhoForm
-from ordens.models import LogOS, OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, PedidoCompra, ServicoPeca
-from ordens.view_modules import impressao
+from ordens.models import LogOS, OrdemArquivo, OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, PedidoCompra, ServicoPeca
+from ordens.view_modules.impressao import _quebrar_tokens_longos
+from core.pdf_utils import logo_or_paragraph, make_numbered_canvas as real_make_numbered_canvas
 
 
 class VerificarClienteOSViewTests(TestCase):
@@ -281,22 +287,26 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
 
     def test_criacao_os_registra_linha_criada_e_diagnosticar(self):
         url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
-        response = self.client.post(
-            url,
-            {
-                "tipo_equipamento": "celular",
-                "marca_catalogo": "__outros__",
-                "marca_manual": "Marca A",
-                "marca_equipamento": "",
-                "modelo_equipamento": "Modelo B",
-                "numero_serie_equipamento": "SN-123",
-                "defeito": "Nao liga",
-                "acessorios": "Cabo",
-                "tipo_reparo": "Fora de Garantia",
-                "status": "concluida",
-                "peritagem": "Sem danos visiveis",
-            },
-        )
+        payload = {
+            "tipo_equipamento": "celular",
+            "marca_catalogo": "__outros__",
+            "marca_manual": "Marca A",
+            "marca_equipamento": "",
+            "modelo_equipamento": "Modelo B",
+            "numero_serie_equipamento": "SN-123",
+            "defeito": "Nao liga",
+            "acessorios": "Cabo",
+            "tipo_reparo": "Fora de Garantia",
+            "status": "concluida",
+            "peritagem": "Sem danos visiveis",
+        }
+        response_revisao = self.client.post(url, payload)
+        self.assertEqual(response_revisao.status_code, 200)
+        self.assertContains(response_revisao, "Revisao antes de criar a OS")
+        self.assertFalse(OrdemServico.objects.exists())
+
+        payload["confirmar_criacao"] = "1"
+        response = self.client.post(url, payload)
         self.assertEqual(response.status_code, 302)
         self.assertIn("/resumo/", response.url)
 
@@ -310,6 +320,120 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
         self.assertEqual(linhas[0].tipo_evento, "automatico")
         self.assertEqual(linhas[1].status, "diagnosticar")
         self.assertEqual(linhas[1].tipo_evento, "automatico")
+
+    def test_criacao_os_com_nonce_repetido_nao_duplica_ordem(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        payload = {
+            "tipo_equipamento": "celular",
+            "marca_catalogo": "__outros__",
+            "marca_manual": "Marca Dedupe",
+            "marca_equipamento": "",
+            "modelo_equipamento": "Modelo Dedupe",
+            "numero_serie_equipamento": "SN-DEDUPE-01",
+            "defeito": "Nao liga",
+            "acessorios": "",
+            "tipo_reparo": "Fora de Garantia",
+            "peritagem": "",
+            "confirmar_criacao": "1",
+            "create_nonce": "nonce-fixo-dedupe",
+        }
+
+        response_1 = self.client.post(url, payload)
+        self.assertEqual(response_1.status_code, 302)
+        self.assertEqual(OrdemServico.objects.count(), 1)
+        ordem = OrdemServico.objects.first()
+        self.assertIsNotNone(ordem)
+
+        response_2 = self.client.post(url, payload)
+        self.assertEqual(response_2.status_code, 302)
+        self.assertEqual(OrdemServico.objects.count(), 1)
+        self.assertEqual(response_2.url, reverse("ordens:resumo_ordem", args=[ordem.id]))
+
+    def test_criacao_os_com_nonce_novo_e_dados_identicos_recentes_nao_duplica(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        payload = {
+            "tipo_equipamento": "celular",
+            "marca_catalogo": "__outros__",
+            "marca_manual": "Marca Dedupe 2",
+            "marca_equipamento": "",
+            "modelo_equipamento": "Modelo Dedupe 2",
+            "numero_serie_equipamento": "SN-DEDUPE-02",
+            "defeito": "Nao liga",
+            "acessorios": "",
+            "tipo_reparo": "Fora de Garantia",
+            "peritagem": "Sem danos",
+            "confirmar_criacao": "1",
+            "create_nonce": "nonce-1-dedupe-2",
+        }
+
+        response_1 = self.client.post(url, payload)
+        self.assertEqual(response_1.status_code, 302)
+        self.assertEqual(OrdemServico.objects.count(), 1)
+        ordem = OrdemServico.objects.first()
+        self.assertIsNotNone(ordem)
+
+        payload["create_nonce"] = "nonce-2-dedupe-2"
+        response_2 = self.client.post(url, payload)
+        self.assertEqual(response_2.status_code, 302)
+        self.assertEqual(OrdemServico.objects.count(), 1)
+        self.assertEqual(response_2.url, reverse("ordens:resumo_ordem", args=[ordem.id]))
+
+    def test_criacao_os_com_dados_identicos_fora_da_janela_permite_nova_ordem(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        payload = {
+            "tipo_equipamento": "celular",
+            "marca_catalogo": "__outros__",
+            "marca_manual": "Marca Janela",
+            "marca_equipamento": "",
+            "modelo_equipamento": "Modelo Janela",
+            "numero_serie_equipamento": "SN-JANELA-01",
+            "defeito": "Nao liga",
+            "acessorios": "",
+            "tipo_reparo": "Fora de Garantia",
+            "peritagem": "",
+            "confirmar_criacao": "1",
+            "create_nonce": "nonce-1-janela",
+        }
+
+        response_1 = self.client.post(url, payload)
+        self.assertEqual(response_1.status_code, 302)
+        self.assertEqual(OrdemServico.objects.count(), 1)
+        ordem_1 = OrdemServico.objects.first()
+        self.assertIsNotNone(ordem_1)
+        OrdemServico.objects.filter(id=ordem_1.id).update(
+            data_abertura=timezone.now() - timedelta(minutes=40)
+        )
+
+        payload["create_nonce"] = "nonce-2-janela"
+        response_2 = self.client.post(url, payload)
+        self.assertEqual(response_2.status_code, 302)
+        self.assertEqual(OrdemServico.objects.count(), 2)
+
+    def test_criacao_os_sem_sn_nao_bloqueia_duplicidade_por_conteudo(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        payload = {
+            "tipo_equipamento": "celular",
+            "marca_catalogo": "__outros__",
+            "marca_manual": "Marca Sem SN",
+            "marca_equipamento": "",
+            "modelo_equipamento": "Modelo Sem SN",
+            "numero_serie_equipamento": "",
+            "defeito": "Nao liga",
+            "acessorios": "",
+            "tipo_reparo": "Fora de Garantia",
+            "peritagem": "",
+            "confirmar_criacao": "1",
+            "create_nonce": "nonce-sem-sn-1",
+        }
+
+        response_1 = self.client.post(url, payload)
+        self.assertEqual(response_1.status_code, 302)
+        self.assertEqual(OrdemServico.objects.count(), 1)
+
+        payload["create_nonce"] = "nonce-sem-sn-2"
+        response_2 = self.client.post(url, payload)
+        self.assertEqual(response_2.status_code, 302)
+        self.assertEqual(OrdemServico.objects.count(), 2)
 
     def test_resumo_ordem_exibe_dados_principais(self):
         tecnico = get_user_model().objects.create_user(
@@ -342,8 +466,48 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
         self.assertContains(response, ordem.modelo_equipamento)
         self.assertContains(response, "Atendente")
         self.assertContains(response, self.user.username)
-        self.assertContains(response, "Técnico responsável")
+        self.assertContains(response, "Tecnico responsavel")
         self.assertContains(response, tecnico.username)
+
+    def test_resumo_ordem_oculta_canal_digital_quando_desativado(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.usar_confirmacao_assinatura_digital = False
+        config.save(update_fields=["usar_confirmacao_assinatura_digital"])
+
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca X",
+            modelo_equipamento="Modelo Y",
+            numero_serie_equipamento="SN-DIGITAL-OFF",
+            defeito="Sem audio",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+
+        response = self.client.get(reverse("ordens:resumo_ordem", args=[ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Canal digital")
+        self.assertNotContains(response, "Reenviar WhatsApp")
+        self.assertContains(response, "Validacao presencial")
+
+    def test_resumo_ordem_nao_exibe_bloco_de_termos_e_condicoes(self):
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca X",
+            modelo_equipamento="Modelo Y",
+            numero_serie_equipamento="SN-RESUMO-01",
+            defeito="Nao carrega",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+
+        response = self.client.get(reverse("ordens:resumo_ordem", args=[ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Termos e condicoes da OS")
 
     def test_criacao_os_com_marca_outros_preenche_marca_manual(self):
         fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor Marca")
@@ -371,6 +535,7 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
                 "numero_nota_fiscal": "NF-12345",
                 "status": "diagnosticar",
                 "peritagem": "",
+                "confirmar_criacao": "1",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -394,6 +559,7 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
                 "referencia_parceiro": "PARC-2026-001",
                 "status": "diagnosticar",
                 "peritagem": "",
+                "confirmar_criacao": "1",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -706,6 +872,7 @@ class IntegracaoFluxoOSCaixaTests(TestCase):
                 "tipo_reparo": "Fora de Garantia",
                 "status": "concluida",
                 "peritagem": "",
+                "confirmar_criacao": "1",
             },
         )
         self.assertEqual(response_criar.status_code, 302)
@@ -1141,6 +1308,92 @@ class PortalClienteTests(TestCase):
             ).exists()
         )
 
+    def test_notificar_pronto_whatsapp_atualiza_status_para_pronto_contactado(self):
+        self.client.force_login(self.user)
+        self.ordem.status = "em_andamento"
+        self.ordem.save(update_fields=["status"])
+
+        response = self.client.post(
+            reverse("ordens:notificar_cliente_ordem", args=[self.ordem.id, "pronto"]),
+            {"canal": "whatsapp"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.status, "pronto_contactado")
+        self.assertTrue(
+            LinhaTrabalho.objects.filter(
+                ordem=self.ordem,
+                status="pronto_contactado",
+                descricao__icontains="pronto para retirada",
+            ).exists()
+        )
+
+    def test_notificar_orcamento_usa_itens_do_orcamento_na_mensagem_padrao(self):
+        self.client.force_login(self.user)
+        config = ConfiguracaoSistema.get_configuracao()
+        config.mensagem_orcamento_whatsapp = ""
+        config.save(update_fields=["mensagem_orcamento_whatsapp"])
+        orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem)
+        ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome="Troca de bateria",
+            descricao="Item principal",
+            valor_unitario=Decimal("80.00"),
+            quantidade=1,
+            tipo_item="peca",
+            origem="manual",
+            status="pendente",
+        )
+        ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome="Mao de obra",
+            descricao="Servico",
+            valor_unitario=Decimal("50.00"),
+            quantidade=1,
+            tipo_item="servico",
+            origem="manual",
+            status="pendente",
+        )
+
+        response = self.client.post(
+            reverse("ordens:notificar_cliente_ordem", args=[self.ordem.id, "orcamento"]),
+            {"canal": "whatsapp"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        notif = NotificacaoCliente.objects.filter(ordem=self.ordem, canal="whatsapp").latest("id")
+        self.assertIn("Troca de bateria", notif.mensagem)
+        self.assertIn("Mao de obra", notif.mensagem)
+        self.assertIn("130.00", notif.mensagem)
+
+    def test_notificar_orcamento_padrao_inclui_link_pdf_quando_ha_orcamento(self):
+        self.client.force_login(self.user)
+        config = ConfiguracaoSistema.get_configuracao()
+        config.mensagem_orcamento_whatsapp = ""
+        config.save(update_fields=["mensagem_orcamento_whatsapp"])
+        orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem)
+        ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome="Display",
+            descricao="Troca completa",
+            valor_unitario=Decimal("150.00"),
+            quantidade=1,
+            tipo_item="peca",
+            origem="manual",
+            status="pendente",
+        )
+
+        response = self.client.post(
+            reverse("ordens:notificar_cliente_ordem", args=[self.ordem.id, "orcamento"]),
+            {"canal": "whatsapp"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        notif = NotificacaoCliente.objects.filter(ordem=self.ordem, canal="whatsapp").latest("id")
+        self.assertIn("PDF do orçamento:", notif.mensagem)
+        self.assertIn(reverse("orcamentos:imprimir_orcamento", args=[orcamento.id]), notif.mensagem)
+
 
 class OrdemEstoqueIntegracaoTests(TestCase):
     def setUp(self):
@@ -1344,8 +1597,8 @@ class BuscarOrdensPrefixosTests(TestCase):
             status="diagnosticar",
         )
 
-    def test_busca_por_sn_retorna_resultado(self):
-        response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "sn:ABC"})
+    def test_busca_por_sn_retorna_resultado_somente_com_match_completo(self):
+        response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "sn:SN-ABC-001"})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         if "redirect" in payload:
@@ -1353,6 +1606,12 @@ class BuscarOrdensPrefixosTests(TestCase):
         else:
             self.assertTrue(payload["resultados"])
             self.assertEqual(payload["resultados"][0]["id"], self.ordem.id)
+
+    def test_busca_por_sn_parcial_nao_retorna_resultado(self):
+        response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "sn:ABC"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["resultados"], [])
 
     def test_busca_por_cpf_retorna_resultado(self):
         response = self.client.get(reverse("ordens:buscar_ordens"), {"q": "cpf:390.533.447-05"})
@@ -1425,6 +1684,7 @@ class FluxoCriticoE2ETests(TestCase):
                 "defeito": "Nao liga",
                 "acessorios": "Carregador original",
                 "notas_internas": "Fluxo E2E garantia",
+                "confirmar_criacao": "1",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -1453,6 +1713,7 @@ class FluxoCriticoE2ETests(TestCase):
                 "defeito": "Nao liga",
                 "acessorios": "Carregador",
                 "notas_internas": "Sem confirmacao digital",
+                "confirmar_criacao": "1",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -1539,6 +1800,7 @@ class FluxoCriticoE2ETests(TestCase):
                 "defeito": "Nao liga",
                 "acessorios": "Carregador",
                 "notas_internas": "Nota interna",
+                "confirmar_criacao": "1",
             },
         )
         self.assertEqual(resp_criar.status_code, 302)
@@ -1947,6 +2209,112 @@ class DetalhesOrdemCabecalhoTests(TestCase):
         self.assertContains(response, 'id="relatorio_tecnico"', html=False)
 
 
+    def test_detalhes_exibe_aba_arquivos_mesmo_sem_anexos(self):
+        response = self.client.get(reverse("ordens:detalhes_ordem", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        abas = response.context["tabs"]
+        self.assertIn("arquivos", [aba["id"] for aba in abas])
+        self.assertContains(response, 'id="arquivos"', html=False)
+
+    def test_detalhes_exibe_etapa_fluxo_para_os_fechada_sem_pagamento(self):
+        ServicoPeca.objects.create(
+            ordem=self.ordem,
+            tipo="servico",
+            nome="Mao de obra",
+            quantidade=1,
+            valor_unitario=Decimal("120.00"),
+        )
+        self.ordem.fechada = True
+        self.ordem.status = "concluida"
+        self.ordem.save(update_fields=["fechada", "status"])
+
+        response = self.client.get(reverse("ordens:detalhes_ordem", args=[self.ordem.id]) + "?tab=servicos")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Concluída aguardando pagamento")
+        self.assertContains(response, "Ir para o Caixa")
+
+
+class OrdemArquivoUploadTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_arquivos_os",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Arquivos",
+            documento="39053344705",
+            telefone="11990000000",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca A",
+            modelo_equipamento="Modelo A",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+
+    @staticmethod
+    def _imagem_upload(nome="foto.jpg", tamanho=(2600, 1800), color=(30, 90, 160)):
+        imagem = Image.new("RGB", tamanho, color)
+        buffer = BytesIO()
+        imagem.save(buffer, format="JPEG", quality=96)
+        return SimpleUploadedFile(nome, buffer.getvalue(), content_type="image/jpeg")
+
+    def test_upload_arquivos_limita_total_de_fotos(self):
+        with TemporaryDirectory() as tmp_dir:
+            with override_settings(MEDIA_ROOT=tmp_dir):
+                for idx in range(5):
+                    OrdemArquivo.objects.create(
+                        ordem=self.ordem,
+                        arquivo=self._imagem_upload(f"existente-{idx}.jpg", tamanho=(800, 600)),
+                        enviado_por=self.user,
+                    )
+
+                response = self.client.post(
+                    reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+                    {
+                        "form_type": "arquivo",
+                        "descricao": "Fotos extras",
+                    },
+                    format="multipart",
+                    files={
+                        "arquivos": [
+                            self._imagem_upload("nova-1.jpg"),
+                            self._imagem_upload("nova-2.jpg"),
+                        ]
+                    },
+                )
+
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(OrdemArquivo.objects.filter(ordem=self.ordem).count(), 5)
+
+    def test_upload_arquivos_otimiza_imagem_grande(self):
+        with TemporaryDirectory() as tmp_dir:
+            with override_settings(MEDIA_ROOT=tmp_dir):
+                response = self.client.post(
+                    reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+                    {
+                        "form_type": "arquivo",
+                        "descricao": "Imagem otimizada",
+                        "arquivos": [self._imagem_upload("grande.jpg", tamanho=(3200, 2400))],
+                    },
+                )
+
+                self.assertEqual(response.status_code, 302)
+                anexo = OrdemArquivo.objects.get(ordem=self.ordem)
+                with Image.open(anexo.arquivo.path) as imagem_salva:
+                    self.assertLessEqual(imagem_salva.width, 1800)
+                    self.assertLessEqual(imagem_salva.height, 1800)
+
+
 class ImpressaoLogoEmpresaTests(TestCase):
     def test_logo_pdf_configurado_da_empresa_tem_prioridade_no_pdf(self):
         with TemporaryDirectory() as tmp_dir:
@@ -1956,8 +2324,8 @@ class ImpressaoLogoEmpresaTests(TestCase):
                 empresa.save(update_fields=["logo_pdf"])
                 style = getSampleStyleSheet()["Normal"]
 
-                with patch("ordens.view_modules.impressao.Image", side_effect=lambda path, width, height: path) as image_mock:
-                    logo = impressao._logo_or_paragraph(empresa, style, "<b>LOGO</b>", 10, 10)
+                with patch("core.pdf_utils.Image", side_effect=lambda path, width, height: path) as image_mock:
+                    logo = logo_or_paragraph(empresa, style, "<b>LOGO</b>", 10, 10)
 
                 self.assertEqual(logo, empresa.logo_pdf.path)
                 self.assertEqual(image_mock.call_args.args[0], empresa.logo_pdf.path)
@@ -1966,9 +2334,172 @@ class ImpressaoLogoEmpresaTests(TestCase):
         empresa = Empresa.objects.create(nome="Empresa sem Logo PDF")
         style = getSampleStyleSheet()["Normal"]
 
-        logo = impressao._logo_or_paragraph(empresa, style, "<b>LOGO</b>", 10, 10)
+        logo = logo_or_paragraph(empresa, style, "<b>LOGO</b>", 10, 10)
 
         self.assertEqual(logo.text, "<b>Empresa sem Logo PDF</b>")
+
+
+class ImpressaoPdfHeadersTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.usuario = user_model.objects.create_user(
+            username="atendente_pdf",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.usuario)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente PDF",
+            documento="39053344705",
+            telefone="11990001111",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca PDF",
+            modelo_equipamento="Modelo PDF",
+            defeito="Teste de impressao",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+
+    @staticmethod
+    def _pdf_page_counts(pdf_bytes):
+        return [int(value) for value in re.findall(br"/Count\s+(\d+)", pdf_bytes)]
+
+    def test_imprimir_ordem_servico_retorna_pdf_sameorigin(self):
+        response = self.client.get(reverse("ordens:imprimir_ordem_servico", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Type"].startswith("application/pdf"))
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertEqual(response.get("X-Frame-Options"), "SAMEORIGIN")
+
+    def test_imprimir_ordem_servico_preview_remove_x_frame_options(self):
+        response = self.client.get(
+            reverse("ordens:imprimir_ordem_servico", args=[self.ordem.id]),
+            {"_preview": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertIsNone(response.get("X-Frame-Options"))
+
+    def test_imprimir_ordem_servico_exibe_paginacao_total(self):
+        with patch("ordens.view_modules.impressao.make_numbered_canvas", wraps=real_make_numbered_canvas) as factory_mock:
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(factory_mock.called)
+        self.assertIn(1, self._pdf_page_counts(response.content))
+
+    def test_imprimir_ordem_servico_preview_aplica_layout_documentos(self):
+        observado = {}
+
+        def _theme_spy(config):
+            observado["preset"] = config.layout_documentos_preset
+            observado["cor"] = config.layout_documentos_cor
+            return real_get_document_theme(config)
+
+        with patch("ordens.view_modules.impressao.get_document_theme", side_effect=_theme_spy):
+            response = self.client.get(
+                reverse("ordens:imprimir_ordem_servico", args=[self.ordem.id]),
+                {"_preview": "1", "layout_documentos_preset": "executivo", "layout_documentos_cor": "pb"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(observado.get("preset"), "executivo")
+        self.assertEqual(observado.get("cor"), "pb")
+
+    def test_imprimir_ordem_servico_confirmacao_usa_data_confirmacao_e_mostra_abertura(self):
+        data_abertura = timezone.now() - timedelta(days=3, hours=2)
+        data_confirmacao = timezone.now() - timedelta(days=1, hours=1)
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(
+            data_abertura=data_abertura,
+            confirmado=True,
+            tipo_confirmacao="link",
+            data_confirmacao=data_confirmacao,
+        )
+        self.ordem.refresh_from_db()
+
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        abertura_fmt = data_abertura.strftime("%d/%m/%Y %H:%M")
+        confirmacao_fmt = data_confirmacao.strftime("%d/%m/%Y %H:%M")
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Data de abertura", texto_unificado)
+        self.assertIn(abertura_fmt, texto_unificado)
+        self.assertIn(f"em {confirmacao_fmt}", texto_unificado)
+        self.assertNotIn(f"em {abertura_fmt}", texto_unificado)
+
+    def test_imprimir_ordem_servico_impressao_preview_remove_x_frame_options(self):
+        response = self.client.get(
+            reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]),
+            {"_preview": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertIsNone(response.get("X-Frame-Options"))
+
+    def test_imprimir_ordem_servico_impressao_limita_em_duas_paginas(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.termos_ordem_servico = "Termo contratual muito longo. " * 600
+        config.save(update_fields=["termos_ordem_servico"])
+
+        response = self.client.get(reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        counts = self._pdf_page_counts(response.content)
+        self.assertTrue(counts)
+        self.assertLessEqual(max(counts), 2)
+
+    def test_imprimir_relatorio_tecnico_longo_gera_multiplas_paginas_com_total(self):
+        ServicoPeca.objects.bulk_create(
+            [
+                ServicoPeca(
+                    ordem=self.ordem,
+                    tipo="servico" if i % 2 == 0 else "peca",
+                    nome=f"Item {i:03d}",
+                    descricao="Linha de teste para quebra de pagina",
+                    quantidade=1,
+                    valor_unitario=Decimal("15.00"),
+                )
+                for i in range(1, 140)
+            ]
+        )
+        self.ordem.relatorio_tecnico = "Relatorio extenso " * 800
+        self.ordem.save(update_fields=["relatorio_tecnico"])
+
+        with patch("ordens.view_modules.impressao.make_numbered_canvas", wraps=real_make_numbered_canvas) as factory_mock:
+            response = self.client.get(reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertTrue(factory_mock.called)
+        self.assertTrue(any(total >= 2 for total in self._pdf_page_counts(response.content)))
+
+    def test_imprimir_relatorio_tecnico_preview_remove_x_frame_options(self):
+        response = self.client.get(
+            reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+            {"_preview": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertIsNone(response.get("X-Frame-Options"))
+
+
+class ImpressaoPdfUtilsTests(TestCase):
+    def test_quebrar_tokens_longos_preserva_texto_e_limita_blocos(self):
+        token_longo = "A" * 40
+        resultado = _quebrar_tokens_longos(token_longo, tamanho_bloco=10)
+
+        self.assertEqual(resultado.replace(" ", ""), token_longo)
+        self.assertTrue(all(len(parte) <= 10 for parte in resultado.split(" ")))
 
 
 class AgendamentoOrdemServicoTests(TestCase):

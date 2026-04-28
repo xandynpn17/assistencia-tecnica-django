@@ -56,7 +56,14 @@ def novo_documento_fiscal(request):
             messages.success(request, "Documento fiscal enviado para fila.")
             return redirect("fiscal:painel_fiscal")
     else:
-        form = DocumentoFiscalForm(initial={"origem": "MANUAL"})
+        initial = {"origem": request.GET.get("origem") or "MANUAL"}
+        if request.GET.get("tipo"):
+            initial["tipo"] = request.GET.get("tipo")
+        if request.GET.get("origem_referencia"):
+            initial["origem_referencia"] = request.GET.get("origem_referencia")
+        if request.GET.get("valor_total"):
+            initial["valor_total"] = request.GET.get("valor_total")
+        form = DocumentoFiscalForm(initial=initial)
     return render(
         request,
         "fiscal/form_documento_fiscal.html",

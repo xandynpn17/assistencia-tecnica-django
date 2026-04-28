@@ -1,37 +1,129 @@
 {% extends "core/base.html" %}
 
-{% block title %}Reposição Inteligente{% endblock %}
+{% block title %}Reposicao Inteligente{% endblock %}
 
 {% block header %}
-<h1 class="m-0 text-dark">Reposição Inteligente (PO2 -> PO3)</h1>
+<h1 class="m-0 text-dark">Reposicao Inteligente ({{ po2.codigo }} -> {{ po3.codigo }})</h1>
 {% endblock %}
 
 {% block content %}
+<style>
+  .reposicao-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .reposicao-summary-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f2f7fb 100%);
+    padding: 12px;
+  }
+  .reposicao-summary-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .reposicao-summary-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #183247;
+  }
+  .reposicao-quick-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  @media (max-width: 991.98px) {
+    .reposicao-summary { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 575.98px) {
+    .reposicao-summary { grid-template-columns: 1fr; }
+  }
+</style>
+
 <div class="card">
+  <div class="card-body border-bottom">
+    <div class="reposicao-summary">
+      <div class="reposicao-summary-card">
+        <div class="reposicao-summary-label">Itens</div>
+        <div class="reposicao-summary-value">{{ resumo.itens }}</div>
+      </div>
+      <div class="reposicao-summary-card">
+        <div class="reposicao-summary-label">Repor agora</div>
+        <div class="reposicao-summary-value">{{ resumo.repor_agora }}</div>
+      </div>
+      <div class="reposicao-summary-card">
+        <div class="reposicao-summary-label">Faltante compra</div>
+        <div class="reposicao-summary-value">{{ resumo.faltante_compra }}</div>
+      </div>
+      <div class="reposicao-summary-card">
+        <div class="reposicao-summary-label">Unidades sugeridas</div>
+        <div class="reposicao-summary-value">{{ resumo.unidades_sugeridas }}</div>
+      </div>
+    </div>
+
+    <div class="reposicao-quick-filters">
+      <a href="?q={{ q|urlencode }}&quick=" class="btn btn-sm {% if not quick %}btn-primary{% else %}btn-outline-primary{% endif %}">Todos</a>
+      <a href="?q={{ q|urlencode }}&quick=repor_agora" class="btn btn-sm {% if quick == 'repor_agora' %}btn-success{% else %}btn-outline-success{% endif %}">Repor agora</a>
+      <a href="?q={{ q|urlencode }}&quick=faltante_compra" class="btn btn-sm {% if quick == 'faltante_compra' %}btn-warning{% else %}btn-outline-warning{% endif %}">Faltante compra</a>
+    </div>
+
+    <form method="get" class="form-row align-items-end">
+      <div class="col-md-8 mb-2">
+        <label>Busca</label>
+        <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Produto, SKU ou EAN">
+      </div>
+      <div class="col-md-2 mb-2">
+        <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+      </div>
+      <div class="col-md-2 mb-2">
+        <a href="{% url 'estoque:reposicao_estoque' %}" class="btn btn-outline-secondary btn-block">Limpar</a>
+      </div>
+    </form>
+  </div>
   <div class="card-body table-responsive">
     <table class="table table-sm table-bordered">
       <thead>
         <tr>
           <th>Produto</th>
           <th>Saldo {{ po3.codigo }}</th>
-          <th>Mínimo</th>
+          <th>Minimo</th>
           <th>Saldo {{ po2.codigo }}</th>
-          <th>Sugestão</th>
-          <th>Repor Agora</th>
-          <th>Faltante Compra</th>
-          <th>Ação</th>
+          <th>Sugestao</th>
+          <th>Repor agora</th>
+          <th>Faltante compra</th>
+          <th>Acao</th>
         </tr>
       </thead>
       <tbody>
         {% for l in linhas %}
         <tr>
-          <td>{{ l.produto.nome }}</td>
+          <td>
+            <div class="font-weight-bold">{{ l.produto.nome }}</div>
+            <small class="text-muted">SKU {{ l.produto.sku|default:"-" }} | EAN {{ l.produto.ean|default:"-" }}</small>
+          </td>
           <td>{{ l.saldo_po3 }}</td>
           <td>{{ l.minimo }}</td>
           <td>{{ l.saldo_po2 }}</td>
           <td>{{ l.sugestao }}</td>
-          <td>{{ l.pode_repor }}</td>
-          <td>{{ l.faltante_compra }}</td>
+          <td>
+            {% if l.pode_repor > 0 %}
+            <span class="badge badge-success">{{ l.pode_repor }}</span>
+            {% else %}
+            <span class="text-muted">0</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if l.faltante_compra > 0 %}
+            <span class="badge badge-warning">{{ l.faltante_compra }}</span>
+            {% else %}
+            <span class="text-muted">0</span>
+            {% endif %}
+          </td>
           <td>
             {% if l.pode_repor > 0 %}
             <form method="post" class="form-inline mb-0">
@@ -41,16 +133,15 @@
               <button type="submit" class="btn btn-sm btn-primary">Repor</button>
             </form>
             {% else %}
-            <span class="text-muted">Sem saldo PO2</span>
+            <span class="text-muted">Sem saldo {{ po2.codigo }}</span>
             {% endif %}
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="text-center text-muted">Sem itens para reposição no momento.</td></tr>
+        <tr><td colspan="8" class="text-center text-muted">Sem itens para reposicao no momento.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 {% endblock %}
-

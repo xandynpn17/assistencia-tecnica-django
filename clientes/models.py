@@ -39,6 +39,19 @@ TIPO_CLIENTE_CHOICES = [
     ('pj', 'Pessoa Jurídica'),
 ]
 
+ORIGEM_CLIENTE_CHOICES = [
+    ("nao_informado", "Não informado"),
+    ("indicacao", "Indicação"),
+    ("google", "Google"),
+    ("instagram", "Instagram"),
+    ("facebook", "Facebook"),
+    ("olx", "OLX"),
+    ("balcao", "Balcão"),
+    ("parceiro", "Parceiro"),
+    ("retorno", "Retorno"),
+    ("outros", "Outros"),
+]
+
 ESTADOS_BRASIL = [
     ('AC', 'Acre'), ('AL', 'Alagoas'), ('AP', 'Amapá'), ('AM', 'Amazonas'),
     ('BA', 'Bahia'), ('CE', 'Ceará'), ('DF', 'Distrito Federal'), ('ES', 'Espírito Santo'),
@@ -86,6 +99,13 @@ class Cliente(models.Model):
         blank=True,
         null=True,
         validators=[telefone_validator]
+    )
+    origem_cliente = models.CharField(
+        max_length=20,
+        choices=ORIGEM_CLIENTE_CHOICES,
+        default="nao_informado",
+        blank=True,
+        verbose_name="Origem do cliente",
     )
 
     endereco = models.CharField(max_length=200, blank=True, null=True)
@@ -213,6 +233,49 @@ class Cliente(models.Model):
             return f"{doc_limpo[:2]}.{doc_limpo[2:5]}.{doc_limpo[5:8]}/{doc_limpo[8:12]}-{doc_limpo[12:]}"
 
         return self.documento
+
+    @property
+    def tipo_cliente_exibicao(self):
+        documento = re.sub(r"\D", "", self.documento or self.cpf or self.cnpj or "")
+        if len(documento) == 14:
+            return "Pessoa Jurídica"
+        if len(documento) == 11:
+            return "Pessoa Física"
+        return self.get_tipo_cliente_display()
+
+    @property
+    def endereco_exibicao(self):
+        if self.endereco:
+            return self.endereco
+
+        partes = []
+        linha_1 = " ".join(
+            parte.strip()
+            for parte in [self.logradouro or "", self.numero or ""]
+            if (parte or "").strip()
+        ).strip()
+        if linha_1:
+            partes.append(linha_1)
+        if (self.complemento or "").strip():
+            partes.append(self.complemento.strip())
+        linha_2 = ", ".join(
+            parte.strip()
+            for parte in [self.bairro or "", self.cidade or ""]
+            if (parte or "").strip()
+        ).strip(", ")
+        if linha_2:
+            partes.append(linha_2)
+        if (self.estado or "").strip():
+            partes.append(self.estado.strip())
+        if (self.codigo_postal or "").strip():
+            partes.append(f"CEP {self.codigo_postal.strip()}")
+        return " | ".join(partes)
+
+    @property
+    def origem_cliente_exibicao(self):
+        if not self.origem_cliente:
+            return "Não informado"
+        return self.get_origem_cliente_display()
 
     def __str__(self):
         documento_fmt = self.get_documento_formatado()

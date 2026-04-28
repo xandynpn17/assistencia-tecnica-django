@@ -1,4 +1,50 @@
-﻿{% extends 'core/base.html' %}
+{% extends 'core/base.html' %}
+{% load widget_tweaks %}
+
+{% block extra_css %}
+<style>
+  .pagar-resumo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+  }
+  .pagar-resumo-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 12px;
+    background: #fff;
+    padding: 14px 16px;
+  }
+  .pagar-resumo-card h4 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+  }
+  .pagar-resumo-card .meta {
+    margin-top: 4px;
+    font-size: .82rem;
+    color: #6c757d;
+  }
+  .pagar-quick-values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .pagar-quick-values .btn {
+    min-width: 110px;
+  }
+  .badge-atraso-critico,
+  .badge-atraso-hoje,
+  .badge-atraso-curto {
+    padding: .36rem .55rem;
+    font-weight: 700;
+    border-radius: 999px;
+  }
+  .badge-atraso-critico { background: #b42318; color: #fff; }
+  .badge-atraso-hoje { background: #b54708; color: #fff; }
+  .badge-atraso-curto { background: #175cd3; color: #fff; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-3">
@@ -7,6 +53,22 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Contas a pagar</h3>
     <a href="{% url 'caixa:criar_conta_pagar' %}" class="btn btn-primary btn-sm">Nova conta</a>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body py-2 d-flex flex-wrap align-items-center" style="gap: 8px;">
+      <strong class="mr-2">Prioridades:</strong>
+      <a href="{% url 'caixa:contas_pagar' %}?prioridade=hoje" class="btn btn-sm {% if prioridade_filtro == 'hoje' %}btn-primary{% else %}btn-outline-primary{% endif %}">Pagar hoje ({{ pagar_hoje_qtd }})</a>
+      <a href="{% url 'caixa:contas_pagar' %}?prioridade=vencidas" class="btn btn-sm {% if prioridade_filtro == 'vencidas' %}btn-danger{% else %}btn-outline-danger{% endif %}">Vencidas ({{ pagar_vencidas_qtd }})</a>
+      <a href="{% url 'caixa:contas_pagar' %}?prioridade=semana" class="btn btn-sm {% if prioridade_filtro == 'semana' %}btn-warning{% else %}btn-outline-warning{% endif %}">Próx. 7 dias ({{ pagar_proximos_7d_qtd }})</a>
+      <a href="{% url 'caixa:contas_pagar' %}?prioridade=sem_categoria" class="btn btn-sm {% if prioridade_filtro == 'sem_categoria' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Sem categoria ({{ pagar_sem_categoria_qtd }})</a>
+      {% if filtros_salvos_existem %}
+      <a href="{% url 'caixa:contas_pagar' %}?restaurar=1" class="btn btn-sm btn-outline-dark">Últimos filtros</a>
+      {% endif %}
+      {% if prioridade_filtro %}
+      <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm btn-outline-secondary">Limpar prioridade</a>
+      {% endif %}
+    </div>
   </div>
 
   <div class="row mb-3">
@@ -44,6 +106,40 @@
     </div>
   </div>
 
+  <div class="pagar-resumo-grid mb-3">
+    <div class="pagar-resumo-card">
+      <div class="text-muted small text-uppercase">Pagar hoje</div>
+      <h4>R$ {{ pagar_hoje_total|floatformat:2 }}</h4>
+      <div class="meta">{{ pagar_hoje_qtd }} conta(s)</div>
+    </div>
+    <div class="pagar-resumo-card">
+      <div class="text-muted small text-uppercase">Vencidas</div>
+      <h4>R$ {{ pagar_vencidas_total|floatformat:2 }}</h4>
+      <div class="meta">{{ pagar_vencidas_qtd }} conta(s)</div>
+    </div>
+    <div class="pagar-resumo-card">
+      <div class="text-muted small text-uppercase">Próximos 7 dias</div>
+      <h4>R$ {{ pagar_proximos_7d_total|floatformat:2 }}</h4>
+      <div class="meta">{{ pagar_proximos_7d_qtd }} conta(s)</div>
+    </div>
+    <div class="pagar-resumo-card">
+      <div class="text-muted small text-uppercase">Sem categoria</div>
+      <h4>R$ {{ pagar_sem_categoria_total|floatformat:2 }}</h4>
+      <div class="meta">{{ pagar_sem_categoria_qtd }} conta(s)</div>
+    </div>
+  </div>
+
+  <div class="pagar-resumo-grid mb-3">
+    {% for row in pagar_aging %}
+    <div class="pagar-resumo-card">
+      <div class="text-muted small text-uppercase">{{ row.titulo }}</div>
+      <h4>R$ {{ row.total|floatformat:2 }}</h4>
+      <div class="meta">{{ row.quantidade }} conta(s)</div>
+      <a href="{% url 'caixa:contas_pagar' %}?aging={{ row.chave }}" class="btn btn-sm btn-outline-primary mt-2">Abrir fila</a>
+    </div>
+    {% endfor %}
+  </div>
+
   <div class="card mb-3">
     <div class="card-body">
       <form method="get" class="form-row align-items-end">
@@ -62,11 +158,20 @@
             <option value="cancelada" {% if status_filtro == 'cancelada' %}selected{% endif %}>Cancelada</option>
           </select>
         </div>
-        <div class="col-lg-2 col-md-6">
-          <label>Vencimento inicio</label>
-          <input type="date" name="vencimento_inicio" value="{{ vencimento_inicio }}" class="form-control">
+        <div class="col-lg-3 col-md-6">
+          <label>Categoria</label>
+          <select name="categoria" class="form-control">
+            <option value="">Todas</option>
+            {% for categoria in categorias_despesa %}
+            <option value="{{ categoria.id }}" {% if categoria_filtro == categoria.id|stringformat:'s' %}selected{% endif %}>{{ categoria.nome }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="col-lg-2 col-md-6">
+          <label>Vencimento início</label>
+          <input type="date" name="vencimento_inicio" value="{{ vencimento_inicio }}" class="form-control">
+        </div>
+        <div class="col-lg-1 col-md-6">
           <label>Vencimento fim</label>
           <input type="date" name="vencimento_fim" value="{{ vencimento_fim }}" class="form-control">
         </div>
@@ -81,7 +186,8 @@
             <option value="mes_anterior" {% if preset_vencimento == 'mes_anterior' %}selected{% endif %}>Mes anterior</option>
           </select>
         </div>
-        <div class="col-lg-3 col-md-6 d-flex" style="gap: 8px;">
+        <input type="hidden" name="prioridade" value="{{ prioridade_filtro }}">
+        <div class="col-lg-3 col-md-6 mt-2 d-flex" style="gap: 8px;">
           <button type="submit" class="btn btn-outline-primary flex-fill">Filtrar</button>
           <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-outline-secondary flex-fill">Limpar</a>
         </div>
@@ -101,8 +207,11 @@
             <th>ID</th>
             <th>Fornecedor</th>
             <th>Descricao</th>
+            <th>Categoria</th>
             <th>Centro de custo</th>
             <th>Vencimento</th>
+            <th>Atraso</th>
+            <th>Prioridade</th>
             <th>Status</th>
             <th class="text-right">Em aberto</th>
             <th></th>
@@ -110,12 +219,33 @@
         </thead>
         <tbody>
         {% for c in contas %}
-        <tr>
+        <tr{% if c.status != 'paga' and c.status != 'cancelada' and c.vencimento < hoje %} class="table-danger"{% elif c.status != 'paga' and c.status != 'cancelada' and c.vencimento == hoje %} class="table-warning"{% endif %}>
           <td>#{{ c.id }}</td>
           <td>{{ c.fornecedor|default:"-" }}</td>
           <td>{{ c.descricao }}</td>
+          <td>{{ c.categoria.nome|default:"-" }}</td>
           <td>{{ c.centro_custo.nome|default:"-" }}</td>
           <td>{{ c.vencimento|date:"d/m/Y" }}</td>
+          <td>
+            {% if c.dias_atraso > 0 %}
+            <span class="badge {% if c.dias_atraso >= 7 %}badge-atraso-critico{% else %}badge-atraso-hoje{% endif %}">{{ c.dias_atraso }} dia{{ c.dias_atraso|pluralize }}</span>
+            {% else %}
+            <span class="text-muted small">-</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if not c.categoria and c.status != "paga" and c.status != "cancelada" %}
+            <span class="badge badge-secondary">Sem categoria</span>
+            {% elif c.status != "paga" and c.status != "cancelada" and c.vencimento < hoje %}
+            <span class="badge badge-atraso-critico">Venceu</span>
+            {% elif c.status != "paga" and c.status != "cancelada" and c.vencimento == hoje %}
+            <span class="badge badge-atraso-hoje">Hoje</span>
+            {% elif c.status != "paga" and c.status != "cancelada" and c.vencimento <= limite_curto_prazo %}
+            <span class="badge badge-atraso-curto">Curto prazo</span>
+            {% else %}
+            <span class="text-muted small">Normal</span>
+            {% endif %}
+          </td>
           <td>
             {% if c.status == "paga" %}
             <span class="badge badge-success">Paga</span>
@@ -130,10 +260,28 @@
             {% endif %}
           </td>
           <td class="text-right">R$ {{ c.valor_aberto|floatformat:2 }}</td>
-          <td><a href="{% url 'caixa:detalhe_conta_pagar' c.id %}" class="btn btn-sm btn-outline-primary">Detalhes</a></td>
+          <td class="text-right">
+            <div class="btn-group btn-group-sm" role="group">
+              <a href="{% url 'caixa:detalhe_conta_pagar' c.id %}" class="btn btn-outline-primary">Detalhes</a>
+              {% if c.status != "paga" and c.status != "cancelada" %}
+              <button
+                type="button"
+                class="btn btn-danger js-abrir-pagamento-rapido"
+                data-toggle="modal"
+                data-target="#modalPagamentoRapido"
+                data-action="{% url 'caixa:detalhe_conta_pagar' c.id %}"
+                data-conta="#{{ c.id }}"
+                data-fornecedor="{{ c.fornecedor|default:'-'|escape }}"
+                data-valor="{{ c.valor_aberto }}"
+              >
+                Pagar
+              </button>
+              {% endif %}
+            </div>
+          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="text-center">Nenhuma conta encontrada.</td></tr>
+        <tr><td colspan="11" class="text-center">Nenhuma conta encontrada.</td></tr>
         {% endfor %}
         </tbody>
       </table>
@@ -159,4 +307,97 @@
     {% endif %}
   </div>
 </div>
+
+<div class="modal fade" id="modalPagamentoRapido" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <form method="post" id="form-pagamento-rapido">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="pagar">
+        <div class="modal-header">
+          <h5 class="modal-title">Pagar conta</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-light py-2">
+            <strong id="pagamento-rapido-titulo">Conta</strong>
+            <span class="text-muted d-block" id="pagamento-rapido-subtitulo"></span>
+          </div>
+          <div class="form-row">
+            <div class="col-md-6 mb-2">
+              <label for="{{ pagamento_rapido_form.valor.id_for_label }}">Valor</label>
+              {{ pagamento_rapido_form.valor|add_class:"form-control"|attr:"id:id_pagamento_rapido_valor" }}
+              <div class="pagar-quick-values">
+                <button type="button" class="btn btn-sm btn-outline-danger js-pagar-valor" data-modo="integral">Saldo total</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary js-pagar-valor" data-modo="metade">50%</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary js-pagar-valor" data-modo="manual_50">50,00</button>
+              </div>
+            </div>
+            <div class="col-md-6 mb-2">
+              <label for="{{ pagamento_rapido_form.forma_pagamento.id_for_label }}">Forma de pagamento</label>
+              {{ pagamento_rapido_form.forma_pagamento|add_class:"form-control"|attr:"id:id_pagamento_rapido_forma" }}
+            </div>
+            <div class="col-md-6 mb-2">
+              <label for="{{ pagamento_rapido_form.referencia.id_for_label }}">Referência</label>
+              {{ pagamento_rapido_form.referencia|add_class:"form-control"|attr:"id:id_pagamento_rapido_referencia" }}
+            </div>
+            <div class="col-md-6 mb-2">
+              <label for="{{ pagamento_rapido_form.observacao.id_for_label }}">Observação</label>
+              {{ pagamento_rapido_form.observacao|add_class:"form-control"|attr:"rows:2"|attr:"id:id_pagamento_rapido_observacao" }}
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger">Confirmar pagamento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("form-pagamento-rapido");
+  let valorAbertoAtual = 0;
+  if (!form) return;
+
+  $("#modalPagamentoRapido").on("show.bs.modal", function (event) {
+    const botao = event.relatedTarget;
+    if (!botao) return;
+    const action = botao.getAttribute("data-action");
+    const conta = botao.getAttribute("data-conta");
+    const fornecedor = botao.getAttribute("data-fornecedor");
+    const valor = botao.getAttribute("data-valor");
+
+    form.setAttribute("action", action);
+    document.getElementById("pagamento-rapido-titulo").textContent = "Conta " + conta;
+    document.getElementById("pagamento-rapido-subtitulo").textContent = fornecedor + " | Em aberto: R$ " + Number(valor || 0).toFixed(2).replace(".", ",");
+    valorAbertoAtual = Number(valor || 0);
+    document.getElementById("id_pagamento_rapido_valor").value = valor || "";
+    document.getElementById("id_pagamento_rapido_referencia").value = "";
+    document.getElementById("id_pagamento_rapido_observacao").value = "";
+  });
+
+  document.querySelectorAll(".js-pagar-valor").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+      const campoValor = document.getElementById("id_pagamento_rapido_valor");
+      if (!campoValor) return;
+      const modo = botao.getAttribute("data-modo");
+      let valor = valorAbertoAtual;
+      if (modo === "metade") {
+        valor = valorAbertoAtual / 2;
+      } else if (modo === "manual_50") {
+        valor = 50;
+      }
+      campoValor.value = valor.toFixed(2);
+      campoValor.focus();
+    });
+  });
+});
+</script>
 {% endblock %}

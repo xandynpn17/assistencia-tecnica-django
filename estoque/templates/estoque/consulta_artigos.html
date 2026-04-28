@@ -13,6 +13,25 @@
   .pdv-card { border-radius: 12px; }
   .pdv-title { font-weight: 700; }
   .pdv-shortcuts { font-size: 12px; color: #6b7280; }
+  .pdv-ready {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: #eef8f1;
+    color: #1f7a45;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid #cfe8d8;
+  }
+  .pdv-ready-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #27ae60;
+    box-shadow: 0 0 0 4px rgba(39, 174, 96, 0.12);
+  }
   .artigo-item {
     border: 1px solid #e5e7eb;
     border-radius: 10px;
@@ -22,6 +41,13 @@
     text-align: left;
   }
   .artigo-item:hover { background: #f8fafc; border-color: #cfd8e3; }
+  .artigo-item.is-active,
+  .artigo-item:focus {
+    background: #eaf2fb;
+    border-color: #7aa7d8;
+    box-shadow: 0 0 0 2px rgba(58, 123, 197, 0.12);
+    outline: none;
+  }
   .artigo-top { display: flex; justify-content: space-between; gap: 10px; }
   .artigo-nome { font-weight: 700; }
   .artigo-preco { font-weight: 700; }
@@ -32,11 +58,121 @@
   #estoquePontosTable tbody tr.selected { background: #eaf2fb; }
   .cesto-total { font-size: 1.15rem; font-weight: 700; }
   .cesto-table-wrap { max-height: 56vh; overflow-y: auto; }
+  .pdv-summary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .pdv-summary-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #f8fbfd 0%, #eef4f8 100%);
+    padding: 12px;
+  }
+  .pdv-summary-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .pdv-summary-value {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #183247;
+  }
+  .pdv-retomar-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .pdv-action-panel {
+    border: 1px solid #d9e2ec;
+    border-radius: 14px;
+    background: #fbfdff;
+    padding: 14px;
+    margin-top: 12px;
+  }
+  .pdv-action-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #627487;
+    margin-bottom: 8px;
+  }
+  .pdv-action-stack {
+    display: grid;
+    gap: 10px;
+  }
+  .pdv-btn-main {
+    min-height: 56px;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 12px;
+  }
+  .pdv-btn-secondary {
+    min-height: 46px;
+    font-weight: 600;
+    border-radius: 12px;
+  }
+  .pdv-after-finalizar {
+    display: none;
+    border: 1px solid #b9d7c2;
+    border-radius: 12px;
+    background: #f4fbf6;
+    padding: 12px;
+    margin-top: 12px;
+  }
+  .pdv-after-finalizar.is-visible { display: block; }
+  .pdv-after-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .pdv-result-empty {
+    border-radius: 10px;
+    border: 1px dashed #d7e1ea;
+    background: #f8fafc;
+    padding: 14px;
+  }
+  .pdv-cesto-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid #d7e1ea;
+    background: #f8fafc;
+    color: #516170;
+  }
+  .pdv-cesto-status.is-active {
+    border-color: #cfe8d8;
+    background: #eef8f1;
+    color: #1f7a45;
+  }
+  .pdv-cesto-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #94a3b8;
+  }
+  .pdv-cesto-status.is-active .pdv-cesto-status-dot {
+    background: #27ae60;
+    box-shadow: 0 0 0 4px rgba(39, 174, 96, 0.12);
+  }
 
   @media (max-width: 991.98px) {
     .pdv-grid { grid-template-columns: 1fr; }
     .pdv-sticky { position: static; }
     .cesto-table-wrap { max-height: 40vh; }
+    .pdv-summary-strip,
+    .pdv-after-actions,
+    .pdv-retomar-row { grid-template-columns: 1fr; }
   }
 </style>
 {% endblock %}
@@ -53,9 +189,15 @@
         <div class="d-flex justify-content-between align-items-center mb-2">
           <div>
             <div class="pdv-title">Consulta de Artigos</div>
-            <small class="text-muted">Digite ao menos 2 caracteres e clique em <strong>Buscar</strong>.</small>
+            <small class="text-muted">Digite ao menos 2 caracteres e clique em <strong>Buscar</strong>. Match exato por EAN/SKU pode seguir direto no modo POS.</small>
           </div>
-          <small class="pdv-shortcuts">Atalhos: <strong>F2</strong> buscar | <strong>Ctrl+Enter</strong> finalizar</small>
+          <div class="text-right">
+            <div id="pdvReadyBadge" class="pdv-ready mb-1">
+              <span class="pdv-ready-dot"></span>
+              <span>Pronto para leitura</span>
+            </div>
+            <small class="pdv-shortcuts d-block">Atalhos: <strong>F2</strong> buscar | <strong>F4</strong> finalizar | <strong>Setas</strong> navegar | <strong>Enter</strong> abrir/seguir r&aacute;pido</small>
+          </div>
         </div>
         <div class="row">
           <div class="col-md-10 mb-2">
@@ -86,17 +228,36 @@
         <div class="d-flex justify-content-between align-items-center mb-2">
           <div>
             <div class="pdv-title">Cesto Atual</div>
-            <small class="text-muted">Código: <span id="cestoCodigo">-</span></small>
+            <small class="text-muted">Painel de fechamento e guia de pagamento.</small>
           </div>
-          <div class="cesto-total">R$ <span id="cestoTotal">0.00</span></div>
+          <div class="text-right">
+            <div id="pdvCestoStatus" class="pdv-cesto-status mb-1">
+              <span class="pdv-cesto-status-dot"></span>
+              <span id="pdvCestoStatusText">Aguardando itens</span>
+            </div>
+            <div class="cesto-total">R$ <span id="cestoTotal">0.00</span></div>
+          </div>
         </div>
 
-        <div class="input-group input-group-sm mb-2">
-          <input type="text" id="cestoCodigoInput" class="form-control" placeholder="Retomar cesto (ex.: CES-00000001)">
-          <div class="input-group-append">
-            <button class="btn btn-outline-secondary" type="button" id="retomarCestoBtn">Retomar</button>
-            <button class="btn btn-outline-dark" type="button" id="novoCestoBtn">Novo</button>
+        <div class="pdv-summary-strip">
+          <div class="pdv-summary-card">
+            <div class="pdv-summary-label">Cesto</div>
+            <div class="pdv-summary-value" id="cestoCodigo">-</div>
           </div>
+          <div class="pdv-summary-card">
+            <div class="pdv-summary-label">Itens</div>
+            <div class="pdv-summary-value" id="cestoItens">0</div>
+          </div>
+          <div class="pdv-summary-card">
+            <div class="pdv-summary-label">Total</div>
+            <div class="pdv-summary-value">R$ <span id="cestoTotalResumo">0.00</span></div>
+          </div>
+        </div>
+
+        <div class="pdv-retomar-row">
+          <input type="text" id="cestoCodigoInput" class="form-control" placeholder="Retomar cesto (ex.: CES-00000001)">
+          <button class="btn btn-outline-secondary pdv-btn-secondary" type="button" id="retomarCestoBtn">Retomar</button>
+          <button class="btn btn-outline-dark pdv-btn-secondary" type="button" id="novoCestoBtn">Novo cesto</button>
         </div>
 
         <div class="table-responsive cesto-table-wrap">
@@ -107,8 +268,20 @@
             <tbody></tbody>
           </table>
         </div>
-        <button class="btn btn-primary btn-block" type="button" id="finalizarCestoBtn">Finalizar cesto e gerar guia</button>
-        <div id="cestoFeedback" class="small mt-2"></div>
+        <div class="pdv-action-panel">
+          <div class="pdv-action-title">Fechamento rápido</div>
+          <div class="pdv-action-stack">
+            <button class="btn btn-primary pdv-btn-main" type="button" id="finalizarCestoBtn">Finalizar venda e gerar guia</button>
+            <div id="cestoFeedback" class="small"></div>
+          </div>
+          <div id="pdvAfterFinalizar" class="pdv-after-finalizar">
+            <div><strong>Guia gerada com sucesso.</strong> Escolha a próxima ação.</div>
+            <div class="pdv-after-actions">
+              <a href="#" class="btn btn-success pdv-btn-secondary" id="pdvIrCaixaBtn">Ir para caixa</a>
+              <a href="#" class="btn btn-outline-primary pdv-btn-secondary" id="pdvImprimirGuiaBtn" target="_blank" rel="noopener">Imprimir guia</a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -218,6 +391,77 @@ document.addEventListener("DOMContentLoaded", function () {
   let hasPrev = false;
   let hasNext = false;
   let cestoCodigoAtual = "";
+  let resultadosAtuais = [];
+  let resultadoSelecionado = -1;
+
+  function focarBusca(select = false) {
+    if (!buscarInput) { return; }
+    buscarInput.focus();
+    if (select) { buscarInput.select(); }
+  }
+
+  function prepararProximaLeitura() {
+    if (buscarInput) {
+      buscarInput.value = "";
+    }
+    resultadosAtuais = [];
+    resultadoSelecionado = -1;
+    resultados.innerHTML = '<div class="pdv-result-empty text-muted">Leitura concluída. Passe o próximo código ou digite outro termo.</div>';
+    paginaAtual = 1;
+    hasPrev = false;
+    hasNext = false;
+    if (pageInfo) {
+      pageInfo.textContent = "";
+    }
+    if (prevBtn) {
+      prevBtn.disabled = true;
+    }
+    if (nextBtn) {
+      nextBtn.disabled = true;
+    }
+    focarBusca();
+  }
+
+  function atualizarSelecaoResultados() {
+    const itens = resultados.querySelectorAll(".artigo-item");
+    itens.forEach((el, index) => {
+      const ativo = index === resultadoSelecionado;
+      el.classList.toggle("is-active", ativo);
+      if (ativo) {
+        el.setAttribute("aria-current", "true");
+        el.scrollIntoView({ block: "nearest" });
+      } else {
+        el.removeAttribute("aria-current");
+      }
+    });
+  }
+
+  function selecionarResultado(index) {
+    if (!resultadosAtuais.length) {
+      resultadoSelecionado = -1;
+      atualizarSelecaoResultados();
+      return;
+    }
+    const ultimo = resultadosAtuais.length - 1;
+    resultadoSelecionado = Math.max(0, Math.min(index, ultimo));
+    atualizarSelecaoResultados();
+  }
+
+  function obterVendedorAuto() {
+    const tecnicoSelect = document.getElementById("addTecnicoSelect");
+    if (vendedorPadrao) { return vendedorPadrao; }
+    if (!tecnicoSelect) { return ""; }
+    const opcoesValidas = Array.from(tecnicoSelect.options || []).filter(opt => (opt.value || "").trim());
+    return opcoesValidas.length === 1 ? opcoesValidas[0].value : "";
+  }
+
+  function ehMatchExatoUnico(query, item) {
+    const termo = String(query || "").trim().toUpperCase();
+    if (!termo || !item) { return false; }
+    return termo === String(item.sku || "").trim().toUpperCase()
+      || termo === String(item.ean || "").trim().toUpperCase()
+      || termo === String(item.id || "").trim().toUpperCase();
+  }
 
   function getCsrf() {
     const name = "csrftoken=";
@@ -232,6 +476,22 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+  function setFinalizacaoLinks(caixaUrl, imprimirUrl) {
+    const box = document.getElementById("pdvAfterFinalizar");
+    const caixaBtn = document.getElementById("pdvIrCaixaBtn");
+    const imprimirBtn = document.getElementById("pdvImprimirGuiaBtn");
+    if (!box || !caixaBtn || !imprimirBtn) { return; }
+    if (caixaUrl && imprimirUrl) {
+      caixaBtn.href = caixaUrl;
+      imprimirBtn.href = imprimirUrl;
+      box.classList.add("is-visible");
+    } else {
+      caixaBtn.removeAttribute("href");
+      imprimirBtn.removeAttribute("href");
+      box.classList.remove("is-visible");
+    }
+  }
+
   function setCestoCodigo(codigo) {
     cestoCodigoAtual = (codigo || "").trim();
     document.getElementById("cestoCodigo").textContent = cestoCodigoAtual || "-";
@@ -239,9 +499,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function renderResultados(items) {
+    resultadosAtuais = items || [];
+    resultadoSelecionado = resultadosAtuais.length ? 0 : -1;
     resultados.innerHTML = "";
     if (!items.length) {
-      resultados.innerHTML = '<div class="list-group-item text-muted">Nenhum artigo encontrado.</div>';
+      resultados.innerHTML = '<div class="pdv-result-empty text-muted">Nenhum artigo encontrado.</div>';
       return;
     }
     items.forEach(item => {
@@ -263,6 +525,7 @@ document.addEventListener("DOMContentLoaded", function () {
       el.addEventListener("click", () => carregarResumo(item.id));
       resultados.appendChild(el);
     });
+    atualizarSelecaoResultados();
   }
 
   function pontoPodeVender(codigo) {
@@ -281,10 +544,16 @@ document.addEventListener("DOMContentLoaded", function () {
     if (vendedorPadrao) { tecnicoSelect.value = vendedorPadrao; }
     document.getElementById("addQuantidade").value = "1";
     vendedorModal.modal("show");
+    setTimeout(() => {
+      document.getElementById("addQuantidade")?.focus();
+      document.getElementById("addQuantidade")?.select();
+    }, 120);
   }
 
   function renderCesto(data) {
     const body = document.querySelector("#cestoTable tbody");
+    const statusBadge = document.getElementById("pdvCestoStatus");
+    const statusText = document.getElementById("pdvCestoStatusText");
     body.innerHTML = "";
     (data.itens || []).forEach(item => {
       const tr = document.createElement("tr");
@@ -298,6 +567,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     setCestoCodigo(data.cesto_codigo || cestoCodigoAtual);
     document.getElementById("cestoTotal").textContent = Number(data.total || 0).toFixed(2);
+    document.getElementById("cestoTotalResumo").textContent = Number(data.total || 0).toFixed(2);
+    document.getElementById("cestoItens").textContent = String((data.itens || []).length);
+    if (statusBadge && statusText) {
+      const ativo = !!((data.itens || []).length);
+      statusBadge.classList.toggle("is-active", ativo);
+      statusText.textContent = ativo ? "Cesto ativo" : "Aguardando itens";
+    }
     const btnFinalizar = document.getElementById("finalizarCestoBtn");
     if (btnFinalizar) {
       btnFinalizar.disabled = !podeVendaMostrador || !(data.itens || []).length;
@@ -317,69 +593,76 @@ document.addEventListener("DOMContentLoaded", function () {
       });
   }
 
-  function carregarResumo(produtoId) {
-    fetch(`{% url 'estoque:api_resumo_artigo' 0 %}`.replace("/0/", `/${produtoId}/`))
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById("modalProdutoId").value = data.id;
-        document.getElementById("modalNome").textContent = data.nome;
-        document.getElementById("modalEan").textContent = data.ean || "-";
-        document.getElementById("modalSku").textContent = data.sku || "-";
-        document.getElementById("modalQtdTotal").textContent = data.quantidade_total;
-        const infoExtra = ` | Loc: ${data.localizacao || '-'} | Garantia: ${data.garantia_peca_dias || 0} dias`;
-        document.getElementById("modalDescricao").textContent = (data.descricao || "Sem descrição") + infoExtra;
-        document.getElementById("modalPreco").textContent = Number(data.preco).toFixed(2);
+  function carregarResumoData(produtoId) {
+    return fetch(`{% url 'estoque:api_resumo_artigo' 0 %}`.replace("/0/", `/${produtoId}/`)).then(r => r.json());
+  }
 
-        const tbody = document.querySelector("#estoquePontosTable tbody");
-        tbody.innerHTML = "";
-        const reservaSelect = document.getElementById("reservaPontoId");
-        reservaSelect.innerHTML = "";
+  function preencherResumoModal(data) {
+    document.getElementById("modalProdutoId").value = data.id;
+    document.getElementById("modalNome").textContent = data.nome;
+    document.getElementById("modalEan").textContent = data.ean || "-";
+    document.getElementById("modalSku").textContent = data.sku || "-";
+    document.getElementById("modalQtdTotal").textContent = data.quantidade_total;
+    const infoExtra = ` | Loc: ${data.localizacao || '-'} | Garantia: ${data.garantia_peca_dias || 0} dias`;
+    document.getElementById("modalDescricao").textContent = (data.descricao || "Sem descrição") + infoExtra;
+    document.getElementById("modalPreco").textContent = Number(data.preco).toFixed(2);
 
-        data.estoque_pontos.forEach(p => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `<td><strong>${p.codigo}</strong> - ${p.nome}</td><td><strong>${p.disponivel}</strong> unidades</td>`;
-          tr.addEventListener("click", () => {
-            tbody.querySelectorAll("tr").forEach(row => row.classList.remove("selected"));
-            tr.classList.add("selected");
-            if (pontoPodeVender(p.codigo) && Number(p.disponivel) > 0) {
-              abrirModalAdicionar(p);
-            }
-          });
-          tbody.appendChild(tr);
+    const tbody = document.querySelector("#estoquePontosTable tbody");
+    tbody.innerHTML = "";
+    const reservaSelect = document.getElementById("reservaPontoId");
+    reservaSelect.innerHTML = "";
 
-          const optReserva = document.createElement("option");
-          optReserva.value = p.id;
-          optReserva.textContent = `${p.codigo} - ${p.nome} (disp: ${p.disponivel})`;
-          reservaSelect.appendChild(optReserva);
-        });
-
-        if (data.ponto_padrao_id) { reservaSelect.value = String(data.ponto_padrao_id); }
-
-        const reservasBody = document.querySelector("#reservasTable tbody");
-        reservasBody.innerHTML = "";
-        (data.reservas || []).forEach(r => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${r.codigo}</td><td>${r.nome}</td><td>${r.telefone || '-'}</td><td>${r.quantidade}</td><td>${r.ponto}</td><td>${r.valido_ate}</td><td>${r.status}</td>`;
-          reservasBody.appendChild(tr);
-        });
-
-        modal.modal("show");
+    data.estoque_pontos.forEach(p => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td><strong>${p.codigo}</strong> - ${p.nome}</td><td><strong>${p.disponivel}</strong> unidades</td>`;
+      tr.addEventListener("click", () => {
+        tbody.querySelectorAll("tr").forEach(row => row.classList.remove("selected"));
+        tr.classList.add("selected");
+        if (pontoPodeVender(p.codigo) && Number(p.disponivel) > 0) {
+          abrirModalAdicionar(p);
+        }
       });
+      tbody.appendChild(tr);
+
+      const optReserva = document.createElement("option");
+      optReserva.value = p.id;
+      optReserva.textContent = `${p.codigo} - ${p.nome} (disp: ${p.disponivel})`;
+      reservaSelect.appendChild(optReserva);
+    });
+
+    if (data.ponto_padrao_id) { reservaSelect.value = String(data.ponto_padrao_id); }
+
+    const reservasBody = document.querySelector("#reservasTable tbody");
+    reservasBody.innerHTML = "";
+    (data.reservas || []).forEach(r => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${r.codigo}</td><td>${r.nome}</td><td>${r.telefone || '-'}</td><td>${r.quantidade}</td><td>${r.ponto}</td><td>${r.valido_ate}</td><td>${r.status}</td>`;
+      reservasBody.appendChild(tr);
+    });
+  }
+
+  function carregarResumo(produtoId) {
+    carregarResumoData(produtoId).then(data => {
+      preencherResumoModal(data);
+      modal.modal("show");
+    });
   }
 
   function buscarArtigos(page = 1) {
     const q = (buscarInput.value || "").trim();
     if (q.length < 2) {
       resultados.innerHTML = '<div class="list-group-item text-muted">Digite pelo menos 2 caracteres e clique em Buscar.</div>';
+      resultadosAtuais = [];
+      resultadoSelecionado = -1;
       paginaAtual = 1;
       hasPrev = false;
       hasNext = false;
       pageInfo.textContent = "";
       prevBtn.disabled = true;
       nextBtn.disabled = true;
-      return;
+      return Promise.resolve({ resultados: [], page: 1, has_prev: false, has_next: false, total: 0 });
     }
-    fetch(`{% url 'estoque:api_consulta_artigos' %}?q=${encodeURIComponent(q)}&page=${page}`)
+    return fetch(`{% url 'estoque:api_consulta_artigos' %}?q=${encodeURIComponent(q)}&page=${page}`)
       .then(r => r.json())
       .then(data => {
         paginaAtual = data.page || 1;
@@ -389,6 +672,7 @@ document.addEventListener("DOMContentLoaded", function () {
         prevBtn.disabled = !hasPrev;
         nextBtn.disabled = !hasNext;
         renderResultados(data.resultados || []);
+        return data;
       });
   }
 
@@ -420,10 +704,12 @@ document.addEventListener("DOMContentLoaded", function () {
         if (data.ok) {
           setCestoCodigo(data.cesto_codigo);
           setFeedback("ok", `Item adicionado ao cesto ${cestoCodigoAtual}.`);
+          setFinalizacaoLinks("", "");
           vendedorModal.modal("hide");
+          modal.modal("hide");
           carregarCesto();
-          buscarArtigos(paginaAtual);
-          carregarResumo(document.getElementById("modalProdutoId").value);
+          prepararProximaLeitura();
+          setTimeout(() => focarBusca(), 120);
         } else {
           setFeedback("erro", data.erro || "Erro ao adicionar item.");
           if ((data.erro || "").toLowerCase().includes("cesto ja foi finalizado")) {
@@ -432,6 +718,57 @@ document.addEventListener("DOMContentLoaded", function () {
           }
         }
       });
+  }
+
+  function adicionarRapidoAoCesto(produtoId, ponto, vendedorNumero) {
+    const payload = new URLSearchParams();
+    payload.append("produto_id", produtoId);
+    payload.append("ponto_id", ponto.id);
+    payload.append("quantidade", "1");
+    payload.append("funcionario_numero", vendedorNumero);
+    payload.append("cesto_codigo", cestoCodigoAtual);
+
+    fetch(`{% url 'estoque:api_venda_rapida' %}`, {
+      method: "POST",
+      headers: {"X-CSRFToken": getCsrf(), "Content-Type": "application/x-www-form-urlencoded"},
+      body: payload.toString(),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          setCestoCodigo(data.cesto_codigo);
+          setFeedback("ok", `Item adicionado automaticamente ao cesto ${cestoCodigoAtual}.`);
+          setFinalizacaoLinks("", "");
+          carregarCesto();
+          prepararProximaLeitura();
+        } else {
+          setFeedback("erro", data.erro || "Erro ao adicionar item.");
+        }
+      });
+  }
+
+  function processarBuscaRapida() {
+    const q = (buscarInput.value || "").trim();
+    if (q.length < 2) {
+      buscarArtigos(1);
+      return;
+    }
+    buscarArtigos(1).then(data => {
+      const itens = (data && data.resultados) || [];
+      if (itens.length !== 1 || !ehMatchExatoUnico(q, itens[0])) {
+        return;
+      }
+      carregarResumoData(itens[0].id).then(resumo => {
+        const pontosVendaveis = (resumo.estoque_pontos || []).filter(p => pontoPodeVender(p.codigo) && Number(p.disponivel) > 0);
+        const vendedorNumero = obterVendedorAuto();
+        if (pontosVendaveis.length === 1 && vendedorNumero) {
+          adicionarRapidoAoCesto(resumo.id, pontosVendaveis[0], vendedorNumero);
+          return;
+        }
+        preencherResumoModal(resumo);
+        modal.modal("show");
+      });
+    });
   }
 
   function finalizarCesto() {
@@ -454,12 +791,11 @@ document.addEventListener("DOMContentLoaded", function () {
       .then(r => r.json())
       .then(data => {
         if (data.ok) {
-          setFeedback(
-            "ok",
-            `Guia ${data.guia} gerada. Total R$ ${Number(data.total).toFixed(2)}. <a href="${data.redirect_caixa}">Ir para caixa</a> | <a href="${data.imprimir_url}" target="_blank">Imprimir guia</a>`
-          );
+          setFeedback("ok", `Guia ${data.guia} gerada. Total R$ ${Number(data.total).toFixed(2)}.`);
+          setFinalizacaoLinks(data.redirect_caixa, data.imprimir_url);
           setCestoCodigo("");
           carregarCesto();
+          focarBusca(true);
         } else {
           setFeedback("erro", data.erro || "Erro ao finalizar cesto.");
         }
@@ -492,6 +828,7 @@ document.addEventListener("DOMContentLoaded", function () {
       setFeedback("erro", "Informe o código do cesto para retomar.");
       return;
     }
+    setFinalizacaoLinks("", "");
     setCestoCodigo(codigo);
     carregarCesto().then(data => {
       if (!data.itens || !data.itens.length) {
@@ -504,8 +841,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function novoCesto() {
     setCestoCodigo("");
+    setFinalizacaoLinks("", "");
     carregarCesto();
     setFeedback("info", "Novo cesto iniciado.");
+    focarBusca(true);
   }
 
   function confirmarReserva() {
@@ -540,7 +879,21 @@ document.addEventListener("DOMContentLoaded", function () {
   buscarInput?.addEventListener("keypress", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      buscarArtigos(1);
+      processarBuscaRapida();
+    }
+  });
+  buscarInput?.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!resultadosAtuais.length) {
+        buscarArtigos(1);
+        return;
+      }
+      selecionarResultado(resultadoSelecionado + 1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!resultadosAtuais.length) { return; }
+      selecionarResultado(resultadoSelecionado - 1);
     }
   });
   prevBtn?.addEventListener("click", () => { if (hasPrev) buscarArtigos(paginaAtual - 1); });
@@ -556,6 +909,18 @@ document.addEventListener("DOMContentLoaded", function () {
       retomarCesto();
     }
   });
+  document.getElementById("addQuantidade")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      adicionarCesto();
+    }
+  });
+  document.getElementById("addTecnicoSelect")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      adicionarCesto();
+    }
+  });
   document.querySelector("#cestoTable tbody")?.addEventListener("click", (e) => {
     const btn = e.target.closest(".js-remover-cesto-item");
     if (!btn) { return; }
@@ -564,15 +929,25 @@ document.addEventListener("DOMContentLoaded", function () {
   document.addEventListener("keydown", (e) => {
     if (e.key === "F2") {
       e.preventDefault();
-      buscarInput?.focus();
-      buscarInput?.select();
+      focarBusca(true);
+    } else if (e.key === "F4") {
+      e.preventDefault();
+      finalizarCesto();
     } else if (e.ctrlKey && e.key === "Enter") {
       e.preventDefault();
       finalizarCesto();
+    } else if (e.key === "Escape") {
+      if (vendedorModal.hasClass("show")) {
+        vendedorModal.modal("hide");
+        focarBusca(true);
+      } else if (modal.hasClass("show")) {
+        modal.modal("hide");
+        focarBusca(true);
+      }
     }
   });
 
-  resultados.innerHTML = '<div class="list-group-item text-muted">Digite pelo menos 2 caracteres e clique em Buscar.</div>';
+  resultados.innerHTML = '<div class="pdv-result-empty text-muted">Digite pelo menos 2 caracteres e clique em Buscar.</div>';
   prevBtn.disabled = true;
   nextBtn.disabled = true;
   if (!podeVendaMostrador) {
@@ -581,6 +956,7 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("novoCestoBtn").disabled = true;
   }
   carregarCesto();
+  focarBusca();
 });
 </script>
 {% endblock %}

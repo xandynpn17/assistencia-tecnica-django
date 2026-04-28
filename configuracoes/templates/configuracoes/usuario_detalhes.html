@@ -20,6 +20,7 @@
         <p class="mb-1"><strong>Email:</strong> {{ usuario_obj.email|default:"-" }}</p>
         <p class="mb-1"><strong>Telefone:</strong> {{ usuario_obj.telefone|default:"-" }}</p>
         <p class="mb-1"><strong>CPF/CNPJ:</strong> {{ usuario_obj.documento_cpf_cnpj|default:"-" }}</p>
+        <p class="mb-1"><strong>Funções extras:</strong> {% if usuario_obj.funcoes_extras_ativas %}{{ usuario_obj.funcoes_extras_ativas|join:", " }}{% else %}-{% endif %}</p>
         <p class="mb-0"><strong>Status:</strong> {% if usuario_obj.is_active %}<span class="badge badge-success">Ativo</span>{% else %}<span class="badge badge-secondary">Inativo</span>{% endif %}</p>
         <hr>
         <a href="{% url 'configuracoes:editar_usuario' usuario_obj.id %}" class="btn btn-primary btn-sm">Editar</a>

@@ -1,7 +1,8 @@
 import re
 from datetime import timedelta
 
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, F, Prefetch, Q, Value
+from django.db.models.functions import Replace, Upper
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import ListView
@@ -25,6 +26,17 @@ QUICK_FILTER_LABELS = {
     "criticas": "Pendencias criticas",
     "paradas_15": "Paradas ha 15+ dias",
 }
+
+
+def _serie_normalizada(valor):
+    return re.sub(r"[^A-Z0-9]", "", (valor or "").upper())
+
+
+def _serie_normalizada_expr(field_name):
+    expr = Upper(F(field_name))
+    for caractere in ("-", " ", "/", "_", ".", ":"):
+        expr = Replace(expr, Value(caractere), Value(""))
+    return expr
 
 
 def _aplicar_busca_ordens(queryset, termo_busca):
@@ -57,7 +69,12 @@ def _aplicar_busca_ordens(queryset, termo_busca):
         serial = termo[3:].strip()
         if len(serial) < 3:
             return queryset.none()
-        return queryset.filter(numero_serie_equipamento__icontains=serial)
+        serial_normalizado = _serie_normalizada(serial)
+        if not serial_normalizado:
+            return queryset.none()
+        return queryset.annotate(
+            numero_serie_busca=_serie_normalizada_expr("numero_serie_equipamento")
+        ).filter(numero_serie_busca=serial_normalizado)
 
     termo_os = termo.upper().replace(" ", "")
     if re.fullmatch(r"OS-\d{4,}", termo_os):
@@ -81,7 +98,7 @@ def _mensagem_busca_ordens_invalida(termo_busca):
     if termo_lower.startswith(("cpf:", "tel:")) and len(digits) < minimo_numerico:
         return f"Use pelo menos {minimo_numerico} numeros apos cpf: ou tel:."
     if termo_lower.startswith("sn:") and len((termo[3:] or "").strip()) < 3:
-        return "Use pelo menos 3 caracteres apos sn:."
+        return "Informe o numero de serie completo apos sn:."
     if re.fullmatch(r"OS-\d{4,}", termo.upper().replace(" ", "")):
         return ""
     if digits and termo == digits and len(digits) >= 4:
@@ -105,7 +122,7 @@ def _aplicar_filtro_rapido_ordens(queryset, quick_filter, user):
     if quick == "aguardando_pecas":
         return queryset.filter(status="pendente_pecas")
     if quick == "prontas":
-        return queryset.filter(status__in=["pronto_contactar", "pronto_contactado"])
+        return queryset.filter(status="pronto_contactado")
     if quick == "criticas":
         return queryset.filter(status__in=["pendente_cliente", "pendente_tecnico", "pendente_pecas", "pendente_marca"])
     if quick == "paradas_15":

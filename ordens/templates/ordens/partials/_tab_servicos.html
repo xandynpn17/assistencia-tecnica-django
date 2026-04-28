@@ -17,6 +17,39 @@
             {% endif %}
         </div>
         <div class="card-modern-body">
+            <div class="alert alert-{{ fluxo_os_tone }} d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <strong>Etapa atual:</strong> {{ fluxo_os_label }}
+                    <br>
+                    <small class="text-muted">
+                        {% if liberada_para_entrega %}
+                            Pagamento confirmado. OS pronta para entrega ao cliente.
+                        {% elif pode_receber_no_caixa %}
+                            Ordem fechada, mas ainda com saldo pendente no caixa.
+                        {% elif ordem.status == 'pronto_contactado' and not ordem.fechada %}
+                            Cliente já foi contactado. O próximo passo é fechar a OS e seguir para o caixa.
+                        {% else %}
+                            Continue a evolução técnica pela linha de trabalho e finalize no momento certo.
+                        {% endif %}
+                    </small>
+                </div>
+                <div class="d-flex flex-wrap" style="gap:8px;">
+                    {% if pode_receber_no_caixa %}
+                    <a class="btn btn-sm btn-primary"
+                       href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ saldo_financeiro_os|floatformat:2 }}">
+                        Ir para o Caixa
+                    </a>
+                    {% elif ordem.status == 'pronto_contactado' and not ordem.fechada %}
+                    <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-sm btn-outline-success">
+                        Fechar e ir ao Caixa
+                    </a>
+                    {% elif liberada_para_entrega %}
+                    <a href="{% url 'ordens:detalhes_ordem' ordem.id %}?tab=relatorio" class="btn btn-sm btn-outline-success">
+                        Revisar entrega
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
             <div class="row mb-3">
                 <div class="col-md-4">
                     <div class="border rounded p-2 bg-light">
@@ -228,6 +261,15 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        {% if ordem.tipo_reparo == 'Garantia de serviço' %}
+                        <div class="form-group col-md-8 d-flex align-items-end">
+                            <div class="form-check mb-2">
+                                <input type="checkbox" name="comissionavel" id="sp_comissionavel" class="form-check-input">
+                                <label class="form-check-label" for="sp_comissionavel">Serviço extra comissionável</label>
+                                <small class="form-text text-muted">Em garantia de serviço, deixe desmarcado para retorno sem comissão e marque apenas se houver venda adicional.</small>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="modal-footer">

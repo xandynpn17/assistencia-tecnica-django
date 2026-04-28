@@ -1,4 +1,5 @@
 from . import fluxo_support as _support
+from ..services.anexos import EXTENSOES_IMAGEM, MAX_FOTOS_POR_OS, preparar_arquivo_anexo
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
@@ -34,14 +35,32 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["total_os"] = sum(item.total() for item in context["itens"])
         pagamentos_os = Pagamento.objects.filter(ordem_servico=ordem).order_by("-data")
         total_pago = sum((p.valor for p in pagamentos_os), Decimal("0.00"))
-        saldo_financeiro = max(Decimal("0.00"), context["total_os"] - total_pago)
+        total_desconto = sum((p.desconto or Decimal("0.00") for p in pagamentos_os), Decimal("0.00"))
+        saldo_financeiro = max(Decimal("0.00"), context["total_os"] - total_pago - total_desconto)
         referencias_pagamento = [ref for ref in pagamentos_os.values_list("referencia", flat=True) if ref]
 
         context["pagamentos_os"] = pagamentos_os
         context["total_pago_os"] = total_pago
+        context["total_desconto_os"] = total_desconto
         context["saldo_financeiro_os"] = saldo_financeiro
         context["os_pago"] = context["total_os"] > 0 and total_pago >= context["total_os"]
         context["referencias_pagamento"] = referencias_pagamento
+        if ordem.fechada and saldo_financeiro > 0:
+            fluxo_label = "Concluída aguardando pagamento"
+            fluxo_tone = "warning"
+        elif ordem.fechada and context["os_pago"]:
+            fluxo_label = "Concluída e liberada para entrega"
+            fluxo_tone = "success"
+        elif ordem.status == "pronto_contactado":
+            fluxo_label = "Pronta para fechamento e caixa"
+            fluxo_tone = "info"
+        else:
+            fluxo_label = "Em atendimento"
+            fluxo_tone = "secondary"
+        context["fluxo_os_label"] = fluxo_label
+        context["fluxo_os_tone"] = fluxo_tone
+        context["pode_receber_no_caixa"] = ordem.fechada and saldo_financeiro > 0
+        context["liberada_para_entrega"] = ordem.fechada and context["os_pago"]
         data_fim_os = ordem.data_conclusao.date() if ordem.data_conclusao else timezone.localdate()
         data_inicio_os = ordem.data_abertura.date() if ordem.data_abertura else timezone.localdate()
         context["dias_em_aberto"] = max(0, (data_fim_os - data_inicio_os).days)
@@ -58,7 +77,27 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             defaults={"cliente": ordem.cliente},
         )
         context["item_form"] = ItemOrcamentoForm()
-        vars_msg = _contexto_variaveis_mensagem(ordem)
+        itens_orcamento = list(
+            context["orcamento"].itens.select_related("tecnico_responsavel").order_by("-id")
+        )
+        stats_orcamento = {
+            "total_itens": len(itens_orcamento),
+            "pendentes": 0,
+            "aprovados": 0,
+            "recusados": 0,
+            "quantidade_total": 0,
+        }
+        for item in itens_orcamento:
+            stats_orcamento["quantidade_total"] += int(item.quantidade or 0)
+            if item.status == "aprovado":
+                stats_orcamento["aprovados"] += 1
+            elif item.status == "recusado":
+                stats_orcamento["recusados"] += 1
+            else:
+                stats_orcamento["pendentes"] += 1
+        context["orcamento_itens"] = itens_orcamento
+        context["orcamento_stats"] = stats_orcamento
+        vars_msg = _contexto_variaveis_mensagem(ordem, request=self.request)
         modelos_ativos = ModeloMensagem.objects.filter(ativo=True).order_by("nome")
         modelos_payload = []
         for m in modelos_ativos:
@@ -90,6 +129,10 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["url_confirmacao_publica"] = self.request.build_absolute_uri(
             reverse("confirmar_os_publico", kwargs={"token": ordem.token_confirmacao})
         )
+        context["assinatura_entrada_data"] = ordem.assinatura_entrada_registrada_em
+        context["assinatura_saida_data"] = ordem.data_assinatura_saida
+        context["assinatura_entrada_tem_arquivo"] = bool(ordem.assinatura_entrada_arquivo)
+        context["assinatura_saida_tem_arquivo"] = bool(ordem.assinatura_saida_imagem)
         # Tabs
         raw_tab = self.request.GET.get("tab", "detalhes")
         tab = "detalhes" if raw_tab == "logs" else raw_tab
@@ -104,8 +147,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         ]
         if context["pedidos_compra"].exists() or tab == "pedidos":
             tabs.insert(3, {"id": "pedidos", "label": "R$ Pedidos", "icon": "bi bi-cart"})
-        if context["arquivos_os"] or tab == "arquivos":
-            tabs.append({"id": "arquivos", "label": "Arquivos", "icon": "bi bi-paperclip"})
+        tabs.append({"id": "arquivos", "label": "Arquivos", "icon": "bi bi-paperclip"})
         if context["tem_alertas"]:
             tabs.append({"id": "alertas", "label": "Alertas", "icon": "bi bi-exclamation-triangle"})
         context["tabs"] = tabs
@@ -187,6 +229,11 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 item = servico_form.save(commit=False)
                 item.ordem = self.object
                 item.produto_estoque = servico_form.cleaned_data.get("produto_estoque")
+                tipo_reparo = (self.object.tipo_reparo or "").strip().lower()
+                if tipo_reparo.startswith("garantia de servi"):
+                    item.comissionavel = item.tipo != "servico" or bool(request.POST.get("comissionavel"))
+                else:
+                    item.comissionavel = True
                 item.save()
                 _log_os(
                     self.object,
@@ -517,10 +564,16 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 messages.error(request, "Selecione ao menos um arquivo.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=arquivos")
 
-            extensoes_imagem = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
+            extensoes_imagem = EXTENSOES_IMAGEM
             fotos_existentes = sum(1 for a in self.object.arquivos.all() if a.eh_imagem)
             novas_fotos = sum(1 for a in arquivos if str(getattr(a, "name", "")).lower().endswith(extensoes_imagem))
             total_fotos = fotos_existentes + novas_fotos
+            if total_fotos > MAX_FOTOS_POR_OS:
+                messages.error(
+                    request,
+                    f"A OS aceita no máximo {MAX_FOTOS_POR_OS} fotos. Remova algumas ou envie menos imagens.",
+                )
+                return redirect(f"{self.object.get_absolute_url()}?tab=arquivos")
             if incluir_relatorio and total_fotos <= 3:
                 incluir_relatorio = False
                 messages.warning(
@@ -530,6 +583,11 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
             criados = 0
             for arquivo in arquivos:
+                try:
+                    arquivo = preparar_arquivo_anexo(arquivo)
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                    return redirect(f"{self.object.get_absolute_url()}?tab=arquivos")
                 OrdemArquivo.objects.create(
                     ordem=self.object,
                     arquivo=arquivo,
@@ -603,6 +661,51 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
 
         # Relatório Técnico
+        elif form_type == "assinatura_saida":
+            if not self.object.confirmado:
+                messages.error(request, "Registre primeiro a assinatura de entrada/confirmação da OS.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
+
+            assinatura_saida = request.FILES.get("assinatura_saida_imagem")
+            data_saida_raw = (request.POST.get("data_assinatura_saida") or "").strip()
+            data_saida = timezone.now()
+            if data_saida_raw:
+                try:
+                    data_saida = datetime.fromisoformat(data_saida_raw)
+                    if timezone.is_naive(data_saida):
+                        data_saida = timezone.make_aware(data_saida, timezone.get_current_timezone())
+                except ValueError:
+                    messages.error(request, "Data/hora de saída inválida.")
+                    return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
+
+            self.object.data_assinatura_saida = data_saida
+            update_fields = ["data_assinatura_saida"]
+            if assinatura_saida:
+                self.object.assinatura_saida_imagem = assinatura_saida
+                update_fields.append("assinatura_saida_imagem")
+            self.object.save(update_fields=update_fields)
+
+            LinhaTrabalho.objects.create(
+                ordem=self.object,
+                status=self.object.status,
+                descricao="Assinatura de saída do cliente registrada.",
+                usuario=request.user,
+                tipo_evento="manual",
+            )
+            _log_os(
+                self.object,
+                "confirmacao",
+                "Assinatura de saída registrada na OS.",
+                usuario=request.user,
+                dados_extras={
+                    "form_type": "assinatura_saida",
+                    "data_assinatura_saida": data_saida.isoformat(),
+                    "possui_arquivo": bool(assinatura_saida),
+                },
+            )
+            messages.success(request, "Assinatura de saída registrada com sucesso.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
+
         elif form_type == "relatorio":
             self.object.relatorio_tecnico = request.POST.get("relatorio_tecnico", "")
             self.object.tipo_reparacao = request.POST.get("tipo_reparacao", "")
@@ -626,5 +729,8 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             )
             registrar_auditoria(logger, request, "relatorio_tecnico_atualizado", ordem=self.object)
             return redirect(f"{self.object.get_absolute_url()}?tab=relatorio")
+
+        messages.warning(request, "A ação enviada não foi reconhecida.")
+        return redirect(f"{self.object.get_absolute_url()}?tab={request.GET.get('tab', 'detalhes')}")
 
 

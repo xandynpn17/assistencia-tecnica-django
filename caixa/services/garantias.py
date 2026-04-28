@@ -1,4 +1,4 @@
-from caixa.views_legacy import _upsert_auditoria_garantia_ordem
+from caixa.view_modules.helpers import _upsert_auditoria_garantia_ordem
 
 
 def upsert_auditoria_garantia_ordem(ordem):

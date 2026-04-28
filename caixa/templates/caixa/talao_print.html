@@ -190,7 +190,17 @@
         <div class="rule"></div>
 
         <div class="row">
-            <div class="label">Valor Total</div>
+            <div class="label">Subtotal</div>
+            <div class="value">R$ {{ pagamento.valor_liquidado|floatformat:2 }}</div>
+        </div>
+        {% if pagamento.desconto %}
+        <div class="row">
+            <div class="label">Desconto</div>
+            <div class="value">R$ {{ pagamento.desconto|floatformat:2 }}</div>
+        </div>
+        {% endif %}
+        <div class="row">
+            <div class="label">Valor Pago</div>
             <div class="value total">R$ {{ pagamento.valor|floatformat:2 }}</div>
         </div>
         <div class="row">
@@ -201,7 +211,7 @@
         {% if pagamento.observacao %}
         <div class="rule"></div>
         <div class="block">
-            <div class="label">Observacao</div>
+            <div class="label">Mensagem adicional</div>
             <div class="value">{{ pagamento.observacao }}</div>
         </div>
         {% endif %}

@@ -85,8 +85,38 @@
         <div class="col-md-2 d-flex align-items-end">
           <button class="btn btn-primary btn-block" type="submit">Atualizar</button>
         </div>
+        {% if filtros_salvos_existem %}
+        <div class="col-md-2 d-flex align-items-end">
+          <a href="{% url 'caixa:comissoes_pendencias' %}?restaurar=1" class="btn btn-outline-dark btn-block">Últimos filtros</a>
+        </div>
+        {% endif %}
       </form>
     </div>
+  </div>
+
+  <div class="card painel-card mb-3">
+    <div class="card-body py-2 d-flex flex-wrap align-items-center" style="gap:8px;">
+      <strong class="mr-2">Ações:</strong>
+      <a href="{% url 'caixa:comissoes_pagamento' %}?competencia_mes={{ competencia_mes }}&competencia_ano={{ competencia_ano }}&status=PENDENTE" class="btn btn-sm btn-outline-primary">Pagamento pendente</a>
+      <a href="{% url 'caixa:comissoes_tecnicos' %}?data_inicio={{ data_inicio|date:'Y-m-d' }}&data_fim={{ data_fim|date:'Y-m-d' }}" class="btn btn-sm btn-outline-secondary">Análise por técnico</a>
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-lg-3 col-md-6 mb-2">
+      <div class="risk-card info">
+        <div class="label">Total da competência</div>
+        <div class="value">R$ {{ total_competencia|floatformat:2 }}</div>
+      </div>
+    </div>
+    {% for row in resumo_competencia %}
+    <div class="col-lg-2 col-md-6 mb-2">
+      <div class="risk-card {% if row.label == 'Pagas' %}info{% elif row.label == 'Canceladas' %}medium{% else %}high{% endif %}">
+        <div class="label">{{ row.label }}</div>
+        <div class="value">{{ row.quantidade }}</div>
+      </div>
+    </div>
+    {% endfor %}
   </div>
 
   <div class="row mb-3">

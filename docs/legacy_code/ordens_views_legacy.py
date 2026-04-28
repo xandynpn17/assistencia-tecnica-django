@@ -1,3 +1,5 @@
+"""Arquivo legado arquivado. O fluxo ativo de ordens usa `ordens.views` e `ordens.view_modules`."""
+
 import re
 from decimal import Decimal
 from urllib.parse import quote, urlencode

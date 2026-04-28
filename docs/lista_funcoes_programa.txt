@@ -1,0 +1,979 @@
+﻿manage.py:7:def main():
+clientes\views.py:17:def _request_ip(request):
+clientes\views.py:25:def lista_clientes(request):
+clientes\views.py:55:def buscar_cliente(request):
+clientes\views.py:93:def detalhes_cliente(request, pk):
+clientes\views.py:203:def editar_cliente(request, cliente_id):
+clientes\views.py:226:def excluir_cliente(request, cliente_id):
+clientes\views.py:256:def unificar_clientes(request):
+assistencia\password_validators.py:21:    def validate(self, password, user=None):
+assistencia\password_validators.py:36:    def get_help_text(self):
+orcamentos\views.py:33:def _codigo_reserva():
+orcamentos\views.py:40:def _detectar_produto_estoque(ean, nome):
+orcamentos\views.py:47:def _garantir_ordem_editavel(request, ordem, form_type):
+orcamentos\views.py:56:def _bool_post(value):
+orcamentos\views.py:60:def _aplicar_desconto_orcamento(orcamento, payload):
+orcamentos\views.py:84:def _desconto_item_payload(payload):
+orcamentos\views.py:100:def _validar_desconto_item(desconto_valor, desconto_percentual):
+orcamentos\views.py:106:def _item_comissionavel_por_padrao(ordem, tipo_item, payload):
+orcamentos\views.py:113:def _item_comissionavel_ajustado(ordem, tipo_item, payload):
+orcamentos\views.py:120:def _resolve_logo_path(empresa):
+orcamentos\views.py:130:def _logo_or_paragraph(empresa, style, fallback, width, height):
+orcamentos\views.py:159:def criar_orcamento(request, ordem_id):
+orcamentos\views.py:177:def editar_orcamento(request, orcamento_id):
+orcamentos\views.py:191:def excluir_orcamento(request, orcamento_id):
+orcamentos\views.py:208:def adicionar_item(request, orcamento_id):
+orcamentos\views.py:306:def editar_item(request, item_id):
+orcamentos\views.py:376:def excluir_item(request, item_id):
+orcamentos\views.py:397:def aceitar_itens_orcamento(request, orcamento_id):
+orcamentos\views.py:432:def recusar_itens_orcamento(request, orcamento_id):
+orcamentos\views.py:467:def lista_orcamentos(request):
+orcamentos\views.py:472:def buscar_produtos(request):
+orcamentos\views.py:489:def migrar_para_servicos(request, orcamento_id):
+orcamentos\views.py:546:def imprimir_orcamento(request, pk):
+orcamentos\views.py:572:    def _draw_footer(canv, _doc):
+orcamentos\views.py:582:    def _section(texto):
+orcamentos\views.py:593:    def _info(rows):
+fiscal\models.py:35:    def get_solo(cls):
+fiscal\models.py:39:    def __str__(self):
+fiscal\models.py:88:    def marcar_fila(self):
+fiscal\models.py:92:    def marcar_autorizada(self, *, numero, serie, chave_acesso, protocolo):
+fiscal\models.py:111:    def marcar_rejeitada(self, mensagem):
+fiscal\models.py:116:    def __str__(self):
+ordens\view_modules\notificacoes.py:33:def _mensagem_confirmacao_inicial(ordem, request):
+ordens\view_modules\notificacoes.py:47:def _mensagem_padrao_notificacao(ordem, tipo, canal="sistema", request=None):
+ordens\view_modules\notificacoes.py:74:def notificar_cliente_ordem(request, pk, tipo):
+ordens\view_modules\notificacoes.py:120:def reenviar_confirmacao_whatsapp(request, pk):
+ordens\view_modules\notificacoes.py:161:def confirmar_manual_resumo(request, pk):
+ordens\view_modules\notificacoes.py:193:def confirmar_ordem_token_publico(request, token):
+ordens\view_modules\notificacoes.py:231:def imprimir_confirmacao_os(request, pk):
+ordens\view_modules\notificacoes.py:236:def portal_cliente(request):
+fiscal\views.py:15:def _gerar_chave_fake(tipo, numero):
+fiscal\views.py:23:def painel_fiscal(request):
+fiscal\views.py:48:def novo_documento_fiscal(request):
+fiscal\views.py:75:def processar_fila_fiscal(request):
+ordens\view_modules\impressao.py:32:def _resolve_logo_path(empresa):
+ordens\view_modules\impressao.py:42:def _logo_or_paragraph(empresa, styles, fallback, width, height):
+ordens\view_modules\impressao.py:67:def _split_termos(termos):
+ordens\view_modules\impressao.py:80:def imprimir_ordem_servico(request, pk):
+ordens\view_modules\impressao.py:106:    def _draw_footer(canv, _doc):
+ordens\view_modules\impressao.py:116:    def _header_block():
+ordens\view_modules\impressao.py:153:    def _section_title(texto):
+ordens\view_modules\impressao.py:168:    def _kv_table(rows):
+ordens\view_modules\impressao.py:242:def imprimir_ordem_servico_impressao(request, pk):
+ordens\view_modules\impressao.py:270:    def _draw_cut(canv, _doc):
+ordens\view_modules\impressao.py:287:    def _bloco_via(rotulo):
+ordens\view_modules\impressao.py:400:    def _bloco_termos(rotulo):
+ordens\view_modules\impressao.py:434:def imprimir_relatorio_tecnico(request, pk):
+ordens\view_modules\impressao.py:459:    def _draw_footer(canv, _doc):
+ordens\view_modules\impressao.py:469:    def _title_bar(texto):
+ordens\view_modules\impressao.py:484:    def _info_table(rows):
+ordens\view_modules\fluxo_support.py:57:def _mensagem_confirmacao_inicial(ordem, request):
+ordens\view_modules\fluxo_support.py:69:def _render_template_mensagem(texto, contexto):
+ordens\view_modules\fluxo_support.py:86:def _registrar_pendente_cliente_envio_orcamento(ordem, usuario, canal):
+ordens\view_modules\fluxo_support.py:101:def _log_os(ordem, tipo_evento, descricao, usuario=None, dados_extras=None):
+ordens\view_modules\fluxo_support.py:111:def _recalcular_comissoes_itens_antecipado(ordem):
+ordens\view_modules\fluxo_support.py:119:def _migrar_itens_aprovados_para_servicos_pecas(ordem, usuario=None):
+ordens\view_modules\fluxo_support.py:156:def _somar_meses_data(data_base, meses):
+ordens\view_modules\fluxo_support.py:166:def _fim_mesmo_dia(inicio):
+agenda\forms.py:56:    def __init__(self, *args, **kwargs):
+agenda\forms.py:67:    def clean(self):
+agenda\forms.py:119:    def __init__(self, *args, **kwargs):
+agenda\forms.py:139:    def __init__(self, *args, **kwargs):
+agenda\forms.py:171:    def __init__(self, *args, **kwargs):
+agenda\forms.py:180:    def preparar_slots(self, slots):
+agenda\forms.py:183:    def get_inicio_aware(self):
+agenda\forms.py:189:    def get_fim_aware(self):
+agenda\views.py:21:def _make_aware(dt_naive):
+agenda\views.py:27:def _parse_iso_datetime(raw, *, end_of_day=False):
+agenda\views.py:47:def _cor_status_agendamento(status):
+agenda\views.py:58:def _format_datetime_local(valor):
+agenda\views.py:64:def _format_datetime_fullcalendar(valor):
+agenda\views.py:70:def _fim_mesmo_dia(inicio):
+agenda\views.py:79:def _somar_meses_data(data_base, meses):
+agenda\views.py:89:def _render_modal_form(request, *, form, action_url, titulo, agendamento=None):
+agenda\views.py:104:def _slots_disponiveis(tecnico, data_ref):
+agenda\views.py:156:def lista_agendamentos(request):
+agenda\views.py:206:def calendario_agenda(request):
+agenda\views.py:229:def api_modal_agendamento_novo(request):
+agenda\views.py:279:def api_modal_agendamento_editar(request, agendamento_id):
+agenda\views.py:308:def api_acao_agendamento(request, agendamento_id):
+agenda\views.py:382:def api_eventos_agenda(request):
+agenda\views.py:429:def api_mover_agendamento(request, agendamento_id):
+agenda\views.py:460:def criar_agendamento(request):
+agenda\views.py:550:def editar_agendamento(request, agendamento_id):
+agenda\views.py:568:def disponibilidades(request):
+agenda\views.py:604:def excluir_disponibilidade(request, disponibilidade_id):
+agenda\views.py:613:def excluir_bloqueio(request, bloqueio_id):
+agenda\views.py:621:def agendar_publico(request):
+agenda\views.py:672:def api_slots_disponiveis(request):
+estoque\view_modules\reservas.py:16:def api_criar_reserva(request):
+estoque\view_modules\reservas.py:55:def api_expirar_reservas(request):
+estoque\view_modules\reservas.py:64:def api_converter_reserva(request, codigo_reserva):
+estoque\view_modules\reservas.py:77:def api_cancelar_reserva(request, codigo_reserva):
+estoque\view_modules\reservas.py:91:def reservas_clientes(request):
+estoque\view_modules\reservas.py:149:def associar_reserva_ordem(request, codigo_reserva):
+estoque\view_modules\reservas.py:169:def expirar_reservas_web(request):
+estoque\view_modules\reservas.py:177:def converter_reserva_web(request, codigo_reserva):
+estoque\view_modules\reservas.py:189:def cancelar_reserva_web(request, codigo_reserva):
+estoque\view_modules\reservas.py:200:def integrar_reservas_no_fechamento(ordem, usuario=None):
+estoque\view_modules\reservas.py:204:def integrar_reservas_na_reabertura(ordem, usuario=None):
+ordens\view_modules\fluxo_orcamento.py:8:def migrar_orcamento(request, pk):
+estoque\view_modules\produtos.py:33:def buscar_produtos(request):
+estoque\view_modules\produtos.py:39:def lista_produtos(request):
+estoque\view_modules\produtos.py:101:def criar_produto(request):
+estoque\view_modules\produtos.py:161:def editar_produto(request, produto_id):
+estoque\view_modules\produtos.py:197:def duplicar_produto(request, produto_id):
+estoque\view_modules\produtos.py:202:def importar_produtos(request):
+estoque\view_modules\produtos.py:310:def tabelas_preco(request):
+estoque\view_modules\produtos.py:333:def estrutura_produto(request, produto_id):
+estoque\view_modules\produtos.py:397:def excluir_produto(request, produto_id):
+estoque\view_modules\produtos.py:407:def buscar_produto(request):
+estoque\view_modules\produtos.py:441:def api_gerar_ean(request):
+estoque\view_modules\produtos.py:450:def api_sugerir_pecas_os(request):
+agenda\models.py:36:    def clean(self):
+agenda\models.py:42:    def __str__(self):
+agenda\models.py:63:    def clean(self):
+agenda\models.py:67:    def __str__(self):
+agenda\models.py:132:    def clean(self):
+agenda\models.py:137:    def duracao(self):
+agenda\models.py:143:    def existe_conflito(cls, tecnico, inicio, fim, *, excluir_id=None):
+agenda\models.py:157:    def criar_por_solicitacao_publica(
+agenda\models.py:181:    def __str__(self):
+ordens\view_modules\fluxo_detalhes.py:13:    def get_context_data(self, **kwargs):
+ordens\view_modules\fluxo_detalhes.py:178:    def post(self, request, *args, **kwargs):
+estoque\view_modules\pdv.py:19:def consulta_artigos(request):
+estoque\view_modules\pdv.py:39:def api_consulta_artigos(request):
+estoque\view_modules\pdv.py:62:def api_resumo_artigo(request, produto_id):
+estoque\view_modules\pdv.py:77:def api_venda_rapida(request):
+estoque\view_modules\pdv.py:124:def api_cesto_resumo(request, cesto_codigo):
+estoque\view_modules\pdv.py:129:def api_cesto_finalizar(request):
+estoque\view_modules\pdv.py:145:def api_cesto_item_remover(request, venda_id):
+estoque\view_modules\pdv.py:163:def guia_pagamento(request, guia_codigo):
+estoque\view_modules\pdv.py:183:def limpar_pre_reservas_antigas_web(request):
+configuracoes\context_processors.py:4:def empresa_context(request):
+estoque\view_modules\movimentacoes.py:22:def registrar_movimentacao(request):
+estoque\view_modules\movimentacoes.py:83:def listar_movimentacoes(request):
+estoque\view_modules\movimentacoes.py:175:def pontos_operacionais(request):
+estoque\view_modules\movimentacoes.py:188:def ubicacoes_estoque(request):
+estoque\view_modules\movimentacoes.py:201:def transferir_estoque(request):
+estoque\view_modules\movimentacoes.py:218:    def _redirect_transferencia(*, produto=None):
+estoque\view_modules\movimentacoes.py:299:def reposicao_estoque(request):
+estoque\view_modules\movimentacoes.py:370:def indicadores_estoque(request):
+estoque\view_modules\movimentacoes.py:422:def detalhe_rateio_competencia(request, snapshot_id):
+estoque\view_modules\movimentacoes.py:430:def exportar_rateio_competencia(request, snapshot_id):
+estoque\view_modules\movimentacoes.py:443:def exportar_rateio_competencia_excel(request, snapshot_id):
+estoque\view_modules\movimentacoes.py:457:def relatorio_divergencias_estoque(request):
+ordens\view_modules\fluxo_classes.py:17:    def _nonce_map(self):
+ordens\view_modules\fluxo_classes.py:20:    def _get_or_make_create_nonce(self):
+ordens\view_modules\fluxo_classes.py:26:    def _buscar_ordem_por_nonce(self, nonce):
+ordens\view_modules\fluxo_classes.py:37:    def _registrar_nonce_usado(self, nonce, ordem_id):
+ordens\view_modules\fluxo_classes.py:48:    def _buscar_ordem_duplicada_recente(self, cleaned_data):
+ordens\view_modules\fluxo_classes.py:53:        def _txt(valor):
+ordens\view_modules\fluxo_classes.py:68:    def post(self, request, *args, **kwargs):
+ordens\view_modules\fluxo_classes.py:103:    def _render_revisao_criacao(self, form):
+ordens\view_modules\fluxo_classes.py:111:    def _valor_choice(form, field_name, value):
+ordens\view_modules\fluxo_classes.py:115:    def _cliente_selecionado(self):
+ordens\view_modules\fluxo_classes.py:121:    def _montar_resumo_revisao(self, dados, form):
+ordens\view_modules\fluxo_classes.py:154:    def _montar_payload_revisao(post_data, form):
+ordens\view_modules\fluxo_classes.py:162:    def form_valid(self, form):
+ordens\view_modules\fluxo_classes.py:250:    def get_context_data(self, **kwargs):
+ordens\view_modules\fluxo_classes.py:283:    def get_queryset(self):
+ordens\view_modules\fluxo_classes.py:298:    def get_context_data(self, **kwargs):
+ordens\view_modules\fluxo_classes.py:319:    def get_context_data(self, **kwargs):
+ordens\view_modules\fluxo_classes.py:401:    def form_valid(self, form):
+ordens\view_modules\fluxo_classes.py:419:    def get_success_url(self):
+ordens\view_modules\fluxo_classes.py:422:    def get_context_data(self, **kwargs):
+configuracoes\admin.py:17:    def has_add_permission(self, request):
+configuracoes\admin.py:20:    def has_delete_permission(self, request, obj=None):
+configuracoes\admin.py:23:    def changelist_view(self, request, extra_context=None):
+configuracoes\admin.py:142:    def has_add_permission(self, request):
+configuracoes\admin.py:145:    def has_change_permission(self, request, obj=None):
+estoque\view_modules\inventario.py:13:def api_inventario_iniciar(request):
+estoque\view_modules\inventario.py:25:def api_inventario_adicionar_item(request, inventario_id):
+estoque\view_modules\inventario.py:52:def api_inventario_finalizar(request, inventario_id):
+estoque\view_modules\inventario.py:85:def api_alertas_estoque(request):
+ordens\view_modules\fluxo_actions.py:9:def verificar_cliente_os(request):
+ordens\view_modules\fluxo_actions.py:24:    def _formatar_numero_telefone(numero):
+ordens\view_modules\fluxo_actions.py:136:def selecionar_cliente_os(request):
+ordens\view_modules\fluxo_actions.py:155:def lista_ordens(request):
+ordens\view_modules\fluxo_actions.py:170:def dashboard_pedidos_compra(request):
+ordens\view_modules\fluxo_actions.py:295:def toggle_fechamento_pedido_compra(request, pedido_id):
+ordens\view_modules\fluxo_actions.py:364:def toggle_fechamento_os(request, pk):
+ordens\view_modules\fluxo_actions.py:429:def agendar_ordem(request, pk):
+configuracoes\forms.py:81:    def __init__(self, *args, **kwargs):
+configuracoes\forms.py:91:    def _validar_arquivo_imagem(cls, arquivo, nome_campo):
+configuracoes\forms.py:104:    def _normalizar_range(valor, padrao, minimo, maximo):
+configuracoes\forms.py:111:    def clean_logo(self):
+configuracoes\forms.py:114:    def clean_logo_pdf(self):
+configuracoes\forms.py:117:    def _processar_logo(self, campo_modelo, campo_form):
+configuracoes\forms.py:205:    def save(self, commit=True):
+configuracoes\forms.py:318:    def __init__(self, *args, **kwargs):
+configuracoes\forms.py:353:    def _somente_digitos(value):
+configuracoes\forms.py:357:    def _validar_cpf(cls, cpf):
+configuracoes\forms.py:372:    def _validar_cnpj(cls, cnpj):
+configuracoes\forms.py:388:    def clean_documento_cpf_cnpj(self):
+configuracoes\forms.py:402:    def clean_numero_vendedor(self):
+configuracoes\forms.py:410:    def clean_password(self):
+configuracoes\forms.py:420:    def clean(self):
+configuracoes\forms.py:428:    def save(self, commit=True):
+configuracoes\forms.py:527:    def __init__(self, *args, **kwargs):
+configuracoes\forms.py:540:    def clean_condicoes_orcamento(self):
+configuracoes\forms.py:548:    def clean_termos_ordem_servico(self):
+configuracoes\forms.py:597:    def _somente_digitos(value):
+configuracoes\forms.py:600:    def clean_cnpj(self):
+configuracoes\forms.py:609:    def clean_telefone(self):
+configuracoes\forms.py:618:    def clean_cep(self):
+configuracoes\forms.py:643:    def save(self, commit=True):
+configuracoes\forms.py:668:    def __init__(self, *args, **kwargs):
+configuracoes\forms.py:700:    def clean(self):
+estoque\view_modules\helpers.py:42:def _normalizar_saldos_produto(produto):
+estoque\view_modules\helpers.py:51:def _recalcular_total_produto(produto):
+estoque\view_modules\helpers.py:55:def _decimal_to_str(valor):
+estoque\view_modules\helpers.py:64:def _snapshot_produto(produto):
+estoque\view_modules\helpers.py:93:def _registrar_historico_produto(produto, *, usuario=None, acao="EDICAO", dados_antes=None, observacao=""):
+estoque\view_modules\helpers.py:104:def _aplicar_estoque_inicial(produto, *, estoque_inicial=0, custo_entrada=None, usuario=None, observacao=""):
+estoque\view_modules\helpers.py:127:def _codigo_reserva():
+estoque\view_modules\helpers.py:134:def _codigo_cesto():
+estoque\view_modules\helpers.py:141:def _codigo_guia():
+estoque\view_modules\helpers.py:148:def _config_sistema():
+estoque\view_modules\helpers.py:152:def _normalizar_texto(valor):
+estoque\view_modules\helpers.py:158:def _resumo_cesto(cesto_codigo):
+estoque\view_modules\helpers.py:190:def _initial_produto_from_origem(origem):
+estoque\view_modules\helpers.py:240:def _ler_arquivo_importacao_produtos(uploaded_file):
+estoque\view_modules\helpers.py:282:def _normalizar_linha_importacao(linha):
+estoque\view_modules\helpers.py:283:    def _val(key, default=""):
+estoque\view_modules\helpers.py:301:def _contexto_rateio_produto(produto=None):
+estoque\view_modules\helpers.py:334:def _resumo_rateio_atual():
+ordens\view_modules\fluxo.py:34:def atualizar_local(request, os_id):
+ordens\view_modules\fluxo.py:74:def adicionar_linha(request, os_id):
+ordens\view_modules\fluxo.py:136:def atualizar_observacoes(request, os_id):
+ordens\view_modules\fluxo.py:164:def atualizar_tecnico(request, os_id):
+ordens\view_modules\fluxo.py:220:def atualizar_numero_serie(request, os_id):
+core\views.py:21:def _dashboard_shared_context(request):
+core\views.py:90:def _dashboard_managerial_context():
+core\views.py:232:def dashboard(request):
+core\views.py:243:def dashboard_indicadores(request):
+core\views.py:259:def login_view(request):
+core\views.py:276:def logout_view(request):
+core\views.py:285:def home_redirect(request):
+core\views.py:292:def painel(request):
+estoque\views_legacy.py:76:def _normalizar_saldos_produto(produto):
+estoque\views_legacy.py:85:def _recalcular_total_produto(produto):
+estoque\views_legacy.py:89:def _decimal_to_str(valor):
+estoque\views_legacy.py:98:def _snapshot_produto(produto):
+estoque\views_legacy.py:127:def _registrar_historico_produto(produto, *, usuario=None, acao="EDICAO", dados_antes=None, observacao=""):
+estoque\views_legacy.py:138:def _aplicar_estoque_inicial(produto, *, estoque_inicial=0, custo_entrada=None, usuario=None, observacao=""):
+estoque\views_legacy.py:161:def _codigo_reserva():
+estoque\views_legacy.py:168:def _codigo_cesto():
+estoque\views_legacy.py:175:def _codigo_guia():
+estoque\views_legacy.py:182:def _config_sistema():
+estoque\views_legacy.py:186:def _normalizar_texto(valor):
+estoque\views_legacy.py:192:def _resumo_cesto(cesto_codigo):
+estoque\views_legacy.py:224:def _initial_produto_from_origem(origem):
+estoque\views_legacy.py:274:def _contexto_rateio_produto(produto=None):
+estoque\views_legacy.py:312:def _resumo_rateio_atual():
+estoque\views_legacy.py:422:def buscar_produtos(request):
+estoque\views_legacy.py:428:def lista_produtos(request):
+estoque\views_legacy.py:459:def criar_produto(request):
+estoque\views_legacy.py:528:def editar_produto(request, produto_id):
+estoque\views_legacy.py:576:def duplicar_produto(request, produto_id):
+estoque\views_legacy.py:580:def _ler_arquivo_importacao_produtos(uploaded_file):
+estoque\views_legacy.py:622:def _normalizar_linha_importacao(linha):
+estoque\views_legacy.py:623:    def _val(key, default=""):
+estoque\views_legacy.py:642:def importar_produtos(request):
+estoque\views_legacy.py:774:def tabelas_preco(request):
+estoque\views_legacy.py:806:def estrutura_produto(request, produto_id):
+estoque\views_legacy.py:879:def excluir_produto(request, produto_id):
+estoque\views_legacy.py:889:def buscar_produto(request):
+estoque\views_legacy.py:923:def api_gerar_ean(request):
+estoque\views_legacy.py:932:def api_sugerir_pecas_os(request):
+estoque\views_legacy.py:1042:def registrar_movimentacao(request):
+estoque\views_legacy.py:1110:def listar_movimentacoes(request):
+estoque\views_legacy.py:1138:def pontos_operacionais(request):
+estoque\views_legacy.py:1161:def ubicacoes_estoque(request):
+estoque\views_legacy.py:1184:def transferir_estoque(request):
+estoque\views_legacy.py:1271:def reposicao_estoque(request):
+estoque\views_legacy.py:1352:def indicadores_estoque(request):
+estoque\views_legacy.py:1452:def detalhe_rateio_competencia(request, snapshot_id):
+estoque\views_legacy.py:1477:def exportar_rateio_competencia(request, snapshot_id):
+estoque\views_legacy.py:1526:def exportar_rateio_competencia_excel(request, snapshot_id):
+estoque\views_legacy.py:1579:def relatorio_divergencias_estoque(request):
+estoque\views_legacy.py:1620:def consulta_artigos(request):
+estoque\views_legacy.py:1648:def api_consulta_artigos(request):
+estoque\views_legacy.py:1711:def api_resumo_artigo(request, produto_id):
+estoque\views_legacy.py:1790:def api_venda_rapida(request):
+estoque\views_legacy.py:1892:def api_cesto_resumo(request, cesto_codigo):
+estoque\views_legacy.py:1897:def api_cesto_finalizar(request):
+estoque\views_legacy.py:1928:def api_cesto_item_remover(request, venda_id):
+estoque\views_legacy.py:1950:def guia_pagamento(request, guia_codigo):
+estoque\views_legacy.py:1983:def api_criar_reserva(request):
+estoque\views_legacy.py:2056:def api_expirar_reservas(request):
+estoque\views_legacy.py:2065:def api_converter_reserva(request, codigo_reserva):
+estoque\views_legacy.py:2078:def api_cancelar_reserva(request, codigo_reserva):
+estoque\views_legacy.py:2092:def api_inventario_iniciar(request):
+estoque\views_legacy.py:2119:def api_inventario_adicionar_item(request, inventario_id):
+estoque\views_legacy.py:2155:def api_inventario_finalizar(request, inventario_id):
+estoque\views_legacy.py:2216:def api_alertas_estoque(request):
+estoque\views_legacy.py:2235:def reservas_clientes(request):
+estoque\views_legacy.py:2268:def associar_reserva_ordem(request, codigo_reserva):
+estoque\views_legacy.py:2289:def expirar_reservas_web(request):
+estoque\views_legacy.py:2297:def limpar_pre_reservas_antigas_web(request):
+estoque\views_legacy.py:2309:def converter_reserva_web(request, codigo_reserva):
+estoque\views_legacy.py:2321:def cancelar_reserva_web(request, codigo_reserva):
+estoque\views_legacy.py:2332:def integrar_reservas_no_fechamento(ordem, usuario=None):
+estoque\views_legacy.py:2336:def integrar_reservas_na_reabertura(ordem, usuario=None):
+configuracoes\models.py:58:    def __str__(self):
+configuracoes\models.py:71:    def save(self, *args, **kwargs):
+configuracoes\models.py:79:    def __str__(self):
+configuracoes\models.py:118:    def __str__(self):
+configuracoes\models.py:139:    def __str__(self):
+configuracoes\models.py:182:    def __str__(self):
+configuracoes\models.py:186:    def tipo_produto_label(self):
+configuracoes\models.py:201:    def vigente_em(self, data_ref):
+configuracoes\models.py:209:    def buscar_regra_vigente(cls, marca, tipo_produto, data_ref=None):
+configuracoes\models.py:227:    def __str__(self):
+configuracoes\models.py:299:    def __str__(self):
+configuracoes\models.py:303:    def nome_exibicao(self):
+configuracoes\models.py:307:    def funcoes_extras_ativas(self):
+configuracoes\models.py:318:    def _gerar_numero_vendedor_disponivel(cls, *, excluir_usuario_id=None):
+configuracoes\models.py:340:    def save(self, *args, **kwargs):
+configuracoes\models.py:371:    def __str__(self):
+configuracoes\models.py:399:    def __str__(self):
+configuracoes\models.py:407:    def __str__(self):
+configuracoes\models.py:428:    def __str__(self):
+configuracoes\models.py:451:    def __str__(self):
+configuracoes\models.py:463:    def novo_numero(cls):
+configuracoes\models.py:470:    def __str__(self):
+configuracoes\models.py:657:    def save(self, *args, **kwargs):
+configuracoes\models.py:663:    def get_configuracao(cls):
+configuracoes\models.py:667:    def __str__(self):
+configuracoes\models.py:688:    def clean(self):
+configuracoes\models.py:694:    def __str__(self):
+ordens\view_modules\common.py:69:def _primeiro_nome(nome):
+ordens\view_modules\common.py:76:def _link_absoluto(request, view_name, **kwargs):
+ordens\view_modules\common.py:85:def request_ip(request):
+ordens\view_modules\common.py:92:def registrar_notificacao(ordem, *, tipo, canal, mensagem, usuario=None, assunto=""):
+ordens\view_modules\common.py:112:def enviar_notificacao(notif):
+ordens\view_modules\common.py:164:def contexto_variaveis_mensagem(ordem, request=None):
+ordens\view_modules\common.py:234:def render_template_mensagem(texto, contexto):
+ordens\view_modules\common.py:243:def registrar_pendente_cliente_envio_orcamento(ordem, usuario, canal):
+ordens\view_modules\common.py:258:def registrar_pronto_contactado(ordem, usuario, canal):
+ordens\view_modules\common.py:274:def log_os(ordem, tipo_evento, descricao, usuario=None, dados_extras=None):
+ordens\view_modules\common.py:284:def recalcular_comissoes_itens_antecipado(ordem):
+clientes\services.py:4:def gerar_numero_cliente_disponivel(cliente_model):
+clientes\services.py:11:def normalizar_documentos_cliente(cliente):
+clientes\services.py:41:def validar_documento_cliente(cliente, *, validar_cpf, validar_cnpj):
+configuracoes\management\commands\preencher_numero_vendedor.py:12:    def add_arguments(self, parser):
+configuracoes\management\commands\preencher_numero_vendedor.py:25:    def _is_database_locked(exc):
+configuracoes\management\commands\preencher_numero_vendedor.py:29:    def _salvar_com_retry(self, usuario, tentativas=30, espera=0.2):
+configuracoes\management\commands\preencher_numero_vendedor.py:45:    def _preencher_usuarios(self, usuarios, *, listar=False):
+configuracoes\management\commands\preencher_numero_vendedor.py:55:    def handle(self, *args, **options):
+configuracoes\management\commands\gerar_base_teste.py:19:def _somente_digitos(valor: str) -> str:
+configuracoes\management\commands\gerar_base_teste.py:23:def _digito_cpf(base: str, peso_inicial: int) -> str:
+configuracoes\management\commands\gerar_base_teste.py:29:def _gerar_cpf(indice: int) -> str:
+configuracoes\management\commands\gerar_base_teste.py:36:def _digito_cnpj(base: str, pesos: list[int]) -> str:
+configuracoes\management\commands\gerar_base_teste.py:42:def _gerar_cnpj(indice: int) -> str:
+configuracoes\management\commands\gerar_base_teste.py:67:    def add_arguments(self, parser):
+configuracoes\management\commands\gerar_base_teste.py:110:    def handle(self, *args, **options):
+configuracoes\management\commands\gerar_base_teste.py:168:    def _limpar_dados(self, *, prefixo: str):
+configuracoes\management\commands\gerar_base_teste.py:212:    def _criar_clientes(self, *, prefixo: str, quantidade: int) -> dict:
+configuracoes\management\commands\gerar_base_teste.py:292:    def _criar_categorias(self, *, prefixo: str) -> dict[str, CategoriaProduto]:
+configuracoes\management\commands\gerar_base_teste.py:311:    def _criar_fornecedores_marcas(self, *, prefixo: str, quantidade: int = 3):
+configuracoes\management\commands\gerar_base_teste.py:363:    def _produto_seeds(self) -> list[ProdutoSeed]:
+configuracoes\management\commands\gerar_base_teste.py:391:    def _criar_produtos(self, *, prefixo: str, quantidade: int, categorias, fornecedores, marcas) -> dict:
+configuracoes\management\commands\gerar_base_teste.py:440:    def _criar_tecnicos(self, *, prefixo: str, quantidade: int):
+configuracoes\management\commands\gerar_base_teste.py:479:    def _criar_ordens(self, *, prefixo: str, quantidade: int, tecnicos):
+configuracoes\management\commands\gerar_base_teste.py:677:    def _garantir_saldo_produto(self, produto: Produto, *, po2: PontoOperacional, po3: PontoOperacional):
+configuracoes\management\commands\check_go_live.py:12:    def handle(self, *args, **options):
+configuracoes\management\commands\restore_db.py:13:    def add_arguments(self, parser):
+configuracoes\management\commands\restore_db.py:17:    def handle(self, *args, **options):
+configuracoes\management\commands\setup_roles.py:9:    def handle(self, *args, **options):
+ordens\view_modules\busca.py:31:def _serie_normalizada(valor):
+ordens\view_modules\busca.py:35:def _serie_normalizada_expr(field_name):
+ordens\view_modules\busca.py:42:def _aplicar_busca_ordens(queryset, termo_busca):
+ordens\view_modules\busca.py:88:def _mensagem_busca_ordens_invalida(termo_busca):
+ordens\view_modules\busca.py:111:def _aplicar_filtro_rapido_ordens(queryset, quick_filter, user):
+ordens\view_modules\busca.py:138:def buscar_ordens(request):
+ordens\view_modules\busca.py:170:    def _tem_filtros_aplicados(self):
+ordens\view_modules\busca.py:177:    def _get_base_queryset(self):
+ordens\view_modules\busca.py:198:    def get_queryset(self):
+ordens\view_modules\busca.py:210:    def get_context_data(self, **kwargs):
+configuracoes\services\usuarios.py:4:def normalizar_numero_vendedor(valor):
+configuracoes\services\usuarios.py:15:def salvar_usuario_com_numero_vendedor(usuario, super_save, *, tentativas=6):
+clientes\models.py:154:    def save(self, *args, **kwargs):
+clientes\models.py:169:    def validar_cpf(cpf):
+clientes\models.py:193:    def validar_cnpj(cnpj):
+clientes\models.py:214:    def get_documento_formatado(self):
+clientes\models.py:238:    def tipo_cliente_exibicao(self):
+clientes\models.py:247:    def endereco_exibicao(self):
+clientes\models.py:275:    def origem_cliente_exibicao(self):
+clientes\models.py:280:    def __str__(self):
+configuracoes\management\commands\backup_db.py:15:    def add_arguments(self, parser):
+configuracoes\management\commands\backup_db.py:19:    def handle(self, *args, **options):
+orcamentos\forms.py:75:    def __init__(self, *args, **kwargs):
+orcamentos\forms.py:86:    def clean(self):
+configuracoes\views.py:58:def _request_ip(request):
+configuracoes\views.py:65:def _garantir_tipos_equipamento_padrao():
+configuracoes\views.py:73:def _log_usuario(usuario_alvo, acao, descricao, usuario_responsavel=None):
+configuracoes\views.py:87:def painel(request):
+configuracoes\views.py:92:def modelos_mensagem(request):
+configuracoes\views.py:139:def tipos_equipamento(request):
+configuracoes\views.py:188:def empresa_edit(request):
+configuracoes\views.py:205:def lista_aliquotas(request):
+configuracoes\views.py:211:def adicionar_aliquota(request):
+configuracoes\views.py:224:def editar_aliquota(request, aliquota_id):
+configuracoes\views.py:238:def excluir_aliquota(request, aliquota_id):
+configuracoes\views.py:251:def lista_usuarios(request):
+configuracoes\views.py:286:def detalhes_usuario(request, usuario_id):
+configuracoes\views.py:339:def adicionar_usuario(request):
+configuracoes\views.py:385:def editar_usuario(request, usuario_id):
+configuracoes\views.py:416:def excluir_usuario(request, usuario_id):
+configuracoes\views.py:439:def backup_banco(request):
+configuracoes\views.py:464:def restore_banco(request):
+configuracoes\views.py:478:def configuracao_os_edit(request):
+configuracoes\views.py:493:def configuracao_sistema_edit(request):
+configuracoes\views.py:521:def marcas_fornecedores(request):
+configuracoes\views.py:675:def buscar_cep(request):
+orcamentos\signals.py:13:def _cancelar_e_remover_servicos_vinculados(item, *, motivo: str, evento: str):
+orcamentos\signals.py:24:def item_orcamento_pre_save_snapshot(sender, instance, **kwargs):
+orcamentos\signals.py:35:def item_orcamento_post_save_comissao(sender, instance, created, raw=False, **kwargs):
+orcamentos\signals.py:70:def item_orcamento_pre_delete_comissao(sender, instance, **kwargs):
+orcamentos\signals.py:84:def orcamento_pre_save_snapshot(sender, instance, **kwargs):
+orcamentos\signals.py:95:def orcamento_post_save_cancelamento(sender, instance, created, raw=False, **kwargs):
+orcamentos\apps.py:8:    def ready(self):
+caixa\view_modules\taloes.py:19:def taloes(request):
+caixa\view_modules\taloes.py:67:def imprimir_talao(request, pagamento_id):
+orcamentos\models.py:34:    def __str__(self):
+orcamentos\models.py:37:    def subtotal_itens(self):
+orcamentos\models.py:40:    def desconto_calculado(self):
+orcamentos\models.py:54:    def total(self):
+orcamentos\models.py:58:    def atualizar_total(self):
+orcamentos\models.py:100:    def subtotal(self):
+orcamentos\models.py:103:    def desconto_calculado(self):
+orcamentos\models.py:117:    def total(self):
+orcamentos\models.py:120:    def save(self, *args, **kwargs):
+configuracoes\management\commands\import_shoficina_csv.py:14:    def add_arguments(self, parser):
+configuracoes\management\commands\import_shoficina_csv.py:19:    def _to_decimal(self, value):
+configuracoes\management\commands\import_shoficina_csv.py:38:    def _to_int(self, value):
+configuracoes\management\commands\import_shoficina_csv.py:54:    def handle(self, *args, **options):
+configuracoes\permissions.py:10:    def __init__(self, roles, capability=None):
+configuracoes\permissions.py:15:def _tipos_usuario_configurados():
+configuracoes\permissions.py:34:def has_role(user, allowed_roles):
+configuracoes\permissions.py:47:def role_required(allowed_roles, login_url="core:login"):
+configuracoes\permissions.py:50:    def decorator(view_func):
+configuracoes\permissions.py:53:        def _wrapped_view(request, *args, **kwargs):
+configuracoes\permissions.py:67:    def test_func(self):
+ordens\views_legacy.py:68:def _aplicar_busca_ordens(queryset, termo_busca):
+ordens\views_legacy.py:109:def _mensagem_busca_ordens_invalida(termo_busca):
+ordens\views_legacy.py:132:def _request_ip(request):
+ordens\views_legacy.py:139:def _registrar_notificacao(ordem, *, tipo, canal, mensagem, usuario=None, assunto=""):
+ordens\views_legacy.py:160:def _enviar_notificacao(notif):
+ordens\views_legacy.py:212:def _contexto_variaveis_mensagem(ordem):
+ordens\views_legacy.py:251:def _mensagem_confirmacao_inicial(ordem, request):
+ordens\views_legacy.py:263:def _render_template_mensagem(texto, contexto):
+ordens\views_legacy.py:280:def _registrar_pendente_cliente_envio_orcamento(ordem, usuario, canal):
+ordens\views_legacy.py:295:def _log_os(ordem, tipo_evento, descricao, usuario=None, dados_extras=None):
+ordens\views_legacy.py:305:def _recalcular_comissoes_itens_antecipado(ordem):
+ordens\views_legacy.py:313:def _migrar_itens_aprovados_para_servicos_pecas(ordem, usuario=None):
+ordens\views_legacy.py:350:def _somar_meses_data(data_base, meses):
+ordens\views_legacy.py:360:def _fim_mesmo_dia(inicio):
+ordens\views_legacy.py:373:def verificar_cliente_os(request):
+ordens\views_legacy.py:388:    def _formatar_numero_telefone(numero):
+ordens\views_legacy.py:500:def selecionar_cliente_os(request):
+ordens\views_legacy.py:519:def lista_ordens(request):
+ordens\views_legacy.py:534:def dashboard_pedidos_compra(request):
+ordens\views_legacy.py:591:def toggle_fechamento_pedido_compra(request, pedido_id):
+ordens\views_legacy.py:660:def toggle_fechamento_os(request, pk):
+ordens\views_legacy.py:725:def agendar_ordem(request, pk):
+ordens\views_legacy.py:779:    def form_valid(self, form):
+ordens\views_legacy.py:855:    def get_context_data(self, **kwargs):
+ordens\views_legacy.py:887:    def get_queryset(self):
+ordens\views_legacy.py:902:    def get_context_data(self, **kwargs):
+ordens\views_legacy.py:923:    def get_context_data(self, **kwargs):
+ordens\views_legacy.py:941:    def form_valid(self, form):
+ordens\views_legacy.py:959:    def get_success_url(self):
+ordens\views_legacy.py:962:    def get_context_data(self, **kwargs):
+ordens\views_legacy.py:979:    def get_context_data(self, **kwargs):
+ordens\views_legacy.py:1104:    def post(self, request, *args, **kwargs):
+ordens\views_legacy.py:1599:def migrar_orcamento(request, pk):
+ordens\views_legacy.py:1662:def buscar_ordens(request):
+ordens\views_legacy.py:1687:def _mensagem_padrao_notificacao(ordem, tipo, canal="sistema"):
+ordens\views_legacy.py:1706:def notificar_cliente_ordem(request, pk, tipo):
+ordens\views_legacy.py:1735:def reenviar_confirmacao_whatsapp(request, pk):
+ordens\views_legacy.py:1776:def confirmar_manual_resumo(request, pk):
+ordens\views_legacy.py:1808:def confirmar_ordem_token_publico(request, token):
+ordens\views_legacy.py:1846:def imprimir_confirmacao_os(request, pk):
+ordens\views_legacy.py:1851:def portal_cliente(request):
+ordens\views_legacy.py:1884:def atualizar_local(request, os_id):
+ordens\views_legacy.py:1923:def adicionar_linha(request, os_id):
+ordens\views_legacy.py:1972:def atualizar_observacoes(request, os_id):
+ordens\views_legacy.py:1998:def atualizar_tecnico(request, os_id):
+ordens\views_legacy.py:2059:def atualizar_numero_serie(request, os_id):
+ordens\views_legacy.py:2118:def imprimir_ordem_servico(request, pk):
+ordens\views_legacy.py:2144:    def _draw_footer(canv, _doc):
+ordens\views_legacy.py:2154:    def _header_block():
+ordens\views_legacy.py:2179:    def _section_title(texto):
+ordens\views_legacy.py:2184:    def _kv_table(rows):
+ordens\views_legacy.py:2252:def imprimir_ordem_servico_impressao(request, pk):
+ordens\views_legacy.py:2281:    def _draw_cut(canv, _doc):
+ordens\views_legacy.py:2298:    def _bloco_via(rotulo):
+ordens\views_legacy.py:2391:    def _bloco_termos(rotulo):
+ordens\views_legacy.py:2434:def imprimir_relatorio_tecnico(request, pk):
+ordens\views_legacy.py:2456:    def _draw_footer(canv, _doc):
+ordens\views_legacy.py:2466:    def _title_bar(texto):
+ordens\views_legacy.py:2471:    def _info_table(rows):
+caixa\view_modules\recebiveis.py:52:def contas_receber(request):
+caixa\view_modules\recebiveis.py:261:def criar_conta_receber(request):
+caixa\view_modules\recebiveis.py:283:def detalhe_conta_receber(request, conta_id):
+caixa\view_modules\recebiveis.py:377:def aging_receber(request):
+caixa\view_modules\recebiveis.py:438:def categorias_financeiras(request):
+caixa\view_modules\recebiveis.py:466:def formas_pagamento(request):
+caixa\view_modules\recebiveis.py:493:def centros_custo(request):
+caixa\view_modules\recebiveis.py:521:def custos_fixos(request):
+caixa\models.py:33:    def clean(self):
+caixa\models.py:40:    def save(self, *args, **kwargs):
+caixa\models.py:44:    def __str__(self):
+caixa\models.py:71:    def metodo_display(self):
+caixa\models.py:77:    def valor_liquidado(self):
+caixa\models.py:80:    def __str__(self):
+caixa\models.py:88:    def _gerar_numero_talao(self):
+caixa\models.py:96:    def save(self, *args, **kwargs):
+caixa\models.py:121:    def __str__(self):
+caixa\models.py:138:    def __str__(self):
+caixa\models.py:171:    def __str__(self):
+caixa\models.py:174:    def atualizar_status_automatico(self):
+caixa\models.py:202:    def __str__(self):
+caixa\models.py:240:    def __str__(self):
+caixa\models.py:244:    def categoria_display(self):
+caixa\models.py:274:    def __str__(self):
+caixa\models.py:295:    def __str__(self):
+caixa\models.py:322:    def __str__(self):
+caixa\models.py:354:    def __str__(self):
+caixa\models.py:400:    def __str__(self):
+caixa\models.py:482:    def __str__(self):
+caixa\models.py:509:    def __str__(self):
+caixa\models.py:523:    def __str__(self):
+caixa\models.py:544:    def __str__(self):
+caixa\models.py:558:    def __str__(self):
+caixa\models.py:602:    def __str__(self):
+caixa\models.py:606:    def categoria_display(self):
+caixa\models.py:609:    def atualizar_status_automatico(self):
+caixa\models.py:621:    def clean(self):
+caixa\models.py:642:    def _recalcular_produtos_rateio(self):
+caixa\models.py:655:    def save(self, *args, **kwargs):
+caixa\models.py:661:    def delete(self, *args, **kwargs):
+caixa\models.py:689:    def __str__(self):
+caixa\models.py:723:    def valor_aberto(self):
+caixa\models.py:726:    def atualizar_status_automatico(self):
+caixa\models.py:738:    def __str__(self):
+caixa\models.py:741:    def delete(self, *args, **kwargs):
+caixa\models.py:760:    def __str__(self):
+caixa\views_legacy.py:74:def caixa_atual():
+caixa\views_legacy.py:78:def _caixa_por_data(data_ref=None):
+caixa\views_legacy.py:83:def _parse_intervalo_datas(raw_inicio, raw_fim):
+caixa\views_legacy.py:103:def _parse_mes_ano(request, mes_key="mes", ano_key="ano", referencia=None):
+caixa\views_legacy.py:121:def _periodo_por_preset(preset, referencia=None):
+caixa\views_legacy.py:137:def _querystring_sem_param(request, *params_remover):
+caixa\views_legacy.py:145:def _paginar_queryset(request, queryset, per_page=50, page_param="page"):
+caixa\views_legacy.py:151:def _fmt_decimal(valor):
+caixa\views_legacy.py:158:def _exportar_csv(filename, cabecalhos, linhas):
+caixa\views_legacy.py:168:def _exportar_pdf_tabela(filename, titulo, cabecalhos, linhas):
+caixa\views_legacy.py:188:    def _nova_pagina():
+caixa\views_legacy.py:217:def _calcular_comparativo_periodo(valor_atual, valor_anterior):
+caixa\views_legacy.py:232:def _atualizar_status_contas_pagar_abertas():
+caixa\views_legacy.py:251:def _redirect_pos_operacao(request, fallback_route):
+caixa\views_legacy.py:257:def _log_financeiro(evento, usuario, conta=None, pagamento=None, valor=None, descricao=""):
+caixa\views_legacy.py:268:def _forma_pagamento_por_codigo(codigo):
+caixa\views_legacy.py:272:def _garantir_formas_pagamento_padrao():
+caixa\views_legacy.py:286:def _garantir_centros_custo_padrao():
+caixa\views_legacy.py:298:def _forma_pagamento_padrao():
+caixa\views_legacy.py:302:def _resolver_forma_pagamento_codigo_legacy(codigo):
+caixa\views_legacy.py:315:def _payload_pagamento_normalizado(request):
+caixa\views_legacy.py:324:def _buscar_ordem_por_numero(texto):
+caixa\views_legacy.py:346:def _resumo_movimento_caixa(caixa):
+caixa\views_legacy.py:376:def _resumo_movimento_caixas(caixas_qs):
+caixa\views_legacy.py:396:def _vincular_talao_itens_ordem(ordem, numero_talao, pagamento=None):
+caixa\views_legacy.py:446:def _garantir_conta_os(ordem, ignorar_pagamento_id=None):
+caixa\views_legacy.py:493:def _garantir_conta_garantia(ordem, dados_garantia=None, ignorar_pagamento_id=None):
+caixa\views_legacy.py:557:def _atualizar_status_contas_abertas():
+caixa\views_legacy.py:580:def _valor_garantia_sugerido(ordem):
+caixa\views_legacy.py:595:def _dados_garantia_ordem(ordem):
+caixa\views_legacy.py:623:def _upsert_auditoria_garantia_ordem(ordem):
+caixa\views_legacy.py:656:def _base_comissao(ordem):
+caixa\views_legacy.py:668:def _ordem_tem_pagamento(ordem):
+caixa\views_legacy.py:672:def _ordem_execucao_confirmada(ordem):
+caixa\views_legacy.py:682:def _ordem_qualifica_para_comissao(ordem, regra):
+caixa\views_legacy.py:701:def _gerar_comissao_ordem(ordem, considerar_pecas=False):
+caixa\views_legacy.py:739:def _gerar_comissao_item_orcamento(item, modo_pagamento="fechamento"):
+caixa\views_legacy.py:786:def _competencia_atual():
+caixa\views_legacy.py:791:def _normalizar_competencia(mes_raw, ano_raw, referencia=None):
+caixa\views_legacy.py:808:def _parse_decimal_input(valor_raw, default=Decimal("0.00")):
+caixa\views_legacy.py:818:def _gerar_codigo_lote_pagamento(competencia):
+caixa\views_legacy.py:833:def _recalcular_comissoes_itens_antecipado(queryset):
+caixa\views_legacy.py:841:def _recalcular_comissoes_motor_novo(ordens_qs):
+caixa\views_legacy.py:846:def _normalizar_criterio_desempenho(criterio):
+caixa\views_legacy.py:853:def _rotulo_criterio_desempenho(criterio):
+caixa\views_legacy.py:862:def _data_referencia_ordem(ordem, criterio="servicos_finalizados"):
+caixa\views_legacy.py:884:def _filtrar_comissoes_por_criterio(qs, criterio):
+caixa\views_legacy.py:903:def _ordem_atende_criterio_desempenho(ordem, criterio):
+caixa\views_legacy.py:914:def _referencia_comissao_realizada(comissao):
+caixa\views_legacy.py:923:def _categoria_comissao_realizada(comissao):
+caixa\views_legacy.py:933:def _percentuais_padrao_desempenho(tecnico=None):
+caixa\views_legacy.py:982:def _resumo_vendas_mostrador_por_colaborador(*, colaborador_id=None, data_inicio=None, data_fim=None):
+caixa\views_legacy.py:1033:def _resumo_produtividade_por_tecnico(*, tecnico_id=None, data_inicio=None, data_fim=None):
+caixa\views_legacy.py:1090:def _periodo_competencia(competencia):
+caixa\views_legacy.py:1097:def _valor_metrica_regra(regra, competencia):
+caixa\views_legacy.py:1106:def _faixa_para_valor(regra, valor):
+caixa\views_legacy.py:1116:def _usuarios_alvo_regra(regra):
+caixa\views_legacy.py:1128:def _recalcular_premios_competencia(competencia):
+caixa\views_legacy.py:1155:def dashboard_caixa(request):
+caixa\views_legacy.py:1323:def abrir_caixa(request):
+caixa\views_legacy.py:1390:def fechar_caixa(request):
+caixa\views_legacy.py:1451:def registrar_pagamento(request):
+caixa\views_legacy.py:1800:def registrar_saida(request):
+caixa\views_legacy.py:1842:def contas_receber(request):
+caixa\views_legacy.py:1973:def criar_conta_receber(request):
+caixa\views_legacy.py:1994:def detalhe_conta_receber(request, conta_id):
+caixa\views_legacy.py:2087:def aging_receber(request):
+caixa\views_legacy.py:2124:def categorias_financeiras(request):
+caixa\views_legacy.py:2151:def formas_pagamento(request):
+caixa\views_legacy.py:2178:def centros_custo(request):
+caixa\views_legacy.py:2206:def custos_fixos(request):
+caixa\views_legacy.py:2325:def taloes(request):
+caixa\views_legacy.py:2371:def imprimir_talao(request, pagamento_id):
+caixa\views_legacy.py:2385:def contas_pagar(request):
+caixa\views_legacy.py:2492:def criar_conta_pagar(request):
+caixa\views_legacy.py:2514:def detalhe_conta_pagar(request, conta_id):
+caixa\views_legacy.py:2592:def comissoes_pagamento(request):
+caixa\views_legacy.py:2593:    def _redirect_pos_post():
+caixa\views_legacy.py:3043:def comissoes_pendencias(request):
+caixa\views_legacy.py:3126:def comissoes_tecnicos(request):
+caixa\views_legacy.py:3129:    def _ordens_por_intervalo(data_inicio, data_fim):
+caixa\views_legacy.py:3145:    def _redirect_comissoes_pos_post():
+caixa\views_legacy.py:3440:def premios_meta(request):
+caixa\views_legacy.py:3479:def meu_desempenho(request):
+caixa\views_legacy.py:3717:    def _obter_folha_colaborador(tecnico):
+caixa\views_legacy.py:3732:    def _adicionar_linha_colaborador(tecnico, secao, linha):
+caixa\views_legacy.py:4127:def dre(request):
+caixa\views_legacy.py:4201:def fluxo_projetado(request):
+caixa\views_legacy.py:4263:def relatorios(request):
+caixa\views_legacy.py:4398:def auditoria_operacional(request):
+caixa\views_legacy.py:4407:    def _redirect_pos_post():
+caixa\views_legacy.py:4523:def garantias_fabricante(request):
+caixa\services\__init__.py:14:def __getattr__(name):
+caixa\forms.py:52:    def __init__(self, *args, **kwargs):
+caixa\forms.py:66:    def clean(self):
+caixa\forms.py:86:    def __init__(self, *args, **kwargs):
+caixa\forms.py:106:    def __init__(self, *args, **kwargs):
+caixa\forms.py:128:    def save(self, commit=True):
+caixa\forms.py:145:    def __init__(self, *args, **kwargs):
+caixa\forms.py:175:    def __init__(self, *args, **kwargs):
+caixa\forms.py:220:    def __init__(self, *args, **kwargs):
+caixa\forms.py:269:    def __init__(self, *args, **kwargs):
+caixa\forms.py:293:    def __init__(self, *args, **kwargs):
+caixa\services\pagamentos.py:5:def gerar_numero_talao_pagamento(*, pagamento, configuracao_sistema_model=None):
+caixa\services\pagamentos.py:17:def excluir_pagamento_com_justificativa(*, pagamento, usuario, justificativa):
+caixa\view_modules\pagaveis.py:32:def contas_pagar(request):
+caixa\view_modules\pagaveis.py:256:def criar_conta_pagar(request):
+caixa\view_modules\pagaveis.py:280:def detalhe_conta_pagar(request, conta_id):
+caixa\view_modules\pagaveis.py:360:def aging_pagar(request):
+clientes\forms.py:110:    def __init__(self, *args, **kwargs):
+clientes\forms.py:187:    def clean_documento(self):
+clientes\forms.py:221:    def clean_telefone_numero(self):
+clientes\forms.py:239:    def clean(self):
+clientes\forms.py:281:    def clean_codigo_postal(self):
+clientes\forms.py:290:    def save(self, commit=True):
+caixa\view_modules\dashboard.py:54:def abrir_caixa(request):
+caixa\view_modules\dashboard.py:68:    def _contexto_abrir(caixa_ref, pode_abrir, mensagem, saldo_digitado=""):
+caixa\view_modules\dashboard.py:127:def fechar_caixa(request):
+caixa\view_modules\dashboard.py:132:    def _montar_conferencia_formas(pagamentos_qs, payload=None):
+caixa\view_modules\dashboard.py:164:    def _contexto_fechar(valor_contado_fisico=None, justificativa_diferenca=""):
+caixa\view_modules\dashboard.py:264:def _dashboard_caixa_context(request, menu_sub):
+caixa\view_modules\dashboard.py:265:    def _comparativo_agrupado(qs_atual, qs_anterior, campo, fallback):
+caixa\view_modules\dashboard.py:476:    def _acao_evento(evento):
+caixa\view_modules\dashboard.py:669:def dashboard_caixa(request):
+caixa\view_modules\dashboard.py:675:def dashboard_financeiro(request):
+caixa\view_modules\dashboard.py:681:def detalhe_caixa(request, caixa_id):
+caixa\view_modules\dashboard.py:714:def registrar_pagamento(request):
+caixa\view_modules\dashboard.py:729:    def _total_liquidado_pagamentos(qs):
+caixa\view_modules\dashboard.py:794:    def _redirect_sucesso(pagamento_id):
+caixa\view_modules\dashboard.py:808:    def _context_pagamento(form):
+caixa\view_modules\dashboard.py:1084:def excluir_pagamento(request, pagamento_id):
+caixa\view_modules\dashboard.py:1121:def registrar_saida(request):
+caixa\view_modules\helpers.py:31:def _caixa_por_data(data_ref=None):
+caixa\view_modules\helpers.py:36:def _parse_intervalo_datas(raw_inicio, raw_fim):
+caixa\view_modules\helpers.py:56:def _parse_mes_ano(request, mes_key="mes", ano_key="ano", referencia=None):
+caixa\view_modules\helpers.py:74:def _periodo_por_preset(preset, referencia=None):
+caixa\view_modules\helpers.py:90:def _querystring_sem_param(request, *params_remover):
+caixa\view_modules\helpers.py:98:def _paginar_queryset(request, queryset, per_page=50, page_param="page"):
+caixa\view_modules\helpers.py:104:def _fmt_decimal(valor):
+caixa\view_modules\helpers.py:111:def _exportar_csv(filename, cabecalhos, linhas):
+caixa\view_modules\helpers.py:121:def _exportar_pdf_tabela(filename, titulo, cabecalhos, linhas):
+caixa\view_modules\helpers.py:141:    def _nova_pagina():
+caixa\view_modules\helpers.py:170:def _calcular_comparativo_periodo(valor_atual, valor_anterior):
+caixa\view_modules\helpers.py:185:def _atualizar_status_contas_pagar_abertas():
+caixa\view_modules\helpers.py:204:def _redirect_pos_operacao(request, fallback_route):
+caixa\view_modules\helpers.py:210:def _log_financeiro(evento, usuario, conta=None, pagamento=None, valor=None, descricao=""):
+caixa\view_modules\helpers.py:221:def _forma_pagamento_por_codigo(codigo):
+caixa\view_modules\helpers.py:225:def _garantir_formas_pagamento_padrao():
+caixa\view_modules\helpers.py:239:def _garantir_centros_custo_padrao():
+caixa\view_modules\helpers.py:251:def _garantir_categorias_financeiras_padrao():
+caixa\view_modules\helpers.py:276:def _forma_pagamento_padrao():
+caixa\view_modules\helpers.py:280:def _resolver_forma_pagamento_codigo_legacy(codigo):
+caixa\view_modules\helpers.py:293:def _payload_pagamento_normalizado(request):
+caixa\view_modules\helpers.py:302:def _buscar_ordem_por_numero(texto):
+caixa\view_modules\helpers.py:324:def _resumo_movimento_caixa(caixa):
+caixa\view_modules\helpers.py:354:def _resumo_movimento_caixas(caixas_qs):
+caixa\view_modules\helpers.py:374:def _vincular_talao_itens_ordem(ordem, numero_talao, pagamento=None):
+caixa\view_modules\helpers.py:421:def _garantir_conta_os(ordem, ignorar_pagamento_id=None):
+caixa\view_modules\helpers.py:475:def _dados_garantia_ordem(ordem):
+caixa\view_modules\helpers.py:502:def _garantir_conta_garantia(ordem, dados_garantia=None, ignorar_pagamento_id=None):
+caixa\view_modules\helpers.py:562:def _atualizar_status_contas_abertas():
+caixa\view_modules\helpers.py:585:def _valor_garantia_sugerido(ordem):
+caixa\view_modules\helpers.py:600:def _base_comissao(ordem):
+caixa\view_modules\helpers.py:612:def _upsert_auditoria_garantia_ordem(ordem):
+caixa\view_modules\comissoes_support.py:32:def _ordem_tem_pagamento(ordem):
+caixa\view_modules\comissoes_support.py:36:def _ordem_execucao_confirmada(ordem):
+caixa\view_modules\comissoes_support.py:46:def _ordem_qualifica_para_comissao(ordem, regra):
+caixa\view_modules\comissoes_support.py:65:def _gerar_comissao_ordem(ordem, considerar_pecas=False):
+caixa\view_modules\comissoes_support.py:103:def _gerar_comissao_item_orcamento(item, modo_pagamento="fechamento"):
+caixa\view_modules\comissoes_support.py:150:def _competencia_atual():
+caixa\view_modules\comissoes_support.py:155:def _normalizar_competencia(mes_raw, ano_raw, referencia=None):
+caixa\view_modules\comissoes_support.py:172:def _parse_decimal_input(valor_raw, default=Decimal("0.00")):
+caixa\view_modules\comissoes_support.py:182:def _gerar_codigo_lote_pagamento(competencia):
+caixa\view_modules\comissoes_support.py:197:def _recalcular_comissoes_itens_antecipado(queryset):
+caixa\view_modules\comissoes_support.py:205:def _recalcular_comissoes_motor_novo(ordens_qs):
+caixa\view_modules\comissoes_support.py:210:def _normalizar_criterio_desempenho(criterio):
+caixa\view_modules\comissoes_support.py:217:def _rotulo_criterio_desempenho(criterio):
+caixa\view_modules\comissoes_support.py:226:def _data_referencia_ordem(ordem, criterio="servicos_finalizados"):
+caixa\view_modules\comissoes_support.py:248:def _filtrar_comissoes_por_criterio(qs, criterio):
+caixa\view_modules\comissoes_support.py:267:def _ordem_atende_criterio_desempenho(ordem, criterio):
+caixa\view_modules\comissoes_support.py:278:def _referencia_comissao_realizada(comissao):
+caixa\view_modules\comissoes_support.py:287:def _categoria_comissao_realizada(comissao):
+caixa\view_modules\comissoes_support.py:297:def _percentuais_padrao_desempenho(tecnico=None):
+caixa\view_modules\comissoes_support.py:346:def _resumo_vendas_mostrador_por_colaborador(*, colaborador_id=None, data_inicio=None, data_fim=None):
+caixa\view_modules\comissoes_support.py:397:def _resumo_produtividade_por_tecnico(*, tecnico_id=None, data_inicio=None, data_fim=None):
+caixa\view_modules\comissoes_support.py:454:def _periodo_competencia(competencia):
+caixa\view_modules\comissoes_support.py:461:def _valor_metrica_regra(regra, competencia):
+caixa\view_modules\comissoes_support.py:470:def _faixa_para_valor(regra, valor):
+caixa\view_modules\comissoes_support.py:480:def _usuarios_alvo_regra(regra):
+caixa\view_modules\comissoes_support.py:492:def _recalcular_premios_competencia(competencia):
+ordens\utils.py:6:def registrar_linha(ordem, usuario, status=None, descricao="", tipo_evento="manual"):
+ordens\utils.py:17:def _request_ip(request):
+ordens\utils.py:24:def registrar_auditoria(logger, request, acao, ordem=None, extra=None):
+estoque\services_produto.py:6:def preparar_cadastro_produto(produto):
+estoque\services_produto.py:30:def aplicar_custos_base_produto(produto):
+estoque\services_produto.py:49:def aplicar_politica_tipo_item_produto(produto):
+estoque\services_produto.py:82:def aplicar_precificacao_produto(produto):
+estoque\services_produto.py:114:def atualizar_produtos_relacionados_rateio(produto):
+caixa\management\commands\auditar_comissoes.py:18:    def add_arguments(self, parser):
+caixa\management\commands\auditar_comissoes.py:38:    def handle(self, *args, **options):
+caixa\management\commands\auditar_comissoes.py:93:    def _fontes_validas_por_ordem(self, ordem):
+caixa\management\commands\auditar_comissoes.py:109:    def _venda_rapida_valida(self, chave_ref: str):
+caixa\management\commands\auditar_comissoes.py:119:    def _parse_chave_unica(self, chave_unica: str):
+caixa\management\commands\auditar_comissoes.py:126:    def _registrar_issue(self, issues, issues_count, *, kind: str, comissao: Comissao, detalhe: str):
+caixa\management\commands\auditar_comissoes.py:139:    def _auditar_por_status_e_valor(self, comissao, issues, issues_count):
+caixa\management\commands\auditar_comissoes.py:173:    def _auditar_fonte(self, comissao, fontes_cache, issues, issues_count):
+caixa\management\commands\auditar_comissoes.py:232:    def _mapear_assinatura_duplicidade(self, comissao, assinaturas):
+caixa\management\commands\auditar_comissoes.py:241:    def _auditar_duplicidade_assinatura(self, assinaturas, issues, issues_count):
+caixa\view_modules\auditoria.py:34:def dre(request):
+caixa\view_modules\auditoria.py:35:    def _comparativo(atual, anterior):
+caixa\view_modules\auditoria.py:47:    def _comparativo_agrupado(qs_atual, qs_anterior, campo, fallback):
+caixa\view_modules\auditoria.py:208:def fluxo_projetado(request):
+caixa\view_modules\auditoria.py:265:def relatorios(request):
+caixa\view_modules\auditoria.py:266:    def _comparativo_agrupado(qs_atual, qs_anterior, campo, fallback):
+caixa\view_modules\auditoria.py:559:def auditoria_operacional(request):
+caixa\view_modules\auditoria.py:573:    def _redirect_pos_post():
+caixa\view_modules\auditoria.py:699:def garantias_fabricante(request):
+caixa\services\comissao_status.py:19:def _registrar_historico(comissao, *, acao: str, status_anterior: str, status_novo: str, usuario=None, extras=None):
+caixa\services\comissao_status.py:36:def aplicar_acao_comissao(
+caixa\services\garantias.py:4:def upsert_auditoria_garantia_ordem(ordem):
+caixa\view_modules\comissoes.py:31:def comissoes_pagamento(request):
+caixa\view_modules\comissoes.py:38:    def _redirect_pos_post():
+caixa\view_modules\comissoes.py:471:def premios_meta(request):
+caixa\view_modules\common.py:5:def caixa_atual():
+estoque\services.py:11:def saldo_disponivel(produto, ponto_operacional):
+estoque\services.py:25:def recalcular_total_produto(produto):
+estoque\services.py:37:def diagnosticar_inconsistencias_estoque(apenas_ativos=True):
+estoque\services.py:81:def reconciliar_totais_produto(apenas_ativos=True):
+estoque\services.py:98:def ajustar_saldo(produto, ponto_operacional, delta, allow_negative=False):
+estoque\services.py:129:def expirar_reservas_vencidas(usuario=None):
+estoque\services.py:143:def limpar_pre_reservas_antigas(*, dias=1):
+estoque\services.py:160:def converter_reserva(reserva, usuario=None, motivo="Conversao de reserva"):
+estoque\services.py:185:def cancelar_reserva(reserva, usuario=None, motivo="Cancelada manualmente"):
+estoque\services.py:207:def consumir_reservas_ordem(ordem, usuario=None):
+estoque\services.py:223:def devolver_reservas_ordem(ordem, usuario=None):
+estoque\services.py:240:def consumir_itens_estoque_ordem(ordem, usuario=None):
+estoque\services.py:267:def devolver_itens_estoque_ordem(ordem, usuario=None):
+estoque\forms.py:152:    def __init__(self, *args, **kwargs):
+estoque\forms.py:208:    def clean_nome(self):
+estoque\forms.py:219:    def clean_ean(self):
+estoque\forms.py:227:    def clean_data_entrada(self):
+estoque\forms.py:233:    def clean(self):
+estoque\forms.py:343:    def clean_competencia(self):
+estoque\forms.py:363:    def clean(self):
+estoque\forms.py:392:    def __init__(self, *args, **kwargs):
+estoque\forms.py:448:    def __init__(self, *args, **kwargs):
+estoque\forms.py:466:    def __init__(self, *args, **kwargs):
+caixa\services\comissoes.py:19:def _texto_preenchido(value) -> bool:
+caixa\services\comissoes.py:23:def _normalizar_tipo_item(item: ItemOrcamento) -> str:
+caixa\services\comissoes.py:30:def _ordem_qualifica_finalizacao(ordem) -> bool:
+caixa\services\comissoes.py:34:def _ordem_qualifica_comissao_servico(ordem) -> bool:
+caixa\services\comissoes.py:38:def _servico_comissionavel_em_ordem(ordem, fonte) -> bool:
+caixa\services\comissoes.py:45:def _percentual_servico_tecnico(tecnico) -> Decimal:
+caixa\services\comissoes.py:63:def _percentual_peca_tecnico(tecnico) -> Decimal:
+caixa\services\comissoes.py:81:def _percentual_vendas_colaborador(colaborador) -> Decimal:
+caixa\services\comissoes.py:89:def _regra_comissao_ativa(tecnico):
+caixa\services\comissoes.py:99:def _produto_do_item(item: ItemOrcamento):
+caixa\services\comissoes.py:104:def _produto_por_ean_ou_nome(*, ean: str = "", nome: str = ""):
+caixa\services\comissoes.py:115:def _criar_comissao_idempotente(*, chave_unica: str, defaults: dict) -> bool:
+caixa\services\comissoes.py:156:def _colaborador_por_numero_vendedor(numero_vendedor: str):
+caixa\services\comissoes.py:168:def _normalizar_tipos_filtro(tipos=None):
+caixa\services\comissoes.py:176:def _competencia_do_dia(data_ref=None):
+caixa\services\comissoes.py:183:def _extrair_fonte_da_chave(chave_unica: str):
+caixa\services\comissoes.py:190:def _comissao_duplicada_por_assinatura(chave_unica: str, defaults: dict):
+caixa\services\comissoes.py:215:def _fontes_comissionaveis(ordem):
+caixa\services\comissoes.py:281:def _base_comissao_fonte(fonte) -> Decimal:
+caixa\services\comissoes.py:287:def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO", tipos=None) -> int:
+caixa\services\comissoes.py:369:def recalcular_comissoes_servico_finalizado(ordens=None, evento: str = "SERVICO_FINALIZADO", tipos=None) -> dict:
+caixa\services\comissoes.py:383:def _data_pronto(ordem):
+caixa\services\comissoes.py:398:def _faixas_bonus_retirada(config: ConfiguracaoSistema):
+caixa\services\comissoes.py:408:def processar_evento_retirada_cliente(ordem, evento: str = "RETIRADA_CLIENTE", data_retirada=None) -> int:
+caixa\services\comissoes.py:449:def processar_evento_venda_mostrador(venda: VendaRapidaEstoque, evento: str = "VENDA_MOSTRADOR") -> int:
+caixa\services\comissoes.py:517:def _cancelar_queryset(queryset, motivo: str, evento: str) -> int:
+caixa\services\comissoes.py:530:def cancelar_comissoes_por_item(item, motivo: str = "", evento: str = "CANCELAMENTO_ITEM") -> int:
+caixa\services\comissoes.py:535:def cancelar_comissoes_por_ordem(ordem, motivo: str = "", evento: str = "CANCELAMENTO_OS") -> int:
+caixa\services\comissoes.py:540:def cancelar_comissoes_por_servico_peca(servico_peca_id, motivo: str = "", evento: str = "CANCELAMENTO_ITEM") -> int:
+caixa\view_modules\comissoes_views.py:10:def comissoes_pendencias(request):
+caixa\view_modules\comissoes_views.py:134:def comissoes_tecnicos(request):
+caixa\view_modules\comissoes_views.py:137:    def _ordens_por_intervalo(data_inicio, data_fim):
+caixa\view_modules\comissoes_views.py:153:    def _redirect_comissoes_pos_post():
+caixa\view_modules\comissoes_views.py:455:def premios_meta(request):
+caixa\view_modules\comissoes_views.py:494:def meu_desempenho(request):
+caixa\view_modules\comissoes_views.py:737:    def _obter_folha_colaborador(tecnico):
+caixa\view_modules\comissoes_views.py:752:    def _adicionar_linha_colaborador(tecnico, secao, linha):
+ordens\apps.py:8:    def ready(self):
+ordens\admin.py:41:    def has_add_permission(self, request):
+ordens\admin.py:44:    def has_change_permission(self, request, obj=None):
+ordens\admin.py:47:    def has_delete_permission(self, request, obj=None):
+ordens\admin.py:58:    def has_module_permission(self, request):
+ordens\admin.py:61:    def has_view_permission(self, request, obj=None):
+ordens\admin.py:64:    def has_add_permission(self, request):
+ordens\admin.py:67:    def has_change_permission(self, request, obj=None):
+ordens\admin.py:70:    def has_delete_permission(self, request, obj=None):
+estoque\models.py:26:    def __str__(self):
+estoque\models.py:44:    def __str__(self):
+estoque\models.py:63:    def __str__(self):
+estoque\models.py:74:    def __str__(self):
+estoque\models.py:186:    def _gerar_codigo_ean(self):
+estoque\models.py:201:    def _gerar_sku(self):
+estoque\models.py:213:    def _aliquota_percentual(self):
+estoque\models.py:235:    def _competencia_rateio_atual(self):
+estoque\models.py:239:    def custo_operacional_sem_rateio(self):
+estoque\models.py:251:    def preco_referencia_rateio(self):
+estoque\models.py:260:    def lucro_unitario_referencia_rateio(self):
+estoque\models.py:266:    def base_rateio_custo_fixo(self, criterio=None, previsao_override=None, incluir_override=None):
+estoque\models.py:280:    def calcular_rateio_custo_fixo_unitario(
+estoque\models.py:334:    def save(self, *args, **kwargs):
+estoque\models.py:345:    def __str__(self):
+estoque\models.py:349:    def custo_total(self):
+estoque\models.py:353:    def lucro_estimado(self):
+estoque\models.py:357:    def margem_real_percentual(self):
+estoque\models.py:363:    def valor_recebido_cartao(self):
+estoque\models.py:368:    def lucro_cartao(self):
+estoque\models.py:372:    def venda_abaixo_margem_minima(self):
+estoque\models.py:376:    def valor_impostos(self):
+estoque\models.py:381:    def preco_sugerido_sem_margem(self):
+estoque\models.py:385:    def lucro_reais(self):
+estoque\models.py:389:    def lucro_percentual(self):
+estoque\models.py:413:    def __str__(self):
+estoque\models.py:417:    def get_solo(cls):
+estoque\models.py:421:    def save(self, *args, **kwargs):
+estoque\models.py:452:    def __str__(self):
+estoque\models.py:456:    def _intervalo_competencia(competencia):
+estoque\models.py:462:    def _realizado_por_produto(cls, competencia):
+estoque\models.py:507:    def gerar_snapshot(cls, *, competencia, usuario=None, observacao="", sobrescrever=False):
+estoque\models.py:616:    def __str__(self):
+estoque\models.py:633:    def __str__(self):
+estoque\models.py:656:    def __str__(self):
+estoque\models.py:669:    def __str__(self):
+estoque\models.py:682:    def clean(self):
+estoque\models.py:686:    def __str__(self):
+estoque\models.py:699:    def clean(self):
+estoque\models.py:703:    def __str__(self):
+estoque\models.py:746:    def __str__(self):
+estoque\models.py:759:    def __str__(self):
+estoque\models.py:787:    def __str__(self):
+estoque\models.py:837:    def __str__(self):
+estoque\models.py:858:    def __str__(self):
+estoque\models.py:875:    def __str__(self):
+ordens\models.py:138:    def __str__(self):
+ordens\models.py:142:    def status_listagem_codigo(self):
+ordens\models.py:151:    def status_listagem_label(self):
+ordens\models.py:160:    def tecnico_responsavel_valido(self):
+ordens\models.py:167:    def atendente_abertura(self):
+ordens\models.py:176:    def get_tipo_equipamento_display(self):
+ordens\models.py:193:    def get_absolute_url(self):
+ordens\models.py:197:    def save(self, *args, **kwargs):
+ordens\models.py:211:    def gerar_codigo_portal(cls):
+ordens\models.py:242:    def atualizar_status_fechamento(self, fechar=True, usuario=None):
+ordens\models.py:276:    def status_validos(cls):
+ordens\models.py:280:    def normalizar_status_os(cls, status):
+ordens\models.py:283:    def pode_transicionar_para(self, novo_status):
+ordens\models.py:288:    def transicionar_status(self, novo_status, usuario=None, motivo=""):
+ordens\models.py:327:    def aplicar_status_sem_historico(self, novo_status):
+ordens\models.py:352:    def receita_total_financeira(self):
+ordens\models.py:355:    def custo_pecas_financeiro(self):
+ordens\models.py:367:    def total_comissoes_financeiro(self):
+ordens\models.py:394:    def lucro_bruto_financeiro(self):
+ordens\models.py:397:    def lucro_liquido_financeiro(self):
+ordens\models.py:437:    def __str__(self):
+ordens\models.py:441:    def save(self, *args, **kwargs):
+ordens\models.py:488:    def total(self):
+ordens\models.py:491:    def __str__(self):
+ordens\models.py:494:    def adicionar_numero_talao(self, numero_talao):
+ordens\models.py:544:    def __str__(self):
+ordens\models.py:581:    def __str__(self):
+ordens\models.py:621:    def save(self, *args, **kwargs):
+ordens\models.py:628:    def __str__(self):
+ordens\models.py:652:    def __str__(self):
+ordens\models.py:684:    def __str__(self):
+ordens\models.py:700:    def __str__(self):
+ordens\models.py:724:    def __str__(self):
+ordens\models.py:756:    def __str__(self):
+ordens\models.py:778:    def eh_imagem(self):
+ordens\models.py:782:    def __str__(self):
+ordens\forms.py:29:    def __init__(self, *args, **kwargs):
+ordens\forms.py:60:    def clean(self):
+ordens\forms.py:153:    def __init__(self, *args, **kwargs):
+ordens\forms.py:179:    def __init__(self, *args, **kwargs):
+ordens\forms.py:187:    def clean(self):
+ordens\templatetags\ordens_extras.py:8:def decode_escaped_newlines(value):
+estoque\management\commands\auditar_estoque.py:9:    def add_arguments(self, parser):
+estoque\management\commands\auditar_estoque.py:26:    def handle(self, *args, **options):
+estoque\management\commands\gerar_inventario_ciclico.py:13:    def add_arguments(self, parser):
+estoque\management\commands\gerar_inventario_ciclico.py:16:    def handle(self, *args, **options):
+ordens\signals.py:12:def ordem_pre_save_snapshot(sender, instance, **kwargs):
+ordens\signals.py:23:def ordem_post_save_log(sender, instance, created, **kwargs):
+estoque\management\commands\limpar_pre_reservas_antigas.py:13:    def add_arguments(self, parser):
+estoque\management\commands\limpar_pre_reservas_antigas.py:26:    def handle(self, *args, **options):
+ordens\management\commands\gerar_dados_teste_os.py:26:    def add_arguments(self, parser):
+ordens\management\commands\gerar_dados_teste_os.py:57:    def handle(self, *args, **options):
+ordens\management\commands\gerar_dados_teste_os.py:96:    def _obter_ou_criar_tecnico(self, *, username_tecnico: str, senha: str) -> User:
+ordens\management\commands\gerar_dados_teste_os.py:113:    def _criar_cliente_teste(self, *, prefixo: str) -> Cliente:
+ordens\management\commands\gerar_dados_teste_os.py:121:    def _gerar_ordens(self, *, cliente: Cliente, tecnico: User, quantidade: int) -> dict:
+ordens\management\commands\gerar_dados_teste_os.py:165:    def _dias_abertura_para_status(*, status: str, indice: int) -> int:
+ordens\services\anexos.py:18:def eh_arquivo_imagem(nome):
+ordens\services\anexos.py:22:def validar_upload_anexo(arquivo):
+ordens\services\anexos.py:40:def preparar_arquivo_anexo(arquivo):
+ordens\services\anexos.py:47:def otimizar_imagem_anexo(arquivo):
+ordens\services\numeracao.py:7:def gerar_codigo_portal_disponivel(ordem_model):
+ordens\services\numeracao.py:14:def gerar_numero_ordem_servico(*, configuracao_model, sequencia_model):
+ordens\services\confirmacao_service.py:9:    def registrar_log(ordem, tipo_evento, descricao, usuario=None):
+ordens\services\confirmacao_service.py:19:    def confirmar_por_link(cls, ordem, ip_origem=""):
+ordens\services\confirmacao_service.py:40:    def confirmar_presencial_ou_impresso(cls, ordem, usuario, tipo_confirmacao="impresso", assinatura_imagem=None):
+ordens\services\confirmacao_service.py:72:    def campos_criticos_bloqueados(ordem):
+ordens\services\log_os_service.py:6:    def registrar(ordem, tipo_evento, descricao, usuario=None, dados_extras=None):
+ordens\services\__init__.py:4:def __getattr__(name):
+ordens\services\os_policy_service.py:29:    def ensure_can_edit(cls, ordem, form_type, usuario=None):

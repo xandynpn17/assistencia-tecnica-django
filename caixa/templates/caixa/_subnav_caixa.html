@@ -1,7 +1,10 @@
 <div class="card mb-3 shadow-sm border-0">
   <div class="card-body py-2 d-flex flex-wrap" style="gap: 8px;">
     <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm {% if menu_sub == 'dashboard_caixa' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-      Dashboard
+      Operação
+    </a>
+    <a href="{% url 'caixa:dashboard_financeiro' %}" class="btn btn-sm {% if menu_sub == 'dashboard_financeiro' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+      Financeiro
     </a>
     <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-sm {% if menu_sub == 'registrar_pagamento' %}btn-primary{% else %}btn-outline-primary{% endif %}">
       Pagamentos
@@ -18,7 +21,10 @@
       Contas a pagar
     </a>
     <a href="{% url 'caixa:aging_receber' %}" class="btn btn-sm {% if menu_sub == 'aging_receber' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Aging
+      Aging receber
+    </a>
+    <a href="{% url 'caixa:aging_pagar' %}" class="btn btn-sm {% if menu_sub == 'aging_pagar' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      Aging pagar
     </a>
 
     <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-sm {% if menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_pendencias' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'meu_desempenho' %}btn-info{% else %}btn-outline-info{% endif %}">

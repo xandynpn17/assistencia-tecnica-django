@@ -1,48 +1,79 @@
 {% extends "core/base.html" %}
 
-{% block header %}<h1 class="m-0 text-dark">Movimentações de Estoque</h1>{% endblock %}
+{% block header %}<h1 class="m-0 text-dark">Movimentacoes de Estoque</h1>{% endblock %}
 
 {% block extra_css %}
 <style>
   .filters-panel { border: 1px solid #e8edf3; border-radius: 12px; background: linear-gradient(180deg, #fafcff 0%, #f4f8fb 100%); padding: 18px; }
   .filters-title { font-weight: 700; color: #1f2937; margin-bottom: 4px; }
   .filters-help { color: #667085; font-size: .92rem; }
+  .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
   .summary-box { border: 1px solid #e5ebf2; border-radius: 12px; background: #fff; padding: 14px; height: 100%; }
-  .summary-box .value { font-size: 1.6rem; font-weight: 700; color: #111827; }
+  .summary-box .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 4px; }
+  .summary-box .value { font-size: 1.45rem; font-weight: 700; color: #111827; }
   .summary-chip { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #eef4f8; color: #243447; font-size: 12px; font-weight: 600; margin-right: 8px; margin-bottom: 8px; }
+  .quick-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .table thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; border-top: none; }
   .table-hover tbody tr:hover { background: #f8fbff; }
   .tipo-badge { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; background: #f1f5f9; font-size: 12px; font-weight: 700; color: #334155; }
+  @media (max-width: 991.98px) {
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 575.98px) {
+    .summary-grid { grid-template-columns: 1fr; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
-    <span>Histórico de movimentações</span>
-    <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm">Nova movimentação</a>
+    <span>Historico de movimentacoes</span>
+    <div class="d-flex">
+      <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm mr-2">Nova movimentacao</a>
+      <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&quick={{ quick }}&export=csv" class="btn btn-outline-secondary btn-sm">Exportar CSV</a>
+    </div>
   </div>
 
   <div class="card-body border-bottom">
     <div class="filters-panel">
-      <div class="row mb-3">
-        <div class="col-lg-8">
-          <div class="filters-title">Filtros de movimentação</div>
-          <div class="filters-help">
-            Use os filtros para limitar por tipo e ponto operacional. Isso facilita a auditoria e evita leitura excessiva de histórico.
-          </div>
+      <div class="filters-title">Filtros de movimentacao</div>
+      <div class="filters-help mb-3">
+        Combine busca, periodo, tipo e ponto operacional para localizar ajustes, transferencias e consumos com mais rapidez.
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-box">
+          <div class="label">Resultado</div>
+          <div class="value">{{ resumo.total }}</div>
         </div>
-        <div class="col-lg-4">
-          <div class="summary-box">
-            <div class="small text-muted text-uppercase mb-1">Resultado</div>
-            <div class="value">{{ movimentacoes|length }}</div>
-            <div class="small text-muted">movimentação(ões) nesta página</div>
-          </div>
+        <div class="summary-box">
+          <div class="label">Entradas</div>
+          <div class="value">{{ resumo.entradas }}</div>
+        </div>
+        <div class="summary-box">
+          <div class="label">Transferencias</div>
+          <div class="value">{{ resumo.transferencias }}</div>
+        </div>
+        <div class="summary-box">
+          <div class="label">Saidas</div>
+          <div class="value">{{ resumo.saidas }}</div>
         </div>
       </div>
 
+      <div class="quick-filters">
+        <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&quick=" class="btn btn-sm {% if not quick %}btn-primary{% else %}btn-outline-primary{% endif %}">Periodo livre</a>
+        <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&quick=hoje" class="btn btn-sm {% if quick == 'hoje' %}btn-info{% else %}btn-outline-info{% endif %}">Hoje</a>
+        <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&quick=7_dias" class="btn btn-sm {% if quick == '7_dias' %}btn-info{% else %}btn-outline-info{% endif %}">7 dias</a>
+        <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&quick=30_dias" class="btn btn-sm {% if quick == '30_dias' %}btn-info{% else %}btn-outline-info{% endif %}">30 dias</a>
+      </div>
+
       <form method="get" class="form-row align-items-end">
-        <div class="col-lg-4 col-md-6 mb-2">
+        <div class="col-lg-3 col-md-6 mb-2">
+          <label>Busca</label>
+          <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Produto, SKU, EAN, observacao ou usuario">
+        </div>
+        <div class="col-lg-2 col-md-6 mb-2">
           <label>Tipo</label>
           <select name="tipo" class="form-control">
             <option value="">Todos</option>
@@ -51,7 +82,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-lg-4 col-md-6 mb-2">
+        <div class="col-lg-2 col-md-6 mb-2">
           <label>Ponto operacional</label>
           <select name="ponto" class="form-control">
             <option value="">Todos</option>
@@ -61,21 +92,25 @@
           </select>
         </div>
         <div class="col-lg-2 col-md-6 mb-2">
-          <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+          <label>Data inicio</label>
+          <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
         </div>
         <div class="col-lg-2 col-md-6 mb-2">
-          <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-outline-secondary btn-block">Limpar</a>
+          <label>Data fim</label>
+          <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
+        </div>
+        <div class="col-lg-1 col-md-6 mb-2">
+          <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
         </div>
       </form>
 
-      {% if tipo_filtro or ponto_filtro %}
+      {% if tipo_filtro or ponto_filtro or q or data_inicio or data_fim %}
       <div class="mt-3">
-        {% if tipo_filtro %}
-        <span class="summary-chip">Tipo<strong class="ml-1">{{ tipo_filtro }}</strong></span>
-        {% endif %}
-        {% if ponto_filtro %}
-        <span class="summary-chip">Ponto<strong class="ml-1">{{ ponto_filtro }}</strong></span>
-        {% endif %}
+        {% if q %}<span class="summary-chip">Busca <strong class="ml-1">{{ q }}</strong></span>{% endif %}
+        {% if tipo_filtro %}<span class="summary-chip">Tipo <strong class="ml-1">{{ tipo_filtro }}</strong></span>{% endif %}
+        {% if ponto_filtro %}<span class="summary-chip">Ponto <strong class="ml-1">{{ ponto_filtro }}</strong></span>{% endif %}
+        {% if data_inicio %}<span class="summary-chip">Inicio <strong class="ml-1">{{ data_inicio }}</strong></span>{% endif %}
+        {% if data_fim %}<span class="summary-chip">Fim <strong class="ml-1">{{ data_fim }}</strong></span>{% endif %}
       </div>
       {% endif %}
     </div>
@@ -91,15 +126,18 @@
           <th>Qtd</th>
           <th>Origem</th>
           <th>Destino</th>
-          <th>Observação</th>
-          <th>Usuário</th>
+          <th>Observacao</th>
+          <th>Usuario</th>
         </tr>
       </thead>
       <tbody>
       {% for m in movimentacoes %}
       <tr>
         <td class="pl-4">{{ m.criado_em|date:"d/m/Y H:i" }}</td>
-        <td>{{ m.produto.nome }}</td>
+        <td>
+          <div class="font-weight-bold">{{ m.produto.nome }}</div>
+          <small class="text-muted">SKU {{ m.produto.sku|default:"-" }} | EAN {{ m.produto.ean|default:"-" }}</small>
+        </td>
         <td><span class="tipo-badge">{{ m.get_tipo_display }}</span></td>
         <td>{{ m.quantidade }}</td>
         <td>{{ m.origem|default:"-" }}</td>
@@ -109,7 +147,7 @@
       </tr>
       {% empty %}
       <tr>
-        <td colspan="8" class="text-center text-muted py-4">Sem movimentações para os filtros informados.</td>
+        <td colspan="8" class="text-center text-muted py-4">Sem movimentacoes para os filtros informados.</td>
       </tr>
       {% endfor %}
       </tbody>
@@ -118,17 +156,17 @@
 
   {% if movimentacoes_page and movimentacoes_page.paginator.num_pages > 1 %}
   <div class="card-footer d-flex justify-content-between align-items-center">
-    <small class="text-muted">Página {{ movimentacoes_page.number }} de {{ movimentacoes_page.paginator.num_pages }}</small>
+    <small class="text-muted">Pagina {{ movimentacoes_page.number }} de {{ movimentacoes_page.paginator.num_pages }}</small>
     <div class="btn-group">
       {% if movimentacoes_page.has_previous %}
-      <a class="btn btn-sm btn-outline-secondary" href="?tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&page={{ movimentacoes_page.previous_page_number }}">Anterior</a>
+      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&quick={{ quick }}&page={{ movimentacoes_page.previous_page_number }}">Anterior</a>
       {% else %}
       <button class="btn btn-sm btn-outline-secondary" disabled>Anterior</button>
       {% endif %}
       {% if movimentacoes_page.has_next %}
-      <a class="btn btn-sm btn-outline-secondary" href="?tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&page={{ movimentacoes_page.next_page_number }}">Próxima</a>
+      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&quick={{ quick }}&page={{ movimentacoes_page.next_page_number }}">Proxima</a>
       {% else %}
-      <button class="btn btn-sm btn-outline-secondary" disabled>Próxima</button>
+      <button class="btn btn-sm btn-outline-secondary" disabled>Proxima</button>
       {% endif %}
     </div>
   </div>

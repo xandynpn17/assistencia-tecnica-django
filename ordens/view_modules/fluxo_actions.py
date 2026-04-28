@@ -208,7 +208,7 @@ def dashboard_pedidos_compra(request):
             criado_em__lt=timezone.now() - timedelta(days=7)
         )
     elif quick_filter == "os_prontas":
-        pedidos_base = pedidos_base.filter(ordem__status__in=["pronto_contactar", "pronto_contactado"])
+        pedidos_base = pedidos_base.filter(ordem__status="pronto_contactado")
 
     pedidos = pedidos_base
     if status_filtro:
@@ -257,9 +257,7 @@ def dashboard_pedidos_compra(request):
         {
             "codigo": "os_prontas",
             "rotulo": "OS prontas",
-            "total": pedidos_scope.filter(
-                ordem__status__in=["pronto_contactar", "pronto_contactado"]
-            ).count(),
+            "total": pedidos_scope.filter(ordem__status="pronto_contactado").count(),
             "ativo": quick_filter == "os_prontas",
         },
     ]
@@ -286,9 +284,7 @@ def dashboard_pedidos_compra(request):
         "pedidos_atrasados_total": pedidos_base.exclude(status="fechado").filter(
             criado_em__lt=timezone.now() - timedelta(days=7)
         ).count(),
-        "pedidos_prontos_total": pedidos_base.filter(
-            ordem__status__in=["pronto_contactar", "pronto_contactado"]
-        ).count(),
+        "pedidos_prontos_total": pedidos_base.filter(ordem__status="pronto_contactado").count(),
         "menu_app": "ordens",
         "menu_sub": "dashboard_pedidos",
     }

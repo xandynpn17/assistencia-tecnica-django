@@ -1,20 +1,20 @@
 {% extends "core/base.html" %}
 
-{% block title %}Modelos de Mensagens{% endblock %}
+{% block title %}Modelos Manuais de Mensagem{% endblock %}
 
 {% block content %}
 <div class="row">
   <div class="col-md-5">
     <div class="card">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">{% if edit_modelo_id %}Editar Modelo{% else %}Novo Modelo{% endif %}</h5>
+        <h5 class="mb-0">{% if edit_modelo_id %}Editar Modelo Manual{% else %}Novo Modelo Manual{% endif %}</h5>
       </div>
       <div class="card-body">
         <form method="post">
           {% csrf_token %}
           {% if edit_modelo_id %}<input type="hidden" name="modelo_id" value="{{ edit_modelo_id }}">{% endif %}
           <div class="form-group">
-            <label>Nome do modelo</label>
+            <label>Nome do modelo manual</label>
             {{ form.nome }}
           </div>
           <div class="form-group">
@@ -28,7 +28,7 @@
           <div class="form-group">
             <label>Corpo da mensagem</label>
             {{ form.corpo }}
-            <small class="text-muted">Variáveis: {nome_cliente}, {numero_os}, {equipamento}, {modelo}, {defeito}, {valor_orcamento}, {prazo_reparo}, {prazo_diagnostico}, {valor_final}, {garantia}, {endereco_loja}, {horario_funcionamento}, {dias_parado}, {data_limite}</small>
+            <small class="text-muted">Use esta biblioteca para mensagens manuais do atendente. Variáveis: {nome_cliente}, {saudacao_cliente}, {numero_os}, {equipamento}, {equipamento_resumo}, {modelo}, {defeito}, {valor_orcamento}, {prazo_reparo}, {prazo_diagnostico}, {valor_final}, {garantia}, {endereco_loja}, {horario_funcionamento}, {dias_parado}, {data_limite}, {itens_orcamento}, {itens_orcamento_resumidos}, {quantidade_itens_orcamento}, {status_os}, {empresa_nome}, {telefone_loja}, {email_loja}, {link_orcamento_pdf}, {link_ordem_pdf}</small>
           </div>
           <div class="form-group form-check">
             {{ form.ativo }}
@@ -46,7 +46,7 @@
   <div class="col-md-7">
     <div class="card">
       <div class="card-header bg-light">
-        <h5 class="mb-0">Modelos Cadastrados</h5>
+        <h5 class="mb-0">Modelos Manuais Cadastrados</h5>
       </div>
       <div class="card-body p-0">
         <table class="table table-sm table-hover mb-0">

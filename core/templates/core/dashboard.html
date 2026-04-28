@@ -19,9 +19,17 @@
 .stat-card-info { border-left: 4px solid #1a73e8; background: linear-gradient(135deg, #3498db, #2980b9); color: #fff; }
 .stat-card-secondary { border-left: 4px solid #5a6268; background: linear-gradient(135deg, #6c757d, #5a6268); color: #fff; }
 .stat-card-light { border-left: 4px solid #3a7bd5; background: #fff; color: #2c3e50; }
-.stat-card-content { padding: 18px; position: relative; }
+.stat-card-content {
+    padding: 18px;
+    position: relative;
+    min-height: 108px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
 .stat-card-number { font-size: 28px; font-weight: 700; line-height: 1.1; margin-bottom: 4px; }
 .stat-card-title { font-size: 13px; font-weight: 600; opacity: 0.95; }
+.stat-card-subtitle { font-size: 11px; opacity: 0.85; margin-top: 4px; }
 .stat-card-icon { position: absolute; top: 14px; right: 14px; font-size: 30px; opacity: 0.2; }
 .stat-card-link { display: block; color: inherit; text-decoration: none; }
 .stat-card-link:hover { color: inherit; text-decoration: none; }
@@ -88,18 +96,13 @@
 <div class="row mb-3">
     <div class="col-12">
         <h1 class="page-title">Dashboard</h1>
-        {% if is_operational %}
-            <p class="page-subtitle">Operação diária da assistência técnica</p>
-        {% else %}
-            <p class="page-subtitle">Painel gerencial do negócio</p>
-        {% endif %}
+        <p class="page-subtitle">Operação diária da assistência técnica</p>
     </div>
 </div>
 {% endblock %}
 
 {% block content %}
 <div class="dashboard-wrap">
-{% if is_operational %}
     <div class="card-modern section-space">
         <div class="card-modern-header">Teclas Rápidas</div>
         <div class="card-modern-body">
@@ -122,7 +125,7 @@
 
     <div class="row section-space">
         <div class="col-md-6 col-lg-3 mb-3"><a href="{{ dashboard_links.abertas }}" class="stat-card-link"><div class="stat-card stat-card-secondary"><div class="stat-card-content"><div class="stat-card-number">{{ total_ordens_abertas }}</div><div class="stat-card-title">Ordens Abertas</div><div class="stat-card-icon"><i class="fas fa-hourglass-start"></i></div></div></div></a></div>
-        <div class="col-md-6 col-lg-3 mb-3"><a href="{{ dashboard_links.fechadas }}" class="stat-card-link"><div class="stat-card stat-card-info"><div class="stat-card-content"><div class="stat-card-number">{{ total_ordens_finalizadas }}</div><div class="stat-card-title">Ordens Concluídas</div><div class="stat-card-icon"><i class="fas fa-check-circle"></i></div></div></div></a></div>
+        <div class="col-md-6 col-lg-3 mb-3"><a href="{{ dashboard_links.fechadas }}" class="stat-card-link"><div class="stat-card stat-card-info"><div class="stat-card-content"><div class="stat-card-number">{{ ordens_finalizadas_mes }}</div><div class="stat-card-title">Concluídas no mês</div><div class="stat-card-subtitle">Acumulado: {{ total_ordens_finalizadas }}</div><div class="stat-card-icon"><i class="fas fa-check-circle"></i></div></div></div></a></div>
         <div class="col-md-6 col-lg-3 mb-3"><div class="stat-card stat-card-primary"><div class="stat-card-content"><div class="stat-card-number">{{ total_ordens }}</div><div class="stat-card-title">Total de Ordens</div><div class="stat-card-icon"><i class="fas fa-tools"></i></div></div></div></div>
         <div class="col-md-6 col-lg-3 mb-3"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ total_clientes }}</div><div class="stat-card-title">Total de Clientes</div><div class="stat-card-icon"><i class="fas fa-users text-primary"></i></div></div></div></div>
     </div>
@@ -152,59 +155,23 @@
             </div>
         </div>
     </div>
-{% else %}
-    <div class="card-modern section-space">
-        <div class="card-modern-header">Teclas Rápidas</div>
-        <div class="card-modern-body">
-            <div class="row quick-grid">
-                <div class="col-md-6 col-lg-3 mb-2">
-                    <a href="{% url 'ordens:verificar_cliente_os' %}" class="quick-btn quick-primary"><i class="fas fa-plus-circle mr-2"></i>Abrir Nova Ordem</a>
-                </div>
-                <div class="col-md-6 col-lg-3 mb-2">
-                    <a href="{{ dashboard_links.abertas }}" class="quick-btn quick-secondary"><i class="fas fa-list mr-2"></i>Listar Ordens</a>
-                </div>
-                <div class="col-md-6 col-lg-3 mb-2">
-                    <a href="{% url 'caixa:dashboard_caixa' %}" class="quick-btn quick-info"><i class="fas fa-cash-register mr-2"></i>Dashboard Caixa</a>
-                </div>
-                <div class="col-md-6 col-lg-3 mb-2">
-                    <a href="{% url 'estoque:consulta_artigos' %}" class="quick-btn quick-primary"><i class="fas fa-search mr-2"></i>Consulta de Artigos</a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row section-space">
-        <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.abertas }}" class="stat-card-link"><div class="stat-card stat-card-secondary"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.abertas_total }}</div><div class="stat-card-title">Ordens Abertas</div><div class="stat-card-icon"><i class="fas fa-hourglass-start"></i></div></div></div></a></div>
-        <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.fechadas }}" class="stat-card-link"><div class="stat-card stat-card-info"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.fechadas_total }}</div><div class="stat-card-title">Ordens Concluídas</div><div class="stat-card-icon"><i class="fas fa-check-circle"></i></div></div></div></a></div>
-        <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.sem_tecnico }}" class="stat-card-link"><div class="stat-card stat-card-primary"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.sem_tecnico }}</div><div class="stat-card-title">Abertas sem Técnico</div><div class="stat-card-icon"><i class="fas fa-user-slash"></i></div></div></div></a></div>
-        <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.prontas }}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.prontas }}</div><div class="stat-card-title">Prontas para Entrega</div><div class="stat-card-icon"><i class="fas fa-hand-holding text-primary"></i></div></div></div></a></div>
-        <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.criticas }}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.criticas }}</div><div class="stat-card-title">Pendências Críticas</div><div class="stat-card-icon"><i class="fas fa-exclamation-triangle text-primary"></i></div></div></div></a></div>
-        <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.paradas }}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.paradas }}</div><div class="stat-card-title">Paradas há 15+ dias</div><div class="stat-card-icon"><i class="fas fa-clock text-primary"></i></div></div></div></a></div>
-    </div>
-
-    <div class="card-modern section-space">
-        <div class="card-modern-header">Ordens por Status (Abertas)</div>
-        <div class="card-modern-body">
-            <div class="row">
-                {% for card in status_cards %}
-                    {% if card.total > 0 %}
-                        <div class="col-md-6 col-lg-4 mb-2">
-                            <a href="{{ card.url }}" class="text-decoration-none">
-                                <div class="status-line mb-0"><strong>{{ card.label }}</strong><span class="badge bg-secondary rounded-pill">{{ card.total }}</span></div>
-                            </a>
-                        </div>
-                    {% endif %}
-                {% endfor %}
-            </div>
-        </div>
-    </div>
 
     <div class="card-modern section-space">
         <div class="card-modern-header">Últimas 5 Ordens Abertas</div>
         <div class="card-modern-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
-                    <thead><tr><th>OS</th><th>Cliente</th><th>Status</th><th>Atendente</th><th>Técnico responsável</th><th>Abertura</th><th class="text-right pr-3">Ações</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>OS</th>
+                            <th>Cliente</th>
+                            <th>Status</th>
+                            <th>Atendente</th>
+                            <th>Técnico responsável</th>
+                            <th>Abertura</th>
+                            <th class="text-right pr-3">Ações</th>
+                        </tr>
+                    </thead>
                     <tbody>
                     {% for ordem in ordens_recentes %}
                         <tr>
@@ -224,6 +191,5 @@
             </div>
         </div>
     </div>
-{% endif %}
 </div>
 {% endblock %}

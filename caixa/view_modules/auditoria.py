@@ -1,6 +1,7 @@
 from calendar import monthrange
 from datetime import date, timedelta
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.db.models import Count, Prefetch, Q, Sum
@@ -12,7 +13,7 @@ from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, role_required
 from ordens.models import LinhaTrabalho, OrdemServico
 
 from ..forms import DespesaRecorrenteForm
-from ..models import AuditoriaGarantia, Caixa, CentroCusto, ContaReceber, DespesaRecorrente, FormaPagamento, LancamentoCaixa, Pagamento, RecebimentoConta
+from ..models import AuditoriaFinanceira, AuditoriaGarantia, Caixa, CategoriaFinanceira, CentroCusto, ContaReceber, DespesaRecorrente, FormaPagamento, LancamentoCaixa, Pagamento, RecebimentoConta
 from .common import caixa_atual
 from .helpers import (
     _atualizar_status_contas_abertas,
@@ -31,6 +32,48 @@ from .helpers import (
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def dre(request):
+    def _comparativo(atual, anterior):
+        variacao = (atual or Decimal("0.00")) - (anterior or Decimal("0.00"))
+        percentual = Decimal("0.00")
+        if anterior:
+            percentual = (variacao / anterior) * Decimal("100.00")
+        return {
+            "atual": atual or Decimal("0.00"),
+            "anterior": anterior or Decimal("0.00"),
+            "variacao": variacao,
+            "percentual": percentual,
+        }
+
+    def _comparativo_agrupado(qs_atual, qs_anterior, campo, fallback):
+        atual_map = {
+            (row[campo] or fallback): row["total"] or Decimal("0.00")
+            for row in qs_atual.values(campo).annotate(total=Sum("valor")).order_by()
+        }
+        anterior_map = {
+            (row[campo] or fallback): row["total"] or Decimal("0.00")
+            for row in qs_anterior.values(campo).annotate(total=Sum("valor")).order_by()
+        }
+        chaves = set(atual_map) | set(anterior_map)
+        linhas = []
+        for nome in chaves:
+            atual = atual_map.get(nome, Decimal("0.00"))
+            anterior = anterior_map.get(nome, Decimal("0.00"))
+            comp = _comparativo(atual, anterior)
+            linhas.append(
+                {
+                    "nome": nome,
+                    "atual": atual,
+                    "anterior": anterior,
+                    "variacao": comp["variacao"],
+                    "percentual": comp["percentual"],
+                }
+            )
+        return sorted(
+            linhas,
+            key=lambda row: (max(row["atual"], row["anterior"]), row["nome"]),
+            reverse=True,
+        )[:8]
+
     hoje = timezone.localdate()
     periodo = (request.GET.get("periodo") or "30").strip()
     data_inicio_raw = (request.GET.get("data_inicio") or "").strip()
@@ -49,7 +92,7 @@ def dre(request):
         data_inicio, data_fim = hoje - timedelta(days=30), hoje
 
     pagamentos_qs = Pagamento.objects.select_related("forma_pagamento").all()
-    saidas_qs = LancamentoCaixa.objects.select_related("centro_custo").filter(tipo="saida")
+    saidas_qs = LancamentoCaixa.objects.select_related("categoria", "centro_custo").filter(tipo="saida")
     if data_inicio:
         pagamentos_qs = pagamentos_qs.filter(data__date__gte=data_inicio)
         saidas_qs = saidas_qs.filter(data__date__gte=data_inicio)
@@ -64,7 +107,73 @@ def dre(request):
     resultado_operacional = receita_bruta - despesas_operacionais
     margem = (resultado_operacional / receita_bruta * Decimal("100.00")) if receita_bruta > 0 else Decimal("0.00")
     despesas_por_centro = saidas_qs.values("centro_custo__nome").annotate(total=Sum("valor")).order_by("-total")[:10]
+    despesas_por_categoria = saidas_qs.values("categoria__nome").annotate(total=Sum("valor")).order_by("-total")[:10]
     receitas_por_forma = pagamentos_qs.values("forma_pagamento__nome", "metodo").annotate(total=Sum("valor")).order_by("-total")[:10]
+
+    dias_periodo = ((data_fim or hoje) - (data_inicio or hoje)).days + 1
+    inicio_anterior = (data_inicio or hoje) - timedelta(days=dias_periodo)
+    fim_anterior = (data_inicio or hoje) - timedelta(days=1)
+    pagamentos_anterior_qs = Pagamento.objects.select_related("forma_pagamento").all()
+    saidas_anterior_qs = LancamentoCaixa.objects.select_related("categoria", "centro_custo").filter(tipo="saida")
+    pagamentos_anterior_qs = pagamentos_anterior_qs.filter(data__date__gte=inicio_anterior, data__date__lte=fim_anterior)
+    saidas_anterior_qs = saidas_anterior_qs.filter(data__date__gte=inicio_anterior, data__date__lte=fim_anterior)
+
+    receita_bruta_anterior = pagamentos_anterior_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    receita_cliente_anterior = pagamentos_anterior_qs.exclude(Q(forma_pagamento__codigo="garantia_fabricante") | Q(metodo="garantia_fabricante")).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    receita_garantia_anterior = pagamentos_anterior_qs.filter(Q(forma_pagamento__codigo="garantia_fabricante") | Q(metodo="garantia_fabricante")).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    despesas_operacionais_anterior = saidas_anterior_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    resultado_operacional_anterior = receita_bruta_anterior - despesas_operacionais_anterior
+    margem_anterior = (
+        (resultado_operacional_anterior / receita_bruta_anterior) * Decimal("100.00")
+        if receita_bruta_anterior > 0
+        else Decimal("0.00")
+    )
+    comparativos_resumo = {
+        "receita_bruta": _comparativo(receita_bruta, receita_bruta_anterior),
+        "receita_cliente": _comparativo(receita_cliente, receita_cliente_anterior),
+        "receita_garantia": _comparativo(receita_garantia, receita_garantia_anterior),
+        "despesas_operacionais": _comparativo(despesas_operacionais, despesas_operacionais_anterior),
+        "resultado_operacional": _comparativo(resultado_operacional, resultado_operacional_anterior),
+        "margem": _comparativo(margem, margem_anterior),
+    }
+    despesas_categoria_comparativo = _comparativo_agrupado(
+        saidas_qs,
+        saidas_anterior_qs,
+        "categoria__nome",
+        "Sem categoria",
+    )
+    despesas_centro_comparativo = _comparativo_agrupado(
+        saidas_qs,
+        saidas_anterior_qs,
+        "centro_custo__nome",
+        "Sem centro de custo",
+    )
+    dre_mensal = []
+    mes_cursor = hoje.replace(day=1)
+    for _ in range(6):
+        inicio_mes = mes_cursor
+        fim_mes = date(mes_cursor.year, mes_cursor.month, monthrange(mes_cursor.year, mes_cursor.month)[1])
+        pagamentos_mes = Pagamento.objects.filter(data__date__gte=inicio_mes, data__date__lte=fim_mes)
+        saidas_mes = LancamentoCaixa.objects.filter(tipo="saida", data__date__gte=inicio_mes, data__date__lte=fim_mes)
+        receita_mes = pagamentos_mes.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+        despesa_mes = saidas_mes.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+        resultado_mes = receita_mes - despesa_mes
+        margem_mes = ((resultado_mes / receita_mes) * Decimal("100.00")) if receita_mes else Decimal("0.00")
+        dre_mensal.append(
+            {
+                "competencia": inicio_mes,
+                "receita": receita_mes,
+                "despesa": despesa_mes,
+                "resultado": resultado_mes,
+                "margem": margem_mes,
+            }
+        )
+        mes_cursor = (inicio_mes - timedelta(days=1)).replace(day=1)
+    dre_mensal.reverse()
+    max_dre_total = max(
+        [max(item["receita"], item["despesa"]) for item in dre_mensal],
+        default=Decimal("0.00"),
+    )
 
     return render(
         request,
@@ -79,7 +188,15 @@ def dre(request):
             "despesas_operacionais": despesas_operacionais,
             "resultado_operacional": resultado_operacional,
             "margem": margem,
+            "comparativos_resumo": comparativos_resumo,
+            "periodo_anterior_inicio": inicio_anterior,
+            "periodo_anterior_fim": fim_anterior,
             "despesas_por_centro": despesas_por_centro,
+            "despesas_por_categoria": despesas_por_categoria,
+            "despesas_categoria_comparativo": despesas_categoria_comparativo,
+            "despesas_centro_comparativo": despesas_centro_comparativo,
+            "dre_mensal": dre_mensal,
+            "max_dre_total": max_dre_total,
             "receitas_por_forma": receitas_por_forma,
             "menu_app": "caixa",
             "menu_sub": "dre",
@@ -146,6 +263,52 @@ def fluxo_projetado(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def relatorios(request):
+    def _comparativo_agrupado(qs_atual, qs_anterior, campo, fallback):
+        atual_map = {
+            (row[campo] or fallback): {
+                "total": row["total"] or Decimal("0.00"),
+                "quantidade": row["quantidade"] or 0,
+            }
+            for row in qs_atual.values(campo).annotate(total=Sum("valor"), quantidade=Count("id")).order_by()
+        }
+        anterior_map = {
+            (row[campo] or fallback): {
+                "total": row["total"] or Decimal("0.00"),
+                "quantidade": row["quantidade"] or 0,
+            }
+            for row in qs_anterior.values(campo).annotate(total=Sum("valor"), quantidade=Count("id")).order_by()
+        }
+        chaves = set(atual_map) | set(anterior_map)
+        linhas = []
+        for nome in chaves:
+            atual = atual_map.get(nome, {"total": Decimal("0.00"), "quantidade": 0})
+            anterior = anterior_map.get(nome, {"total": Decimal("0.00"), "quantidade": 0})
+            variacao = atual["total"] - anterior["total"]
+            percentual = Decimal("0.00")
+            if anterior["total"]:
+                percentual = (variacao / anterior["total"]) * Decimal("100.00")
+            linhas.append(
+                {
+                    "nome": nome,
+                    "atual_total": atual["total"],
+                    "atual_quantidade": atual["quantidade"],
+                    "anterior_total": anterior["total"],
+                    "anterior_quantidade": anterior["quantidade"],
+                    "variacao": variacao,
+                    "percentual": percentual,
+                }
+            )
+        return sorted(
+            linhas,
+            key=lambda row: (abs(row["variacao"]), max(row["atual_total"], row["anterior_total"])),
+            reverse=True,
+        )[:8]
+
+    session_key = "caixa_relatorios_filtros"
+    if request.GET.get("restaurar") == "1":
+        filtros_salvos = request.session.get(session_key) or {}
+        if filtros_salvos:
+            return redirect(f"{request.path}?{urlencode(filtros_salvos)}")
     caixa = caixa_atual()
     hoje = timezone.localdate()
     preset_periodo = (request.GET.get("preset") or "").strip()
@@ -155,6 +318,7 @@ def relatorios(request):
     data_fim_raw = (request.GET.get("data_fim") or "").strip()
     forma_pagamento_id = (request.GET.get("forma_pagamento") or "").strip()
     centro_custo_id = (request.GET.get("centro_custo") or "").strip()
+    categoria_id = (request.GET.get("categoria") or "").strip()
     tipo_lancamento = (request.GET.get("tipo_lancamento") or "").strip()
     considerar_todos_caixas = request.GET.get("todos_caixas") == "1"
 
@@ -174,7 +338,7 @@ def relatorios(request):
         )
         .order_by("-data", "-id")
     )
-    lancamentos = LancamentoCaixa.objects.select_related("centro_custo").order_by("-data", "-id")
+    lancamentos = LancamentoCaixa.objects.select_related("categoria", "centro_custo").order_by("-data", "-id")
     if caixa and not considerar_todos_caixas:
         pagamentos = pagamentos.filter(caixa=caixa)
         lancamentos = lancamentos.filter(caixa=caixa)
@@ -188,6 +352,8 @@ def relatorios(request):
         pagamentos = pagamentos.filter(forma_pagamento_id=int(forma_pagamento_id))
     if centro_custo_id.isdigit():
         lancamentos = lancamentos.filter(centro_custo_id=int(centro_custo_id))
+    if categoria_id.isdigit():
+        lancamentos = lancamentos.filter(categoria_id=int(categoria_id))
     if tipo_lancamento in {"entrada", "saida"}:
         lancamentos = lancamentos.filter(tipo=tipo_lancamento)
 
@@ -200,11 +366,92 @@ def relatorios(request):
     saldo = saldo_base + total_entradas - total_saidas
     pagamentos_por_forma = pagamentos.values("forma_pagamento__nome", "metodo").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
     saidas_por_centro = lancamentos.filter(tipo="saida").values("centro_custo__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
+    saidas_por_categoria = lancamentos.filter(tipo="saida").values("categoria__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
+    caixas_relatorio = Caixa.objects.all()
+    if not considerar_todos_caixas and caixa:
+        caixas_relatorio = caixas_relatorio.filter(id=caixa.id)
+    if data_inicio:
+        caixas_relatorio = caixas_relatorio.filter(data__gte=data_inicio)
+    if data_fim:
+        caixas_relatorio = caixas_relatorio.filter(data__lte=data_fim)
+    diferencas_por_forma_map = {}
+    for caixa_item in caixas_relatorio.filter(aberto=False):
+        for item in caixa_item.conferencia_formas_pagamento or []:
+            nome = item.get("nome") or item.get("codigo") or "Sem forma"
+            bucket = diferencas_por_forma_map.setdefault(
+                nome,
+                {
+                    "nome": nome,
+                    "apurado_total": Decimal("0.00"),
+                    "conferido_total": Decimal("0.00"),
+                    "diferenca_total": Decimal("0.00"),
+                    "ocorrencias": 0,
+                },
+            )
+            apurado = Decimal(str(item.get("apurado") or "0"))
+            conferido = Decimal(str(item.get("contado") or "0"))
+            diferenca = Decimal(str(item.get("diferenca") or "0"))
+            bucket["apurado_total"] += apurado
+            bucket["conferido_total"] += conferido
+            bucket["diferenca_total"] += diferenca
+            if diferenca != Decimal("0.00"):
+                bucket["ocorrencias"] += 1
+    diferencas_por_forma = sorted(
+        diferencas_por_forma_map.values(),
+        key=lambda row: (abs(row["diferenca_total"]), row["ocorrencias"]),
+        reverse=True,
+    )[:8]
+    if data_inicio and data_fim:
+        dias_periodo = (data_fim - data_inicio).days + 1
+        periodo_anterior_inicio = data_inicio - timedelta(days=dias_periodo)
+        periodo_anterior_fim = data_inicio - timedelta(days=1)
+    else:
+        periodo_anterior_inicio = hoje - timedelta(days=30)
+        periodo_anterior_fim = hoje - timedelta(days=1)
+
+    pagamentos_anterior = (
+        Pagamento.objects.select_related("forma_pagamento")
+        .filter(data__date__gte=periodo_anterior_inicio, data__date__lte=periodo_anterior_fim)
+    )
+    lancamentos_anterior = (
+        LancamentoCaixa.objects.select_related("categoria", "centro_custo")
+        .filter(data__date__gte=periodo_anterior_inicio, data__date__lte=periodo_anterior_fim)
+    )
+    if caixa and not considerar_todos_caixas:
+        pagamentos_anterior = pagamentos_anterior.filter(caixa=caixa)
+        lancamentos_anterior = lancamentos_anterior.filter(caixa=caixa)
+    if forma_pagamento_id.isdigit():
+        pagamentos_anterior = pagamentos_anterior.filter(forma_pagamento_id=int(forma_pagamento_id))
+    if centro_custo_id.isdigit():
+        lancamentos_anterior = lancamentos_anterior.filter(centro_custo_id=int(centro_custo_id))
+    if categoria_id.isdigit():
+        lancamentos_anterior = lancamentos_anterior.filter(categoria_id=int(categoria_id))
+    if tipo_lancamento in {"entrada", "saida"}:
+        lancamentos_anterior = lancamentos_anterior.filter(tipo=tipo_lancamento)
+
+    comparativo_categorias = _comparativo_agrupado(
+        lancamentos.filter(tipo="saida"),
+        lancamentos_anterior.filter(tipo="saida"),
+        "categoria__nome",
+        "Sem categoria",
+    )
+    comparativo_centros = _comparativo_agrupado(
+        lancamentos.filter(tipo="saida"),
+        lancamentos_anterior.filter(tipo="saida"),
+        "centro_custo__nome",
+        "Sem centro de custo",
+    )
+    comparativo_formas = _comparativo_agrupado(
+        pagamentos,
+        pagamentos_anterior,
+        "forma_pagamento__nome",
+        "Sem forma",
+    )
 
     if exportar in {"csv", "pdf"}:
         if dataset_export == "lancamentos":
-            cabecalhos = ["Descricao", "Centro de custo", "Tipo", "Valor", "Data"]
-            linhas = [[l.descricao or "-", getattr(l.centro_custo, "nome", "") or "-", l.get_tipo_display(), _fmt_decimal(l.valor), l.data.strftime("%d/%m/%Y %H:%M") if l.data else "-"] for l in lancamentos]
+            cabecalhos = ["Descricao", "Categoria", "Centro de custo", "Tipo", "Valor", "Data"]
+            linhas = [[l.descricao or "-", getattr(l.categoria, "nome", "") or "-", getattr(l.centro_custo, "nome", "") or "-", l.get_tipo_display(), _fmt_decimal(l.valor), l.data.strftime("%d/%m/%Y %H:%M") if l.data else "-"] for l in lancamentos]
             titulo = "Relatorio de lancamentos"
         elif dataset_export == "resumo":
             cabecalhos = ["Indicador", "Valor"]
@@ -216,6 +463,16 @@ def relatorios(request):
                 ["Saldo apurado", _fmt_decimal(saldo)],
             ]
             titulo = "Resumo financeiro"
+        elif dataset_export == "executivo":
+            cabecalhos = ["Grupo", "Nome", "Atual", "Anterior", "Variacao"]
+            linhas = []
+            for row in comparativo_categorias:
+                linhas.append(["Categoria", row["nome"], _fmt_decimal(row["atual_total"]), _fmt_decimal(row["anterior_total"]), _fmt_decimal(row["variacao"])])
+            for row in comparativo_centros:
+                linhas.append(["Centro", row["nome"], _fmt_decimal(row["atual_total"]), _fmt_decimal(row["anterior_total"]), _fmt_decimal(row["variacao"])])
+            for row in comparativo_formas:
+                linhas.append(["Forma", row["nome"], _fmt_decimal(row["atual_total"]), _fmt_decimal(row["anterior_total"]), _fmt_decimal(row["variacao"])])
+            titulo = "Relatorio executivo"
         else:
             cabecalhos = ["OS", "Atendente", "Tecnico responsavel", "Valor", "Forma", "Referencia", "Data"]
             linhas = [
@@ -240,6 +497,20 @@ def relatorios(request):
     lancamentos_page = _paginar_queryset(request, lancamentos, per_page=100, page_param="page_lancamentos")
     querystring_pagamentos = _querystring_sem_param(request, "page_pagamentos", "export", "dataset")
     querystring_lancamentos = _querystring_sem_param(request, "page_lancamentos", "export", "dataset")
+    filtros_para_salvar = {
+        "data_inicio": data_inicio_raw,
+        "data_fim": data_fim_raw,
+        "preset": preset_periodo,
+        "forma_pagamento": forma_pagamento_id,
+        "centro_custo": centro_custo_id,
+        "categoria": categoria_id,
+        "tipo_lancamento": tipo_lancamento,
+        "todos_caixas": "1" if considerar_todos_caixas else "",
+    }
+    filtros_para_salvar = {k: v for k, v in filtros_para_salvar.items() if v not in {"", None}}
+    if filtros_para_salvar:
+        request.session[session_key] = filtros_para_salvar
+    filtros_salvos = request.session.get(session_key) or {}
 
     return render(
         request,
@@ -261,13 +532,23 @@ def relatorios(request):
             "preset_periodo": preset_periodo,
             "formas_pagamento": FormaPagamento.objects.filter(ativa=True).order_by("nome"),
             "forma_pagamento_filtro": forma_pagamento_id,
+            "categorias_financeiras": CategoriaFinanceira.objects.filter(tipo="saida", ativa=True).order_by("nome"),
+            "categoria_filtro": categoria_id,
             "centros_custo": CentroCusto.objects.filter(ativo=True).order_by("nome"),
             "centro_custo_filtro": centro_custo_id,
             "tipo_lancamento_filtro": tipo_lancamento,
             "pagamentos_por_forma": pagamentos_por_forma,
             "saidas_por_centro": saidas_por_centro,
+            "saidas_por_categoria": saidas_por_categoria,
+            "comparativo_categorias": comparativo_categorias,
+            "comparativo_centros": comparativo_centros,
+            "comparativo_formas": comparativo_formas,
+            "periodo_anterior_inicio": periodo_anterior_inicio,
+            "periodo_anterior_fim": periodo_anterior_fim,
+            "diferencas_por_forma": diferencas_por_forma,
             "querystring_pagamentos": querystring_pagamentos,
             "querystring_lancamentos": querystring_lancamentos,
+            "filtros_salvos_existem": bool(filtros_salvos),
             "menu_app": "caixa",
             "menu_sub": "relatorios",
         },
@@ -276,6 +557,11 @@ def relatorios(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def auditoria_operacional(request):
+    session_key = "caixa_auditoria_operacional_filtros"
+    if request.GET.get("restaurar") == "1":
+        filtros_salvos = request.session.get(session_key) or {}
+        if filtros_salvos:
+            return redirect(f"{request.path}?{urlencode(filtros_salvos)}")
     _atualizar_status_contas_abertas()
     _atualizar_status_contas_pagar_abertas()
     hoje = timezone.localdate()
@@ -348,14 +634,28 @@ def auditoria_operacional(request):
     caixas_com_diferenca = Caixa.objects.filter(aberto=False, data__gte=data_inicio).exclude(diferenca_fechamento=Decimal("0.00")).order_by("-data", "-id")
     pagamentos_sem_talao = Pagamento.objects.select_related("ordem_servico").filter(data__date__gte=data_inicio).filter(Q(numero_talao__isnull=True) | Q(numero_talao="")).order_by("-data")
     saidas_sem_centro = LancamentoCaixa.objects.filter(tipo="saida", data__date__gte=data_inicio, centro_custo__isnull=True).order_by("-data")
+    saidas_sem_categoria = LancamentoCaixa.objects.filter(tipo="saida", data__date__gte=data_inicio, categoria__isnull=True).order_by("-data")
     garantias_pendentes_qs = AuditoriaGarantia.objects.select_related("ordem_servico", "fornecedor").filter(status_faturamento__in=["pendente", "enviado"]).order_by("-atualizado_em")
+    eventos_criticos = AuditoriaFinanceira.objects.select_related("usuario", "conta", "pagamento").filter(
+        criado_em__date__gte=data_inicio,
+        evento__in=[
+            "pagamento_excluido",
+            "caixa_fechado",
+            "conta_receber_baixa_manual",
+            "conta_pagar_baixa_manual",
+        ],
+    ).order_by("-criado_em", "-id")
 
     ordens_prontas_page = _paginar_queryset(request, ordens_prontas_sem_recebimento, per_page=30, page_param="page_prontas")
     contas_vencidas_page = _paginar_queryset(request, contas_vencidas, per_page=30, page_param="page_vencidas")
     caixas_diferenca_page = _paginar_queryset(request, caixas_com_diferenca, per_page=30, page_param="page_caixas")
     pagamentos_sem_talao_page = _paginar_queryset(request, pagamentos_sem_talao, per_page=30, page_param="page_taloes")
     saidas_sem_centro_page = _paginar_queryset(request, saidas_sem_centro, per_page=30, page_param="page_saidas")
+    saidas_sem_categoria_page = _paginar_queryset(request, saidas_sem_categoria, per_page=30, page_param="page_categorias")
     garantias_pendentes_page = _paginar_queryset(request, garantias_pendentes_qs, per_page=30, page_param="page_garantias")
+    eventos_criticos_page = _paginar_queryset(request, eventos_criticos, per_page=20, page_param="page_eventos")
+    filtros_para_salvar = {"dias": dias if dias in dias_validos else "30"}
+    request.session[session_key] = filtros_para_salvar
 
     return render(
         request,
@@ -372,16 +672,23 @@ def auditoria_operacional(request):
             "pagamentos_sem_talao_page": pagamentos_sem_talao_page,
             "saidas_sem_centro": saidas_sem_centro_page,
             "saidas_sem_centro_page": saidas_sem_centro_page,
+            "saidas_sem_categoria": saidas_sem_categoria_page,
+            "saidas_sem_categoria_page": saidas_sem_categoria_page,
             "garantias_pendentes": garantias_pendentes_page,
             "garantias_pendentes_page": garantias_pendentes_page,
+            "eventos_criticos": eventos_criticos_page,
+            "eventos_criticos_page": eventos_criticos_page,
             "total_ordens_prontas_sem_recebimento": ordens_prontas_sem_recebimento.count(),
             "total_contas_vencidas": contas_vencidas.count(),
             "total_caixas_com_diferenca": caixas_com_diferenca.count(),
             "total_pagamentos_sem_talao": pagamentos_sem_talao.count(),
             "total_saidas_sem_centro": saidas_sem_centro.count(),
+            "total_saidas_sem_categoria": saidas_sem_categoria.count(),
             "total_garantias_pendentes": garantias_pendentes_qs.count(),
+            "total_eventos_criticos": eventos_criticos.count(),
             "centros_custo_ativos": CentroCusto.objects.filter(ativo=True).order_by("nome"),
             "querystring_auditoria": _querystring_sem_param(request),
+            "filtros_salvos_existem": bool(request.session.get(session_key)),
             "menu_app": "caixa",
             "menu_sub": "auditoria_operacional",
         },

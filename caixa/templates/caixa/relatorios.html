@@ -49,6 +49,15 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="col-md-3 mt-2">
+                    <label>Categoria de saída</label>
+                    <select name="categoria" class="form-control">
+                        <option value="">Todas</option>
+                        {% for categoria in categorias_financeiras %}
+                        <option value="{{ categoria.id }}" {% if categoria_filtro == categoria.id|stringformat:'s' %}selected{% endif %}>{{ categoria.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="col-md-2 mt-2">
                     <label>Tipo de lançamento</label>
                     <select name="tipo_lancamento" class="form-control">
@@ -67,18 +76,25 @@
                     <button type="submit" class="btn btn-primary flex-fill">Filtrar</button>
                     <a href="{% url 'caixa:relatorios' %}" class="btn btn-outline-secondary flex-fill">Limpar</a>
                 </div>
+                {% if filtros_salvos_existem %}
+                <div class="col-md-2 mt-2">
+                    <a href="{% url 'caixa:relatorios' %}?restaurar=1" class="btn btn-outline-dark btn-block">Últimos filtros</a>
+                </div>
+                {% endif %}
                 <div class="col-12 mt-2 d-flex flex-wrap" style="gap:8px;">
                     <a class="btn btn-sm btn-outline-success" href="?{{ request.GET.urlencode }}&export=csv&dataset=pagamentos">CSV pagamentos</a>
                     <a class="btn btn-sm btn-outline-danger" href="?{{ request.GET.urlencode }}&export=pdf&dataset=pagamentos">PDF pagamentos</a>
                     <a class="btn btn-sm btn-outline-success" href="?{{ request.GET.urlencode }}&export=csv&dataset=lancamentos">CSV lançamentos</a>
                     <a class="btn btn-sm btn-outline-danger" href="?{{ request.GET.urlencode }}&export=pdf&dataset=lancamentos">PDF lançamentos</a>
                     <a class="btn btn-sm btn-outline-dark" href="?{{ request.GET.urlencode }}&export=pdf&dataset=resumo">PDF resumo</a>
+                    <a class="btn btn-sm btn-outline-primary" href="?{{ request.GET.urlencode }}&export=csv&dataset=executivo">CSV executivo</a>
+                    <a class="btn btn-sm btn-outline-primary" href="?{{ request.GET.urlencode }}&export=pdf&dataset=executivo">PDF executivo</a>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="row mb-3">
+<div class="row mb-3">
         <div class="col-md-3">
             <div class="small-box bg-success">
                 <div class="inner">
@@ -119,6 +135,7 @@
             <span class="{% if saldo < 0 %}text-danger{% else %}text-success{% endif %}">
                 R$ {{ saldo|floatformat:2 }}
             </span>
+            <span class="text-muted ml-2">Comparativo com {{ periodo_anterior_inicio|date:"d/m/Y" }} a {{ periodo_anterior_fim|date:"d/m/Y" }}</span>
         </div>
     </div>
 
@@ -165,7 +182,126 @@
                 </div>
             </div>
         </div>
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header bg-white"><strong>Saídas por categoria</strong></div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Categoria</th><th class="text-center">Qtde.</th><th class="text-right">Total</th></tr></thead>
+                        <tbody>
+                            {% for row in saidas_por_categoria %}
+                            <tr>
+                                <td>{{ row.categoria__nome|default:"Sem categoria" }}</td>
+                                <td class="text-center">{{ row.quantidade }}</td>
+                                <td class="text-right">R$ {{ row.total|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="3" class="text-center text-muted">Sem saídas.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header bg-white"><strong>Tendência por categoria</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Categoria</th><th class="text-right">Atual</th><th class="text-right">Anterior</th><th class="text-right">Var.</th></tr></thead>
+                    <tbody>
+                        {% for row in comparativo_categorias %}
+                        <tr>
+                            <td>{{ row.nome }}</td>
+                            <td class="text-right">R$ {{ row.atual_total|floatformat:2 }}</td>
+                            <td class="text-right">R$ {{ row.anterior_total|floatformat:2 }}</td>
+                            <td class="text-right">R$ {{ row.variacao|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted">Sem categorias para comparar.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header bg-white"><strong>Tendência por centro de custo</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Centro</th><th class="text-right">Atual</th><th class="text-right">Anterior</th><th class="text-right">Var.</th></tr></thead>
+                    <tbody>
+                        {% for row in comparativo_centros %}
+                        <tr>
+                            <td>{{ row.nome }}</td>
+                            <td class="text-right">R$ {{ row.atual_total|floatformat:2 }}</td>
+                            <td class="text-right">R$ {{ row.anterior_total|floatformat:2 }}</td>
+                            <td class="text-right">R$ {{ row.variacao|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted">Sem centros para comparar.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header bg-white"><strong>Diferenças de fecho por forma</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Forma</th><th class="text-center">Ocorrências</th><th class="text-right">Apurado</th><th class="text-right">Conferido</th><th class="text-right">Diferença</th></tr></thead>
+                    <tbody>
+                        {% for row in diferencas_por_forma %}
+                        <tr>
+                            <td>{{ row.nome }}</td>
+                            <td class="text-center">{{ row.ocorrencias }}</td>
+                            <td class="text-right">R$ {{ row.apurado_total|floatformat:2 }}</td>
+                            <td class="text-right">R$ {{ row.conferido_total|floatformat:2 }}</td>
+                            <td class="text-right {% if row.diferenca_total != 0 %}font-weight-bold{% endif %}">R$ {{ row.diferenca_total|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted">Sem diferenças por forma no período.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header bg-white"><strong>Tendência por forma de pagamento</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Forma</th><th class="text-right">Atual</th><th class="text-right">Anterior</th><th class="text-right">Var.</th></tr></thead>
+                    <tbody>
+                        {% for row in comparativo_formas %}
+                        <tr>
+                            <td>{{ row.nome }}</td>
+                            <td class="text-right">R$ {{ row.atual_total|floatformat:2 }}</td>
+                            <td class="text-right">R$ {{ row.anterior_total|floatformat:2 }}</td>
+                            <td class="text-right">R$ {{ row.variacao|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted">Sem formas para comparar.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
     {% if lancamentos or pagamentos %}
     <div class="card mb-3">
@@ -227,6 +363,7 @@
                 <thead>
                     <tr>
                         <th>Descrição</th>
+                        <th>Categoria</th>
                         <th>Centro de custo</th>
                         <th class="text-right">Valor</th>
                         <th>Tipo</th>
@@ -237,6 +374,7 @@
                     {% for l in lancamentos_page %}
                     <tr>
                         <td>{{ l.descricao|default:"-" }}</td>
+                        <td>{{ l.categoria.nome|default:"-" }}</td>
                         <td>{{ l.centro_custo.nome|default:"-" }}</td>
                         <td class="text-right">R$ {{ l.valor|floatformat:2 }}</td>
                         <td>

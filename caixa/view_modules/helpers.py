@@ -119,51 +119,126 @@ def _exportar_csv(filename, cabecalhos, linhas):
 
 
 def _exportar_pdf_tabela(filename, titulo, cabecalhos, linhas):
+    from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.pdfgen import canvas
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from core.pdf_utils import get_pdf_fonts
 
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
     pagina = landscape(A4)
-    largura, altura = pagina
-    margem_x = 24
-    topo = altura - 28
-    linha_altura = 14
-    col_largura = max(70, int((largura - (margem_x * 2)) / max(1, len(cabecalhos))))
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=pagina,
+        leftMargin=1.0 * cm,
+        rightMargin=1.0 * cm,
+        topMargin=1.0 * cm,
+        bottomMargin=0.9 * cm,
+        title=titulo[:120],
+        author="Assistencia PDF Engine",
+        creator="Assistencia PDF Engine",
+        pageCompression=1,
+    )
 
-    pdf = canvas.Canvas(response, pagesize=pagina)
-    y = topo
-    pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawString(margem_x, y, titulo[:110])
-    y -= 18
+    fonts = get_pdf_fonts()
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "CaixaPdfTitle",
+        parent=styles["Heading3"],
+        fontName=fonts["bold"],
+        fontSize=12,
+        leading=14,
+        textColor=colors.HexColor("#0f172a"),
+    )
+    head_style = ParagraphStyle(
+        "CaixaPdfHead",
+        parent=styles["BodyText"],
+        fontName=fonts["bold"],
+        fontSize=8.1,
+        leading=9.7,
+        textColor=colors.white,
+    )
+    cell_style = ParagraphStyle(
+        "CaixaPdfCell",
+        parent=styles["BodyText"],
+        fontName=fonts["regular"],
+        fontSize=7.7,
+        leading=9.3,
+        textColor=colors.HexColor("#111827"),
+    )
+    cell_right_style = ParagraphStyle(
+        "CaixaPdfCellRight",
+        parent=cell_style,
+        alignment=2,
+    )
 
-    def _nova_pagina():
-        nonlocal y
-        pdf.showPage()
-        pdf.setFont("Helvetica-Bold", 11)
-        pdf.drawString(margem_x, topo, titulo[:110])
-        y = topo - 18
+    def _texto_curto(valor, limite=92):
+        texto = " ".join(str(valor or "-").split())
+        if len(texto) <= limite:
+            return texto
+        return texto[: max(1, limite - 1)].rstrip() + "…"
 
-    pdf.setFont("Helvetica-Bold", 8)
-    for idx, cabecalho in enumerate(cabecalhos):
-        pdf.drawString(margem_x + idx * col_largura, y, str(cabecalho)[:34])
-    y -= linha_altura
-    pdf.setFont("Helvetica", 8)
+    def _parece_numero(valor):
+        texto = str(valor or "").strip().replace(".", "").replace(",", ".")
+        if not texto:
+            return False
+        try:
+            float(texto)
+            return True
+        except Exception:
+            return False
 
-    for linha in linhas:
-        if y < 28:
-            _nova_pagina()
-            pdf.setFont("Helvetica-Bold", 8)
-            for idx, cabecalho in enumerate(cabecalhos):
-                pdf.drawString(margem_x + idx * col_largura, y, str(cabecalho)[:34])
-            y -= linha_altura
-            pdf.setFont("Helvetica", 8)
-        for idx, coluna in enumerate(linha):
-            pdf.drawString(margem_x + idx * col_largura, y, str(coluna or "")[:34])
-        y -= linha_altura
+    qtd_colunas = max(1, len(cabecalhos))
+    rows_text = [list(linha) for linha in linhas]
+    max_chars = [len(str(cabecalho or "")) for cabecalho in cabecalhos]
+    numeric_cols = [True] * qtd_colunas
+    for linha in rows_text:
+        for idx in range(qtd_colunas):
+            valor = linha[idx] if idx < len(linha) else ""
+            max_chars[idx] = max(max_chars[idx], len(_texto_curto(valor, limite=110)))
+            if not _parece_numero(valor):
+                numeric_cols[idx] = False
+    weights = [max(1.0, min(4.0, chars / 14.0)) for chars in max_chars]
+    total_weight = sum(weights) or float(qtd_colunas)
+    usable_w = pagina[0] - doc.leftMargin - doc.rightMargin
+    min_w = 2.1 * cm
+    col_widths = [max(min_w, usable_w * (weight / total_weight)) for weight in weights]
+    excesso = sum(col_widths) - usable_w
+    if excesso > 0:
+        idx_desc = max(range(len(col_widths)), key=lambda i: col_widths[i])
+        col_widths[idx_desc] = max(min_w, col_widths[idx_desc] - excesso)
 
-    pdf.save()
+    table_data = [[Paragraph(_texto_curto(cabecalho, limite=44), head_style) for cabecalho in cabecalhos]]
+    for linha in rows_text:
+        row_cells = []
+        for idx in range(qtd_colunas):
+            valor = linha[idx] if idx < len(linha) else ""
+            estilo = cell_right_style if numeric_cols[idx] else cell_style
+            row_cells.append(Paragraph(_texto_curto(valor), estilo))
+        table_data.append(row_cells)
+
+    tabela = Table(table_data, colWidths=col_widths, repeatRows=1)
+    tabela.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f2937")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f8fafc"), colors.white]),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d1d5db")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]
+        )
+    )
+    story = [Paragraph(_texto_curto(titulo, limite=130), title_style), Spacer(1, 0.25 * cm), tabela]
+    doc.build(story)
     return response
 
 
@@ -246,6 +321,31 @@ def _garantir_centros_custo_padrao():
     ]
     for row in defaults:
         CentroCusto.objects.get_or_create(nome=row["nome"], defaults=row)
+
+
+def _garantir_categorias_financeiras_padrao():
+    defaults = [
+        {"nome": "Cliente OS", "tipo": "receber", "ativa": True},
+        {"nome": "Garantia Fabricante", "tipo": "receber", "ativa": True},
+        {"nome": "Recebimento Avulso", "tipo": "receber", "ativa": True},
+        {"nome": "Marketing e Aquisição", "tipo": "saida", "ativa": True},
+        {"nome": "Aluguel e Infraestrutura", "tipo": "saida", "ativa": True},
+        {"nome": "Utilidades e Consumo", "tipo": "saida", "ativa": True},
+        {"nome": "Impostos e Taxas", "tipo": "saida", "ativa": True},
+        {"nome": "Tecnologia e Sistemas", "tipo": "saida", "ativa": True},
+        {"nome": "Serviços de Terceiros", "tipo": "saida", "ativa": True},
+        {"nome": "Compras e Insumos", "tipo": "saida", "ativa": True},
+        {"nome": "Fretes e Logística", "tipo": "saida", "ativa": True},
+        {"nome": "Pessoal e Benefícios", "tipo": "saida", "ativa": True},
+        {"nome": "Comissões e Premiações", "tipo": "saida", "ativa": True},
+        {"nome": "Despesas Gerais", "tipo": "saida", "ativa": True},
+    ]
+    for row in defaults:
+        CategoriaFinanceira.objects.get_or_create(
+            nome=row["nome"],
+            tipo=row["tipo"],
+            defaults={"ativa": row["ativa"]},
+        )
 
 
 def _forma_pagamento_padrao():
@@ -394,11 +494,16 @@ def _vincular_talao_itens_ordem(ordem, numero_talao, pagamento=None):
 
 
 def _garantir_conta_os(ordem, ignorar_pagamento_id=None):
+    categoria, _ = CategoriaFinanceira.objects.get_or_create(
+        nome="Cliente OS",
+        tipo="receber",
+        defaults={"ativa": True},
+    )
     total_os = sum((item.total() for item in ordem.servicos_pecas.all()), Decimal("0.00"))
     pagamentos_qs = Pagamento.objects.filter(ordem_servico=ordem)
     if ignorar_pagamento_id:
         pagamentos_qs = pagamentos_qs.exclude(id=ignorar_pagamento_id)
-    total_pago = sum((pag.valor for pag in pagamentos_qs), Decimal("0.00"))
+    total_pago = sum(((pag.valor or Decimal("0.00")) + (pag.desconto or Decimal("0.00")) for pag in pagamentos_qs), Decimal("0.00"))
     valor_aberto = max(Decimal("0.00"), total_os - total_pago)
     if total_os <= Decimal("0.00"):
         contas_existentes = ContaReceber.objects.filter(
@@ -424,6 +529,7 @@ def _garantir_conta_os(ordem, ignorar_pagamento_id=None):
     if not conta:
         conta = ContaReceber.objects.create(
             ordem_servico=ordem,
+            categoria=categoria,
             descricao=f"OS {ordem.numero_os}",
             tipo_origem="cliente_os",
             cliente_nome=ordem.cliente.nome,
@@ -432,6 +538,7 @@ def _garantir_conta_os(ordem, ignorar_pagamento_id=None):
             vencimento=timezone.localdate(),
         )
     else:
+        conta.categoria = categoria
         conta.valor_original = total_os
         conta.valor_aberto = valor_aberto
         conta.tipo_origem = "cliente_os"
@@ -621,6 +728,7 @@ __all__ = [
     "_exportar_pdf_tabela",
     "_fmt_decimal",
     "_forma_pagamento_por_codigo",
+    "_garantir_categorias_financeiras_padrao",
     "_garantir_centros_custo_padrao",
     "_garantir_conta_garantia",
     "_garantir_conta_os",

@@ -35,6 +35,13 @@ def _ordem_qualifica_comissao_servico(ordem) -> bool:
     return ordem.status in COMISSAO_SERVICO_STATUSES and _texto_preenchido(ordem.relatorio_tecnico)
 
 
+def _servico_comissionavel_em_ordem(ordem, fonte) -> bool:
+    tipo_reparo = (ordem.tipo_reparo or "").strip().lower()
+    if not tipo_reparo.startswith("garantia de servi"):
+        return True
+    return bool(fonte.get("comissionavel"))
+
+
 def _percentual_servico_tecnico(tecnico) -> Decimal:
     valor = getattr(tecnico, "percentual_comissao_servico", None)
     try:
@@ -227,15 +234,22 @@ def _fontes_comissionaveis(ordem):
             itens_cobertos_por_servico_peca.add(item_orc.id)
         ean_ref = getattr(item_orc, "ean", "") if item_orc else ""
         chave_ref = f"item:{item_orc.id}" if item_orc else f"sp:{linha.id}"
+        base_linha = Decimal(linha.total() or 0)
+        base_bruta = base_linha
+        if base_bruta <= 0 and item_orc:
+            base_bruta = Decimal(item_orc.subtotal() or 0)
         fontes.append(
             {
                 "chave_ref": chave_ref,
                 "nome": linha.nome,
                 "tipo_item": (linha.tipo or "").strip().lower(),
-                "base": Decimal(linha.total() or 0),
+                "base": base_linha,
+                # Prioriza o valor efetivamente migrado para ServicoPeca.
+                "base_bruta": base_bruta,
                 "tecnico": linha.tecnico_responsavel,
                 "item_orcamento": item_orc,
                 "produto": _produto_por_ean_ou_nome(ean=ean_ref, nome=linha.nome),
+                "comissionavel": getattr(linha, "comissionavel", True),
             }
         )
 
@@ -254,12 +268,20 @@ def _fontes_comissionaveis(ordem):
                 "nome": item.nome,
                 "tipo_item": tipo_item,
                 "base": Decimal(item.total() or 0),
+                "base_bruta": Decimal(item.subtotal() or 0),
                 "tecnico": item.tecnico_responsavel,
                 "item_orcamento": item,
                 "produto": _produto_do_item(item) if tipo_item == "peca" else None,
+                "comissionavel": getattr(item, "comissionavel", True),
             }
         )
     return fontes
+
+
+def _base_comissao_fonte(fonte) -> Decimal:
+    # Politica comercial: descontos no orcamento e no caixa sao absorvidos pela empresa.
+    # Portanto, a comissao permanece sobre o valor bruto do item/linha.
+    return Decimal(fonte.get("base_bruta") or fonte.get("base") or 0)
 
 
 def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO", tipos=None) -> int:
@@ -274,7 +296,7 @@ def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO
         tecnico = fonte["tecnico"]
         if not tecnico:
             continue
-        base = Decimal(fonte["base"] or 0)
+        base = _base_comissao_fonte(fonte)
         if base <= 0:
             continue
 
@@ -287,6 +309,8 @@ def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO
         nome_ref = fonte["nome"]
 
         if tipo_item == "servico":
+            if not _servico_comissionavel_em_ordem(ordem, fonte):
+                continue
             percentual = _percentual_servico_tecnico(tecnico)
             if percentual > 0:
                 valor_comissao = (base * percentual) / Decimal("100")

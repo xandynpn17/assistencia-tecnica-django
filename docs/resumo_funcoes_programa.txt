@@ -1,0 +1,11 @@
+﻿agenda: 40
+assistencia: 2
+caixa: 295
+clientes: 24
+configuracoes: 121
+core: 8
+estoque: 211
+fiscal: 10
+manage.py: 1
+orcamentos: 44
+ordens: 223

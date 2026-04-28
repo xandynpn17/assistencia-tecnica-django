@@ -11,11 +11,20 @@ from configuracoes.permissions import ORDER_ROLES, role_required
 from ..models import LinhaTrabalho, OrdemServico
 from ..services.confirmacao_service import ConfirmacaoOSService
 from .common import (
+    DEFAULT_MENSAGEM_ORCAMENTO_EMAIL,
+    DEFAULT_MENSAGEM_ORCAMENTO_WHATSAPP,
+    DEFAULT_MENSAGEM_PRONTO_EMAIL,
+    DEFAULT_MENSAGEM_PRONTO_WHATSAPP,
+    LEGACY_MENSAGEM_ORCAMENTO_EMAIL,
+    LEGACY_MENSAGEM_ORCAMENTO_WHATSAPP,
+    LEGACY_MENSAGEM_PRONTO_EMAIL,
+    LEGACY_MENSAGEM_PRONTO_WHATSAPP,
     contexto_variaveis_mensagem,
     enviar_notificacao,
     log_os,
     registrar_notificacao,
     registrar_pendente_cliente_envio_orcamento,
+    registrar_pronto_contactado,
     render_template_mensagem,
     request_ip,
 )
@@ -35,19 +44,27 @@ def _mensagem_confirmacao_inicial(ordem, request):
     )
 
 
-def _mensagem_padrao_notificacao(ordem, tipo, canal="sistema"):
+def _mensagem_padrao_notificacao(ordem, tipo, canal="sistema", request=None):
     config = ConfiguracaoSistema.get_configuracao()
-    base = contexto_variaveis_mensagem(ordem)
+    base = contexto_variaveis_mensagem(ordem, request=request)
     if tipo == "orcamento":
         if canal == "email":
-            template = config.mensagem_orcamento_email or "Orcamento OS {numero_os}: {valor_orcamento}."
+            template = config.mensagem_orcamento_email or DEFAULT_MENSAGEM_ORCAMENTO_EMAIL
+            if template == LEGACY_MENSAGEM_ORCAMENTO_EMAIL:
+                template = DEFAULT_MENSAGEM_ORCAMENTO_EMAIL
         else:
-            template = config.mensagem_orcamento_whatsapp or "Orcamento OS {numero_os}: {valor_orcamento}."
+            template = config.mensagem_orcamento_whatsapp or DEFAULT_MENSAGEM_ORCAMENTO_WHATSAPP
+            if template == LEGACY_MENSAGEM_ORCAMENTO_WHATSAPP:
+                template = DEFAULT_MENSAGEM_ORCAMENTO_WHATSAPP
     elif tipo == "pronto":
         if canal == "email":
-            template = config.mensagem_pronto_email or "OS {numero_os} pronta para retirada."
+            template = config.mensagem_pronto_email or DEFAULT_MENSAGEM_PRONTO_EMAIL
+            if template == LEGACY_MENSAGEM_PRONTO_EMAIL:
+                template = DEFAULT_MENSAGEM_PRONTO_EMAIL
         else:
-            template = config.mensagem_pronto_whatsapp or "OS {numero_os} pronta para retirada."
+            template = config.mensagem_pronto_whatsapp or DEFAULT_MENSAGEM_PRONTO_WHATSAPP
+            if template == LEGACY_MENSAGEM_PRONTO_WHATSAPP:
+                template = DEFAULT_MENSAGEM_PRONTO_WHATSAPP
     else:
         template = "Atualizacao da OS {numero_os}. Codigo de acompanhamento: {codigo_portal}."
     return render_template_mensagem(template, base)
@@ -57,9 +74,24 @@ def _mensagem_padrao_notificacao(ordem, tipo, canal="sistema"):
 def notificar_cliente_ordem(request, pk, tipo):
     ordem = get_object_or_404(OrdemServico, pk=pk)
     canal = request.POST.get("canal", "sistema")
-    mensagem = request.POST.get("mensagem") or _mensagem_padrao_notificacao(ordem, tipo, canal=canal)
-    mensagem = render_template_mensagem(mensagem, contexto_variaveis_mensagem(ordem))
-    notif = registrar_notificacao(ordem, tipo=tipo, canal=canal, mensagem=mensagem, usuario=request.user)
+    assunto = (request.POST.get("assunto") or "").strip()
+    if canal == "email" and not assunto:
+        if tipo == "orcamento":
+            assunto = f"Orçamento da OS {ordem.numero_os}"
+        elif tipo == "pronto":
+            assunto = f"Equipamento pronto - OS {ordem.numero_os}"
+        else:
+            assunto = f"Atualização da OS {ordem.numero_os}"
+    mensagem = request.POST.get("mensagem") or _mensagem_padrao_notificacao(ordem, tipo, canal=canal, request=request)
+    mensagem = render_template_mensagem(mensagem, contexto_variaveis_mensagem(ordem, request=request))
+    notif = registrar_notificacao(
+        ordem,
+        tipo=tipo,
+        canal=canal,
+        mensagem=mensagem,
+        usuario=request.user,
+        assunto=assunto,
+    )
     resultado = enviar_notificacao(notif)
     if resultado.get("enviada"):
         log_os(
@@ -71,6 +103,8 @@ def notificar_cliente_ordem(request, pk, tipo):
         )
         if tipo == "orcamento" and canal in {"email", "whatsapp"}:
             registrar_pendente_cliente_envio_orcamento(ordem, request.user, canal)
+        if tipo == "pronto" and canal in {"email", "whatsapp"}:
+            registrar_pronto_contactado(ordem, request.user, canal)
         if resultado.get("url"):
             messages.success(request, "O WhatsApp foi aberto em nova aba, mantendo a sessao no sistema.")
             wa = quote(resultado.get("url", ""), safe="")

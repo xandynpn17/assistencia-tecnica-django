@@ -1,3 +1,5 @@
+"""Arquivo legado arquivado. O fluxo ativo de estoque usa `estoque.views` e `estoque.view_modules`."""
+
 import csv
 from datetime import datetime, timedelta
 from decimal import Decimal

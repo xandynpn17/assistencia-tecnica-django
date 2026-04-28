@@ -2,7 +2,28 @@
 
 <form method="post">
     {% csrf_token %}
-    {{ form.as_p }}
+    <div class="mb-3">
+        <label>Descrição</label>
+        {{ form.descricao }}
+    </div>
+    <div class="row">
+        <div class="col-md-4">
+            <label>Tipo de desconto</label>
+            <select name="desconto_tipo" class="form-control">
+                <option value="">Sem desconto</option>
+                <option value="valor" {% if orcamento.desconto_valor and not orcamento.desconto_percentual %}selected{% endif %}>Valor</option>
+                <option value="percentual" {% if orcamento.desconto_percentual %}selected{% endif %}>Percentual</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label>Desconto (R$)</label>
+            {{ form.desconto_valor }}
+        </div>
+        <div class="col-md-4">
+            <label>Desconto (%)</label>
+            {{ form.desconto_percentual }}
+        </div>
+    </div>
     <button type="submit" class="btn btn-primary">Salvar Orçamento</button>
 </form>
 

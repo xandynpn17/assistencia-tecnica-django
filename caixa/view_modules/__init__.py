@@ -1,8 +1,17 @@
 from .auditoria import auditoria_operacional, dre, fluxo_projetado, garantias_fabricante, relatorios
 from .comissoes import comissoes_pagamento, comissoes_pendencias, comissoes_tecnicos, meu_desempenho, premios_meta
 from .common import _upsert_auditoria_garantia_ordem, caixa_atual
-from .dashboard import abrir_caixa, dashboard_caixa, fechar_caixa, registrar_pagamento, registrar_saida
-from .pagaveis import contas_pagar, criar_conta_pagar, detalhe_conta_pagar
+from .dashboard import (
+    abrir_caixa,
+    dashboard_caixa,
+    dashboard_financeiro,
+    detalhe_caixa,
+    excluir_pagamento,
+    fechar_caixa,
+    registrar_pagamento,
+    registrar_saida,
+)
+from .pagaveis import aging_pagar, contas_pagar, criar_conta_pagar, detalhe_conta_pagar
 from .taloes import imprimir_talao, taloes
 from .recebiveis import (
     aging_receber,
@@ -18,6 +27,7 @@ from .recebiveis import (
 __all__ = [
     "_upsert_auditoria_garantia_ordem",
     "abrir_caixa",
+    "aging_pagar",
     "aging_receber",
     "auditoria_operacional",
     "caixa_atual",
@@ -32,9 +42,12 @@ __all__ = [
     "criar_conta_receber",
     "custos_fixos",
     "dashboard_caixa",
+    "dashboard_financeiro",
+    "detalhe_caixa",
     "detalhe_conta_pagar",
     "detalhe_conta_receber",
     "dre",
+    "excluir_pagamento",
     "fechar_caixa",
     "fluxo_projetado",
     "formas_pagamento",

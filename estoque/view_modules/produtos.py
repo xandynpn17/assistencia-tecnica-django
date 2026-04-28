@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -39,6 +39,8 @@ def buscar_produtos(request):
 def lista_produtos(request):
     filtro = request.GET.get("tipo", "todos")
     ponto_id = request.GET.get("ponto")
+    q = (request.GET.get("q") or "").strip()
+    quick = (request.GET.get("quick") or "").strip()
     page_number = request.GET.get("page")
 
     if filtro == "servicos":
@@ -51,6 +53,32 @@ def lista_produtos(request):
     if ponto_id:
         produtos = produtos.filter(ponto_operacional_id=ponto_id)
 
+    if q:
+        produtos = produtos.filter(
+            Q(nome__icontains=q)
+            | Q(sku__icontains=q)
+            | Q(ean__icontains=q)
+            | Q(descricao__icontains=q)
+            | Q(marca__nome__icontains=q)
+            | Q(categoria_config__nome__icontains=q)
+            | Q(fornecedor_config__nome__icontains=q)
+        ).distinct()
+
+    resumo_qs = produtos
+    resumo = {
+        "total": resumo_qs.count(),
+        "baixo_estoque": resumo_qs.filter(quantidade__lte=F("estoque_minimo")).count(),
+        "sem_saldo": resumo_qs.filter(quantidade__lte=0).count(),
+        "permite_os": resumo_qs.filter(permite_os=True).count(),
+    }
+
+    if quick == "baixo_estoque":
+        produtos = produtos.filter(quantidade__lte=F("estoque_minimo"))
+    elif quick == "sem_saldo":
+        produtos = produtos.filter(quantidade__lte=0)
+    elif quick == "permite_os":
+        produtos = produtos.filter(permite_os=True)
+
     produtos = produtos.select_related("ponto_operacional", "categoria_config", "marca", "fornecedor_config").order_by("nome")
     produtos_page = Paginator(produtos, 30).get_page(page_number)
 
@@ -62,6 +90,9 @@ def lista_produtos(request):
         "menu_sub": "lista_produtos",
         "filtro": filtro,
         "ponto_filtro": ponto_id or "",
+        "q": q,
+        "quick": quick,
+        "resumo": resumo,
     }
     return render(request, "estoque/lista_produtos.html", context)
 

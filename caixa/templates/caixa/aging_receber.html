@@ -1,20 +1,105 @@
 {% extends 'core/base.html' %}
 
+{% block extra_css %}
+<style>
+  .aging-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+  }
+  .aging-card {
+    border: 1px solid #dfe6ee;
+    border-radius: 12px;
+    background: #fff;
+    padding: 14px 16px;
+  }
+  .aging-card .meta {
+    color: #6c757d;
+    font-size: .82rem;
+  }
+  .aging-card .acoes {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-3">
   {% include 'caixa/_subnav_caixa.html' %}
 
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Aging de contas a receber</h3>
+    <div>
+      <h3 class="mb-0">Aging de contas a receber</h3>
+      <small class="text-muted">Total em aberto: R$ {{ total_aberto|floatformat:2 }}</small>
+    </div>
     <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm btn-outline-secondary">Voltar para contas a receber</a>
   </div>
 
+  <div class="aging-grid mb-3">
+    {% for row in bucket_rows %}
+    <div class="aging-card border-{{ row.classe }}">
+      <div class="text-muted small text-uppercase">{{ row.titulo }}</div>
+      <h4 class="mb-1">R$ {{ row.total|floatformat:2 }}</h4>
+      <div class="meta">{{ row.quantidade }} conta(s) | {{ row.percentual|floatformat:1 }}% da carteira</div>
+      <div class="acoes">
+        <a href="{% url 'caixa:contas_receber' %}?aging={{ row.chave }}" class="btn btn-sm btn-outline-primary">Abrir fila</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
   <div class="row">
-    <div class="col-md-4"><div class="small-box bg-info"><div class="inner"><h4>R$ {{ buckets.a_vencer|floatformat:2 }}</h4><p>A vencer</p></div></div></div>
-    <div class="col-md-4"><div class="small-box bg-warning"><div class="inner"><h4>R$ {{ buckets.vencidas_1_30|floatformat:2 }}</h4><p>Vencidas de 1 a 30 dias</p></div></div></div>
-    <div class="col-md-4"><div class="small-box bg-warning"><div class="inner"><h4>R$ {{ buckets.vencidas_31_60|floatformat:2 }}</h4><p>Vencidas de 31 a 60 dias</p></div></div></div>
-    <div class="col-md-6"><div class="small-box bg-danger"><div class="inner"><h4>R$ {{ buckets.vencidas_61_90|floatformat:2 }}</h4><p>Vencidas de 61 a 90 dias</p></div></div></div>
-    <div class="col-md-6"><div class="small-box bg-danger"><div class="inner"><h4>R$ {{ buckets.vencidas_90_plus|floatformat:2 }}</h4><p>Vencidas há mais de 90 dias</p></div></div></div>
+    {% for row in bucket_rows %}
+    <div class="col-lg-6">
+      <div class="card mb-3">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <strong>{{ row.titulo }}</strong>
+          <div class="d-flex align-items-center" style="gap:8px;">
+            <small class="text-muted">R$ {{ row.total|floatformat:2 }}</small>
+            <a href="{% url 'caixa:contas_receber' %}?aging={{ row.chave }}" class="btn btn-xs btn-outline-primary">Abrir fila</a>
+          </div>
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Conta</th>
+                <th>Cliente</th>
+                <th>OS</th>
+                <th>Vencimento</th>
+                <th class="text-right">Em aberto</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for conta in row.contas %}
+              <tr>
+                <td>#{{ conta.id }} - {{ conta.descricao|default:"-" }}</td>
+                <td>{{ conta.cliente_nome|default:"-" }}</td>
+                <td>{{ conta.ordem_servico.numero_os|default:"-" }}</td>
+                <td>
+                  {{ conta.vencimento|date:"d/m/Y" }}
+                  {% if conta.dias_atraso > 0 %}
+                  <small class="text-danger d-block">{{ conta.dias_atraso }} dia{{ conta.dias_atraso|pluralize }}</small>
+                  {% endif %}
+                </td>
+                <td class="text-right">R$ {{ conta.valor_aberto|floatformat:2 }}</td>
+                <td class="text-right">
+                  <a href="{% url 'caixa:detalhe_conta_receber' conta.id %}#form-baixa" class="btn btn-xs btn-primary">Receber</a>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center text-muted">Sem contas nesta faixa.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
   </div>
 </div>
 {% endblock %}

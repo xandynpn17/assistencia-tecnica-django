@@ -24,6 +24,8 @@ class Orcamento(models.Model):
     numero = models.PositiveSmallIntegerField(default=1)  # 🔹 Novo campo
     tipo = models.CharField(max_length=1, choices=TIPO_CHOICES, default='1')
     valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    desconto_valor = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    desconto_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     descricao = models.TextField(blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pendente')
     data_criacao = models.DateTimeField(auto_now_add=True)
@@ -32,8 +34,26 @@ class Orcamento(models.Model):
     def __str__(self):
         return f"Orçamento #{self.id} - {self.cliente} (nº {self.numero})"
 
-    def total(self):
+    def subtotal_itens(self):
         return sum(item.total() for item in self.itens.all())
+
+    def desconto_calculado(self):
+        subtotal = Decimal(self.subtotal_itens() or 0)
+        percentual = Decimal(self.desconto_percentual or 0)
+        valor = Decimal(self.desconto_valor or 0)
+        if subtotal <= Decimal("0.00"):
+            return Decimal("0.00")
+        if percentual > Decimal("0.00"):
+            desconto = (subtotal * percentual) / Decimal("100")
+        else:
+            desconto = valor
+        if desconto < Decimal("0.00"):
+            return Decimal("0.00")
+        return min(desconto, subtotal)
+
+    def total(self):
+        subtotal = Decimal(self.subtotal_itens() or 0)
+        return max(Decimal("0.00"), subtotal - self.desconto_calculado())
 
     def atualizar_total(self):
         self.valor_total = self.total()
@@ -62,6 +82,8 @@ class ItemOrcamento(models.Model):
     descricao = models.TextField(blank=True)
     valor_unitario = models.DecimalField(max_digits=10, decimal_places=2)
     quantidade = models.PositiveIntegerField(default=1)
+    desconto_valor = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    desconto_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tipo_item = models.CharField(max_length=20, choices=TIPO_ITEM_CHOICES, default="servico")
     origem = models.CharField(max_length=10, choices=ORIGEM_CHOICES, default='manual')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pendente')  # ← campo novo
@@ -73,9 +95,27 @@ class ItemOrcamento(models.Model):
         related_name="itens_orcamento_responsavel",
         limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
     )
+    comissionavel = models.BooleanField(default=True)
+
+    def subtotal(self):
+        return self.valor_unitario * self.quantidade
+
+    def desconto_calculado(self):
+        subtotal = Decimal(self.subtotal() or 0)
+        percentual = Decimal(self.desconto_percentual or 0)
+        valor = Decimal(self.desconto_valor or 0)
+        if subtotal <= Decimal("0.00"):
+            return Decimal("0.00")
+        if percentual > Decimal("0.00"):
+            desconto = (subtotal * percentual) / Decimal("100")
+        else:
+            desconto = valor
+        if desconto < Decimal("0.00"):
+            return Decimal("0.00")
+        return min(desconto, subtotal)
 
     def total(self):
-        return self.valor_unitario * self.quantidade
+        return max(Decimal("0.00"), self.subtotal() - self.desconto_calculado())
 
     def save(self, *args, **kwargs):
         if not self.tipo_item:
