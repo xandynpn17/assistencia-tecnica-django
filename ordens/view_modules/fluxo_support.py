@@ -23,6 +23,7 @@ from configuracoes.models import ConfiguracaoSistema, Empresa, MarcaGarantia, Mo
 from configuracoes.permissions import ORDER_CREATION_ROLES, ORDER_ROLES, RoleRequiredMixin, role_required
 from orcamentos.forms import ItemOrcamentoForm, OrcamentoForm
 from orcamentos.models import Orcamento
+from orcamentos.services import FluxoOrcamentoService
 from ..forms import LinhaTrabalhoForm, OrdemSerieForm, OrdemServicoForm, ServicoPecaForm
 from ..models import (
     LinhaTrabalho,
@@ -117,40 +118,14 @@ def _recalcular_comissoes_itens_antecipado(ordem):
 
 
 def _migrar_itens_aprovados_para_servicos_pecas(ordem, usuario=None):
-    from orcamentos.models import ItemOrcamento
-
-    itens_aprovados = ItemOrcamento.objects.select_related("tecnico_responsavel").filter(
-        orcamento__ordem_servico=ordem,
-        status="aprovado",
+    resultado = FluxoOrcamentoService.migrar_itens_aprovados_da_ordem(
+        ordem,
+        usuario=usuario,
+        criar_historico=True,
+        usar_valor_liquido=False,
+        copiar_comissionavel=False,
     )
-    total_migrados = 0
-    for item in itens_aprovados:
-        tipo_item = (item.tipo_item or "").strip()
-        if tipo_item not in {"servico", "peca"}:
-            tipo_item = "peca" if item.origem == "estoque" else "servico"
-        _, created = ServicoPeca.objects.get_or_create(
-            ordem=ordem,
-            item_orcamento=item,
-            defaults={
-                "tipo": tipo_item,
-                "nome": item.nome,
-                "descricao": item.descricao,
-                "quantidade": item.quantidade,
-                "valor_unitario": item.valor_unitario,
-                "tecnico_responsavel": item.tecnico_responsavel or ordem.tecnico_responsavel,
-            },
-        )
-        total_migrados += int(created)
-
-    if total_migrados:
-        LinhaTrabalho.objects.create(
-            ordem=ordem,
-            status=ordem.status,
-            descricao=f"Itens aprovados migrados para Serviços & Peças ({total_migrados}).",
-            usuario=usuario,
-            tipo_evento="sistema",
-        )
-    return total_migrados
+    return resultado.total_migrados
 
 
 def _somar_meses_data(data_base, meses):

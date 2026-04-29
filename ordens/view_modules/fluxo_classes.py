@@ -1,6 +1,7 @@
 from . import fluxo_support as _support
 import uuid
 from datetime import timedelta
+from ..services import ResumoOperacionalService
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
@@ -342,33 +343,7 @@ class OrdemServicoResumoView(RoleRequiredMixin, DetailView):
             confirmacao_status_class = "warning"
             confirmacao_evento_em = None
 
-        dias_aberta = 0
-        if ordem.data_abertura:
-            dias_aberta = max((timezone.localdate() - ordem.data_abertura.date()).days, 0)
-
-        resumo_alertas = []
-        if not (ordem.cliente.telefone or "").strip():
-            resumo_alertas.append("Cliente sem telefone. O envio digital depende desse dado.")
-        if not ordem.tecnico_responsavel_valido:
-            resumo_alertas.append("Tecnico responsavel ainda nao definido.")
-        if not (ordem.numero_serie_equipamento or "").strip():
-            resumo_alertas.append("Numero de serie nao informado.")
-
-        proxima_acao_por_status = {
-            "diagnosticar": "Registrar diagnostico inicial e atualizar a linha de trabalho.",
-            "em_andamento": "Seguir execucao tecnica e registrar evolucao na OS.",
-            "pendente_tecnico": "Aguardar retorno tecnico e manter cliente informado.",
-            "pendente_cliente": "Cobrar retorno/aprovacao do cliente.",
-            "pendente_marca": "Acompanhar posicao da marca/parceiro.",
-            "pendente_pecas": "Acompanhar chegada de pecas para continuar o reparo.",
-            "pendente_orcamento": "Concluir e enviar orcamento ao cliente.",
-            "autorizado": "Executar servico autorizado e registrar pecas/servicos.",
-            "pronto_contactado": "Organizar retirada e fechamento financeiro.",
-            "recusado": "Registrar devolucao e finalizar tratativas.",
-            "devolucao": "Concluir entrega sem reparo e fechar quando aplicavel.",
-            "concluida": "Ordem finalizada.",
-        }
-        proxima_acao = proxima_acao_por_status.get(ordem.status, "Validar dados da OS e seguir fluxo operacional.")
+        resumo_operacional = ResumoOperacionalService.construir(ordem)
 
         link_confirmacao_publico = self.request.build_absolute_uri(
             reverse("confirmar_os_publico", kwargs={"token": ordem.token_confirmacao})
@@ -381,9 +356,10 @@ class OrdemServicoResumoView(RoleRequiredMixin, DetailView):
         context["confirmacao_status"] = confirmacao_status
         context["confirmacao_status_class"] = confirmacao_status_class
         context["confirmacao_evento_em"] = confirmacao_evento_em
-        context["dias_aberta"] = dias_aberta
-        context["resumo_alertas"] = resumo_alertas
-        context["proxima_acao"] = proxima_acao
+        context["dias_aberta"] = resumo_operacional.dias_aberta
+        context["resumo_alertas"] = resumo_operacional.resumo_alertas
+        context["proxima_acao"] = resumo_operacional.proxima_acao
+        context["resumo_operacional"] = resumo_operacional
         context["link_confirmacao_publico"] = link_confirmacao_publico
         return context
 

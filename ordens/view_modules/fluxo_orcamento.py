@@ -1,3 +1,5 @@
+from orcamentos.services import FluxoOrcamentoService
+
 from . import fluxo_support as _support
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
@@ -9,42 +11,34 @@ def migrar_orcamento(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
     orcamento = getattr(ordem, "orcamento", None)
     if ordem.fechada:
-        messages.error(request, "A OS está fechada. Reabra para alterar o orçamento.")
+        messages.error(request, "A OS estÃ¡ fechada. Reabra para alterar o orÃ§amento.")
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
     if request.method == "POST":
         if not orcamento or not orcamento.itens.exists():
-            messages.warning(request, "Nenhum item encontrado no orçamento.")
+            messages.warning(request, "Nenhum item encontrado no orÃ§amento.")
             return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
-        itens_aprovados = orcamento.itens.filter(status="aprovado")
-        if not itens_aprovados.exists():
-            messages.warning(request, "Somente itens aprovados podem ser migrados para Serviços & Peças.")
-            return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
-
-        count = 0
-        for item in itens_aprovados:
-            _, created = ServicoPeca.objects.get_or_create(
-                ordem=ordem,
-                item_orcamento=item,
-                defaults={
-                    "tipo": (item.tipo_item if item.tipo_item in {"servico", "peca"} else ("peca" if item.origem == "estoque" else "servico")),
-                    "nome": item.nome,
-                    "descricao": item.descricao,
-                    "quantidade": item.quantidade,
-                    "valor_unitario": item.valor_unitario,
-                    "tecnico_responsavel": item.tecnico_responsavel or ordem.tecnico_responsavel,
-                },
-            )
-            count += int(created)
-
-        LinhaTrabalho.objects.create(
-            ordem=ordem,
-            descricao=f"Itens do orçamento migrados ({count} itens)",
-            status=ordem.status,
+        resultado = FluxoOrcamentoService.migrar_itens_aprovados_da_ordem(
+            ordem,
             usuario=request.user,
-            tipo_evento="sistema",
+            criar_historico=False,
+            usar_valor_liquido=False,
+            copiar_comissionavel=False,
         )
+        count = resultado.total_migrados
+        if not resultado.itens_aprovados:
+            messages.warning(request, "Somente itens aprovados podem ser migrados para ServiÃ§os & PeÃ§as.")
+            return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+
+        if count:
+            LinhaTrabalho.objects.create(
+                ordem=ordem,
+                descricao=f"Itens do orÃ§amento migrados ({count} itens)",
+                status=ordem.status,
+                usuario=request.user,
+                tipo_evento="sistema",
+            )
         registrar_auditoria(
             logger,
             request,
@@ -55,12 +49,16 @@ def migrar_orcamento(request, pk):
         _log_os(
             ordem,
             "edicao_critica",
-            f"Orçamento migrado para serviços/peças ({count} itens).",
+            f"OrÃ§amento migrado para serviÃ§os/peÃ§as ({count} itens).",
             usuario=request.user,
             dados_extras={"itens": count},
         )
 
-        messages.success(request, f"{count} itens migrados para Serviços & Peças com sucesso.")
+        if not count:
+            messages.info(request, "Os itens aprovados jÃ¡ estavam migrados para ServiÃ§os & PeÃ§as.")
+            return redirect(f"{ordem.get_absolute_url()}?tab=servicos")
+
+        messages.success(request, f"{count} itens migrados para ServiÃ§os & PeÃ§as com sucesso.")
         return redirect(f"{ordem.get_absolute_url()}?tab=servicos")
 
     return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")

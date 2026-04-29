@@ -42,6 +42,11 @@ SENSITIVE_PERMISSION_MESSAGES = {
     "perm_caixa_ver_auditoria": "Voce nao tem permissao para acessar a auditoria operacional.",
 }
 
+SENSITIVE_PERMISSION_DEFAULT_ROLES = {
+    "perm_os_concluir": ORDER_ROLES,
+    "perm_os_reabrir": ORDER_ROLES,
+}
+
 
 def is_management_user(user):
     if not getattr(user, "is_authenticated", False):
@@ -68,6 +73,9 @@ def has_sensitive_permission(user, permission_name):
     if not getattr(user, "is_authenticated", False):
         return False
     if is_management_user(user):
+        return True
+    default_roles = SENSITIVE_PERMISSION_DEFAULT_ROLES.get(permission_name)
+    if default_roles and has_role(user, default_roles):
         return True
     return bool(getattr(user, permission_name, False))
 

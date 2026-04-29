@@ -3,6 +3,7 @@ from django.core.exceptions import PermissionDenied
 
 from . import fluxo_support as _support
 from configuracoes.permissions import require_sensitive_permission
+from ..services import FechamentoOSService
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
@@ -376,57 +377,31 @@ def toggle_fechamento_os(request, pk):
                 else "Voce nao tem permissao para reabrir esta OS."
             ),
         )
-        itens_migrados = 0
-        if fechando:
-            itens_migrados = _migrar_itens_aprovados_para_servicos_pecas(ordem, usuario=request.user)
-
-        ordem.atualizar_status_fechamento(fechar=fechando, usuario=request.user)
-        acao = "Ordem fechada" if ordem.fechada else "Ordem reaberta"
-        reservas_processadas = 0
-        itens_estoque_processados = 0
-        if ordem.fechada:
-            reservas_processadas = consumir_reservas_ordem(ordem, usuario=request.user)
-            itens_estoque_processados = consumir_itens_estoque_ordem(ordem, usuario=request.user)
-        else:
-            reservas_processadas = devolver_reservas_ordem(ordem, usuario=request.user)
-            itens_estoque_processados = devolver_itens_estoque_ordem(ordem, usuario=request.user)
-
-        # Registrar no historico quem fechou/reabriu
-        LinhaTrabalho.objects.create(
-            ordem=ordem,
-            descricao=acao,
-            status=ordem.status,
-            usuario=request.user,
-            tipo_evento="sistema",
-        )
+        resultado = FechamentoOSService.alternar_fechamento(ordem, usuario=request.user)
         registrar_auditoria(logger, request, "fechamento_os_alterado", ordem=ordem, extra={"fechada": ordem.fechada})
 
         if ordem.fechada and request.GET.get("ir_caixa") == "1":
-            total_os = sum(item.total() for item in ordem.servicos_pecas.all())
             messages.success(request, "Ordem fechada. Redirecionando para registro de pagamento no Caixa.")
-            return redirect(f"{reverse('caixa:registrar_pagamento')}?os={ordem.id}&valor={total_os:.2f}")
-
-        if ordem.fechada and ordem.tipo_reparo == "Garantia":
-            upsert_auditoria_garantia_ordem(ordem)
+            return redirect(f"{reverse('caixa:registrar_pagamento')}?os={ordem.id}&valor={resultado.total_os:.2f}")
         _log_os(
             ordem,
             "alteracao_status",
-            f"{acao}.",
+            f"{resultado.acao}.",
             usuario=request.user,
             dados_extras={
                 "status": ordem.status,
                 "fechada": ordem.fechada,
-                "itens_migrados": itens_migrados,
-                "itens_estoque_processados": itens_estoque_processados,
+                "itens_migrados": resultado.itens_migrados,
+                "itens_estoque_processados": resultado.itens_estoque_processados,
             },
         )
 
-        if reservas_processadas or itens_estoque_processados:
+        if resultado.reservas_processadas or resultado.itens_estoque_processados:
             messages.success(
                 request,
                 "Ordem atualizada com sucesso! "
-                f"Reservas processadas: {reservas_processadas}. "
-                f"Itens de estoque processados: {itens_estoque_processados}.",
+                f"Reservas processadas: {resultado.reservas_processadas}. "
+                f"Itens de estoque processados: {resultado.itens_estoque_processados}.",
             )
         else:
             messages.success(request, "Ordem atualizada com sucesso!")

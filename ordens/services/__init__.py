@@ -1,7 +1,11 @@
-__all__ = ["LogOSService", "OSAccessPolicyService"]
+__all__ = ["FechamentoOSService", "LogOSService", "OSAccessPolicyService", "ResumoOperacionalService"]
 
 
 def __getattr__(name):
+    if name == "FechamentoOSService":
+        from .fechamento_os import FechamentoOSService
+
+        return FechamentoOSService
     if name == "LogOSService":
         from .log_os_service import LogOSService
 
@@ -10,4 +14,8 @@ def __getattr__(name):
         from .os_policy_service import OSAccessPolicyService
 
         return OSAccessPolicyService
+    if name == "ResumoOperacionalService":
+        from .resumo_operacional import ResumoOperacionalService
+
+        return ResumoOperacionalService
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

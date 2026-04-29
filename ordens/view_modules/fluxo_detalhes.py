@@ -1,7 +1,8 @@
-from . import fluxo_support as _support
+﻿from . import fluxo_support as _support
 from ..services.anexos import EXTENSOES_IMAGEM, MAX_FOTOS_POR_OS, preparar_arquivo_anexo
 from django.core.exceptions import PermissionDenied
 from configuracoes.permissions import has_sensitive_permission, require_sensitive_permission
+from ..services import FechamentoOSService, ResumoOperacionalService
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
@@ -19,7 +20,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
         orcamento, _ = Orcamento.objects.get_or_create(
             ordem_servico=ordem,
-            defaults={"cliente": ordem.cliente, "descricao": "Orçamento"}
+            defaults={"cliente": ordem.cliente, "descricao": "OrÃ§amento"}
         )
 
         context["linhas"] = ordem.linhas_trabalho.exclude(
@@ -47,25 +48,21 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["saldo_financeiro_os"] = saldo_financeiro
         context["os_pago"] = context["total_os"] > 0 and total_pago >= context["total_os"]
         context["referencias_pagamento"] = referencias_pagamento
-        if ordem.fechada and saldo_financeiro > 0:
-            fluxo_label = "Concluída aguardando pagamento"
-            fluxo_tone = "warning"
-        elif ordem.fechada and context["os_pago"]:
-            fluxo_label = "Concluída e liberada para entrega"
-            fluxo_tone = "success"
-        elif ordem.status == "pronto_contactado":
-            fluxo_label = "Pronta para fechamento e caixa"
-            fluxo_tone = "info"
-        else:
-            fluxo_label = "Em atendimento"
-            fluxo_tone = "secondary"
-        context["fluxo_os_label"] = fluxo_label
-        context["fluxo_os_tone"] = fluxo_tone
-        context["pode_receber_no_caixa"] = ordem.fechada and saldo_financeiro > 0
-        context["liberada_para_entrega"] = ordem.fechada and context["os_pago"]
-        data_fim_os = ordem.data_conclusao.date() if ordem.data_conclusao else timezone.localdate()
-        data_inicio_os = ordem.data_abertura.date() if ordem.data_abertura else timezone.localdate()
-        context["dias_em_aberto"] = max(0, (data_fim_os - data_inicio_os).days)
+        resumo_operacional = ResumoOperacionalService.construir(
+            ordem,
+            total_os=context["total_os"],
+            total_pago=total_pago,
+            saldo_financeiro=saldo_financeiro,
+            os_pago=context["os_pago"],
+        )
+        context["resumo_operacional"] = resumo_operacional
+        context["fluxo_os_label"] = resumo_operacional.fluxo_label
+        context["fluxo_os_tone"] = resumo_operacional.fluxo_tone
+        context["pode_receber_no_caixa"] = resumo_operacional.pode_receber_no_caixa
+        context["liberada_para_entrega"] = resumo_operacional.liberada_para_entrega
+        context["dias_em_aberto"] = resumo_operacional.dias_aberta
+        context["proxima_acao"] = resumo_operacional.proxima_acao
+        context["resumo_alertas"] = resumo_operacional.resumo_alertas
         context["auditoria_garantia"] = (
             AuditoriaGarantia.objects.select_related("fornecedor", "marca", "regra_garantia")
             .filter(ordem_servico=ordem)
@@ -143,9 +140,9 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         tabs = [
             {"id": "detalhes", "label": "Detalhes", "icon": "bi bi-info-circle"},
             {"id": "linhas", "label": "Linhas de Trabalho", "icon": "bi bi-list-task"},
-            {"id": "servicos", "label": "Serviços & Peças", "icon": "bi bi-bag"},
-            {"id": "orcamentos", "label": "Orçamentos", "icon": "bi bi-cash-stack"},
-            {"id": "relatorio", "label": "Relatório Técnico", "icon": "bi bi-tools"},
+            {"id": "servicos", "label": "ServiÃ§os & PeÃ§as", "icon": "bi bi-bag"},
+            {"id": "orcamentos", "label": "OrÃ§amentos", "icon": "bi bi-cash-stack"},
+            {"id": "relatorio", "label": "RelatÃ³rio TÃ©cnico", "icon": "bi bi-tools"},
         ]
         if context["pedidos_compra"].exists() or tab == "pedidos":
             tabs.insert(3, {"id": "pedidos", "label": "R$ Pedidos", "icon": "bi bi-cart"})
@@ -237,10 +234,10 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                     extra={"linha_id": linha.id},
                 )
             elif OrdemServico.normalizar_status_os(request.POST.get("status")) == "concluida":
-                messages.error(request, "O status Concluída só pode ser definido ao fechar a ordem.")
+                messages.error(request, "O status ConcluÃ­da sÃ³ pode ser definido ao fechar a ordem.")
             return redirect(f"{self.object.get_absolute_url()}?tab=linhas")
 
-        # Serviços & Peças
+        # ServiÃ§os & PeÃ§as
         elif form_type == "servico_peca":
             servico_form = ServicoPecaForm(request.POST)
             if servico_form.is_valid():
@@ -256,7 +253,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 _log_os(
                     self.object,
                     "edicao_critica",
-                    f"Serviço/Peça adicionado: {item.nome}.",
+                    f"ServiÃ§o/PeÃ§a adicionado: {item.nome}.",
                     usuario=request.user,
                     dados_extras={"item_id": item.id, "tipo": item.tipo},
                 )
@@ -269,20 +266,20 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             if item.item_orcamento_id:
                 cancelar_comissoes_por_item(
                     item.item_orcamento,
-                    motivo="Serviço/Peça removido da OS.",
+                    motivo="ServiÃ§o/PeÃ§a removido da OS.",
                     evento="CANCELAMENTO_ITEM",
                 )
             else:
                 cancelar_comissoes_por_servico_peca(
                     item.id,
-                    motivo="Serviço/Peça removido da OS.",
+                    motivo="ServiÃ§o/PeÃ§a removido da OS.",
                     evento="CANCELAMENTO_ITEM",
                 )
             item.delete()
             _log_os(
                 self.object,
                 "cancelamento",
-                f"Serviço/Peça removido: {nome_item}.",
+                f"ServiÃ§o/PeÃ§a removido: {nome_item}.",
                 usuario=request.user,
                 dados_extras={"item_id": item_id},
             )
@@ -311,12 +308,12 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             descricao = (request.POST.get("descricao_talao") or "").strip()
             imagem = request.FILES.get("imagem_talao")
             if not numero:
-                messages.error(request, "Informe o número do talão.")
+                messages.error(request, "Informe o nÃºmero do talÃ£o.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
             try:
                 valor = Decimal(valor_raw) if valor_raw else None
             except Exception:
-                messages.error(request, "Valor do talão inválido.")
+                messages.error(request, "Valor do talÃ£o invÃ¡lido.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
             talao, created = OrdemTalao.objects.get_or_create(
                 ordem=self.object,
@@ -341,7 +338,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             _log_os(
                 self.object,
                 "edicao_critica",
-                f"Talão registrado: {numero}.",
+                f"TalÃ£o registrado: {numero}.",
                 usuario=request.user,
                 dados_extras={"numero_talao": numero, "talao_id": talao.id},
             )
@@ -358,19 +355,11 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             except PermissionDenied as exc:
                 messages.error(request, str(exc) or "Permissao insuficiente.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
-            itens_migrados = _migrar_itens_aprovados_para_servicos_pecas(self.object, usuario=request.user)
-            total_os = sum(item.total() for item in self.object.servicos_pecas.all())
             try:
-                self.object.transicionar_status(
-                    "concluida",
-                    usuario=request.user,
-                    motivo="Finalizacao e lancamento no caixa",
-                )
+                resultado = FechamentoOSService.finalizar_para_caixa(self.object, usuario=request.user)
             except ValueError as exc:
                 messages.error(request, str(exc))
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
-            reservas_processadas = consumir_reservas_ordem(self.object, usuario=request.user)
-            itens_estoque_processados = consumir_itens_estoque_ordem(self.object, usuario=request.user)
             _log_os(
                 self.object,
                 "alteracao_status",
@@ -378,9 +367,9 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 usuario=request.user,
                 dados_extras={
                     "status": self.object.status,
-                    "reservas_processadas": reservas_processadas,
-                    "itens_migrados": itens_migrados,
-                    "itens_estoque_processados": itens_estoque_processados,
+                    "reservas_processadas": resultado.reservas_processadas,
+                    "itens_migrados": resultado.itens_migrados,
+                    "itens_estoque_processados": resultado.itens_estoque_processados,
                 },
             )
             registrar_auditoria(
@@ -388,15 +377,15 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 request,
                 "os_concluida_no_caixa",
                 ordem=self.object,
-                extra={"total_os": f"{total_os:.2f}", "reservas_processadas": reservas_processadas},
+                extra={"total_os": f"{resultado.total_os:.2f}", "reservas_processadas": resultado.reservas_processadas},
             )
 
             messages.success(
                 request,
-                f"OS finalizada! Continue no Caixa para registrar o pagamento de {total_os:.2f}.",
+                f"OS finalizada! Continue no Caixa para registrar o pagamento de {resultado.total_os:.2f}.",
             )
             if request.POST.get("ir_caixa") == "1":
-                return redirect(f"{reverse('caixa:registrar_pagamento')}?os={self.object.id}&valor={total_os:.2f}")
+                return redirect(f"{reverse('caixa:registrar_pagamento')}?os={self.object.id}&valor={resultado.total_os:.2f}")
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
         elif form_type == "enviar_mensagem_modelo":
@@ -405,17 +394,17 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             assunto = (request.POST.get("assunto") or "").strip()
             mensagem = (request.POST.get("mensagem") or "").strip()
             if canal not in {"email", "whatsapp"}:
-                messages.error(request, "Canal de envio inválido.")
+                messages.error(request, "Canal de envio invÃ¡lido.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
             if not modelo_id:
                 messages.error(request, "Selecione um modelo de mensagem.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
             modelo = get_object_or_404(ModeloMensagem, id=modelo_id, ativo=True)
             if canal == "email" and not assunto:
-                messages.error(request, "Assunto é obrigatório para envio por e-mail.")
+                messages.error(request, "Assunto Ã© obrigatÃ³rio para envio por e-mail.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
             if not mensagem:
-                messages.error(request, "Mensagem não pode ficar vazia.")
+                messages.error(request, "Mensagem nÃ£o pode ficar vazia.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
 
             notif = _registrar_notificacao(
@@ -443,7 +432,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                     dados_extras={"canal": canal, "modelo_id": modelo.id, "notificacao_id": notif.id},
                 )
                 if resultado.get("url"):
-                    messages.success(request, "O WhatsApp foi aberto em nova aba, mantendo a sessão no sistema.")
+                    messages.success(request, "O WhatsApp foi aberto em nova aba, mantendo a sessÃ£o no sistema.")
                     wa = quote(resultado.get("url", ""), safe="")
                     wa_app = quote(resultado.get("app_url", ""), safe="")
                     return redirect(f"{self.object.get_absolute_url()}?tab=detalhes&wa={wa}&wa_app={wa_app}")
@@ -514,7 +503,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             pedido = get_object_or_404(PedidoCompra, id=pedido_id, ordem=self.object)
             status_validos = {valor for valor, _ in PedidoCompra.STATUS_CHOICES}
             if status_linha not in status_validos:
-                messages.error(request, "Status de pedido inválido.")
+                messages.error(request, "Status de pedido invÃ¡lido.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
 
             PedidoCompraLinha.objects.create(
@@ -598,14 +587,14 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             if total_fotos > MAX_FOTOS_POR_OS:
                 messages.error(
                     request,
-                    f"A OS aceita no máximo {MAX_FOTOS_POR_OS} fotos. Remova algumas ou envie menos imagens.",
+                    f"A OS aceita no mÃ¡ximo {MAX_FOTOS_POR_OS} fotos. Remova algumas ou envie menos imagens.",
                 )
                 return redirect(f"{self.object.get_absolute_url()}?tab=arquivos")
             if incluir_relatorio and total_fotos <= 3:
                 incluir_relatorio = False
                 messages.warning(
                     request,
-                    "Inclusão no relatório técnico habilita com 4 ou mais fotos. Arquivos anexados sem marcação.",
+                    "InclusÃ£o no relatÃ³rio tÃ©cnico habilita com 4 ou mais fotos. Arquivos anexados sem marcaÃ§Ã£o.",
                 )
 
             criados = 0
@@ -677,20 +666,20 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 _log_os(
                     self.object,
                     "confirmacao",
-                    f"Confirmação registrada via {tipo_conf}.",
+                    f"ConfirmaÃ§Ã£o registrada via {tipo_conf}.",
                     usuario=request.user,
                     dados_extras={"tipo_confirmacao": tipo_conf},
                 )
-                messages.success(request, "Confirmação da OS registrada com sucesso.")
+                messages.success(request, "ConfirmaÃ§Ã£o da OS registrada com sucesso.")
             except ValueError as exc:
                 messages.error(request, str(exc))
             return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
 
 
-        # Relatório Técnico
+        # RelatÃ³rio TÃ©cnico
         elif form_type == "assinatura_saida":
             if not self.object.confirmado:
-                messages.error(request, "Registre primeiro a assinatura de entrada/confirmação da OS.")
+                messages.error(request, "Registre primeiro a assinatura de entrada/confirmaÃ§Ã£o da OS.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
 
             assinatura_saida = request.FILES.get("assinatura_saida_imagem")
@@ -702,7 +691,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                     if timezone.is_naive(data_saida):
                         data_saida = timezone.make_aware(data_saida, timezone.get_current_timezone())
                 except ValueError:
-                    messages.error(request, "Data/hora de saída inválida.")
+                    messages.error(request, "Data/hora de saÃ­da invÃ¡lida.")
                     return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
 
             self.object.data_assinatura_saida = data_saida
@@ -715,14 +704,14 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             LinhaTrabalho.objects.create(
                 ordem=self.object,
                 status=self.object.status,
-                descricao="Assinatura de saída do cliente registrada.",
+                descricao="Assinatura de saÃ­da do cliente registrada.",
                 usuario=request.user,
                 tipo_evento="manual",
             )
             _log_os(
                 self.object,
                 "confirmacao",
-                "Assinatura de saída registrada na OS.",
+                "Assinatura de saÃ­da registrada na OS.",
                 usuario=request.user,
                 dados_extras={
                     "form_type": "assinatura_saida",
@@ -730,7 +719,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                     "possui_arquivo": bool(assinatura_saida),
                 },
             )
-            messages.success(request, "Assinatura de saída registrada com sucesso.")
+            messages.success(request, "Assinatura de saÃ­da registrada com sucesso.")
             return redirect(f"{self.object.get_absolute_url()}?tab=detalhes")
 
         elif form_type == "relatorio":
@@ -741,15 +730,15 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             _log_os(
                 self.object,
                 "edicao_critica",
-                "Relatório técnico atualizado.",
+                "RelatÃ³rio tÃ©cnico atualizado.",
                 usuario=request.user,
                 dados_extras={"tipo_reparacao": self.object.tipo_reparacao or ""},
             )
 
-            # Registrar quem atualizou o relatório
+            # Registrar quem atualizou o relatÃ³rio
             LinhaTrabalho.objects.create(
                 ordem=self.object,
-                descricao="Relatório técnico atualizado",
+                descricao="RelatÃ³rio tÃ©cnico atualizado",
                 status=self.object.status,
                 usuario=request.user,
                 tipo_evento="manual",
@@ -757,7 +746,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             registrar_auditoria(logger, request, "relatorio_tecnico_atualizado", ordem=self.object)
             return redirect(f"{self.object.get_absolute_url()}?tab=relatorio")
 
-        messages.warning(request, "A ação enviada não foi reconhecida.")
+        messages.warning(request, "A aÃ§Ã£o enviada nÃ£o foi reconhecida.")
         return redirect(f"{self.object.get_absolute_url()}?tab={request.GET.get('tab', 'detalhes')}")
 
 

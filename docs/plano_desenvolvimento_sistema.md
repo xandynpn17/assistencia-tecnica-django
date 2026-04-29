@@ -37,7 +37,7 @@ Status: concluida
 ## Etapas pendentes
 
 ### Fase 1 - Mapa oficial do fluxo da OS
-Status: diagnostico concluido / implementacao pendente
+Status: diagnostico concluido / implementacao inicial concluida
 Prioridade: alta
 
 Objetivo:
@@ -61,8 +61,21 @@ Resultado esperado:
 - o usuario trabalha pela situacao da OS, nao pela memoria de qual tela usar;
 - o fluxo fica unico por regra, nao por sequencia rigida.
 
+Feito nesta etapa:
+- service `ordens/services/resumo_operacional.py` criado para centralizar leitura operacional por status;
+- tela de detalhes da OS agora mostra:
+  - proxima acao recomendada;
+  - acoes recomendadas;
+  - alertas operacionais principais;
+  - situacao operacional resumida no topo.
+
+Ainda pendente nesta fase:
+- transformar a matriz `status -> acoes permitidas -> bloqueios` em regra formal reutilizavel;
+- revisar quais botoes devem ficar em destaque por status;
+- reduzir mais a dispersao de acoes entre abas.
+
 ### Fase 2 - Regras criticas em services
-Status: pendente
+Status: implementacao concluida
 Prioridade: alta
 
 Objetivo:
@@ -92,6 +105,13 @@ Resultado esperado:
 - regra unica para acoes sensiveis;
 - menos logica espalhada em views;
 - menor risco de inconsistencias.
+
+Feito nesta etapa:
+- `ordens/services/fechamento_os.py` criado e aplicado no fechamento, reabertura e finalizacao para caixa;
+- `orcamentos/services/fluxo_orcamento.py` criado e aplicado na aprovacao, recusa e migracao de itens;
+- helper de migracao de itens aprovados da OS passou a delegar para o service central;
+- fluxo de orcamento em `ordens` e `orcamentos` passou a reutilizar a mesma camada de regra;
+- testes focados de OS, caixa e orcamento executados com sucesso apos a refatoracao.
 
 ### Fase 3 - Permissoes granulares
 Status: implementacao inicial concluida / ampliacao pendente
@@ -159,7 +179,7 @@ Resultado esperado:
 - seguranca melhora sem engessar a operacao.
 
 ### Fase 4 - Orcamento como extensao natural da OS
-Status: pendente
+Status: implementacao tecnica inicial concluida / consolidacao visual pendente
 Prioridade: media/alta
 
 Objetivo:
@@ -182,6 +202,14 @@ O que implementar:
 Resultado esperado:
 - o usuario sente que o orcamento mora dentro da OS;
 - o codigo deixa de ter dois "donos" do mesmo fluxo.
+
+Feito nesta etapa:
+- a logica de aprovacao, recusa e migracao foi consolidada em `orcamentos/services/fluxo_orcamento.py`;
+- os pontos ativos em `ordens` e `orcamentos` passaram a usar a mesma regra central.
+
+Ainda pendente nesta fase:
+- simplificar mais rotas e pontos de entrada visuais;
+- revisar nomenclatura e mensagens para reforcar a OS como porta principal.
 
 ### Fase 5 - Revisao de encoding e textos
 Status: pendente

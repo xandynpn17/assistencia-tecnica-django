@@ -1039,6 +1039,23 @@ class IntegracaoFluxoOSCaixaTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, tecnico.username)
 
+    def test_detalhes_ordem_exibe_resumo_operacional_por_status(self):
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Resumo",
+            modelo_equipamento="Modelo Resumo",
+            numero_serie_equipamento="",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="pendente_pecas",
+        )
+        response = self.client.get(reverse("ordens:detalhes_ordem", args=[ordem.id]) + "?tab=detalhes")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Acompanhar chegada de pecas para continuar o reparo.")
+        self.assertContains(response, "Numero de serie nao informado.")
+        self.assertContains(response, "Acompanhar pedido de compra ou reserva de estoque.")
+
     def test_editar_os_permite_apenas_numero_serie_e_registra_linha(self):
         ordem = OrdemServico.objects.create(
             cliente=self.cliente,

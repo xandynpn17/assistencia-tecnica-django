@@ -1,4 +1,4 @@
-# orcamentos/views.py
+﻿# orcamentos/views.py
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -10,7 +10,8 @@ import re
 import string
 
 from .models import Orcamento, ItemOrcamento
-from ordens.models import OrdemServico, ServicoPeca, LinhaTrabalho
+from .services import FluxoOrcamentoService
+from ordens.models import OrdemServico
 from django.http import HttpResponse
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -25,7 +26,7 @@ from django.utils import timezone
 from configuracoes.models import ConfiguracaoSistema, Empresa
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from estoque.services import cancelar_reserva
-from caixa.services.comissoes import cancelar_comissoes_por_item, processar_evento_servico_finalizado
+from caixa.services.comissoes import cancelar_comissoes_por_item
 from configuracoes.permissions import ORDER_ROLES, require_sensitive_permission, role_required
 from core.pdf_preview import apply_document_preview_overrides, apply_preview_xframe_headers
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
@@ -138,7 +139,7 @@ def _aplicar_xframe_preview(request, response):
 
 
 # ==========================
-# Criar e editar orçamento
+# Criar e editar orÃ§amento
 # ==========================
 @role_required(ORDER_ROLES)
 def criar_orcamento(request, ordem_id):
@@ -154,7 +155,7 @@ def criar_orcamento(request, ordem_id):
         _aplicar_desconto_orcamento(orcamento, request.POST)
         orcamento.save()
         orcamento.atualizar_total()
-        messages.success(request, "Orçamento atualizado com sucesso!")
+        messages.success(request, "OrÃ§amento atualizado com sucesso!")
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     return render(request, "orcamentos/orcamento_form.html", {"orcamento": orcamento, "ordem": ordem})
 
@@ -168,7 +169,7 @@ def editar_orcamento(request, orcamento_id):
         _aplicar_desconto_orcamento(orcamento, request.POST)
         orcamento.save()
         orcamento.atualizar_total()
-        messages.success(request, "Orçamento atualizado com sucesso!")
+        messages.success(request, "OrÃ§amento atualizado com sucesso!")
         return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
     return render(request, "orcamentos/orcamento_form.html", {"orcamento": orcamento, "ordem": orcamento.ordem_servico})
 
@@ -180,14 +181,14 @@ def excluir_orcamento(request, orcamento_id):
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
         orcamento.delete()
-        messages.success(request, "Orçamento excluído com sucesso!")
+        messages.success(request, "OrÃ§amento excluÃ­do com sucesso!")
         return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
     return redirect("ordens:lista_ordens")
 
 
 
 # ==========================
-# Itens do orçamento
+# Itens do orÃ§amento
 # ==========================
 @role_required(ORDER_ROLES)
 def adicionar_item(request, orcamento_id):
@@ -230,7 +231,7 @@ def adicionar_item(request, orcamento_id):
         origem = "estoque" if produto else "manual"
         tipo_item = (request.POST.get("tipo_item") or "").strip()
         if tipo_item not in {"servico", "peca"}:
-            messages.error(request, "Selecione obrigatoriamente o tipo do item: Serviço ou Peça.")
+            messages.error(request, "Selecione obrigatoriamente o tipo do item: ServiÃ§o ou PeÃ§a.")
             return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos&open_modal=adicionar_item")
 
         item = ItemOrcamento.objects.create(
@@ -283,7 +284,7 @@ def adicionar_item(request, orcamento_id):
                         )
                         messages.info(request, f"Pre-reserva criada para {produto.nome}.")
                     else:
-                        messages.warning(request, f"Item {produto.nome} adicionado sem reserva por falta de saldo disponível no ponto.")
+                        messages.warning(request, f"Item {produto.nome} adicionado sem reserva por falta de saldo disponÃ­vel no ponto.")
         messages.success(request, "Item adicionado com sucesso!")
     return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
 
@@ -294,11 +295,11 @@ def editar_item(request, item_id):
         if request.method == "POST":
             return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
         from django.http import JsonResponse
-        return JsonResponse({"erro": "OS bloqueada para edição de orçamento."}, status=400)
+        return JsonResponse({"erro": "OS bloqueada para ediÃ§Ã£o de orÃ§amento."}, status=400)
     if request.method == "POST":
         item.ean = request.POST.get("ean", item.ean)
         item.nome = request.POST.get("nome", item.nome)
-        # Descrição nao deve ser alterada apos insercao para manter rastreabilidade.
+        # DescriÃ§Ã£o nao deve ser alterada apos insercao para manter rastreabilidade.
         try:
             quantidade = int(request.POST.get("quantidade", item.quantidade))
         except (TypeError, ValueError):
@@ -374,14 +375,14 @@ def excluir_item(request, item_id):
             messages.error(request, str(exc) or "Permissao insuficiente.")
             return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
         reservas_item = list(item.reservas_estoque.all())
-        cancelar_comissoes_por_item(item, motivo="Item removido do orçamento.", evento="CANCELAMENTO_ITEM")
+        cancelar_comissoes_por_item(item, motivo="Item removido do orÃ§amento.", evento="CANCELAMENTO_ITEM")
         item.delete()
         for reserva in reservas_item:
             try:
-                cancelar_reserva(reserva, usuario=request.user, motivo="Item de orçamento excluído")
+                cancelar_reserva(reserva, usuario=request.user, motivo="Item de orÃ§amento excluÃ­do")
             except ValueError:
                 pass
-        messages.success(request, "Item excluído com sucesso!")
+        messages.success(request, "Item excluÃ­do com sucesso!")
     return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
 # ==========================
@@ -398,29 +399,10 @@ def aceitar_itens_orcamento(request, orcamento_id):
             messages.warning(request, "Selecione ao menos um item para aprovar.")
             return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
 
-        itens = orc.itens.filter(id__in=itens_ids)
-        total_migrados = 0
-        for item in itens:
-            item.status = "aprovado"
-            item.save()
-        processar_evento_servico_finalizado(orc.ordem_servico, evento="SERVICO_FINALIZADO")
-
-        if not orc.itens.filter(status='pendente').exists():
-            orc.status = "aprovado"
-            orc.save()
-            ordem = orc.ordem_servico
-            status_anterior = ordem.status
-            if ordem.status not in {"pronto_contactado", "concluida"}:
-                ordem.status = "autorizado"
-                ordem.save(update_fields=["status"])
-            LinhaTrabalho.objects.create(
-                ordem=ordem,
-                status=ordem.status,
-                descricao=f"Todos os itens do orçamento aprovados pelo cliente (status: {status_anterior} -> {ordem.status}).",
-                usuario=request.user
-            )
-        messages.success(request, f"{itens.count()} item(s) aprovado(s) com sucesso!")
+        resultado = FluxoOrcamentoService.aceitar_itens(orc, itens_ids, usuario=request.user)
+        messages.success(request, f"{resultado.itens_processados} item(s) aprovado(s) com sucesso!")
     return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
+
 
 @role_required(ORDER_ROLES)
 def recusar_itens_orcamento(request, orcamento_id):
@@ -433,34 +415,16 @@ def recusar_itens_orcamento(request, orcamento_id):
             messages.warning(request, "Selecione ao menos um item para recusar.")
             return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
 
-        itens = orc.itens.filter(id__in=itens_ids)
-        for item in itens:
-            item.status = "recusado"
-            item.save()
-            cancelar_comissoes_por_item(item, motivo="Item de orçamento recusado.", evento="CANCELAMENTO_ITEM")
-
-        if not orc.itens.filter(status='pendente').exists():
-            orc.status = "recusado"
-            orc.save()
-            ordem = orc.ordem_servico
-            ordem.status = "pendente_cliente"
-            ordem.save()
-            LinhaTrabalho.objects.create(
-                ordem=ordem,
-                status="pendente_cliente",
-                descricao="Todos os itens do orçamento recusados pelo cliente.",
-                usuario=request.user
-            )
-        messages.warning(request, f"{itens.count()} item(s) recusado(s).")
+        resultado = FluxoOrcamentoService.recusar_itens(orc, itens_ids, usuario=request.user)
+        messages.warning(request, f"{resultado.itens_processados} item(s) recusado(s).")
     return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
-
-
 
 
 @role_required(ORDER_ROLES)
 def lista_orcamentos(request):
     orcamentos = Orcamento.objects.all()
     return render(request, 'orcamentos/lista_orcamentos.html', {'orcamentos': orcamentos})
+
 
 @role_required(ORDER_ROLES)
 def buscar_produtos(request):
@@ -470,11 +434,12 @@ def buscar_produtos(request):
         produtos = Produto.objects.filter(
             Q(nome__icontains=termo) | Q(ean__icontains=termo),
             ativo=True
-        )[:50]  # limita a 50 resultados
+        )[:50]
     return render(request, 'orcamentos/buscar_produtos.html', {
         'produtos': produtos,
         'termo': termo,
     })
+
 
 # ==========================
 # Migrar itens para serviços
@@ -492,48 +457,23 @@ def migrar_para_servicos(request, orcamento_id):
             messages.warning(request, "Nenhum item selecionado para migração.")
             return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
 
-        itens_aprovados = itens.filter(status="aprovado")
-        itens_nao_aprovados = itens.exclude(status="aprovado")
-        if itens_nao_aprovados.exists():
+        resultado = FluxoOrcamentoService.migrar_itens_selecionados(
+            orc,
+            itens_ids,
+            usuario=request.user,
+            criar_historico=True,
+            usar_valor_liquido=True,
+            copiar_comissionavel=True,
+        )
+        if resultado.itens_nao_aprovados:
             messages.warning(request, "Somente itens aprovados podem ser migrados para Serviços & Peças.")
-        if not itens_aprovados.exists():
+        if not resultado.itens_aprovados:
             return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
-
-        total_migrados = 0
-        for item in itens_aprovados:
-            tipo_item = (item.tipo_item or "").strip()
-            if tipo_item not in {"servico", "peca"}:
-                tipo_item = "peca" if item.origem == "estoque" else "servico"
-            quantidade_item = int(item.quantidade or 1) or 1
-            valor_unitario_liquido = (Decimal(item.total() or 0) / Decimal(quantidade_item)).quantize(Decimal("0.01"))
-            _, created = ServicoPeca.objects.get_or_create(
-                ordem=ordem,
-                item_orcamento=item,
-                defaults={
-                    "nome": item.nome,
-                    "descricao": item.descricao,
-                    "valor_unitario": valor_unitario_liquido,
-                    "quantidade": quantidade_item,
-                    "tipo": tipo_item,
-                    "tecnico_responsavel": item.tecnico_responsavel or ordem.tecnico_responsavel,
-                    "comissionavel": item.comissionavel,
-                },
-            )
-            if not created:
-                continue
-            total_migrados += 1
-
-        if not total_migrados:
+        if not resultado.total_migrados:
             messages.info(request, "Os itens selecionados já estavam migrados para Serviços & Peças.")
             return redirect(f"{ordem.get_absolute_url()}?tab=servicos")
 
-        LinhaTrabalho.objects.create(
-            ordem=ordem,
-            status="orcamentado",
-            descricao=f"{total_migrados} item(s) migrado(s) para Serviços & Peças.",
-            usuario=request.user
-        )
-        messages.success(request, f"{total_migrados} item(s) migrado(s) com sucesso!")
+        messages.success(request, f"{resultado.total_migrados} item(s) migrado(s) com sucesso!")
     return redirect(f"{ordem.get_absolute_url()}?tab=servicos")
 
 @role_required(ORDER_ROLES)
@@ -602,7 +542,7 @@ def imprimir_orcamento(request, pk):
         canv.line(doc.leftMargin, doc.bottomMargin - 0.25 * cm, A4[0] - doc.rightMargin, doc.bottomMargin - 0.25 * cm)
         canv.setFont(fonts["regular"], 8)
         canv.setFillColor(tema_docs["meta_color"])
-        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"Orçamento {orcamento.id} - OS {ordem.numero_os}")
+        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"OrÃ§amento {orcamento.id} - OS {ordem.numero_os}")
         canv.drawRightString(
             A4[0] - doc.rightMargin,
             doc.bottomMargin - 0.6 * cm,
@@ -723,14 +663,14 @@ def imprimir_orcamento(request, pk):
     logo = logo_or_paragraph(
         empresa,
         styles["OrcMeta"],
-        "<b>ASSISTÊNCIA TÉCNICA</b>",
+        "<b>ASSISTÃŠNCIA TÃ‰CNICA</b>",
         layout_docs["orc_logo_w_cm"] * cm,
         layout_docs["orc_logo_h_cm"] * cm,
     )
 
     header_right = [
-        Paragraph("ORÇAMENTO", styles["OrcTitle"]),
-        Paragraph(f"<b>Nº Orçamento:</b> {orcamento.id}", styles["OrcMeta"]),
+        Paragraph("ORÃ‡AMENTO", styles["OrcTitle"]),
+        Paragraph(f"<b>NÂº OrÃ§amento:</b> {orcamento.id}", styles["OrcMeta"]),
         Paragraph(f"<b>OS:</b> {ordem.numero_os}", styles["OrcMeta"]),
         Paragraph(f"<b>Data:</b> {orcamento.data_criacao.strftime('%d/%m/%Y')}", styles["OrcMeta"]),
         Paragraph(f"<b>Validade:</b> {data_validade}", styles["OrcMeta"]),
@@ -755,7 +695,7 @@ def imprimir_orcamento(request, pk):
 
     titulo_cliente = "Dados do Cliente"
     titulo_equipamento = "Equipamento"
-    titulo_itens = "Itens do Orçamento"
+    titulo_itens = "Itens do OrÃ§amento"
     if layout_preset == "executivo":
         titulo_cliente = "Resumo do Cliente"
         titulo_equipamento = "Resumo do Equipamento"
@@ -778,7 +718,7 @@ def imprimir_orcamento(request, pk):
                 [Paragraph("Tipo", styles["OrcLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["OrcValue"])],
                 [Paragraph("Marca", styles["OrcLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["OrcValue"])],
                 [Paragraph("Modelo", styles["OrcLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["OrcValue"])],
-                [Paragraph("Número de Série", styles["OrcLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["OrcValue"])],
+                [Paragraph("NÃºmero de SÃ©rie", styles["OrcLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["OrcValue"])],
                 [Paragraph("Defeito", styles["OrcLabel"]), Paragraph(ordem.defeito or "-", styles["OrcValue"])],
                 [Paragraph("Peritagem", styles["OrcLabel"]), Paragraph(ordem.peritagem or "-", styles["OrcValue"])],
             ]),
@@ -790,7 +730,7 @@ def imprimir_orcamento(request, pk):
     linhas = [[
         Paragraph("<b>Item</b>", styles["OrcLabel"]),
         Paragraph("<b>Qtd</b>", styles["OrcLabel"]),
-        Paragraph("<b>Unitário</b>", styles["OrcLabel"]),
+        Paragraph("<b>UnitÃ¡rio</b>", styles["OrcLabel"]),
         Paragraph("<b>Total</b>", styles["OrcLabel"]),
     ]]
     for idx_item, item in enumerate(orcamento.itens.all(), start=1):
@@ -860,8 +800,8 @@ def imprimir_orcamento(request, pk):
     ]))
     bloco_aprovacao = Table(
         [
-            [f"Data da aprovação: ____/____/______  (Validade: {data_validade})", "Assinatura do Cliente: ______________________________"],
-            ["Nome legível do cliente: ______________________________", "Assinatura da Assistência: ______________________________"],
+            [f"Data da aprovaÃ§Ã£o: ____/____/______  (Validade: {data_validade})", "Assinatura do Cliente: ______________________________"],
+            ["Nome legÃ­vel do cliente: ______________________________", "Assinatura da AssistÃªncia: ______________________________"],
         ],
         colWidths=[usable_w / 2.0, usable_w / 2.0],
     )
@@ -873,7 +813,7 @@ def imprimir_orcamento(request, pk):
         ("TOPPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_v"] + 1),
         ("BOTTOMPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_v"] + 1),
     ]))
-    titulo_condicoes = "Condições Comerciais e Aprovação"
+    titulo_condicoes = "CondiÃ§Ãµes Comerciais e AprovaÃ§Ã£o"
     story.extend([
         tabela_itens,
         Spacer(1, 0.25 * cm),
@@ -882,17 +822,16 @@ def imprimir_orcamento(request, pk):
         KeepTogether([
             _section(titulo_condicoes),
             Paragraph(
-                condicoes_orcamento or "Validade de 7 dias. Valores sujeitos à aprovação do cliente.",
+                condicoes_orcamento or "Validade de 7 dias. Valores sujeitos Ã  aprovaÃ§Ã£o do cliente.",
                 styles["OrcText"],
             ),
         ]),
         Spacer(1, 0.16 * cm),
         KeepTogether([bloco_aprovacao]),
         Spacer(1, 0.14 * cm),
-        Paragraph("Declaro estar ciente dos valores e autorizo o serviço descrito neste orçamento.", styles["OrcMeta"]),
+        Paragraph("Declaro estar ciente dos valores e autorizo o serviÃ§o descrito neste orÃ§amento.", styles["OrcMeta"]),
     ])
 
     doc.build(story, canvasmaker=make_numbered_canvas(_draw_footer))
     return _aplicar_xframe_preview(request, response)
-
 
