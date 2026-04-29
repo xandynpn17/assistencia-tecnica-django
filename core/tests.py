@@ -1,6 +1,8 @@
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -10,6 +12,43 @@ from caixa.models import CategoriaFinanceira, ContaPagar, ContaReceber, Pagament
 from clientes.models import Cliente
 from ordens.models import OrdemServico
 from orcamentos.models import Orcamento
+
+
+class EncodingIntegrityTests(TestCase):
+    def test_no_mojibake_sequences_in_runtime_sources(self):
+        base_dir = Path(settings.BASE_DIR)
+        bad_tokens = (
+            "Ã§",
+            "Ã¡",
+            "Ã£",
+            "Ã©",
+            "Ãª",
+            "Ã³",
+            "Ãº",
+            "Ã­",
+            "ÃƒÂ",
+            "Ã‚",
+            "Âº",
+            "Âª",
+        )
+        allowed_suffixes = {".py", ".html"}
+        excluded_dirs = {"migrations", "staticfiles", ".venv", "venv", "media", ".git", ".idea", ".vscode"}
+
+        offending = []
+        for path in base_dir.rglob("*"):
+            if path.suffix not in allowed_suffixes:
+                continue
+            rel_parts = set(path.relative_to(base_dir).parts)
+            if rel_parts.intersection(excluded_dirs):
+                continue
+            if path.name.startswith("test") or path.name == "tests.py":
+                continue
+
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            if any(token in text for token in bad_tokens):
+                offending.append(str(path.relative_to(base_dir)))
+
+        self.assertEqual(offending, [], f"Arquivos com possivel mojibake: {offending}")
 
 
 class DashboardTests(TestCase):
