@@ -902,7 +902,7 @@ def registrar_pagamento(request):
             desconto_aplicado = min(max(desconto_aplicado, Decimal("0.00")), valor_bruto_pagamento)
             valor_liquido_pagamento = valor_bruto_pagamento - desconto_aplicado
             if desconto_aplicado > Decimal("0.00") and valor_liquido_pagamento <= Decimal("0.00"):
-                form.add_error("desconto_valor", "O desconto nÃ£o pode zerar o pagamento.")
+                form.add_error("desconto_valor", "O desconto não pode zerar o pagamento.")
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             chave_idempotencia = (form.cleaned_data.get("chave_idempotencia") or "").strip()
             if chave_idempotencia:
@@ -923,7 +923,7 @@ def registrar_pagamento(request):
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             if ordem:
                 if desconto_aplicado > Decimal("0.00") and codigo_forma == "garantia_fabricante":
-                    erro_desconto = "Desconto nÃ£o pode ser aplicado em recebimento de garantia fabricante."
+                    erro_desconto = "Desconto não pode ser aplicado em recebimento de garantia fabricante."
                     form.add_error("desconto_valor", erro_desconto)
                     return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
                 if codigo_forma == "garantia_fabricante" and ordem.tipo_reparo != "Garantia":
