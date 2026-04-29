@@ -1,4 +1,4 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 {% load static %}
 
 {% block extra_css %}
@@ -139,52 +139,24 @@
 .os-header-actions .dropdown-menu {
     font-size: 0.9rem;
 }
-.os-operational-summary {
-    border: 1px solid #e9ecef;
-    border-radius: 10px;
-    background: #fff;
-    padding: 14px 16px;
-    margin-bottom: 18px;
-}
-.os-operational-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-    gap: 16px;
-}
-.os-operational-title {
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    color: #6c757d;
-    margin-bottom: 6px;
-    letter-spacing: 0.02em;
-}
-.os-operational-next {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #2c3e50;
-}
-.os-operational-list {
-    margin: 0;
-    padding-left: 18px;
-}
-.os-operational-list li {
-    margin-bottom: 4px;
-}
-.os-alert-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 10px;
-}
-.os-alert-chip {
+.os-next-step-hint {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #fff4db;
-    color: #7a5200;
-    font-size: 0.85rem;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 6px;
+    border: none;
+    background: transparent;
+    color: #d39e00;
+    vertical-align: text-top;
+    cursor: pointer;
+}
+.os-next-step-hint:hover,
+.os-next-step-hint:focus {
+    color: #b78600;
+    text-decoration: none;
+    outline: none;
 }
 @media (max-width: 767.98px) {
     .fab-menu {
@@ -193,9 +165,6 @@
     }
     .os-header-meta {
         gap: 8px;
-    }
-    .os-operational-grid {
-        grid-template-columns: 1fr;
     }
 }
 
@@ -225,6 +194,16 @@
                             {% else %}badge-info{% endif %}">
                             {{ status_label }}
                         </span>
+                        <button
+                            type="button"
+                            class="os-next-step-hint"
+                            data-toggle="tooltip"
+                            data-placement="top"
+                            title="{{ proxima_acao }}{% if resumo_alertas %} | Alertas: {% for alerta in resumo_alertas %}{% if not forloop.first %}; {% endif %}{{ alerta }}{% endfor %}{% endif %}"
+                            aria-label="Ver próxima ação sugerida"
+                        >
+                            <i class="fas fa-lightbulb"></i>
+                        </button>
                     {% endwith %}
                 </div>
                 <div><strong>Abertura:</strong> {{ ordem.data_abertura|date:"d/m/Y H:i" }}</div>
@@ -295,43 +274,6 @@
             <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-danger btn-sm">
                 <i class="fas fa-lock-open mr-1"></i> Fechar
             </a>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<div class="os-operational-summary">
-    <div class="d-flex justify-content-between align-items-start flex-wrap" style="gap: 12px;">
-        <div>
-            <div class="os-operational-title">Proxima acao</div>
-            <div class="os-operational-next">{{ proxima_acao }}</div>
-        </div>
-        <span class="badge badge-{{ fluxo_os_tone }}">{{ fluxo_os_label }}</span>
-    </div>
-    <div class="os-operational-grid mt-3">
-        <div>
-            <div class="os-operational-title">Acoes recomendadas</div>
-            <ul class="os-operational-list">
-                {% for acao in resumo_operacional.acoes_recomendadas %}
-                <li>{{ acao }}</li>
-                {% endfor %}
-            </ul>
-        </div>
-        <div>
-            <div class="os-operational-title">Leitura rapida</div>
-            <div class="small text-muted mb-2">
-                Status atual da operacao com foco no proximo passo e nos bloqueios visiveis.
-            </div>
-            {% if resumo_alertas %}
-            <div class="os-alert-list">
-                {% for alerta in resumo_alertas %}
-                <span class="os-alert-chip"><i class="fas fa-exclamation-triangle"></i>{{ alerta }}</span>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="small text-success">
-                Sem alertas operacionais imediatos nesta OS.
-            </div>
             {% endif %}
         </div>
     </div>
@@ -808,6 +750,7 @@
 {% block extra_js %}
 <script>
     $(document).ready(function() {
+        $('[data-toggle="tooltip"]').tooltip();
         $('#modalAdicionarItem1, #modalAdicionarItem2').on('show.bs.modal', function (e) {
             console.log('Modal abrir:', this.id);
         });
@@ -1089,6 +1032,8 @@ document.addEventListener("DOMContentLoaded", function () {
 </script>
 {% endif %}
 {% endblock extra_js %}
+
+
 
 
 

@@ -1052,9 +1052,12 @@ class IntegracaoFluxoOSCaixaTests(TestCase):
         )
         response = self.client.get(reverse("ordens:detalhes_ordem", args=[ordem.id]) + "?tab=detalhes")
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Serviços &amp; Peças")
+        self.assertContains(response, "Orçamentos")
+        self.assertContains(response, "Relatório Técnico")
         self.assertContains(response, "Acompanhar chegada de pecas para continuar o reparo.")
         self.assertContains(response, "Numero de serie nao informado.")
-        self.assertContains(response, "Acompanhar pedido de compra ou reserva de estoque.")
+        self.assertContains(response, 'data-toggle="tooltip"')
 
     def test_editar_os_permite_apenas_numero_serie_e_registra_linha(self):
         ordem = OrdemServico.objects.create(
