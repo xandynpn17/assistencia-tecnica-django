@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.core.exceptions import PermissionDenied
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -16,12 +17,51 @@ from io import BytesIO, StringIO
 from PIL import Image
 from configuracoes.models import ConfiguracaoSistema, Empresa, FornecedorGarantia, MarcaGarantia
 from configuracoes.forms import ConfiguracaoSistemaForm, EmpresaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm
+from configuracoes.permissions import has_sensitive_permission, require_sensitive_permission
 from django.conf import settings
 from clientes.models import Cliente
 from estoque.models import CategoriaProduto, Produto
 from configuracoes.models import RegraGarantiaMarca, TipoEquipamentoConfig
 from ordens.models import OrdemServico
 from orcamentos.models import Orcamento
+
+
+class PermissoesSensiveisHelperTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.tecnico = user_model.objects.create_user(
+            username="tecnico_sensitive",
+            password="senha123",
+            tipo_usuario="tecnico",
+        )
+        self.gerente = user_model.objects.create_user(
+            username="gerente_sensitive",
+            password="senha123",
+            tipo_usuario="gerente",
+        )
+        self.atendente = user_model.objects.create_user(
+            username="atendente_sensitive",
+            password="senha123",
+            tipo_usuario="atendente",
+        )
+
+    def test_permissao_default_de_concluir_os_para_perfil_ordens(self):
+        self.assertTrue(has_sensitive_permission(self.tecnico, "perm_os_concluir"))
+        self.assertTrue(has_sensitive_permission(self.atendente, "perm_os_concluir"))
+
+    def test_permissao_especifica_precisa_flag_quando_nao_ha_default(self):
+        self.assertFalse(has_sensitive_permission(self.tecnico, "perm_os_editar_numero_serie"))
+        self.tecnico.perm_os_editar_numero_serie = True
+        self.tecnico.save(update_fields=["perm_os_editar_numero_serie"])
+        self.assertTrue(has_sensitive_permission(self.tecnico, "perm_os_editar_numero_serie"))
+
+    def test_gerente_tem_acesso_sensivel_global(self):
+        self.assertTrue(has_sensitive_permission(self.gerente, "perm_caixa_ver_auditoria"))
+        self.assertTrue(require_sensitive_permission(self.gerente, "perm_orcamento_excluir_item"))
+
+    def test_require_sensitive_permission_lanca_erro_quando_sem_acesso(self):
+        with self.assertRaises(PermissionDenied):
+            require_sensitive_permission(self.tecnico, "perm_caixa_ver_dre")
 
 
 class PermissoesConfiguracoesTests(TestCase):

@@ -154,11 +154,12 @@ Feito nesta etapa:
   - acessar auditoria operacional;
 - menus e botoes criticos ajustados para refletir as novas permissoes;
 - migration `0038` aplicada com preenchimento inicial compativel ao acesso que ja existia.
+- testes de helper de permissao sensivel adicionados em `configuracoes/tests.py`.
 
 Ainda pendente nesta fase:
 - granularizar outras acoes sensiveis da OS e do caixa;
 - reduzir mais verificacoes hardcoded em templates;
-- adicionar testes especificos das novas permissoes granulares.
+- ampliar testes especificos das novas permissoes granulares para rotas criticas restantes.
 
 Permissoes sensiveis sugeridas:
 - editar numero de serie;
