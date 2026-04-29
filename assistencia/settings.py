@@ -77,12 +77,41 @@ WSGI_APPLICATION = 'assistencia.wsgi.application'
 
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DB_ENGINE = os.getenv("DJANGO_DB_ENGINE", "sqlite").strip().lower()
+
+if DB_ENGINE == "postgres":
+    required_envs = [
+        "DJANGO_DB_NAME",
+        "DJANGO_DB_USER",
+        "DJANGO_DB_PASSWORD",
+        "DJANGO_DB_HOST",
+    ]
+    missing_envs = [env_name for env_name in required_envs if not os.getenv(env_name)]
+    if missing_envs:
+        raise ImproperlyConfigured(
+            "Variaveis de ambiente ausentes para PostgreSQL: " + ", ".join(missing_envs)
+        )
+
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv("DJANGO_DB_NAME"),
+            'USER': os.getenv("DJANGO_DB_USER"),
+            'PASSWORD': os.getenv("DJANGO_DB_PASSWORD"),
+            'HOST': os.getenv("DJANGO_DB_HOST"),
+            'PORT': os.getenv("DJANGO_DB_PORT", "5432"),
+            'CONN_MAX_AGE': int(os.getenv("DJANGO_DB_CONN_MAX_AGE", "60")),
+        }
     }
-}
+elif DB_ENGINE == "sqlite":
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+else:
+    raise ImproperlyConfigured("DJANGO_DB_ENGINE invalido. Use 'sqlite' ou 'postgres'.")
 
 
 # Password validation

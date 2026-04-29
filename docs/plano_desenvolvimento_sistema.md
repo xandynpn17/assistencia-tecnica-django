@@ -277,7 +277,7 @@ Ainda pendente nesta fase:
 - remover ou isolar referencias antigas restantes que nao agregam manutencao.
 
 ### Fase 7 - Preparacao para PostgreSQL
-Status: pendente
+Status: implementacao inicial concluida / validacao de migracao pendente
 Prioridade: media
 
 Contexto:
@@ -300,6 +300,19 @@ O que implementar:
 
 Resultado esperado:
 - migracao previsivel e sem dependencia do banco antigo.
+
+Feito nesta etapa:
+- `assistencia/settings.py` com selecao de banco por ambiente:
+  - `DJANGO_DB_ENGINE=sqlite` (padrao atual);
+  - `DJANGO_DB_ENGINE=postgres` com vars obrigatorias de conexao.
+- validacao defensiva para evitar subir PostgreSQL sem variaveis minimas.
+- dependencia `psycopg[binary]` adicionada em `requirements.txt`.
+- checklist tecnico criado em `docs/checklist_migracao_postgresql.md`.
+
+Ainda pendente nesta fase:
+- executar migracao real em base PostgreSQL limpa;
+- rodar suite completa e homologacao no novo banco;
+- revisar indices/constraints com volume real de dados.
 
 ## Ordem recomendada de implementacao
 
