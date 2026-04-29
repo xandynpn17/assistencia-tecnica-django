@@ -1,4 +1,8 @@
-﻿agenda: 40
+﻿## RESUMO HISTORICO
+## Este resumo pode divergir do codigo ativo e serve como referencia de auditoria.
+## Fonte operacional atual: docs/README.md.
+
+agenda: 40
 assistencia: 2
 caixa: 295
 clientes: 24
@@ -9,3 +13,4 @@ fiscal: 10
 manage.py: 1
 orcamentos: 44
 ordens: 223
+

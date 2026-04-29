@@ -1,4 +1,8 @@
-﻿manage.py:7:def main():
+﻿## INVENTARIO HISTORICO
+## Este arquivo e uma fotografia antiga e pode conter caminhos de legado.
+## Fonte operacional atual: docs/README.md e docs/revisao_arquitetura.md.
+
+manage.py:7:def main():
 clientes\views.py:17:def _request_ip(request):
 clientes\views.py:25:def lista_clientes(request):
 clientes\views.py:55:def buscar_cliente(request):
@@ -977,3 +981,4 @@ ordens\services\confirmacao_service.py:72:    def campos_criticos_bloqueados(ord
 ordens\services\log_os_service.py:6:    def registrar(ordem, tipo_evento, descricao, usuario=None, dados_extras=None):
 ordens\services\__init__.py:4:def __getattr__(name):
 ordens\services\os_policy_service.py:29:    def ensure_can_edit(cls, ordem, form_type, usuario=None):
+

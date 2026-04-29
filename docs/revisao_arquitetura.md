@@ -2,110 +2,33 @@
 
 ## Estado atual
 
-O projeto ja possui uma base funcional acima do escopo inicial, com os apps:
+O sistema esta organizado em apps alinhados ao dominio:
 
-- `core`: autenticacao, dashboard e templates base.
-- `clientes`: cadastro, busca, edicao e historico do cliente.
-- `ordens`: abertura e acompanhamento da OS, linhas de trabalho, notificacoes e impressao.
-- `estoque`: produtos, pecas, servicos, movimentacoes, reservas e inventario.
-- `orcamentos`: itens de orcamento vinculados a OS.
-- `caixa`: recebimentos, contas, comissoes e relatorios financeiros.
-- `configuracoes`: usuarios, empresa, marcas, fornecedores, permissoes e parametros do sistema.
+- `core`: autenticacao, dashboard e base de templates.
+- `clientes`: cadastro, busca e consolidacao de clientes.
+- `ordens`: abertura e operacao da OS, historico e fluxo tecnico.
+- `orcamentos`: itens, aprovacao/recusa e migracao para execucao.
+- `estoque`: catalogo, movimentacao, reservas e inventario.
+- `caixa`: recebimentos, contas, comissoes e relatorios.
+- `configuracoes`: usuarios, perfis, permissoes e parametros globais.
 
-## Mapeamento para o negocio
+## Consolidacoes ja aplicadas
 
-O sistema ja cobre boa parte do fluxo da assistencia tecnica:
+- Fluxos criticos de OS centralizados em `ordens/services/fechamento_os.py`.
+- Fluxo de orcamento centralizado em `orcamentos/services/fluxo_orcamento.py`.
+- Permissoes sensiveis estruturadas em helper central (`has_sensitive_permission` / `require_sensitive_permission`).
+- Codigo legado removido da area ativa e arquivado em `docs/legacy_code/`.
 
-- clientes cadastrados em `clientes.Cliente`
-- servicos e pecas concentrados em `estoque.Produto`
-- tecnicos representados por `configuracoes.User` com `tipo_usuario="tecnico"`
-- ordens de servico em `ordens.OrdemServico`
-- itens executados na OS em `ordens.ServicoPeca`
-- financeiro em `caixa`
+## Pontos que ainda exigem evolucao
 
-Isso significa que hoje o projeto esta mais proximo de uma arquitetura "integrada" do que da divisao idealizada em apps separados `servicos`, `tecnicos` e `financeiro`.
+1. Formalizar matriz de status da OS: `status -> acoes permitidas -> bloqueios`.
+2. Expandir granularidade de permissoes para outras acoes sensiveis.
+3. Consolidar entrada visual do orcamento para reduzir caminhos duplicados.
+4. Fechar revisao de textos/encoding em todo fluxo de interface.
+5. Preparar migracao para PostgreSQL com checklist tecnico reproducivel.
 
-## Principais pontos de atencao
+## Decisao tecnica vigente
 
-### 1. Escopo misturado entre basico e avancado
-
-O projeto ja inclui recursos avancados como:
-
-- portal do cliente
-- confirmacao digital
-- pedidos de compra
-- controle operacional por ponto de estoque
-- regras de comissao
-- auditorias e relatorios adicionais
-
-Para a fase atual, vale priorizar o fluxo essencial:
-
-1. cliente
-2. abertura da OS
-3. diagnostico
-4. adicionar servicos e pecas
-5. totalizacao
-6. aprovacao
-7. conclusao
-8. recebimento
-
-### 2. Cadastro de servicos esta embutido no estoque
-
-Hoje `estoque.Produto` suporta `tipo_item="servico"` e `is_servico=True`.
-Isso funciona, mas pode confundir manutencao futura. A recomendacao e manter esse modelo por agora e tratar o modulo "servicos" como uma visao do estoque filtrada por tipo.
-
-### 3. Tecnicos nao estao em app proprio
-
-Os tecnicos estao no usuario customizado em `configuracoes`.
-Isso e suficiente para a fase atual e evita duplicacao de cadastro. Se no futuro houver agenda, produtividade ou especialidades tecnicas mais complexas, ai sim vale um app proprio.
-
-### 4. Ambiente local quebrado
-
-A virtualenv atual aponta para um Python removido durante a reinstalacao do ambiente. Antes de retomar execucao de testes e servidor, o ambiente deve ser recriado.
-
-## Recomendacao arquitetural para agora
-
-### Manter
-
-- `clientes`
-- `ordens`
-- `estoque`
-- `orcamentos`
-- `caixa`
-- `configuracoes`
-- `core`
-
-### Nao criar agora
-
-- app `servicos`
-- app `tecnicos`
-
-### Renomear por conceito, nao por codigo
-
-- "Servicos" = produtos do estoque com `tipo_item="servico"`
-- "Tecnicos" = usuarios com perfil tecnico
-- "Financeiro" = app `caixa`
-
-## Proxima fase recomendada
-
-### Fase 1
-
-- estabilizar ambiente Python
-- validar formularios, rotas e templates principais
-- garantir fluxo completo cliente -> OS -> servicos/pecas -> total
-
-### Fase 2
-
-- simplificar telas mais carregadas da OS
-- revisar regras de estoque automatico ao usar peca na OS
-- revisar calculo de totais e comissoes
-
-### Fase 3
-
-- relatorios financeiros essenciais
-- melhorias de usabilidade
-- preparacao para PostgreSQL
-
-## Decisao pratica
-
-Para continuar o desenvolvimento, a melhor estrategia e evoluir a base atual em vez de recriar o projeto do zero. O ganho agora vem mais de consolidar o fluxo principal e reduzir complexidade acidental do que de abrir novos apps.
+- Manter arquitetura modular atual e evoluir por refatoracoes incrementais.
+- Evitar criacao de novos apps enquanto houver ganho maior em consolidacao dos fluxos existentes.
+- Tratar `docs/legacy_code/` apenas como historico de consulta.

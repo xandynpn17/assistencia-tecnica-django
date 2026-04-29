@@ -23,7 +23,6 @@ from configuracoes.models import ConfiguracaoSistema, Empresa, MarcaGarantia, Mo
 from configuracoes.permissions import ORDER_CREATION_ROLES, ORDER_ROLES, RoleRequiredMixin, role_required
 from orcamentos.forms import ItemOrcamentoForm, OrcamentoForm
 from orcamentos.models import Orcamento
-from orcamentos.services import FluxoOrcamentoService
 from ..forms import LinhaTrabalhoForm, OrdemSerieForm, OrdemServicoForm, ServicoPecaForm
 from ..models import (
     LinhaTrabalho,
@@ -115,17 +114,6 @@ def _recalcular_comissoes_itens_antecipado(ordem):
     except Exception:
         return 0
     return processar_evento_servico_finalizado(ordem, evento="SERVICO_FINALIZADO")
-
-
-def _migrar_itens_aprovados_para_servicos_pecas(ordem, usuario=None):
-    resultado = FluxoOrcamentoService.migrar_itens_aprovados_da_ordem(
-        ordem,
-        usuario=usuario,
-        criar_historico=True,
-        usar_valor_liquido=False,
-        copiar_comissionavel=False,
-    )
-    return resultado.total_migrados
 
 
 def _somar_meses_data(data_base, meses):

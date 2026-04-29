@@ -1,9 +1,9 @@
-# Plano de Desenvolvimento do Sistema
+﻿# Plano de Desenvolvimento do Sistema
 
 ## Objetivo
 
 Consolidar o sistema de assistencia tecnica sem reescrever o que ja funciona.
-O foco e evoluir o fluxo operacional, endurecer regras criticas, granular permissões e limpar a base para a futura migracao para PostgreSQL.
+O foco e evoluir o fluxo operacional, endurecer regras criticas, granular permissoes e limpar a base para a futura migracao para PostgreSQL.
 
 ## Principios
 
@@ -212,7 +212,7 @@ Ainda pendente nesta fase:
 - revisar nomenclatura e mensagens para reforcar a OS como porta principal.
 
 ### Fase 5 - Revisao de encoding e textos
-Status: pendente
+Status: implementacao principal concluida / monitoramento ativo
 Prioridade: media
 
 Objetivo:
@@ -233,8 +233,18 @@ Resultado esperado:
 - interface mais profissional;
 - menos risco em PDF, exportacao e renderizacao.
 
+Feito nesta etapa:
+- correcoes de mojibake aplicadas nos fluxos de OS, orcamento e caixa;
+- labels das abas da OS normalizados;
+- testes focados atualizados para refletir a nova interface;
+- teste de guarda anti-mojibake adicionado em `core/tests.py`.
+
+Ainda pendente nesta fase:
+- tratar casos residuais em comentarios/documentacao tecnica nao operacional;
+- manter varredura continua via suite de testes.
+
 ### Fase 6 - Limpeza tecnica e documental
-Status: pendente
+Status: em andamento
 Prioridade: media
 
 Objetivo:
@@ -256,6 +266,15 @@ O que implementar:
 Resultado esperado:
 - repositorio mais claro;
 - menor risco de manutencao no arquivo errado.
+
+Feito nesta etapa:
+- `docs/revisao_arquitetura.md` atualizado para o estado tecnico atual;
+- `docs/README.md` criado como indice de fontes ativas vs historicas;
+- inventarios historicos mantidos, mas tratados como referencia de auditoria.
+
+Ainda pendente nesta fase:
+- revisar e consolidar artefatos de inventario tecnico (`lista_funcoes_programa.txt`, `resumo_funcoes_programa.txt`);
+- remover ou isolar referencias antigas restantes que nao agregam manutencao.
 
 ### Fase 7 - Preparacao para PostgreSQL
 Status: pendente
@@ -309,8 +328,9 @@ Status: concluida nesta rodada.
 Entrega 3:
 - extrair service de fechamento/reabertura da OS;
 - extrair service do fluxo de orcamento.
-Status: pendente.
+Status: concluida.
 
 Entrega 4:
 - revisar encoding e limpar referencias restantes ao legado.
-Status: pendente.
+Status: em andamento.
+
