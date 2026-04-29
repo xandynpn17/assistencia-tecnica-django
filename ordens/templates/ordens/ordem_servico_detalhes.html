@@ -268,7 +268,7 @@
                 <i class="fas fa-lock mr-1"></i> Reabrir
             </a>
             {% elif not ordem.fechada and pode_concluir_os %}
-            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-outline-success btn-sm">
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn {% if destacar_fechar_e_caixa %}btn-success{% else %}btn-outline-success{% endif %} btn-sm">
                 <i class="fas fa-cash-register mr-1"></i> Fechar e ir ao Caixa
             </a>
             <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-danger btn-sm">

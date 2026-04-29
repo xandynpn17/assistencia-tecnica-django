@@ -5,7 +5,7 @@
             <span>Serviços & Peças</span>
             {% if not ordem.fechada %}
             <div class="d-flex">
-                <button type="button" class="btn btn-sm btn-light mr-2" data-toggle="modal" data-target="#modalAdicionarServicoPeca">
+                <button type="button" class="btn btn-sm {% if destacar_adicionar_servico_peca %}btn-primary{% else %}btn-light{% endif %} mr-2" data-toggle="modal" data-target="#modalAdicionarServicoPeca">
                     <i class="fas fa-barcode mr-1"></i>Adicionar EAN/Produto
                 </button>
                 <button type="button" class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarTalao">
@@ -31,22 +31,40 @@
                         {% else %}
                             Continue a evolução técnica pela linha de trabalho e finalize no momento certo.
                         {% endif %}
+                        {% if bloqueios_operacionais %}
+                            <br>
+                            <span class="text-danger">
+                                {% for bloqueio in bloqueios_operacionais %}
+                                    {% if not forloop.first %} | {% endif %}{{ bloqueio }}
+                                {% endfor %}
+                            </span>
+                        {% endif %}
                     </small>
                 </div>
                 <div class="d-flex flex-wrap" style="gap:8px;">
                     {% if pode_receber_no_caixa %}
-                    <a class="btn btn-sm btn-primary"
+                    <a class="btn btn-sm {% if destacar_ir_para_caixa %}btn-primary{% else %}btn-outline-primary{% endif %}"
                        href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ saldo_financeiro_os|floatformat:2 }}">
                         Ir para o Caixa
                     </a>
                     {% elif ordem.status == 'pronto_contactado' and not ordem.fechada %}
-                    <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-sm btn-outline-success">
+                    <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-sm {% if destacar_fechar_e_caixa %}btn-success{% else %}btn-outline-success{% endif %}">
                         Fechar e ir ao Caixa
                     </a>
                     {% elif liberada_para_entrega %}
-                    <a href="{% url 'ordens:detalhes_ordem' ordem.id %}?tab=relatorio" class="btn btn-sm btn-outline-success">
+                    <a href="{% url 'ordens:detalhes_ordem' ordem.id %}?tab=relatorio" class="btn btn-sm {% if destacar_revisar_entrega %}btn-success{% else %}btn-outline-success{% endif %}">
                         Revisar entrega
                     </a>
+                    {% endif %}
+                    {% if destacar_abrir_orcamento %}
+                    <a href="{% url 'ordens:detalhes_ordem' ordem.id %}?tab=orcamentos" class="btn btn-sm btn-outline-primary">
+                        Abrir Orcamento
+                    </a>
+                    {% endif %}
+                    {% if destacar_abrir_pedido_compra %}
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-toggle="modal" data-target="#modalAdicionarPedido">
+                        Abrir Pedido
+                    </button>
                     {% endif %}
                 </div>
             </div>

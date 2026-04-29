@@ -359,6 +359,8 @@ class OrdemServicoResumoView(RoleRequiredMixin, DetailView):
         context["dias_aberta"] = resumo_operacional.dias_aberta
         context["resumo_alertas"] = resumo_operacional.resumo_alertas
         context["proxima_acao"] = resumo_operacional.proxima_acao
+        context["acoes_recomendadas"] = resumo_operacional.acoes_recomendadas
+        context["bloqueios_operacionais"] = resumo_operacional.bloqueios_operacionais
         context["resumo_operacional"] = resumo_operacional
         context["link_confirmacao_publico"] = link_confirmacao_publico
         return context

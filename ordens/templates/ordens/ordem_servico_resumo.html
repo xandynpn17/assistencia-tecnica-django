@@ -94,6 +94,24 @@
       </div>
       {% endif %}
 
+      {% if acoes_recomendadas %}
+      <div class="alert alert-info alert-compact">
+        <strong>Acoes sugeridas:</strong>
+        {% for acao in acoes_recomendadas %}
+        <div>{{ acao }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if bloqueios_operacionais %}
+      <div class="alert alert-light alert-compact border">
+        <strong>Bloqueios operacionais:</strong>
+        {% for bloqueio in bloqueios_operacionais %}
+        <div class="text-danger">{{ bloqueio }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
       <div class="resume-main-grid mb-3">
         <div class="resume-block">
           <div class="block-header">Cliente e equipamento</div>

@@ -63,6 +63,15 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["dias_em_aberto"] = resumo_operacional.dias_aberta
         context["proxima_acao"] = resumo_operacional.proxima_acao
         context["resumo_alertas"] = resumo_operacional.resumo_alertas
+        context["bloqueios_operacionais"] = resumo_operacional.bloqueios_operacionais
+        context["acoes_recomendadas"] = resumo_operacional.acoes_recomendadas
+        acoes_destaque = set(resumo_operacional.acoes_destaque)
+        context["destacar_fechar_e_caixa"] = "fechar_e_ir_caixa" in acoes_destaque
+        context["destacar_ir_para_caixa"] = "ir_para_caixa" in acoes_destaque
+        context["destacar_revisar_entrega"] = "revisar_entrega" in acoes_destaque
+        context["destacar_adicionar_servico_peca"] = "adicionar_servico_peca" in acoes_destaque
+        context["destacar_abrir_orcamento"] = "abrir_orcamento" in acoes_destaque
+        context["destacar_abrir_pedido_compra"] = "abrir_pedido_compra" in acoes_destaque
         context["auditoria_garantia"] = (
             AuditoriaGarantia.objects.select_related("fornecedor", "marca", "regra_garantia")
             .filter(ordem_servico=ordem)

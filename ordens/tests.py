@@ -27,6 +27,8 @@ from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoq
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.forms import LinhaTrabalhoForm
 from ordens.models import LogOS, OrdemArquivo, OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, PedidoCompra, ServicoPeca
+from ordens.services.fluxo_os_policy import FluxoOSPolicyService
+from ordens.services.resumo_operacional import ResumoOperacionalService
 from ordens.view_modules.impressao import _quebrar_tokens_longos
 from core.pdf_utils import logo_or_paragraph, make_numbered_canvas as real_make_numbered_canvas
 
@@ -267,6 +269,68 @@ class FluxoStatusOrdemServicoTests(TestCase):
         self.ordem.refresh_from_db()
         self.assertEqual(self.ordem.status, "em_andamento")
         self.assertFalse(self.ordem.fechada)
+
+
+class FluxoOperacionalPolicyTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.usuario = user_model.objects.create_user(
+            username="gerente_policy_os",
+            password="senha-forte-123",
+            tipo_usuario="gerente",
+        )
+        self.client.force_login(self.usuario)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Policy OS",
+            documento="52998224725",
+            telefone="11977776666",
+            estado="SP",
+        )
+
+    def test_policy_de_pendente_orcamento_destaca_acao_de_orcamento(self):
+        policy = FluxoOSPolicyService.obter_policy("pendente_orcamento")
+        self.assertIn("abrir_orcamento", policy.acoes_destaque)
+        self.assertIn("enviar_mensagem_cliente", policy.acoes_destaque)
+
+    def test_resumo_operacional_inclui_bloqueio_quando_os_fechada(self):
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Policy",
+            modelo_equipamento="Modelo Policy",
+            defeito="Sem imagem",
+            tipo_reparo="Fora de Garantia",
+            status="concluida",
+        )
+        ordem.fechada = True
+        ordem.save(update_fields=["fechada"])
+
+        resumo = ResumoOperacionalService.construir(
+            ordem,
+            total_os=Decimal("100.00"),
+            total_pago=Decimal("0.00"),
+            saldo_financeiro=Decimal("100.00"),
+            os_pago=False,
+        )
+
+        self.assertIn("A OS esta fechada para edicao operacional.", resumo.bloqueios_operacionais)
+        self.assertIn("ir_para_caixa", resumo.acoes_destaque)
+
+    def test_detalhes_recebe_destaque_orcamento_em_status_pendente_orcamento(self):
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Policy",
+            modelo_equipamento="Modelo Policy",
+            defeito="Sem audio",
+            tipo_reparo="Fora de Garantia",
+            status="pendente_orcamento",
+        )
+
+        response = self.client.get(reverse("ordens:detalhes_ordem", args=[ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["destacar_abrir_orcamento"])
 
 
 class CriacaoOrdemServicoHistoricoTests(TestCase):

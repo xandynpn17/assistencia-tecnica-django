@@ -1,4 +1,10 @@
-__all__ = ["FechamentoOSService", "LogOSService", "OSAccessPolicyService", "ResumoOperacionalService"]
+__all__ = [
+    "FechamentoOSService",
+    "FluxoOSPolicyService",
+    "LogOSService",
+    "OSAccessPolicyService",
+    "ResumoOperacionalService",
+]
 
 
 def __getattr__(name):
@@ -6,6 +12,10 @@ def __getattr__(name):
         from .fechamento_os import FechamentoOSService
 
         return FechamentoOSService
+    if name == "FluxoOSPolicyService":
+        from .fluxo_os_policy import FluxoOSPolicyService
+
+        return FluxoOSPolicyService
     if name == "LogOSService":
         from .log_os_service import LogOSService
 

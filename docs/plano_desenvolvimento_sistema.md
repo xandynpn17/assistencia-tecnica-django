@@ -63,14 +63,15 @@ Resultado esperado:
 
 Feito nesta etapa:
 - service `ordens/services/resumo_operacional.py` criado para centralizar leitura operacional por status;
+- matriz formal de fluxo criada em `ordens/services/fluxo_os_policy.py` (`status -> proxima acao -> acoes recomendadas -> bloqueios -> destaques`);
 - tela de detalhes da OS agora mostra:
   - proxima acao recomendada;
   - acoes recomendadas;
   - alertas operacionais principais;
   - situacao operacional resumida no topo.
+- destaques de acoes por status aplicados no cabecalho e no bloco de Servicos & Pecas (ex.: fechar e ir ao caixa, abrir orcamento, abrir pedido).
 
 Ainda pendente nesta fase:
-- transformar a matriz `status -> acoes permitidas -> bloqueios` em regra formal reutilizavel;
 - revisar quais botoes devem ficar em destaque por status;
 - reduzir mais a dispersao de acoes entre abas.
 
