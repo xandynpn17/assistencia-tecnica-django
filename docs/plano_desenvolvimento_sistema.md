@@ -272,9 +272,9 @@ Feito nesta etapa:
 - `docs/revisao_arquitetura.md` atualizado para o estado tecnico atual;
 - `docs/README.md` criado como indice de fontes ativas vs historicas;
 - inventarios historicos mantidos, mas tratados como referencia de auditoria.
+- inventarios tecnicos consolidados em `docs/legacy_code/` para reduzir ruido na raiz de documentacao.
 
 Ainda pendente nesta fase:
-- revisar e consolidar artefatos de inventario tecnico (`lista_funcoes_programa.txt`, `resumo_funcoes_programa.txt`);
 - remover ou isolar referencias antigas restantes que nao agregam manutencao.
 
 ### Fase 7 - Preparacao para PostgreSQL

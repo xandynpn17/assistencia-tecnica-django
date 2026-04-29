@@ -11,8 +11,8 @@
 ## Fontes historicas
 
 - `legacy_code/`: codigo legado arquivado para consulta.
-- `lista_funcoes_programa.txt`: inventario historico de funcoes (inclui legado).
-- `resumo_funcoes_programa.txt`: resumo historico de contagem por modulo.
+- `legacy_code/lista_funcoes_programa.txt`: inventario historico de funcoes (inclui legado).
+- `legacy_code/resumo_funcoes_programa.txt`: resumo historico de contagem por modulo.
 
 ## Regra de uso
 
