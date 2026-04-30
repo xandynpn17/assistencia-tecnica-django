@@ -310,9 +310,11 @@ Esses pontos podem virar padrao para o resto.
 - `perm_caixa_registrar_saida`
 - `perm_caixa_criar_conta_receber`
 - `perm_caixa_baixar_conta_receber`
+- `perm_caixa_cancelar_conta_receber` (sugerida quando existir fluxo manual)
 - `perm_caixa_aplicar_desconto`
 - `perm_caixa_criar_conta_pagar`
 - `perm_caixa_baixar_conta_pagar`
+- `perm_caixa_cancelar_conta_pagar`
 - `perm_caixa_ver_dre`
 - `perm_caixa_gerir_comissoes`
 - `perm_caixa_ver_auditoria`

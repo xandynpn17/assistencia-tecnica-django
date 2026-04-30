@@ -149,6 +149,11 @@ Feito nesta etapa:
   - concluir/fechar OS;
   - reabrir OS;
   - excluir item de orcamento;
+  - criar conta a receber;
+  - baixar conta a receber;
+  - criar conta a pagar;
+  - baixar conta a pagar;
+  - cancelar conta a pagar;
   - excluir pagamento;
   - acessar DRE;
   - gerir comissoes;

@@ -56,6 +56,12 @@ class CaixaPermissoesTests(TestCase):
             password="senha-forte-123",
             tipo_usuario="gerente",
         )
+        self.financeiro_extra = user_model.objects.create_user(
+            username="financeiro_extra",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+            acesso_caixa_financeiro_extra=True,
+        )
         self.superuser = user_model.objects.create_superuser(
             username="root_caixa",
             password="senha-forte-123",
@@ -136,6 +142,16 @@ class CaixaPermissoesTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertTrue(ContaReceber.objects.exists())
+
+    def test_usuario_financeiro_extra_sem_perm_nao_cria_conta_receber(self):
+        self.client.force_login(self.financeiro_extra)
+        response = self.client.get(reverse("caixa:criar_conta_receber"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_usuario_financeiro_extra_sem_perm_nao_cria_conta_pagar(self):
+        self.client.force_login(self.financeiro_extra)
+        response = self.client.get(reverse("caixa:criar_conta_pagar"))
+        self.assertEqual(response.status_code, 403)
 
     def test_atendente_sem_acesso_a_dre_e_comissoes(self):
         self.client.force_login(self.atendente)
@@ -635,6 +651,33 @@ class CaixaPermissoesTests(TestCase):
         conta.refresh_from_db()
         self.assertEqual(str(conta.valor_aberto), "100.00")
         self.assertFalse(Pagamento.objects.filter(referencia="REC-3").exists())
+
+    def test_usuario_financeiro_extra_sem_perm_nao_baixa_conta_receber(self):
+        conta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="Conta bloqueada para baixa",
+            cliente_nome=self.cliente.nome,
+            valor_original="100.00",
+            valor_aberto="100.00",
+            vencimento="2030-01-01",
+            status="aberta",
+        )
+        self.client.force_login(self.financeiro_extra)
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_receber", args=[conta.id]),
+            {
+                "valor": "40.00",
+                "desconto": "0.00",
+                "juros": "0.00",
+                "referencia": "REC-BLOCK",
+                "observacao": "",
+                "metodo": "pix",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(str(conta.valor_aberto), "100.00")
+        self.assertFalse(Pagamento.objects.filter(referencia="REC-BLOCK").exists())
 
     def test_nao_permite_abrir_novo_caixa_no_mesmo_dia_apos_fechamento(self):
         caixa = Caixa.objects.filter(aberto=True).first()
@@ -3497,6 +3540,43 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(response.url, reverse("caixa:abrir_caixa"))
         conta.refresh_from_db()
         self.assertEqual(str(conta.valor_pago), "0.00")
+
+    def test_usuario_financeiro_extra_sem_perm_nao_paga_conta_pagar(self):
+        self.client.force_login(self.financeiro_extra)
+        conta = ContaPagar.objects.create(
+            fornecedor="Fornecedor bloqueado",
+            descricao="Despesa bloqueada",
+            valor_total=Decimal("100.00"),
+            valor_pago=Decimal("0.00"),
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_pagar", args=[conta.id]),
+            {"valor": "10.00", "action": "pagar"},
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(str(conta.valor_pago), "0.00")
+        self.assertFalse(PagamentoContaPagar.objects.filter(conta=conta).exists())
+
+    def test_usuario_financeiro_extra_sem_perm_nao_cancela_conta_pagar(self):
+        self.client.force_login(self.financeiro_extra)
+        conta = ContaPagar.objects.create(
+            fornecedor="Fornecedor sem cancelamento",
+            descricao="Despesa ativa",
+            valor_total=Decimal("100.00"),
+            valor_pago=Decimal("0.00"),
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_pagar", args=[conta.id]),
+            {"action": "cancelar"},
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.status, "aberta")
 
     def test_dashboard_considera_pagamentos_sem_lancamento_no_total_entradas(self):
         self.client.force_login(self.gerente)

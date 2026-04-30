@@ -252,6 +252,8 @@ def contas_receber(request):
             "querystring_paginacao": querystring_paginacao,
             "filtros_salvos_existem": bool(filtros_salvos),
             "baixa_rapida_form": BaixaContaReceberForm(),
+            "pode_criar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_criar_conta_receber"),
+            "pode_baixar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_baixar_conta_receber"),
             "pode_aplicar_desconto_caixa": has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"),
             "menu_app": "caixa",
             "menu_sub": "contas_receber",
@@ -262,6 +264,7 @@ def contas_receber(request):
 @role_required(CAIXA_FINANCIAL_ROLES)
 def criar_conta_receber(request):
     _garantir_categorias_financeiras_padrao()
+    require_sensitive_permission(request.user, "perm_caixa_criar_conta_receber")
     if request.method == "POST":
         form = ContaReceberForm(request.POST)
         if form.is_valid():
@@ -293,6 +296,11 @@ def detalhe_conta_receber(request, conta_id):
     if request.method == "POST":
         form = BaixaContaReceberForm(_payload_pagamento_normalizado(request))
         if form.is_valid():
+            try:
+                require_sensitive_permission(request.user, "perm_caixa_baixar_conta_receber")
+            except PermissionDenied as exc:
+                messages.error(request, str(exc) or "Permissao insuficiente.")
+                return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
             if conta.status in {"paga", "cancelada"}:
                 messages.error(request, "Esta conta nao permite nova baixa.")
                 return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
@@ -379,6 +387,7 @@ def detalhe_conta_receber(request, conta_id):
             "recebimentos": recebimentos,
             "valor_quitado": valor_quitado,
             "dias_atraso": dias_atraso,
+            "pode_baixar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_baixar_conta_receber"),
             "pode_aplicar_desconto_caixa": has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"),
             "menu_app": "caixa",
             "menu_sub": "contas_receber",

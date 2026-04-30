@@ -3,12 +3,18 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, role_required
+from configuracoes.permissions import (
+    CAIXA_FINANCIAL_ROLES,
+    has_sensitive_permission,
+    require_sensitive_permission,
+    role_required,
+)
 
 from ..forms import ContaPagarForm, PagamentoContaPagarForm
 from ..models import CategoriaFinanceira, ContaPagar, LancamentoCaixa
@@ -246,6 +252,8 @@ def contas_pagar(request):
             "querystring_paginacao": querystring_paginacao,
             "filtros_salvos_existem": bool(filtros_salvos),
             "pagamento_rapido_form": PagamentoContaPagarForm(),
+            "pode_criar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_criar_conta_pagar"),
+            "pode_baixar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar"),
             "menu_app": "caixa",
             "menu_sub": "contas_pagar",
         },
@@ -256,6 +264,7 @@ def contas_pagar(request):
 def criar_conta_pagar(request):
     _garantir_categorias_financeiras_padrao()
     _garantir_centros_custo_padrao()
+    require_sensitive_permission(request.user, "perm_caixa_criar_conta_pagar")
     if request.method == "POST":
         form = ContaPagarForm(request.POST)
         if form.is_valid():
@@ -288,6 +297,11 @@ def detalhe_conta_pagar(request, conta_id):
     if request.method == "POST":
         action = (request.POST.get("action") or "pagar").strip()
         if action == "cancelar":
+            try:
+                require_sensitive_permission(request.user, "perm_caixa_cancelar_conta_pagar")
+            except PermissionDenied as exc:
+                messages.error(request, str(exc) or "Permissao insuficiente.")
+                return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
             if pagamentos.exists():
                 messages.error(request, "Nao e permitido cancelar/excluir conta com pagamentos vinculados.")
             else:
@@ -299,6 +313,11 @@ def detalhe_conta_pagar(request, conta_id):
 
         form = PagamentoContaPagarForm(request.POST)
         if form.is_valid():
+            try:
+                require_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar")
+            except PermissionDenied as exc:
+                messages.error(request, str(exc) or "Permissao insuficiente.")
+                return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
             valor_pg = form.cleaned_data["valor"]
             if valor_pg <= 0:
                 messages.error(request, "Valor de pagamento invalido.")
@@ -350,6 +369,8 @@ def detalhe_conta_pagar(request, conta_id):
             "form": form,
             "pagamentos": pagamentos,
             "dias_atraso": dias_atraso,
+            "pode_baixar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar"),
+            "pode_cancelar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_cancelar_conta_pagar"),
             "menu_app": "caixa",
             "menu_sub": "contas_pagar",
         },

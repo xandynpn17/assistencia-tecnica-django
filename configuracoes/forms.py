@@ -282,6 +282,11 @@ class UserForm(forms.ModelForm):
             'perm_os_reabrir',
             'perm_orcamento_aplicar_desconto',
             'perm_orcamento_excluir_item',
+            'perm_caixa_criar_conta_receber',
+            'perm_caixa_baixar_conta_receber',
+            'perm_caixa_criar_conta_pagar',
+            'perm_caixa_baixar_conta_pagar',
+            'perm_caixa_cancelar_conta_pagar',
             'perm_caixa_aplicar_desconto',
             'perm_caixa_excluir_pagamento',
             'perm_caixa_ver_dre',
@@ -357,6 +362,11 @@ class UserForm(forms.ModelForm):
             "perm_os_reabrir",
             "perm_orcamento_aplicar_desconto",
             "perm_orcamento_excluir_item",
+            "perm_caixa_criar_conta_receber",
+            "perm_caixa_baixar_conta_receber",
+            "perm_caixa_criar_conta_pagar",
+            "perm_caixa_baixar_conta_pagar",
+            "perm_caixa_cancelar_conta_pagar",
             "perm_caixa_aplicar_desconto",
             "perm_caixa_excluir_pagamento",
             "perm_caixa_ver_dre",
@@ -377,6 +387,11 @@ class UserForm(forms.ModelForm):
         self.fields["perm_os_reabrir"].label = "Reabrir OS fechada"
         self.fields["perm_orcamento_aplicar_desconto"].label = "Aplicar desconto em orcamento"
         self.fields["perm_orcamento_excluir_item"].label = "Excluir item de orcamento"
+        self.fields["perm_caixa_criar_conta_receber"].label = "Criar conta a receber"
+        self.fields["perm_caixa_baixar_conta_receber"].label = "Baixar conta a receber"
+        self.fields["perm_caixa_criar_conta_pagar"].label = "Criar conta a pagar"
+        self.fields["perm_caixa_baixar_conta_pagar"].label = "Baixar conta a pagar"
+        self.fields["perm_caixa_cancelar_conta_pagar"].label = "Cancelar conta a pagar"
         self.fields["perm_caixa_aplicar_desconto"].label = "Aplicar desconto no caixa"
         self.fields["perm_caixa_excluir_pagamento"].label = "Excluir pagamento"
         self.fields["perm_caixa_ver_dre"].label = "Ver DRE"

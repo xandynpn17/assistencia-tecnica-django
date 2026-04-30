@@ -64,6 +64,21 @@ class PermissoesSensiveisHelperTests(TestCase):
         self.assertTrue(has_sensitive_permission(self.atendente, "perm_orcamento_aplicar_desconto"))
         self.assertTrue(has_sensitive_permission(self.atendente, "perm_caixa_aplicar_desconto"))
 
+    def test_financeiro_exige_permissoes_granulares_nas_contas(self):
+        campos = [
+            "perm_caixa_criar_conta_receber",
+            "perm_caixa_baixar_conta_receber",
+            "perm_caixa_criar_conta_pagar",
+            "perm_caixa_baixar_conta_pagar",
+            "perm_caixa_cancelar_conta_pagar",
+        ]
+        for campo in campos:
+            self.assertFalse(has_sensitive_permission(self.atendente, campo))
+            setattr(self.atendente, campo, True)
+        self.atendente.save(update_fields=campos)
+        for campo in campos:
+            self.assertTrue(has_sensitive_permission(self.atendente, campo))
+
     def test_gerente_tem_acesso_sensivel_global(self):
         self.assertTrue(has_sensitive_permission(self.gerente, "perm_caixa_ver_auditoria"))
         self.assertTrue(require_sensitive_permission(self.gerente, "perm_orcamento_excluir_item"))

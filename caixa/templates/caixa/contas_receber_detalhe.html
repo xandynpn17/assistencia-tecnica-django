@@ -129,6 +129,10 @@
           <div class="alert alert-warning mb-0">
             Esta conta está com status <strong>{{ conta.get_status_display }}</strong> e não permite nova baixa.
           </div>
+          {% elif not pode_baixar_conta_receber %}
+          <div class="alert alert-warning mb-0">
+            Voce nao tem permissao para baixar contas a receber.
+          </div>
           {% else %}
           <form method="post">
             {% csrf_token %}

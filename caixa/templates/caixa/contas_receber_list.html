@@ -56,7 +56,9 @@
 
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Contas a receber</h3>
+    {% if pode_criar_conta_receber %}
     <a href="{% url 'caixa:criar_conta_receber' %}" class="btn btn-primary btn-sm">Nova conta</a>
+    {% endif %}
   </div>
 
   <div class="card mb-3">
@@ -267,7 +269,7 @@
           <td class="text-right">
             <div class="btn-group btn-group-sm" role="group">
               <a href="{% url 'caixa:detalhe_conta_receber' c.id %}" class="btn btn-outline-primary">Detalhes</a>
-              {% if c.status != "paga" and c.status != "cancelada" %}
+              {% if pode_baixar_conta_receber and c.status != "paga" and c.status != "cancelada" %}
               <button
                 type="button"
                 class="btn btn-success js-abrir-baixa-rapida"

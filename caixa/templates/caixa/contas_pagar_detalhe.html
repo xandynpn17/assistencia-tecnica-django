@@ -119,6 +119,10 @@
           <div class="alert alert-warning mb-0">
             Esta conta está com status <strong>{{ conta.get_status_display }}</strong> e não permite novos pagamentos.
           </div>
+          {% elif not pode_baixar_conta_pagar %}
+          <div class="alert alert-warning mb-0">
+            Voce nao tem permissao para registrar pagamentos em contas a pagar.
+          </div>
           {% else %}
           <form method="post">
             {% csrf_token %}
@@ -141,12 +145,15 @@
           <form method="post" onsubmit="return window.AppMessages.confirmSync('Deseja cancelar esta conta?');">
             {% csrf_token %}
             <input type="hidden" name="action" value="cancelar">
-            <button type="submit" class="btn btn-outline-danger btn-block" {% if pagamentos %}disabled{% endif %}>
+            <button type="submit" class="btn btn-outline-danger btn-block" {% if pagamentos or not pode_cancelar_conta_pagar %}disabled{% endif %}>
               Cancelar conta
             </button>
           </form>
           {% if pagamentos %}
           <small class="text-muted d-block mt-2">Conta com pagamentos vinculados não pode ser cancelada.</small>
+          {% endif %}
+          {% if not pagamentos and not pode_cancelar_conta_pagar %}
+          <small class="text-muted d-block mt-2">Bloqueado para este usuario.</small>
           {% endif %}
         </div>
       </div>
