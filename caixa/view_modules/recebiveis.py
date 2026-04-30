@@ -3,12 +3,13 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, role_required
+from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, has_sensitive_permission, require_sensitive_permission, role_required
 
 from ..forms import (
     BaixaContaReceberForm,
@@ -251,6 +252,7 @@ def contas_receber(request):
             "querystring_paginacao": querystring_paginacao,
             "filtros_salvos_existem": bool(filtros_salvos),
             "baixa_rapida_form": BaixaContaReceberForm(),
+            "pode_aplicar_desconto_caixa": has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"),
             "menu_app": "caixa",
             "menu_sub": "contas_receber",
         },
@@ -309,6 +311,16 @@ def detalhe_conta_receber(request, conta_id):
             abatimento = valor + desconto
             valor_recebido = valor + juros
 
+            if desconto > Decimal("0.00"):
+                try:
+                    require_sensitive_permission(
+                        request.user,
+                        "perm_caixa_aplicar_desconto",
+                        message="Voce nao tem permissao para aplicar desconto no caixa.",
+                    )
+                except PermissionDenied as exc:
+                    messages.error(request, str(exc) or "Permissao insuficiente.")
+                    return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
             if abatimento > conta.valor_aberto:
                 messages.error(request, "O valor principal somado ao desconto nao pode ser maior que o saldo em aberto.")
                 return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
@@ -367,6 +379,7 @@ def detalhe_conta_receber(request, conta_id):
             "recebimentos": recebimentos,
             "valor_quitado": valor_quitado,
             "dias_atraso": dias_atraso,
+            "pode_aplicar_desconto_caixa": has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"),
             "menu_app": "caixa",
             "menu_sub": "contas_receber",
         },

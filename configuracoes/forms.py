@@ -280,7 +280,9 @@ class UserForm(forms.ModelForm):
             'perm_os_alterar_tecnico',
             'perm_os_concluir',
             'perm_os_reabrir',
+            'perm_orcamento_aplicar_desconto',
             'perm_orcamento_excluir_item',
+            'perm_caixa_aplicar_desconto',
             'perm_caixa_excluir_pagamento',
             'perm_caixa_ver_dre',
             'perm_caixa_gerir_comissoes',
@@ -353,7 +355,9 @@ class UserForm(forms.ModelForm):
             "perm_os_alterar_tecnico",
             "perm_os_concluir",
             "perm_os_reabrir",
+            "perm_orcamento_aplicar_desconto",
             "perm_orcamento_excluir_item",
+            "perm_caixa_aplicar_desconto",
             "perm_caixa_excluir_pagamento",
             "perm_caixa_ver_dre",
             "perm_caixa_gerir_comissoes",
@@ -371,7 +375,9 @@ class UserForm(forms.ModelForm):
         self.fields["perm_os_alterar_tecnico"].label = "Alterar tecnico responsavel"
         self.fields["perm_os_concluir"].label = "Concluir e fechar OS"
         self.fields["perm_os_reabrir"].label = "Reabrir OS fechada"
+        self.fields["perm_orcamento_aplicar_desconto"].label = "Aplicar desconto em orcamento"
         self.fields["perm_orcamento_excluir_item"].label = "Excluir item de orcamento"
+        self.fields["perm_caixa_aplicar_desconto"].label = "Aplicar desconto no caixa"
         self.fields["perm_caixa_excluir_pagamento"].label = "Excluir pagamento"
         self.fields["perm_caixa_ver_dre"].label = "Ver DRE"
         self.fields["perm_caixa_gerir_comissoes"].label = "Gerir comissoes"

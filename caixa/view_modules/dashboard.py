@@ -5,7 +5,7 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
@@ -871,6 +871,7 @@ def registrar_pagamento(request):
             "pagamento_sucesso": pagamento_sucesso,
             "emitir_fiscal_url": emitir_fiscal_url,
             "pode_excluir_pagamento": has_sensitive_permission(request.user, "perm_caixa_excluir_pagamento"),
+            "pode_aplicar_desconto_caixa": has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"),
             "troco_sugerido": troco_sugerido,
             "valor_recebido": valor_recebido,
             "valor_base_pagamento": ordem_valor_aberto if ordem else (guia_total if vendas_guia else (venda.valor_total if venda else None)),
@@ -900,6 +901,16 @@ def registrar_pagamento(request):
             elif desconto_valor > Decimal("0.00"):
                 desconto_aplicado = desconto_valor
             desconto_aplicado = min(max(desconto_aplicado, Decimal("0.00")), valor_bruto_pagamento)
+            if desconto_aplicado > Decimal("0.00"):
+                try:
+                    require_sensitive_permission(
+                        request.user,
+                        "perm_caixa_aplicar_desconto",
+                        message="Voce nao tem permissao para aplicar desconto no caixa.",
+                    )
+                except PermissionDenied as exc:
+                    form.add_error("desconto_valor", str(exc) or "Permissao insuficiente.")
+                    return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             valor_liquido_pagamento = valor_bruto_pagamento - desconto_aplicado
             if desconto_aplicado > Decimal("0.00") and valor_liquido_pagamento <= Decimal("0.00"):
                 form.add_error("desconto_valor", "O desconto não pode zerar o pagamento.")

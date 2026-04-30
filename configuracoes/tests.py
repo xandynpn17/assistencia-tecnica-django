@@ -55,6 +55,15 @@ class PermissoesSensiveisHelperTests(TestCase):
         self.tecnico.save(update_fields=["perm_os_editar_numero_serie"])
         self.assertTrue(has_sensitive_permission(self.tecnico, "perm_os_editar_numero_serie"))
 
+    def test_desconto_exige_permissao_granular_para_funcionario(self):
+        self.assertFalse(has_sensitive_permission(self.atendente, "perm_orcamento_aplicar_desconto"))
+        self.assertFalse(has_sensitive_permission(self.atendente, "perm_caixa_aplicar_desconto"))
+        self.atendente.perm_orcamento_aplicar_desconto = True
+        self.atendente.perm_caixa_aplicar_desconto = True
+        self.atendente.save(update_fields=["perm_orcamento_aplicar_desconto", "perm_caixa_aplicar_desconto"])
+        self.assertTrue(has_sensitive_permission(self.atendente, "perm_orcamento_aplicar_desconto"))
+        self.assertTrue(has_sensitive_permission(self.atendente, "perm_caixa_aplicar_desconto"))
+
     def test_gerente_tem_acesso_sensivel_global(self):
         self.assertTrue(has_sensitive_permission(self.gerente, "perm_caixa_ver_auditoria"))
         self.assertTrue(require_sensitive_permission(self.gerente, "perm_orcamento_excluir_item"))

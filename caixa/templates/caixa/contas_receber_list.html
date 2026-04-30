@@ -344,7 +344,12 @@
             </div>
             <div class="col-md-4 mb-2">
               <label for="{{ baixa_rapida_form.desconto.id_for_label }}">Desconto</label>
+              {% if pode_aplicar_desconto_caixa %}
               {{ baixa_rapida_form.desconto|add_class:"form-control"|attr:"id:id_baixa_rapida_desconto" }}
+              {% else %}
+              {{ baixa_rapida_form.desconto|add_class:"form-control"|attr:"id:id_baixa_rapida_desconto"|attr:"disabled:disabled" }}
+              <small class="form-text text-muted">Bloqueado para este usuario.</small>
+              {% endif %}
             </div>
             <div class="col-md-4 mb-2">
               <label for="{{ baixa_rapida_form.juros.id_for_label }}">Juros</label>

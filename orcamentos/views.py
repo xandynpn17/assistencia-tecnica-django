@@ -107,6 +107,36 @@ def _validar_desconto_item(desconto_valor, desconto_percentual):
     return ""
 
 
+def _payload_tem_desconto_orcamento(payload):
+    tipo = (payload.get("desconto_tipo") or "").strip()
+    valor_bruto = (payload.get("desconto_valor") or "").strip().replace(",", ".")
+    percentual_bruto = (payload.get("desconto_percentual") or "").strip().replace(",", ".")
+    if tipo not in {"valor", "percentual"}:
+        return False
+    try:
+        desconto_valor = Decimal(valor_bruto or "0")
+    except InvalidOperation:
+        desconto_valor = Decimal("0.00")
+    try:
+        desconto_percentual = Decimal(percentual_bruto or "0")
+    except InvalidOperation:
+        desconto_percentual = Decimal("0.00")
+    return desconto_valor > Decimal("0.00") or desconto_percentual > Decimal("0.00")
+
+
+def _exigir_permissao_desconto_orcamento(request, ordem):
+    try:
+        require_sensitive_permission(
+            request.user,
+            "perm_orcamento_aplicar_desconto",
+            message="Voce nao tem permissao para aplicar desconto no orcamento.",
+        )
+    except PermissionDenied as exc:
+        messages.error(request, str(exc) or "Permissao insuficiente.")
+        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+    return None
+
+
 def _item_comissionavel_por_padrao(ordem, tipo_item, payload):
     marcou = _bool_post(payload.get("comissionavel"))
     if (ordem.tipo_reparo or "").strip().lower().startswith("garantia de servi") and tipo_item == "servico":
@@ -151,6 +181,10 @@ def criar_orcamento(request, ordem_id):
         defaults={"cliente": ordem.cliente},
     )
     if request.method == "POST":
+        if _payload_tem_desconto_orcamento(request.POST):
+            bloqueio = _exigir_permissao_desconto_orcamento(request, ordem)
+            if bloqueio:
+                return bloqueio
         orcamento.descricao = request.POST.get("descricao", orcamento.descricao)
         _aplicar_desconto_orcamento(orcamento, request.POST)
         orcamento.save()
@@ -165,6 +199,10 @@ def editar_orcamento(request, orcamento_id):
     if not _garantir_ordem_editavel(request, orcamento.ordem_servico, "orcamento"):
         return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
     if request.method == "POST":
+        if _payload_tem_desconto_orcamento(request.POST):
+            bloqueio = _exigir_permissao_desconto_orcamento(request, orcamento.ordem_servico)
+            if bloqueio:
+                return bloqueio
         orcamento.descricao = request.POST.get("descricao", orcamento.descricao)
         _aplicar_desconto_orcamento(orcamento, request.POST)
         orcamento.save()
@@ -217,6 +255,10 @@ def adicionar_item(request, orcamento_id):
         if erro_desconto:
             messages.error(request, erro_desconto)
             return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos&open_modal=adicionar_item")
+        if desconto_valor > Decimal("0.00") or desconto_percentual > Decimal("0.00"):
+            bloqueio = _exigir_permissao_desconto_orcamento(request, orcamento.ordem_servico)
+            if bloqueio:
+                return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos&open_modal=adicionar_item")
 
         tecnico = None
         tecnico_id = request.POST.get("tecnico_responsavel")
@@ -319,6 +361,10 @@ def editar_item(request, item_id):
         if erro_desconto:
             messages.error(request, erro_desconto)
             return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
+        if desconto_valor > Decimal("0.00") or desconto_percentual > Decimal("0.00"):
+            bloqueio = _exigir_permissao_desconto_orcamento(request, item.orcamento.ordem_servico)
+            if bloqueio:
+                return bloqueio
         item.desconto_valor = desconto_valor
         item.desconto_percentual = desconto_percentual
         produto = _detectar_produto_estoque(item.ean, item.nome)

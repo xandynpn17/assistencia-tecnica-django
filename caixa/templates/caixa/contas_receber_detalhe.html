@@ -135,7 +135,12 @@
             {% for field in form %}
             <div class="mb-2">
               <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {% if field.name == "desconto" and not pode_aplicar_desconto_caixa %}
+              {{ field|add_class:"form-control"|attr:"disabled:disabled" }}
+              <small class="form-text text-muted">Bloqueado para este usuario.</small>
+              {% else %}
               {{ field|add_class:"form-control" }}
+              {% endif %}
               {% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}
             </div>
             {% endfor %}

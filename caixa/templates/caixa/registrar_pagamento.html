@@ -222,12 +222,21 @@
                             <div class="form-row">
                                 <div class="form-group col-md-4">
                                     <label for="{{ form.desconto_valor.id_for_label }}"><strong>Desconto (R$)</strong></label>
+                                    {% if pode_aplicar_desconto_caixa %}
                                     {{ form.desconto_valor|add_class:"form-control"|attr:"id:id_desconto_valor_pos" }}
+                                    {% else %}
+                                    {{ form.desconto_valor|add_class:"form-control"|attr:"id:id_desconto_valor_pos"|attr:"disabled:disabled" }}
+                                    {% endif %}
                                     {% if form.desconto_valor.errors %}<small class="text-danger">{{ form.desconto_valor.errors|striptags }}</small>{% endif %}
                                 </div>
                                 <div class="form-group col-md-4">
                                     <label for="{{ form.desconto_percentual.id_for_label }}"><strong>Desconto (%)</strong></label>
+                                    {% if pode_aplicar_desconto_caixa %}
                                     {{ form.desconto_percentual|add_class:"form-control"|attr:"id:id_desconto_percentual_pos" }}
+                                    {% else %}
+                                    {{ form.desconto_percentual|add_class:"form-control"|attr:"id:id_desconto_percentual_pos"|attr:"disabled:disabled" }}
+                                    <small class="form-text text-muted">Bloqueado para este usuario.</small>
+                                    {% endif %}
                                     {% if form.desconto_percentual.errors %}<small class="text-danger">{{ form.desconto_percentual.errors|striptags }}</small>{% endif %}
                                 </div>
                                 <div class="form-group col-md-4">

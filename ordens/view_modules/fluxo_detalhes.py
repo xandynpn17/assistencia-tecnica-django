@@ -185,6 +185,10 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             self.request.user,
             "perm_orcamento_excluir_item",
         )
+        context["pode_aplicar_desconto_orcamento"] = has_sensitive_permission(
+            self.request.user,
+            "perm_orcamento_aplicar_desconto",
+        )
         serial = (ordem.numero_serie_equipamento or "").strip()
         if serial:
             context["processo_anterior_sn"] = (

@@ -322,6 +322,43 @@ class ItemOrcamentoTecnicoTests(TestCase):
         mensagens = [str(message) for message in response.context["messages"]]
         self.assertTrue(any("nunca os dois" in mensagem for mensagem in mensagens))
 
+    def test_adicionar_item_com_desconto_exige_permissao(self):
+        response = self.client.post(
+            reverse("orcamentos:adicionar_item", args=[self.orcamento.id]),
+            {
+                "ean": "",
+                "nome": "Item com desconto bloqueado",
+                "descricao": "Teste",
+                "valor_unitario": "100.00",
+                "quantidade": "1",
+                "tipo_item": "servico",
+                "origem": "manual",
+                "desconto_valor": "10.00",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ItemOrcamento.objects.filter(nome="Item com desconto bloqueado").exists())
+
+    def test_adicionar_item_com_desconto_funciona_com_permissao(self):
+        self.atendente.perm_orcamento_aplicar_desconto = True
+        self.atendente.save(update_fields=["perm_orcamento_aplicar_desconto"])
+        response = self.client.post(
+            reverse("orcamentos:adicionar_item", args=[self.orcamento.id]),
+            {
+                "ean": "",
+                "nome": "Item com desconto liberado",
+                "descricao": "Teste",
+                "valor_unitario": "100.00",
+                "quantidade": "1",
+                "tipo_item": "servico",
+                "origem": "manual",
+                "desconto_valor": "10.00",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        item = ItemOrcamento.objects.get(nome="Item com desconto liberado")
+        self.assertEqual(item.desconto_valor, Decimal("10.00"))
+
     def test_garantia_de_servico_cria_item_sem_comissao_por_padrao(self):
         self.ordem.tipo_reparo = "Garantia de serviço"
         self.ordem.save(update_fields=["tipo_reparo"])

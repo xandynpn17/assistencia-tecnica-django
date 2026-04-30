@@ -310,6 +310,7 @@ Esses pontos podem virar padrao para o resto.
 - `perm_caixa_registrar_saida`
 - `perm_caixa_criar_conta_receber`
 - `perm_caixa_baixar_conta_receber`
+- `perm_caixa_aplicar_desconto`
 - `perm_caixa_criar_conta_pagar`
 - `perm_caixa_baixar_conta_pagar`
 - `perm_caixa_ver_dre`
@@ -343,7 +344,8 @@ Ordem recomendada:
 3. reabrir/concluir OS
 4. excluir item de orcamento
 5. excluir pagamento
-6. ver DRE / comissoes / auditoria
+6. aplicar desconto em orcamento e caixa
+7. ver DRE / comissoes / auditoria
 
 ## 5. Feito x pendente
 
@@ -354,13 +356,16 @@ Ordem recomendada:
 - identificacao das acoes reais da OS;
 - mapa das permissoes de modulo atuais;
 - identificacao das acoes sensiveis sem granularidade;
-- identificacao de gaps estruturais nas permissoes.
+- identificacao de gaps estruturais nas permissoes;
+- matriz de bloqueio por status da OS;
+- helper central para permissao por acao sensivel;
+- campos de permissao granular para acoes sensiveis ja priorizadas;
+- aplicacao das permissoes granulares em editar serie, alterar tecnico, concluir/reabrir OS, excluir item de orcamento, excluir pagamento, DRE, comissoes, auditoria e descontos;
+- consolidacao das acoes de orcamento dentro da aba da OS.
 
 ### Pendente para implementacao
 
-- matriz de bloqueio por status da OS;
-- helper central para permissao por acao sensivel;
-- campos novos de permissao granular no usuario;
-- aplicacao das permissoes granulares nas views;
 - remocao gradual de regras hardcoded em templates;
-- reorganizacao visual da OS em torno de status e proxima acao.
+- ampliar permissoes granulares para criar/baixar contas a receber e contas a pagar;
+- revisar exclusoes e edicoes destrutivas fora de OS/orcamento/caixa;
+- reorganizacao visual fina da OS em torno de status e proxima acao, mantendo o layout atual.

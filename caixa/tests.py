@@ -3826,6 +3826,11 @@ class PagamentoComDescontoTests(TestCase):
             password="senha-forte-123",
             tipo_usuario="gerente",
         )
+        self.atendente = user_model.objects.create_user(
+            username="atendente_desconto_pagamento",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
         self.client.force_login(self.gerente)
         self.caixa = Caixa.objects.create(aberto=True, saldo_inicial=Decimal("0.00"))
         self.forma_pix = FormaPagamento.objects.create(nome="PIX Teste", codigo="pix_teste", tipo="avista", ativa=True)
@@ -3877,6 +3882,24 @@ class PagamentoComDescontoTests(TestCase):
         recebimento = conta.recebimentos.latest("id")
         self.assertEqual(recebimento.valor, Decimal("90.00"))
         self.assertEqual(recebimento.desconto, Decimal("10.00"))
+
+    def test_registrar_pagamento_com_desconto_exige_permissao(self):
+        self.client.force_login(self.atendente)
+        response = self.client.post(
+            reverse("caixa:registrar_pagamento") + f"?os={self.ordem.id}",
+            {
+                "ordem_servico": str(self.ordem.id),
+                "valor": "100.00",
+                "forma_pagamento": str(self.forma_pix.id),
+                "referencia": "PIX-BLOQ",
+                "desconto_valor": "10.00",
+                "desconto_percentual": "",
+                "chave_idempotencia": "pagamento-desconto-bloqueado-1",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Pagamento.objects.filter(chave_idempotencia="pagamento-desconto-bloqueado-1").exists())
+        self.assertIn("desconto_valor", response.context["form"].errors)
 
     def test_desconto_no_caixa_nao_reduz_comissao(self):
         tecnico = get_user_model().objects.create_user(

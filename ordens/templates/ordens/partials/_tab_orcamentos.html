@@ -248,6 +248,9 @@ if (checkAll) {
 
                     <div class="alert alert-light border mb-3 py-2">
                         <strong>Desconto do item:</strong> informe por valor <strong>ou</strong> por percentual.
+                        {% if not pode_aplicar_desconto_orcamento %}
+                        <span class="text-muted">Permissao necessaria.</span>
+                        {% endif %}
                     </div>
 
                     <div class="row">
@@ -267,11 +270,11 @@ if (checkAll) {
                         </div>
                         <div class="col-md-3 mb-3">
                             <label for="id_desconto_valor2">Desconto (R$)</label>
-                            <input type="number" step="0.01" min="0" name="desconto_valor" id="id_desconto_valor2" class="form-control" value="0.00">
+                            <input type="number" step="0.01" min="0" name="desconto_valor" id="id_desconto_valor2" class="form-control" value="0.00" {% if not pode_aplicar_desconto_orcamento %}disabled{% endif %}>
                         </div>
                         <div class="col-md-3 mb-3">
                             <label for="id_desconto_percentual2">Desconto (%)</label>
-                            <input type="number" step="0.01" min="0" max="100" name="desconto_percentual" id="id_desconto_percentual2" class="form-control" value="0.00">
+                            <input type="number" step="0.01" min="0" max="100" name="desconto_percentual" id="id_desconto_percentual2" class="form-control" value="0.00" {% if not pode_aplicar_desconto_orcamento %}disabled{% endif %}>
                             <small class="form-text text-muted">Use valor ou percentual, não os dois.</small>
                         </div>
                     </div>
