@@ -12,6 +12,8 @@ __pycache__/
 
 # AMBIENTE VIRTUAL
 venv/
+.venv/
+.venv_codex/
 .env
 
 # IDE
