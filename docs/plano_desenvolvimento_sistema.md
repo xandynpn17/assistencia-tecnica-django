@@ -208,6 +208,9 @@ Resultado esperado:
 Feito nesta etapa:
 - a logica de aprovacao, recusa e migracao foi consolidada em `orcamentos/services/fluxo_orcamento.py`;
 - os pontos ativos em `ordens` e `orcamentos` passaram a usar a mesma regra central.
+- aba de orcamento da OS passou a ter painel operacional com totais, pendencias, aprovados, recusados e acoes diretas.
+- envio de orcamento por WhatsApp/E-mail e impressao passaram a ficar disponiveis diretamente na aba de orcamento.
+- notificacao de orcamento pode retornar para a propria aba `orcamentos`, mantendo o usuario no contexto da OS.
 
 Ainda pendente nesta fase:
 - simplificar mais rotas e pontos de entrada visuais;

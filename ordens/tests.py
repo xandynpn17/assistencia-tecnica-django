@@ -1392,6 +1392,15 @@ class PortalClienteTests(TestCase):
             ).exists()
         )
 
+    def test_notificar_orcamento_whatsapp_pode_voltar_para_aba_orcamentos(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("ordens:notificar_cliente_ordem", args=[self.ordem.id, "orcamento"]),
+            {"canal": "whatsapp", "next_tab": "orcamentos"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("?tab=orcamentos&wa=", response.url)
+
     def test_notificar_pronto_whatsapp_atualiza_status_para_pronto_contactado(self):
         self.client.force_login(self.user)
         self.ordem.status = "em_andamento"
@@ -2318,6 +2327,26 @@ class DetalhesOrdemCabecalhoTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Concluída aguardando pagamento")
         self.assertContains(response, "Ir para o Caixa")
+
+    def test_detalhes_exibe_painel_operacional_do_orcamento(self):
+        orcamento = Orcamento.objects.create(cliente=self.cliente, ordem_servico=self.ordem)
+        ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome="Servico painel",
+            descricao="Teste",
+            valor_unitario=Decimal("90.00"),
+            quantidade=1,
+            tipo_item="servico",
+            origem="manual",
+            status="pendente",
+        )
+
+        response = self.client.get(reverse("ordens:detalhes_ordem", args=[self.ordem.id]) + "?tab=orcamentos")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Painel do Orcamento")
+        self.assertContains(response, "Enviar Orcamento WhatsApp")
+        self.assertContains(response, "Imprimir Orcamento")
 
 
 class OrdemArquivoUploadTests(TestCase):

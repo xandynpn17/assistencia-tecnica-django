@@ -2,16 +2,63 @@
 <div class="tab-pane fade {% if active_tab == 'orcamentos' %}show active{% endif %}" id="orcamentos">
     <div class="card-modern flex-fill mt-3">
         <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span>Orçamentos</span>
+            <span>Orcamento da OS</span>
             <div class="d-flex">
                 {% if not ordem.fechada %}
-                <button type="button" class="btn btn-primary btn-sm mr-2" data-toggle="modal"
+                <button type="button" class="btn {% if destacar_abrir_orcamento or not orcamento_tem_itens %}btn-primary{% else %}btn-light{% endif %} btn-sm mr-2" data-toggle="modal"
                         data-target="#modalAdicionarItem2">
                     <i class="fas fa-plus"></i> Inserir Item
                 </button>
                 {% else %}
                 <span class="text-light"><i class="fas fa-lock mr-1"></i> Edição bloqueada</span>
                 {% endif %}
+            </div>
+        </div>
+
+        <div class="card-modern-body border-bottom">
+            <div class="d-flex justify-content-between align-items-start flex-wrap" style="gap: 12px;">
+                <div>
+                    <h6 class="mb-2">Painel do Orcamento</h6>
+                    <div class="d-flex flex-wrap" style="gap:8px;">
+                        <span class="badge badge-light border">Itens: {{ orcamento_stats.total_itens }}</span>
+                        <span class="badge badge-warning">Pendentes: {{ orcamento_stats.pendentes }}</span>
+                        <span class="badge badge-success">Aprovados: {{ orcamento_stats.aprovados }}</span>
+                        <span class="badge badge-danger">Recusados: {{ orcamento_stats.recusados }}</span>
+                        <span class="badge badge-info">Qtd: {{ orcamento_stats.quantidade_total }}</span>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        {% if not orcamento_tem_itens %}
+                            Sem itens para envio.
+                        {% elif orcamento_tem_pendentes %}
+                            Aguardando envio ou retorno do cliente.
+                        {% elif orcamento_pode_migrar %}
+                            Itens aprovados prontos para migracao.
+                        {% else %}
+                            Sem itens pendentes.
+                        {% endif %}
+                    </small>
+                </div>
+                <div class="d-flex flex-wrap justify-content-end" style="gap:8px;">
+                    <a href="{% url 'orcamentos:imprimir_orcamento' orcamento.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-print mr-1"></i> Imprimir Orcamento
+                    </a>
+                    <form method="post" action="{% url 'ordens:notificar_cliente_ordem' ordem.id 'orcamento' %}" class="mb-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="canal" value="whatsapp">
+                        <input type="hidden" name="next_tab" value="orcamentos">
+                        <button type="submit" class="btn btn-sm btn-outline-success" {% if not orcamento_pode_enviar %}disabled{% endif %}>
+                            <i class="fab fa-whatsapp mr-1"></i> Enviar Orcamento WhatsApp
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'ordens:notificar_cliente_ordem' ordem.id 'orcamento' %}" class="mb-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="canal" value="email">
+                        <input type="hidden" name="next_tab" value="orcamentos">
+                        <button type="submit" class="btn btn-sm btn-outline-primary" {% if not orcamento_pode_enviar or not ordem.cliente.email %}disabled{% endif %}>
+                            <i class="fas fa-envelope mr-1"></i> Enviar por Email
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
 

@@ -105,6 +105,11 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 stats_orcamento["pendentes"] += 1
         context["orcamento_itens"] = itens_orcamento
         context["orcamento_stats"] = stats_orcamento
+        context["orcamento_tem_itens"] = stats_orcamento["total_itens"] > 0
+        context["orcamento_tem_pendentes"] = stats_orcamento["pendentes"] > 0
+        context["orcamento_tem_aprovados"] = stats_orcamento["aprovados"] > 0
+        context["orcamento_pode_migrar"] = stats_orcamento["aprovados"] > 0
+        context["orcamento_pode_enviar"] = stats_orcamento["total_itens"] > 0
         vars_msg = _contexto_variaveis_mensagem(ordem, request=self.request)
         modelos_ativos = ModeloMensagem.objects.filter(ativo=True).order_by("nome")
         modelos_payload = []

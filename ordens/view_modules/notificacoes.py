@@ -74,6 +74,9 @@ def _mensagem_padrao_notificacao(ordem, tipo, canal="sistema", request=None):
 def notificar_cliente_ordem(request, pk, tipo):
     ordem = get_object_or_404(OrdemServico, pk=pk)
     canal = request.POST.get("canal", "sistema")
+    next_tab = (request.POST.get("next_tab") or "detalhes").strip()
+    if next_tab not in {"detalhes", "orcamentos", "servicos", "relatorio", "linhas"}:
+        next_tab = "detalhes"
     assunto = (request.POST.get("assunto") or "").strip()
     if canal == "email" and not assunto:
         if tipo == "orcamento":
@@ -109,11 +112,11 @@ def notificar_cliente_ordem(request, pk, tipo):
             messages.success(request, "O WhatsApp foi aberto em nova aba, mantendo a sessao no sistema.")
             wa = quote(resultado.get("url", ""), safe="")
             wa_app = quote(resultado.get("app_url", ""), safe="")
-            return redirect(f"{ordem.get_absolute_url()}?tab=detalhes&wa={wa}&wa_app={wa_app}")
+            return redirect(f"{ordem.get_absolute_url()}?tab={next_tab}&wa={wa}&wa_app={wa_app}")
         messages.success(request, "Notificacao enviada com sucesso.")
     else:
         messages.error(request, f"Falha ao enviar notificacao: {notif.erro or 'erro desconhecido'}")
-    return redirect(f"{ordem.get_absolute_url()}?tab=detalhes")
+    return redirect(f"{ordem.get_absolute_url()}?tab={next_tab}")
 
 
 @role_required(ORDER_ROLES)
