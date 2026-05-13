@@ -1,7 +1,7 @@
 ﻿from . import fluxo_support as _support
 from ..services.anexos import EXTENSOES_IMAGEM, MAX_FOTOS_POR_OS, preparar_arquivo_anexo
 from django.core.exceptions import PermissionDenied
-from configuracoes.permissions import has_sensitive_permission, require_sensitive_permission
+from configuracoes.permissions import has_sensitive_permission, is_management_user, require_sensitive_permission
 from ..services import FechamentoOSService, ResumoOperacionalService
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
@@ -135,10 +135,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["tem_alertas"] = ordem.alertas.exists()
         context["logs_confirmacao"] = ordem.logs_confirmacao.select_related("usuario_responsavel").all()[:15]
         context["logs_os"] = ordem.logs_os.select_related("usuario_responsavel").all()[:50]
-        context["pode_ver_logs"] = bool(
-            self.request.user.is_superuser
-            or getattr(self.request.user, "tipo_usuario", "") in {"adm", "gerente"}
-        )
+        context["pode_ver_logs"] = is_management_user(self.request.user)
         context["url_confirmacao_publica"] = self.request.build_absolute_uri(
             reverse("confirmar_os_publico", kwargs={"token": ordem.token_confirmacao})
         )
@@ -169,9 +166,21 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             self.request.user,
             "perm_os_editar_numero_serie",
         )
+        context["pode_editar_observacoes_internas"] = has_sensitive_permission(
+            self.request.user,
+            "perm_os_editar_observacoes_internas",
+        )
+        context["pode_editar_local_armazenamento"] = has_sensitive_permission(
+            self.request.user,
+            "perm_os_editar_local_armazenamento",
+        )
         context["pode_alterar_tecnico"] = has_sensitive_permission(
             self.request.user,
             "perm_os_alterar_tecnico",
+        )
+        context["pode_excluir_servico_peca"] = has_sensitive_permission(
+            self.request.user,
+            "perm_os_excluir_servico_peca",
         )
         context["pode_concluir_os"] = has_sensitive_permission(
             self.request.user,
@@ -180,6 +189,22 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["pode_reabrir_os"] = has_sensitive_permission(
             self.request.user,
             "perm_os_reabrir",
+        )
+        context["pode_editar_orcamento"] = has_sensitive_permission(
+            self.request.user,
+            "perm_orcamento_editar",
+        )
+        context["pode_aprovar_item_orcamento"] = has_sensitive_permission(
+            self.request.user,
+            "perm_orcamento_aprovar_item",
+        )
+        context["pode_recusar_item_orcamento"] = has_sensitive_permission(
+            self.request.user,
+            "perm_orcamento_recusar_item",
+        )
+        context["pode_migrar_item_orcamento"] = has_sensitive_permission(
+            self.request.user,
+            "perm_orcamento_migrar_item",
         )
         context["pode_excluir_item_orcamento"] = has_sensitive_permission(
             self.request.user,
@@ -281,6 +306,15 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             item_id = request.POST.get("item_id")
             item = get_object_or_404(ServicoPeca, id=item_id, ordem=self.object)
             nome_item = item.nome
+            try:
+                require_sensitive_permission(
+                    request.user,
+                    "perm_os_excluir_servico_peca",
+                    message="Voce nao tem permissao para excluir servicos ou pecas desta OS.",
+                )
+            except PermissionDenied as exc:
+                messages.error(request, str(exc) or "Permissao insuficiente.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
             if item.item_orcamento_id:
                 cancelar_comissoes_por_item(
                     item.item_orcamento,

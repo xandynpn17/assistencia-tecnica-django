@@ -11,7 +11,7 @@
             {% endif %}
         </div>
         <div class="card-modern-body">
-            <div class="mb-2">
+            <div class="mb-2 d-flex flex-wrap" style="gap:8px;">
                 <span class="badge badge-info">Fotos: {{ fotos_count }}</span>
                 {% if pode_incluir_fotos_relatorio %}
                 <span class="badge badge-success">Já é possível incluir fotos no relatório técnico</span>
@@ -20,7 +20,7 @@
                 {% endif %}
             </div>
             <div class="table-responsive">
-                <table class="table table-sm table-bordered">
+                <table class="table table-sm table-bordered mb-0">
                     <thead>
                         <tr>
                             <th>Arquivo</th>

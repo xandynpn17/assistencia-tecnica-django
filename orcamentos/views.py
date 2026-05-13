@@ -137,6 +137,25 @@ def _exigir_permissao_desconto_orcamento(request, ordem):
     return None
 
 
+def _exigir_permissao_orcamento(request, ordem, permission_name, *, redirect_tab="orcamentos"):
+    try:
+        require_sensitive_permission(
+            request.user,
+            permission_name,
+        )
+    except PermissionDenied as exc:
+        messages.error(request, str(exc) or "Permissao insuficiente.")
+        return redirect(f"{ordem.get_absolute_url()}?tab={redirect_tab}")
+    return None
+
+
+def _redirect_orcamento_na_os(ordem, *, tab="orcamentos", open_modal=None):
+    url = f"{ordem.get_absolute_url()}?tab={tab}"
+    if open_modal:
+        url = f"{url}&open_modal={open_modal}"
+    return redirect(url)
+
+
 def _item_comissionavel_por_padrao(ordem, tipo_item, payload):
     marcou = _bool_post(payload.get("comissionavel"))
     if (ordem.tipo_reparo or "").strip().lower().startswith("garantia de servi") and tipo_item == "servico":
@@ -175,53 +194,62 @@ def _aplicar_xframe_preview(request, response):
 def criar_orcamento(request, ordem_id):
     ordem = get_object_or_404(OrdemServico, id=ordem_id)
     if not _garantir_ordem_editavel(request, ordem, "orcamento"):
-        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+        return _redirect_orcamento_na_os(ordem)
+    bloqueio = _exigir_permissao_orcamento(request, ordem, "perm_orcamento_editar")
+    if bloqueio:
+        return bloqueio
     orcamento, _ = Orcamento.objects.get_or_create(
         ordem_servico=ordem,
         defaults={"cliente": ordem.cliente},
     )
-    if request.method == "POST":
-        if _payload_tem_desconto_orcamento(request.POST):
-            bloqueio = _exigir_permissao_desconto_orcamento(request, ordem)
-            if bloqueio:
-                return bloqueio
-        orcamento.descricao = request.POST.get("descricao", orcamento.descricao)
-        _aplicar_desconto_orcamento(orcamento, request.POST)
-        orcamento.save()
-        orcamento.atualizar_total()
-        messages.success(request, "Orçamento atualizado com sucesso!")
-        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
-    return render(request, "orcamentos/orcamento_form.html", {"orcamento": orcamento, "ordem": ordem})
+    if request.method != "POST":
+        return _redirect_orcamento_na_os(ordem)
+    if _payload_tem_desconto_orcamento(request.POST):
+        bloqueio = _exigir_permissao_desconto_orcamento(request, ordem)
+        if bloqueio:
+            return bloqueio
+    orcamento.descricao = request.POST.get("descricao", orcamento.descricao)
+    _aplicar_desconto_orcamento(orcamento, request.POST)
+    orcamento.save()
+    orcamento.atualizar_total()
+    messages.success(request, "Orçamento da OS atualizado com sucesso!")
+    return _redirect_orcamento_na_os(ordem)
 
 @role_required(ORDER_ROLES)
 def editar_orcamento(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
     if not _garantir_ordem_editavel(request, orcamento.ordem_servico, "orcamento"):
-        return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
-    if request.method == "POST":
-        if _payload_tem_desconto_orcamento(request.POST):
-            bloqueio = _exigir_permissao_desconto_orcamento(request, orcamento.ordem_servico)
-            if bloqueio:
-                return bloqueio
-        orcamento.descricao = request.POST.get("descricao", orcamento.descricao)
-        _aplicar_desconto_orcamento(orcamento, request.POST)
-        orcamento.save()
-        orcamento.atualizar_total()
-        messages.success(request, "Orçamento atualizado com sucesso!")
-        return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
-    return render(request, "orcamentos/orcamento_form.html", {"orcamento": orcamento, "ordem": orcamento.ordem_servico})
+        return _redirect_orcamento_na_os(orcamento.ordem_servico)
+    bloqueio = _exigir_permissao_orcamento(request, orcamento.ordem_servico, "perm_orcamento_editar")
+    if bloqueio:
+        return bloqueio
+    if request.method != "POST":
+        return _redirect_orcamento_na_os(orcamento.ordem_servico)
+    if _payload_tem_desconto_orcamento(request.POST):
+        bloqueio = _exigir_permissao_desconto_orcamento(request, orcamento.ordem_servico)
+        if bloqueio:
+            return bloqueio
+    orcamento.descricao = request.POST.get("descricao", orcamento.descricao)
+    _aplicar_desconto_orcamento(orcamento, request.POST)
+    orcamento.save()
+    orcamento.atualizar_total()
+    messages.success(request, "Orçamento da OS atualizado com sucesso!")
+    return _redirect_orcamento_na_os(orcamento.ordem_servico)
 
 @role_required(ORDER_ROLES)
 def excluir_orcamento(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
     ordem = orcamento.ordem_servico
     if not _garantir_ordem_editavel(request, ordem, "orcamento"):
-        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+        return _redirect_orcamento_na_os(ordem)
+    bloqueio = _exigir_permissao_orcamento(request, ordem, "perm_orcamento_editar")
+    if bloqueio:
+        return bloqueio
     if request.method == "POST":
         orcamento.delete()
-        messages.success(request, "Orçamento excluído com sucesso!")
-        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
-    return redirect("ordens:lista_ordens")
+        messages.success(request, "Orçamento da OS excluído com sucesso!")
+        return _redirect_orcamento_na_os(ordem)
+    return _redirect_orcamento_na_os(ordem)
 
 
 
@@ -232,7 +260,10 @@ def excluir_orcamento(request, orcamento_id):
 def adicionar_item(request, orcamento_id):
     orcamento = get_object_or_404(Orcamento, id=orcamento_id)
     if not _garantir_ordem_editavel(request, orcamento.ordem_servico, "orcamento_item"):
-        return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
+        return _redirect_orcamento_na_os(orcamento.ordem_servico)
+    bloqueio = _exigir_permissao_orcamento(request, orcamento.ordem_servico, "perm_orcamento_editar")
+    if bloqueio:
+        return bloqueio
     if request.method == "POST":
         nome = request.POST.get("nome", "")
         descricao = request.POST.get("descricao", "")
@@ -241,10 +272,10 @@ def adicionar_item(request, orcamento_id):
             quantidade = int(request.POST.get("quantidade", 1))
         except (TypeError, ValueError):
             messages.error(request, "Quantidade invalida. Informe um numero inteiro maior que zero.")
-            return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos&open_modal=adicionar_item")
+            return _redirect_orcamento_na_os(orcamento.ordem_servico, open_modal="adicionar_item")
         if quantidade <= 0:
             messages.error(request, "Quantidade invalida. Informe um valor maior que zero.")
-            return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos&open_modal=adicionar_item")
+            return _redirect_orcamento_na_os(orcamento.ordem_servico, open_modal="adicionar_item")
         valor_unitario_str = request.POST.get("valor_unitario", "0").replace(",", ".")
         try:
             valor_unitario = Decimal(valor_unitario_str)
@@ -254,11 +285,11 @@ def adicionar_item(request, orcamento_id):
         erro_desconto = _validar_desconto_item(desconto_valor, desconto_percentual)
         if erro_desconto:
             messages.error(request, erro_desconto)
-            return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos&open_modal=adicionar_item")
+            return _redirect_orcamento_na_os(orcamento.ordem_servico, open_modal="adicionar_item")
         if desconto_valor > Decimal("0.00") or desconto_percentual > Decimal("0.00"):
             bloqueio = _exigir_permissao_desconto_orcamento(request, orcamento.ordem_servico)
             if bloqueio:
-                return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos&open_modal=adicionar_item")
+                return _redirect_orcamento_na_os(orcamento.ordem_servico, open_modal="adicionar_item")
 
         tecnico = None
         tecnico_id = request.POST.get("tecnico_responsavel")
@@ -274,7 +305,7 @@ def adicionar_item(request, orcamento_id):
         tipo_item = (request.POST.get("tipo_item") or "").strip()
         if tipo_item not in {"servico", "peca"}:
             messages.error(request, "Selecione obrigatoriamente o tipo do item: Serviço ou Peça.")
-            return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos&open_modal=adicionar_item")
+            return _redirect_orcamento_na_os(orcamento.ordem_servico, open_modal="adicionar_item")
 
         item = ItemOrcamento.objects.create(
             orcamento=orcamento,
@@ -327,17 +358,20 @@ def adicionar_item(request, orcamento_id):
                         messages.info(request, f"Pre-reserva criada para {produto.nome}.")
                     else:
                         messages.warning(request, f"Item {produto.nome} adicionado sem reserva por falta de saldo disponível no ponto.")
-        messages.success(request, "Item adicionado com sucesso!")
-    return redirect(f"{orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
+        messages.success(request, "Item adicionado ao orçamento da OS com sucesso!")
+    return _redirect_orcamento_na_os(orcamento.ordem_servico)
 
 @role_required(ORDER_ROLES)
 def editar_item(request, item_id):
     item = get_object_or_404(ItemOrcamento, id=item_id)
     if not _garantir_ordem_editavel(request, item.orcamento.ordem_servico, "orcamento_item"):
         if request.method == "POST":
-            return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
+            return _redirect_orcamento_na_os(item.orcamento.ordem_servico)
         from django.http import JsonResponse
         return JsonResponse({"erro": "OS bloqueada para edição de orçamento."}, status=400)
+    bloqueio = _exigir_permissao_orcamento(request, item.orcamento.ordem_servico, "perm_orcamento_editar")
+    if bloqueio:
+        return bloqueio
     if request.method == "POST":
         item.ean = request.POST.get("ean", item.ean)
         item.nome = request.POST.get("nome", item.nome)
@@ -346,10 +380,10 @@ def editar_item(request, item_id):
             quantidade = int(request.POST.get("quantidade", item.quantidade))
         except (TypeError, ValueError):
             messages.error(request, "Quantidade invalida. Informe um numero inteiro maior que zero.")
-            return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
+            return _redirect_orcamento_na_os(item.orcamento.ordem_servico)
         if quantidade <= 0:
             messages.error(request, "Quantidade invalida. Informe um valor maior que zero.")
-            return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
+            return _redirect_orcamento_na_os(item.orcamento.ordem_servico)
         item.quantidade = quantidade
         valor_str = request.POST.get("valor_unitario", str(item.valor_unitario)).replace(",", ".")
         try:
@@ -360,7 +394,7 @@ def editar_item(request, item_id):
         erro_desconto = _validar_desconto_item(desconto_valor, desconto_percentual)
         if erro_desconto:
             messages.error(request, erro_desconto)
-            return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
+            return _redirect_orcamento_na_os(item.orcamento.ordem_servico)
         if desconto_valor > Decimal("0.00") or desconto_percentual > Decimal("0.00"):
             bloqueio = _exigir_permissao_desconto_orcamento(request, item.orcamento.ordem_servico)
             if bloqueio:
@@ -385,8 +419,8 @@ def editar_item(request, item_id):
         else:
             item.tecnico_responsavel = None
         item.save()
-        messages.success(request, "Item atualizado com sucesso!")
-        return redirect(f"{item.orcamento.ordem_servico.get_absolute_url()}?tab=orcamentos")
+        messages.success(request, "Item do orçamento da OS atualizado com sucesso!")
+        return _redirect_orcamento_na_os(item.orcamento.ordem_servico)
     # JSON para modal
     from django.http import JsonResponse
     return JsonResponse({
@@ -409,7 +443,7 @@ def excluir_item(request, item_id):
     item = get_object_or_404(ItemOrcamento, id=item_id)
     ordem = item.orcamento.ordem_servico
     if not _garantir_ordem_editavel(request, ordem, "orcamento_item"):
-        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+        return _redirect_orcamento_na_os(ordem)
     if request.method == "POST":
         try:
             require_sensitive_permission(
@@ -419,7 +453,7 @@ def excluir_item(request, item_id):
             )
         except PermissionDenied as exc:
             messages.error(request, str(exc) or "Permissao insuficiente.")
-            return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+            return _redirect_orcamento_na_os(ordem)
         reservas_item = list(item.reservas_estoque.all())
         cancelar_comissoes_por_item(item, motivo="Item removido do orçamento.", evento="CANCELAMENTO_ITEM")
         item.delete()
@@ -428,42 +462,48 @@ def excluir_item(request, item_id):
                 cancelar_reserva(reserva, usuario=request.user, motivo="Item de orçamento excluído")
             except ValueError:
                 pass
-        messages.success(request, "Item excluído com sucesso!")
-    return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+        messages.success(request, "Item removido do orçamento da OS com sucesso!")
+    return _redirect_orcamento_na_os(ordem)
 
 # ==========================
 # Aceitar / Recusar itens selecionados
 # ==========================
 @role_required(ORDER_ROLES)
 def aceitar_itens_orcamento(request, orcamento_id):
+    orc = get_object_or_404(Orcamento, id=orcamento_id)
     if request.method == "POST":
-        orc = get_object_or_404(Orcamento, id=orcamento_id)
         if not _garantir_ordem_editavel(request, orc.ordem_servico, "orcamento_item"):
-            return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
+            return _redirect_orcamento_na_os(orc.ordem_servico)
+        bloqueio = _exigir_permissao_orcamento(request, orc.ordem_servico, "perm_orcamento_aprovar_item")
+        if bloqueio:
+            return bloqueio
         itens_ids = request.POST.getlist("itens_selecionados")
         if not itens_ids:
-            messages.warning(request, "Selecione ao menos um item para aprovar.")
-            return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
+            messages.warning(request, "Selecione ao menos um item do orçamento da OS para aprovar.")
+            return _redirect_orcamento_na_os(orc.ordem_servico)
 
         resultado = FluxoOrcamentoService.aceitar_itens(orc, itens_ids, usuario=request.user)
-        messages.success(request, f"{resultado.itens_processados} item(s) aprovado(s) com sucesso!")
-    return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
+        messages.success(request, f"{resultado.itens_processados} item(ns) do orçamento da OS aprovado(s) com sucesso!")
+    return _redirect_orcamento_na_os(orc.ordem_servico)
 
 
 @role_required(ORDER_ROLES)
 def recusar_itens_orcamento(request, orcamento_id):
+    orc = get_object_or_404(Orcamento, id=orcamento_id)
     if request.method == "POST":
-        orc = get_object_or_404(Orcamento, id=orcamento_id)
         if not _garantir_ordem_editavel(request, orc.ordem_servico, "orcamento_item"):
-            return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
+            return _redirect_orcamento_na_os(orc.ordem_servico)
+        bloqueio = _exigir_permissao_orcamento(request, orc.ordem_servico, "perm_orcamento_recusar_item")
+        if bloqueio:
+            return bloqueio
         itens_ids = request.POST.getlist("itens_selecionados")
         if not itens_ids:
-            messages.warning(request, "Selecione ao menos um item para recusar.")
-            return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
+            messages.warning(request, "Selecione ao menos um item do orçamento da OS para recusar.")
+            return _redirect_orcamento_na_os(orc.ordem_servico)
 
         resultado = FluxoOrcamentoService.recusar_itens(orc, itens_ids, usuario=request.user)
-        messages.warning(request, f"{resultado.itens_processados} item(s) recusado(s).")
-    return redirect(f"{orc.ordem_servico.get_absolute_url()}?tab=orcamentos")
+        messages.warning(request, f"{resultado.itens_processados} item(ns) do orçamento da OS recusado(s).")
+    return _redirect_orcamento_na_os(orc.ordem_servico)
 
 
 @role_required(ORDER_ROLES)
@@ -495,13 +535,16 @@ def migrar_para_servicos(request, orcamento_id):
     orc = get_object_or_404(Orcamento, id=orcamento_id)
     ordem = orc.ordem_servico
     if not _garantir_ordem_editavel(request, ordem, "orcamento_item"):
-        return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+        return _redirect_orcamento_na_os(ordem)
+    bloqueio = _exigir_permissao_orcamento(request, ordem, "perm_orcamento_migrar_item")
+    if bloqueio:
+        return bloqueio
     if request.method == "POST":
         itens_ids = request.POST.getlist("itens_selecionados")
         itens = orc.itens.filter(id__in=itens_ids)
         if not itens.exists():
-            messages.warning(request, "Nenhum item selecionado para migração.")
-            return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+            messages.warning(request, "Nenhum item do orçamento da OS foi selecionado para migração.")
+            return _redirect_orcamento_na_os(ordem)
 
         resultado = FluxoOrcamentoService.migrar_itens_selecionados(
             orc,
@@ -512,14 +555,14 @@ def migrar_para_servicos(request, orcamento_id):
             copiar_comissionavel=True,
         )
         if resultado.itens_nao_aprovados:
-            messages.warning(request, "Somente itens aprovados podem ser migrados para Serviços & Peças.")
+            messages.warning(request, "Somente itens aprovados do orçamento da OS podem ser migrados para Serviços & Peças.")
         if not resultado.itens_aprovados:
-            return redirect(f"{ordem.get_absolute_url()}?tab=orcamentos")
+            return _redirect_orcamento_na_os(ordem)
         if not resultado.total_migrados:
-            messages.info(request, "Os itens selecionados já estavam migrados para Serviços & Peças.")
+            messages.info(request, "Os itens selecionados do orçamento da OS já estavam migrados para Serviços & Peças.")
             return redirect(f"{ordem.get_absolute_url()}?tab=servicos")
 
-        messages.success(request, f"{resultado.total_migrados} item(s) migrado(s) com sucesso!")
+        messages.success(request, f"{resultado.total_migrados} item(ns) do orçamento da OS migrado(s) com sucesso!")
     return redirect(f"{ordem.get_absolute_url()}?tab=servicos")
 
 @role_required(ORDER_ROLES)

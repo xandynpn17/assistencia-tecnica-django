@@ -68,6 +68,24 @@ class ResumoOperacionalService:
         elif ordem.status == "pronto_contactado":
             fluxo_label = "Pronta para fechamento e caixa"
             fluxo_tone = "info"
+        elif ordem.status == "orcamentado":
+            fluxo_label = "Orcamento enviado ao cliente"
+            fluxo_tone = "warning"
+        elif ordem.status == "autorizado":
+            fluxo_label = "Autorizada para execucao"
+            fluxo_tone = "primary"
+        elif ordem.status == "pronto_envio_parceiro":
+            fluxo_label = "Pronta para envio ao parceiro"
+            fluxo_tone = "info"
+        elif ordem.status == "enviado_parceiro":
+            fluxo_label = "Em parceiro externo"
+            fluxo_tone = "dark"
+        elif ordem.status == "transito_outdoor":
+            fluxo_label = "Em transito externo"
+            fluxo_tone = "secondary"
+        elif ordem.status == "recepcionado":
+            fluxo_label = "Recepcionado de parceiro"
+            fluxo_tone = "info"
         else:
             fluxo_label = "Em atendimento"
             fluxo_tone = "secondary"

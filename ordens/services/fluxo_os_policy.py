@@ -83,6 +83,15 @@ class FluxoOSPolicyService:
             bloqueios_operacionais=(),
             acoes_destaque=("abrir_orcamento", "enviar_mensagem_cliente"),
         ),
+        "orcamentado": FluxoStatusPolicy(
+            proxima_acao="Aguardar resposta do cliente sobre o orcamento enviado.",
+            acoes_recomendadas=(
+                "Registrar tentativas de contato e follow-up.",
+                "Atualizar a OS assim que houver aprovacao ou recusa.",
+            ),
+            bloqueios_operacionais=(),
+            acoes_destaque=("enviar_mensagem_cliente", "registrar_linha"),
+        ),
         "autorizado": FluxoStatusPolicy(
             proxima_acao="Executar servico autorizado e registrar pecas e servicos.",
             acoes_recomendadas=(
@@ -91,6 +100,42 @@ class FluxoOSPolicyService:
             ),
             bloqueios_operacionais=(),
             acoes_destaque=("adicionar_servico_peca", "registrar_linha"),
+        ),
+        "pronto_envio_parceiro": FluxoStatusPolicy(
+            proxima_acao="Selecionar a OS numa guia de expedicao para parceiro.",
+            acoes_recomendadas=(
+                "Conferir dados do parceiro e referencia externa.",
+                "Emitir a guia quando o equipamento estiver efetivamente pronto para sair.",
+            ),
+            bloqueios_operacionais=(),
+            acoes_destaque=("registrar_linha",),
+        ),
+        "enviado_parceiro": FluxoStatusPolicy(
+            proxima_acao="Acompanhar parceiro e manter a expedicao atualizada.",
+            acoes_recomendadas=(
+                "Registrar protocolo, previsao e devolucao do parceiro.",
+                "Atualizar a guia de expedicao quando o equipamento regressar.",
+            ),
+            bloqueios_operacionais=(),
+            acoes_destaque=("registrar_linha",),
+        ),
+        "transito_outdoor": FluxoStatusPolicy(
+            proxima_acao="Acompanhar o transito externo do equipamento.",
+            acoes_recomendadas=(
+                "Confirmar saida ou retorno com o parceiro.",
+                "Atualizar a linha de trabalho com a localizacao do equipamento.",
+            ),
+            bloqueios_operacionais=(),
+            acoes_destaque=("registrar_linha",),
+        ),
+        "recepcionado": FluxoStatusPolicy(
+            proxima_acao="Retomar a triagem tecnica apos retorno do parceiro.",
+            acoes_recomendadas=(
+                "Conferir estado do equipamento na entrada.",
+                "Atualizar linha de trabalho e definir proximo status operacional.",
+            ),
+            bloqueios_operacionais=(),
+            acoes_destaque=("registrar_linha",),
         ),
         "pronto_contactado": FluxoStatusPolicy(
             proxima_acao="Organizar retirada e fechamento financeiro.",

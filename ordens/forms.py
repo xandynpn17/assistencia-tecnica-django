@@ -1,10 +1,11 @@
-from django import forms
+﻿from django import forms
 from django.contrib.auth import get_user_model
+from configuracoes.models import ParceiroExpedicao
 from estoque.models import Produto
 from configuracoes.models import MarcaGarantia, TipoEquipamentoConfig
 from orcamentos.models import Orcamento
 
-from .models import LinhaTrabalho, NotificacaoCliente, OrdemServico, ServicoPeca
+from .models import GuiaExpedicaoItem, GuiaExpedicaoParceiro, LinhaTrabalho, NotificacaoCliente, OrdemServico, ServicoPeca
 
 
 class OrdemServicoForm(forms.ModelForm):
@@ -245,3 +246,99 @@ class NotificacaoClienteForm(forms.ModelForm):
             "canal": forms.Select(attrs={"class": "form-control"}),
             "mensagem": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
+
+
+class ExpedicaoParceiroForm(forms.ModelForm):
+    ordens_servico = forms.ModelMultipleChoiceField(
+        queryset=OrdemServico.objects.none(),
+        label="Ordens prontas para envio",
+        widget=forms.CheckboxSelectMultiple(),
+    )
+
+    parceiro_config = forms.ChoiceField(
+        choices=[],
+        label="Parceiro",
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    parceiro_manual = forms.CharField(
+        required=False,
+        label="Outro parceiro",
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Nome do parceiro"}),
+    )
+
+    class Meta:
+        model = GuiaExpedicaoParceiro
+        fields = ["referencia_externa", "observacoes_saida"]
+        widgets = {
+            "referencia_externa": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "OS externa, protocolo ou referência"}
+            ),
+            "observacoes_saida": forms.Textarea(
+                attrs={"class": "form-control", "rows": 3, "placeholder": "Observações da expedição"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["ordens_servico"].queryset = (
+            OrdemServico.objects.filter(fechada=False, status="pronto_envio_parceiro")
+            .exclude(itens_expedicao__status="expedida")
+            .order_by("-data_abertura")
+        )
+        self.fields["ordens_servico"].label_from_instance = lambda ordem: (
+            f"{ordem.numero_os} - {ordem.cliente.nome} - {ordem.status_listagem_label}"
+        )
+        parceiros = list(ParceiroExpedicao.objects.filter(ativo=True).order_by("nome").values_list("id", "nome"))
+        self.fields["parceiro_config"].choices = [("", "Selecione"), *[(str(pid), nome) for pid, nome in parceiros], ("outros", "Outros (digitar manualmente)")]
+
+    def clean(self):
+        cleaned = super().clean()
+        parceiro_config = (cleaned.get("parceiro_config") or "").strip()
+        parceiro_manual = (cleaned.get("parceiro_manual") or "").strip()
+        if parceiro_config == "outros":
+            if not parceiro_manual:
+                self.add_error("parceiro_manual", "Informe o nome do parceiro.")
+            else:
+                cleaned["parceiro_nome_resolvido"] = parceiro_manual
+            return cleaned
+        if parceiro_config:
+            parceiro_obj = ParceiroExpedicao.objects.filter(id=int(parceiro_config), ativo=True).first()
+            if parceiro_obj:
+                cleaned["parceiro_nome_resolvido"] = parceiro_obj.nome
+            else:
+                self.add_error("parceiro_config", "Parceiro invalido.")
+        else:
+            self.add_error("parceiro_config", "Selecione o parceiro.")
+        return cleaned
+
+
+class RecepcaoParceiroForm(forms.Form):
+    itens_expedicao = forms.ModelMultipleChoiceField(
+        queryset=GuiaExpedicaoItem.objects.none(),
+        label="Ordens expedidas",
+        widget=forms.CheckboxSelectMultiple(),
+    )
+    status_retorno = forms.ChoiceField(
+        choices=GuiaExpedicaoItem.RETORNO_STATUS_CHOICES,
+        widget=forms.Select(attrs={"class": "form-control"}),
+        initial="recepcionado",
+    )
+    observacoes_retorno = forms.CharField(
+        required=False,
+        widget=forms.Textarea(
+            attrs={"class": "form-control", "rows": 3, "placeholder": "Observacoes do retorno"}
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["itens_expedicao"].queryset = (
+            GuiaExpedicaoItem.objects.select_related("guia", "ordem_servico__cliente")
+            .filter(status="expedida")
+            .order_by("guia__numero_guia", "ordem_servico__numero_os")
+        )
+        self.fields["itens_expedicao"].label_from_instance = lambda item: (
+            f"{item.guia.numero_guia} - {item.ordem_servico.numero_os} - {item.ordem_servico.cliente.nome}"
+        )
+
+

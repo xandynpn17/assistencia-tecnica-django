@@ -1,4 +1,4 @@
-{% extends 'core/base.html' %}
+﻿{% extends 'core/base.html' %}
 {% load static %}
 
 {% block title %}{% if object %}Editar{% else %}Nova{% endif %} Ordem de Serviço{% endblock %}
@@ -102,7 +102,7 @@
         {% if revisao_criacao %}
         <div class="card-modern">
             <div class="card-modern-header d-flex justify-content-between align-items-center">
-                <span><i class="fas fa-check-circle mr-2"></i>Revisao antes de criar a OS</span>
+                <span><i class="fas fa-check-circle mr-2"></i>Revisão antes de criar a OS</span>
                 <small>Confirme os dados</small>
             </div>
             <div class="card-modern-body">
@@ -157,7 +157,7 @@
                                     <div class="review-value">{{ revisao_resumo.equipamento.marca }} / {{ revisao_resumo.equipamento.modelo }}</div>
                                 </div>
                                 <div class="col-md-6 mb-2">
-                                    <div class="review-label">Numero de serie</div>
+                                    <div class="review-label">Número de série</div>
                                     <div class="review-value">{{ revisao_resumo.equipamento.serie }}</div>
                                 </div>
                                 <div class="col-md-12">
@@ -169,7 +169,7 @@
                     </div>
 
                     <div class="review-card">
-                        <div class="review-card-head">Atendimento e diagnostico inicial</div>
+                        <div class="review-card-head">Atendimento e diagnóstico inicial</div>
                         <div class="review-card-body">
                             <div class="row">
                                 <div class="col-md-6 mb-2">
@@ -185,7 +185,7 @@
                                     <div class="review-value">{{ revisao_resumo.atendimento.nota_fiscal }}</div>
                                 </div>
                                 <div class="col-md-6 mb-2">
-                                    <div class="review-label">Referencia parceiro</div>
+                                    <div class="review-label">Referência parceiro</div>
                                     <div class="review-value">{{ revisao_resumo.atendimento.referencia_parceiro }}</div>
                                 </div>
                                 <div class="col-md-12 mb-2">
@@ -195,7 +195,7 @@
                                     </div>
                                 </div>
                                 <div class="col-md-12 mb-2">
-                                    <div class="review-label">Acessorios</div>
+                                    <div class="review-label">Acessórios</div>
                                     <div class="review-value">{{ revisao_resumo.tecnico.acessorios }}</div>
                                 </div>
                                 <div class="col-md-12">
@@ -226,12 +226,12 @@
 
                     <div class="wizard-actions-top">
                         <div class="wizard-actions-group">
-                            <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-outline-secondary wizard-action-btn wizard-icon-btn" data-nav-back-client title="Voltar para selecao do cliente" aria-label="Voltar para selecao do cliente">
+                            <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-outline-secondary wizard-action-btn wizard-icon-btn" data-nav-back-client title="Voltar para seleção do cliente" aria-label="Voltar para seleção do cliente">
                                 <i class="fas fa-arrow-left"></i>
                             </a>
                         </div>
                         <div class="wizard-actions-group">
-                            <button type="button" class="btn btn-outline-secondary wizard-action-btn wizard-icon-btn" data-nav-prev style="display:none;" title="Voltar para pagina 1" aria-label="Voltar para pagina 1">
+                            <button type="button" class="btn btn-outline-secondary wizard-action-btn wizard-icon-btn" data-nav-prev style="display:none;" title="Voltar para página 1" aria-label="Voltar para página 1">
                                 <i class="fas fa-arrow-left"></i>
                             </button>
                             <button type="button" class="btn btn-primary wizard-action-btn" data-nav-next>Avançar</button>
@@ -624,3 +624,6 @@ $(function () {
 </script>
 {% endif %}
 {% endblock %}
+
+
+

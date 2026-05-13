@@ -1,4 +1,4 @@
-{% extends 'core/base.html' %}
+﻿{% extends 'core/base.html' %}
 {% load static %}
 
 {% block title %}Verificar Cliente | Assistência Técnica{% endblock %}
@@ -399,12 +399,11 @@
                                         <th>Documento</th>
                                         <th>Tipo</th>
                                         <th>Cadastrado em</th>
-                                        <th style="width: 100px" class="text-center">Ação</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for cliente in clientes %}
-                                    <tr>
+                                    <tr class="cliente-row-clickable" data-href="{% url 'ordens:nova_ordem_cliente' cliente.id %}" title="Duplo clique para selecionar cliente e abrir a OS">
                                         <td><span class="badge bg-primary">{{ cliente.numero_cliente }}</span></td>
                                         <td><strong>{{ cliente.nome }}</strong></td>
                                         <td>
@@ -438,13 +437,6 @@
                                             {% endif %}
                                         </td>
                                         <td>{{ cliente.data_cadastro|date:"d/m/Y" }}</td>
-                                        <td class="text-center">
-                                            <a href="{% url 'ordens:nova_ordem_cliente' cliente.id %}"
-                                               class="btn btn-success btn-sm"
-                                               title="Criar Ordem de Serviço">
-                                                <i class="fas fa-plus-circle mr-1"></i> Criar OS
-                                            </a>
-                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -643,8 +635,42 @@
 .alert {
     animation: fadeIn 0.3s ease;
 }
+
+.cliente-row-clickable {
+    cursor: pointer;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cliente-row-clickable:hover td {
+    background: #eef6ff;
+}
+
+.cliente-row-clickable:active td {
+    background: #e2f0ff;
+}
+
+.cliente-row-clickable td:first-child {
+    border-left: 3px solid transparent;
+}
+
+.cliente-row-clickable:hover td:first-child {
+    border-left-color: #2f80ed;
+}
 </style>
 
 <!-- SCRIPT COMPLETO COM TODAS AS FUNÇÕES -->
 <script src="{% static 'js/ordens/verificar_cliente_os.js' %}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".cliente-row-clickable").forEach(function (row) {
+        row.addEventListener("dblclick", function () {
+            const href = row.getAttribute("data-href");
+            if (href) {
+                window.location.href = href;
+            }
+        });
+    });
+});
+</script>
 {% endblock %}
+

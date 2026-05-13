@@ -41,6 +41,10 @@ class FluxoOrcamentoService:
             status_orcamento = orcamento.status
             status_ordem_anterior = ordem.status
             status_ordem_atual = ordem.status
+            if ordem.status not in {"pronto_contactado", "concluida", "autorizado"}:
+                ordem.status = "orcamentado"
+                ordem.save(update_fields=["status"])
+                status_ordem_atual = ordem.status
             if not orcamento.itens.filter(status="pendente").exists():
                 orcamento.status = "aprovado"
                 orcamento.save(update_fields=["status"])

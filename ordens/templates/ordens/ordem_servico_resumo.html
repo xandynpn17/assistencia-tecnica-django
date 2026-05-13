@@ -7,7 +7,6 @@
   .resume-shell { max-width: 1240px; margin: 0 auto; }
   .resume-card { border-radius: 12px; overflow: hidden; }
   .resume-header { padding: 14px 16px; }
-  .resume-subtitle { opacity: .92; font-size: .95rem; margin: 4px 0 0; }
   .resume-code { font-family: "Consolas", "Courier New", monospace; font-weight: 700; letter-spacing: .02em; }
   .resume-actions { gap: 8px; }
   .resume-main-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; }
@@ -17,7 +16,6 @@
   .resume-label { color: #6b7280; font-size: .76rem; text-transform: uppercase; letter-spacing: .02em; }
   .resume-value { font-weight: 600; font-size: .95rem; }
   .defect-highlight { background: #f8fbff; border: 1px solid #dce8f8; border-radius: 8px; padding: 10px 12px; }
-  .alert-compact { padding: 8px 12px; margin-bottom: 12px; }
   @media (max-width: 991.98px) { .resume-main-grid { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
@@ -36,7 +34,6 @@
             {% endif %}
             <span class="resume-code">{{ ordem.numero_os }}</span>
           </h5>
-          <p class="resume-subtitle mb-0">Proxima acao: {{ proxima_acao }}</p>
         </div>
         <div class="d-flex flex-wrap align-items-center">
           <span class="badge badge-light text-dark mr-2 mb-1">{{ ordem.status_listagem_label }}</span>
@@ -85,32 +82,6 @@
           Voltar para listagem
         </a>
       </div>
-
-      {% if resumo_alertas %}
-      <div class="alert alert-warning alert-compact">
-        {% for alerta in resumo_alertas %}
-        <div>{{ alerta }}</div>
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      {% if acoes_recomendadas %}
-      <div class="alert alert-info alert-compact">
-        <strong>Acoes sugeridas:</strong>
-        {% for acao in acoes_recomendadas %}
-        <div>{{ acao }}</div>
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      {% if bloqueios_operacionais %}
-      <div class="alert alert-light alert-compact border">
-        <strong>Bloqueios operacionais:</strong>
-        {% for bloqueio in bloqueios_operacionais %}
-        <div class="text-danger">{{ bloqueio }}</div>
-        {% endfor %}
-      </div>
-      {% endif %}
 
       <div class="resume-main-grid mb-3">
         <div class="resume-block">

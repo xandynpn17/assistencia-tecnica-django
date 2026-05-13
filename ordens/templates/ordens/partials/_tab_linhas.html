@@ -21,7 +21,7 @@
             {% if linhas %}
             <div class="list-group mb-3" id="linhasList">
                 {% for linha in linhas %}
-                <div class="list-group-item">
+                <div class="list-group-item py-2">
                     <span class="linha-status badge badge-primary">{{ linha.get_status_display }}</span>
                     <span class="badge badge-light border ml-1">{{ linha.get_tipo_evento_display }}</span>
                     <small class="linha-data float-right">
@@ -29,7 +29,7 @@
                         {% if linha.usuario %}- {{ linha.usuario.username }}{% endif %}
                     </small>
                     {% if linha.descricao %}
-                    <p class="linha-descricao">{{ linha.descricao }}</p>
+                    <p class="linha-descricao mb-0 mt-1">{{ linha.descricao }}</p>
                     {% endif %}
                 </div>
                 {% endfor %}

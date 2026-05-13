@@ -20,7 +20,6 @@ from .fluxo_core import (
     agendar_ordem,
     dashboard_pedidos_compra,
     lista_ordens,
-    migrar_orcamento,
     selecionar_cliente_os,
     toggle_fechamento_os,
     toggle_fechamento_pedido_compra,
@@ -42,8 +41,15 @@ def atualizar_local(request, os_id):
         ordem = OrdemServico.objects.get(id=os_id)
         try:
             OSAccessPolicyService.ensure_can_edit(ordem, "edicao_local", usuario=request.user)
+            require_sensitive_permission(
+                request.user,
+                "perm_os_editar_local_armazenamento",
+                message="Voce nao tem permissao para editar o local de armazenamento desta OS.",
+            )
         except ValueError as exc:
             return JsonResponse({"success": False, "message": str(exc)}, status=400)
+        except PermissionDenied as exc:
+            return JsonResponse({"success": False, "message": str(exc) or "Permissao insuficiente."}, status=403)
 
         local_anterior = (ordem.local_armazenamento or "").strip()
         local_novo = (local or "").strip()
@@ -144,8 +150,15 @@ def atualizar_observacoes(request, os_id):
         ordem = OrdemServico.objects.get(id=os_id)
         try:
             OSAccessPolicyService.ensure_can_edit(ordem, "edicao_observacoes", usuario=request.user)
+            require_sensitive_permission(
+                request.user,
+                "perm_os_editar_observacoes_internas",
+                message="Voce nao tem permissao para editar as observacoes internas desta OS.",
+            )
         except ValueError as exc:
             return JsonResponse({"success": False, "message": str(exc)}, status=400)
+        except PermissionDenied as exc:
+            return JsonResponse({"success": False, "message": str(exc) or "Permissao insuficiente."}, status=403)
 
         ordem.notas_internas = obs
         ordem.save(update_fields=["notas_internas"])
@@ -298,7 +311,6 @@ __all__ = [
     "atualizar_tecnico",
     "dashboard_pedidos_compra",
     "lista_ordens",
-    "migrar_orcamento",
     "selecionar_cliente_os",
     "toggle_fechamento_os",
     "toggle_fechamento_pedido_compra",

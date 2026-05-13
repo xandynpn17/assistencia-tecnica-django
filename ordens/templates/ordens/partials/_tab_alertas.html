@@ -2,9 +2,9 @@
     <div class="card-modern">
         <div class="card-modern-header">Alertas da OS</div>
         <div class="card-modern-body">
-            <h6 class="text-danger">Alertas ativos</h6>
+            <h6 class="text-danger mb-2">Alertas ativos</h6>
             {% for alerta in alertas_ativos %}
-            <div class="alert alert-danger alerta-fixo d-flex justify-content-between align-items-center">
+            <div class="alert alert-danger alerta-fixo d-flex justify-content-between align-items-center py-2 mb-2">
                 <div>
                     {{ alerta.mensagem|linebreaksbr }}
                     <div class="small">Criado em {{ alerta.criado_em|date:"d/m/Y H:i" }}</div>
@@ -17,13 +17,13 @@
                 </form>
             </div>
             {% empty %}
-            <p class="text-muted">Nenhum alerta ativo.</p>
+            <p class="text-muted mb-0">Nenhum alerta ativo.</p>
             {% endfor %}
 
-            <hr>
+            <hr class="my-3">
             <h6>Histórico de alertas encerrados</h6>
             <div class="table-responsive">
-                <table class="table table-sm table-bordered">
+                <table class="table table-sm table-bordered mb-0">
                     <thead>
                         <tr>
                             <th>Mensagem</th>

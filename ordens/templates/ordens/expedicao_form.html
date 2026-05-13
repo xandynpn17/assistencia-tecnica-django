@@ -1,0 +1,109 @@
+{% extends 'core/base.html' %}
+{% block title %}Expedir para parceiro{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 col-xl-8">
+        {% include 'ordens/_subnav_expedicao.html' %}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0">{{ titulo_pagina }}</h3>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="form-group mb-2">
+                        <label>{{ form.ordens_servico.label }}</label>
+                        <div class="border rounded p-2" style="max-height: 280px; overflow-y: auto;">
+                            {{ form.ordens_servico }}
+                        </div>
+                        <small class="text-muted">Aparecem aqui apenas ordens em pronto para envio ao parceiro.</small>
+                    </div>
+                    {% if form.errors %}
+                    <div class="alert alert-danger py-2">
+                        {{ form.errors }}
+                    </div>
+                    {% endif %}
+                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#modalEmitirGuia">
+                        Expedir (emitir guia)
+                    </button>
+
+                    <div class="modal fade" id="modalEmitirGuia" tabindex="-1" role="dialog" aria-hidden="true">
+                        <div class="modal-dialog" role="document">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Dados da guia</h5>
+                                    <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                                        <span aria-hidden="true">&times;</span>
+                                    </button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="form-group mb-2">
+                                        <label>{{ form.parceiro_config.label }}</label>
+                                        {{ form.parceiro_config }}
+                                    </div>
+                                    <div class="form-group mb-2">
+                                        <label>{{ form.parceiro_manual.label }}</label>
+                                        {{ form.parceiro_manual }}
+                                    </div>
+                                    <div class="form-group mb-2">
+                                        <label>{{ form.referencia_externa.label }}</label>
+                                        {{ form.referencia_externa }}
+                                    </div>
+                                    <div class="form-group mb-0">
+                                        <label>{{ form.observacoes_saida.label }}</label>
+                                        {{ form.observacoes_saida }}
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-primary">Emitir guia</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Guias em aberto</h3>
+            </div>
+            <div class="card-body">
+                {% if guias_abertas %}
+                <div class="list-group list-group-flush">
+                    {% for guia in guias_abertas %}
+                    <div class="list-group-item px-0">
+                        <div><strong>{{ guia.numero_guia }}</strong></div>
+                        <div class="small text-muted">{{ guia.parceiro_nome }} - {{ guia.total_ordens }} ordem(ns)</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Nenhuma guia em aberto.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var parceiroSelect = document.getElementById("id_parceiro_config");
+    var parceiroManual = document.getElementById("id_parceiro_manual");
+    function toggleParceiroManual() {
+        if (!parceiroSelect || !parceiroManual) return;
+        var mostrar = parceiroSelect.value === "outros";
+        parceiroManual.closest(".form-group").style.display = mostrar ? "" : "none";
+    }
+    if (parceiroSelect) {
+        parceiroSelect.addEventListener("change", toggleParceiroManual);
+        toggleParceiroManual();
+    }
+});
+</script>
+{% endblock %}

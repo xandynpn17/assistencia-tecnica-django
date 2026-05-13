@@ -1,8 +1,9 @@
-import random
+﻿import random
 import string
 import uuid
 
 from django.db import models, transaction
+from django.db.models import Q
 from django.utils import timezone
 from clientes.models import Cliente
 from django.conf import settings
@@ -14,13 +15,12 @@ from ordens.services.numeracao import gerar_codigo_portal_disponivel, gerar_nume
 
 
 # ===========================
-# ORDEM DE SERVIÇO
+# ORDEM DE SERVIÃ‡O
 # ===========================
 class OrdemServico(models.Model):
     STATUS_ALIASES = {
         "bancada": "em_andamento",
         "reparo": "em_andamento",
-        "orcamentado": "autorizado",
         "pronto_contactar": "pronto_contactado",
     }
 
@@ -52,7 +52,12 @@ class OrdemServico(models.Model):
         ('pendente_marca', 'Pendente Marca'),
         ('pendente_pecas', 'Pendente Peças'),
         ('pendente_orcamento', 'Pendente Orçamento'),
-        ('autorizado', 'Orçamentado / Autorizado'),
+        ('orcamentado', 'Orçamentado'),
+        ('autorizado', 'Autorizado'),
+        ('pronto_envio_parceiro', 'Pronto para envio parceiro'),
+        ('transito_outdoor', 'Trânsito outdoor'),
+        ('enviado_parceiro', 'Enviado ao parceiro'),
+        ('recepcionado', 'Recepcionado'),
         ('recusado', 'Recusado'),
         ('devolucao', 'Devolução sem reparação'),
         ('pronto_contactado', 'Pronto contactado'),
@@ -103,7 +108,7 @@ class OrdemServico(models.Model):
     defeito = models.TextField()
     acessorios = models.TextField(blank=True)
     tipo_reparo = models.CharField(max_length=20, choices=TIPO_REPARO_CHOICES)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diagnosticar')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='diagnosticar')
     data_abertura = models.DateTimeField(auto_now_add=True)
     data_conclusao = models.DateTimeField(blank=True, null=True)
     peritagem = models.TextField(blank=True, null=False)
@@ -113,12 +118,12 @@ class OrdemServico(models.Model):
     manutencao_preventiva_meses = models.PositiveSmallIntegerField(
         blank=True,
         null=True,
-        help_text="Intervalo sugerido para manutenção preventiva futura.",
+        help_text="Intervalo sugerido para manutenÃ§Ã£o preventiva futura.",
     )
     notas_internas = models.TextField(blank=True)
 
     # ===========================
-    # RELATÓRIO TÉCNICO
+    # RELATÃ“RIO TÃ‰CNICO
     # ===========================
     relatorio_tecnico = models.TextField(blank=True, null=True)
 
@@ -132,7 +137,7 @@ class OrdemServico(models.Model):
         blank=True,
         related_name="ordens_responsaveis",
         limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
-        verbose_name="Técnico responsável"
+        verbose_name="TÃ©cnico responsÃ¡vel"
     )
 
     def __str__(self):
@@ -151,7 +156,7 @@ class OrdemServico(models.Model):
     def status_listagem_label(self):
         status = self.normalizar_status_os(self.status)
         if self.fechada:
-            return "Concluída"
+            return "ConcluÃ­da"
         if status == "concluida":
             return "Reaberta"
         return dict(self.STATUS_CHOICES).get(status, status)
@@ -217,7 +222,7 @@ class OrdemServico(models.Model):
     fechada = models.BooleanField(default=False)
     token_confirmacao = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     TIPO_CONFIRMACAO_CHOICES = [
-        ("link", "Confirmação por link"),
+        ("link", "ConfirmaÃ§Ã£o por link"),
         ("presencial_assinatura", "Presencial com assinatura"),
         ("impresso", "Impresso"),
     ]
@@ -261,26 +266,26 @@ class OrdemServico(models.Model):
 
     def atualizar_status_fechamento(self, fechar=True, usuario=None):
         """
-        Fecha ou reabre a Ordem de Serviço.
-        - fechar=True: marca como concluída, bloqueia edição e define data_conclusao
-        - fechar=False: reabre a OS, desbloqueia edição e limpa data_conclusao
+        Fecha ou reabre a Ordem de ServiÃ§o.
+        - fechar=True: marca como concluÃ­da, bloqueia ediÃ§Ã£o e define data_conclusao
+        - fechar=False: reabre a OS, desbloqueia ediÃ§Ã£o e limpa data_conclusao
         """
 
         if fechar:
-            # 🔒 Validacao obrigatória
+            # ðŸ”’ Validacao obrigatÃ³ria
             if not self.relatorio_tecnico or not self.tipo_reparacao:
-                raise ValueError("Não é possível fechar a OS sem Relatório Técnico e Tipo de Reparação.")
+                raise ValueError("NÃ£o Ã© possÃ­vel fechar a OS sem RelatÃ³rio TÃ©cnico e Tipo de ReparaÃ§Ã£o.")
 
             self.status = 'concluida'
             self.data_conclusao = timezone.now()
             self.fechada = True
 
-            # ➕ Cria linha de trabalho de conclusão
+            # âž• Cria linha de trabalho de conclusÃ£o
             from .models import LinhaTrabalho
             LinhaTrabalho.objects.create(
                 ordem=self,
                 status="concluida",
-                descricao="Ordem concluída.",
+                descricao="Ordem concluÃ­da.",
                 usuario=usuario,
                 tipo_evento="sistema",
             )
@@ -302,17 +307,17 @@ class OrdemServico(models.Model):
 
     def pode_transicionar_para(self, novo_status):
         # Fluxo livre entre status validos da OS.
-        # "criada" existe apenas na LinhaTrabalho, não como status de OS.
+        # "criada" existe apenas na LinhaTrabalho, nÃ£o como status de OS.
         return novo_status in self.status_validos()
 
     def transicionar_status(self, novo_status, usuario=None, motivo=""):
         novo_status = self.normalizar_status_os(novo_status)
         if novo_status not in self.status_validos():
-            raise ValueError("Status de destino inválido.")
+            raise ValueError("Status de destino invÃ¡lido.")
 
         if not self.pode_transicionar_para(novo_status):
             raise ValueError(
-                f"Transição de status inválida: {self.status} -> {novo_status}."
+                f"TransiÃ§Ã£o de status invÃ¡lida: {self.status} -> {novo_status}."
             )
 
         status_anterior = self.status
@@ -322,7 +327,7 @@ class OrdemServico(models.Model):
         if novo_status == "concluida":
             if not self.relatorio_tecnico or not self.tipo_reparacao:
                 raise ValueError(
-                    "Não é possível concluir sem relatório técnico e tipo de reparação."
+                    "NÃ£o Ã© possÃ­vel concluir sem relatÃ³rio tÃ©cnico e tipo de reparaÃ§Ã£o."
                 )
             self.fechada = True
             self.data_conclusao = timezone.now()
@@ -347,7 +352,7 @@ class OrdemServico(models.Model):
     def aplicar_status_sem_historico(self, novo_status):
         novo_status = self.normalizar_status_os(novo_status)
         if novo_status not in self.status_validos():
-            raise ValueError("Status de destino inválido.")
+            raise ValueError("Status de destino invÃ¡lido.")
 
         if self.status == novo_status:
             return
@@ -355,7 +360,7 @@ class OrdemServico(models.Model):
         if novo_status == "concluida":
             if not self.relatorio_tecnico or not self.tipo_reparacao:
                 raise ValueError(
-                    "Não é possível concluir sem relatório técnico e tipo de reparação."
+                    "NÃ£o Ã© possÃ­vel concluir sem relatÃ³rio tÃ©cnico e tipo de reparaÃ§Ã£o."
                 )
             self.fechada = True
             self.data_conclusao = timezone.now()
@@ -434,9 +439,12 @@ class LinhaTrabalho(models.Model):
         ("pendente_pecas", "Pendente peças"),
         ("pendente_cliente", "Pendente cliente"),
         ("pendente_marca", "Pendente marca"),
-        ("autorizado", "Orçamentado / Autorizado"),
+        ("orcamentado", "Orçamentado"),
+        ("autorizado", "Autorizado"),
+        ("pronto_envio_parceiro", "Pronto para envio parceiro"),
         ("transito_outdoor", "Trânsito outdoor"),
         ("enviado_parceiro", "Enviado ao parceiro"),
+        ("recepcionado", "Recepcionado"),
         ("pronto_contactado", "Pronto contactado"),
         ("devolucao", "Devolução sem reparação"),
         ("concluida", "Concluído")
@@ -467,7 +475,7 @@ class LinhaTrabalho(models.Model):
 
 
         # ==============================
-        # Serviços & Peças
+        # ServiÃ§os & PeÃ§as
         # ==============================
 
 class ServicoPeca(models.Model):
@@ -801,3 +809,102 @@ class OrdemArquivo(models.Model):
 
     def __str__(self):
         return f"{self.ordem.numero_os} - {self.arquivo.name}"
+
+class GuiaExpedicaoParceiro(models.Model):
+    numero_guia = models.CharField(max_length=20, unique=True, blank=True)
+    parceiro_nome = models.CharField(max_length=120)
+    referencia_externa = models.CharField(max_length=120, blank=True)
+    observacoes_saida = models.TextField(blank=True)
+    expedida_em = models.DateTimeField(auto_now_add=True)
+    expedida_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="guias_expedicao_emitidas",
+    )
+
+    class Meta:
+        ordering = ["-expedida_em", "-id"]
+
+    def save(self, *args, **kwargs):
+        novo = self.pk is None
+        super().save(*args, **kwargs)
+        if novo and not self.numero_guia:
+            self.numero_guia = f"EXP-{self.id:06d}"
+            super().save(update_fields=["numero_guia"])
+
+    @property
+    def total_ordens(self):
+        return self.itens.count()
+
+    @property
+    def total_ordens_abertas(self):
+        return self.itens.filter(status="expedida").count()
+
+    @property
+    def status_geral(self):
+        if self.itens.filter(status="expedida").exists():
+            if self.itens.filter(status="recepcionada").exists():
+                return "parcial"
+            return "expedida"
+        return "recepcionada"
+
+    def __str__(self):
+        return self.numero_guia or f"EXP-{self.id:06d}"
+
+
+class GuiaExpedicaoItem(models.Model):
+    STATUS_CHOICES = [
+        ("expedida", "Expedida"),
+        ("recepcionada", "Recepcionada"),
+    ]
+
+    RETORNO_STATUS_CHOICES = [
+        ("diagnosticar", "Diagnosticar"),
+        ("em_andamento", "Bancada"),
+        ("pendente_pecas", "Pendente peças"),
+        ("pendente_orcamento", "Pendente orçamento"),
+        ("orcamentado", "Orçamentado"),
+        ("autorizado", "Autorizado"),
+        ("pronto_envio_parceiro", "Pronto para envio parceiro"),
+        ("recepcionado", "Recepcionado"),
+    ]
+
+    guia = models.ForeignKey(
+        GuiaExpedicaoParceiro,
+        related_name="itens",
+        on_delete=models.CASCADE,
+    )
+    ordem_servico = models.ForeignKey(
+        OrdemServico,
+        related_name="itens_expedicao",
+        on_delete=models.CASCADE,
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="expedida")
+    status_retorno = models.CharField(max_length=30, choices=RETORNO_STATUS_CHOICES, blank=True)
+    observacoes_retorno = models.TextField(blank=True)
+    recepcionada_em = models.DateTimeField(blank=True, null=True)
+    recepcionada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_expedicao_recepcionados",
+    )
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(fields=["guia", "ordem_servico"], name="uniq_ordem_por_guia_expedicao"),
+            models.UniqueConstraint(
+                fields=["ordem_servico"],
+                condition=Q(status="expedida"),
+                name="uniq_ordem_com_expedicao_aberta",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.guia.numero_guia} - {self.ordem_servico.numero_os}"
+
+

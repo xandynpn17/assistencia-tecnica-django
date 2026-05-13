@@ -1,0 +1,11 @@
+<div class="d-flex flex-wrap mb-3" style="gap: 8px;">
+    <a href="{% url 'ordens:expedir_parceiro' %}" class="btn btn-sm {% if menu_sub == 'expedir_parceiro' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        Expedir
+    </a>
+    <a href="{% url 'ordens:recepcionar_parceiro' %}" class="btn btn-sm {% if menu_sub == 'recepcionar_parceiro' %}btn-success{% else %}btn-outline-success{% endif %}">
+        Recepcionar
+    </a>
+    <a href="{% url 'ordens:guias_expedicao' %}" class="btn btn-sm {% if menu_sub == 'guias_expedicao' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+        Guias
+    </a>
+</div>

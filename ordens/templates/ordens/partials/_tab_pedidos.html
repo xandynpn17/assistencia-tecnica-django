@@ -2,7 +2,7 @@
 <div class="tab-pane fade {% if active_tab == 'pedidos' %}show active{% endif %}" id="pedidos">
     <div class="card-modern">
         <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span>R$ Pedidos</span>
+            <span class="os-tab-header-title">Pedidos</span>
             {% if not ordem.fechada %}
             <button class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarPedido">
                 <i class="fas fa-plus mr-1"></i>Novo pedido
@@ -14,8 +14,8 @@
         <div class="card-modern-body">
             {% if pedidos_compra %}
                 {% for pedido in pedidos_compra %}
-                <div class="border rounded p-3 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
+                <div class="border rounded p-2 mb-2">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap" style="gap: 10px;">
                         <div>
                             <h6 class="mb-1">{{ pedido.numero_oc|default:"OC sem numero" }} - {{ pedido.titulo }}</h6>
                             <div class="small text-muted">
@@ -26,28 +26,28 @@
                             <div class="small"><strong>Tipo de peça:</strong> {{ pedido.tipo_peca }}</div>
                             {% endif %}
                             {% if pedido.descricao %}
-                            <div class="mt-1">{{ pedido.descricao }}</div>
-                            {% endif %}
-                            {% if pedido.fotos.all %}
-                            <div class="mt-2 d-flex flex-wrap">
-                                {% for foto in pedido.fotos.all %}
-                                <a href="{{ foto.imagem.url }}" target="_blank" class="mr-2 mb-2">
-                                    <img src="{{ foto.imagem.url }}" alt="Foto pedido" style="width:72px;height:72px;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
-                                </a>
-                                {% endfor %}
-                            </div>
+                            <div class="small mt-1">{{ pedido.descricao }}</div>
                             {% endif %}
                         </div>
+                        {% if pedido.fotos.all %}
+                        <div class="d-flex flex-wrap justify-content-end" style="gap:6px;">
+                            {% for foto in pedido.fotos.all %}
+                            <a href="{{ foto.imagem.url }}" target="_blank">
+                                <img src="{{ foto.imagem.url }}" alt="Foto pedido" style="width:64px;height:64px;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
+                            </a>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
 
-                    <div class="mt-3">
-                        <h6>Linhas do pedido</h6>
-                        <div class="list-group mb-3">
+                    <div class="mt-2">
+                        <h6 class="mb-2">Linhas do pedido</h6>
+                        <div class="list-group mb-2">
                             {% for linha in pedido.linhas.all %}
-                            <div class="list-group-item">
+                            <div class="list-group-item py-2">
                                 <span class="badge badge-primary">{{ linha.get_status_display }}</span>
                                 <small class="float-right">{{ linha.criado_em|date:"d/m/Y H:i" }}{% if linha.usuario %} - {{ linha.usuario.username }}{% endif %}</small>
-                                <div class="mt-1">{{ linha.descricao|default:"-" }}</div>
+                                <div class="small mt-1">{{ linha.descricao|default:"-" }}</div>
                             </div>
                             {% empty %}
                             <div class="list-group-item text-muted">Sem atualizações.</div>
@@ -55,7 +55,7 @@
                         </div>
 
                         {% if not ordem.fechada %}
-                        <form method="post" class="border rounded p-3 bg-light">
+                        <form method="post" class="border rounded p-2 bg-light">
                             {% csrf_token %}
                             <input type="hidden" name="form_type" value="pedido_compra_linha">
                             <input type="hidden" name="pedido_id" value="{{ pedido.id }}">

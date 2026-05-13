@@ -139,6 +139,25 @@
 .os-header-actions .dropdown-menu {
     font-size: 0.9rem;
 }
+.os-tab-header-title {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.os-tab-header-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.os-tab-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
 .os-next-step-hint {
     display: inline-flex;
     align-items: center;
@@ -190,6 +209,11 @@
                             {% if status_codigo == 'concluida' %}badge-danger
                             {% elif status_codigo == 'reaberta' %}badge-secondary
                             {% elif status_codigo == 'em_andamento' %}badge-warning
+                            {% elif status_codigo == 'orcamentado' %}badge-info
+                            {% elif status_codigo == 'autorizado' %}badge-primary
+                            {% elif status_codigo == 'pronto_envio_parceiro' %}badge-success
+                            {% elif status_codigo == 'enviado_parceiro' %}badge-dark
+                            {% elif status_codigo == 'recepcionado' %}badge-success
                             {% elif status_codigo == 'pronto_contactado' %}badge-success
                             {% else %}badge-info{% endif %}">
                             {{ status_label }}
@@ -322,7 +346,7 @@
         {% endfor %}
     </ul>
 
-<div class="tab-content mt-3">
+<div class="tab-content">
     {% if ordem.fechada %}
     <div class="alert alert-warning">
         OS fechada: para adicionar linhas ou alterar orçamento/itens, reabra a ordem.
@@ -599,19 +623,19 @@
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="pedido_compra">
                 <div class="modal-body">
-                    <div class="form-group">
+                    <div class="form-group mb-2">
                         <label for="pedido_titulo">Titulo</label>
                         <input type="text" name="titulo" id="pedido_titulo" class="form-control" required>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group mb-2">
                         <label for="pedido_tipo_peca">Tipo de peca</label>
                         <input type="text" name="tipo_peca" id="pedido_tipo_peca" class="form-control" placeholder="Ex: Placa principal, display, motor">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group mb-2">
                         <label for="pedido_descricao">Descrição</label>
                         <textarea name="descricao" id="pedido_descricao" class="form-control" rows="3" placeholder="Detalhes do item a encomendar"></textarea>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group mb-2">
                         <label for="pedido_status_inicial">Status inicial</label>
                         <select name="status_inicial" id="pedido_status_inicial" class="form-control">
                             {% for value, label in pedido_status_choices %}
@@ -619,13 +643,14 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group mb-0">
                         <label for="pedido_fotos">Fotos</label>
                         <input type="file" name="fotos" id="pedido_fotos" class="form-control-file" accept="image/*" multiple>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="submit" class="btn btn-primary">Criar pedido</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
                 </div>
             </form>
         </div>

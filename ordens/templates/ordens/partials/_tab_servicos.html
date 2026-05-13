@@ -2,10 +2,20 @@
 <div class="tab-pane fade {% if active_tab == 'servicos' %}show active{% endif %}" id="servicos">
     <div class="card-modern">
         <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span>Serviços & Peças</span>
+            <span class="os-tab-header-title">
+                <span>Serviços & Peças</span>
+                <button type="button"
+                        class="os-next-step-hint"
+                        data-toggle="tooltip"
+                        data-placement="top"
+                        title="Etapa atual: {{ fluxo_os_label }} | {% if liberada_para_entrega %}Pagamento confirmado. OS pronta para entrega ao cliente.{% elif pode_receber_no_caixa %}Ordem fechada, mas ainda com saldo pendente no caixa.{% elif ordem.status == 'pronto_contactado' and not ordem.fechada %}Cliente já foi contactado. O próximo passo é fechar a OS e seguir para o caixa.{% else %}Continue a evolução técnica pela linha de trabalho e finalize no momento certo.{% endif %}{% if bloqueios_operacionais %} | Bloqueios: {% for bloqueio in bloqueios_operacionais %}{% if not forloop.first %}; {% endif %}{{ bloqueio }}{% endfor %}{% endif %}"
+                        aria-label="Ver resumo operacional da aba de serviços e peças">
+                    <i class="fas fa-lightbulb"></i>
+                </button>
+            </span>
             {% if not ordem.fechada %}
-            <div class="d-flex">
-                <button type="button" class="btn btn-sm {% if destacar_adicionar_servico_peca %}btn-primary{% else %}btn-light{% endif %} mr-2" data-toggle="modal" data-target="#modalAdicionarServicoPeca">
+            <div class="os-tab-header-actions">
+                <button type="button" class="btn btn-sm {% if destacar_adicionar_servico_peca %}btn-primary{% else %}btn-light{% endif %}" data-toggle="modal" data-target="#modalAdicionarServicoPeca">
                     <i class="fas fa-barcode mr-1"></i>Adicionar EAN/Produto
                 </button>
                 <button type="button" class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarTalao">
@@ -17,79 +27,54 @@
             {% endif %}
         </div>
         <div class="card-modern-body">
-            <div class="alert alert-{{ fluxo_os_tone }} d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <strong>Etapa atual:</strong> {{ fluxo_os_label }}
-                    <br>
-                    <small class="text-muted">
-                        {% if liberada_para_entrega %}
-                            Pagamento confirmado. OS pronta para entrega ao cliente.
-                        {% elif pode_receber_no_caixa %}
-                            Ordem fechada, mas ainda com saldo pendente no caixa.
-                        {% elif ordem.status == 'pronto_contactado' and not ordem.fechada %}
-                            Cliente já foi contactado. O próximo passo é fechar a OS e seguir para o caixa.
-                        {% else %}
-                            Continue a evolução técnica pela linha de trabalho e finalize no momento certo.
-                        {% endif %}
-                        {% if bloqueios_operacionais %}
-                            <br>
-                            <span class="text-danger">
-                                {% for bloqueio in bloqueios_operacionais %}
-                                    {% if not forloop.first %} | {% endif %}{{ bloqueio }}
-                                {% endfor %}
-                            </span>
-                        {% endif %}
-                    </small>
-                </div>
-                <div class="d-flex flex-wrap" style="gap:8px;">
-                    {% if pode_receber_no_caixa %}
-                    <a class="btn btn-sm {% if destacar_ir_para_caixa %}btn-primary{% else %}btn-outline-primary{% endif %}"
-                       href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ saldo_financeiro_os|floatformat:2 }}">
-                        Ir para o Caixa
-                    </a>
-                    {% elif ordem.status == 'pronto_contactado' and not ordem.fechada %}
-                    <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-sm {% if destacar_fechar_e_caixa %}btn-success{% else %}btn-outline-success{% endif %}">
-                        Fechar e ir ao Caixa
-                    </a>
-                    {% elif liberada_para_entrega %}
-                    <a href="{% url 'ordens:detalhes_ordem' ordem.id %}?tab=relatorio" class="btn btn-sm {% if destacar_revisar_entrega %}btn-success{% else %}btn-outline-success{% endif %}">
-                        Revisar entrega
-                    </a>
-                    {% endif %}
-                    {% if destacar_abrir_orcamento %}
-                    <a href="{% url 'ordens:detalhes_ordem' ordem.id %}?tab=orcamentos" class="btn btn-sm btn-outline-primary">
-                        Abrir Orcamento
-                    </a>
-                    {% endif %}
-                    {% if destacar_abrir_pedido_compra %}
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-toggle="modal" data-target="#modalAdicionarPedido">
-                        Abrir Pedido
-                    </button>
-                    {% endif %}
-                </div>
+            <div class="os-tab-toolbar mb-2">
+                {% if pode_receber_no_caixa %}
+                <a class="btn btn-sm {% if destacar_ir_para_caixa %}btn-primary{% else %}btn-outline-primary{% endif %}"
+                   href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ saldo_financeiro_os|floatformat:2 }}">
+                    Ir para o Caixa
+                </a>
+                {% elif ordem.status == 'pronto_contactado' and not ordem.fechada %}
+                <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-sm {% if destacar_fechar_e_caixa %}btn-success{% else %}btn-outline-success{% endif %}">
+                    Fechar e ir ao Caixa
+                </a>
+                {% elif liberada_para_entrega %}
+                <a href="{% url 'ordens:detalhes_ordem' ordem.id %}?tab=relatorio" class="btn btn-sm {% if destacar_revisar_entrega %}btn-success{% else %}btn-outline-success{% endif %}">
+                    Revisar entrega
+                </a>
+                {% endif %}
+                {% if destacar_abrir_orcamento %}
+                <a href="{% url 'ordens:detalhes_ordem' ordem.id %}?tab=orcamentos" class="btn btn-sm btn-outline-primary">
+                    Abrir Orçamento
+                </a>
+                {% endif %}
+                {% if destacar_abrir_pedido_compra %}
+                <button type="button" class="btn btn-sm btn-outline-primary" data-toggle="modal" data-target="#modalAdicionarPedido">
+                    Abrir Pedido
+                </button>
+                {% endif %}
             </div>
-            <div class="row mb-3">
+            <div class="row mb-2">
                 <div class="col-md-4">
-                    <div class="border rounded p-2 bg-light">
+                    <div class="border rounded p-2 bg-light small">
                         <small class="text-muted">Valor total OS</small>
                         <div><strong>R$ {{ total_os|floatformat:2 }}</strong></div>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="border rounded p-2 bg-light">
+                    <div class="border rounded p-2 bg-light small">
                         <small class="text-muted">Valor pago</small>
                         <div><strong>R$ {{ total_pago_os|floatformat:2 }}</strong></div>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="border rounded p-2 bg-light">
+                    <div class="border rounded p-2 bg-light small">
                         <small class="text-muted">Saldo</small>
                         <div><strong>R$ {{ saldo_financeiro_os|floatformat:2 }}</strong></div>
                     </div>
                 </div>
             </div>
 
-            <div class="alert {% if os_pago %}alert-success{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center">
+            <div class="alert {% if os_pago %}alert-success{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center py-2 mb-2">
                 <div>
                     <strong>Pago?</strong> {% if os_pago %}Sim{% else %}Não{% endif %}
                     <br>
@@ -109,7 +94,7 @@
             </div>
 
             {% if ordem.tipo_reparo == 'Garantia' %}
-            <div class="border rounded p-3 mb-3 bg-light">
+            <div class="border rounded p-2 mb-2 bg-light small">
                 <h6 class="mb-2"><i class="fas fa-file-invoice-dollar mr-1"></i>Resumo Financeiro da Garantia</h6>
                 {% if auditoria_garantia %}
                 <p class="mb-1"><strong>Fornecedor:</strong> {{ auditoria_garantia.fornecedor.nome|default:"-" }}</p>
@@ -126,10 +111,10 @@
             {% if itens %}
             <div class="list-group mb-3">
                 {% for item in itens %}
-                <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div class="list-group-item d-flex justify-content-between align-items-center py-2">
                     <div class="w-100">
-                        <h6>{{ item.nome }} <span class="badge badge-light border">{{ item.get_tipo_display }}</span></h6>
-                        <p class="mb-1">R$ {{ item.valor_unitario|floatformat:2 }} x {{ item.quantidade }} = R$ {{ item.total|floatformat:2 }}</p>
+                        <h6 class="mb-1">{{ item.nome }} <span class="badge badge-light border">{{ item.get_tipo_display }}</span></h6>
+                        <p class="mb-1 small">R$ {{ item.valor_unitario|floatformat:2 }} x {{ item.quantidade }} = R$ {{ item.total|floatformat:2 }}</p>
                         {% if item.produto_estoque %}
                         <small class="text-muted">Estoque vinculado: {{ item.produto_estoque.nome }}{% if item.estoque_consumido_em %} | Baixado{% endif %}</small><br>
                         {% endif %}
@@ -138,7 +123,7 @@
                         <br><small class="text-muted">Garantia da peça: {{ item.garantia_dias }} dias</small>
                         {% endif %}
                     </div>
-                    {% if not ordem.fechada %}
+                    {% if not ordem.fechada and pode_excluir_servico_peca %}
                     <form method="post" class="ml-2 mb-0" onsubmit="return window.AppMessages.confirmSync('Excluir este item de Serviços e Peças?');">
                         {% csrf_token %}
                         <input type="hidden" name="form_type" value="excluir_servico_peca">
@@ -156,7 +141,7 @@
             <p class="text-muted text-center py-3">Nenhum serviço ou peça registrado.</p>
             {% endif %}
 
-            <hr>
+            <hr class="my-3">
             <h6 class="mb-2">Talões da OS</h6>
             {% if taloes_os %}
             <div class="d-flex flex-wrap">
@@ -180,28 +165,28 @@
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Talão {{ talao.numero }}</h5>
+                <h5 class="modal-title">Talao {{ talao.numero }}</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <div class="modal-body">
                 <div class="border rounded p-3 bg-light">
                     <h6 class="mb-2">RECIBO</h6>
-                    <p class="mb-1"><strong>Talão:</strong> {{ talao.numero }}</p>
+                    <p class="mb-1"><strong>Talao:</strong> {{ talao.numero }}</p>
                     <p class="mb-1"><strong>Data:</strong> {{ talao.criado_em|date:"d/m/Y H:i" }}</p>
                     <p class="mb-1"><strong>OS:</strong> {{ ordem.numero_os }}</p>
                     <p class="mb-1"><strong>Cliente:</strong> {{ ordem.cliente.nome }}</p>
                     <p class="mb-1"><strong>Tipo:</strong> {{ talao.get_origem_display }}</p>
-                    <p class="mb-1"><strong>Produto/Serviço:</strong> {{ talao.item_referencia|default:"-" }}</p>
+                    <p class="mb-1"><strong>Produto/Servico:</strong> {{ talao.item_referencia|default:"-" }}</p>
                     <p class="mb-2"><strong>Valor:</strong> {% if talao.valor %}R$ {{ talao.valor|floatformat:2 }}{% else %}-{% endif %}</p>
                     <hr>
                     <p class="mb-1"><strong>Empresa:</strong> {{ empresa_talao.nome|default:"-" }}</p>
                     <p class="mb-1"><strong>CNPJ:</strong> {{ empresa_talao.cnpj|default:"-" }}</p>
                     <p class="mb-1"><strong>Telefone:</strong> {{ empresa_talao.telefone|default:"-" }}</p>
-                    <p class="mb-0"><strong>Endereço:</strong> {{ empresa_talao.endereco|default:"-" }}</p>
+                    <p class="mb-0"><strong>Endereco:</strong> {{ empresa_talao.endereco|default:"-" }}</p>
                 </div>
-                {% if talao.criado_por %}<p class="mt-2 mb-2"><strong>Usuário:</strong> {{ talao.criado_por.username }}</p>{% endif %}
+                {% if talao.criado_por %}<p class="mt-2 mb-2"><strong>Usuario:</strong> {{ talao.criado_por.username }}</p>{% endif %}
                 {% if talao.descricao %}
-                <p class="mb-2"><strong>Descrição:</strong><br>{{ talao.descricao|linebreaksbr }}</p>
+                <p class="mb-2"><strong>Descricao:</strong><br>{{ talao.descricao|linebreaksbr }}</p>
                 {% endif %}
                 {% if talao.imagem %}
                 <a href="{{ talao.imagem.url }}" target="_blank">
@@ -218,7 +203,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-plus-circle mr-2"></i>Adicionar Serviço/Peça</h5>
+                <h5 class="modal-title"><i class="fas fa-plus-circle mr-2"></i>Adicionar servico ou peca</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form method="post">
@@ -226,7 +211,7 @@
                 <input type="hidden" name="form_type" value="servico_peca">
                 <div class="modal-body">
                     <input type="hidden" name="produto_estoque_id" id="sp_produto_estoque_id">
-                    <div class="row mb-3">
+                    <div class="row mb-2">
                         <div class="col-md-10">
                             <input type="text" id="sp_produto_busca" class="form-control" placeholder="Buscar por EAN ou nome do produto">
                         </div>
@@ -234,44 +219,44 @@
                             <button type="button" id="sp_btn_buscar" class="btn btn-primary btn-block"><i class="fas fa-search"></i></button>
                         </div>
                     </div>
-                    <div id="sp_resultado_busca" class="mb-3" style="max-height:180px;overflow-y:auto;"></div>
+                    <div id="sp_resultado_busca" class="mb-2" style="max-height:180px;overflow-y:auto;"></div>
                     <div class="form-row">
-                        <div class="form-group col-md-4">
+                        <div class="form-group col-md-4 mb-2">
                             <label>Tipo</label>
                             <select name="tipo" class="form-control" id="sp_tipo">
-                                <option value="peca">Peça</option>
-                                <option value="servico">Serviço</option>
+                                <option value="peca">Peca</option>
+                                <option value="servico">Servico</option>
                             </select>
                         </div>
-                        <div class="form-group col-md-8">
+                        <div class="form-group col-md-8 mb-2">
                             <label>Nome</label>
                             <input type="text" name="nome" id="sp_nome" class="form-control" required>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>Descrição</label>
+                    <div class="form-group mb-2">
+                        <label>Descricao</label>
                         <textarea name="descricao" id="sp_descricao" rows="2" class="form-control"></textarea>
                     </div>
                     <div class="form-row">
-                        <div class="form-group col-md-4">
+                        <div class="form-group col-md-4 mb-2">
                             <label>Quantidade</label>
                             <input type="number" name="quantidade" id="sp_quantidade" class="form-control" min="1" value="1" required>
                         </div>
-                        <div class="form-group col-md-4">
-                            <label>Valor unitário</label>
+                        <div class="form-group col-md-4 mb-2">
+                            <label>Valor unitario</label>
                             <div class="input-group">
                                 <div class="input-group-prepend"><span class="input-group-text">R$</span></div>
                                 <input type="number" step="0.01" name="valor_unitario" id="sp_valor" class="form-control" required>
                             </div>
                         </div>
-                        <div class="form-group col-md-4">
+                        <div class="form-group col-md-4 mb-2">
                             <label>Garantia (dias)</label>
                             <input type="number" name="garantia_dias" id="sp_garantia" class="form-control" min="0" value="">
                         </div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group col-md-4">
-                            <label>Responsável da comissão</label>
+                        <div class="form-group col-md-4 mb-2">
+                            <label>Responsavel da comissao</label>
                             <select name="tecnico_responsavel" class="form-control">
                                 <option value="">-- Selecione --</option>
                                 {% for user in tecnicos %}
@@ -279,12 +264,12 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        {% if ordem.tipo_reparo == 'Garantia de serviço' %}
-                        <div class="form-group col-md-8 d-flex align-items-end">
+                        {% if ordem.tipo_reparo == 'Garantia de servico' %}
+                        <div class="form-group col-md-8 d-flex align-items-end mb-2">
                             <div class="form-check mb-2">
                                 <input type="checkbox" name="comissionavel" id="sp_comissionavel" class="form-check-input">
-                                <label class="form-check-label" for="sp_comissionavel">Serviço extra comissionável</label>
-                                <small class="form-text text-muted">Em garantia de serviço, deixe desmarcado para retorno sem comissão e marque apenas se houver venda adicional.</small>
+                                <label class="form-check-label" for="sp_comissionavel">Servico extra comissionavel</label>
+                                <small class="form-text text-muted">Em garantia de servico, deixe desmarcado para retorno sem comissao e marque apenas se houver venda adicional.</small>
                             </div>
                         </div>
                         {% endif %}
@@ -303,38 +288,38 @@
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-receipt mr-2"></i>Adicionar Talão</h5>
+                <h5 class="modal-title"><i class="fas fa-receipt mr-2"></i>Adicionar talao</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="adicionar_talao">
                 <div class="modal-body">
-                    <div class="form-group">
-                        <label>Número do talão</label>
+                    <div class="form-group mb-2">
+                        <label>Numero do talao</label>
                         <input type="text" name="numero_talao" class="form-control" required>
                     </div>
                     <div class="form-row">
-                        <div class="form-group col-md-6">
+                        <div class="form-group col-md-6 mb-2">
                             <label>Valor</label>
                             <input type="number" step="0.01" min="0" name="valor_talao" class="form-control">
                         </div>
-                        <div class="form-group col-md-6">
-                            <label>Produto/Serviço</label>
-                            <input type="text" name="item_talao" class="form-control" placeholder="Ex: Mão de obra">
+                        <div class="form-group col-md-6 mb-2">
+                            <label>Produto/Servico</label>
+                            <input type="text" name="item_talao" class="form-control" placeholder="Ex: Mao de obra">
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>Descrição</label>
+                    <div class="form-group mb-2">
+                        <label>Descricao</label>
                         <textarea name="descricao_talao" rows="3" class="form-control"></textarea>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group mb-0">
                         <label>Imagem (opcional)</label>
                         <input type="file" name="imagem_talao" class="form-control-file" accept="image/*">
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-success">Salvar talão</button>
+                    <button type="submit" class="btn btn-success">Salvar talao</button>
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
                 </div>
             </form>
@@ -380,7 +365,7 @@ document.addEventListener('DOMContentLoaded', function () {
             row.innerHTML = `
                 <div><strong>${produto.ean || '-'} - ${produto.nome}</strong> (R$ ${produto.preco})</div>
                 <small class="text-muted">SKU: ${produto.sku || '-'} | Estoque: ${produto.quantidade ?? '-'}</small>
-                ${historico > 0 || score > 0 ? `<br><small class="text-info">Ranking: ${score} | Histórico: ${historico}x ${motivos ? `| ${motivos}` : ''}</small>` : ''}
+                ${historico > 0 || score > 0 ? `<br><small class="text-info">Ranking: ${score} | Historico: ${historico}x ${motivos ? `| ${motivos}` : ''}</small>` : ''}
             `;
             row.addEventListener('click', function () {
                 aplicarProdutoNoFormulario(produto);
@@ -403,7 +388,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(r => r.json())
             .then(data => renderResultados(data.resultados || []))
             .catch(() => {
-                resultado.innerHTML = '<div class="text-danger">Erro ao carregar sugestões automáticas.</div>';
+                resultado.innerHTML = '<div class="text-danger">Erro ao carregar sugestoes automaticas.</div>';
             });
     }
 
@@ -423,3 +408,5 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+
+

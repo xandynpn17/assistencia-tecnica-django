@@ -1,9 +1,19 @@
-<!-- Aba Detalhes -->
+﻿<!-- Aba Detalhes -->
 <div class="tab-pane fade {% if active_tab == 'detalhes' %}show active{% endif %}" id="detalhes">
     <div class="card-modern">
         <!-- Header -->
         <div class="card-modern-header">
-            <i class="fas fa-info-circle mr-2"></i> Detalhes do Equipamento
+            <div class="d-flex align-items-center justify-content-between">
+                <span><i class="fas fa-info-circle mr-2"></i> Detalhes do Equipamento</span>
+                <button type="button"
+                        class="os-next-step-hint"
+                        data-toggle="tooltip"
+                        data-placement="top"
+                        aria-label="Ver detalhes das assinaturas"
+                        title="Assinatura de entrada: {% if assinatura_entrada_data %}{{ assinatura_entrada_data|date:'d/m/Y H:i' }}{% else %}-{% endif %} | Arquivo entrada: {% if assinatura_entrada_tem_arquivo %}Sim{% else %}Nao{% endif %} | Assinatura de saida: {% if assinatura_saida_data %}{{ assinatura_saida_data|date:'d/m/Y H:i' }}{% else %}-{% endif %} | Arquivo saida: {% if assinatura_saida_tem_arquivo %}Sim{% else %}Nao{% endif %}">
+                    <i class="fas fa-signature"></i>
+                </button>
+            </div>
         </div>
 
         <!-- Card Body -->
@@ -31,7 +41,7 @@
                             {% if ordem.peritagem %}
                             {{ ordem.peritagem }}
                             {% else %}
-                            <span class="text-muted">Não informado</span>
+                            <span class="text-muted">Nao informado</span>
                             {% endif %}
                         </p>
                     </div>
@@ -39,15 +49,15 @@
 
                 <!-- Barra lateral (direita) -->
                 <div class="col-md-4">
-                    <div class="border rounded bg-white p-3 h-100 d-flex flex-column" id="painelDetalhesLateral">
+                    <div class="border rounded bg-white p-2 p-md-3 h-100 d-flex flex-column" id="painelDetalhesLateral">
 
                         <!-- Dados do equipamento -->
-                        <div class="mb-3">
-                            <p class="mb-1"><strong>Tipo:</strong> {{ ordem.get_tipo_equipamento_display }}</p>
-                            <p class="mb-1"><strong>Marca:</strong> {{ ordem.marca_equipamento }}</p>
-                            <p class="mb-1"><strong>Modelo:</strong> {{ ordem.modelo_equipamento }}</p>
-                            <p class="mb-1">
-                                <strong>Nº Série:</strong>
+                        <div class="mb-2 small">
+                            <p class="mb-1 text-break"><strong>Tipo:</strong> {{ ordem.get_tipo_equipamento_display }}</p>
+                            <p class="mb-1 text-break"><strong>Marca:</strong> {{ ordem.marca_equipamento }}</p>
+                            <p class="mb-1 text-break"><strong>Modelo:</strong> {{ ordem.modelo_equipamento }}</p>
+                            <p class="mb-1 text-break">
+                                <strong>No Serie:</strong>
                                 <span id="serie-view"
                                       class="{% if pode_editar_serie %}text-primary{% endif %}"
                                       {% if pode_editar_serie %}style="cursor:pointer;" title="Duplo clique para editar"{% endif %}>
@@ -62,51 +72,40 @@
                                 {% endif %}
                             </p>
                             <div id="serie-feedback" class="small"></div>
-                            <p class="mb-1 mt-2">
-                                <strong>Processo anterior:</strong>
-                                {% if processo_anterior_sn %}
-                                    <a href="{% url 'ordens:detalhes_ordem' processo_anterior_sn.id %}">#{{ processo_anterior_sn.numero_os }}</a>
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </p>
-                            <p class="mb-1">
-                                <strong>Referência parceiro:</strong> {{ ordem.referencia_parceiro|default:"-" }}
-                            </p>
-                            <hr class="my-2">
-                            <p class="mb-1"><strong>Assinatura de entrada:</strong>
-                                {% if assinatura_entrada_data %}
-                                    {{ assinatura_entrada_data|date:"d/m/Y H:i" }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </p>
-                            <p class="mb-1"><strong>Arquivo entrada:</strong> {% if assinatura_entrada_tem_arquivo %}Sim{% else %}Não{% endif %}</p>
-                            <p class="mb-1"><strong>Assinatura de saída:</strong>
-                                {% if assinatura_saida_data %}
-                                    {{ assinatura_saida_data|date:"d/m/Y H:i" }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </p>
-                            <p class="mb-0"><strong>Arquivo saída:</strong> {% if assinatura_saida_tem_arquivo %}Sim{% else %}Não{% endif %}</p>
+                            <div class="border-top pt-2 mt-2 text-muted">
+                                <p class="mb-1 text-break">
+                                    <strong>Processo anterior:</strong>
+                                    {% if processo_anterior_sn %}
+                                        <a href="{% url 'ordens:detalhes_ordem' processo_anterior_sn.id %}">#{{ processo_anterior_sn.numero_os }}</a>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </p>
+                                <p class="mb-0 text-break">
+                                    <strong>Referencia parceiro:</strong> {{ ordem.referencia_parceiro|default:"-" }}
+                                </p>
+                            </div>
                         </div>
 
-                        <!-- Observações Internas -->
+                        <!-- Observacoes Internas -->
                         <div class="observacoes-wrap">
-                            <label class="font-weight-bold mb-1" for="observacoes">Observações (internas)</label>
+                            <label class="font-weight-bold mb-1" for="observacoes">Observacoes (internas)</label>
                             <textarea id="observacoes"
                                       class="form-control form-control-sm"
-                                      rows="5"
+                                      rows="4"
                                       data-os-id="{{ ordem.id }}"
-                                      placeholder="Somente visivel internamente...">{{ ordem.notas_internas|default:"" }}</textarea>
+                                      placeholder="Somente visivel internamente..."
+                                      {% if not pode_editar_observacoes_internas %}disabled{% endif %}>{{ ordem.notas_internas|default:"" }}</textarea>
+                            {% if not pode_editar_observacoes_internas %}
+                            <small class="text-muted d-block mt-1">Edicao das observacoes internas controlada por permissao.</small>
+                            {% endif %}
                             <div id="observacoes-feedback" class="small mt-1"></div>
                         </div>
 
                         <div class="detalhes-footer-meta">
-                            <div class="mb-2">
+                            <div class="mb-1">
                                 <div class="meta-stacked">
-                                    <label class="meta-label" for="tecnicoResponsavel">Técnico responsável:</label>
+                                    <label class="meta-label" for="tecnicoResponsavel">Tecnico responsavel:</label>
                                     <select id="tecnicoResponsavel"
                                             class="form-control form-control-sm"
                                             style="height: 31px;"
@@ -133,7 +132,11 @@
                                            style="height: 31px;"
                                            value="{{ ordem.local_armazenamento|default:'' }}"
                                            data-os-id="{{ ordem.id }}"
-                                           placeholder="Local...">
+                                           placeholder="Local..."
+                                           {% if not pode_editar_local_armazenamento %}disabled{% endif %}>
+                                    {% if not pode_editar_local_armazenamento %}
+                                    <small class="text-muted d-block mt-1">Edicao do local de armazenamento controlada por permissao.</small>
+                                    {% endif %}
                                 </div>
                                 <div id="local-feedback" class="small mt-1"></div>
                             </div>
@@ -144,3 +147,5 @@
         </div>
     </div>
 </div>
+
+

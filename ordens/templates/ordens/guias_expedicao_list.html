@@ -1,0 +1,114 @@
+{% extends 'core/base.html' %}
+{% block title %}Guias de expedição{% endblock %}
+
+{% block content %}
+{% include 'ordens/_subnav_expedicao.html' %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 12px;">
+        <h3 class="card-title mb-0">Guias de expedição</h3>
+        <form method="get" class="form-inline" style="gap: 8px;">
+            <select name="status" class="form-control form-control-sm">
+                <option value="">Todas as guias</option>
+                <option value="abertas" {% if status_filtro == 'abertas' %}selected{% endif %}>Com ordens expedidas</option>
+                <option value="recepcionadas" {% if status_filtro == 'recepcionadas' %}selected{% endif %}>Totalmente recepcionadas</option>
+            </select>
+            <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control form-control-sm" title="Data inicial">
+            <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control form-control-sm" title="Data final">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Filtrar</button>
+            <a href="{% url 'ordens:guias_expedicao' %}" class="btn btn-sm btn-outline-secondary">Limpar</a>
+        </form>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="pl-3">Guia</th>
+                        <th>Ordens</th>
+                        <th>Parceiro</th>
+                        <th>Status</th>
+                        <th>Expedida</th>
+                        <th>Itens</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for guia in guias %}
+                    <tr class="linha-guia" data-pdf-url="{% url 'ordens:guia_expedicao_pdf' guia.id %}" title="Duplo clique para abrir PDF da guia">
+                        <td class="pl-3">
+                            <strong><a href="{% url 'ordens:guia_expedicao_pdf' guia.id %}" target="_blank">{{ guia.numero_guia }}</a></strong>
+                            {% if guia.referencia_externa %}
+                            <div class="small text-muted">{{ guia.referencia_externa }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ guia.total_ordens }}</td>
+                        <td>{{ guia.parceiro_nome }}</td>
+                        <td>
+                            <span class="badge {% if guia.status_geral == 'expedida' %}badge-warning{% elif guia.status_geral == 'parcial' %}badge-info{% else %}badge-success{% endif %}">
+                                {% if guia.status_geral == 'expedida' %}Expedida
+                                {% elif guia.status_geral == 'parcial' %}Parcial
+                                {% else %}Recepcionada{% endif %}
+                            </span>
+                            <div class="small text-muted">{{ guia.total_ordens_abertas }} aberta(s)</div>
+                        </td>
+                        <td>
+                            {{ guia.expedida_em|date:"d/m/Y H:i" }}
+                            {% if guia.expedida_por %}<div class="small text-muted">{{ guia.expedida_por }}</div>{% endif %}
+                        </td>
+                        <td>
+                            {% for item in guia.itens.all %}
+                            <div class="small">
+                                <a href="{{ item.ordem_servico.get_absolute_url }}">{{ item.ordem_servico.numero_os }}</a>
+                                - {{ item.ordem_servico.cliente.nome }}
+                                <span class="text-muted">({% if item.status == 'expedida' %}em aberto{% else %}recepcionada{% endif %})</span>
+                            </div>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">Nenhuma guia encontrada.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% if guias.paginator.num_pages > 1 %}
+<div class="d-flex justify-content-between align-items-center mt-3">
+    <div class="text-muted small">
+        Pagina {{ guias.number }} de {{ guias.paginator.num_pages }}
+    </div>
+    <nav aria-label="Paginação de guias">
+        <ul class="pagination pagination-sm mb-0">
+            {% if guias.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ guias.previous_page_number }}&status={{ status_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}">Anterior</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+            {% endif %}
+            {% if guias.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ guias.next_page_number }}&status={{ status_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}">Proxima</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Proxima</span></li>
+            {% endif %}
+        </ul>
+    </nav>
+</div>
+{% endif %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll(".linha-guia").forEach(function(row) {
+        row.addEventListener("dblclick", function() {
+            const pdfUrl = row.getAttribute("data-pdf-url");
+            if (pdfUrl) {
+                window.open(pdfUrl, "_blank");
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

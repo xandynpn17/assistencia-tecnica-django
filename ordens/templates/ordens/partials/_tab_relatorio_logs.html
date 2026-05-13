@@ -8,23 +8,25 @@
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="relatorio">
 
-                <div class="form-group">
-                    <label for="relatorio_tecnico">Descrição</label>
-                    <textarea name="relatorio_tecnico" id="relatorio_tecnico" rows="5" class="form-control">{{ relatorio_tecnico_display|default_if_none:"" }}</textarea>
+                <div class="form-row">
+                    <div class="form-group col-lg-8">
+                        <label for="relatorio_tecnico">Descrição</label>
+                        <textarea name="relatorio_tecnico" id="relatorio_tecnico" rows="4" class="form-control">{{ relatorio_tecnico_display|default_if_none:"" }}</textarea>
+                    </div>
+
+                    <div class="form-group col-lg-4">
+                        <label for="tipo_reparacao">Tipo de Reparação</label>
+                        <select name="tipo_reparacao" id="tipo_reparacao" class="form-control">
+                            <option value="">-- Selecione --</option>
+                            {% for key, value in tipos_reparacao %}
+                            <option value="{{ key }}" {% if ordem.tipo_reparacao == key %}selected{% endif %}>{{ value }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="tipo_reparacao">Tipo de Reparação</label>
-                    <select name="tipo_reparacao" id="tipo_reparacao" class="form-control">
-                        <option value="">-- Selecione --</option>
-                        {% for key, value in tipos_reparacao %}
-                        <option value="{{ key }}" {% if ordem.tipo_reparacao == key %}selected{% endif %}>{{ value }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <button type="submit" class="btn btn-success"><i class="fas fa-save mr-2"></i> Salvar Relatório
+                <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-save mr-2"></i> Salvar Relatório
                 </button>
             </form>
         </div>
@@ -39,7 +41,7 @@
         <div class="card-modern-body">
             {% if logs_os %}
             <div class="table-responsive">
-                <table class="table table-sm table-bordered">
+                <table class="table table-sm table-bordered mb-0">
                     <thead>
                         <tr>
                             <th>Data</th>

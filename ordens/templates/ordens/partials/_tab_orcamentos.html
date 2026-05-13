@@ -1,24 +1,24 @@
-<!-- Orçamento -->
+<!-- Orçamento da OS -->
 <div class="tab-pane fade {% if active_tab == 'orcamentos' %}show active{% endif %}" id="orcamentos">
-    <div class="card-modern flex-fill mt-3">
+    <div class="card-modern flex-fill">
         <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span>Orcamento da OS</span>
-            <div class="d-flex">
-                {% if not ordem.fechada %}
-                <button type="button" class="btn {% if destacar_abrir_orcamento or not orcamento_tem_itens %}btn-primary{% else %}btn-light{% endif %} btn-sm mr-2" data-toggle="modal"
+            <span class="os-tab-header-title">Orçamento dentro da OS</span>
+            <div class="os-tab-header-actions">
+                {% if not ordem.fechada and pode_editar_orcamento %}
+                <button type="button" class="btn {% if destacar_abrir_orcamento or not orcamento_tem_itens %}btn-primary{% else %}btn-light{% endif %} btn-sm" data-toggle="modal"
                         data-target="#modalAdicionarItem2">
                     <i class="fas fa-plus"></i> Inserir Item
                 </button>
                 {% else %}
-                <span class="text-light"><i class="fas fa-lock mr-1"></i> Edição bloqueada</span>
+                <span class="text-light"><i class="fas fa-lock mr-1"></i>Edição bloqueada</span>
                 {% endif %}
             </div>
         </div>
 
-        <div class="card-modern-body border-bottom">
+        <div class="card-modern-body border-bottom py-2">
             <div class="d-flex justify-content-between align-items-start flex-wrap" style="gap: 12px;">
                 <div>
-                    <h6 class="mb-2">Painel do Orcamento</h6>
+                    <h6 class="mb-1">Painel operacional do orçamento</h6>
                     <div class="d-flex flex-wrap" style="gap:8px;">
                         <span class="badge badge-light border">Itens: {{ orcamento_stats.total_itens }}</span>
                         <span class="badge badge-warning">Pendentes: {{ orcamento_stats.pendentes }}</span>
@@ -26,28 +26,32 @@
                         <span class="badge badge-danger">Recusados: {{ orcamento_stats.recusados }}</span>
                         <span class="badge badge-info">Qtd: {{ orcamento_stats.quantidade_total }}</span>
                     </div>
-                    <small class="text-muted d-block mt-2">
+                    <small class="text-muted d-block mt-1">
                         {% if not orcamento_tem_itens %}
                             Sem itens para envio.
                         {% elif orcamento_tem_pendentes %}
                             Aguardando envio ou retorno do cliente.
                         {% elif orcamento_pode_migrar %}
-                            Itens aprovados prontos para migracao.
+                            Itens aprovados prontos para migração.
                         {% else %}
                             Sem itens pendentes.
                         {% endif %}
                     </small>
+                    <div class="small text-muted mt-1">
+                        <span class="mr-3"><strong>Descrição:</strong> {{ orcamento.descricao|default:"-" }}</span>
+                        <span><strong>Total:</strong> R$ {{ orcamento.valor_total|default:0|floatformat:2 }}</span>
+                    </div>
                 </div>
                 <div class="d-flex flex-wrap justify-content-end" style="gap:8px;">
                     <a href="{% url 'orcamentos:imprimir_orcamento' orcamento.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-print mr-1"></i> Imprimir Orcamento
+                        <i class="fas fa-print mr-1"></i> Imprimir orçamento da OS
                     </a>
                     <form method="post" action="{% url 'ordens:notificar_cliente_ordem' ordem.id 'orcamento' %}" class="mb-0">
                         {% csrf_token %}
                         <input type="hidden" name="canal" value="whatsapp">
                         <input type="hidden" name="next_tab" value="orcamentos">
                         <button type="submit" class="btn btn-sm btn-outline-success" {% if not orcamento_pode_enviar %}disabled{% endif %}>
-                            <i class="fab fa-whatsapp mr-1"></i> Enviar Orcamento WhatsApp
+                            <i class="fab fa-whatsapp mr-1"></i> Enviar ao cliente no WhatsApp
                         </button>
                     </form>
                     <form method="post" action="{% url 'ordens:notificar_cliente_ordem' ordem.id 'orcamento' %}" class="mb-0">
@@ -55,7 +59,7 @@
                         <input type="hidden" name="canal" value="email">
                         <input type="hidden" name="next_tab" value="orcamentos">
                         <button type="submit" class="btn btn-sm btn-outline-primary" {% if not orcamento_pode_enviar or not ordem.cliente.email %}disabled{% endif %}>
-                            <i class="fas fa-envelope mr-1"></i> Enviar por Email
+                            <i class="fas fa-envelope mr-1"></i> Enviar ao cliente por e-mail
                         </button>
                     </form>
                 </div>
@@ -66,37 +70,36 @@
             {% csrf_token %}
             <input type="hidden" name="orcamento_id" value="{{ orcamento.id }}">
 
-            <div class="d-flex justify-content-end mb-3 mt-2">
+            <div class="os-tab-toolbar mb-2 mt-1">
                 {% if not ordem.fechada %}
                 <button type="submit" formaction="{% url 'orcamentos:aceitar_orcamento' orcamento.id %}"
-                        class="btn btn-success btn-sm mr-2" onclick="return validarSelecao('aprovar');">
+                        class="btn btn-success btn-sm" onclick="return validarSelecao('aprovar');" {% if not pode_aprovar_item_orcamento %}disabled{% endif %}>
                     <i class="fas fa-check"></i> Aprovar Selecionados
                 </button>
 
                 <button type="submit" formaction="{% url 'orcamentos:recusar_orcamento' orcamento.id %}"
-                        class="btn btn-danger btn-sm mr-2" onclick="return validarSelecao('recusar');">
+                        class="btn btn-danger btn-sm" onclick="return validarSelecao('recusar');" {% if not pode_recusar_item_orcamento %}disabled{% endif %}>
                     <i class="fas fa-times"></i> Recusar Selecionados
                 </button>
 
                 <button type="submit" formaction="{% url 'orcamentos:migrar_para_servicos' orcamento.id %}"
-                        class="btn btn-success btn-sm" onclick="return validarSelecao('migrar');">
+                        class="btn btn-success btn-sm" onclick="return validarSelecao('migrar');" {% if not pode_migrar_item_orcamento %}disabled{% endif %}>
                     <i class="fas fa-arrow-down"></i> Migrar Selecionados
                 </button>
                 <button type="submit" formaction="{% url 'orcamentos:excluir_orcamento' orcamento.id %}"
-                        class="btn btn-outline-danger btn-sm ml-2"
+                        class="btn btn-outline-danger btn-sm"
+                        {% if not pode_editar_orcamento %}disabled{% endif %}
                         onclick="return window.AppMessages.confirmSync('Excluir este orçamento e todos os itens?');">
                     <i class="fas fa-trash"></i> Excluir Orçamento
                 </button>
                 {% else %}
-                <span class="text-muted"><i class="fas fa-lock mr-1"></i> Ações bloqueadas com OS fechada</span>
+                <span class="text-muted"><i class="fas fa-lock mr-1"></i>Ações bloqueadas com OS fechada</span>
                 {% endif %}
             </div>
 
             <div class="card-modern-body">
-                <p><strong>Descrição:</strong> {{ orcamento.descricao|default:"-" }}</p>
-                <p><strong>Total:</strong> R$ {{ orcamento.valor_total|default:0|floatformat:2 }}</p>
-
-                <table class="table table-sm table-bordered">
+                <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0">
                     <thead>
                         <tr>
                             <th><input type="checkbox" id="checkAll"></th>
@@ -130,7 +133,7 @@
                             <td>{{ item.origem }}</td>
                             <td>{{ item.tecnico_responsavel.username|default:"-" }}</td>
                             <td class="text-center">
-                                {% if not ordem.fechada %}
+                                {% if not ordem.fechada and pode_editar_orcamento %}
                                 <button type="button" class="btn btn-sm btn-info" onclick="editarItem({{ item.id }})">
                                     <i class="fas fa-edit"></i>
                                 </button>
@@ -144,6 +147,8 @@
                                     <i class="fas fa-trash"></i>
                                 </button>
                                 {% endif %}
+                                {% elif not ordem.fechada %}
+                                    <span class="badge badge-secondary">Edição controlada</span>
                                 {% else %}
                                 <span class="badge badge-secondary">Bloqueado</span>
                                 {% endif %}
@@ -156,6 +161,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
             </div>
         </form>
     </div>
@@ -184,7 +190,7 @@ function mostrarMensagemPagina(mensagem, tipo = 'warning') {
 function validarSelecao(acao) {
     const selecionados = document.querySelectorAll('input[name="itens_selecionados"]:checked');
     if (selecionados.length === 0) {
-        mostrarMensagemPagina(`Selecione ao menos um item antes de ${acao === 'migrar' ? 'migrar' : acao + ' o orçamento'}.`, 'warning');
+        mostrarMensagemPagina(`Selecione ao menos um item antes de ${acao === 'migrar' ? 'migrar' : acao + ' o orcamento'}.`, 'warning');
         return false;
     }
     return window.AppMessages.confirmSync(`Tem certeza que deseja ${acao} os itens selecionados?`);
@@ -204,7 +210,7 @@ if (checkAll) {
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalAdicionarItem2Label">
-                    <i class="fas fa-plus-circle mr-2"></i>Adicionar Item ao Orçamento
+                    <i class="fas fa-plus-circle mr-2"></i>Adicionar item ao orcamento
                 </h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
                     <span aria-hidden="true">&times;</span>
@@ -214,7 +220,7 @@ if (checkAll) {
             <form method="post" action="{% url 'orcamentos:adicionar_item' orcamento.id %}">
                 {% csrf_token %}
                 <div class="modal-body">
-                    <div class="row mb-3">
+                    <div class="row mb-2">
                         <div class="col-md-10">
                             <input type="text" id="produto_busca" class="form-control"
                                    placeholder="Buscar produto por nome ou EAN">
@@ -226,27 +232,27 @@ if (checkAll) {
                         </div>
                     </div>
 
-                    <div id="resultado_busca_produto" class="mt-2" style="max-height:200px; overflow-y:auto;"></div>
+                    <div id="resultado_busca_produto" class="mt-2 mb-2" style="max-height:200px; overflow-y:auto;"></div>
 
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="id_ean2">EAN / Código</label>
+                        <div class="col-md-6 mb-2">
+                            <label for="id_ean2">EAN / Codigo</label>
                             <input type="text" name="ean" id="id_ean2" class="form-control"
                                    value="{{ item_form.ean.value|default_if_none:'' }}">
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-6 mb-2">
                             <label for="id_nome2">Nome</label>
                             <input type="text" name="nome" id="id_nome2" class="form-control"
                                    value="{{ item_form.nome.value|default_if_none:'' }}">
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="id_descricao2">Descrição</label>
+                    <div class="mb-2">
+                        <label for="id_descricao2">Descricao</label>
                         <textarea name="descricao" id="id_descricao2" rows="3" class="form-control">{{ item_form.descricao.value|default_if_none:"" }}</textarea>
                     </div>
 
-                    <div class="alert alert-light border mb-3 py-2">
+                    <div class="alert alert-light border mb-2 py-2">
                         <strong>Desconto do item:</strong> informe por valor <strong>ou</strong> por percentual.
                         {% if not pode_aplicar_desconto_orcamento %}
                         <span class="text-muted">Permissao necessaria.</span>
@@ -254,8 +260,8 @@ if (checkAll) {
                     </div>
 
                     <div class="row">
-                        <div class="col-md-3 mb-3">
-                            <label for="id_valor_unitario2">Valor unitário</label>
+                        <div class="col-md-3 mb-2">
+                            <label for="id_valor_unitario2">Valor unitario</label>
                             <div class="input-group">
                                 <div class="input-group-prepend"><span class="input-group-text">R$</span></div>
                                 <input type="number" step="0.01" name="valor_unitario" id="id_valor_unitario2"
@@ -263,32 +269,32 @@ if (checkAll) {
                                        value="{{ item_form.valor_unitario.value|default_if_none:'' }}">
                             </div>
                         </div>
-                        <div class="col-md-3 mb-3">
+                        <div class="col-md-3 mb-2">
                             <label for="id_quantidade2">Quantidade</label>
                             <input type="number" name="quantidade" id="id_quantidade2" class="form-control"
                                    value="{{ item_form.quantidade.value|default_if_none:'' }}">
                         </div>
-                        <div class="col-md-3 mb-3">
+                        <div class="col-md-3 mb-2">
                             <label for="id_desconto_valor2">Desconto (R$)</label>
                             <input type="number" step="0.01" min="0" name="desconto_valor" id="id_desconto_valor2" class="form-control" value="0.00" {% if not pode_aplicar_desconto_orcamento %}disabled{% endif %}>
                         </div>
-                        <div class="col-md-3 mb-3">
+                        <div class="col-md-3 mb-2">
                             <label for="id_desconto_percentual2">Desconto (%)</label>
                             <input type="number" step="0.01" min="0" max="100" name="desconto_percentual" id="id_desconto_percentual2" class="form-control" value="0.00" {% if not pode_aplicar_desconto_orcamento %}disabled{% endif %}>
-                            <small class="form-text text-muted">Use valor ou percentual, não os dois.</small>
+                            <small class="form-text text-muted">Use valor ou percentual, nao os dois.</small>
                         </div>
                     </div>
 
                     <div class="row">
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-4 mb-2">
                             <label for="id_tipo_item2">Tipo do Item</label>
                             <select name="tipo_item" id="id_tipo_item2" class="form-control" required>
                                 <option value="" selected>Selecione</option>
-                                <option value="servico">Serviço</option>
-                                <option value="peca">Peça</option>
+                                <option value="servico">Servico</option>
+                                <option value="peca">Peca</option>
                             </select>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-4 mb-2">
                             <label>Origem</label>
                             <div>
                                 <span id="id_origem_badge" class="badge badge-secondary">Manual</span>
@@ -296,8 +302,8 @@ if (checkAll) {
                             </div>
                             <input type="hidden" name="origem" id="id_origem2" value="manual">
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label for="id_tecnico_responsavel2">Responsável da Comissão</label>
+                        <div class="col-md-4 mb-2">
+                            <label for="id_tecnico_responsavel2">Responsavel da Comissao</label>
                             <select name="tecnico_responsavel" id="id_tecnico_responsavel2" class="form-control">
                                 <option value="">-- Selecione --</option>
                                 {% for user in tecnicos %}
@@ -309,7 +315,7 @@ if (checkAll) {
                 </div>
 
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-success"><i class="fas fa-save mr-1"></i> Salvar Item
+                    <button type="submit" class="btn btn-success" {% if not pode_editar_orcamento %}disabled{% endif %}><i class="fas fa-save mr-1"></i> Salvar Item
                     </button>
                     <button type="button" class="btn btn-secondary" data-dismiss="modal"><i
                             class="fas fa-times mr-1"></i> Cancelar
@@ -498,3 +504,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+
+

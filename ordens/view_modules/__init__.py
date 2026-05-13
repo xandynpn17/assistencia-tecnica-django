@@ -1,4 +1,5 @@
 from .busca import OrdemServicoListView, buscar_ordens
+from .expedicao import expedir_parceiro, guia_expedicao_pdf, guias_expedicao, recepcionar_parceiro
 from .fluxo import (
     DetalhesOrdemView,
     OrdemServicoCreateView,
@@ -12,7 +13,6 @@ from .fluxo import (
     atualizar_tecnico,
     dashboard_pedidos_compra,
     lista_ordens,
-    migrar_orcamento,
     selecionar_cliente_os,
     toggle_fechamento_os,
     toggle_fechamento_pedido_compra,
@@ -48,14 +48,17 @@ __all__ = [
     "confirmar_manual_resumo",
     "confirmar_ordem_token_publico",
     "dashboard_pedidos_compra",
+    "expedir_parceiro",
+    "guia_expedicao_pdf",
+    "guias_expedicao",
     "imprimir_confirmacao_os",
     "imprimir_ordem_servico",
     "imprimir_ordem_servico_impressao",
     "imprimir_relatorio_tecnico",
     "lista_ordens",
-    "migrar_orcamento",
     "notificar_cliente_ordem",
     "portal_cliente",
+    "recepcionar_parceiro",
     "reenviar_confirmacao_whatsapp",
     "selecionar_cliente_os",
     "toggle_fechamento_os",

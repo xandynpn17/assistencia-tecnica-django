@@ -20,13 +20,13 @@ from reportlab.platypus import Paragraph as reportlab_paragraph
 from caixa.models import Caixa, Pagamento
 from caixa.models import AuditoriaGarantia
 from clientes.models import Cliente
-from configuracoes.models import ConfiguracaoSistema, Empresa
+from configuracoes.models import ConfiguracaoSistema, Empresa, ParceiroExpedicao
 from core.pdf_theme import get_document_theme as real_get_document_theme
 from configuracoes.models import FornecedorGarantia, MarcaGarantia, ModeloMensagem
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.forms import LinhaTrabalhoForm
-from ordens.models import LogOS, OrdemArquivo, OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, PedidoCompra, ServicoPeca
+from ordens.models import GuiaExpedicaoItem, GuiaExpedicaoParceiro, LogOS, OrdemArquivo, OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, PedidoCompra, ServicoPeca
 from ordens.services.fluxo_os_policy import FluxoOSPolicyService
 from ordens.services.resumo_operacional import ResumoOperacionalService
 from ordens.view_modules.impressao import _quebrar_tokens_longos
@@ -366,7 +366,7 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
         }
         response_revisao = self.client.post(url, payload)
         self.assertEqual(response_revisao.status_code, 200)
-        self.assertContains(response_revisao, "Revisao antes de criar a OS")
+        self.assertContains(response_revisao, "Revisão antes de criar a OS")
         self.assertFalse(OrdemServico.objects.exists())
 
         payload["confirmar_criacao"] = "1"
@@ -1253,6 +1253,18 @@ class LinhaTrabalhoAjaxAtualizaStatusTests(TestCase):
             ).exists()
         )
 
+    def test_adicionar_linha_ajax_mantem_status_orcamentado_distinto(self):
+        url = reverse("ordens:adicionar_linha", args=[self.ordem.id])
+        response = self.client.post(
+            url,
+            {"status": "orcamentado", "descricao": "Orcamento enviado ao cliente"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.status, "orcamentado")
+        self.assertTrue(LinhaTrabalho.objects.filter(ordem=self.ordem, status="orcamentado").exists())
+
     def test_status_em_bancada_atualiza_os_com_mesmo_status(self):
         url = reverse("ordens:adicionar_linha", args=[self.ordem.id])
         response = self.client.post(url, {"status": "em_andamento", "descricao": "Em bancada"})
@@ -1284,6 +1296,88 @@ class LinhaTrabalhoAjaxAtualizaStatusTests(TestCase):
         self.ordem.refresh_from_db()
         self.assertEqual(self.ordem.status, "diagnosticar")
         self.assertFalse(LinhaTrabalho.objects.filter(ordem=self.ordem, status="concluida").exists())
+
+
+class GuiasExpedicaoParceiroTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_expedicao",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Expedicao",
+            documento="39053344705",
+            telefone="11955554444",
+            estado="SP",
+        )
+        self.parceiro = ParceiroExpedicao.objects.create(nome="Parceiro Teste", ativo=True)
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca XP",
+            modelo_equipamento="Modelo XP",
+            defeito="Falha intermitente",
+            tipo_reparo="Fora de Garantia",
+            status="pronto_envio_parceiro",
+        )
+        self.ordem_2 = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="tablet",
+            marca_equipamento="Marca XP",
+            modelo_equipamento="Modelo Z",
+            defeito="Sem imagem",
+            tipo_reparo="Fora de Garantia",
+            status="pronto_envio_parceiro",
+        )
+
+    def test_expedir_parceiro_cria_guia_com_varias_ordens(self):
+        response = self.client.post(
+            reverse("ordens:expedir_parceiro"),
+            {
+                "ordens_servico": [str(self.ordem.id), str(self.ordem_2.id)],
+                "parceiro_config": str(self.parceiro.id),
+                "referencia_externa": "EXT-123",
+                "observacoes_saida": "Segue para analise externa",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.ordem.refresh_from_db()
+        self.ordem_2.refresh_from_db()
+        self.assertEqual(self.ordem.status, "enviado_parceiro")
+        self.assertEqual(self.ordem_2.status, "enviado_parceiro")
+        guia = GuiaExpedicaoParceiro.objects.get()
+        self.assertEqual(guia.total_ordens, 2)
+        self.assertEqual(guia.referencia_externa, "EXT-123")
+        self.assertEqual(GuiaExpedicaoItem.objects.filter(guia=guia, status="expedida").count(), 2)
+
+    def test_recepcionar_parceiro_fecha_item_e_define_status_retorno(self):
+        guia = GuiaExpedicaoParceiro.objects.create(
+            parceiro_nome="Parceiro Teste",
+            referencia_externa="EXT-123",
+            expedida_por=self.user,
+        )
+        item = GuiaExpedicaoItem.objects.create(guia=guia, ordem_servico=self.ordem)
+        self.ordem.aplicar_status_sem_historico("enviado_parceiro")
+
+        response = self.client.post(
+            reverse("ordens:recepcionar_parceiro"),
+            {
+                "itens_expedicao": [str(item.id)],
+                "status_retorno": "em_andamento",
+                "observacoes_retorno": "Retornou para bancada",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        item.refresh_from_db()
+        self.ordem.refresh_from_db()
+        self.assertEqual(item.status, "recepcionada")
+        self.assertEqual(self.ordem.status, "em_andamento")
+        self.assertIsNotNone(item.recepcionada_em)
 
 
 class PortalClienteTests(TestCase):
@@ -1749,6 +1843,10 @@ class FluxoCriticoE2ETests(TestCase):
             username="atendente_e2e",
             password="senha-forte-123",
             tipo_usuario="atendente",
+            perm_orcamento_editar=True,
+            perm_orcamento_aprovar_item=True,
+            perm_orcamento_recusar_item=True,
+            perm_orcamento_migrar_item=True,
         )
         self.client.force_login(self.user)
         self.cliente = Cliente.objects.create(
@@ -2006,6 +2104,7 @@ class OSConfirmadaBloqueioEdicaoTests(TestCase):
             username="atendente_confirmada",
             password="senha-forte-123",
             tipo_usuario="atendente",
+            perm_os_excluir_servico_peca=True,
         )
         self.client.force_login(self.user)
         self.cliente = Cliente.objects.create(
@@ -2054,6 +2153,100 @@ class OSConfirmadaBloqueioEdicaoTests(TestCase):
                 "form_type": "excluir_servico_peca",
                 "item_id": str(item.id),
             },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ServicoPeca.objects.filter(id=item.id).exists())
+
+
+class PermissoesGranularesOSTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="atendente_os_perms",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+            perm_os_editar_observacoes_internas=False,
+            perm_os_editar_local_armazenamento=False,
+            perm_os_excluir_servico_peca=False,
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Permissao OS",
+            documento="39053344705",
+            telefone="11999995555",
+            estado="SP",
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca P",
+            modelo_equipamento="Modelo P",
+            defeito="Teste granular",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+
+    def test_atualizar_local_exige_permissao_granular(self):
+        response = self.client.post(
+            reverse("ordens:atualizar_local", args=[self.ordem.id]),
+            data='{"local":"Prateleira A"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.local_armazenamento, "")
+
+    def test_atualizar_local_funciona_com_permissao(self):
+        self.user.perm_os_editar_local_armazenamento = True
+        self.user.save(update_fields=["perm_os_editar_local_armazenamento"])
+        response = self.client.post(
+            reverse("ordens:atualizar_local", args=[self.ordem.id]),
+            data='{"local":"Prateleira A"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.local_armazenamento, "Prateleira A")
+
+    def test_atualizar_observacoes_exige_permissao_granular(self):
+        response = self.client.post(
+            reverse("ordens:atualizar_observacoes", args=[self.ordem.id]),
+            data='{"observacoes":"Nao expor ao cliente"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.notas_internas, "")
+
+    def test_excluir_servico_peca_exige_permissao_granular(self):
+        item = ServicoPeca.objects.create(
+            ordem=self.ordem,
+            tipo="servico",
+            nome="Teste exclusao",
+            quantidade=1,
+            valor_unitario=Decimal("50.00"),
+        )
+        response = self.client.post(
+            reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+            {"form_type": "excluir_servico_peca", "item_id": str(item.id)},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ServicoPeca.objects.filter(id=item.id).exists())
+
+    def test_excluir_servico_peca_funciona_com_permissao(self):
+        self.user.perm_os_excluir_servico_peca = True
+        self.user.save(update_fields=["perm_os_excluir_servico_peca"])
+        item = ServicoPeca.objects.create(
+            ordem=self.ordem,
+            tipo="servico",
+            nome="Teste exclusao",
+            quantidade=1,
+            valor_unitario=Decimal("50.00"),
+        )
+        response = self.client.post(
+            reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+            {"form_type": "excluir_servico_peca", "item_id": str(item.id)},
         )
         self.assertEqual(response.status_code, 302)
         self.assertFalse(ServicoPeca.objects.filter(id=item.id).exists())
@@ -2344,9 +2537,9 @@ class DetalhesOrdemCabecalhoTests(TestCase):
         response = self.client.get(reverse("ordens:detalhes_ordem", args=[self.ordem.id]) + "?tab=orcamentos")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Painel do Orcamento")
-        self.assertContains(response, "Enviar Orcamento WhatsApp")
-        self.assertContains(response, "Imprimir Orcamento")
+        self.assertContains(response, "Painel operacional")
+        self.assertContains(response, "Enviar ao cliente no WhatsApp")
+        self.assertContains(response, "Imprimir")
 
 
 class OrdemArquivoUploadTests(TestCase):
