@@ -1,0 +1,98 @@
+{% extends "core/base.html" %}
+
+{% block title %}Auditoria de Estoque{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Auditoria de Estoque</h1>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="form-row">
+      <div class="col-md-3 mb-2">
+        <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Buscar por evento/produto/guia">
+      </div>
+      <div class="col-md-2 mb-2">
+        <select name="evento" class="form-control">
+          <option value="">Todos os eventos</option>
+          {% for item in tipos_evento %}
+            <option value="{{ item }}" {% if evento_filtro == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 mb-2">
+        <input type="text" name="usuario" value="{{ usuario_filtro }}" class="form-control" placeholder="Usuario">
+      </div>
+      <div class="col-md-2 mb-2">
+        <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control">
+      </div>
+      <div class="col-md-2 mb-2">
+        <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
+      </div>
+      <div class="col-md-1 mb-2 d-flex">
+        <button class="btn btn-primary btn-block" type="submit">Filtrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Data/Hora</th>
+          <th>Evento</th>
+          <th>Usuario</th>
+          <th>Produto</th>
+          <th>Ponto</th>
+          <th>Reserva</th>
+          <th>Guia</th>
+          <th>Inventario</th>
+          <th>Qtd</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in eventos %}
+        <tr>
+          <td>{{ e.criado_em|date:"d/m/Y H:i" }}</td>
+          <td><code>{{ e.evento }}</code></td>
+          <td>{{ e.usuario.username|default:"-" }}</td>
+          <td>{{ e.produto.nome|default:"-" }}</td>
+          <td>{{ e.ponto_operacional.codigo|default:"-" }}</td>
+          <td>{{ e.reserva.codigo_reserva|default:"-" }}</td>
+          <td>{{ e.venda.guia_pagamento|default:"-" }}</td>
+          <td>{% if e.inventario_id %}#{{ e.inventario_id }}{% else %}-{% endif %}</td>
+          <td>{% if e.quantidade is not None %}{{ e.quantidade }}{% else %}-{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" class="text-center text-muted py-4">Sem eventos para os filtros aplicados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if eventos_page.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm mb-0">
+    {% if eventos_page.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?q={{ q }}&evento={{ evento_filtro }}&usuario={{ usuario_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&page={{ eventos_page.previous_page_number }}">Anterior</a>
+      </li>
+    {% endif %}
+    <li class="page-item disabled">
+      <span class="page-link">Pagina {{ eventos_page.number }} de {{ eventos_page.paginator.num_pages }}</span>
+    </li>
+    {% if eventos_page.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?q={{ q }}&evento={{ evento_filtro }}&usuario={{ usuario_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&page={{ eventos_page.next_page_number }}">Proxima</a>
+      </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

@@ -47,7 +47,7 @@ def aplicar_custos_base_produto(produto):
 
 
 def aplicar_politica_tipo_item_produto(produto):
-    if produto.tipo_item == "servico":
+    if produto.eh_servico:
         produto.is_servico = True
         produto.quantidade = 0
         produto.estoque_minimo = 0
@@ -114,9 +114,7 @@ def aplicar_precificacao_produto(produto):
 def atualizar_produtos_relacionados_rateio(produto):
     from .models import Produto
 
-    produtos_rateio = Produto.objects.filter(
-        ativo=True,
-        is_servico=False,
+    produtos_rateio = Produto.objects.ativos().nao_servicos().filter(
         incluir_rateio_custo_fixo=True,
     ).exclude(pk=produto.pk)
     for produto_rateio in produtos_rateio:

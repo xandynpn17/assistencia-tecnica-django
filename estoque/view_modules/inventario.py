@@ -1,12 +1,12 @@
-from django.db import transaction
+﻿from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 
-from configuracoes.permissions import STOCK_MANAGE_ROLES, STOCK_VIEW_ROLES, role_required
+from configuracoes.permissions import STOCK_MANAGE_ROLES, STOCK_VIEW_ROLES, require_sensitive_permission, role_required
 
-from ..models import InventarioEstoque, ItemInventarioEstoque, MovimentacaoEstoque, PontoOperacional, Produto, SaldoEstoquePonto
-from .helpers import ajustar_saldo, logger
+from ..models import InventarioEstoque, ItemInventarioEstoque, PontoOperacional, Produto, SaldoEstoquePonto
+from ..services import finalizar_inventario_estoque
+from .helpers import _registrar_evento_estoque
 
 
 @role_required(STOCK_MANAGE_ROLES)
@@ -28,7 +28,7 @@ def api_inventario_adicionar_item(request, inventario_id):
     inventario = get_object_or_404(InventarioEstoque, id=inventario_id)
     if inventario.status != "aberto":
         return JsonResponse({"ok": False, "erro": "Inventario ja finalizado."}, status=400)
-    produto = get_object_or_404(Produto, id=request.POST.get("produto_id"), ativo=True, is_servico=False)
+    produto = get_object_or_404(Produto.objects.ativos().nao_servicos(), id=request.POST.get("produto_id"))
     try:
         quantidade_contada = int(request.POST.get("quantidade_contada") or "0")
     except ValueError:
@@ -50,40 +50,29 @@ def api_inventario_adicionar_item(request, inventario_id):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_inventario_finalizar(request, inventario_id):
+    require_sensitive_permission(request.user, "perm_estoque_inventario_finalizar")
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     inventario = get_object_or_404(InventarioEstoque, id=inventario_id)
     if inventario.status != "aberto":
         return JsonResponse({"ok": False, "erro": "Inventario ja finalizado."}, status=400)
-    itens_ajustados = 0
-    unidades_ajustadas = 0
     try:
-        with transaction.atomic():
-            inventario = InventarioEstoque.objects.select_for_update().get(id=inventario.id)
-            if inventario.status != "aberto":
-                return JsonResponse({"ok": False, "erro": "Inventario ja finalizado."}, status=400)
-            itens = list(ItemInventarioEstoque.objects.select_for_update().filter(inventario=inventario).select_related("produto"))
-            if not itens:
-                return JsonResponse({"ok": False, "erro": "Inventario sem itens para finalizar."}, status=400)
-            for item in itens:
-                if item.ajuste == 0:
-                    continue
-                ajustar_saldo(item.produto, inventario.ponto_operacional, item.ajuste)
-                MovimentacaoEstoque.objects.create(produto=item.produto, tipo="inventario", quantidade=item.ajuste, origem=inventario.ponto_operacional if item.ajuste < 0 else None, destino=inventario.ponto_operacional if item.ajuste > 0 else None, observacao=(f"Ajuste inventario #{inventario.id} (sistema={item.quantidade_sistema}, contado={item.quantidade_contada}). {(item.observacao or '').strip()}").strip(), usuario=request.user)
-                itens_ajustados += 1
-                unidades_ajustadas += abs(int(item.ajuste))
-            inventario.status = "fechado"
-            inventario.fechado_em = timezone.now()
-            inventario.save(update_fields=["status", "fechado_em"])
+        resumo = finalizar_inventario_estoque(inventario, usuario=request.user)
     except ValueError as exc:
         return JsonResponse({"ok": False, "erro": str(exc)}, status=400)
-    logger.info("inventario_finalizado", extra={"inventario_id": inventario.id, "usuario_id": request.user.id})
-    return JsonResponse({"ok": True, "resumo": {"itens_ajustados": itens_ajustados, "unidades_ajustadas": unidades_ajustadas}})
+    _registrar_evento_estoque(
+        "inventario_finalizado",
+        usuario=request.user,
+        inventario_id=inventario.id,
+        itens_ajustados=resumo["itens_ajustados"],
+        unidades_ajustadas=resumo["unidades_ajustadas"],
+    )
+    return JsonResponse({"ok": True, "resumo": {"itens_ajustados": resumo["itens_ajustados"], "unidades_ajustadas": resumo["unidades_ajustadas"]}})
 
 
 @role_required(STOCK_VIEW_ROLES)
 def api_alertas_estoque(request):
-    produtos = Produto.objects.filter(ativo=True, is_servico=False).order_by("nome")
+    produtos = Produto.objects.ativos().nao_servicos().order_by("nome")
     abaixo = []
     for p in produtos:
         if int(p.quantidade) <= int(p.estoque_minimo or 0):
@@ -97,3 +86,4 @@ __all__ = [
     "api_inventario_finalizar",
     "api_alertas_estoque",
 ]
+

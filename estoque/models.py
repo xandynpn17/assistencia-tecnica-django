@@ -1,5 +1,7 @@
-from datetime import timedelta
+﻿from datetime import timedelta
 from decimal import Decimal
+import random
+import string
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
@@ -75,16 +77,30 @@ class ServicoReferencia(models.Model):
         return self.nome
 
 
+class ProdutoQuerySet(models.QuerySet):
+    def ativos(self):
+        return self.filter(ativo=True)
+
+    def servicos(self):
+        return self.filter(tipo_item="servico")
+
+    def nao_servicos(self):
+        return self.exclude(tipo_item="servico")
+
+    def estoque_fisico(self):
+        return self.nao_servicos()
+
+
 class Produto(models.Model):
     MODO_PRECO_CHOICES = [
         ("simples", "Simples"),
-        ("avancado", "Avançado"),
+        ("avancado", "Avancado"),
     ]
 
     TIPO_ITEM_CHOICES = [
         ("produto", "Produto"),
-        ("peca", "Peça"),
-        ("consumivel", "Consumível"),
+        ("peca", "Peca"),
+        ("consumivel", "Consumivel"),
         ("servico", "Servico"),
     ]
 
@@ -169,7 +185,7 @@ class Produto(models.Model):
     incluir_rateio_custo_fixo = models.BooleanField(default=False)
     ativo = models.BooleanField(default=True)
     data_entrada = models.DateField(default=timezone.now, blank=True)
-    is_servico = models.BooleanField(default=False, verbose_name="É um serviço")
+    is_servico = models.BooleanField(default=False, verbose_name="E um servico")
     ponto_operacional = models.ForeignKey(
         "estoque.PontoOperacional",
         on_delete=models.SET_NULL,
@@ -182,6 +198,7 @@ class Produto(models.Model):
         blank=True,
         related_name="produtos",
     )
+    objects = ProdutoQuerySet.as_manager()
 
     def _gerar_codigo_ean(self):
         ultimo = Produto.objects.order_by("-id").first()
@@ -225,7 +242,7 @@ class Produto(models.Model):
             regime = (empresa.regime_tributario or "simples")
             modo = (empresa.modo_tributario or "basico")
             if regime == "simples" and modo == "basico":
-                if self.tipo_item == "servico":
+                if self.eh_servico:
                     return Decimal(str(empresa.aliquota_servico or 0))
                 return Decimal(str(empresa.aliquota_comercio or 0))
             return Decimal(str((empresa.icms or 0) + (empresa.ipi or 0) + (empresa.pis or 0) + (empresa.cofins or 0)))
@@ -267,7 +284,7 @@ class Produto(models.Model):
         criterio = criterio or ConfiguracaoRateioCustoFixo.get_solo().criterio_rateio
         incluir = self.incluir_rateio_custo_fixo if incluir_override is None else bool(incluir_override)
         previsao_atual = int(previsao_override if previsao_override is not None else (self.previsao_venda_mensal or 0))
-        if self.tipo_item == "servico" or not incluir or previsao_atual <= 0:
+        if self.eh_servico or not incluir or previsao_atual <= 0:
             return Decimal("0.00")
 
         previsao_decimal = Decimal(str(previsao_atual))
@@ -312,9 +329,7 @@ class Produto(models.Model):
         if total_fixos <= 0:
             return Decimal("0.00")
 
-        produtos_rateio = Produto.objects.filter(
-            ativo=True,
-            is_servico=False,
+        produtos_rateio = Produto.objects.ativos().nao_servicos().filter(
             incluir_rateio_custo_fixo=True,
             previsao_venda_mensal__gt=0,
         )
@@ -344,6 +359,10 @@ class Produto(models.Model):
 
     def __str__(self):
         return self.nome
+
+    @property
+    def eh_servico(self):
+        return self.tipo_item == "servico" or bool(self.is_servico)
 
     @property
     def custo_total(self):
@@ -421,9 +440,7 @@ class ConfiguracaoRateioCustoFixo(models.Model):
     def save(self, *args, **kwargs):
         self.pk = 1
         result = super().save(*args, **kwargs)
-        produtos_rateio = Produto.objects.filter(
-            ativo=True,
-            is_servico=False,
+        produtos_rateio = Produto.objects.ativos().nao_servicos().filter(
             incluir_rateio_custo_fixo=True,
         )
         for produto in produtos_rateio:
@@ -525,9 +542,7 @@ class RateioCustoFixoCompetencia(models.Model):
             or Decimal("0.00")
         )
         produtos = list(
-            Produto.objects.filter(
-                ativo=True,
-                is_servico=False,
+            Produto.objects.ativos().nao_servicos().filter(
                 incluir_rateio_custo_fixo=True,
                 previsao_venda_mensal__gt=0,
             ).order_by("nome")
@@ -633,13 +648,17 @@ class TabelaPreco(models.Model):
     def __str__(self):
         return self.nome
 
+    @property
+    def eh_servico(self):
+        return self.tipo_item == "servico"
+
 
 class ProdutoHistorico(models.Model):
     ACAO_CHOICES = [
-        ("CRIACAO", "Criação"),
-        ("EDICAO", "Edição"),
-        ("DUPLICACAO", "Duplicação"),
-        ("IMPORTACAO", "Importação"),
+        ("CRIACAO", "Criacao"),
+        ("EDICAO", "Edicao"),
+        ("DUPLICACAO", "Duplicacao"),
+        ("IMPORTACAO", "Importacao"),
     ]
 
     produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="historicos")
@@ -655,6 +674,34 @@ class ProdutoHistorico(models.Model):
 
     def __str__(self):
         return f"{self.produto.nome} - {self.get_acao_display()} ({self.criado_em:%d/%m/%Y %H:%M})"
+
+
+class EstoqueEvento(models.Model):
+    evento = models.CharField(max_length=60)
+    usuario = models.ForeignKey("configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True)
+    produto = models.ForeignKey("estoque.Produto", on_delete=models.SET_NULL, null=True, blank=True)
+    ponto_operacional = models.ForeignKey("estoque.PontoOperacional", on_delete=models.SET_NULL, null=True, blank=True)
+    reserva = models.ForeignKey("estoque.ReservaEstoque", on_delete=models.SET_NULL, null=True, blank=True)
+    venda = models.ForeignKey("estoque.VendaRapidaEstoque", on_delete=models.SET_NULL, null=True, blank=True)
+    inventario = models.ForeignKey("estoque.InventarioEstoque", on_delete=models.SET_NULL, null=True, blank=True)
+    quantidade = models.IntegerField(null=True, blank=True)
+    dados = models.JSONField(default=dict, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        indexes = [
+            models.Index(fields=["evento", "-criado_em"], name="idx_evt_evento_criado"),
+            models.Index(fields=["usuario", "-criado_em"], name="idx_evt_usuario_criado"),
+            models.Index(fields=["produto", "-criado_em"], name="idx_evt_produto_criado"),
+            models.Index(fields=["ponto_operacional", "-criado_em"], name="idx_evt_ponto_criado"),
+            models.Index(fields=["reserva", "-criado_em"], name="idx_evt_reserva_criado"),
+            models.Index(fields=["venda", "-criado_em"], name="idx_evt_venda_criado"),
+            models.Index(fields=["inventario", "-criado_em"], name="idx_evt_inv_criado"),
+        ]
+
+    def __str__(self):
+        return f"{self.evento} ({self.criado_em:%d/%m/%Y %H:%M})"
 
 
 class ProdutoPrecoTabela(models.Model):
@@ -681,7 +728,7 @@ class ProdutoEquivalente(models.Model):
 
     def clean(self):
         if self.produto_id and self.equivalente_id and self.produto_id == self.equivalente_id:
-            raise ValidationError("Produto equivalente não pode ser o mesmo produto.")
+            raise ValidationError("Produto equivalente nao pode ser o mesmo produto.")
 
     def __str__(self):
         return f"{self.produto.nome} ~ {self.equivalente.nome}"
@@ -698,7 +745,7 @@ class ProdutoKitItem(models.Model):
 
     def clean(self):
         if self.produto_kit_id and self.componente_id and self.produto_kit_id == self.componente_id:
-            raise ValidationError("Componente do kit não pode ser o mesmo produto.")
+            raise ValidationError("Componente do kit nao pode ser o mesmo produto.")
 
     def __str__(self):
         return f"{self.produto_kit.nome} -> {self.componente.nome} ({self.quantidade})"
@@ -707,14 +754,14 @@ class ProdutoKitItem(models.Model):
 class MovimentacaoEstoque(models.Model):
     TIPO_CHOICES = [
         ("entrada", "Entrada de estoque"),
-        ("transferencia", "Transferência"),
+        ("transferencia", "Transferencia"),
         ("avaria", "Avaria"),
         ("ajuste", "Ajuste"),
         ("venda", "Venda"),
         ("reserva", "Reserva"),
         ("consumo_os", "Consumo em OS"),
-        ("devolucao_reserva", "Devolução de reserva"),
-        ("inventario", "Inventário"),
+        ("devolucao_reserva", "Devolucao de reserva"),
+        ("inventario", "Inventario"),
     ]
 
     produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="movimentacoes")
@@ -742,6 +789,12 @@ class MovimentacaoEstoque(models.Model):
 
     class Meta:
         ordering = ["-criado_em", "-id"]
+        indexes = [
+            models.Index(fields=["tipo", "-criado_em"], name="idx_mov_tipo_criado"),
+            models.Index(fields=["produto", "-criado_em"], name="idx_mov_prod_criado"),
+            models.Index(fields=["origem", "-criado_em"], name="idx_mov_origem_criado"),
+            models.Index(fields=["destino", "-criado_em"], name="idx_mov_destino_criado"),
+        ]
 
     def __str__(self):
         return f"{self.produto.nome} - {self.get_tipo_display()} ({self.quantidade})"
@@ -783,6 +836,12 @@ class VendaRapidaEstoque(models.Model):
 
     class Meta:
         ordering = ["-criado_em", "-id"]
+        indexes = [
+            models.Index(fields=["status", "-criado_em"], name="idx_vr_status_criado"),
+            models.Index(fields=["cesto_codigo", "status"], name="idx_vr_cesto_status"),
+            models.Index(fields=["guia_pagamento", "status"], name="idx_vr_guia_status"),
+            models.Index(fields=["produto", "-criado_em"], name="idx_vr_prod_criado"),
+        ]
 
     def __str__(self):
         return f"{self.produto.nome} - {self.quantidade} - {self.get_status_display()}"
@@ -833,9 +892,25 @@ class ReservaEstoque(models.Model):
 
     class Meta:
         ordering = ["-criado_em", "-id"]
+        indexes = [
+            models.Index(fields=["status", "valido_ate"], name="idx_res_status_validade"),
+            models.Index(fields=["produto", "status"], name="idx_res_prod_status"),
+            models.Index(fields=["ponto_operacional", "status"], name="idx_res_ponto_status"),
+            models.Index(fields=["ordem_servico", "status"], name="idx_res_ordem_status"),
+            models.Index(fields=["-criado_em"], name="idx_res_criado_desc"),
+        ]
 
     def __str__(self):
         return f"{self.codigo_reserva} - {self.produto.nome} ({self.status})"
+
+    def save(self, *args, **kwargs):
+        if not self.codigo_reserva:
+            while True:
+                codigo = "RES-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+                if not ReservaEstoque.objects.filter(codigo_reserva=codigo).exclude(pk=self.pk).exists():
+                    self.codigo_reserva = codigo
+                    break
+        super().save(*args, **kwargs)
 
 
 class InventarioEstoque(models.Model):
@@ -874,6 +949,7 @@ class ItemInventarioEstoque(models.Model):
 
     def __str__(self):
         return f"{self.produto.nome} ({self.ajuste:+d})"
+
 
 
 

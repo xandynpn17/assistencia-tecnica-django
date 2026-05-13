@@ -2,51 +2,268 @@
 
 {% block header %}<h1 class="m-0 text-dark">Nova Movimentacao de Estoque</h1>{% endblock %}
 
+{% block extra_css %}
+<style>
+  .mov-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(300px, .9fr);
+    gap: 16px;
+  }
+  .mov-card {
+    border: 1px solid #dce6ef;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+  }
+  .mov-card-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid #e7eef5;
+    background: linear-gradient(135deg, #f8fbff 0%, #eef5fb 100%);
+  }
+  .mov-card-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #183247;
+  }
+  .mov-card-subtitle {
+    margin-top: 6px;
+    color: #607286;
+    font-size: .92rem;
+  }
+  .mov-card-body {
+    padding: 22px;
+  }
+  .mov-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .mov-field-full {
+    grid-column: 1 / -1;
+  }
+  .mov-label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: #213547;
+  }
+  .mov-help {
+    margin-top: 6px;
+    color: #6b7c8f;
+    font-size: .85rem;
+  }
+  .mov-tips {
+    display: grid;
+    gap: 12px;
+  }
+  .mov-tip {
+    border: 1px solid #dce6ef;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    padding: 14px;
+  }
+  .mov-tip-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    color: #183247;
+    margin-bottom: 8px;
+  }
+  .mov-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .mov-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: #edf4fb;
+    color: #23415c;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .mov-alert {
+    border-radius: 12px;
+    border: 1px solid #f1d89a;
+    background: #fff9e9;
+    color: #6d5614;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+  }
+  .mov-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .mov-actions-meta {
+    color: #6b7c8f;
+    font-size: .88rem;
+  }
+  @media (max-width: 991.98px) {
+    .mov-shell,
+    .mov-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-  <div class="card-body">
-    <form method="post">
-      {% csrf_token %}
-      <div class="form-group">
-        <label>Buscar artigo (EAN, SKU ou descrição)</label>
-        <input type="text" id="filtroProduto" class="form-control" placeholder="Digite para filtrar o artigo">
+<div class="mov-shell">
+  <div class="mov-card">
+    <div class="mov-card-header">
+      <h2 class="mov-card-title">Registrar movimentacao</h2>
+      <div class="mov-card-subtitle">
+        Use esta tela para entradas, transferencias e ajustes operacionais com rastreabilidade mais clara.
       </div>
-      <div class="form-group">
-        <label for="{{ form.produto.id_for_label }}">Artigo</label>
-        {{ form.produto }}
+    </div>
+    <div class="mov-card-body">
+      {% if form.non_field_errors %}
+      <div class="alert alert-danger">
+        {% for error in form.non_field_errors %}
+        <div>{{ error }}</div>
+        {% endfor %}
       </div>
-      <div class="form-group">
-        <label for="{{ form.tipo.id_for_label }}">Tipo</label>
-        {{ form.tipo }}
+      {% endif %}
+
+      <div class="mov-alert">
+        Escolha primeiro o artigo e depois o tipo de movimentacao. O formulario ajusta origem e destino conforme o fluxo escolhido.
       </div>
-      <div class="form-group">
-        <label for="{{ form.quantidade.id_for_label }}">Quantidade</label>
-        {{ form.quantidade }}
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <div class="mov-grid">
+          <div class="mov-field-full">
+            <label class="mov-label" for="filtroProduto">Buscar artigo</label>
+            <input type="text" id="filtroProduto" class="form-control" placeholder="EAN, SKU ou descricao do artigo">
+            <div class="mov-help">Filtre rapidamente antes de selecionar o artigo correto na lista abaixo.</div>
+          </div>
+
+          <div class="mov-field-full">
+            <label class="mov-label" for="{{ form.produto.id_for_label }}">Artigo</label>
+            {{ form.produto }}
+            {% if form.produto.errors %}
+            <div class="text-danger small mt-1">{{ form.produto.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div>
+            <label class="mov-label" for="{{ form.tipo.id_for_label }}">Tipo de movimentacao</label>
+            {{ form.tipo }}
+            {% if form.tipo.errors %}
+            <div class="text-danger small mt-1">{{ form.tipo.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div>
+            <label class="mov-label" for="{{ form.quantidade.id_for_label }}">Quantidade</label>
+            {{ form.quantidade }}
+            {% if form.quantidade.errors %}
+            <div class="text-danger small mt-1">{{ form.quantidade.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div>
+            <label class="mov-label" for="{{ form.origem.id_for_label }}">Origem</label>
+            {{ form.origem }}
+            {% if form.origem.errors %}
+            <div class="text-danger small mt-1">{{ form.origem.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div>
+            <label class="mov-label" for="{{ form.destino.id_for_label }}">Destino</label>
+            {{ form.destino }}
+            {% if form.destino.errors %}
+            <div class="text-danger small mt-1">{{ form.destino.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div>
+            <label class="mov-label" for="{{ form.destino_ubicacao.id_for_label }}">Ubicacao de destino</label>
+            {{ form.destino_ubicacao }}
+            {% if form.destino_ubicacao.errors %}
+            <div class="text-danger small mt-1">{{ form.destino_ubicacao.errors|join:", " }}</div>
+            {% endif %}
+            <div class="mov-help">Preencha quando a movimentacao exigir enderecamento interno.</div>
+          </div>
+
+          <div>
+            <label class="mov-label" for="{{ form.valor_unitario_custo.id_for_label }}">Custo unitario da entrada</label>
+            {{ form.valor_unitario_custo }}
+            {% if form.valor_unitario_custo.errors %}
+            <div class="text-danger small mt-1">{{ form.valor_unitario_custo.errors|join:", " }}</div>
+            {% endif %}
+            <div class="mov-help">Opcional. Atualiza o custo medio quando o tipo for entrada de estoque.</div>
+          </div>
+
+          <div class="mov-field-full">
+            <label class="mov-label" for="{{ form.observacao.id_for_label }}">Observacao</label>
+            {{ form.observacao }}
+            {% if form.observacao.errors %}
+            <div class="text-danger small mt-1">{{ form.observacao.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="mov-actions">
+          <div class="mov-actions-meta">
+            Revise produto, quantidade e ponto operacional antes de salvar.
+          </div>
+          <div class="text-nowrap">
+            <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-outline-secondary">Voltar</a>
+            <button class="btn btn-primary" type="submit">Salvar movimentacao</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="mov-tips">
+    <div class="mov-tip">
+      <div class="mov-tip-title">
+        <i class="fas fa-arrow-down text-success"></i>
+        Entrada
       </div>
-      <div class="form-group">
-        <label for="{{ form.origem.id_for_label }}">Origem</label>
-        {{ form.origem }}
+      <div>Use quando o item chegou ao estoque e voce quer atualizar saldo e custo de forma controlada.</div>
+      <div class="mov-chip-row">
+        <span class="mov-chip">Atualiza saldo</span>
+        <span class="mov-chip">Pode recalcular custo medio</span>
       </div>
-      <div class="form-group">
-        <label for="{{ form.destino.id_for_label }}">Destino</label>
-        {{ form.destino }}
+    </div>
+
+    <div class="mov-tip">
+      <div class="mov-tip-title">
+        <i class="fas fa-random text-info"></i>
+        Transferencia
       </div>
-      <div class="form-group">
-        <label for="{{ form.destino_ubicacao.id_for_label }}">Ubicacao destino</label>
-        {{ form.destino_ubicacao }}
+      <div>Ideal para mover itens entre pontos operacionais ou enderecos internos sem perder rastreabilidade.</div>
+      <div class="mov-chip-row">
+        <span class="mov-chip">Exige origem e destino</span>
+        <span class="mov-chip">Mantem historico da rota</span>
       </div>
-      <div class="form-group">
-        <label for="{{ form.valor_unitario_custo.id_for_label }}">Custo unitario da entrada (opcional)</label>
-        {{ form.valor_unitario_custo }}
-        <small class="text-muted">Usado para calcular custo medio quando o tipo for Entrada de estoque.</small>
+    </div>
+
+    <div class="mov-tip">
+      <div class="mov-tip-title">
+        <i class="fas fa-tools text-warning"></i>
+        Ajuste e consumo
       </div>
-      <div class="form-group">
-        <label for="{{ form.observacao.id_for_label }}">Observacao</label>
-        {{ form.observacao }}
+      <div>Use apenas quando o movimento nao vier de um fluxo automatico, como correcao, perda ou apoio operacional.</div>
+      <div class="mov-chip-row">
+        <span class="mov-chip">Registrar motivo na observacao</span>
+        <span class="mov-chip">Revisar permissao do usuario</span>
       </div>
-      <button class="btn btn-primary" type="submit">Salvar</button>
-      <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-secondary">Voltar</a>
-    </form>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -59,40 +276,52 @@ document.addEventListener("DOMContentLoaded", function () {
   const tipo = document.getElementById("id_tipo");
   const origem = document.getElementById("id_origem");
   const destino = document.getElementById("id_destino");
+  const custo = document.getElementById("id_valor_unitario_custo");
+
   if (!filtro || !select) return;
-  const options = Array.from(select.options).map(o => ({value: o.value, text: o.text}));
+
+  const options = Array.from(select.options).map(function (option) {
+    return { value: option.value, text: option.text };
+  });
+
   filtro.addEventListener("input", function () {
     const q = filtro.value.toLowerCase().trim();
     const atual = select.value;
     select.innerHTML = "";
-    options.forEach(function (op) {
-      if (!q || op.text.toLowerCase().includes(q)) {
+    options.forEach(function (option) {
+      if (!q || option.text.toLowerCase().includes(q)) {
         const el = document.createElement("option");
-        el.value = op.value;
-        el.textContent = op.text;
+        el.value = option.value;
+        el.textContent = option.text;
         select.appendChild(el);
       }
     });
-    if (Array.from(select.options).some(o => o.value === atual)) {
+    if (Array.from(select.options).some(function (option) { return option.value === atual; })) {
       select.value = atual;
     }
   });
 
   function ajustarCamposPorTipo() {
     if (!tipo || !origem || !destino) return;
-    if (tipo.value === "entrada") {
-      origem.disabled = true;
+    const tipoAtual = tipo.value;
+    const entrada = tipoAtual === "entrada";
+
+    origem.disabled = entrada;
+    if (entrada) {
       origem.value = "";
-      destino.disabled = false;
-    } else {
-      origem.disabled = false;
-      destino.disabled = false;
+    }
+    destino.disabled = false;
+
+    if (custo) {
+      custo.disabled = !entrada;
+      if (!entrada) {
+        custo.value = "";
+      }
     }
   }
-  if (tipo) {
-    tipo.addEventListener("change", ajustarCamposPorTipo);
-    ajustarCamposPorTipo();
-  }
+
+  tipo.addEventListener("change", ajustarCamposPorTipo);
+  ajustarCamposPorTipo();
 });
 </script>
 {% endblock %}

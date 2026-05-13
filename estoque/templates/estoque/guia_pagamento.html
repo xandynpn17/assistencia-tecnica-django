@@ -16,7 +16,7 @@
   }
   .guia-summary {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
     margin-bottom: 14px;
   }
@@ -37,6 +37,12 @@
     font-weight: 700;
     color: #183247;
   }
+  .guia-status-badge {
+    font-size: .78rem;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 999px;
+  }
   @media (max-width: 991.98px) {
     .guia-actions,
     .guia-summary {
@@ -52,7 +58,11 @@
     <h5 class="mb-0">Guia de Pagamento {{ guia_codigo }}</h5>
     <div class="guia-actions">
       <button type="button" class="btn btn-outline-secondary guia-btn" onclick="window.print()">Imprimir guia</button>
+      {% if resumo_guia.pode_ir_caixa %}
       <a href="{% url 'caixa:registrar_pagamento' %}?guia={{ guia_codigo }}" class="btn btn-primary guia-btn">Ir para Caixa</a>
+      {% else %}
+      <button type="button" class="btn btn-light guia-btn" disabled>Guia sem pendencia</button>
+      {% endif %}
     </div>
   </div>
   <div class="card-body">
@@ -62,14 +72,40 @@
         <div class="guia-summary-value">{{ guia_codigo }}</div>
       </div>
       <div class="guia-summary-card">
+        <div class="guia-summary-label">Status</div>
+        <div class="guia-summary-value">
+          <span class="badge badge-{{ resumo_guia.status_classe }} guia-status-badge">{{ resumo_guia.status_label }}</span>
+        </div>
+      </div>
+      <div class="guia-summary-card">
         <div class="guia-summary-label">Itens</div>
-        <div class="guia-summary-value">{{ vendas|length }}</div>
+        <div class="guia-summary-value">{{ resumo_guia.itens_total }}</div>
       </div>
       <div class="guia-summary-card">
         <div class="guia-summary-label">Total</div>
         <div class="guia-summary-value">R$ {{ total }}</div>
       </div>
     </div>
+
+    <div class="guia-summary mb-3">
+      <div class="guia-summary-card">
+        <div class="guia-summary-label">Pre-reserva</div>
+        <div class="guia-summary-value">{{ resumo_guia.itens_pre_reserva }}</div>
+      </div>
+      <div class="guia-summary-card">
+        <div class="guia-summary-label">Vendida</div>
+        <div class="guia-summary-value">{{ resumo_guia.itens_vendida }}</div>
+      </div>
+      <div class="guia-summary-card">
+        <div class="guia-summary-label">Cancelada</div>
+        <div class="guia-summary-value">{{ resumo_guia.itens_cancelada }}</div>
+      </div>
+      <div class="guia-summary-card">
+        <div class="guia-summary-label">Valor em aberto</div>
+        <div class="guia-summary-value">R$ {{ resumo_guia.valor_em_aberto|floatformat:2 }}</div>
+      </div>
+    </div>
+
     <div class="table-responsive">
       <table class="table table-sm table-striped">
         <thead>
@@ -77,7 +113,7 @@
             <th>Produto</th>
             <th>Ponto</th>
             <th>Qtd</th>
-            <th>Técnico</th>
+            <th>Tecnico</th>
             <th>Vendedor</th>
             <th>Valor Unit.</th>
             <th>Total</th>
@@ -94,7 +130,15 @@
             <td>{{ venda.funcionario_numero }}</td>
             <td>R$ {{ venda.valor_unitario }}</td>
             <td>R$ {{ venda.valor_total }}</td>
-            <td>{{ venda.get_status_display }}</td>
+            <td>
+              {% if venda.status == "vendida" %}
+              <span class="badge badge-success">Vendida</span>
+              {% elif venda.status == "cancelada" %}
+              <span class="badge badge-secondary">Cancelada</span>
+              {% else %}
+              <span class="badge badge-warning">Pre-reserva</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>

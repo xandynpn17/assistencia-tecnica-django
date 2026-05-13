@@ -1,4 +1,4 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 
 {% block title %}Indicadores de Estoque{% endblock %}
 
@@ -48,12 +48,12 @@
   </div>
   <div class="col-md-2">
     <div class="small-box bg-warning">
-      <div class="inner"><h3>{{ kpis.abaixo_minimo }}</h3><p>Abaixo do mínimo</p></div>
+      <div class="inner"><h3>{{ kpis.abaixo_minimo }}</h3><p>Abaixo do minimo</p></div>
     </div>
   </div>
   <div class="col-md-2">
     <div class="small-box bg-secondary">
-      <div class="inner"><h3>{{ kpis.parados_60 }}</h3><p>Parados há 60 dias</p></div>
+      <div class="inner"><h3>{{ kpis.parados_60 }}</h3><p>Parados ha 60 dias</p></div>
     </div>
   </div>
   <div class="col-md-4">
@@ -66,7 +66,7 @@
 <div class="row">
   <div class="col-lg-4">
     <div class="card">
-      <div class="card-header"><strong>Configuração do Rateio</strong></div>
+      <div class="card-header"><strong>Configuracao do Rateio</strong></div>
       <div class="card-body">
         <form method="post">
           {% csrf_token %}
@@ -79,7 +79,7 @@
             <input type="text" class="form-control" value="{{ rateio_resumo.configuracao.get_criterio_rateio_display }}" readonly>
             {% endif %}
             <small class="form-text text-muted">
-              Unidades previstas é a regra mais estável. Faturamento e margem usam a referência atual de preço do produto.
+              Unidades previstas e a regra mais estavel. Faturamento e margem usam a referencia atual de preco do produto.
             </small>
           </div>
           {% if pode_gerenciar_rateio %}
@@ -99,13 +99,13 @@
         <div class="row">
           <div class="col-md-3">
             <div class="border rounded p-2 mb-2">
-              <div class="text-muted small">Critério</div>
+              <div class="text-muted small">Criterio</div>
               <div><strong>{{ rateio_resumo.configuracao.get_criterio_rateio_display }}</strong></div>
             </div>
           </div>
           <div class="col-md-3">
             <div class="border rounded p-2 mb-2">
-              <div class="text-muted small">Custos fixos do mês</div>
+              <div class="text-muted small">Custos fixos do mes</div>
               <div><strong>R$ {{ rateio_resumo.total_fixos|floatformat:2 }}</strong></div>
             </div>
           </div>
@@ -159,7 +159,7 @@
         </div>
         {% if rateio_resumo.snapshot_atual %}
         <div class="alert alert-success py-2 mt-3 mb-0">
-          Já existe snapshot fechado para esta competência.
+          Ja existe snapshot fechado para esta competencia.
           <a href="{% url 'estoque:detalhe_rateio_competencia' rateio_resumo.snapshot_atual.id %}" class="alert-link">Ver detalhe</a>
         </div>
         {% endif %}
@@ -182,8 +182,8 @@
               <th>Atingimento</th>
               <th>Fat. real</th>
               <th>Base</th>
-              <th>Participação</th>
-              <th>Rateio unitário</th>
+              <th>Participacao</th>
+              <th>Rateio unitario</th>
               <th>Rateio mensal</th>
             </tr>
           </thead>
@@ -208,7 +208,7 @@
               <td>R$ {{ item.custo_rateio_total|floatformat:2 }}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="9" class="text-center text-muted py-3">Nenhum produto participa do rateio neste mês.</td></tr>
+            <tr><td colspan="9" class="text-center text-muted py-3">Nenhum produto participa do rateio neste mes.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -217,7 +217,7 @@
   </div>
   <div class="col-lg-5">
     <div class="card">
-      <div class="card-header"><strong>Fechar Competência</strong></div>
+      <div class="card-header"><strong>Fechar Competencia</strong></div>
       <div class="card-body">
         <form method="post">
           {% csrf_token %}
@@ -235,14 +235,14 @@
             {% if pode_gerenciar_rateio %}
             {{ rateio_snapshot_form.observacao }}
             {% else %}
-            <input type="text" class="form-control" value="Somente usuários com permissão de gestão podem fechar a competência." readonly>
+            <input type="text" class="form-control" value="Somente usuarios com permissao de gestao podem fechar a competencia." readonly>
             {% endif %}
           </div>
           {% if pode_gerenciar_rateio %}
           <button type="submit" class="btn btn-outline-primary btn-sm">Gerar snapshot fechado</button>
           {% endif %}
           <small class="form-text text-muted">
-            O snapshot congela o histórico da competência para consulta futura.
+            O snapshot congela o historico da competencia para consulta futura.
           </small>
         </form>
       </div>
@@ -254,8 +254,8 @@
         <table class="table table-sm mb-0">
           <thead>
             <tr>
-              <th>Competência</th>
-              <th>Critério</th>
+              <th>Competencia</th>
+              <th>Criterio</th>
               <th>Fixos</th>
               <th></th>
             </tr>
@@ -271,7 +271,7 @@
               </td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum snapshot gerado até agora.</td></tr>
+            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum snapshot gerado ate agora.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -283,7 +283,7 @@
 <div class="row">
   <div class="col-lg-8">
     <div class="card">
-      <div class="card-header"><strong>Evolução Previsto x Realizado</strong></div>
+      <div class="card-header"><strong>Evolucao Previsto x Realizado</strong></div>
       <div class="card-body">
         {% for linha in rateio_resumo.historico_competencias %}
         <div class="mb-3">
@@ -305,19 +305,19 @@
           </div>
         </div>
         {% empty %}
-        <div class="text-muted">Gere snapshots para visualizar a evolução por competência.</div>
+        <div class="text-muted">Gere snapshots para visualizar a evolucao por competencia.</div>
         {% endfor %}
       </div>
     </div>
   </div>
   <div class="col-lg-4">
     <div class="card">
-      <div class="card-header"><strong>Leitura do Gráfico</strong></div>
+      <div class="card-header"><strong>Leitura do Grafico</strong></div>
       <div class="card-body">
-        <div class="mb-2"><span class="badge badge-primary">Azul</span> previsto fechado na competência</div>
+        <div class="mb-2"><span class="badge badge-primary">Azul</span> previsto fechado na competencia</div>
         <div class="mb-2"><span class="badge badge-success">Verde</span> realizado apurado</div>
         <small class="text-muted">
-          O realizado considera venda a mostrador e peças consumidas em ordens de serviço no mês da competência.
+          O realizado considera venda a mostrador e pecas consumidas em ordens de servico no mes da competencia.
         </small>
       </div>
     </div>
@@ -327,7 +327,7 @@
 <div class="row">
   <div class="col-md-6">
     <div class="card">
-      <div class="card-header"><strong>Top saídas (30 dias)</strong></div>
+      <div class="card-header"><strong>Top saidas (30 dias)</strong></div>
       <div class="card-body table-responsive">
         <table class="table table-sm table-bordered">
           <thead><tr><th>Produto</th><th>Unidades</th></tr></thead>
@@ -335,7 +335,7 @@
             {% for item in top_saidas %}
             <tr><td>{{ item.produto }}</td><td>{{ item.unidades }}</td></tr>
             {% empty %}
-            <tr><td colspan="2" class="text-center text-muted">Sem dados de saída.</td></tr>
+            <tr><td colspan="2" class="text-center text-muted">Sem dados de saida.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -365,3 +365,5 @@
   </div>
 </div>
 {% endblock %}
+
+

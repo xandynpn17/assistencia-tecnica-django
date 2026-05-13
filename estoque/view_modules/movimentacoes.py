@@ -1,74 +1,48 @@
-import csv
+﻿import csv
 from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import DecimalField, ExpressionWrapper, F, Max, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from configuracoes.permissions import STOCK_MANAGE_ROLES, STOCK_VIEW_ROLES, has_role, role_required
+from configuracoes.permissions import (
+    STOCK_MANAGE_ROLES,
+    STOCK_VIEW_ROLES,
+    has_role,
+    require_sensitive_permission,
+    role_required,
+)
 
 from ..forms import ConfiguracaoRateioCustoFixoForm, GerarSnapshotRateioForm, MovimentacaoEstoqueForm, PontoOperacionalForm, UbicacaoEstoqueForm
 from ..models import ConfiguracaoRateioCustoFixo, MovimentacaoEstoque, PontoOperacional, Produto, RateioCustoFixoCompetencia, ReservaEstoque, SaldoEstoquePonto, UbicacaoEstoque, VendaRapidaEstoque
-from .helpers import _config_sistema, _normalizar_saldos_produto, _recalcular_total_produto, _resumo_rateio_atual, ajustar_saldo, logger, saldo_disponivel
+from ..services import registrar_movimentacao_estoque
+from .helpers import _registrar_evento_estoque, _resumo_rateio_atual, saldo_disponivel
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def registrar_movimentacao(request):
+    require_sensitive_permission(request.user, "perm_estoque_ajuste_manual")
     if request.method == "POST":
         form = MovimentacaoEstoqueForm(request.POST)
         if form.is_valid():
-            mov = form.save(commit=False)
-            mov.usuario = request.user
-            produto = mov.produto
-            _normalizar_saldos_produto(produto)
-            config = _config_sistema()
             try:
-                with transaction.atomic():
-                    if mov.tipo == "transferencia":
-                        if int(mov.quantidade or 0) <= 0:
-                            messages.error(request, "Transferencia exige quantidade positiva.")
-                            return redirect("estoque:registrar_movimentacao")
-                        origem_saldo, _ = SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=mov.origem)
-                        destino_saldo, _ = SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=mov.destino)
-                        if origem_saldo.quantidade < mov.quantidade:
-                            messages.error(request, "Saldo insuficiente na origem.")
-                            return redirect("estoque:registrar_movimentacao")
-                        origem_saldo.quantidade -= mov.quantidade
-                        destino_saldo.quantidade += mov.quantidade
-                        origem_saldo.save(update_fields=["quantidade"])
-                        destino_saldo.save(update_fields=["quantidade"])
-                    elif mov.tipo == "entrada" and mov.destino:
-                        ajustar_saldo(produto, mov.destino, abs(int(mov.quantidade)))
-                        mov.quantidade = abs(int(mov.quantidade))
-                        custo_entrada = mov.valor_unitario_custo if mov.valor_unitario_custo is not None else produto.custo_unitario
-                        qtd_entrada = abs(int(mov.quantidade))
-                        qtd_anterior = max(int(produto.quantidade or 0) - qtd_entrada, 0)
-                        custo_anterior = Decimal(str(produto.custo_medio or produto.custo_unitario or 0))
-                        custo_entrada_dec = Decimal(str(custo_entrada or 0))
-                        if (qtd_anterior + qtd_entrada) > 0:
-                            custo_medio = ((custo_anterior * qtd_anterior) + (custo_entrada_dec * qtd_entrada)) / Decimal(qtd_anterior + qtd_entrada)
-                            produto.custo_medio = custo_medio
-                            produto.custo_unitario = custo_medio
-                            produto.save(update_fields=["custo_medio", "custo_unitario"])
-                    elif mov.tipo in {"ajuste", "avaria", "inventario"} and mov.origem:
-                        if not (mov.observacao or "").strip():
-                            messages.error(request, "Informe observacao para ajuste/avaria/inventario.")
-                            return redirect("estoque:registrar_movimentacao")
-                        ajustar_saldo(produto, mov.origem, mov.quantidade)
-                    elif mov.tipo in {"venda", "consumo_os"} and mov.origem:
-                        ajustar_saldo(produto, mov.origem, -abs(int(mov.quantidade)), allow_negative=bool(config.estoque_permitir_negativo))
-                        mov.quantidade = -abs(int(mov.quantidade))
-                    elif mov.tipo in {"devolucao_reserva"} and mov.destino:
-                        ajustar_saldo(produto, mov.destino, abs(int(mov.quantidade)))
-                        mov.quantidade = abs(int(mov.quantidade))
-                    mov.save()
-                    _recalcular_total_produto(produto)
+                registrar_movimentacao_estoque(
+                    produto=form.cleaned_data["produto"],
+                    tipo=form.cleaned_data["tipo"],
+                    quantidade=form.cleaned_data["quantidade"],
+                    origem=form.cleaned_data.get("origem"),
+                    destino=form.cleaned_data.get("destino"),
+                    destino_ubicacao=form.cleaned_data.get("destino_ubicacao", ""),
+                    valor_unitario_custo=form.cleaned_data.get("valor_unitario_custo"),
+                    observacao=form.cleaned_data.get("observacao", ""),
+                    usuario=request.user,
+                )
             except ValueError as exc:
                 messages.error(request, str(exc))
                 return redirect("estoque:registrar_movimentacao")
@@ -199,9 +173,10 @@ def ubicacoes_estoque(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def transferir_estoque(request):
+    require_sensitive_permission(request.user, "perm_estoque_transferencia")
     q = (request.GET.get("q") or "").strip()
     produto_id = (request.GET.get("produto_id") or request.POST.get("produto_id") or "").strip()
-    produtos = Produto.objects.filter(ativo=True, is_servico=False)
+    produtos = Produto.objects.ativos().nao_servicos()
     if q:
         produtos = produtos.filter(Q(nome__icontains=q) | Q(ean__icontains=q) | Q(sku__icontains=q))
     produtos = produtos.order_by("nome")[:50]
@@ -210,7 +185,7 @@ def transferir_estoque(request):
     produto_selecionado = None
     if produto_id.isdigit():
         produto_selecionado = (
-            Produto.objects.filter(id=int(produto_id), ativo=True, is_servico=False)
+            Produto.objects.ativos().nao_servicos().filter(id=int(produto_id))
             .select_related("marca", "ponto_operacional")
             .first()
         )
@@ -227,7 +202,7 @@ def transferir_estoque(request):
         return redirect(url)
 
     if request.method == "POST":
-        produto = get_object_or_404(Produto, id=request.POST.get("produto_id"), ativo=True)
+        produto = get_object_or_404(Produto.objects.ativos().nao_servicos(), id=request.POST.get("produto_id"))
         origem = get_object_or_404(PontoOperacional, id=request.POST.get("origem_id"), ativo=True)
         destino = get_object_or_404(PontoOperacional, id=request.POST.get("destino_id"), ativo=True)
         destino_ubicacao_id = request.POST.get("destino_ubicacao_id")
@@ -261,13 +236,27 @@ def transferir_estoque(request):
                 messages.error(request, f"Saldo insuficiente na origem. Disponivel: {disponivel}.")
                 return _redirect_transferencia(produto=produto)
             try:
-                ajustar_saldo(produto, origem, -quantidade)
-                ajustar_saldo(produto, destino, quantidade)
-                MovimentacaoEstoque.objects.create(produto=produto, tipo="transferencia", quantidade=quantidade, origem=origem, destino=destino, destino_ubicacao=destino_ubicacao, observacao=f"Transpasse por busca de artigo. {destino_ubicacao}".strip(), usuario=request.user)
+                registrar_movimentacao_estoque(
+                    produto=produto,
+                    tipo="transferencia",
+                    quantidade=quantidade,
+                    origem=origem,
+                    destino=destino,
+                    destino_ubicacao=destino_ubicacao,
+                    observacao=f"Transpasse por busca de artigo. {destino_ubicacao}".strip(),
+                    usuario=request.user,
+                )
             except ValueError as exc:
                 messages.error(request, str(exc))
                 return _redirect_transferencia(produto=produto)
-        logger.info("transferencia_estoque", extra={"produto_id": produto.id, "origem_id": origem.id, "destino_id": destino.id, "quantidade": quantidade, "usuario_id": request.user.id})
+        _registrar_evento_estoque(
+            "transferencia_estoque",
+            usuario=request.user,
+            produto_id=produto.id,
+            origem_id=origem.id,
+            destino_id=destino.id,
+            quantidade=quantidade,
+        )
         messages.success(request, "Transferencia registrada com sucesso.")
         return redirect("estoque:movimentacoes")
     saldos_produto = []
@@ -297,6 +286,7 @@ def transferir_estoque(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def reposicao_estoque(request):
+    require_sensitive_permission(request.user, "perm_estoque_transferencia")
     po2 = PontoOperacional.objects.filter(codigo__iexact="PO2", ativo=True).first()
     po3 = PontoOperacional.objects.filter(codigo__iexact="PO3", ativo=True).first()
     q = (request.GET.get("q") or "").strip()
@@ -305,7 +295,7 @@ def reposicao_estoque(request):
         messages.error(request, "Configure os pontos PO2 (Armazem) e PO3 (Loja) para usar reposicao inteligente.")
         return redirect("estoque:pontos_operacionais")
     if request.method == "POST":
-        produto = get_object_or_404(Produto, id=request.POST.get("produto_id"), ativo=True, is_servico=False)
+        produto = get_object_or_404(Produto.objects.ativos().nao_servicos(), id=request.POST.get("produto_id"))
         try:
             quantidade = int(request.POST.get("quantidade") or "0")
         except ValueError:
@@ -320,21 +310,38 @@ def reposicao_estoque(request):
                 messages.error(request, f"Saldo insuficiente no PO2 para {produto.nome}. Disponivel: {saldo_origem.quantidade}.")
                 return redirect("estoque:reposicao_estoque")
             try:
-                ajustar_saldo(produto, po2, -quantidade)
-                ajustar_saldo(produto, po3, quantidade)
-                MovimentacaoEstoque.objects.create(produto=produto, tipo="transferencia", quantidade=quantidade, origem=po2, destino=po3, observacao="Reposicao inteligente PO2 -> PO3", usuario=request.user)
+                registrar_movimentacao_estoque(
+                    produto=produto,
+                    tipo="transferencia",
+                    quantidade=quantidade,
+                    origem=po2,
+                    destino=po3,
+                    observacao="Reposicao inteligente PO2 -> PO3",
+                    usuario=request.user,
+                )
             except ValueError as exc:
                 messages.error(request, str(exc))
                 return redirect("estoque:reposicao_estoque")
         messages.success(request, f"Reposicao realizada: {quantidade} un de {produto.nome}.")
         return redirect("estoque:reposicao_estoque")
-    produtos = Produto.objects.filter(ativo=True, is_servico=False).order_by("nome")
+    produtos = Produto.objects.ativos().nao_servicos().order_by("nome")
     if q:
         produtos = produtos.filter(Q(nome__icontains=q) | Q(sku__icontains=q) | Q(ean__icontains=q))
+    produtos = list(produtos)
+    saldos_map = {}
+    if produtos:
+        saldos_qs = SaldoEstoquePonto.objects.filter(
+            produto__in=produtos,
+            ponto_operacional__in=[po2, po3],
+        ).values("produto_id", "ponto_operacional_id", "quantidade")
+        saldos_map = {
+            (row["produto_id"], row["ponto_operacional_id"]): int(row["quantidade"] or 0)
+            for row in saldos_qs
+        }
     linhas = []
     for p in produtos:
-        saldo_po2 = SaldoEstoquePonto.objects.filter(produto=p, ponto_operacional=po2).values_list("quantidade", flat=True).first() or 0
-        saldo_po3 = SaldoEstoquePonto.objects.filter(produto=p, ponto_operacional=po3).values_list("quantidade", flat=True).first() or 0
+        saldo_po2 = saldos_map.get((p.id, po2.id), 0)
+        saldo_po3 = saldos_map.get((p.id, po3.id), 0)
         minimo = int(p.estoque_minimo or 0)
         sugestao = max(minimo - int(saldo_po3), 0)
         if sugestao <= 0:
@@ -393,24 +400,22 @@ def indicadores_estoque(request):
                     messages.warning(request, f"Ja existe snapshot fechado para {snapshot.competencia:%m/%Y}.")
                 return redirect("estoque:indicadores_estoque")
             messages.error(request, "Informe uma competencia valida para gerar o snapshot.")
-    produtos = list(Produto.objects.filter(ativo=True, is_servico=False).order_by("nome"))
-    total_itens = len(produtos)
-    ruptura = 0
-    abaixo_minimo = 0
-    parados_60 = 0
-    valor_estoque = Decimal("0.00")
-    for p in produtos:
-        qtd = int(p.quantidade or 0)
-        minimo = int(p.estoque_minimo or 0)
-        if qtd <= 0:
-            ruptura += 1
-        if qtd <= minimo:
-            abaixo_minimo += 1
-        if qtd > 0:
-            valor_estoque += Decimal(str(p.preco_final or 0)) * Decimal(qtd)
-        ultima_mov = p.movimentacoes.order_by("-criado_em").values_list("criado_em", flat=True).first()
-        if not ultima_mov or ultima_mov < corte_60:
-            parados_60 += 1
+    produtos_qs = Produto.objects.ativos().nao_servicos().annotate(ultima_mov=Max("movimentacoes__criado_em"))
+    total_itens = produtos_qs.count()
+    ruptura = produtos_qs.filter(quantidade__lte=0).count()
+    abaixo_minimo = produtos_qs.filter(quantidade__lte=F("estoque_minimo")).count()
+    parados_60 = produtos_qs.filter(Q(ultima_mov__isnull=True) | Q(ultima_mov__lt=corte_60)).count()
+    valor_estoque = (
+        produtos_qs.filter(quantidade__gt=0).aggregate(
+            total=Sum(
+                ExpressionWrapper(
+                    F("preco_final") * F("quantidade"),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                )
+            )
+        )["total"]
+        or Decimal("0.00")
+    )
     negativos_ponto = SaldoEstoquePonto.objects.select_related("produto", "ponto_operacional").filter(quantidade__lt=0).order_by("ponto_operacional__codigo", "produto__nome")
     top_mov = MovimentacaoEstoque.objects.filter(tipo__in=["venda", "consumo_os"], criado_em__gte=corte_30).values("produto__nome", "produto_id").annotate(total=Sum("quantidade")).order_by("total")[:10]
     top_saidas = [{"produto_id": r["produto_id"], "produto": r["produto__nome"], "unidades": abs(int(r["total"] or 0))} for r in top_mov if int(r["total"] or 0) < 0]
@@ -459,7 +464,7 @@ def relatorio_divergencias_estoque(request):
     pre_reservas_antigas = VendaRapidaEstoque.objects.filter(status="pre_reserva", criado_em__date__lt=hoje)
     total_pre_reservas_antigas = pre_reservas_antigas.count()
     reservas_vencidas_ativas = ReservaEstoque.objects.filter(status="ativa", valido_ate__lt=hoje)
-    produtos_abaixo = [p for p in Produto.objects.filter(ativo=True, is_servico=False).order_by("nome") if int(p.quantidade) <= int(p.estoque_minimo or 0)]
+    produtos_abaixo = Produto.objects.ativos().nao_servicos().filter(quantidade__lte=F("estoque_minimo")).order_by("nome")
     negativos_ponto = SaldoEstoquePonto.objects.select_related("produto", "ponto_operacional").filter(quantidade__lt=0).order_by("ponto_operacional__codigo", "produto__nome")
     po2 = PontoOperacional.objects.filter(codigo__iexact="PO2").first()
     mov_po2_sem_ubicacao = MovimentacaoEstoque.objects.none()
@@ -481,3 +486,4 @@ __all__ = [
     "indicadores_estoque",
     "relatorio_divergencias_estoque",
 ]
+

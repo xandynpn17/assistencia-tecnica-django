@@ -15,6 +15,7 @@ from configuracoes.models import ConfiguracaoSistema, Empresa, FornecedorGaranti
 
 from ..models import (
     ConfiguracaoRateioCustoFixo,
+    EstoqueEvento,
     MovimentacaoEstoque,
     PontoOperacional,
     Produto,
@@ -31,8 +32,12 @@ from ..services import (
     converter_reserva,
     devolver_reservas_ordem,
     expirar_reservas_vencidas,
+    gerar_codigo_cesto_venda_rapida,
+    gerar_codigo_guia_venda_rapida,
     limpar_pre_reservas_antigas,
+    normalizar_saldos_produto,
     recalcular_total_produto,
+    resumir_cesto_venda_rapida,
     saldo_disponivel,
 )
 
@@ -40,12 +45,7 @@ logger = logging.getLogger(__name__)
 
 
 def _normalizar_saldos_produto(produto):
-    if not produto.saldos_por_ponto.exists() and produto.ponto_operacional and produto.quantidade:
-        SaldoEstoquePonto.objects.create(
-            produto=produto,
-            ponto_operacional=produto.ponto_operacional,
-            quantidade=produto.quantidade,
-        )
+    normalizar_saldos_produto(produto)
 
 
 def _recalcular_total_produto(produto):
@@ -59,6 +59,36 @@ def _decimal_to_str(valor):
         return str(Decimal(str(valor)))
     except Exception:
         return str(valor)
+
+
+def _registrar_evento_estoque(evento, *, usuario=None, **dados):
+    payload = {
+        "evento": evento,
+        "usuario_id": getattr(usuario, "id", None) if getattr(usuario, "is_authenticated", False) else None,
+        "usuario_nome": getattr(usuario, "username", "") if getattr(usuario, "is_authenticated", False) else "",
+    }
+    payload.update(dados)
+    logger.info("estoque_evento", extra=payload)
+    try:
+        evento_modelo = {
+            "evento": evento,
+            "usuario": usuario if getattr(usuario, "is_authenticated", False) else None,
+            "quantidade": dados.get("quantidade"),
+            "dados": {k: v for k, v in dados.items() if k not in {"quantidade", "produto_id", "ponto_id", "reserva_id", "venda_id", "inventario_id"}},
+        }
+        if dados.get("produto_id"):
+            evento_modelo["produto_id"] = dados.get("produto_id")
+        if dados.get("ponto_id"):
+            evento_modelo["ponto_operacional_id"] = dados.get("ponto_id")
+        if dados.get("reserva_id"):
+            evento_modelo["reserva_id"] = dados.get("reserva_id")
+        if dados.get("venda_id"):
+            evento_modelo["venda_id"] = dados.get("venda_id")
+        if dados.get("inventario_id"):
+            evento_modelo["inventario_id"] = dados.get("inventario_id")
+        EstoqueEvento.objects.create(**evento_modelo)
+    except Exception:
+        logger.exception("falha_persistir_estoque_evento")
 
 
 def _snapshot_produto(produto):
@@ -106,7 +136,7 @@ def _aplicar_estoque_inicial(produto, *, estoque_inicial=0, custo_entrada=None, 
         quantidade = int(estoque_inicial or 0)
     except (TypeError, ValueError):
         quantidade = 0
-    if quantidade <= 0 or produto.is_servico or not produto.ponto_operacional:
+    if quantidade <= 0 or produto.eh_servico or not produto.ponto_operacional:
         return 0
 
     custo = Decimal(str(custo_entrada or 0))
@@ -132,17 +162,11 @@ def _codigo_reserva():
 
 
 def _codigo_cesto():
-    while True:
-        codigo = "CES-" + "".join(random.choices(string.digits, k=8))
-        if not VendaRapidaEstoque.objects.filter(cesto_codigo=codigo).exists():
-            return codigo
+    return gerar_codigo_cesto_venda_rapida()
 
 
 def _codigo_guia():
-    while True:
-        codigo = "GUIA-" + "".join(random.choices(string.digits, k=8))
-        if not VendaRapidaEstoque.objects.filter(guia_pagamento=codigo).exists():
-            return codigo
+    return gerar_codigo_guia_venda_rapida()
 
 
 def _config_sistema():
@@ -156,35 +180,7 @@ def _normalizar_texto(valor):
 
 
 def _resumo_cesto(cesto_codigo):
-    vendas = list(
-        VendaRapidaEstoque.objects.select_related("produto", "ponto_operacional")
-        .filter(cesto_codigo=cesto_codigo, status="pre_reserva")
-        .order_by("-id")
-    )
-    total = sum((v.valor_total for v in vendas), Decimal("0.00"))
-    guia = ""
-    for v in vendas:
-        if v.guia_pagamento:
-            guia = v.guia_pagamento
-            break
-    return {
-        "ok": True,
-        "cesto_codigo": cesto_codigo,
-        "guia": guia,
-        "itens": [
-            {
-                "id": v.id,
-                "produto": v.produto.nome,
-                "ponto": v.ponto_operacional.codigo,
-                "quantidade": v.quantidade,
-                "valor_unitario": float(v.valor_unitario),
-                "valor_total": float(v.valor_total),
-                "vendedor": v.funcionario_numero,
-            }
-            for v in vendas
-        ],
-        "total": float(total),
-    }
+    return resumir_cesto_venda_rapida(cesto_codigo)
 
 
 def _initial_produto_from_origem(origem):
@@ -314,7 +310,7 @@ def _contexto_rateio_produto(produto=None):
     except Exception:
         total_fixos = Decimal("0.00")
 
-    produtos_base = Produto.objects.filter(ativo=True, is_servico=False, incluir_rateio_custo_fixo=True, previsao_venda_mensal__gt=0)
+    produtos_base = Produto.objects.ativos().nao_servicos().filter(incluir_rateio_custo_fixo=True, previsao_venda_mensal__gt=0)
     if produto and getattr(produto, "pk", None):
         produtos_base = produtos_base.exclude(pk=produto.pk)
 
@@ -348,7 +344,7 @@ def _resumo_rateio_atual():
         total_fixos = Decimal("0.00")
 
     produtos = list(
-        Produto.objects.filter(ativo=True, is_servico=False, incluir_rateio_custo_fixo=True, previsao_venda_mensal__gt=0).order_by("nome")
+        Produto.objects.ativos().nao_servicos().filter(incluir_rateio_custo_fixo=True, previsao_venda_mensal__gt=0).order_by("nome")
     )
     detalhes = []
     total_base = Decimal("0.00")
@@ -441,6 +437,7 @@ __all__ = [
     "_normalizar_saldos_produto",
     "_normalizar_texto",
     "_recalcular_total_produto",
+    "_registrar_evento_estoque",
     "_registrar_historico_produto",
     "_resumo_cesto",
     "_resumo_rateio_atual",
@@ -456,3 +453,4 @@ __all__ = [
     "logger",
     "saldo_disponivel",
 ]
+

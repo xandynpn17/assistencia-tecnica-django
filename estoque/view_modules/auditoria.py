@@ -1,0 +1,75 @@
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.shortcuts import render
+
+from configuracoes.permissions import STOCK_VIEW_ROLES, role_required
+
+from ..models import EstoqueEvento
+
+
+@role_required(STOCK_VIEW_ROLES)
+def auditoria_estoque(request):
+    q = (request.GET.get("q") or "").strip()
+    evento = (request.GET.get("evento") or "").strip()
+    usuario = (request.GET.get("usuario") or "").strip()
+    data_inicio = (request.GET.get("data_inicio") or "").strip()
+    data_fim = (request.GET.get("data_fim") or "").strip()
+    page_number = request.GET.get("page")
+
+    eventos = EstoqueEvento.objects.select_related(
+        "usuario",
+        "produto",
+        "ponto_operacional",
+        "reserva",
+        "venda",
+        "inventario",
+    )
+
+    if q:
+        eventos = eventos.filter(
+            Q(evento__icontains=q)
+            | Q(produto__nome__icontains=q)
+            | Q(ponto_operacional__codigo__icontains=q)
+            | Q(reserva__codigo_reserva__icontains=q)
+            | Q(venda__guia_pagamento__icontains=q)
+            | Q(usuario__username__icontains=q)
+        )
+    if evento:
+        eventos = eventos.filter(evento=evento)
+    if usuario:
+        eventos = eventos.filter(usuario__username__icontains=usuario)
+    if data_inicio:
+        eventos = eventos.filter(criado_em__date__gte=data_inicio)
+    if data_fim:
+        eventos = eventos.filter(criado_em__date__lte=data_fim)
+
+    eventos = eventos.order_by("-criado_em", "-id")
+    eventos_page = Paginator(eventos, 50).get_page(page_number)
+
+    tipos_evento = (
+        EstoqueEvento.objects.order_by("evento")
+        .values_list("evento", flat=True)
+        .distinct()
+    )
+
+    return render(
+        request,
+        "estoque/auditoria_estoque.html",
+        {
+            "eventos": eventos_page,
+            "eventos_page": eventos_page,
+            "tipos_evento": tipos_evento,
+            "q": q,
+            "evento_filtro": evento,
+            "usuario_filtro": usuario,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "menu_app": "estoque",
+            "menu_sub": "auditoria_estoque",
+        },
+    )
+
+
+__all__ = [
+    "auditoria_estoque",
+]

@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django import forms
 from django.utils import timezone
@@ -27,7 +27,7 @@ class ProdutoForm(forms.ModelForm):
         min_value=0,
         initial=0,
         widget=forms.NumberInput(attrs={"class": "form-control", "min": 0}),
-        help_text="Somente para cadastro inicial. A entrada será registrada no histórico de movimentação.",
+        help_text="Somente para cadastro inicial. A entrada sera registrada no historico de movimentacao.",
     )
     custo_entrada_inicial = forms.DecimalField(
         label="Custo da entrada",
@@ -36,13 +36,13 @@ class ProdutoForm(forms.ModelForm):
         decimal_places=2,
         max_digits=10,
         widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": 0}),
-        help_text="Opcional. Se informado, será usado no cálculo do custo médio da entrada inicial.",
+        help_text="Opcional. Se informado, sera usado no calculo do custo medio da entrada inicial.",
     )
     permitir_preco_abaixo_minimo = forms.BooleanField(
-        label="Permitir preço abaixo do mínimo",
+        label="Permitir preco abaixo do minimo",
         required=False,
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
-        help_text="Marque para permitir preço final abaixo do mínimo calculado.",
+        help_text="Marque para permitir preco final abaixo do minimo calculado.",
     )
 
     class Meta:
@@ -94,13 +94,12 @@ class ProdutoForm(forms.ModelForm):
             "estoque_minimo",
             "ativo",
             "data_entrada",
-            "is_servico",
             "ponto_operacional",
         ]
         widgets = {
             "nome": forms.TextInput(attrs={"class": "form-control"}),
-            "sku": forms.TextInput(attrs={"class": "form-control", "placeholder": "Se vazio, gera automático"}),
-            "ean": forms.TextInput(attrs={"class": "form-control", "placeholder": "Se vazio, gera automático (13 dígitos)"}),
+            "sku": forms.TextInput(attrs={"class": "form-control", "placeholder": "Se vazio, gera automatico"}),
+            "ean": forms.TextInput(attrs={"class": "form-control", "placeholder": "Se vazio, gera automatico (13 digitos)"}),
             "foto": forms.ClearableFileInput(attrs={"class": "form-control-file"}),
             "tipo_item": forms.Select(attrs={"class": "form-control"}),
             "modo_preco": forms.Select(attrs={"class": "form-control"}),
@@ -213,7 +212,7 @@ class ProdutoForm(forms.ModelForm):
         if self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
-            raise forms.ValidationError("Já existe um produto com este nome.")
+            raise forms.ValidationError("Ja existe um produto com este nome.")
         return nome
 
     def clean_ean(self):
@@ -221,20 +220,18 @@ class ProdutoForm(forms.ModelForm):
         if not ean:
             return ""
         if len(ean) != 13:
-            raise forms.ValidationError("O EAN deve conter exatamente 13 dígitos.")
+            raise forms.ValidationError("O EAN deve conter exatamente 13 digitos.")
         return ean
 
     def clean_data_entrada(self):
         data_entrada = self.cleaned_data.get("data_entrada") or timezone.now().date()
         if data_entrada > timezone.localdate():
-            raise forms.ValidationError("A data de entrada não pode estar no futuro.")
+            raise forms.ValidationError("A data de entrada nao pode estar no futuro.")
         return data_entrada
 
     def clean(self):
         cleaned = super().clean()
         tipo_item = cleaned.get("tipo_item")
-        cleaned["is_servico"] = bool(tipo_item == "servico")
-
         categoria_cfg = cleaned.get("categoria_config")
         categoria_manual = (cleaned.get("categoria") or "").strip()
         if categoria_cfg:
@@ -267,9 +264,9 @@ class ProdutoForm(forms.ModelForm):
             quantidade = int(cleaned.get("quantidade") or 0)
             estoque_minimo = int(cleaned.get("estoque_minimo") or 0)
             if quantidade > 0:
-                self.add_error("quantidade", "Para serviço, a quantidade em estoque deve ser 0.")
+                self.add_error("quantidade", "Para servico, a quantidade em estoque deve ser 0.")
             if estoque_minimo > 0:
-                self.add_error("estoque_minimo", "Para serviço, o estoque mínimo deve ser 0.")
+                self.add_error("estoque_minimo", "Para servico, o estoque minimo deve ser 0.")
             cleaned["permite_comissao_peca"] = False
             cleaned["percentual_comissao_peca"] = 0
             cleaned["estoque_inicial"] = 0
@@ -291,6 +288,7 @@ class ProdutoForm(forms.ModelForm):
             produto_rateio = self.instance if getattr(self.instance, "pk", None) else Produto(tipo_item=tipo_item)
             produto_rateio.pk = getattr(self.instance, "pk", None)
             produto_rateio.tipo_item = tipo_item
+            produto_rateio.is_servico = tipo_item == "servico"
             produto_rateio.incluir_rateio_custo_fixo = incluir_rateio
             produto_rateio.previsao_venda_mensal = previsao_venda_mensal
             custo_rateio_fixo = Decimal(
@@ -314,7 +312,7 @@ class ProdutoForm(forms.ModelForm):
         if preco_final > 0 and preco_final < preco_minimo and not permitir_abaixo:
             self.add_error(
                 "preco_final",
-                f"Preço final abaixo do mínimo calculado ({preco_minimo:.2f}). Marque a opção de confirmação para salvar.",
+                f"Preco final abaixo do minimo calculado ({preco_minimo:.2f}). Marque a opcao de confirmacao para salvar.",
             )
 
         return cleaned
@@ -367,11 +365,11 @@ class MovimentacaoEstoqueForm(forms.ModelForm):
         destino = cleaned.get("destino")
         quantidade = cleaned.get("quantidade")
         if tipo == "transferencia" and (not origem or not destino):
-            raise forms.ValidationError("Transferência exige origem e destino.")
+            raise forms.ValidationError("Transferencia exige origem e destino.")
         if tipo == "transferencia" and origem == destino:
             raise forms.ValidationError("Origem e destino devem ser diferentes.")
         if tipo == "transferencia" and (quantidade is None or int(quantidade) <= 0):
-            self.add_error("quantidade", "Transferência exige quantidade positiva.")
+            self.add_error("quantidade", "Transferencia exige quantidade positiva.")
         if tipo == "entrada" and not destino:
             self.add_error("destino", "Entrada de estoque exige ponto de destino.")
         destino_ubicacao = (cleaned.get("destino_ubicacao") or "").strip()
@@ -383,15 +381,15 @@ class MovimentacaoEstoqueForm(forms.ModelForm):
             and (destino.codigo or "").upper() == "PO2"
             and not destino_ubicacao
         ):
-            self.add_error("destino_ubicacao", "Informe a localização de destino no PO2.")
+            self.add_error("destino_ubicacao", "Informe a localizacao de destino no PO2.")
         observacao = (cleaned.get("observacao") or "").strip()
         if tipo in {"ajuste", "avaria", "inventario"} and not observacao:
-            self.add_error("observacao", "Informe observação para este tipo de movimentação.")
+            self.add_error("observacao", "Informe observacao para este tipo de movimentacao.")
         return cleaned
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["produto"].queryset = Produto.objects.filter(ativo=True, is_servico=False).order_by("nome")
+        self.fields["produto"].queryset = Produto.objects.ativos().nao_servicos().order_by("nome")
         self.fields["produto"].label_from_instance = (
             lambda p: f"{p.nome} | EAN {p.ean or '-'} | SKU {p.sku or '-'} | {p.localizacao or '-'}"
         )
@@ -448,7 +446,7 @@ class ProdutoEquivalenteForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         produto = kwargs.pop("produto", None)
         super().__init__(*args, **kwargs)
-        queryset = Produto.objects.filter(ativo=True, is_servico=False).order_by("nome")
+        queryset = Produto.objects.ativos().nao_servicos().order_by("nome")
         if produto:
             queryset = queryset.exclude(id=produto.id)
         self.fields["equivalente"].queryset = queryset
@@ -466,7 +464,8 @@ class ProdutoKitItemForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         produto = kwargs.pop("produto", None)
         super().__init__(*args, **kwargs)
-        queryset = Produto.objects.filter(ativo=True, is_servico=False).order_by("nome")
+        queryset = Produto.objects.ativos().nao_servicos().order_by("nome")
         if produto:
             queryset = queryset.exclude(id=produto.id)
         self.fields["componente"].queryset = queryset
+

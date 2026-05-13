@@ -6,102 +6,303 @@
 <h1 class="m-0 text-dark">Importar Produtos</h1>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+  .import-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(280px, .9fr);
+    gap: 16px;
+  }
+  .import-card {
+    border: 1px solid #dce6ef;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+  }
+  .import-card-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid #e7eef5;
+    background: linear-gradient(135deg, #f8fbff 0%, #eef5fb 100%);
+  }
+  .import-card-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #183247;
+  }
+  .import-card-subtitle {
+    margin-top: 6px;
+    color: #607286;
+    font-size: .92rem;
+  }
+  .import-card-body {
+    padding: 22px;
+  }
+  .import-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .import-info-box {
+    border: 1px solid #dce6ef;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 14px;
+  }
+  .import-info-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #64748b;
+    margin-bottom: 5px;
+  }
+  .import-info-value {
+    font-size: .96rem;
+    color: #183247;
+    font-weight: 700;
+  }
+  .import-columns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .import-column-chip {
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: #edf4fb;
+    color: #24415d;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .import-form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+  }
+  .import-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .import-panel {
+    border: 1px solid #e7eef5;
+    border-radius: 14px;
+    background: #fbfdff;
+    padding: 16px;
+  }
+  .import-panel + .import-panel {
+    margin-top: 14px;
+  }
+  .import-panel-title {
+    font-weight: 700;
+    color: #183247;
+    margin-bottom: 6px;
+  }
+  .import-table thead th {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #64748b;
+    border-top: none;
+  }
+  .import-side-note {
+    border: 1px solid #dce6ef;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    padding: 16px;
+  }
+  .import-side-note + .import-side-note {
+    margin-top: 14px;
+  }
+  .import-side-title {
+    font-weight: 700;
+    color: #183247;
+    margin-bottom: 10px;
+  }
+  .import-list {
+    padding-left: 18px;
+    margin: 0;
+    color: #607286;
+  }
+  .import-list li + li {
+    margin-top: 8px;
+  }
+  @media (max-width: 991.98px) {
+    .import-shell,
+    .import-info-grid,
+    .import-form-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card-modern">
-    <div class="card-modern-header d-flex justify-content-between align-items-center">
-        Importação em lote
-        <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+<div class="import-shell">
+  <div class="import-card">
+    <div class="import-card-header d-flex justify-content-between align-items-center">
+      <div>
+        <h2 class="import-card-title">Importacao em lote</h2>
+        <div class="import-card-subtitle">
+          Valide primeiro e importe depois. Assim a equipe consegue corrigir arquivos antes de afetar o cadastro.
+        </div>
+      </div>
+      <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-outline-secondary btn-sm">Voltar</a>
     </div>
-    <div class="card-modern-body">
-        <div class="alert alert-light border">
-            Formatos aceitos: <strong>CSV</strong> e <strong>XLSX</strong>.
-            <br>
-            Colunas recomendadas: <code>nome</code>, <code>sku</code>, <code>ean</code>, <code>tipo_item</code>,
-            <code>categoria</code>, <code>marca</code>, <code>fornecedor</code>, <code>custo_unitario</code>,
-            <code>preco_final</code>, <code>estoque_minimo</code>, <code>estoque_inicial</code>.
-        </div>
 
-        <form method="post" enctype="multipart/form-data" class="mb-3">
-            {% csrf_token %}
-            <div class="form-row align-items-end">
-                <div class="col-md-8">
-                    <label for="id_arquivo">Arquivo</label>
-                    <input type="file" name="arquivo" id="id_arquivo" class="form-control" accept=".csv,.xlsx" required>
-                </div>
-                <div class="col-md-4">
-                    <button type="submit" name="acao" value="validar" class="btn btn-outline-primary">Validar arquivo</button>
-                    <button type="submit" name="acao" value="importar" class="btn btn-primary">Importar</button>
-                </div>
-            </div>
-        </form>
-
-        {% if erros %}
-        <div class="alert alert-warning">
-            <strong>Foram encontrados erros.</strong> Corrija o arquivo antes de importar.
+    <div class="import-card-body">
+      <div class="import-info-grid">
+        <div class="import-info-box">
+          <div class="import-info-label">Formatos aceitos</div>
+          <div class="import-info-value">CSV e XLSX</div>
         </div>
-        <div class="table-responsive mb-3">
-            <table class="table table-sm table-bordered">
-                <thead>
-                <tr>
-                    <th>Linha</th>
-                    <th>Erros</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for linha, erros_linha in erros %}
-                <tr>
-                    <td>{{ linha }}</td>
-                    <td>
-                        {% for erro in erros_linha %}
-                        <div>{{ erro }}</div>
-                        {% endfor %}
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+        <div class="import-info-box">
+          <div class="import-info-label">Fluxo recomendado</div>
+          <div class="import-info-value">Validar antes de importar</div>
         </div>
-        {% endif %}
+        <div class="import-info-box">
+          <div class="import-info-label">Campos mais usados</div>
+          <div class="import-info-value">Cadastro, preco e saldo inicial</div>
+        </div>
+      </div>
 
-        {% if preview %}
-        <h5 class="mb-2">Pré-visualização ({{ preview|length }} linhas)</h5>
+      <div class="import-panel">
+        <div class="import-panel-title">Colunas recomendadas</div>
+        <div class="text-muted">
+          Para um lote mais completo, envie os principais dados de identificacao, classificacao e saldo inicial.
+        </div>
+        <div class="import-columns">
+          <span class="import-column-chip">nome</span>
+          <span class="import-column-chip">sku</span>
+          <span class="import-column-chip">ean</span>
+          <span class="import-column-chip">tipo_item</span>
+          <span class="import-column-chip">categoria</span>
+          <span class="import-column-chip">marca</span>
+          <span class="import-column-chip">fornecedor</span>
+          <span class="import-column-chip">custo_unitario</span>
+          <span class="import-column-chip">preco_final</span>
+          <span class="import-column-chip">estoque_minimo</span>
+          <span class="import-column-chip">estoque_inicial</span>
+        </div>
+      </div>
+
+      <form method="post" enctype="multipart/form-data" class="import-panel">
+        {% csrf_token %}
+        <div class="import-form-row">
+          <div>
+            <label for="id_arquivo" class="font-weight-bold">Arquivo</label>
+            <input type="file" name="arquivo" id="id_arquivo" class="form-control" accept=".csv,.xlsx" required>
+            <small class="form-text text-muted">Use um arquivo por lote para facilitar revisao e auditoria.</small>
+          </div>
+          <div class="import-actions">
+            <button type="submit" name="acao" value="validar" class="btn btn-outline-primary">Validar arquivo</button>
+            <button type="submit" name="acao" value="importar" class="btn btn-primary">Importar lote</button>
+          </div>
+        </div>
+      </form>
+
+      {% if erros %}
+      <div class="import-panel border-warning">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="import-panel-title mb-0">Erros encontrados</div>
+          <span class="badge badge-warning">{{ erros|length }} linhas com ajuste</span>
+        </div>
+        <div class="text-muted mb-3">Corrija o arquivo antes de importar para evitar produtos incompletos ou inconsistentes.</div>
         <div class="table-responsive">
-            <table class="table table-sm table-hover table-bordered">
-                <thead>
-                <tr>
-                    <th>Linha</th>
-                    <th>Nome</th>
-                    <th>Tipo</th>
-                    <th>EAN</th>
-                    <th>Custo</th>
-                    <th>Preço</th>
-                    <th>Estoque inicial</th>
-                    <th>Status</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for row in preview %}
-                <tr>
-                    <td>{{ row.linha }}</td>
-                    <td>{{ row.nome }}</td>
-                    <td>{{ row.tipo_item }}</td>
-                    <td>{{ row.ean|default:"-" }}</td>
-                    <td>{{ row.custo_unitario }}</td>
-                    <td>{{ row.preco_final }}</td>
-                    <td>{{ row.estoque_inicial }}</td>
-                    <td>
-                        {% if row.erros %}
-                        <span class="badge badge-warning">Com erro</span>
-                        {% else %}
-                        <span class="badge badge-success">OK</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+          <table class="table table-sm table-bordered import-table mb-0">
+            <thead>
+              <tr>
+                <th>Linha</th>
+                <th>Erros</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for linha, erros_linha in erros %}
+              <tr>
+                <td>{{ linha }}</td>
+                <td>
+                  {% for erro in erros_linha %}
+                  <div>{{ erro }}</div>
+                  {% endfor %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
-        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if preview %}
+      <div class="import-panel">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="import-panel-title mb-0">Pre-visualizacao do lote</div>
+          <span class="badge badge-info">{{ preview|length }} linhas</span>
+        </div>
+        <div class="text-muted mb-3">Confira os dados essenciais abaixo antes de confirmar a importacao.</div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover table-bordered import-table mb-0">
+            <thead>
+              <tr>
+                <th>Linha</th>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>EAN</th>
+                <th>Custo</th>
+                <th>Preco</th>
+                <th>Estoque inicial</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in preview %}
+              <tr>
+                <td>{{ row.linha }}</td>
+                <td>{{ row.nome }}</td>
+                <td>{{ row.tipo_item }}</td>
+                <td>{{ row.ean|default:"-" }}</td>
+                <td>{{ row.custo_unitario }}</td>
+                <td>{{ row.preco_final }}</td>
+                <td>{{ row.estoque_inicial }}</td>
+                <td>
+                  {% if row.erros %}
+                  <span class="badge badge-warning">Com erro</span>
+                  {% else %}
+                  <span class="badge badge-success">OK</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
     </div>
+  </div>
+
+  <div>
+    <div class="import-side-note">
+      <div class="import-side-title">Boas praticas do lote</div>
+      <ul class="import-list">
+        <li>Padronize SKU e EAN para evitar duplicidade de cadastro.</li>
+        <li>Defina corretamente `tipo_item` para separar peca, produto e servico.</li>
+        <li>Use saldo inicial apenas quando realmente estiver carregando um produto novo.</li>
+      </ul>
+    </div>
+
+    <div class="import-side-note">
+      <div class="import-side-title">O que revisar antes de importar</div>
+      <ul class="import-list">
+        <li>Preco final coerente com custo e margem.</li>
+        <li>Fornecedor e marca com nomes consistentes.</li>
+        <li>Colunas obrigatorias preenchidas nas linhas do lote.</li>
+      </ul>
+    </div>
+  </div>
 </div>
 {% endblock %}

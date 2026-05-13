@@ -1,22 +1,37 @@
-from django.contrib import messages
+﻿from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
-from django.db.models import Prefetch, Q, Sum
+from django.db.models import Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from configuracoes.permissions import ORDER_ROLES, STOCK_MANAGE_ROLES, STOCK_VIEW_ROLES, has_role, role_required
+from configuracoes.permissions import (
+    ORDER_ROLES,
+    STOCK_MANAGE_ROLES,
+    STOCK_VIEW_ROLES,
+    has_role,
+    require_sensitive_permission,
+    role_required,
+)
 
-from ..models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
-from .helpers import _codigo_reserva, _normalizar_saldos_produto, cancelar_reserva, consumir_reservas_ordem, converter_reserva, devolver_reservas_ordem, datetime, expirar_reservas_vencidas, logger
+from ..models import PontoOperacional, Produto, ReservaEstoque
+from ..services import criar_reserva_estoque
+from .helpers import (
+    _registrar_evento_estoque,
+    cancelar_reserva,
+    consumir_reservas_ordem,
+    converter_reserva,
+    datetime,
+    devolver_reservas_ordem,
+    expirar_reservas_vencidas,
+)
 
 
 @role_required(ORDER_ROLES)
 def api_criar_reserva(request):
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
-    produto = get_object_or_404(Produto, id=request.POST.get("produto_id"), ativo=True, is_servico=False, permite_os=True)
+    produto = get_object_or_404(Produto.objects.ativos().nao_servicos().filter(permite_os=True), id=request.POST.get("produto_id"))
     ponto = get_object_or_404(PontoOperacional, id=request.POST.get("ponto_id"), ativo=True)
     nome = (request.POST.get("nome") or "").strip()
     telefone = (request.POST.get("telefone") or "").strip()
@@ -36,18 +51,26 @@ def api_criar_reserva(request):
     if valido_ate < timezone.localdate():
         return JsonResponse({"ok": False, "erro": "Data de validade da reserva nao pode ser passada."}, status=400)
 
-    expirar_reservas_vencidas()
-    _normalizar_saldos_produto(produto)
-    with transaction.atomic():
-        saldo = SaldoEstoquePonto.objects.select_for_update().filter(produto=produto, ponto_operacional=ponto).first()
-        if not saldo:
-            saldo = SaldoEstoquePonto.objects.create(produto=produto, ponto_operacional=ponto, quantidade=0)
-        reservado = ReservaEstoque.objects.select_for_update().filter(produto=produto, ponto_operacional=ponto, status="ativa", valido_ate__gte=timezone.localdate()).aggregate(total=Sum("quantidade"))["total"] or 0
-        disponivel = int(saldo.quantidade) - int(reservado)
-        if disponivel < quantidade:
-            return JsonResponse({"ok": False, "erro": "Sem saldo disponivel para reservar neste ponto."}, status=400)
-        reserva = ReservaEstoque.objects.create(codigo_reserva=_codigo_reserva(), produto=produto, ponto_operacional=ponto, quantidade=quantidade, nome_contato=nome, telefone_contato=telefone, valido_ate=valido_ate, status="ativa", usuario=request.user)
-    logger.info("reserva_criada", extra={"reserva_id": reserva.id, "produto_id": produto.id, "ponto_id": ponto.id, "quantidade": quantidade, "usuario_id": request.user.id})
+    try:
+        reserva = criar_reserva_estoque(
+            produto=produto,
+            ponto_operacional=ponto,
+            quantidade=quantidade,
+            nome_contato=nome,
+            telefone_contato=telefone,
+            valido_ate=valido_ate,
+            usuario=request.user,
+        )
+    except ValueError as exc:
+        return JsonResponse({"ok": False, "erro": str(exc)}, status=400)
+    _registrar_evento_estoque(
+        "reserva_criada",
+        usuario=request.user,
+        reserva_id=reserva.id,
+        produto_id=produto.id,
+        ponto_id=ponto.id,
+        quantidade=quantidade,
+    )
     return JsonResponse({"ok": True, "codigo_reserva": reserva.codigo_reserva})
 
 
@@ -56,18 +79,19 @@ def api_expirar_reservas(request):
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     total = expirar_reservas_vencidas(usuario=request.user)
-    logger.info("reservas_expiradas_execucao", extra={"quantidade": total, "usuario_id": request.user.id})
+    _registrar_evento_estoque("reservas_expiradas_execucao", usuario=request.user, quantidade=total)
     return JsonResponse({"ok": True, "reservas_expiradas": total})
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_converter_reserva(request, codigo_reserva):
+    require_sensitive_permission(request.user, "perm_estoque_converter_reserva")
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
     try:
         converter_reserva(reserva, usuario=request.user, motivo="Conversao manual")
-        logger.info("reserva_convertida", extra={"reserva_id": reserva.id, "usuario_id": request.user.id})
+        _registrar_evento_estoque("reserva_convertida", usuario=request.user, reserva_id=reserva.id)
         return JsonResponse({"ok": True})
     except ValueError as exc:
         return JsonResponse({"ok": False, "erro": str(exc)}, status=400)
@@ -75,13 +99,14 @@ def api_converter_reserva(request, codigo_reserva):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_cancelar_reserva(request, codigo_reserva):
+    require_sensitive_permission(request.user, "perm_estoque_cancelar_reserva")
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     motivo = (request.POST.get("motivo") or "").strip() or "Cancelada manualmente"
     reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
     try:
         cancelar_reserva(reserva, usuario=request.user, motivo=motivo)
-        logger.info("reserva_cancelada", extra={"reserva_id": reserva.id, "usuario_id": request.user.id})
+        _registrar_evento_estoque("reserva_cancelada", usuario=request.user, reserva_id=reserva.id)
         return JsonResponse({"ok": True})
     except ValueError as exc:
         return JsonResponse({"ok": False, "erro": str(exc)}, status=400)
@@ -175,6 +200,7 @@ def expirar_reservas_web(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def converter_reserva_web(request, codigo_reserva):
+    require_sensitive_permission(request.user, "perm_estoque_converter_reserva")
     if request.method == "POST":
         reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
         try:
@@ -187,6 +213,7 @@ def converter_reserva_web(request, codigo_reserva):
 
 @role_required(STOCK_MANAGE_ROLES)
 def cancelar_reserva_web(request, codigo_reserva):
+    require_sensitive_permission(request.user, "perm_estoque_cancelar_reserva")
     if request.method == "POST":
         reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
         try:
@@ -218,3 +245,4 @@ __all__ = [
     "integrar_reservas_no_fechamento",
     "integrar_reservas_na_reabertura",
 ]
+

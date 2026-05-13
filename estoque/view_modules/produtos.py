@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -8,7 +8,13 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from configuracoes.permissions import ORDER_ROLES, STOCK_MANAGE_ROLES, STOCK_VIEW_ROLES, role_required
+from configuracoes.permissions import (
+    ORDER_ROLES,
+    STOCK_MANAGE_ROLES,
+    STOCK_VIEW_ROLES,
+    require_sensitive_permission,
+    role_required,
+)
 
 from ..forms import ProdutoEquivalenteForm, ProdutoForm, ProdutoKitItemForm, ProdutoPrecoTabelaForm, TabelaPrecoForm
 from ..models import PontoOperacional, Produto, ProdutoEquivalente, ProdutoKitItem, ProdutoPrecoTabela, TabelaPreco
@@ -44,11 +50,11 @@ def lista_produtos(request):
     page_number = request.GET.get("page")
 
     if filtro == "servicos":
-        produtos = Produto.objects.filter(ativo=True, is_servico=True)
+        produtos = Produto.objects.ativos().servicos()
     elif filtro == "produtos":
-        produtos = Produto.objects.filter(ativo=True, is_servico=False)
+        produtos = Produto.objects.ativos().nao_servicos()
     else:
-        produtos = Produto.objects.filter(ativo=True)
+        produtos = Produto.objects.ativos()
 
     if ponto_id:
         produtos = produtos.filter(ponto_operacional_id=ponto_id)
@@ -99,6 +105,7 @@ def lista_produtos(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def criar_produto(request):
+    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
     ultimo = Produto.objects.order_by("-id").first()
     initial = {}
     if ultimo:
@@ -159,6 +166,7 @@ def criar_produto(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def editar_produto(request, produto_id):
+    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
     produto = get_object_or_404(Produto, id=produto_id)
     if request.method == "POST":
         snapshot_antes = _snapshot_produto(produto)
@@ -200,6 +208,7 @@ def duplicar_produto(request, produto_id):
 
 @role_required(STOCK_MANAGE_ROLES)
 def importar_produtos(request):
+    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
     preview = []
     erros = []
     importados = 0
@@ -308,6 +317,7 @@ def importar_produtos(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def tabelas_preco(request):
+    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
     if request.method == "POST":
         acao = (request.POST.get("acao") or "").strip()
         if acao == "excluir":
@@ -331,6 +341,7 @@ def tabelas_preco(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def estrutura_produto(request, produto_id):
+    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
     produto = get_object_or_404(Produto, id=produto_id)
     if request.method == "POST":
         acao = (request.POST.get("acao") or "").strip()
@@ -395,6 +406,7 @@ def estrutura_produto(request, produto_id):
 
 @role_required(STOCK_MANAGE_ROLES)
 def excluir_produto(request, produto_id):
+    require_sensitive_permission(request.user, "perm_estoque_excluir_produto")
     produto = get_object_or_404(Produto, id=produto_id)
     if request.method == "POST":
         produto.delete()
@@ -439,6 +451,7 @@ def buscar_produto(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_gerar_ean(request):
+    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     produto_tmp = Produto()
@@ -456,7 +469,7 @@ def api_sugerir_pecas_os(request):
     if not modelo and not servico and not q:
         return JsonResponse({"ok": True, "resultados": []})
 
-    base_qs = Produto.objects.filter(ativo=True, is_servico=False, permite_os=True).prefetch_related("servicos_compativeis")
+    base_qs = Produto.objects.ativos().nao_servicos().filter(permite_os=True).prefetch_related("servicos_compativeis")
     produtos = base_qs
     if q:
         produtos = produtos.filter(
@@ -568,3 +581,4 @@ __all__ = [
     "api_gerar_ean",
     "api_sugerir_pecas_os",
 ]
+

@@ -132,6 +132,53 @@
     gap: 10px;
     margin-top: 10px;
   }
+  .pdv-guides-panel {
+    border: 1px solid #d9e2ec;
+    border-radius: 14px;
+    background: #fbfdff;
+    padding: 14px;
+    margin-top: 12px;
+  }
+  .pdv-guides-table th,
+  .pdv-guides-table td {
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .pdv-guia-row {
+    cursor: pointer;
+  }
+  .pdv-guia-row:hover {
+    background: #f4f8fc;
+  }
+  .pdv-guia-status {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid transparent;
+  }
+  .pdv-guia-status.status-pendente {
+    background: #fff8e1;
+    color: #8a6d0a;
+    border-color: #f7e5a8;
+  }
+  .pdv-guia-status.status-paga {
+    background: #eef8f1;
+    color: #1f7a45;
+    border-color: #cfe8d8;
+  }
+  .pdv-guia-status.status-cancelada {
+    background: #f1f5f9;
+    color: #516170;
+    border-color: #d9e2ec;
+  }
+  .pdv-guia-status.status-divergente {
+    background: #fdecec;
+    color: #a33a3a;
+    border-color: #f5c2c2;
+  }
   .pdv-result-empty {
     border-radius: 10px;
     border: 1px dashed #d7e1ea;
@@ -165,12 +212,113 @@
     background: #27ae60;
     box-shadow: 0 0 0 4px rgba(39, 174, 96, 0.12);
   }
+  .artigo-modal .modal-content { border-radius: 12px; }
+  .artigo-modal .modal-header {
+    align-items: flex-start;
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .artigo-modal-title { font-size: 1.15rem; font-weight: 700; color: #1f2d3d; }
+  .artigo-modal-subtitle { font-size: 12px; color: #6b7280; margin-top: 3px; }
+  .artigo-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .artigo-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid #d7e1ea;
+    border-radius: 999px;
+    background: #fff;
+    color: #516170;
+    font-size: 12px;
+    padding: 4px 9px;
+  }
+  .artigo-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .artigo-kpi {
+    border: 1px solid #d9e2ec;
+    border-radius: 10px;
+    background: #fbfdff;
+    padding: 11px 12px;
+    min-height: 76px;
+  }
+  .artigo-kpi-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .artigo-kpi-value { font-size: 1.08rem; font-weight: 800; color: #183247; }
+  .artigo-kpi-note { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .artigo-detail-band {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .artigo-detail-box {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #fff;
+    padding: 12px;
+  }
+  .artigo-detail-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6b7280;
+    margin-bottom: 5px;
+  }
+  .artigo-detail-text { color: #374151; margin: 0; }
+  .artigo-stock-table td,
+  .artigo-stock-table th { vertical-align: middle; }
+  .artigo-stock-table tbody tr.is-saleable:hover { background: #eef8f1; }
+  .artigo-stock-table tbody tr.is-muted { color: #94a3b8; }
+  .artigo-stock-code { font-weight: 800; color: #1f2d3d; }
+  .artigo-stock-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .artigo-stock-action.is-ready {
+    background: #eef8f1;
+    color: #1f7a45;
+    border: 1px solid #cfe8d8;
+  }
+  .artigo-stock-action.is-blocked {
+    background: #f8fafc;
+    color: #6b7280;
+    border: 1px solid #e5e7eb;
+  }
+  .artigo-tabs .nav-link {
+    font-weight: 700;
+    color: #516170;
+  }
+  .artigo-tabs .nav-link.active { color: #1f2d3d; }
+  .artigo-empty-state {
+    border: 1px dashed #d7e1ea;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #6b7280;
+    padding: 12px;
+    text-align: center;
+  }
 
   @media (max-width: 991.98px) {
     .pdv-grid { grid-template-columns: 1fr; }
     .pdv-sticky { position: static; }
     .cesto-table-wrap { max-height: 40vh; }
     .pdv-summary-strip,
+    .artigo-kpi-grid,
+    .artigo-detail-band,
     .pdv-after-actions,
     .pdv-retomar-row { grid-template-columns: 1fr; }
   }
@@ -209,14 +357,14 @@
         </div>
         {% if not pode_venda_mostrador %}
         <div class="alert alert-warning py-2 mb-2">
-          Este perfil pode consultar artigos, mas não pode concluir venda a mostrador.
+          Este perfil pode consultar artigos, mas nao pode concluir venda a mostrador.
         </div>
         {% endif %}
         <div id="artigoBuscaResultados" class="list-group"></div>
         <div class="d-flex justify-content-between mt-2">
           <button class="btn btn-sm btn-outline-secondary" id="artigoPrevBtn" type="button">Anterior</button>
           <small class="text-muted" id="artigoPaginaInfo"></small>
-          <button class="btn btn-sm btn-outline-secondary" id="artigoNextBtn" type="button">Próxima</button>
+          <button class="btn btn-sm btn-outline-secondary" id="artigoNextBtn" type="button">Proxima</button>
         </div>
       </div>
     </div>
@@ -263,19 +411,19 @@
         <div class="table-responsive cesto-table-wrap">
           <table class="table table-sm table-striped mb-2" id="cestoTable">
             <thead>
-              <tr><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Vendedor</th><th>Total</th><th>Ações</th></tr>
+              <tr><th>Produto</th><th>Ponto</th><th>Qtd</th><th>Vendedor</th><th>Total</th><th>Acoes</th></tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
         <div class="pdv-action-panel">
-          <div class="pdv-action-title">Fechamento rápido</div>
+          <div class="pdv-action-title">Fechamento rapido</div>
           <div class="pdv-action-stack">
             <button class="btn btn-primary pdv-btn-main" type="button" id="finalizarCestoBtn">Finalizar venda e gerar guia</button>
             <div id="cestoFeedback" class="small"></div>
           </div>
           <div id="pdvAfterFinalizar" class="pdv-after-finalizar">
-            <div><strong>Guia gerada com sucesso.</strong> Escolha a próxima ação.</div>
+            <div><strong>Guia gerada com sucesso.</strong> Escolha a proxima acao.</div>
             <div class="pdv-after-actions">
               <a href="#" class="btn btn-success pdv-btn-secondary" id="pdvIrCaixaBtn">Ir para caixa</a>
               <a href="#" class="btn btn-outline-primary pdv-btn-secondary" id="pdvImprimirGuiaBtn" target="_blank" rel="noopener">Imprimir guia</a>
@@ -287,48 +435,139 @@
   </div>
 </div>
 
-<div class="modal fade" id="artigoResumoModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade artigo-modal" id="artigoResumoModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Resumo do Artigo</h5>
+        <div>
+          <h5 class="modal-title artigo-modal-title" id="modalNome"></h5>
+          <div class="artigo-modal-subtitle">Resumo do artigo, disponibilidade e a&ccedil;&otilde;es operacionais.</div>
+          <div class="artigo-chip-row">
+            <span class="artigo-chip"><i class="fas fa-barcode"></i> EAN <strong id="modalEan"></strong></span>
+            <span class="artigo-chip"><i class="fas fa-tag"></i> SKU <strong id="modalSku"></strong></span>
+            <span class="artigo-chip"><i class="fas fa-map-marker-alt"></i> Local <strong id="modalLocalizacao"></strong></span>
+          </div>
+        </div>
         <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
       </div>
       <div class="modal-body">
         <input type="hidden" id="modalProdutoId">
-        <div class="row mb-2">
-          <div class="col-md-4"><strong id="modalNome"></strong></div>
-          <div class="col-md-2">EAN: <span id="modalEan"></span></div>
-          <div class="col-md-2">SKU: <span id="modalSku"></span></div>
-          <div class="col-md-2">Total: <span id="modalQtdTotal"></span></div>
-          <div class="col-md-2">R$ <span id="modalPreco"></span></div>
+        <div class="artigo-kpi-grid">
+          <div class="artigo-kpi">
+            <div class="artigo-kpi-label">Pre&ccedil;o de venda</div>
+            <div class="artigo-kpi-value">R$ <span id="modalPreco"></span></div>
+            <div class="artigo-kpi-note">Valor usado no cesto</div>
+          </div>
+          <div class="artigo-kpi">
+            <div class="artigo-kpi-label">Estoque total</div>
+            <div class="artigo-kpi-value"><span id="modalQtdTotal"></span> un.</div>
+            <div class="artigo-kpi-note" id="modalStatusEstoque"></div>
+          </div>
+          <div class="artigo-kpi">
+            <div class="artigo-kpi-label">Reservado</div>
+            <div class="artigo-kpi-value"><span id="modalQtdReservada"></span> un.</div>
+            <div class="artigo-kpi-note">Reservas ativas no prazo</div>
+          </div>
+          <div class="artigo-kpi">
+            <div class="artigo-kpi-label">Garantia da pe&ccedil;a</div>
+            <div class="artigo-kpi-value"><span id="modalGarantia"></span> dias</div>
+            <div class="artigo-kpi-note">Aplicada na OS/venda</div>
+          </div>
         </div>
-        <p id="modalDescricao" class="text-muted"></p>
 
-        <h6 class="mb-2">Estoque por ponto</h6>
-        <table class="table table-sm table-bordered" id="estoquePontosTable">
-          <thead><tr><th>Ponto operacional</th><th>Estoque disponível</th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <small class="text-muted">Clique em PO3 ou PO2 com estoque para adicionar ao cesto.</small>
-
-        <hr>
-        <h6 class="mb-2">Reservas</h6>
-        <div class="row">
-          <div class="col-md-3 mb-2"><label>Ponto</label><select class="form-control" id="reservaPontoId"></select></div>
-          <div class="col-md-2 mb-2"><label>Qtd</label><input class="form-control" type="number" id="reservaQuantidade" min="1" value="1"></div>
-          <div class="col-md-3 mb-2"><label>Nome</label><input class="form-control" type="text" id="reservaNome"></div>
-          <div class="col-md-2 mb-2"><label>Telefone</label><input class="form-control" type="text" id="reservaTelefone"></div>
-          <div class="col-md-2 mb-2"><label>Válido até</label><input class="form-control" type="date" id="reservaValidoAte"></div>
+        <div class="artigo-detail-band">
+          <div class="artigo-detail-box">
+            <div class="artigo-detail-label">Descri&ccedil;&atilde;o</div>
+            <p id="modalDescricao" class="artigo-detail-text"></p>
+          </div>
+          <div class="artigo-detail-box">
+            <div class="artigo-detail-label">Modelos compat&iacute;veis</div>
+            <p id="modalModelos" class="artigo-detail-text"></p>
+          </div>
         </div>
-        <button class="btn btn-outline-primary" type="button" id="confirmarReservaBtn">Criar reserva</button>
-        <a href="{% url 'estoque:reservas_clientes' %}" class="btn btn-outline-secondary">Ver reservas</a>
-        <div id="reservaFeedback" class="small mt-2"></div>
-        <hr>
-        <table class="table table-sm table-bordered" id="reservasTable">
-          <thead><tr><th>Código</th><th>Nome</th><th>Telefone</th><th>Qtd</th><th>Ponto</th><th>Válido até</th><th>Status</th></tr></thead>
-          <tbody></tbody>
-        </table>
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Disponibilidade por ponto</h6>
+          <small class="text-muted">PO2/PO3 com estoque podem ser adicionados ao cesto.</small>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover artigo-stock-table" id="estoquePontosTable">
+            <thead>
+              <tr>
+                <th>Ponto operacional</th>
+                <th class="text-right">F&iacute;sico</th>
+                <th class="text-right">Reservado</th>
+                <th class="text-right">Dispon&iacute;vel</th>
+                <th>A&ccedil;&atilde;o</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <ul class="nav nav-tabs artigo-tabs mt-3" id="artigoResumoTabs" role="tablist">
+          <li class="nav-item">
+            <a class="nav-link active" id="reservas-tab" data-toggle="pill" href="#reservas-pane" role="tab">Reservas</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="movimentacoes-tab" data-toggle="pill" href="#movimentacoes-pane" role="tab">Movimenta&ccedil;&otilde;es</a>
+          </li>
+        </ul>
+        <div class="tab-content pt-3">
+          <div class="tab-pane fade show active" id="reservas-pane" role="tabpanel">
+            <div class="row">
+              <div class="col-md-3 mb-2"><label>Ponto</label><select class="form-control" id="reservaPontoId"></select></div>
+              <div class="col-md-2 mb-2"><label>Qtd</label><input class="form-control" type="number" id="reservaQuantidade" min="1" value="1"></div>
+              <div class="col-md-3 mb-2"><label>Nome</label><input class="form-control" type="text" id="reservaNome"></div>
+              <div class="col-md-2 mb-2"><label>Telefone</label><input class="form-control" type="text" id="reservaTelefone"></div>
+              <div class="col-md-2 mb-2"><label>V&aacute;lido at&eacute;</label><input class="form-control" type="date" id="reservaValidoAte"></div>
+            </div>
+            <button class="btn btn-outline-primary" type="button" id="confirmarReservaBtn">Criar reserva</button>
+            <a href="{% url 'estoque:reservas_clientes' %}" class="btn btn-outline-secondary">Ver reservas</a>
+            <div id="reservaFeedback" class="small mt-2"></div>
+            <div class="table-responsive mt-3">
+              <table class="table table-sm table-bordered" id="reservasTable">
+                <thead><tr><th>C&oacute;digo</th><th>Nome</th><th>Telefone</th><th>Qtd</th><th>Ponto</th><th>V&aacute;lido at&eacute;</th><th>Status</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="tab-pane fade" id="movimentacoes-pane" role="tabpanel">
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered" id="movimentacoesTable">
+                <thead><tr><th>Data</th><th>Tipo</th><th>Qtd</th><th>Origem</th><th>Destino</th><th>Obs.</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="pdv-guides-panel">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+              <div class="pdv-action-title mb-1">Guias recentes</div>
+              <small class="text-muted">Duplo clique abre a guia. Use "Ir caixa" para pendencias.</small>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" type="button" id="recarregarGuiasBtn">Atualizar</button>
+          </div>
+          <div class="table-responsive cesto-table-wrap">
+            <table class="table table-sm table-striped mb-0 pdv-guides-table" id="pdvGuiasTable">
+              <thead>
+                <tr>
+                  <th>Guia</th>
+                  <th>Status</th>
+                  <th class="text-right">Itens</th>
+                  <th class="text-right">Total</th>
+                  <th class="text-right">Em aberto</th>
+                  <th>Atualizado</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="7" class="text-muted text-center">Sem guias recentes.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -348,12 +587,12 @@
           <input type="text" class="form-control" id="addPontoNome" readonly>
         </div>
         <div class="form-group">
-          <label>Técnico</label>
+          <label>Tecnico</label>
           <select class="form-control" id="addTecnicoSelect">
-            <option value="">Selecione um técnico</option>
+            <option value="">Selecione um tecnico</option>
             {% for tecnico in tecnicos_disponiveis %}
             <option value="{{ tecnico.numero_vendedor|default:'' }}" {% if tecnico.numero_vendedor == numero_vendedor_padrao %}selected{% endif %}>
-              {{ tecnico.username }}{% if tecnico.numero_vendedor %} - Vendedor {{ tecnico.numero_vendedor }}{% else %} - sem número de vendedor{% endif %}
+              {{ tecnico.username }}{% if tecnico.numero_vendedor %} - Vendedor {{ tecnico.numero_vendedor }}{% else %} - sem numero de vendedor{% endif %}
             </option>
             {% endfor %}
           </select>
@@ -383,6 +622,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const nextBtn = document.getElementById("artigoNextBtn");
   const pageInfo = document.getElementById("artigoPaginaInfo");
   const cestoCodigoInput = document.getElementById("cestoCodigoInput");
+  const guiasTableBody = document.querySelector("#pdvGuiasTable tbody");
   const modal = $("#artigoResumoModal");
   const vendedorModal = $("#vendedorModal");
   const vendedorPadrao = "{{ numero_vendedor_padrao|default:''|escapejs }}";
@@ -406,7 +646,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     resultadosAtuais = [];
     resultadoSelecionado = -1;
-    resultados.innerHTML = '<div class="pdv-result-empty text-muted">Leitura concluída. Passe o próximo código ou digite outro termo.</div>';
+    resultados.innerHTML = '<div class="pdv-result-empty text-muted">Leitura concluida. Passe o proximo codigo ou digite outro termo.</div>';
     paginaAtual = 1;
     hasPrev = false;
     hasNext = false;
@@ -468,6 +708,15 @@ document.addEventListener("DOMContentLoaded", function () {
     return document.cookie.split(";").map(c => c.trim()).find(c => c.startsWith(name))?.substring(name.length) || "";
   }
 
+  function escapeHtml(valor) {
+    return String(valor ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
   function setFeedback(tipo, textoHtml) {
     const fb = document.getElementById("cestoFeedback");
     fb.className = `small mt-2 ${tipo === "erro" ? "text-danger" : tipo === "ok" ? "text-success" : "text-muted"}`;
@@ -498,6 +747,58 @@ document.addEventListener("DOMContentLoaded", function () {
     cestoCodigoInput.value = cestoCodigoAtual;
   }
 
+  function formatarDataHoraIso(valorIso) {
+    if (!valorIso) { return "-"; }
+    const data = new Date(valorIso);
+    if (Number.isNaN(data.getTime())) { return "-"; }
+    return data.toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function renderGuiasRecentes(guias) {
+    if (!guiasTableBody) { return; }
+    guiasTableBody.innerHTML = "";
+    if (!guias || !guias.length) {
+      guiasTableBody.innerHTML = '<tr><td colspan="7" class="text-muted text-center">Sem guias recentes.</td></tr>';
+      return;
+    }
+
+    guias.forEach((guia) => {
+      const tr = document.createElement("tr");
+      tr.className = "pdv-guia-row";
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(guia.guia)}</strong></td>
+        <td><span class="pdv-guia-status status-${escapeHtml(guia.status)}">${escapeHtml(guia.status_label)}</span></td>
+        <td class="text-right">${Number(guia.itens_total || 0)}</td>
+        <td class="text-right">R$ ${Number(guia.valor_total || 0).toFixed(2)}</td>
+        <td class="text-right">R$ ${Number(guia.valor_em_aberto || 0).toFixed(2)}</td>
+        <td>${escapeHtml(formatarDataHoraIso(guia.atualizado_em))}</td>
+        <td>
+          <div class="btn-group btn-group-sm">
+            <a class="btn btn-outline-primary" href="${escapeHtml(guia.guia_url)}" target="_blank" rel="noopener">Guia</a>
+            ${guia.pode_ir_caixa ? `<a class="btn btn-outline-success" href="${escapeHtml(guia.caixa_url)}">Ir caixa</a>` : `<button type="button" class="btn btn-outline-secondary" disabled>Quitada</button>`}
+          </div>
+        </td>
+      `;
+      tr.addEventListener("dblclick", () => {
+        if (guia.guia_url) {
+          window.open(guia.guia_url, "_blank", "noopener");
+        }
+      });
+      guiasTableBody.appendChild(tr);
+    });
+  }
+
+  function carregarGuiasRecentes() {
+    return fetch(`{% url 'estoque:api_guias_recentes' %}?limit=12`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) {
+          renderGuiasRecentes(data.guias || []);
+        }
+      })
+      .catch(() => {});
+  }
+
   function renderResultados(items) {
     resultadosAtuais = items || [];
     resultadoSelecionado = resultadosAtuais.length ? 0 : -1;
@@ -513,9 +814,9 @@ document.addEventListener("DOMContentLoaded", function () {
       el.innerHTML = `
         <div class="artigo-top">
           <div>
-            <div class="artigo-nome">${item.nome}</div>
-            <div class="artigo-meta">EAN: ${item.ean || '-'}</div>
-            <div class="artigo-meta">Modelos: ${item.modelos_compativeis || '-'}</div>
+            <div class="artigo-nome">${escapeHtml(item.nome)}</div>
+            <div class="artigo-meta">EAN: ${escapeHtml(item.ean || '-')}</div>
+            <div class="artigo-meta">Modelos: ${escapeHtml(item.modelos_compativeis || '-')}</div>
           </div>
           <div class="artigo-preco-bloco">
             <div class="artigo-preco">R$ ${item.preco.toFixed(2)}</div>
@@ -535,7 +836,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function abrirModalAdicionar(ponto) {
     if (!podeVendaMostrador) {
-      setFeedback("erro", "Este perfil não possui permissão para venda a mostrador.");
+      setFeedback("erro", "Este perfil nao possui permissao para venda a mostrador.");
       return;
     }
     document.getElementById("addPontoId").value = String(ponto.id);
@@ -603,9 +904,17 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("modalEan").textContent = data.ean || "-";
     document.getElementById("modalSku").textContent = data.sku || "-";
     document.getElementById("modalQtdTotal").textContent = data.quantidade_total;
-    const infoExtra = ` | Loc: ${data.localizacao || '-'} | Garantia: ${data.garantia_peca_dias || 0} dias`;
-    document.getElementById("modalDescricao").textContent = (data.descricao || "Sem descrição") + infoExtra;
+    document.getElementById("modalQtdReservada").textContent = String((data.estoque_pontos || []).reduce((total, p) => total + Number(p.reservado || 0), 0));
+    document.getElementById("modalGarantia").textContent = data.garantia_peca_dias || 0;
+    document.getElementById("modalLocalizacao").textContent = data.localizacao || "-";
+    document.getElementById("modalDescricao").textContent = data.descricao || "Sem descricao cadastrada.";
+    document.getElementById("modalModelos").textContent = data.modelos_compativeis || "Sem modelos cadastrados.";
     document.getElementById("modalPreco").textContent = Number(data.preco).toFixed(2);
+    const statusEstoque = document.getElementById("modalStatusEstoque");
+    if (statusEstoque) {
+      statusEstoque.textContent = data.abaixo_minimo ? "Abaixo do minimo definido" : "Dentro do minimo operacional";
+      statusEstoque.className = data.abaixo_minimo ? "artigo-kpi-note text-danger" : "artigo-kpi-note text-success";
+    }
 
     const tbody = document.querySelector("#estoquePontosTable tbody");
     tbody.innerHTML = "";
@@ -614,11 +923,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
     data.estoque_pontos.forEach(p => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td><strong>${p.codigo}</strong> - ${p.nome}</td><td><strong>${p.disponivel}</strong> unidades</td>`;
+      const podeVender = pontoPodeVender(p.codigo) && Number(p.disponivel) > 0;
+      tr.classList.toggle("is-saleable", podeVender);
+      tr.classList.toggle("is-muted", Number(p.disponivel) <= 0);
+      tr.innerHTML = `
+        <td><span class="artigo-stock-code">${escapeHtml(p.codigo)}</span> - ${escapeHtml(p.nome)}</td>
+        <td class="text-right">${Number(p.quantidade || 0)}</td>
+        <td class="text-right">${Number(p.reservado || 0)}</td>
+        <td class="text-right"><strong>${Number(p.disponivel || 0)}</strong></td>
+        <td>
+          <span class="artigo-stock-action ${podeVender ? 'is-ready' : 'is-blocked'}">
+            ${podeVender ? '<i class="fas fa-cart-plus"></i> Adicionar' : '<i class="fas fa-lock"></i> Consulta'}
+          </span>
+        </td>`;
       tr.addEventListener("click", () => {
         tbody.querySelectorAll("tr").forEach(row => row.classList.remove("selected"));
         tr.classList.add("selected");
-        if (pontoPodeVender(p.codigo) && Number(p.disponivel) > 0) {
+        if (podeVender) {
           abrirModalAdicionar(p);
         }
       });
@@ -634,10 +955,24 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const reservasBody = document.querySelector("#reservasTable tbody");
     reservasBody.innerHTML = "";
+    if (!(data.reservas || []).length) {
+      reservasBody.innerHTML = '<tr><td colspan="7"><div class="artigo-empty-state">Sem reservas recentes para este artigo.</div></td></tr>';
+    }
     (data.reservas || []).forEach(r => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${r.codigo}</td><td>${r.nome}</td><td>${r.telefone || '-'}</td><td>${r.quantidade}</td><td>${r.ponto}</td><td>${r.valido_ate}</td><td>${r.status}</td>`;
+      tr.innerHTML = `<td>${escapeHtml(r.codigo)}</td><td>${escapeHtml(r.nome)}</td><td>${escapeHtml(r.telefone || '-')}</td><td>${r.quantidade}</td><td>${escapeHtml(r.ponto)}</td><td>${escapeHtml(r.valido_ate)}</td><td>${escapeHtml(r.status)}</td>`;
       reservasBody.appendChild(tr);
+    });
+
+    const movimentacoesBody = document.querySelector("#movimentacoesTable tbody");
+    movimentacoesBody.innerHTML = "";
+    if (!(data.movimentacoes || []).length) {
+      movimentacoesBody.innerHTML = '<tr><td colspan="6"><div class="artigo-empty-state">Sem movimentacoes recentes para este artigo.</div></td></tr>';
+    }
+    (data.movimentacoes || []).forEach(m => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${escapeHtml(m.quando)}</td><td>${escapeHtml(m.tipo)}</td><td>${m.quantidade}</td><td>${escapeHtml(m.origem)}</td><td>${escapeHtml(m.destino)}</td><td>${escapeHtml(m.obs || '-')}</td>`;
+      movimentacoesBody.appendChild(tr);
     });
   }
 
@@ -668,7 +1003,7 @@ document.addEventListener("DOMContentLoaded", function () {
         paginaAtual = data.page || 1;
         hasPrev = !!data.has_prev;
         hasNext = !!data.has_next;
-        pageInfo.textContent = `Página ${paginaAtual}`;
+        pageInfo.textContent = `Pagina ${paginaAtual}`;
         prevBtn.disabled = !hasPrev;
         nextBtn.disabled = !hasNext;
         renderResultados(data.resultados || []);
@@ -678,12 +1013,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function adicionarCesto() {
     if (!podeVendaMostrador) {
-      setFeedback("erro", "Este perfil não possui permissão para venda a mostrador.");
+      setFeedback("erro", "Este perfil nao possui permissao para venda a mostrador.");
       return;
     }
     const vendedorNumero = document.getElementById("addTecnicoSelect").value;
     if (!vendedorNumero) {
-      setFeedback("erro", "Selecione um colaborador com número de vendedor cadastrado.");
+      setFeedback("erro", "Selecione um colaborador com numero de vendedor cadastrado.");
       return;
     }
 
@@ -773,7 +1108,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function finalizarCesto() {
     if (!podeVendaMostrador) {
-      setFeedback("erro", "Este perfil não possui permissão para venda a mostrador.");
+      setFeedback("erro", "Este perfil nao possui permissao para venda a mostrador.");
       return;
     }
     if (!cestoCodigoAtual) {
@@ -795,6 +1130,7 @@ document.addEventListener("DOMContentLoaded", function () {
           setFinalizacaoLinks(data.redirect_caixa, data.imprimir_url);
           setCestoCodigo("");
           carregarCesto();
+          carregarGuiasRecentes();
           focarBusca(true);
         } else {
           setFeedback("erro", data.erro || "Erro ao finalizar cesto.");
@@ -816,8 +1152,9 @@ document.addEventListener("DOMContentLoaded", function () {
         if (data.ok) {
           renderCesto(data);
           setFeedback("ok", "Item removido do cesto.");
+          carregarGuiasRecentes();
         } else {
-          setFeedback("erro", data.erro || "Não foi possível remover o item.");
+          setFeedback("erro", data.erro || "Nao foi possivel remover o item.");
         }
       });
   }
@@ -825,14 +1162,14 @@ document.addEventListener("DOMContentLoaded", function () {
   function retomarCesto() {
     const codigo = (cestoCodigoInput.value || "").trim().toUpperCase();
     if (!codigo) {
-      setFeedback("erro", "Informe o código do cesto para retomar.");
+      setFeedback("erro", "Informe o codigo do cesto para retomar.");
       return;
     }
     setFinalizacaoLinks("", "");
     setCestoCodigo(codigo);
     carregarCesto().then(data => {
       if (!data.itens || !data.itens.length) {
-        setFeedback("info", "Cesto carregado sem itens em pré-reserva.");
+        setFeedback("info", "Cesto carregado sem itens em pre-reserva.");
       } else {
         setFeedback("ok", `Cesto ${codigo} retomado com ${data.itens.length} item(ns).`);
       }
@@ -866,7 +1203,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const fb = document.getElementById("reservaFeedback");
         if (data.ok) {
           fb.className = "small text-success";
-          fb.textContent = `Reserva criada com código ${data.codigo_reserva}.`;
+          fb.textContent = `Reserva criada com codigo ${data.codigo_reserva}.`;
           carregarResumo(document.getElementById("modalProdutoId").value);
         } else {
           fb.className = "small text-danger";
@@ -903,6 +1240,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.getElementById("confirmarReservaBtn")?.addEventListener("click", confirmarReserva);
   document.getElementById("retomarCestoBtn")?.addEventListener("click", retomarCesto);
   document.getElementById("novoCestoBtn")?.addEventListener("click", novoCesto);
+  document.getElementById("recarregarGuiasBtn")?.addEventListener("click", carregarGuiasRecentes);
   cestoCodigoInput?.addEventListener("keypress", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -956,7 +1294,9 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("novoCestoBtn").disabled = true;
   }
   carregarCesto();
+  carregarGuiasRecentes();
   focarBusca();
 });
 </script>
 {% endblock %}
+
