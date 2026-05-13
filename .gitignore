@@ -58,4 +58,8 @@ credentials.json
 
 # Artefatos locais de diagnostico
 __full_test_output.txt
+__caixa_full_latest.txt
+__caixa_test_output.txt
 backups/
+db.sqlite3.bkp*
+pgdata_codex/
