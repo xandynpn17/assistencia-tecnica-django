@@ -179,7 +179,7 @@ def _exportar_pdf_tabela(filename, titulo, cabecalhos, linhas):
         texto = " ".join(str(valor or "-").split())
         if len(texto) <= limite:
             return texto
-        return texto[: max(1, limite - 1)].rstrip() + "…"
+        return texto[: max(1, limite - 1)].rstrip() + "..."
 
     def _parece_numero(valor):
         texto = str(valor or "").strip().replace(".", "").replace(",", ".")
@@ -328,16 +328,16 @@ def _garantir_categorias_financeiras_padrao():
         {"nome": "Cliente OS", "tipo": "receber", "ativa": True},
         {"nome": "Garantia Fabricante", "tipo": "receber", "ativa": True},
         {"nome": "Recebimento Avulso", "tipo": "receber", "ativa": True},
-        {"nome": "Marketing e Aquisição", "tipo": "saida", "ativa": True},
+        {"nome": "Marketing e Aquisicao", "tipo": "saida", "ativa": True},
         {"nome": "Aluguel e Infraestrutura", "tipo": "saida", "ativa": True},
         {"nome": "Utilidades e Consumo", "tipo": "saida", "ativa": True},
         {"nome": "Impostos e Taxas", "tipo": "saida", "ativa": True},
         {"nome": "Tecnologia e Sistemas", "tipo": "saida", "ativa": True},
-        {"nome": "Serviços de Terceiros", "tipo": "saida", "ativa": True},
+        {"nome": "Servicos de Terceiros", "tipo": "saida", "ativa": True},
         {"nome": "Compras e Insumos", "tipo": "saida", "ativa": True},
-        {"nome": "Fretes e Logística", "tipo": "saida", "ativa": True},
-        {"nome": "Pessoal e Benefícios", "tipo": "saida", "ativa": True},
-        {"nome": "Comissões e Premiações", "tipo": "saida", "ativa": True},
+        {"nome": "Fretes e Logistica", "tipo": "saida", "ativa": True},
+        {"nome": "Pessoal e Beneficios", "tipo": "saida", "ativa": True},
+        {"nome": "Comissoes e Premiacao", "tipo": "saida", "ativa": True},
         {"nome": "Despesas Gerais", "tipo": "saida", "ativa": True},
     ]
     for row in defaults:
@@ -747,3 +747,5 @@ __all__ = [
     "_valor_garantia_sugerido",
     "_vincular_talao_itens_ordem",
 ]
+
+

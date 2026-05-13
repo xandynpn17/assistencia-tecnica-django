@@ -1,6 +1,6 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Indicadores Gerenciais - Assistência{% endblock %}
+{% block title %}Indicadores Gerenciais - Assistencia{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -72,11 +72,11 @@
     <div class="col-12 d-flex flex-column flex-lg-row justify-content-lg-between align-items-lg-center">
         <div class="mb-3 mb-lg-0">
             <h1 class="page-title">Indicadores Gerenciais</h1>
-            <p class="page-subtitle">Leitura de desempenho, pendências e volume do negócio</p>
+            <p class="page-subtitle">Leitura de desempenho, pendencias e volume do negocio</p>
         </div>
         <div>
             <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left mr-2"></i>Voltar para operação
+                <i class="fas fa-arrow-left mr-2"></i>Voltar para operacao
             </a>
         </div>
     </div>
@@ -86,14 +86,14 @@
 {% block content %}
 <div class="dashboard-wrap">
     <div class="card-modern section-space">
-        <div class="card-modern-header">Base do Negócio</div>
+        <div class="card-modern-header">Base do Negocio</div>
         <div class="card-modern-body">
             <div class="row">
                 <div class="col-md-6 col-lg-3 mb-3"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.clientes_total }}</div><div class="stat-card-title">Clientes cadastrados</div><div class="stat-card-icon"><i class="fas fa-users text-primary"></i></div></div></div></div>
                 <div class="col-md-6 col-lg-3 mb-3"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.ordens_total }}</div><div class="stat-card-title">Ordens registradas</div><div class="stat-card-icon"><i class="fas fa-clipboard-list text-primary"></i></div></div></div></div>
                 <div class="col-md-6 col-lg-3 mb-3"><a href="{{ dashboard_links.abertas }}" class="stat-card-link"><div class="stat-card stat-card-secondary"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.abertas_total }}</div><div class="stat-card-title">Ordens abertas</div><div class="stat-card-icon"><i class="fas fa-hourglass-start"></i></div></div></div></a></div>
-                <div class="col-md-6 col-lg-3 mb-3"><a href="{{ dashboard_links.fechadas }}" class="stat-card-link"><div class="stat-card stat-card-info"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.fechadas_mes }}</div><div class="stat-card-title">Concluídas no mês</div><div class="stat-card-subtitle">Acumulado: {{ gerencial_cards.fechadas_total }}</div><div class="stat-card-icon"><i class="fas fa-check-circle"></i></div></div></div></a></div>
-                <div class="col-md-6 col-lg-3 mb-3"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.clientes_mes }}</div><div class="stat-card-title">Novos clientes no mês</div><div class="stat-card-icon"><i class="fas fa-user-plus text-primary"></i></div></div></div></div>
+                <div class="col-md-6 col-lg-3 mb-3"><a href="{{ dashboard_links.fechadas }}" class="stat-card-link"><div class="stat-card stat-card-info"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.fechadas_mes }}</div><div class="stat-card-title">Concluidas no mes</div><div class="stat-card-subtitle">Acumulado: {{ gerencial_cards.fechadas_total }}</div><div class="stat-card-icon"><i class="fas fa-check-circle"></i></div></div></div></a></div>
+                <div class="col-md-6 col-lg-3 mb-3"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.clientes_mes }}</div><div class="stat-card-title">Novos clientes no mes</div><div class="stat-card-icon"><i class="fas fa-user-plus text-primary"></i></div></div></div></div>
             </div>
         </div>
     </div>
@@ -102,31 +102,31 @@
         <div class="card-modern-header">Alertas e Gargalos</div>
         <div class="card-modern-body">
             <div class="row">
-                <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.sem_tecnico }}" class="stat-card-link"><div class="stat-card stat-card-primary"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.sem_tecnico }}</div><div class="stat-card-title">Abertas sem Técnico</div><div class="stat-card-icon"><i class="fas fa-user-slash"></i></div></div></div></a></div>
-                <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.criticas }}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.criticas }}</div><div class="stat-card-title">Pendências Críticas</div><div class="stat-card-icon"><i class="fas fa-exclamation-triangle text-primary"></i></div></div></div></a></div>
-                <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.paradas }}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.paradas }}</div><div class="stat-card-title">Paradas há 15+ dias</div><div class="stat-card-icon"><i class="fas fa-clock text-primary"></i></div></div></div></a></div>
+                <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.sem_tecnico }}" class="stat-card-link"><div class="stat-card stat-card-primary"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.sem_tecnico }}</div><div class="stat-card-title">Abertas sem Tecnico</div><div class="stat-card-icon"><i class="fas fa-user-slash"></i></div></div></div></a></div>
+                <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.criticas }}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.criticas }}</div><div class="stat-card-title">Pendencias Criticas</div><div class="stat-card-icon"><i class="fas fa-exclamation-triangle text-primary"></i></div></div></div></a></div>
+                <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.paradas }}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.paradas }}</div><div class="stat-card-title">Paradas ha 15+ dias</div><div class="stat-card-icon"><i class="fas fa-clock text-primary"></i></div></div></div></a></div>
                 <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.prontas }}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.prontas }}</div><div class="stat-card-title">Prontas para Entrega</div><div class="stat-card-icon"><i class="fas fa-hand-holding text-primary"></i></div></div></div></a></div>
                 <div class="col-md-6 col-lg-4 mb-3"><a href="{% url 'ordens:lista_ordens' %}?carregar=1&status=pendente_cliente" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.pendente_cliente }}</div><div class="stat-card-title">Pendente cliente</div><div class="stat-card-icon"><i class="fas fa-user-clock text-primary"></i></div></div></div></a></div>
-                <div class="col-md-6 col-lg-4 mb-3"><a href="{% url 'ordens:lista_ordens' %}?carregar=1&status=pendente_pecas" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.pendente_pecas }}</div><div class="stat-card-title">Pendente peças</div><div class="stat-card-icon"><i class="fas fa-box-open text-primary"></i></div></div></div></a></div>
+                <div class="col-md-6 col-lg-4 mb-3"><a href="{% url 'ordens:lista_ordens' %}?carregar=1&status=pendente_pecas" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.pendente_pecas }}</div><div class="stat-card-title">Pendente pecas</div><div class="stat-card-icon"><i class="fas fa-box-open text-primary"></i></div></div></div></a></div>
             </div>
         </div>
     </div>
 
     <div class="row section-space">
-        <div class="col-md-6 col-lg-4 mb-3"><a href="{% url 'ordens:lista_ordens' %}?carregar=1&status=autorizado" class="stat-card-link"><div class="stat-card stat-card-info"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.autorizadas }}</div><div class="stat-card-title">Orçamentadas / Autorizadas</div><div class="stat-card-icon"><i class="fas fa-file-signature"></i></div></div></div></a></div>
+        <div class="col-md-6 col-lg-4 mb-3"><a href="{% url 'ordens:lista_ordens' %}?carregar=1&status=autorizado" class="stat-card-link"><div class="stat-card stat-card-info"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.autorizadas }}</div><div class="stat-card-title">Orcamentadas / Autorizadas</div><div class="stat-card-icon"><i class="fas fa-file-signature"></i></div></div></div></a></div>
         <div class="col-md-6 col-lg-4 mb-3"><a href="{% url 'ordens:lista_ordens' %}?carregar=1&status=recusado" class="stat-card-link"><div class="stat-card stat-card-secondary"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.recusadas }}</div><div class="stat-card-title">Recusadas</div><div class="stat-card-icon"><i class="fas fa-ban"></i></div></div></div></a></div>
         <div class="col-md-6 col-lg-4 mb-3"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.reabertas }}</div><div class="stat-card-title">Reabertas</div><div class="stat-card-icon"><i class="fas fa-undo text-primary"></i></div></div></div></div>
     </div>
 
     <div class="card-modern section-space">
-        <div class="card-modern-header">Financeiro Vinculado à OS</div>
+        <div class="card-modern-header">Financeiro Vinculado a OS</div>
         <div class="card-modern-body">
             <div class="row">
                 <div class="col-md-6 col-lg-3 mb-3">
                     <div class="stat-card stat-card-light">
                         <div class="stat-card-content">
                             <div class="stat-card-number">{{ gerencial_cards.concluidas_sem_pagamento }}</div>
-                            <div class="stat-card-title">Concluídas sem pagamento</div>
+                            <div class="stat-card-title">Concluidas sem pagamento</div>
                             <div class="stat-card-icon"><i class="fas fa-file-invoice-dollar text-primary"></i></div>
                         </div>
                     </div>
@@ -153,7 +153,7 @@
                     <div class="stat-card stat-card-light">
                         <div class="stat-card-content">
                             <div class="stat-card-number">R$ {{ gerencial_cards.recebimentos_mes_os|floatformat:2 }}</div>
-                            <div class="stat-card-title">Recebimentos do mês</div>
+                            <div class="stat-card-title">Recebimentos do mes</div>
                             <div class="stat-card-subtitle">Somente pagamentos ligados a OS</div>
                             <div class="stat-card-icon"><i class="fas fa-cash-register text-primary"></i></div>
                         </div>
@@ -163,7 +163,7 @@
                     <div class="stat-card stat-card-light">
                         <div class="stat-card-content">
                             <div class="stat-card-number">R$ {{ gerencial_cards.despesas_totais_mes|floatformat:2 }}</div>
-                            <div class="stat-card-title">Despesas pagas no mês</div>
+                            <div class="stat-card-title">Despesas pagas no mes</div>
                             <div class="stat-card-icon"><i class="fas fa-money-bill-wave text-primary"></i></div>
                         </div>
                     </div>
@@ -172,10 +172,10 @@
                     <div class="stat-card stat-card-light">
                         <div class="stat-card-content">
                             <div class="stat-card-number">R$ {{ gerencial_cards.despesas_marketing_mes|floatformat:2 }}</div>
-                            <div class="stat-card-title">Marketing no mês</div>
+                            <div class="stat-card-title">Marketing no mes</div>
                             <div class="stat-card-subtitle">
                                 {% if gerencial_cards.cac_medio %}
-                                CAC médio: R$ {{ gerencial_cards.cac_medio|floatformat:2 }}
+                                CAC medio: R$ {{ gerencial_cards.cac_medio|floatformat:2 }}
                                 {% else %}
                                 Sem base suficiente para CAC
                                 {% endif %}
@@ -193,40 +193,40 @@
         <div class="card-modern-body">
             <div class="row">
                 <div class="col-md-4 mb-3">
-                    <div class="text-muted text-uppercase small mb-1">Volume histórico</div>
+                    <div class="text-muted text-uppercase small mb-1">Volume historico</div>
                     <div class="h4 mb-1">{{ gerencial_cards.ordens_total }}</div>
-                    <div class="text-muted small">Ordens acumuladas desde o início da operação.</div>
+                    <div class="text-muted small">Ordens acumuladas desde o inicio da operacao.</div>
                 </div>
                 <div class="col-md-4 mb-3">
                     <div class="text-muted text-uppercase small mb-1">Recusa atual</div>
                     <div class="h4 mb-1">{{ gerencial_cards.recusadas }}</div>
-                    <div class="text-muted small">Ordens que hoje estão marcadas como recusadas.</div>
+                    <div class="text-muted small">Ordens que hoje estao marcadas como recusadas.</div>
                 </div>
                 <div class="col-md-4 mb-3">
-                    <div class="text-muted text-uppercase small mb-1">Recuperação</div>
+                    <div class="text-muted text-uppercase small mb-1">Recuperacao</div>
                     <div class="h4 mb-1">{{ gerencial_cards.reabertas }}</div>
-                    <div class="text-muted small">Ordens reabertas após já terem passado por conclusão.</div>
+                    <div class="text-muted small">Ordens reabertas apos ja terem passado por conclusao.</div>
                 </div>
                 <div class="col-md-4 mb-3">
-                    <div class="text-muted text-uppercase small mb-1">Conversão de orçamento</div>
+                    <div class="text-muted text-uppercase small mb-1">Conversao de orcamento</div>
                     <div class="h4 mb-1">{{ gerencial_cards.conversao_orcamento }}%</div>
-                    <div class="text-muted small">{{ gerencial_cards.orcamentos_aprovados_mes }} aprovados de {{ gerencial_cards.orcamentos_total_mes }} orçamentos no mês.</div>
+                    <div class="text-muted small">{{ gerencial_cards.orcamentos_aprovados_mes }} aprovados de {{ gerencial_cards.orcamentos_total_mes }} orcamentos no mes.</div>
                 </div>
                 <div class="col-md-4 mb-3">
                     <div class="text-muted text-uppercase small mb-1">Taxa de recusa</div>
                     <div class="h4 mb-1">{{ gerencial_cards.taxa_recusa }}%</div>
-                    <div class="text-muted small">{{ gerencial_cards.orcamentos_recusados_mes }} recusados entre orçamentos decididos no mês.</div>
+                    <div class="text-muted small">{{ gerencial_cards.orcamentos_recusados_mes }} recusados entre orcamentos decididos no mes.</div>
                 </div>
                 <div class="col-md-4 mb-3">
-                    <div class="text-muted text-uppercase small mb-1">Ticket médio por OS concluída</div>
+                    <div class="text-muted text-uppercase small mb-1">Ticket medio por OS concluida</div>
                     <div class="h4 mb-1">R$ {{ gerencial_cards.ticket_medio_os_mes|floatformat:2 }}</div>
-                    <div class="text-muted small">Calculado sobre a receita técnica das OS concluídas no mês.</div>
+                    <div class="text-muted small">Calculado sobre a receita tecnica das OS concluidas no mes.</div>
                 </div>
                 <div class="col-md-4 mb-3">
-                    <div class="text-muted text-uppercase small mb-1">CAC médio</div>
+                    <div class="text-muted text-uppercase small mb-1">CAC medio</div>
                     {% if gerencial_cards.cac_medio %}
                     <div class="h4 mb-1">R$ {{ gerencial_cards.cac_medio|floatformat:2 }}</div>
-                    <div class="text-muted small">Despesas de marketing do mês divididas pelos novos clientes do mês.</div>
+                    <div class="text-muted small">Despesas de marketing do mes divididas pelos novos clientes do mes.</div>
                     {% else %}
                     <div class="h6 mb-1 text-muted">Sem base suficiente</div>
                     <div class="text-muted small">Cadastre novos clientes com origem e registre despesas de marketing no caixa para ativar esse indicador.</div>
@@ -249,7 +249,7 @@
                 </div>
                 {% empty %}
                 <div class="col-12">
-                    <div class="text-muted small">Ainda não há novos clientes classificados no período.</div>
+                    <div class="text-muted small">Ainda nao ha novos clientes classificados no periodo.</div>
                 </div>
                 {% endfor %}
             </div>
@@ -278,7 +278,7 @@
 
     {% comment %}
     <div class="card-modern section-space">
-        <div class="card-modern-header">Últimas 5 Ordens Abertas</div>
+        <div class="card-modern-header">Ultimas 5 Ordens Abertas</div>
         <div class="card-modern-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
@@ -288,9 +288,9 @@
                             <th>Cliente</th>
                             <th>Status</th>
                             <th>Atendente</th>
-                            <th>Técnico responsável</th>
+                            <th>Tecnico responsavel</th>
                             <th>Abertura</th>
-                            <th class="text-right pr-3">Ações</th>
+                            <th class="text-right pr-3">Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -299,8 +299,8 @@
                             <td>{{ ordem.numero_os }}</td>
                             <td>{{ ordem.cliente.nome }}</td>
                             <td>{{ ordem.status_listagem_label }}</td>
-                            <td>{% if ordem.atendente_abertura %}{{ ordem.atendente_abertura.get_full_name|default:ordem.atendente_abertura.username }}{% else %}<span class="text-muted">Não informado</span>{% endif %}</td>
-                            <td>{% if ordem.tecnico_responsavel_valido %}{{ ordem.tecnico_responsavel_valido.get_full_name|default:ordem.tecnico_responsavel_valido.username }}{% else %}<span class="text-muted">Sem técnico</span>{% endif %}</td>
+                            <td>{% if ordem.atendente_abertura %}{{ ordem.atendente_abertura.get_full_name|default:ordem.atendente_abertura.username }}{% else %}<span class="text-muted">Nao informado</span>{% endif %}</td>
+                            <td>{% if ordem.tecnico_responsavel_valido %}{{ ordem.tecnico_responsavel_valido.get_full_name|default:ordem.tecnico_responsavel_valido.username }}{% else %}<span class="text-muted">Sem tecnico</span>{% endif %}</td>
                             <td>{{ ordem.data_abertura|date:"d/m/Y H:i" }}</td>
                             <td class="text-right pr-3"><a href="{% url 'ordens:detalhes_ordem' ordem.id %}" class="btn btn-sm btn-outline-primary">Abrir</a></td>
                         </tr>
@@ -315,3 +315,4 @@
     {% endcomment %}
 </div>
 {% endblock %}
+

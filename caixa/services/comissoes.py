@@ -322,7 +322,7 @@ def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO
                         "ordem_servico": ordem,
                         "item_orcamento": item_orcamento,
                         "tipo": "SERVICO",
-                        "descricao": f"Comissão de serviço - item {nome_ref}",
+                        "descricao": f"Comissao de servico - item {nome_ref}",
                         "valor_base": base,
                         "percentual": percentual,
                         "valor_comissao": valor_comissao,
@@ -352,7 +352,7 @@ def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO
                     "item_orcamento": item_orcamento,
                     "produto": produto,
                     "tipo": "PECA",
-                    "descricao": f"Comissão de peça - item {nome_ref}",
+                    "descricao": f"Comissao de peca - item {nome_ref}",
                     "valor_base": base,
                     "percentual": percentual_peca,
                     "valor_comissao": valor_comissao,
@@ -433,7 +433,7 @@ def processar_evento_retirada_cliente(ordem, evento: str = "RETIRADA_CLIENTE", d
                     "tecnico": tecnico,
                     "ordem_servico": ordem,
                     "tipo": "BONUS_RETIRADA",
-                    "descricao": f"Bônus retirada em {dias} dia(s)",
+                    "descricao": f"Bonus retirada em {dias} dia(s)",
                     "valor_base": Decimal("0"),
                     "percentual": Decimal("0"),
                     "valor_comissao": valor_bonus,
@@ -470,7 +470,7 @@ def processar_evento_venda_mostrador(venda: VendaRapidaEstoque, evento: str = "V
                 "tecnico": colaborador,
                 "produto": produto,
                 "tipo": "COMISSAO_VENDAS",
-                "descricao": f"Comissão venda mostrador - {produto.nome}",
+                "descricao": f"Comissao venda mostrador - {produto.nome}",
                 "valor_base": base,
                 "percentual": percentual_vendas,
                 "valor_comissao": valor_comissao,
@@ -495,7 +495,7 @@ def processar_evento_venda_mostrador(venda: VendaRapidaEstoque, evento: str = "V
                 "tecnico": colaborador,
                 "produto": produto,
                 "tipo": "BONUS_PRODUTO",
-                "descricao": f"Bônus por venda mostrador - {produto.nome}",
+                "descricao": f"Bonus por venda mostrador - {produto.nome}",
                 "valor_base": base,
                 "percentual": Decimal("0"),
                 "valor_comissao": bonus_venda,
@@ -518,7 +518,7 @@ def _cancelar_queryset(queryset, motivo: str, evento: str) -> int:
     total = 0
     for comissao in queryset.exclude(status__in=["CANCELADA", "PAGA"]):
         extras = dict(comissao.dados_extras or {})
-        extras["motivo_cancelamento"] = (motivo or "").strip() or "Cancelamento automático"
+        extras["motivo_cancelamento"] = (motivo or "").strip() or "Cancelamento automatico"
         extras["evento_cancelamento"] = evento
         comissao.status = "CANCELADA"
         comissao.dados_extras = extras
@@ -541,3 +541,5 @@ def cancelar_comissoes_por_servico_peca(servico_peca_id, motivo: str = "", event
     chave_suffix = f":sp:{int(servico_peca_id)}"
     queryset = Comissao.objects.filter(chave_unica__iendswith=chave_suffix)
     return _cancelar_queryset(queryset, motivo=motivo, evento=evento)
+
+

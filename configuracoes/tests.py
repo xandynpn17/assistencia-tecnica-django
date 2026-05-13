@@ -8,6 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test.utils import override_settings
 from django.utils import timezone
 from urllib.parse import parse_qs, urlparse
+from unittest.mock import patch
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from html import unescape
@@ -15,9 +16,23 @@ import csv
 import gzip
 from io import BytesIO, StringIO
 from PIL import Image
-from configuracoes.models import ConfiguracaoSistema, Empresa, FornecedorGarantia, MarcaGarantia
+from configuracoes.models import (
+    ConfiguracaoSistema,
+    Empresa,
+    FornecedorGarantia,
+    LinhaAtuacaoCatalogo,
+    MarcaGarantia,
+    SegmentoEmpresaCatalogo,
+    SetupInicialSistema,
+    TipoEquipamentoCatalogo,
+)
 from configuracoes.forms import ConfiguracaoSistemaForm, EmpresaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm
 from configuracoes.permissions import has_sensitive_permission, require_sensitive_permission
+from configuracoes.services.setup_inicial import (
+    garantir_catalogo_padrao,
+    setup_inicial_concluido,
+    sincronizar_tipos_ativos_por_linhas,
+)
 from django.conf import settings
 from clientes.models import Cliente
 from estoque.models import CategoriaProduto, Produto
@@ -68,9 +83,46 @@ class PermissoesSensiveisHelperTests(TestCase):
         campos = [
             "perm_caixa_criar_conta_receber",
             "perm_caixa_baixar_conta_receber",
+            "perm_caixa_cancelar_conta_receber",
+            "perm_caixa_editar_conta_receber",
             "perm_caixa_criar_conta_pagar",
             "perm_caixa_baixar_conta_pagar",
             "perm_caixa_cancelar_conta_pagar",
+            "perm_caixa_editar_conta_pagar",
+        ]
+        for campo in campos:
+            self.assertFalse(has_sensitive_permission(self.atendente, campo))
+            setattr(self.atendente, campo, True)
+        self.atendente.save(update_fields=campos)
+        for campo in campos:
+            self.assertTrue(has_sensitive_permission(self.atendente, campo))
+
+    def test_ordens_e_orcamentos_passam_a_aceitar_flags_granulares(self):
+        campos = [
+            "perm_os_editar_observacoes_internas",
+            "perm_os_editar_local_armazenamento",
+            "perm_os_excluir_servico_peca",
+            "perm_orcamento_editar",
+            "perm_orcamento_aprovar_item",
+            "perm_orcamento_recusar_item",
+            "perm_orcamento_migrar_item",
+        ]
+        for campo in campos:
+            self.assertFalse(has_sensitive_permission(self.atendente, campo))
+            setattr(self.atendente, campo, True)
+        self.atendente.save(update_fields=campos)
+        for campo in campos:
+            self.assertTrue(has_sensitive_permission(self.atendente, campo))
+
+    def test_estoque_passa_a_aceitar_flags_granulares(self):
+        campos = [
+            "perm_estoque_cadastro_produto",
+            "perm_estoque_excluir_produto",
+            "perm_estoque_ajuste_manual",
+            "perm_estoque_transferencia",
+            "perm_estoque_inventario_finalizar",
+            "perm_estoque_converter_reserva",
+            "perm_estoque_cancelar_reserva",
         ]
         for campo in campos:
             self.assertFalse(has_sensitive_permission(self.atendente, campo))
@@ -86,6 +138,34 @@ class PermissoesSensiveisHelperTests(TestCase):
     def test_require_sensitive_permission_lanca_erro_quando_sem_acesso(self):
         with self.assertRaises(PermissionDenied):
             require_sensitive_permission(self.tecnico, "perm_caixa_ver_dre")
+
+
+class CheckPostgresReadyCommandTests(TestCase):
+    @override_settings(DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": "db.sqlite3"}})
+    @patch.dict(
+        "os.environ",
+        {
+            "DJANGO_DB_ENGINE": "postgres",
+            "DJANGO_DB_NAME": "assistencia_dev",
+            "DJANGO_DB_USER": "postgres",
+            "DJANGO_DB_PASSWORD": "segredo",
+            "DJANGO_DB_HOST": "127.0.0.1",
+            "DJANGO_DB_PORT": "5432",
+        },
+        clear=False,
+    )
+    def test_check_postgres_ready_sem_falhas_criticas(self):
+        out = StringIO()
+        call_command("check_postgres_ready", stdout=out)
+        output = out.getvalue()
+        self.assertIn("SQLite", output)
+        self.assertIn("Pre-check concluido sem falhas criticas.", output)
+
+    @override_settings(DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": "db.sqlite3"}})
+    @patch.dict("os.environ", {}, clear=True)
+    def test_check_postgres_ready_strict_falha_sem_variaveis(self):
+        with self.assertRaises(CommandError):
+            call_command("check_postgres_ready", "--strict")
 
 
 class PermissoesConfiguracoesTests(TestCase):
@@ -861,3 +941,23 @@ class PreviewDocumentoTests(TestCase):
         texto = unescape(html)
         self.assertIn("Pré-visualização dos Layouts", texto)
         self.assertNotIn("PrÃ©-visualizaÃ§Ã£o dos Layouts", texto)
+
+class SetupInicialSyncCompatTests(TestCase):
+    def test_sync_reaproveita_tipo_existente_com_mesmo_nome_e_codigo_legado(self):
+        garantir_catalogo_padrao()
+        linha = LinhaAtuacaoCatalogo.objects.filter(codigo="informatica").first()
+        self.assertIsNotNone(linha)
+        tipo_catalogo = TipoEquipamentoCatalogo.objects.filter(linha=linha).order_by("id").first()
+        self.assertIsNotNone(tipo_catalogo)
+        registro_existente = TipoEquipamentoConfig.objects.filter(nome=tipo_catalogo.nome).first()
+        self.assertIsNotNone(registro_existente)
+        registro_existente.codigo = "codigo_legado"
+        registro_existente.ativo = False
+        registro_existente.ordem = 999
+        registro_existente.save(update_fields=["codigo", "ativo", "ordem"])
+
+        sincronizar_tipos_ativos_por_linhas(LinhaAtuacaoCatalogo.objects.filter(id=linha.id))
+
+        registro = TipoEquipamentoConfig.objects.get(nome=tipo_catalogo.nome)
+        self.assertEqual(registro.codigo, tipo_catalogo.codigo)
+        self.assertTrue(registro.ativo)

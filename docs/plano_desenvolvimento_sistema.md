@@ -37,7 +37,7 @@ Status: concluida
 ## Etapas pendentes
 
 ### Fase 1 - Mapa oficial do fluxo da OS
-Status: diagnostico concluido / implementacao inicial concluida
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -70,10 +70,8 @@ Feito nesta etapa:
   - alertas operacionais principais;
   - situacao operacional resumida no topo.
 - destaques de acoes por status aplicados no cabecalho e no bloco de Servicos & Pecas (ex.: fechar e ir ao caixa, abrir orcamento, abrir pedido).
-
-Ainda pendente nesta fase:
-- revisar quais botoes devem ficar em destaque por status;
-- reduzir mais a dispersao de acoes entre abas.
+- destaques e botoes prioritarios por status foram revisados nas abas principais da OS;
+- dispersao operacional foi reduzida com tooltips compactos, toolbars por aba e headers mais consistentes.
 
 ### Fase 2 - Regras criticas em services
 Status: implementacao concluida
@@ -151,21 +149,26 @@ Feito nesta etapa:
   - excluir item de orcamento;
   - criar conta a receber;
   - baixar conta a receber;
+  - cancelar conta a receber;
+  - editar conta a receber;
   - criar conta a pagar;
   - baixar conta a pagar;
   - cancelar conta a pagar;
+  - editar conta a pagar;
   - excluir pagamento;
   - acessar DRE;
   - gerir comissoes;
   - acessar auditoria operacional;
 - menus e botoes criticos ajustados para refletir as novas permissoes;
 - migration `0038` aplicada com preenchimento inicial compativel ao acesso que ja existia.
+- migration `0041` amplia a cobertura de contas a receber com permissao especifica de cancelamento.
+- edicao controlada de contas a receber/pagar adicionada, com bloqueio de campos financeiros quando ja existe movimentacao.
 - testes de helper de permissao sensivel adicionados em `configuracoes/tests.py`.
 
-Ainda pendente nesta fase:
-- granularizar outras acoes sensiveis da OS e do caixa;
-- reduzir mais verificacoes hardcoded em templates;
-- ampliar testes especificos das novas permissoes granulares para rotas criticas restantes.
+Fase 03 concluida:
+- acoes sensiveis restantes da OS e do orcamento agora usam permissoes granulares;
+- verificacoes hardcoded remanescentes do caixa foram substituidas por helpers reutilizaveis;
+- testes especificos das permissoes granulares cobrem rotas criticas de OS, orcamentos e helper central.
 
 Permissoes sensiveis sugeridas:
 - editar numero de serie;
@@ -176,6 +179,7 @@ Permissoes sensiveis sugeridas:
 - aplicar desconto manual;
 - excluir pagamento;
 - editar conta a receber/pagar;
+- cancelar conta a receber/pagar;
 - acessar DRE;
 - gerir comissoes;
 - acessar auditoria operacional;
@@ -186,7 +190,7 @@ Resultado esperado:
 - seguranca melhora sem engessar a operacao.
 
 ### Fase 4 - Orcamento como extensao natural da OS
-Status: implementacao tecnica inicial concluida / consolidacao visual pendente
+Status: concluida
 Prioridade: media/alta
 
 Objetivo:
@@ -218,11 +222,16 @@ Feito nesta etapa:
 - notificacao de orcamento pode retornar para a propria aba `orcamentos`, mantendo o usuario no contexto da OS.
 
 Ainda pendente nesta fase:
-- simplificar mais rotas e pontos de entrada visuais;
-- revisar nomenclatura e mensagens para reforcar a OS como porta principal.
+- nenhuma pendencia critica aberta nesta fase.
+
+Feito nesta etapa:
+- rotas duplicadas de orcamento em `ordens` foram removidas;
+- `orcamentos` permaneceu como modulo oficial da logica e a OS virou o ponto principal de entrada visual;
+- acessos GET de criacao/edicao de orcamento passaram a redirecionar para a aba da OS;
+- textos da aba de orcamento foram ajustados para reforcar o ownership da OS.
 
 ### Fase 5 - Revisao de encoding e textos
-Status: implementacao principal concluida / monitoramento ativo
+Status: concluida
 Prioridade: media
 
 Objetivo:
@@ -246,15 +255,13 @@ Resultado esperado:
 Feito nesta etapa:
 - correcoes de mojibake aplicadas nos fluxos de OS, orcamento e caixa;
 - labels das abas da OS normalizados;
+- modais principais de servicos, orcamentos e pedidos passaram por limpeza visual e textual;
+- textos operacionais mais expostos da OS foram estabilizados em formato seguro para evitar regressao de encoding;
 - testes focados atualizados para refletir a nova interface;
 - teste de guarda anti-mojibake adicionado em `core/tests.py`.
 
-Ainda pendente nesta fase:
-- tratar casos residuais em comentarios/documentacao tecnica nao operacional;
-- manter varredura continua via suite de testes.
-
 ### Fase 6 - Limpeza tecnica e documental
-Status: em andamento
+Status: concluida
 Prioridade: media
 
 Objetivo:
@@ -282,12 +289,12 @@ Feito nesta etapa:
 - `docs/README.md` criado como indice de fontes ativas vs historicas;
 - inventarios historicos mantidos, mas tratados como referencia de auditoria.
 - inventarios tecnicos consolidados em `docs/legacy_code/` para reduzir ruido na raiz de documentacao.
-
-Ainda pendente nesta fase:
-- remover ou isolar referencias antigas restantes que nao agregam manutencao.
+- `docs/ownership_modulos.md` criado para registrar ownership tecnico atual por app e service.
+- `docs/legacy_code/README.md` reforcado para desencorajar manutencao em arquivos arquivados.
+- referencias documentais ativas alinhadas para separar melhor fonte viva vs historico.
 
 ### Fase 7 - Preparacao para PostgreSQL
-Status: implementacao inicial concluida / validacao de migracao pendente
+Status: concluida
 Prioridade: media
 
 Contexto:
@@ -318,11 +325,19 @@ Feito nesta etapa:
 - validacao defensiva para evitar subir PostgreSQL sem variaveis minimas.
 - dependencia `psycopg[binary]` adicionada em `requirements.txt`.
 - checklist tecnico criado em `docs/checklist_migracao_postgresql.md`.
+- arquivo `.env.postgres.example` criado para acelerar setup local.
+- comando `check_postgres_ready` criado para pre-validar ambiente e conexao.
+- migracao real aplicada em base PostgreSQL limpa (`assistencia_dev`).
+- conexao validada com `check_postgres_ready --check-connection`.
+- correcoes de compatibilidade SQLite/PostgreSQL aplicadas no setup inicial:
+  - aumento do campo `TipoEquipamentoConfig.codigo` para `max_length=80`;
+  - migration `configuracoes.0048` aplicada.
+- homologacao automatizada concluida em PostgreSQL:
+  - suite completa `core ordens estoque caixa orcamentos configuracoes` com 472 testes OK.
 
-Ainda pendente nesta fase:
-- executar migracao real em base PostgreSQL limpa;
-- rodar suite completa e homologacao no novo banco;
-- revisar indices/constraints com volume real de dados.
+Pendencias residuais (nao bloqueantes):
+- padronizar, quando desejado, uma unica instancia local em `5432` (hoje ambiente homologado em `5433`);
+- validar indices/constraints com carga operacional real (dados de uso).
 
 ## Ordem recomendada de implementacao
 
@@ -355,5 +370,5 @@ Status: concluida.
 
 Entrega 4:
 - revisar encoding e limpar referencias restantes ao legado.
-Status: em andamento.
+Status: concluida.
 

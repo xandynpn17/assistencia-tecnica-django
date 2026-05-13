@@ -20,6 +20,8 @@
       <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fornecedor-cons">Consultar Fornecedores</a></li>
       <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-marca-cad">Cadastrar Marca</a></li>
       <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-marca-cons">Consultar Marcas/Regras</a></li>
+      <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-parceiro-cad">Cadastrar Parceiro</a></li>
+      <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-parceiro-cons">Consultar Parceiros</a></li>
     </ul>
 
     <div class="tab-content">
@@ -278,6 +280,75 @@
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div class="tab-pane fade" id="tab-parceiro-cad">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="{% if edit_parceiro_id %}parceiro_edit{% else %}parceiro{% endif %}">
+          {% if edit_parceiro_id %}
+          <input type="hidden" name="parceiro_id" value="{{ edit_parceiro_id }}">
+          {% endif %}
+          <div class="row">
+            <div class="col-md-4">{{ parceiro_form.nome.label_tag }}{{ parceiro_form.nome }}</div>
+            <div class="col-md-4">{{ parceiro_form.contato.label_tag }}{{ parceiro_form.contato }}</div>
+            <div class="col-md-4">{{ parceiro_form.telefone.label_tag }}{{ parceiro_form.telefone }}</div>
+            <div class="col-md-4">{{ parceiro_form.email.label_tag }}{{ parceiro_form.email }}</div>
+            <div class="col-md-6">{{ parceiro_form.observacoes.label_tag }}{{ parceiro_form.observacoes }}</div>
+            <div class="col-md-2 mt-2">{{ parceiro_form.ativo.label_tag }}<br>{{ parceiro_form.ativo }}</div>
+          </div>
+          <button class="btn btn-primary mt-3" type="submit">{% if edit_parceiro_id %}Atualizar parceiro{% else %}Salvar parceiro{% endif %}</button>
+          {% if edit_parceiro_id %}
+          <a class="btn btn-outline-secondary mt-3 ml-2" href="{% url 'configuracoes:marcas_fornecedores' %}#tab-parceiro-cad">Cancelar edicao</a>
+          {% endif %}
+        </form>
+      </div>
+
+      <div class="tab-pane fade" id="tab-parceiro-cons">
+        <form method="get" class="form-inline mb-2">
+          <input class="form-control mr-2" type="text" name="qp" value="{{ busca_parceiro }}" placeholder="Buscar parceiro">
+          <button class="btn btn-outline-primary" type="submit">Buscar</button>
+        </form>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>Nome</th><th>Contato</th><th>Telefone</th><th>Email</th><th>Ativo</th><th>Ações</th></tr></thead>
+            <tbody>
+              {% for p in parceiros %}
+              <tr>
+                <td>{{ p.nome }}</td>
+                <td>{{ p.contato|default:"-" }}</td>
+                <td>{{ p.telefone|default:"-" }}</td>
+                <td>{{ p.email|default:"-" }}</td>
+                <td>{{ p.ativo|yesno:"Sim,Não" }}</td>
+                <td class="text-nowrap">
+                  <a class="btn btn-sm btn-outline-primary" href="?edit_parceiro={{ p.id }}#tab-parceiro-cad">Editar</a>
+                  <form method="post" class="d-inline" onsubmit="return window.AppMessages.confirmSync('Excluir parceiro?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="parceiro_delete">
+                    <input type="hidden" name="parceiro_id" value="{{ p.id }}">
+                    <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center text-muted">Sem parceiros.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if parceiros.has_other_pages %}
+        <nav>
+          <ul class="pagination pagination-sm">
+            {% if parceiros.has_previous %}
+            <li class="page-item"><a class="page-link" href="?qp={{ busca_parceiro }}&page_p={{ parceiros.previous_page_number }}#tab-parceiro-cons">Anterior</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Pagina {{ parceiros.number }} de {{ parceiros.paginator.num_pages }}</span></li>
+            {% if parceiros.has_next %}
+            <li class="page-item"><a class="page-link" href="?qp={{ busca_parceiro }}&page_p={{ parceiros.next_page_number }}#tab-parceiro-cons">Proxima</a></li>
+            {% endif %}
+          </ul>
+        </nav>
+        {% endif %}
       </div>
     </div>
   </div>

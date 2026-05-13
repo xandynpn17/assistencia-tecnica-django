@@ -1,4 +1,4 @@
-﻿{% extends 'core/base.html' %}
+{% extends 'core/base.html' %}
 
 {% block extra_css %}
 <style>
@@ -155,7 +155,7 @@
     <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
       <div>
         <h3 class="card-title mb-0">Pagamento de comissões</h3>
-        <p class="subtitle-muted">Gestão mensal por colaborador, com lote e validação de duplicidade.</p>
+        <p class="subtitle-muted">Gestáo mensal por colaborador, com lote e validação de duplicidade.</p>
       </div>
       <small class="text-muted">Registros no filtro: {{ total_registros }}</small>
     </div>
@@ -779,13 +779,13 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
       if (acao !== "prever_lote") {
-        let msg = "Confirmar ação em lote para as comissões selecionadas?";
+        let msg = "Confirmar ação em lote para as comissões selecionadasó";
         if (acao === "pagar_lote") {
-          msg = "Confirmar pagamento em lote das comissões selecionadas?";
+          msg = "Confirmar pagamento em lote das comissões selecionadasó";
         } else if (acao === "cancelar_lote") {
-          msg = "Confirmar cancelamento em lote das comissões selecionadas?";
+          msg = "Confirmar cancelamento em lote das comissões selecionadasó";
         } else if (acao === "liberar_lote") {
-          msg = "Confirmar liberação em lote das comissões selecionadas?";
+          msg = "Confirmar liberação em lote das comissões selecionadasó";
         }
         if (!confirmar(msg)) {
           return;

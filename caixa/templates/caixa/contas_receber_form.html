@@ -6,13 +6,22 @@
   {% include 'caixa/_subnav_caixa.html' %}
 
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Nova conta a receber</h3>
-    <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+    <h3 class="mb-0">{{ titulo_pagina|default:"Nova conta a receber" }}</h3>
+    {% if url_voltar_args %}
+    <a href="{% url url_voltar url_voltar_args.0 %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+    {% else %}
+    <a href="{% url url_voltar %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+    {% endif %}
   </div>
 
   <div class="card shadow-sm border-0">
     <div class="card-header bg-white"><strong>Dados da conta</strong></div>
     <div class="card-body">
+      {% if edicao_restrita %}
+      <div class="alert alert-warning">
+        Esta conta ja possui recebimentos. Campos financeiros ficam bloqueados para preservar o historico.
+      </div>
+      {% endif %}
       <form method="post">
         {% csrf_token %}
         <div class="row">
@@ -20,12 +29,17 @@
           <div class="col-md-6 mb-3">
             <label for="{{ field.id_for_label }}">{{ field.label }}</label>
             {{ field|add_class:"form-control" }}
+            {% if field.help_text %}<small class="form-text text-muted">{{ field.help_text }}</small>{% endif %}
             {% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}
           </div>
           {% endfor %}
         </div>
-        <button type="submit" class="btn btn-primary">Salvar</button>
-        <a href="{% url 'caixa:contas_receber' %}" class="btn btn-outline-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary">{{ texto_botao_salvar|default:"Salvar" }}</button>
+        {% if url_voltar_args %}
+        <a href="{% url url_voltar url_voltar_args.0 %}" class="btn btn-outline-secondary">Cancelar</a>
+        {% else %}
+        <a href="{% url url_voltar %}" class="btn btn-outline-secondary">Cancelar</a>
+        {% endif %}
       </form>
     </div>
   </div>

@@ -1,4 +1,4 @@
-from datetime import timedelta
+﻿from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -18,18 +18,18 @@ class EncodingIntegrityTests(TestCase):
     def test_no_mojibake_sequences_in_runtime_sources(self):
         base_dir = Path(settings.BASE_DIR)
         bad_tokens = (
-            "Ã§",
-            "Ã¡",
-            "Ã£",
-            "Ã©",
-            "Ãª",
-            "Ã³",
-            "Ãº",
-            "Ã­",
-            "ÃƒÂ",
-            "Ã‚",
-            "Âº",
-            "Âª",
+            "ÃƒÂ§",
+            "ÃƒÂ¡",
+            "ÃƒÂ£",
+            "ÃƒÂ©",
+            "ÃƒÂª",
+            "ÃƒÂ³",
+            "ÃƒÂº",
+            "ÃƒÂ­",
+            "ÃƒÆ’Ã‚",
+            "Ãƒâ€š",
+            "Ã‚Âº",
+            "Ã‚Âª",
         )
         allowed_suffixes = {".py", ".html"}
         excluded_dirs = {"migrations", "staticfiles", ".venv", "venv", "media", ".git", ".idea", ".vscode"}
@@ -125,7 +125,7 @@ class DashboardTests(TestCase):
         self.assertContains(response, "Últimas 5 Ordens Abertas")
         self.assertContains(response, "Atendente")
         self.assertContains(response, "Técnico responsável")
-        self.assertNotContains(response, "Abertas sem Técnico")
+        self.assertNotContains(response, "Abertas sem Tecnico")
 
     def test_indicadores_gerenciais_exibem_cards_tabela_e_blocos(self):
         self.client.force_login(self.gerente)
@@ -138,27 +138,27 @@ class DashboardTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Indicadores Gerenciais")
-        self.assertContains(response, "Base do Negócio")
+        self.assertContains(response, "Base do Negocio")
         self.assertContains(response, "Alertas e Gargalos")
-        self.assertContains(response, "Financeiro Vinculado à OS")
+        self.assertContains(response, "Financeiro Vinculado a OS")
         self.assertContains(response, "Leitura Comercial")
         self.assertContains(response, "Clientes cadastrados")
-        self.assertContains(response, "Novos clientes no mês")
+        self.assertContains(response, "Novos clientes no mes")
         self.assertContains(response, "Ordens registradas")
         self.assertContains(response, "Recusadas")
         self.assertContains(response, "Reabertas")
-        self.assertContains(response, "Concluídas sem pagamento")
+        self.assertContains(response, "Concluidas sem pagamento")
         self.assertContains(response, "Valor em aberto nas OS")
-        self.assertContains(response, "Recebimentos do mês")
-        self.assertContains(response, "Conversão de orçamento")
+        self.assertContains(response, "Recebimentos do mes")
+        self.assertContains(response, "Conversao de orcamento")
         self.assertContains(response, "Taxa de recusa")
-        self.assertContains(response, "Ticket médio por OS concluída")
-        self.assertContains(response, "CAC médio")
-        self.assertContains(response, "Abertas sem Técnico")
-        self.assertNotContains(response, "Últimas 5 Ordens Abertas")
+        self.assertContains(response, "Ticket medio por OS concluida")
+        self.assertContains(response, "CAC medio")
+        self.assertContains(response, "Abertas sem Tecnico")
+        self.assertNotContains(response, "Ultimas 5 Ordens Abertas")
         self.assertNotContains(response, "Atendente")
-        self.assertNotContains(response, "Técnico responsável")
-        self.assertContains(response, "Concluídas no mês")
+        self.assertNotContains(response, "Tecnico responsavel")
+        self.assertContains(response, "Concluidas no mes")
         self.assertContains(response, "Acumulado:")
         self.assertIn("?carregar=1&amp;status=pronto_contactado", response.content.decode())
 
@@ -314,14 +314,14 @@ class DashboardTests(TestCase):
         self.cliente.origem_cliente = "google"
         self.cliente.save(update_fields=["origem_cliente"])
         categoria_marketing = CategoriaFinanceira.objects.create(
-            nome="Marketing e Aquisição",
+            nome="Marketing e Aquisicao",
             tipo="saida",
             ativa=True,
         )
         conta_pagar = PagamentoContaPagar.objects.create(
             conta=ContaPagar.objects.create(
                 fornecedor="Meta Ads",
-                descricao="Campanha do mês",
+                descricao="Campanha do mes",
                 categoria=categoria_marketing,
                 valor_total=Decimal("120.00"),
                 valor_pago=Decimal("120.00"),
@@ -330,7 +330,7 @@ class DashboardTests(TestCase):
             ),
             valor=Decimal("120.00"),
         )
-        # garante uso da variável e data no período
+        # garante uso da variavel e data no periodo
         self.assertIsNotNone(conta_pagar.pk)
 
         response = self.client.get(reverse("core:dashboard_indicadores"))
@@ -367,3 +367,4 @@ class DashboardTests(TestCase):
         self.client.force_login(self.atendente)
         response = self.client.get(reverse("core:dashboard_indicadores"))
         self.assertEqual(response.status_code, 403)
+

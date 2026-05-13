@@ -8,7 +8,7 @@
       <h1 class="mb-1">Operação do caixa - {{ data_inicio_ref|date:"d/m/Y" }}</h1>
     {% else %}
       <h1 class="mb-1">Operação do caixa por período</h1>
-      <div class="text-muted small">{{ data_inicio_ref|date:"d/m/Y" }} até {{ data_fim_ref|date:"d/m/Y" }}</div>
+      <div class="text-muted small">{{ data_inicio_ref|date:"d/m/Y" }} at? {{ data_fim_ref|date:"d/m/Y" }}</div>
     {% endif %}
   </div>
   <form method="get" class="card p-2 mb-0" style="min-width: 360px;">
@@ -237,7 +237,7 @@
           </button>
         </div>
         <div class="modal-body">
-          <div class="small text-muted mb-2">{{ evento.quando|date:"d/m/Y H:i" }}{% if evento.usuario %} · {{ evento.usuario.username }}{% endif %}</div>
+          <div class="small text-muted mb-2">{{ evento.quando|date:"d/m/Y H:i" }}{% if evento.usuario %} - {{ evento.usuario.username }}{% endif %}</div>
           <div>{{ evento.descricao }}</div>
         </div>
         <div class="modal-footer">

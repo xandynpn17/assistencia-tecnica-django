@@ -4,7 +4,6 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -15,6 +14,7 @@ from ..forms import (
     BaixaContaReceberForm,
     CategoriaFinanceiraForm,
     CentroCustoForm,
+    ContaReceberEdicaoForm,
     ContaReceberForm,
     CustoFixoMensalForm,
     FormaPagamentoForm,
@@ -25,10 +25,8 @@ from ..models import (
     ContaReceber,
     CustoFixoMensal,
     FormaPagamento,
-    LancamentoCaixa,
-    Pagamento,
-    RecebimentoConta,
 )
+from ..services.contas import processar_baixa_conta_receber
 from caixa.services.comissoes import processar_evento_retirada_cliente
 from .common import caixa_atual
 from .helpers import (
@@ -112,6 +110,12 @@ def contas_receber(request):
     )
     receber_garantia_qtd = pendentes_qs.filter(tipo_origem="garantia_fabricante").count()
     receber_garantia_total = pendentes_qs.filter(tipo_origem="garantia_fabricante").aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    receber_criticas_qs = pendentes_qs.filter(
+        Q(vencimento__lt=hoje)
+        | Q(tipo_origem="cliente_os", ordem_servico__status__in=["pronto_contactado", "pronto_contactar"])
+    )
+    receber_criticas_qtd = receber_criticas_qs.count()
+    receber_criticas_total = receber_criticas_qs.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     if status:
         queryset = queryset.filter(status=status)
     if tipo_origem in {"cliente_os", "garantia_fabricante", "avulso"}:
@@ -141,6 +145,11 @@ def contas_receber(request):
             tipo_origem="cliente_os",
             status__in=["aberta", "parcial", "vencida"],
             ordem_servico__status="pronto_contactado",
+        )
+    elif prioridade == "criticas":
+        queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"]).filter(
+            Q(vencimento__lt=hoje)
+            | Q(tipo_origem="cliente_os", ordem_servico__status__in=["pronto_contactado", "pronto_contactar"])
         )
     if aging_filtro in {"a_vencer", "vencidas_1_30", "vencidas_31_60", "vencidas_61_90", "vencidas_90_plus"}:
         queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"])
@@ -245,6 +254,8 @@ def contas_receber(request):
             "receber_proximos_7d_qtd": receber_proximos_7d_qtd,
             "receber_proximos_7d_total": receber_proximos_7d_total,
             "receber_prontas_qtd": receber_prontas_qtd,
+            "receber_criticas_qtd": receber_criticas_qtd,
+            "receber_criticas_total": receber_criticas_total,
             "receber_garantia_qtd": receber_garantia_qtd,
             "receber_garantia_total": receber_garantia_total,
             "hoje": hoje,
@@ -280,7 +291,63 @@ def criar_conta_receber(request):
     return render(
         request,
         "caixa/contas_receber_form.html",
-        {"form": form, "menu_app": "caixa", "menu_sub": "contas_receber"},
+        {
+            "form": form,
+            "titulo_pagina": "Nova conta a receber",
+            "texto_botao_salvar": "Salvar",
+            "url_voltar": "caixa:contas_receber",
+            "menu_app": "caixa",
+            "menu_sub": "contas_receber",
+        },
+    )
+
+
+@role_required(CAIXA_FINANCIAL_ROLES)
+def editar_conta_receber(request, conta_id):
+    _garantir_categorias_financeiras_padrao()
+    require_sensitive_permission(request.user, "perm_caixa_editar_conta_receber")
+    conta = get_object_or_404(ContaReceber, id=conta_id)
+    if conta.status == "cancelada":
+        messages.warning(request, "Contas canceladas nao podem ser editadas.")
+        return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
+
+    edicao_restrita = conta.recebimentos.exists()
+    if request.method == "POST":
+        form = ContaReceberEdicaoForm(
+            request.POST,
+            instance=conta,
+            allow_financial_changes=not edicao_restrita,
+        )
+        if form.is_valid():
+            conta = form.save(commit=False)
+            if conta.ordem_servico_id:
+                conta.tipo_origem = "cliente_os"
+            elif conta.tipo_origem != "garantia_fabricante":
+                conta.tipo_origem = "avulso"
+            conta.save()
+            _log_financeiro("conta_receber_editada", request.user, conta=conta, valor=conta.valor_original)
+            if edicao_restrita:
+                messages.success(request, "Conta atualizada. Campos financeiros foram preservados porque ja existem recebimentos.")
+            else:
+                messages.success(request, "Conta a receber atualizada com sucesso.")
+            return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
+    else:
+        form = ContaReceberEdicaoForm(instance=conta, allow_financial_changes=not edicao_restrita)
+
+    return render(
+        request,
+        "caixa/contas_receber_form.html",
+        {
+            "form": form,
+            "conta": conta,
+            "titulo_pagina": f"Editar conta a receber #{conta.id}",
+            "texto_botao_salvar": "Salvar alteracoes",
+            "url_voltar": "caixa:detalhe_conta_receber",
+            "url_voltar_args": [conta.id],
+            "edicao_restrita": edicao_restrita,
+            "menu_app": "caixa",
+            "menu_sub": "contas_receber",
+        },
     )
 
 
@@ -294,6 +361,22 @@ def detalhe_conta_receber(request, conta_id):
     dias_atraso = max(0, (hoje - conta.vencimento).days) if conta.vencimento else 0
 
     if request.method == "POST":
+        action = (request.POST.get("action") or "baixar").strip()
+        if action == "cancelar":
+            try:
+                require_sensitive_permission(request.user, "perm_caixa_cancelar_conta_receber")
+            except PermissionDenied as exc:
+                messages.error(request, str(exc) or "Permissao insuficiente.")
+                return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
+            if recebimentos.exists():
+                messages.error(request, "Nao e permitido cancelar conta com recebimentos vinculados.")
+            else:
+                conta.status = "cancelada"
+                conta.save(update_fields=["status", "atualizado_em"])
+                _log_financeiro("conta_receber_cancelada", request.user, conta=conta, valor=conta.valor_original)
+                messages.success(request, "Conta cancelada.")
+            return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
+
         form = BaixaContaReceberForm(_payload_pagamento_normalizado(request))
         if form.is_valid():
             try:
@@ -336,43 +419,20 @@ def detalhe_conta_receber(request, conta_id):
                 messages.error(request, "O valor efetivamente recebido deve ser maior que zero.")
                 return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
 
-            with transaction.atomic():
-                pagamento = Pagamento.objects.create(
-                    caixa=caixa,
-                    ordem_servico=conta.ordem_servico,
-                    valor=valor_recebido,
-                    forma_pagamento=forma_pagamento,
-                    metodo=forma_pagamento.codigo if forma_pagamento else "",
-                    referencia=referencia,
-                    observacao=observacao,
-                )
-                _vincular_talao_itens_ordem(pagamento.ordem_servico, pagamento.numero_talao, pagamento=pagamento)
-                LancamentoCaixa.objects.create(
-                    caixa=caixa,
-                    pagamento=pagamento,
-                    descricao=f"Baixa conta receber #{conta.id}",
-                    valor=valor_recebido,
-                    tipo="entrada",
-                    usuario=request.user,
-                )
-                RecebimentoConta.objects.create(
-                    conta=conta,
-                    pagamento=pagamento,
-                    valor=valor,
-                    desconto=desconto,
-                    juros=juros,
-                    referencia=referencia,
-                    observacao=observacao,
-                    usuario=request.user,
-                )
-
-                conta.valor_aberto = max(Decimal("0.00"), conta.valor_aberto - abatimento)
-                conta.atualizar_status_automatico()
-                conta.save()
-                if conta.ordem_servico and conta.ordem_servico.status == "concluida" and conta.status == "paga":
-                    processar_evento_retirada_cliente(conta.ordem_servico, evento="RETIRADA_CLIENTE")
-
-            _log_financeiro("conta_receber_baixa_manual", request.user, conta=conta, pagamento=pagamento, valor=valor_recebido)
+            pagamento = processar_baixa_conta_receber(
+                conta=conta,
+                caixa=caixa,
+                usuario=request.user,
+                forma_pagamento=forma_pagamento,
+                valor=valor,
+                desconto=desconto,
+                juros=juros,
+                referencia=referencia,
+                observacao=observacao,
+                vincular_talao_cb=_vincular_talao_itens_ordem,
+                log_financeiro_cb=_log_financeiro,
+                processar_retirada_cb=processar_evento_retirada_cliente,
+            )
             messages.success(request, "Baixa registrada com sucesso.")
             return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
     else:
@@ -388,6 +448,8 @@ def detalhe_conta_receber(request, conta_id):
             "valor_quitado": valor_quitado,
             "dias_atraso": dias_atraso,
             "pode_baixar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_baixar_conta_receber"),
+            "pode_cancelar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_cancelar_conta_receber"),
+            "pode_editar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_editar_conta_receber"),
             "pode_aplicar_desconto_caixa": has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"),
             "menu_app": "caixa",
             "menu_sub": "contas_receber",
@@ -658,5 +720,6 @@ __all__ = [
     "criar_conta_receber",
     "custos_fixos",
     "detalhe_conta_receber",
+    "editar_conta_receber",
     "formas_pagamento",
 ]

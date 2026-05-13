@@ -11,7 +11,7 @@ from .dashboard import (
     registrar_pagamento,
     registrar_saida,
 )
-from .pagaveis import aging_pagar, contas_pagar, criar_conta_pagar, detalhe_conta_pagar
+from .pagaveis import aging_pagar, contas_pagar, criar_conta_pagar, detalhe_conta_pagar, editar_conta_pagar
 from .taloes import imprimir_talao, taloes
 from .recebiveis import (
     aging_receber,
@@ -21,6 +21,7 @@ from .recebiveis import (
     criar_conta_receber,
     custos_fixos,
     detalhe_conta_receber,
+    editar_conta_receber,
     formas_pagamento,
 )
 
@@ -46,6 +47,8 @@ __all__ = [
     "detalhe_caixa",
     "detalhe_conta_pagar",
     "detalhe_conta_receber",
+    "editar_conta_pagar",
+    "editar_conta_receber",
     "dre",
     "excluir_pagamento",
     "fechar_caixa",

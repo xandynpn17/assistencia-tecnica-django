@@ -66,6 +66,7 @@
       <strong class="mr-2">Prioridades:</strong>
       <a href="{% url 'caixa:contas_receber' %}?prioridade=hoje" class="btn btn-sm {% if prioridade_filtro == 'hoje' %}btn-primary{% else %}btn-outline-primary{% endif %}">Receber hoje ({{ receber_hoje_qtd }})</a>
       <a href="{% url 'caixa:contas_receber' %}?prioridade=vencidas" class="btn btn-sm {% if prioridade_filtro == 'vencidas' %}btn-danger{% else %}btn-outline-danger{% endif %}">Vencidas ({{ receber_vencidas_qtd }})</a>
+      <a href="{% url 'caixa:contas_receber' %}?prioridade=criticas" class="btn btn-sm {% if prioridade_filtro == 'criticas' %}btn-dark{% else %}btn-outline-dark{% endif %}">Criticas ({{ receber_criticas_qtd }})</a>
       <a href="{% url 'caixa:contas_receber' %}?prioridade=semana" class="btn btn-sm {% if prioridade_filtro == 'semana' %}btn-warning{% else %}btn-outline-warning{% endif %}">Próx. 7 dias ({{ receber_proximos_7d_qtd }})</a>
       <a href="{% url 'caixa:contas_receber' %}?prioridade=prontas" class="btn btn-sm {% if prioridade_filtro == 'prontas' %}btn-success{% else %}btn-outline-success{% endif %}">OS prontas ({{ receber_prontas_qtd }})</a>
       {% if filtros_salvos_existem %}

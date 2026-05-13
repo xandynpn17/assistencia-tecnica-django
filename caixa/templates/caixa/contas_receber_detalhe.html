@@ -7,7 +7,12 @@
 
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Conta a receber #{{ conta.id }}</h3>
-    <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+    <div class="d-flex gap-2">
+      {% if pode_editar_conta_receber %}
+      <a href="{% url 'caixa:editar_conta_receber' conta.id %}" class="btn btn-sm btn-outline-primary mr-2">Editar</a>
+      {% endif %}
+      <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+    </div>
   </div>
 
   <div class="row mb-3">
@@ -136,6 +141,7 @@
           {% else %}
           <form method="post">
             {% csrf_token %}
+            <input type="hidden" name="action" value="baixar">
             {% for field in form %}
             <div class="mb-2">
               <label for="{{ field.id_for_label }}">{{ field.label }}</label>
@@ -150,6 +156,24 @@
             {% endfor %}
             <button type="submit" class="btn btn-success">Registrar baixa</button>
           </form>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-body">
+          <form method="post" onsubmit="return window.AppMessages.confirmSync('Deseja cancelar esta conta?');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="cancelar">
+            <button type="submit" class="btn btn-outline-danger btn-block" {% if recebimentos or not pode_cancelar_conta_receber %}disabled{% endif %}>
+              Cancelar conta
+            </button>
+          </form>
+          {% if recebimentos %}
+          <small class="text-muted d-block mt-2">Conta com recebimentos vinculados nao pode ser cancelada.</small>
+          {% endif %}
+          {% if not recebimentos and not pode_cancelar_conta_receber %}
+          <small class="text-muted d-block mt-2">Bloqueado para este usuario.</small>
           {% endif %}
         </div>
       </div>

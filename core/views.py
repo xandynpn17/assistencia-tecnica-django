@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -128,7 +128,7 @@ def _dashboard_managerial_context():
     despesas_totais_mes = despesas_pagas_mes_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     despesas_marketing_mes = (
         despesas_pagas_mes_qs.filter(
-            Q(conta__categoria__nome="Marketing e Aquisição") | Q(conta__centro_custo__nome="Marketing")
+            Q(conta__categoria__nome__icontains="marketing") | Q(conta__centro_custo__nome__icontains="marketing")
         ).aggregate(total=Sum("valor"))["total"]
         or Decimal("0.00")
     )
@@ -295,3 +295,4 @@ def painel(request):
         "tipo_usuario": request.user.get_tipo_display(),
     }
     return render(request, "configuracoes/painel.html", context)
+

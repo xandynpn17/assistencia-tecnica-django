@@ -7,7 +7,12 @@
 
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Conta a pagar #{{ conta.id }}</h3>
-    <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+    <div class="d-flex gap-2">
+      {% if pode_editar_conta_pagar %}
+      <a href="{% url 'caixa:editar_conta_pagar' conta.id %}" class="btn btn-sm btn-outline-primary mr-2">Editar</a>
+      {% endif %}
+      <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+    </div>
   </div>
 
   <div class="row mb-3">

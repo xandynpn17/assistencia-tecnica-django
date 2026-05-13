@@ -1,4 +1,4 @@
-﻿{% extends 'core/base.html' %}
+{% extends 'core/base.html' %}
 
 {% block extra_css %}
 <style>
@@ -44,7 +44,7 @@
       <h1 class="mb-1">Financeiro do caixa - {{ data_inicio_ref|date:"d/m/Y" }}</h1>
     {% else %}
       <h1 class="mb-1">Financeiro do caixa por período</h1>
-      <div class="text-muted small">{{ data_inicio_ref|date:"d/m/Y" }} até {{ data_fim_ref|date:"d/m/Y" }}</div>
+      <div class="text-muted small">{{ data_inicio_ref|date:"d/m/Y" }} at? {{ data_fim_ref|date:"d/m/Y" }}</div>
     {% endif %}
   </div>
   <form method="get" class="card p-2 mb-0" style="min-width: 360px;">
@@ -118,7 +118,7 @@
 </div>
 
 <div class="alert alert-light py-2">
-  Comparativo com período anterior ({{ periodo_anterior_inicio|date:"d/m/Y" }} até {{ periodo_anterior_fim|date:"d/m/Y" }}).
+  Comparativo com período anterior ({{ periodo_anterior_inicio|date:"d/m/Y" }} at? {{ periodo_anterior_fim|date:"d/m/Y" }}).
 </div>
 
 <div class="row mb-3">
@@ -190,7 +190,7 @@
   </div>
   <div class="col-lg-6">
     <div class="card h-100">
-      <div class="card-header"><h3 class="card-title">Pressão sobre o caixa</h3></div>
+      <div class="card-header"><h3 class="card-title">Pressóo sobre o caixa</h3></div>
       <div class="card-body p-0">
         <table class="table table-sm mb-0">
           <tbody>

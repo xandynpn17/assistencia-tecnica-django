@@ -469,18 +469,18 @@ def premios_meta(request):
             regra_premio_form = RegraPremioMetaForm(request.POST)
             if regra_premio_form.is_valid():
                 regra_premio_form.save()
-                messages.success(request, "Regra de prêmio salva.")
+                messages.success(request, "Regra de premio salva.")
                 return redirect("caixa:premios_meta")
         elif request.POST.get("action") == "faixa_premio":
             faixa_premio_form = FaixaPremioMetaForm(request.POST)
             if faixa_premio_form.is_valid():
                 faixa_premio_form.save()
-                messages.success(request, "Faixa de prêmio salva.")
+                messages.success(request, "Faixa de premio salva.")
                 return redirect("caixa:premios_meta")
         elif request.POST.get("action") == "recalcular_premios":
             competencia = _competencia_atual()
             total = _recalcular_premios_competencia(competencia)
-            messages.success(request, f"Prêmios recalculados para {competencia:%m/%Y}: {total} registros.")
+            messages.success(request, f"Premios recalculados para {competencia:%m/%Y}: {total} registros.")
             return redirect("caixa:premios_meta")
 
     regras_premios = RegraPremioMeta.objects.prefetch_related("faixas").all()
@@ -564,13 +564,13 @@ def meu_desempenho(request):
     if filtro_aplicado:
         if not data_inicio or not data_fim:
             periodo_valido = False
-            messages.warning(request, "Informe datas válidas para pesquisar.")
+            messages.warning(request, "Informe datas validas para pesquisar.")
         elif data_inicio > data_fim:
             periodo_valido = False
-            messages.warning(request, "A data de início não pode ser maior que a data de fim.")
+            messages.warning(request, "A data de inicio nao pode ser maior que a data de fim.")
         elif (data_fim - data_inicio).days > 366:
             periodo_valido = False
-            messages.warning(request, "O intervalo máximo permitido para consulta é de 12 meses.")
+            messages.warning(request, "O intervalo maximo permitido para consulta e de 12 meses.")
 
     if not pode_filtrar_tecnicos:
         tecnico_filtro = str(request.user.id)
@@ -702,15 +702,15 @@ def meu_desempenho(request):
     secoes_realizadas = [
         {
             "chave": "servicos",
-            "titulo": "Serviços",
-            "descricao": "Comissões geradas por mão de obra e serviços executados.",
+            "titulo": "Servicos",
+            "descricao": "Comissoes geradas por mao de obra e servicos executados.",
             "linhas": linhas_realizadas_por_tipo["servicos"],
             "total": resumo_por_tipo_real["servicos"],
         },
         {
             "chave": "pecas",
             "titulo": "Pecas",
-            "descricao": "Comissões geradas por peças aplicadas no reparo.",
+            "descricao": "Comissoes geradas por pecas aplicadas no reparo.",
             "linhas": linhas_realizadas_por_tipo["pecas"],
             "total": resumo_por_tipo_real["pecas"],
         },
@@ -724,7 +724,7 @@ def meu_desempenho(request):
         {
             "chave": "vendas",
             "titulo": "Vendas",
-            "descricao": "Comissões de venda de mostrador e balcão.",
+            "descricao": "Comissoes de venda de mostrador e balcao.",
             "linhas": linhas_realizadas_por_tipo["vendas"],
             "total": resumo_por_tipo_real["vendas"],
         },
@@ -956,7 +956,7 @@ def meu_desempenho(request):
         folha["secoes"] = [
             {
                 "chave": "servicos",
-                "titulo": "Serviços",
+                "titulo": "Servicos",
                 "linhas": folha["servicos"]["linhas"],
                 "total_valor": folha["servicos"]["total_valor"],
                 "total_comissao": folha["servicos"]["total_comissao"],
@@ -1027,7 +1027,7 @@ def meu_desempenho(request):
 
     secoes_desempenho = [
         {
-            "titulo": "Serviços",
+            "titulo": "Servicos",
             "descricao": f"Calculado pelo percentual informado ({percentual_servicos:.2f}%).",
             "linhas": servicos_calculados,
             "total": total_comissao_servicos_relatorio,
@@ -1040,7 +1040,7 @@ def meu_desempenho(request):
         },
         {
             "titulo": "Vendas",
-            "descricao": "Comissões de venda geradas quando a guia passa no caixa.",
+            "descricao": "Comissoes de venda geradas quando a guia passa no caixa.",
             "linhas": linhas_realizadas_por_tipo["vendas"],
             "total": resumo_por_tipo_real["vendas"],
         },
@@ -1171,3 +1171,5 @@ def meu_desempenho(request):
             "menu_sub": "meu_desempenho",
         },
     )
+
+

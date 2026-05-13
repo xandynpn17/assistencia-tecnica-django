@@ -1,3 +1,4 @@
+{% load permission_tags %}
 <div class="card mb-3 shadow-sm border-0">
   <div class="card-body py-2 d-flex flex-wrap" style="gap: 8px;">
     <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm {% if menu_sub == 'dashboard_caixa' %}btn-primary{% else %}btn-outline-primary{% endif %}">
@@ -13,7 +14,7 @@
       Saídas
     </a>
 
-    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.acesso_caixa_financeiro_extra %}
+    {% if user|has_role_alias:'caixa_financial' %}
     <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm {% if menu_sub == 'contas_receber' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
       Contas a receber
     </a>
@@ -27,7 +28,7 @@
       Aging pagar
     </a>
 
-    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_caixa_gerir_comissoes %}
+    {% if user|has_perm_sensivel:'perm_caixa_gerir_comissoes' %}
     <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-sm {% if menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_pendencias' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'meu_desempenho' %}btn-info{% else %}btn-outline-info{% endif %}">
       Comissões
     </a>
@@ -35,7 +36,7 @@
     <a href="{% url 'caixa:relatorios' %}" class="btn btn-sm {% if menu_sub == 'relatorios' %}btn-dark{% else %}btn-outline-dark{% endif %}">
       Relatórios
     </a>
-    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_caixa_ver_dre %}
+    {% if user|has_perm_sensivel:'perm_caixa_ver_dre' %}
     <a href="{% url 'caixa:dre' %}" class="btn btn-sm {% if menu_sub == 'dre' %}btn-dark{% else %}btn-outline-dark{% endif %}">
       DRE
     </a>
@@ -62,7 +63,7 @@
     <a href="{% url 'caixa:garantias_fabricante' %}" class="btn btn-sm {% if menu_sub == 'garantias_fabricante' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
       Garantias
     </a>
-    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_caixa_gerir_comissoes %}
+    {% if user|has_perm_sensivel:'perm_caixa_gerir_comissoes' %}
     <a href="{% url 'caixa:premios_meta' %}" class="btn btn-sm {% if menu_sub == 'premios_meta' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
       Prêmios
     </a>

@@ -60,7 +60,7 @@ class Empresa(models.Model):
 
 
 class TipoEquipamentoConfig(models.Model):
-    codigo = models.CharField(max_length=40, unique=True)
+    codigo = models.CharField(max_length=80, unique=True)
     nome = models.CharField(max_length=80, unique=True)
     ativo = models.BooleanField(default=True)
     ordem = models.PositiveIntegerField(default=0)
@@ -70,7 +70,7 @@ class TipoEquipamentoConfig(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.codigo and self.nome:
-            self.codigo = slugify(self.nome).replace("-", "_")[:40]
+            self.codigo = slugify(self.nome).replace("-", "_")[:80]
         if not self.codigo:
             self.codigo = f"equip_{self.pk or ''}".strip("_")
         self.codigo = self.codigo.lower()
@@ -78,6 +78,57 @@ class TipoEquipamentoConfig(models.Model):
 
     def __str__(self):
         return self.nome
+
+
+class SegmentoEmpresaCatalogo(models.Model):
+    codigo = models.CharField(max_length=40, unique=True)
+    nome = models.CharField(max_length=80, unique=True)
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["ordem", "nome"]
+
+    def __str__(self):
+        return self.nome
+
+
+class LinhaAtuacaoCatalogo(models.Model):
+    segmento = models.ForeignKey(
+        SegmentoEmpresaCatalogo,
+        on_delete=models.CASCADE,
+        related_name="linhas",
+    )
+    codigo = models.CharField(max_length=60, unique=True)
+    nome = models.CharField(max_length=100)
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["segmento__ordem", "ordem", "nome"]
+        unique_together = [("segmento", "nome")]
+
+    def __str__(self):
+        return f"{self.segmento.nome} - {self.nome}"
+
+
+class TipoEquipamentoCatalogo(models.Model):
+    linha = models.ForeignKey(
+        LinhaAtuacaoCatalogo,
+        on_delete=models.CASCADE,
+        related_name="tipos_equipamento",
+    )
+    codigo = models.CharField(max_length=80, unique=True)
+    nome = models.CharField(max_length=120)
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["linha__segmento__ordem", "linha__ordem", "ordem", "nome"]
+        unique_together = [("linha", "nome")]
+
+    def __str__(self):
+        return f"{self.linha.nome} - {self.nome}"
 
 
 class FornecedorGarantia(models.Model):
@@ -110,6 +161,21 @@ class FornecedorGarantia(models.Model):
     prazo_pagamento_dias = models.PositiveIntegerField(default=30)
     documento_anexo = models.FileField(upload_to="fornecedores/documentos/", blank=True, null=True)
     comprovante_pagamento_anexo = models.FileField(upload_to="fornecedores/comprovantes/", blank=True, null=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
+class ParceiroExpedicao(models.Model):
+    nome = models.CharField(max_length=120, unique=True)
+    contato = models.CharField(max_length=120, blank=True)
+    telefone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
+    observacoes = models.TextField(blank=True)
     ativo = models.BooleanField(default=True)
 
     class Meta:
@@ -281,21 +347,38 @@ class User(AbstractUser):
     acesso_caixa_financeiro_extra = models.BooleanField(default=False)
     acesso_configuracoes_extra = models.BooleanField(default=False)
     perm_os_editar_numero_serie = models.BooleanField(default=False)
+    perm_os_editar_observacoes_internas = models.BooleanField(default=False)
+    perm_os_editar_local_armazenamento = models.BooleanField(default=False)
     perm_os_alterar_tecnico = models.BooleanField(default=False)
+    perm_os_excluir_servico_peca = models.BooleanField(default=False)
     perm_os_concluir = models.BooleanField(default=False)
     perm_os_reabrir = models.BooleanField(default=False)
+    perm_orcamento_editar = models.BooleanField(default=False)
+    perm_orcamento_aprovar_item = models.BooleanField(default=False)
+    perm_orcamento_recusar_item = models.BooleanField(default=False)
+    perm_orcamento_migrar_item = models.BooleanField(default=False)
     perm_orcamento_aplicar_desconto = models.BooleanField(default=False)
     perm_orcamento_excluir_item = models.BooleanField(default=False)
     perm_caixa_criar_conta_receber = models.BooleanField(default=False)
     perm_caixa_baixar_conta_receber = models.BooleanField(default=False)
+    perm_caixa_cancelar_conta_receber = models.BooleanField(default=False)
+    perm_caixa_editar_conta_receber = models.BooleanField(default=False)
     perm_caixa_criar_conta_pagar = models.BooleanField(default=False)
     perm_caixa_baixar_conta_pagar = models.BooleanField(default=False)
     perm_caixa_cancelar_conta_pagar = models.BooleanField(default=False)
+    perm_caixa_editar_conta_pagar = models.BooleanField(default=False)
     perm_caixa_aplicar_desconto = models.BooleanField(default=False)
     perm_caixa_excluir_pagamento = models.BooleanField(default=False)
     perm_caixa_ver_dre = models.BooleanField(default=False)
     perm_caixa_gerir_comissoes = models.BooleanField(default=False)
     perm_caixa_ver_auditoria = models.BooleanField(default=False)
+    perm_estoque_cadastro_produto = models.BooleanField(default=False)
+    perm_estoque_excluir_produto = models.BooleanField(default=False)
+    perm_estoque_ajuste_manual = models.BooleanField(default=False)
+    perm_estoque_transferencia = models.BooleanField(default=False)
+    perm_estoque_inventario_finalizar = models.BooleanField(default=False)
+    perm_estoque_converter_reserva = models.BooleanField(default=False)
+    perm_estoque_cancelar_reserva = models.BooleanField(default=False)
     numero_vendedor = models.CharField(
         max_length=10,
         blank=True,
@@ -748,6 +831,42 @@ class ConfiguracaoSistema(models.Model):
 
     def __str__(self):
         return f"Configurações do Sistema (ID: {self.pk})"
+
+class SetupInicialSistema(models.Model):
+    TIPO_EMPRESA_CHOICES = [
+        ("assistencia_tecnica", "Assistencia tecnica"),
+        ("oficina_mecanica", "Oficina mecanica"),
+    ]
+
+    empresa = models.OneToOneField(
+        Empresa,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="setup_inicial",
+    )
+    tipo_empresa = models.CharField(max_length=40, choices=TIPO_EMPRESA_CHOICES, blank=True)
+    linhas_atuacao = models.ManyToManyField(LinhaAtuacaoCatalogo, blank=True, related_name="setups")
+    concluido = models.BooleanField(default=False)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Setup inicial do sistema"
+        verbose_name_plural = "Setup inicial do sistema"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_setup(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "Setup inicial"
+
 
 class ModeloMensagem(models.Model):
     TIPO_CHOICES = [

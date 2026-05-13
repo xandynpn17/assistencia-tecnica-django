@@ -81,3 +81,18 @@ py -3.13 -m venv .venv
 ## Documentacao complementar
 
 Analise da arquitetura atual: `docs/revisao_arquitetura.md`
+Ownership tecnico dos modulos: `docs/ownership_modulos.md`
+Checklist de migracao PostgreSQL: `docs/checklist_migracao_postgresql.md`
+
+## Preparacao para PostgreSQL
+
+Existe um arquivo exemplo de ambiente para a migracao:
+
+- `.env.postgres.example`
+
+E um pre-check rapido para validar configuracao:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py check_postgres_ready
+.\.venv\Scripts\python.exe manage.py check_postgres_ready --check-connection
+```

@@ -13,8 +13,10 @@ from .models import (
     ConfiguracaoSistema,
     Empresa,
     FornecedorGarantia,
+    LinhaAtuacaoCatalogo,
     MarcaGarantia,
     ModeloMensagem,
+    ParceiroExpedicao,
     RegraGarantiaMarca,
     TipoEquipamentoConfig,
     UsuarioArquivo,
@@ -277,21 +279,38 @@ class UserForm(forms.ModelForm):
             'acesso_caixa_financeiro_extra',
             'acesso_configuracoes_extra',
             'perm_os_editar_numero_serie',
+            'perm_os_editar_observacoes_internas',
+            'perm_os_editar_local_armazenamento',
             'perm_os_alterar_tecnico',
+            'perm_os_excluir_servico_peca',
             'perm_os_concluir',
             'perm_os_reabrir',
+            'perm_orcamento_editar',
+            'perm_orcamento_aprovar_item',
+            'perm_orcamento_recusar_item',
+            'perm_orcamento_migrar_item',
             'perm_orcamento_aplicar_desconto',
             'perm_orcamento_excluir_item',
             'perm_caixa_criar_conta_receber',
             'perm_caixa_baixar_conta_receber',
+            'perm_caixa_cancelar_conta_receber',
+            'perm_caixa_editar_conta_receber',
             'perm_caixa_criar_conta_pagar',
             'perm_caixa_baixar_conta_pagar',
             'perm_caixa_cancelar_conta_pagar',
+            'perm_caixa_editar_conta_pagar',
             'perm_caixa_aplicar_desconto',
             'perm_caixa_excluir_pagamento',
             'perm_caixa_ver_dre',
             'perm_caixa_gerir_comissoes',
             'perm_caixa_ver_auditoria',
+            'perm_estoque_cadastro_produto',
+            'perm_estoque_excluir_produto',
+            'perm_estoque_ajuste_manual',
+            'perm_estoque_transferencia',
+            'perm_estoque_inventario_finalizar',
+            'perm_estoque_converter_reserva',
+            'perm_estoque_cancelar_reserva',
             'data_admissao',
             'data_demissao',
             'pis_pasep',
@@ -357,21 +376,38 @@ class UserForm(forms.ModelForm):
             "acesso_caixa_financeiro_extra",
             "acesso_configuracoes_extra",
             "perm_os_editar_numero_serie",
+            "perm_os_editar_observacoes_internas",
+            "perm_os_editar_local_armazenamento",
             "perm_os_alterar_tecnico",
+            "perm_os_excluir_servico_peca",
             "perm_os_concluir",
             "perm_os_reabrir",
+            "perm_orcamento_editar",
+            "perm_orcamento_aprovar_item",
+            "perm_orcamento_recusar_item",
+            "perm_orcamento_migrar_item",
             "perm_orcamento_aplicar_desconto",
             "perm_orcamento_excluir_item",
             "perm_caixa_criar_conta_receber",
             "perm_caixa_baixar_conta_receber",
+            "perm_caixa_cancelar_conta_receber",
+            "perm_caixa_editar_conta_receber",
             "perm_caixa_criar_conta_pagar",
             "perm_caixa_baixar_conta_pagar",
             "perm_caixa_cancelar_conta_pagar",
+            "perm_caixa_editar_conta_pagar",
             "perm_caixa_aplicar_desconto",
             "perm_caixa_excluir_pagamento",
             "perm_caixa_ver_dre",
             "perm_caixa_gerir_comissoes",
             "perm_caixa_ver_auditoria",
+            "perm_estoque_cadastro_produto",
+            "perm_estoque_excluir_produto",
+            "perm_estoque_ajuste_manual",
+            "perm_estoque_transferencia",
+            "perm_estoque_inventario_finalizar",
+            "perm_estoque_converter_reserva",
+            "perm_estoque_cancelar_reserva",
         ):
             self.fields[field_name].required = False
             self.fields[field_name].widget.attrs.update({"class": "form-check-input"})
@@ -382,21 +418,38 @@ class UserForm(forms.ModelForm):
         self.fields["acesso_configuracoes_extra"].label = "Configurações"
 
         self.fields["perm_os_editar_numero_serie"].label = "Editar numero de serie"
+        self.fields["perm_os_editar_observacoes_internas"].label = "Editar observacoes internas da OS"
+        self.fields["perm_os_editar_local_armazenamento"].label = "Editar local de armazenamento"
         self.fields["perm_os_alterar_tecnico"].label = "Alterar tecnico responsavel"
+        self.fields["perm_os_excluir_servico_peca"].label = "Excluir servico ou peca da OS"
         self.fields["perm_os_concluir"].label = "Concluir e fechar OS"
         self.fields["perm_os_reabrir"].label = "Reabrir OS fechada"
+        self.fields["perm_orcamento_editar"].label = "Criar e editar orcamento"
+        self.fields["perm_orcamento_aprovar_item"].label = "Aprovar item de orcamento"
+        self.fields["perm_orcamento_recusar_item"].label = "Recusar item de orcamento"
+        self.fields["perm_orcamento_migrar_item"].label = "Migrar item para servicos e pecas"
         self.fields["perm_orcamento_aplicar_desconto"].label = "Aplicar desconto em orcamento"
         self.fields["perm_orcamento_excluir_item"].label = "Excluir item de orcamento"
         self.fields["perm_caixa_criar_conta_receber"].label = "Criar conta a receber"
         self.fields["perm_caixa_baixar_conta_receber"].label = "Baixar conta a receber"
+        self.fields["perm_caixa_cancelar_conta_receber"].label = "Cancelar conta a receber"
+        self.fields["perm_caixa_editar_conta_receber"].label = "Editar conta a receber"
         self.fields["perm_caixa_criar_conta_pagar"].label = "Criar conta a pagar"
         self.fields["perm_caixa_baixar_conta_pagar"].label = "Baixar conta a pagar"
         self.fields["perm_caixa_cancelar_conta_pagar"].label = "Cancelar conta a pagar"
+        self.fields["perm_caixa_editar_conta_pagar"].label = "Editar conta a pagar"
         self.fields["perm_caixa_aplicar_desconto"].label = "Aplicar desconto no caixa"
         self.fields["perm_caixa_excluir_pagamento"].label = "Excluir pagamento"
         self.fields["perm_caixa_ver_dre"].label = "Ver DRE"
         self.fields["perm_caixa_gerir_comissoes"].label = "Gerir comissoes"
         self.fields["perm_caixa_ver_auditoria"].label = "Ver auditoria operacional"
+        self.fields["perm_estoque_cadastro_produto"].label = "Cadastrar e editar produtos"
+        self.fields["perm_estoque_excluir_produto"].label = "Excluir produtos"
+        self.fields["perm_estoque_ajuste_manual"].label = "Registrar ajuste manual"
+        self.fields["perm_estoque_transferencia"].label = "Transferir e repor estoque"
+        self.fields["perm_estoque_inventario_finalizar"].label = "Finalizar inventario"
+        self.fields["perm_estoque_converter_reserva"].label = "Converter reserva"
+        self.fields["perm_estoque_cancelar_reserva"].label = "Cancelar reserva"
 
     @staticmethod
     def _somente_digitos(value):
@@ -727,6 +780,19 @@ class MarcaGarantiaForm(forms.ModelForm):
         return instance
 
 
+class ParceiroExpedicaoForm(forms.ModelForm):
+    class Meta:
+        model = ParceiroExpedicao
+        fields = ["nome", "contato", "telefone", "email", "observacoes", "ativo"]
+        widgets = {
+            "nome": forms.TextInput(attrs={"class": "form-control"}),
+            "contato": forms.TextInput(attrs={"class": "form-control"}),
+            "telefone": forms.TextInput(attrs={"class": "form-control", "placeholder": "(11) 99999-9999"}),
+            "email": forms.EmailInput(attrs={"class": "form-control"}),
+            "observacoes": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+        }
+
+
 class RegraGarantiaMarcaForm(forms.ModelForm):
     tipo_produto = forms.ChoiceField(
         required=True,
@@ -797,6 +863,85 @@ class TipoEquipamentoConfigForm(forms.ModelForm):
         widgets = {
             "nome": forms.TextInput(attrs={"class": "form-control"}),
         }
+
+
+class SetupInicialSistemaForm(forms.Form):
+    nome_empresa = forms.CharField(
+        label="Nome da empresa",
+        max_length=200,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    cnpj = forms.CharField(
+        label="CNPJ (opcional)",
+        required=False,
+        max_length=18,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    telefone = forms.CharField(
+        label="Telefone (opcional)",
+        required=False,
+        max_length=20,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    email = forms.EmailField(
+        label="Email (opcional)",
+        required=False,
+        widget=forms.EmailInput(attrs={"class": "form-control"}),
+    )
+    endereco = forms.CharField(
+        label="Endereço (opcional)",
+        required=False,
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+    )
+    prefixo_os = forms.CharField(
+        label="Prefixo da OS",
+        max_length=10,
+        initial="OS",
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    tipo_empresa = forms.ChoiceField(
+        label="Tipo de empresa",
+        choices=[
+            ("assistencia_tecnica", "Assistência técnica"),
+            ("oficina_mecanica", "Oficina mecânica"),
+        ],
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    linhas_atuacao = forms.ModelMultipleChoiceField(
+        queryset=LinhaAtuacaoCatalogo.objects.none(),
+        label="Linhas de atuação",
+        required=False,
+        widget=forms.CheckboxSelectMultiple(),
+    )
+
+    def __init__(self, *args, **kwargs):
+        tipo_empresa = kwargs.pop("tipo_empresa", None)
+        super().__init__(*args, **kwargs)
+        qs = LinhaAtuacaoCatalogo.objects.filter(ativo=True).select_related("segmento").order_by(
+            "segmento__ordem",
+            "ordem",
+            "nome",
+        )
+        if tipo_empresa:
+            qs = qs.filter(segmento__codigo=tipo_empresa)
+        self.fields["linhas_atuacao"].queryset = qs
+
+    def clean_prefixo_os(self):
+        valor = (self.cleaned_data.get("prefixo_os") or "").strip()
+        if not valor:
+            raise forms.ValidationError("Informe o prefixo da OS.")
+        return valor.upper()
+
+    def clean(self):
+        cleaned = super().clean()
+        tipo_empresa = cleaned.get("tipo_empresa")
+        linhas = cleaned.get("linhas_atuacao")
+        if not tipo_empresa or not linhas:
+            return cleaned
+        linhas_invalidas = [linha.nome for linha in linhas if linha.segmento.codigo != tipo_empresa]
+        if linhas_invalidas:
+            raise forms.ValidationError("Selecione apenas linhas do tipo de empresa escolhido.")
+        return cleaned
 
 
 class UsuarioArquivoForm(forms.ModelForm):

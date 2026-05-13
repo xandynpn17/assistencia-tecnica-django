@@ -1,4 +1,10 @@
 __all__ = [
+    "calcular_desconto_pagamento",
+    "validar_valor_pagamento_origem",
+    "processar_pagamento_pos_transacional",
+    "excluir_pagamento_com_justificativa",
+    "processar_baixa_conta_receber",
+    "processar_pagamento_conta_pagar",
     "cancelar_comissoes_por_item",
     "cancelar_comissoes_por_ordem",
     "processar_evento_venda_mostrador",
@@ -12,6 +18,19 @@ __all__ = [
 
 
 def __getattr__(name):
+    if name in {
+        "calcular_desconto_pagamento",
+        "validar_valor_pagamento_origem",
+        "processar_pagamento_pos_transacional",
+        "excluir_pagamento_com_justificativa",
+    }:
+        from . import pagamentos
+
+        return getattr(pagamentos, name)
+    if name in {"processar_baixa_conta_receber", "processar_pagamento_conta_pagar"}:
+        from . import contas
+
+        return getattr(contas, name)
     if name in {
         "cancelar_comissoes_por_item",
         "cancelar_comissoes_por_ordem",

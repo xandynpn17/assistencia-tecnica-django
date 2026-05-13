@@ -679,6 +679,169 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(str(conta.valor_aberto), "100.00")
         self.assertFalse(Pagamento.objects.filter(referencia="REC-BLOCK").exists())
 
+    def test_usuario_financeiro_extra_sem_perm_nao_cancela_conta_receber(self):
+        conta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="Conta sem cancelamento",
+            cliente_nome=self.cliente.nome,
+            valor_original="100.00",
+            valor_aberto="100.00",
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        self.client.force_login(self.financeiro_extra)
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_receber", args=[conta.id]),
+            {"action": "cancelar"},
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.status, "aberta")
+
+    def test_usuario_financeiro_extra_sem_perm_nao_edita_conta_receber(self):
+        conta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="Conta sem edicao",
+            cliente_nome=self.cliente.nome,
+            valor_original="100.00",
+            valor_aberto="100.00",
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        self.client.force_login(self.financeiro_extra)
+        response = self.client.get(reverse("caixa:editar_conta_receber", args=[conta.id]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_usuario_financeiro_extra_com_perm_edita_conta_receber_sem_movimentacao(self):
+        self.financeiro_extra.perm_caixa_editar_conta_receber = True
+        self.financeiro_extra.save(update_fields=["perm_caixa_editar_conta_receber"])
+        conta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="Conta original",
+            cliente_nome=self.cliente.nome,
+            valor_original="100.00",
+            valor_aberto="100.00",
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        self.client.force_login(self.financeiro_extra)
+        response = self.client.post(
+            reverse("caixa:editar_conta_receber", args=[conta.id]),
+            {
+                "ordem_servico": self.ordem.id,
+                "descricao": "Conta editada",
+                "cliente_nome": "Cliente ajustado",
+                "ponto_operacional": "",
+                "categoria": "",
+                "valor_original": "180.00",
+                "vencimento": "2030-01-15",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.descricao, "Conta editada")
+        self.assertEqual(conta.cliente_nome, "Cliente ajustado")
+        self.assertEqual(str(conta.valor_original), "180.00")
+        self.assertEqual(str(conta.valor_aberto), "180.00")
+
+    def test_edicao_conta_receber_movimentada_preserva_valor_original(self):
+        conta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="Conta movimentada",
+            cliente_nome=self.cliente.nome,
+            valor_original="100.00",
+            valor_aberto="80.00",
+            vencimento=timezone.localdate(),
+            status="parcial",
+        )
+        pagamento = Pagamento.objects.create(
+            caixa=Caixa.objects.filter(aberto=True).first(),
+            ordem_servico=self.ordem,
+            valor=Decimal("20.00"),
+            metodo="pix",
+            referencia="REC-EDIT-LOCK",
+        )
+        conta.recebimentos.create(
+            pagamento=pagamento,
+            valor=Decimal("20.00"),
+            desconto=Decimal("0.00"),
+            juros=Decimal("0.00"),
+            referencia="REC-EDIT-LOCK",
+            usuario=self.gerente,
+        )
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("caixa:editar_conta_receber", args=[conta.id]),
+            {
+                "ordem_servico": "",
+                "descricao": "Conta movimentada ajustada",
+                "cliente_nome": "Cliente revisado",
+                "ponto_operacional": "",
+                "categoria": "",
+                "valor_original": "500.00",
+                "vencimento": "2030-01-20",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.descricao, "Conta movimentada ajustada")
+        self.assertEqual(conta.cliente_nome, "Cliente revisado")
+        self.assertEqual(str(conta.valor_original), "100.00")
+        self.assertEqual(str(conta.valor_aberto), "80.00")
+
+    def test_gerente_cancela_conta_receber_sem_recebimentos(self):
+        conta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="Conta cancelavel",
+            cliente_nome=self.cliente.nome,
+            valor_original="100.00",
+            valor_aberto="100.00",
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_receber", args=[conta.id]),
+            {"action": "cancelar"},
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.status, "cancelada")
+
+    def test_conta_receber_com_recebimentos_nao_pode_ser_cancelada(self):
+        conta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="Conta com recebimento",
+            cliente_nome=self.cliente.nome,
+            valor_original="100.00",
+            valor_aberto="100.00",
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        pagamento = Pagamento.objects.create(
+            caixa=Caixa.objects.filter(aberto=True).first(),
+            ordem_servico=self.ordem,
+            valor=Decimal("20.00"),
+            metodo="pix",
+            referencia="REC-CANCEL-BLOCK",
+        )
+        conta.recebimentos.create(
+            pagamento=pagamento,
+            valor=Decimal("20.00"),
+            desconto=Decimal("0.00"),
+            juros=Decimal("0.00"),
+            referencia="REC-CANCEL-BLOCK",
+            usuario=self.gerente,
+        )
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_receber", args=[conta.id]),
+            {"action": "cancelar"},
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.status, "aberta")
+
     def test_nao_permite_abrir_novo_caixa_no_mesmo_dia_apos_fechamento(self):
         caixa = Caixa.objects.filter(aberto=True).first()
         caixa.aberto = False
@@ -893,6 +1056,42 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(len(contas), 1)
         self.assertEqual(contas[0].id, conta_hoje.id)
 
+    def test_contas_pagar_filtra_prioridade_criticas(self):
+        categoria = CategoriaFinanceira.objects.create(nome="Fornecedor Critico", tipo="saida", ativa=True)
+        conta_vencida = ContaPagar.objects.create(
+            fornecedor="Fornecedor Vencido",
+            descricao="Conta vencida",
+            categoria=categoria,
+            valor_total=Decimal("140.00"),
+            valor_pago=Decimal("0.00"),
+            vencimento=timezone.localdate() - timedelta(days=2),
+            status="aberta",
+        )
+        conta_sem_categoria = ContaPagar.objects.create(
+            fornecedor="Fornecedor Sem Categoria",
+            descricao="Conta sem categoria",
+            valor_total=Decimal("90.00"),
+            valor_pago=Decimal("0.00"),
+            vencimento=timezone.localdate() + timedelta(days=4),
+            status="aberta",
+        )
+        ContaPagar.objects.create(
+            fornecedor="Fornecedor Normal",
+            descricao="Conta normal",
+            categoria=categoria,
+            valor_total=Decimal("75.00"),
+            valor_pago=Decimal("0.00"),
+            vencimento=timezone.localdate() + timedelta(days=10),
+            status="aberta",
+        )
+
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("caixa:contas_pagar"), {"prioridade": "criticas"})
+
+        self.assertEqual(response.status_code, 200)
+        contas_ids = {conta.id for conta in response.context["contas"]}
+        self.assertEqual(contas_ids, {conta_vencida.id, conta_sem_categoria.id})
+
     def test_contas_pagar_exibe_resumos_operacionais(self):
         ContaPagar.objects.create(
             fornecedor="Fornecedor Hoje",
@@ -1020,6 +1219,45 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(len(contas), 1)
         self.assertEqual(contas[0].id, conta_vencida.id)
         self.assertEqual(contas[0].dias_atraso, 2)
+
+    def test_contas_receber_filtra_prioridade_criticas(self):
+        conta_vencida = ContaReceber.objects.create(
+            descricao="Receber vencido",
+            cliente_nome="Cliente Vencido",
+            tipo_origem="avulso",
+            valor_original="80.00",
+            valor_aberto="80.00",
+            vencimento=timezone.localdate() - timedelta(days=3),
+            status="aberta",
+        )
+        self.ordem.status = "pronto_contactado"
+        self.ordem.save(update_fields=["status"])
+        conta_pronta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="OS pronta sem recebimento",
+            cliente_nome=self.cliente.nome,
+            tipo_origem="cliente_os",
+            valor_original="120.00",
+            valor_aberto="120.00",
+            vencimento=timezone.localdate() + timedelta(days=5),
+            status="aberta",
+        )
+        ContaReceber.objects.create(
+            descricao="Receber normal",
+            cliente_nome="Cliente Normal",
+            tipo_origem="avulso",
+            valor_original="60.00",
+            valor_aberto="60.00",
+            vencimento=timezone.localdate() + timedelta(days=12),
+            status="aberta",
+        )
+
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("caixa:contas_receber"), {"prioridade": "criticas"})
+
+        self.assertEqual(response.status_code, 200)
+        contas_ids = {conta.id for conta in response.context["contas"]}
+        self.assertEqual(contas_ids, {conta_vencida.id, conta_pronta.id})
 
     def test_contas_receber_exibe_resumos_operacionais(self):
         ContaReceber.objects.create(
@@ -3577,6 +3815,85 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(response.status_code, 302)
         conta.refresh_from_db()
         self.assertEqual(conta.status, "aberta")
+
+    def test_usuario_financeiro_extra_sem_perm_nao_edita_conta_pagar(self):
+        self.client.force_login(self.financeiro_extra)
+        conta = ContaPagar.objects.create(
+            fornecedor="Fornecedor sem edicao",
+            descricao="Despesa ativa",
+            valor_total=Decimal("100.00"),
+            valor_pago=Decimal("0.00"),
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        response = self.client.get(reverse("caixa:editar_conta_pagar", args=[conta.id]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_usuario_financeiro_extra_com_perm_edita_conta_pagar_sem_movimentacao(self):
+        self.financeiro_extra.perm_caixa_editar_conta_pagar = True
+        self.financeiro_extra.save(update_fields=["perm_caixa_editar_conta_pagar"])
+        categoria = CategoriaFinanceira.objects.create(nome="Categoria edicao pagar", tipo="saida", ativa=True)
+        conta = ContaPagar.objects.create(
+            fornecedor="Fornecedor antigo",
+            descricao="Despesa original",
+            categoria=categoria,
+            valor_total=Decimal("100.00"),
+            valor_pago=Decimal("0.00"),
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        self.client.force_login(self.financeiro_extra)
+        response = self.client.post(
+            reverse("caixa:editar_conta_pagar", args=[conta.id]),
+            {
+                "fornecedor": "Fornecedor novo",
+                "descricao": "Despesa editada",
+                "categoria": str(categoria.id),
+                "valor_total": "190.00",
+                "vencimento": "2030-02-01",
+                "centro_custo": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.fornecedor, "Fornecedor novo")
+        self.assertEqual(conta.descricao, "Despesa editada")
+        self.assertEqual(str(conta.valor_total), "190.00")
+
+    def test_edicao_conta_pagar_movimentada_preserva_valor_total(self):
+        categoria = CategoriaFinanceira.objects.create(nome="Categoria bloqueada pagar", tipo="saida", ativa=True)
+        conta = ContaPagar.objects.create(
+            fornecedor="Fornecedor travado",
+            descricao="Despesa com pagamento",
+            categoria=categoria,
+            valor_total=Decimal("100.00"),
+            valor_pago=Decimal("30.00"),
+            vencimento=timezone.localdate(),
+            status="parcial",
+        )
+        PagamentoContaPagar.objects.create(
+            conta=conta,
+            caixa=Caixa.objects.filter(aberto=True).first(),
+            valor=Decimal("30.00"),
+            usuario=self.gerente,
+        )
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("caixa:editar_conta_pagar", args=[conta.id]),
+            {
+                "fornecedor": "Fornecedor revisado",
+                "descricao": "Despesa revisada",
+                "categoria": str(categoria.id),
+                "valor_total": "500.00",
+                "vencimento": "2030-02-05",
+                "centro_custo": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.fornecedor, "Fornecedor revisado")
+        self.assertEqual(conta.descricao, "Despesa revisada")
+        self.assertEqual(str(conta.valor_total), "100.00")
 
     def test_dashboard_considera_pagamentos_sem_lancamento_no_total_entradas(self):
         self.client.force_login(self.gerente)

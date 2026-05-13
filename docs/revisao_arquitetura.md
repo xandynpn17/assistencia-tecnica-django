@@ -18,17 +18,18 @@ O sistema esta organizado em apps alinhados ao dominio:
 - Fluxo de orcamento centralizado em `orcamentos/services/fluxo_orcamento.py`.
 - Permissoes sensiveis estruturadas em helper central (`has_sensitive_permission` / `require_sensitive_permission`).
 - Codigo legado removido da area ativa e arquivado em `docs/legacy_code/`.
+- Ownership tecnico dos apps documentado em `docs/ownership_modulos.md`.
+- Interface principal da OS refinada para reduzir dispersao de acoes entre abas e reforcar a OS como centro operacional.
 
 ## Pontos que ainda exigem evolucao
 
-1. Formalizar matriz de status da OS: `status -> acoes permitidas -> bloqueios`.
-2. Expandir granularidade de permissoes para outras acoes sensiveis.
-3. Consolidar entrada visual do orcamento para reduzir caminhos duplicados.
-4. Fechar revisao de textos/encoding em todo fluxo de interface.
-5. Preparar migracao para PostgreSQL com checklist tecnico reproducivel.
+1. Expandir a disciplina de services para novos fluxos compostos que ainda crescerem nas views.
+2. Concluir refinamentos funcionais finos antes da rodada final de banco.
+3. Preparar migracao para PostgreSQL com validacao real em base limpa.
 
 ## Decisao tecnica vigente
 
 - Manter arquitetura modular atual e evoluir por refatoracoes incrementais.
 - Evitar criacao de novos apps enquanto houver ganho maior em consolidacao dos fluxos existentes.
 - Tratar `docs/legacy_code/` apenas como historico de consulta.
+- Usar `docs/ownership_modulos.md` como referencia curta antes de qualquer refatoracao transversal.

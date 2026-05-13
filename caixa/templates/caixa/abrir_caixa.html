@@ -41,7 +41,7 @@
             <div class="small-box bg-warning">
                 <div class="inner">
                     <h4>R$ {{ saldo_sugerido_abertura|floatformat:2 }}</h4>
-                    <p>Sugestão de saldo inicial</p>
+                    <p>Sugestáo de saldo inicial</p>
                 </div>
                 <div class="icon"><i class="fas fa-lightbulb"></i></div>
             </div>
@@ -110,7 +110,7 @@
                     <div class="card-body">
                         {% if ultimo_caixa %}
                             <div class="mb-3">
-                                <div class="text-muted small">Resumo do último caixa encerrado</div>
+                                <div class="text-muted small">Resumo do Último caixa encerrado</div>
                                 <div class="font-weight-bold">{{ ultimo_caixa.data|date:"d/m/Y" }}</div>
                             </div>
                             <div class="row">
@@ -162,7 +162,7 @@
                                 <div class="form-control bg-light">{% now "d/m/Y" %}</div>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label class="small text-muted mb-1 d-block">Sugestão de abertura</label>
+                                <label class="small text-muted mb-1 d-block">Sugestáo de abertura</label>
                                 <div class="input-group">
                                     <div class="form-control bg-light">R$ {{ saldo_sugerido_abertura|floatformat:2 }}</div>
                                     <div class="input-group-append">

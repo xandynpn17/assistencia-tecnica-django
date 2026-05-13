@@ -134,6 +134,49 @@ class ContaReceberForm(forms.ModelForm):
         return instance
 
 
+class ContaReceberEdicaoForm(forms.ModelForm):
+    def __init__(self, *args, allow_financial_changes=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.allow_financial_changes = allow_financial_changes
+        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+            tipo__in=["entrada", "receber"],
+            ativa=True,
+        ).order_by("nome")
+        if not allow_financial_changes:
+            self.fields["ordem_servico"].disabled = True
+            self.fields["valor_original"].disabled = True
+            self.fields["ordem_servico"].help_text = "Bloqueado porque a conta ja possui recebimentos."
+            self.fields["valor_original"].help_text = "Bloqueado porque a conta ja possui recebimentos."
+
+    class Meta:
+        model = ContaReceber
+        fields = [
+            "ordem_servico",
+            "descricao",
+            "cliente_nome",
+            "ponto_operacional",
+            "categoria",
+            "valor_original",
+            "vencimento",
+        ]
+        widgets = {
+            "vencimento": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self.allow_financial_changes:
+            instance.valor_aberto = instance.valor_original
+        else:
+            instance.valor_original = self.instance.valor_original
+            instance.valor_aberto = self.instance.valor_aberto
+            instance.ordem_servico = self.instance.ordem_servico
+        instance.atualizar_status_automatico()
+        if commit:
+            instance.save()
+        return instance
+
+
 class BaixaContaReceberForm(forms.Form):
     valor = forms.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
     desconto = forms.DecimalField(max_digits=12, decimal_places=2, min_value=0, required=False, initial=0)
@@ -283,6 +326,39 @@ class ContaPagarForm(forms.ModelForm):
         widgets = {
             "vencimento": forms.DateInput(attrs={"type": "date"}),
         }
+
+
+class ContaPagarEdicaoForm(forms.ModelForm):
+    def __init__(self, *args, allow_financial_changes=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.allow_financial_changes = allow_financial_changes
+        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+            tipo="saida",
+            ativa=True,
+        ).order_by("nome")
+        self.fields["categoria"].required = True
+        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
+        self.fields["categoria"].label = "Categoria"
+        self.fields["centro_custo"].label = "Centro de custo"
+        if not allow_financial_changes:
+            self.fields["valor_total"].disabled = True
+            self.fields["valor_total"].help_text = "Bloqueado porque a conta ja possui pagamentos."
+
+    class Meta:
+        model = ContaPagar
+        fields = ["fornecedor", "descricao", "categoria", "valor_total", "vencimento", "centro_custo"]
+        widgets = {
+            "vencimento": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if not self.allow_financial_changes:
+            instance.valor_total = self.instance.valor_total
+        instance.atualizar_status_automatico()
+        if commit:
+            instance.save()
+        return instance
 
 
 class PagamentoContaPagarForm(forms.ModelForm):

@@ -26,12 +26,17 @@ from caixa.services.comissoes import (
     processar_evento_servico_finalizado,
     processar_evento_venda_mostrador,
 )
-from caixa.services.pagamentos import excluir_pagamento_com_justificativa
+from caixa.services.pagamentos import (
+    calcular_desconto_pagamento,
+    excluir_pagamento_com_justificativa,
+    processar_pagamento_pos_transacional,
+    validar_valor_pagamento_origem,
+)
 from clientes.models import Cliente
 from ordens.models import OrdemServico
 
 from ..forms import LancamentoCaixaForm, PagamentoForm
-from ..models import AuditoriaFinanceira, Caixa, ContaPagar, ContaReceber, CustoFixoMensal, LancamentoCaixa, Pagamento, PagamentoContaPagar, RecebimentoConta
+from ..models import AuditoriaFinanceira, Caixa, ContaPagar, ContaReceber, CustoFixoMensal, LancamentoCaixa, Pagamento, PagamentoContaPagar
 from .common import caixa_atual
 from .helpers import (
     _atualizar_status_contas_abertas,
@@ -405,7 +410,8 @@ def _dashboard_caixa_context(request, menu_sub):
     ]
     despesas_marketing_periodo = (
         pagamentos_conta_pagar_periodo.filter(
-            Q(conta__categoria__nome="Marketing e Aquisição") | Q(conta__centro_custo__nome="Marketing")
+            Q(conta__categoria__nome__icontains="marketing")
+            | Q(conta__centro_custo__nome__icontains="marketing")
         ).aggregate(total=Sum("valor"))["total"]
         or Decimal("0.00")
     )
@@ -475,7 +481,7 @@ def _dashboard_caixa_context(request, menu_sub):
     eventos_rotulos = {
         "pagamento_excluido": "Pagamento excluído",
         "caixa_fechado": "Fecho de caixa",
-        "conta_receber_baixa_manual": "Baixa manual de recebível",
+        "conta_receber_baixa_manual": "Baixa manual de recebivel",
         "conta_pagar_baixa_manual": "Baixa manual de conta a pagar",
     }
 
@@ -501,7 +507,7 @@ def _dashboard_caixa_context(request, menu_sub):
                 }
         if evento.evento == "pagamento_excluido":
             return {
-                "label": "Ver talões",
+                "label": "Ver taloes",
                 "url": reverse("caixa:taloes"),
             }
         return None
@@ -895,12 +901,11 @@ def registrar_pagamento(request):
             desconto_valor = form.cleaned_data.get("desconto_valor") or Decimal("0.00")
             desconto_percentual = form.cleaned_data.get("desconto_percentual") or Decimal("0.00")
             valor_bruto_pagamento = Decimal(pagamento_preview.valor or Decimal("0.00"))
-            desconto_aplicado = Decimal("0.00")
-            if desconto_percentual > Decimal("0.00"):
-                desconto_aplicado = (valor_bruto_pagamento * desconto_percentual) / Decimal("100.00")
-            elif desconto_valor > Decimal("0.00"):
-                desconto_aplicado = desconto_valor
-            desconto_aplicado = min(max(desconto_aplicado, Decimal("0.00")), valor_bruto_pagamento)
+            desconto_aplicado, valor_liquido_pagamento = calcular_desconto_pagamento(
+                valor_bruto=valor_bruto_pagamento,
+                desconto_valor=desconto_valor,
+                desconto_percentual=desconto_percentual,
+            )
             if desconto_aplicado > Decimal("0.00"):
                 try:
                     require_sensitive_permission(
@@ -911,30 +916,30 @@ def registrar_pagamento(request):
                 except PermissionDenied as exc:
                     form.add_error("desconto_valor", str(exc) or "Permissao insuficiente.")
                     return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
-            valor_liquido_pagamento = valor_bruto_pagamento - desconto_aplicado
             if desconto_aplicado > Decimal("0.00") and valor_liquido_pagamento <= Decimal("0.00"):
-                form.add_error("desconto_valor", "O desconto não pode zerar o pagamento.")
+                form.add_error("desconto_valor", "O desconto nao pode zerar o pagamento.")
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             chave_idempotencia = (form.cleaned_data.get("chave_idempotencia") or "").strip()
             if chave_idempotencia:
                 pagamento_existente = Pagamento.objects.filter(chave_idempotencia=chave_idempotencia).first()
                 if pagamento_existente:
-                    messages.info(request, f"Este pagamento já foi registrado. Talão: {pagamento_existente.numero_talao}.")
+                    messages.info(request, f"Este pagamento ja foi registrado. Talao: {pagamento_existente.numero_talao}.")
                     return redirect(_redirect_sucesso(pagamento_existente.id))
             forma_preview = pagamento_preview.forma_pagamento
             codigo_forma = forma_preview.codigo if forma_preview else ""
             valor_validacao = valor_liquido_pagamento + desconto_aplicado
-            if venda and valor_validacao != venda.valor_total:
-                form.add_error("valor", f"Valor divergente da pre-reserva. Esperado: {venda.valor_total:.2f}.")
-            if vendas_guia:
-                total_guia = sum((v.valor_total for v in vendas_guia), Decimal("0.00"))
-                if valor_validacao != total_guia:
-                    form.add_error("valor", f"Valor divergente do total da guia. Esperado: {total_guia:.2f}.")
-            if form.errors:
+            try:
+                validar_valor_pagamento_origem(
+                    venda=venda,
+                    vendas_guia=vendas_guia,
+                    valor_validacao=valor_validacao,
+                )
+            except ValueError as exc:
+                form.add_error("valor", str(exc))
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             if ordem:
                 if desconto_aplicado > Decimal("0.00") and codigo_forma == "garantia_fabricante":
-                    erro_desconto = "Desconto não pode ser aplicado em recebimento de garantia fabricante."
+                    erro_desconto = "Desconto nao pode ser aplicado em recebimento de garantia fabricante."
                     form.add_error("desconto_valor", erro_desconto)
                     return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
                 if codigo_forma == "garantia_fabricante" and ordem.tipo_reparo != "Garantia":
@@ -966,110 +971,32 @@ def registrar_pagamento(request):
                         form.add_error("metodo", erro_regra)
                         return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             try:
-                with transaction.atomic():
-                    pagamento = form.save(commit=False)
-                    pagamento.caixa = caixa
-                    pagamento.ordem_servico = ordem if ordem else pagamento.ordem_servico
-                    pagamento.metodo = pagamento.forma_pagamento.codigo if pagamento.forma_pagamento else (pagamento.metodo or "")
-                    pagamento.stock_item = venda.produto if venda else (item if item else pagamento.stock_item)
-                    pagamento.desconto = desconto_aplicado
-                    pagamento.desconto_percentual = desconto_percentual if desconto_aplicado > Decimal("0.00") else Decimal("0.00")
-                    pagamento.valor = valor_liquido_pagamento
-                    pagamento.chave_idempotencia = chave_idempotencia or None
-                    pagamento.save()
-                    _vincular_talao_itens_ordem(pagamento.ordem_servico, pagamento.numero_talao, pagamento=pagamento)
-
-                    descricao = (
-                        f"Pagamento OS {pagamento.ordem_servico.numero_os}"
-                        if pagamento.ordem_servico
-                        else f"Pagamento Stock {pagamento.stock_item.id}"
-                        if pagamento.stock_item
-                        else "Pagamento Avulso"
-                    )
-                    LancamentoCaixa.objects.create(
-                        caixa=caixa,
-                        pagamento=pagamento,
-                        descricao=descricao,
-                        valor=pagamento.valor,
-                        tipo="entrada",
-                        usuario=request.user,
-                    )
-                    _log_financeiro("pagamento_registrado", request.user, pagamento=pagamento, valor=pagamento.valor, descricao=descricao)
-
-                    if venda:
-                        from estoque.models import MovimentacaoEstoque
-                        from estoque.services import ajustar_saldo
-
-                        config = ConfiguracaoSistema.get_configuracao()
-                        try:
-                            ajustar_saldo(venda.produto, venda.ponto_operacional, -int(venda.quantidade), allow_negative=bool(config.estoque_permitir_negativo))
-                        except ValueError:
-                            raise ValueError(f"Saldo insuficiente para concluir venda #{venda.id} em {venda.ponto_operacional.codigo}.")
-                        MovimentacaoEstoque.objects.create(
-                            produto=venda.produto,
-                            tipo="venda",
-                            quantidade=-int(venda.quantidade),
-                            origem=venda.ponto_operacional,
-                            observacao=f"Venda finalizada no caixa #{pagamento.id} (pre-reserva {venda.id})",
-                            usuario=request.user,
-                        )
-                        venda.pagamento = pagamento
-                        venda.status = "vendida"
-                        venda.concluido_em = timezone.now()
-                        venda.save(update_fields=["pagamento", "status", "concluido_em"])
-                        processar_evento_venda_mostrador(venda, evento="VENDA_MOSTRADOR")
-                    elif vendas_guia:
-                        from estoque.models import MovimentacaoEstoque
-                        from estoque.services import ajustar_saldo
-
-                        config = ConfiguracaoSistema.get_configuracao()
-                        for item_guia in vendas_guia:
-                            try:
-                                ajustar_saldo(item_guia.produto, item_guia.ponto_operacional, -int(item_guia.quantidade), allow_negative=bool(config.estoque_permitir_negativo))
-                            except ValueError:
-                                raise ValueError(f"Saldo insuficiente para concluir item da guia {guia_codigo} no ponto {item_guia.ponto_operacional.codigo}.")
-                            MovimentacaoEstoque.objects.create(
-                                produto=item_guia.produto,
-                                tipo="venda",
-                                quantidade=-int(item_guia.quantidade),
-                                origem=item_guia.ponto_operacional,
-                                observacao=f"Venda finalizada no caixa #{pagamento.id} (guia {guia_codigo})",
-                                usuario=request.user,
-                            )
-                            item_guia.pagamento = pagamento
-                            item_guia.status = "vendida"
-                            item_guia.concluido_em = timezone.now()
-                            item_guia.save(update_fields=["pagamento", "status", "concluido_em"])
-                            processar_evento_venda_mostrador(item_guia, evento="VENDA_MOSTRADOR")
-
-                    if pagamento.ordem_servico:
-                        if pagamento.forma_pagamento and pagamento.forma_pagamento.codigo == "garantia_fabricante":
-                            conta = _garantir_conta_garantia(pagamento.ordem_servico, ignorar_pagamento_id=pagamento.id)
-                        else:
-                            conta = _garantir_conta_os(pagamento.ordem_servico, ignorar_pagamento_id=pagamento.id)
-                        if conta and conta.status in {"aberta", "parcial", "vencida"} and conta.valor_aberto > 0:
-                            abatimento = min(pagamento.valor_liquidado, conta.valor_aberto)
-                            conta.valor_aberto -= abatimento
-                            conta.atualizar_status_automatico()
-                            conta.save()
-                            RecebimentoConta.objects.create(
-                                conta=conta,
-                                pagamento=pagamento,
-                                valor=pagamento.valor,
-                                desconto=min(pagamento.desconto, abatimento),
-                                referencia=pagamento.referencia or "",
-                                usuario=request.user,
-                            )
-                            _log_financeiro("conta_receber_baixa_pagamento", request.user, conta=conta, pagamento=pagamento, valor=abatimento)
-                        processar_evento_servico_finalizado(pagamento.ordem_servico, evento="SERVICO_FINALIZADO")
-                        if pagamento.ordem_servico.status == "concluida" and conta and conta.status == "paga":
-                            processar_evento_retirada_cliente(pagamento.ordem_servico, evento="RETIRADA_CLIENTE")
+                pagamento = processar_pagamento_pos_transacional(
+                    form=form,
+                    caixa=caixa,
+                    ordem=ordem,
+                    item=item,
+                    venda=venda,
+                    vendas_guia=vendas_guia,
+                    guia_codigo=guia_codigo,
+                    desconto_aplicado=desconto_aplicado,
+                    desconto_percentual=desconto_percentual,
+                    chave_idempotencia=chave_idempotencia,
+                    usuario=request.user,
+                    vincular_talao_cb=_vincular_talao_itens_ordem,
+                    log_financeiro_cb=_log_financeiro,
+                    garantir_conta_garantia_cb=_garantir_conta_garantia,
+                    garantir_conta_os_cb=_garantir_conta_os,
+                    processar_evento_servico_finalizado_cb=processar_evento_servico_finalizado,
+                    processar_evento_retirada_cliente_cb=processar_evento_retirada_cliente,
+                    processar_evento_venda_mostrador_cb=processar_evento_venda_mostrador,
+                )
             except IntegrityError:
                 pagamento_existente = Pagamento.objects.filter(chave_idempotencia=chave_idempotencia).first()
                 if pagamento_existente:
-                    messages.info(request, f"Este pagamento já foi registrado. Talão: {pagamento_existente.numero_talao}.")
+                    messages.info(request, f"Este pagamento ja foi registrado. Talao: {pagamento_existente.numero_talao}.")
                     return redirect(_redirect_sucesso(pagamento_existente.id))
-                form.add_error(None, "Não foi possível concluir o pagamento. Tente novamente.")
+                form.add_error(None, "Nao foi possivel concluir o pagamento. Tente novamente.")
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             except ValueError as exc:
                 form.add_error(None, str(exc))
@@ -1125,9 +1052,9 @@ def excluir_pagamento(request, pagamento_id):
                     "pagamento_excluido",
                     request.user,
                     valor=pagamento.valor,
-                    descricao=f"Pagamento {pagamento_info} excluído. Justificativa: {justificativa}",
+                    descricao=f"Pagamento {pagamento_info} excluido. Justificativa: {justificativa}",
                 )
-                messages.success(request, "Pagamento excluído com sucesso.")
+                messages.success(request, "Pagamento excluido com sucesso.")
                 return redirect("caixa:taloes")
             except ValueError as exc:
                 messages.error(request, str(exc))
@@ -1196,3 +1123,5 @@ __all__ = [
     "registrar_pagamento",
     "registrar_saida",
 ]
+
+

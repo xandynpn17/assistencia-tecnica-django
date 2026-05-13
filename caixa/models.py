@@ -104,7 +104,7 @@ class Pagamento(models.Model):
 
 class FormaPagamento(models.Model):
     TIPO_CHOICES = [
-        ("avista", "À vista"),
+        ("avista", "à vista"),
         ("aprazo", "A prazo"),
     ]
 
@@ -522,7 +522,7 @@ class FaixaPremioMeta(models.Model):
 
     def __str__(self):
         teto = self.meta_maxima if self.meta_maxima is not None else "sem teto"
-        return f"{self.regra.nome}: {self.meta_minima} até {teto} => {self.premio_valor}"
+        return f"{self.regra.nome}: {self.meta_minima} at? {teto} => {self.premio_valor}"
 
 
 class PremioColaboradorCompetencia(models.Model):

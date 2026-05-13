@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -78,3 +80,180 @@ def excluir_pagamento_com_justificativa(*, pagamento, usuario, justificativa):
         pagamento.delete()
 
     return pagamento_id
+
+
+def calcular_desconto_pagamento(*, valor_bruto, desconto_valor, desconto_percentual):
+    valor_bruto = Decimal(valor_bruto or Decimal("0.00"))
+    desconto_valor = Decimal(desconto_valor or Decimal("0.00"))
+    desconto_percentual = Decimal(desconto_percentual or Decimal("0.00"))
+
+    desconto_aplicado = Decimal("0.00")
+    if desconto_percentual > Decimal("0.00"):
+        desconto_aplicado = (valor_bruto * desconto_percentual) / Decimal("100.00")
+    elif desconto_valor > Decimal("0.00"):
+        desconto_aplicado = desconto_valor
+
+    desconto_aplicado = min(max(desconto_aplicado, Decimal("0.00")), valor_bruto)
+    valor_liquido = valor_bruto - desconto_aplicado
+    return desconto_aplicado, valor_liquido
+
+
+def validar_valor_pagamento_origem(*, venda=None, vendas_guia=None, valor_validacao=None):
+    valor_validacao = Decimal(valor_validacao or Decimal("0.00"))
+    if venda and valor_validacao != Decimal(venda.valor_total or Decimal("0.00")):
+        raise ValueError(f"Valor divergente da pre-reserva. Esperado: {venda.valor_total:.2f}.")
+    if vendas_guia:
+        total_guia = sum((Decimal(v.valor_total or Decimal("0.00")) for v in vendas_guia), Decimal("0.00"))
+        if valor_validacao != total_guia:
+            raise ValueError(f"Valor divergente do total da guia. Esperado: {total_guia:.2f}.")
+
+
+def processar_pagamento_pos_transacional(
+    *,
+    form,
+    caixa,
+    ordem,
+    item,
+    venda,
+    vendas_guia,
+    guia_codigo,
+    desconto_aplicado,
+    desconto_percentual,
+    chave_idempotencia,
+    usuario,
+    vincular_talao_cb,
+    log_financeiro_cb,
+    garantir_conta_garantia_cb,
+    garantir_conta_os_cb,
+    processar_evento_servico_finalizado_cb,
+    processar_evento_retirada_cliente_cb,
+    processar_evento_venda_mostrador_cb,
+):
+    from caixa.models import LancamentoCaixa, RecebimentoConta
+    from configuracoes.models import ConfiguracaoSistema
+    from estoque.models import MovimentacaoEstoque
+    from estoque.services import ajustar_saldo
+
+    desconto_aplicado = Decimal(desconto_aplicado or Decimal("0.00"))
+    desconto_percentual = Decimal(desconto_percentual or Decimal("0.00"))
+
+    with transaction.atomic():
+        pagamento = form.save(commit=False)
+        pagamento.caixa = caixa
+        pagamento.ordem_servico = ordem if ordem else pagamento.ordem_servico
+        pagamento.metodo = pagamento.forma_pagamento.codigo if pagamento.forma_pagamento else (pagamento.metodo or "")
+        pagamento.stock_item = venda.produto if venda else (item if item else pagamento.stock_item)
+        pagamento.desconto = desconto_aplicado
+        pagamento.desconto_percentual = desconto_percentual if desconto_aplicado > Decimal("0.00") else Decimal("0.00")
+        pagamento.valor = Decimal(pagamento.valor or Decimal("0.00")) - desconto_aplicado
+        pagamento.chave_idempotencia = chave_idempotencia or None
+        pagamento.save()
+        vincular_talao_cb(pagamento.ordem_servico, pagamento.numero_talao, pagamento=pagamento)
+
+        descricao = (
+            f"Pagamento OS {pagamento.ordem_servico.numero_os}"
+            if pagamento.ordem_servico
+            else f"Pagamento Stock {pagamento.stock_item.id}"
+            if pagamento.stock_item
+            else "Pagamento Avulso"
+        )
+        LancamentoCaixa.objects.create(
+            caixa=caixa,
+            pagamento=pagamento,
+            descricao=descricao,
+            valor=pagamento.valor,
+            tipo="entrada",
+            usuario=usuario,
+        )
+        log_financeiro_cb(
+            "pagamento_registrado",
+            usuario,
+            pagamento=pagamento,
+            valor=pagamento.valor,
+            descricao=descricao,
+        )
+
+        if venda:
+            config = ConfiguracaoSistema.get_configuracao()
+            try:
+                ajustar_saldo(
+                    venda.produto,
+                    venda.ponto_operacional,
+                    -int(venda.quantidade),
+                    allow_negative=bool(config.estoque_permitir_negativo),
+                )
+            except ValueError:
+                raise ValueError(
+                    f"Saldo insuficiente para concluir venda #{venda.id} em {venda.ponto_operacional.codigo}."
+                )
+            MovimentacaoEstoque.objects.create(
+                produto=venda.produto,
+                tipo="venda",
+                quantidade=-int(venda.quantidade),
+                origem=venda.ponto_operacional,
+                observacao=f"Venda finalizada no caixa #{pagamento.id} (pre-reserva {venda.id})",
+                usuario=usuario,
+            )
+            venda.pagamento = pagamento
+            venda.status = "vendida"
+            venda.concluido_em = timezone.now()
+            venda.save(update_fields=["pagamento", "status", "concluido_em"])
+            processar_evento_venda_mostrador_cb(venda, evento="VENDA_MOSTRADOR")
+        elif vendas_guia:
+            config = ConfiguracaoSistema.get_configuracao()
+            for item_guia in vendas_guia:
+                try:
+                    ajustar_saldo(
+                        item_guia.produto,
+                        item_guia.ponto_operacional,
+                        -int(item_guia.quantidade),
+                        allow_negative=bool(config.estoque_permitir_negativo),
+                    )
+                except ValueError:
+                    raise ValueError(
+                        f"Saldo insuficiente para concluir item da guia {guia_codigo} no ponto {item_guia.ponto_operacional.codigo}."
+                    )
+                MovimentacaoEstoque.objects.create(
+                    produto=item_guia.produto,
+                    tipo="venda",
+                    quantidade=-int(item_guia.quantidade),
+                    origem=item_guia.ponto_operacional,
+                    observacao=f"Venda finalizada no caixa #{pagamento.id} (guia {guia_codigo})",
+                    usuario=usuario,
+                )
+                item_guia.pagamento = pagamento
+                item_guia.status = "vendida"
+                item_guia.concluido_em = timezone.now()
+                item_guia.save(update_fields=["pagamento", "status", "concluido_em"])
+                processar_evento_venda_mostrador_cb(item_guia, evento="VENDA_MOSTRADOR")
+
+        if pagamento.ordem_servico:
+            if pagamento.forma_pagamento and pagamento.forma_pagamento.codigo == "garantia_fabricante":
+                conta = garantir_conta_garantia_cb(pagamento.ordem_servico, ignorar_pagamento_id=pagamento.id)
+            else:
+                conta = garantir_conta_os_cb(pagamento.ordem_servico, ignorar_pagamento_id=pagamento.id)
+            if conta and conta.status in {"aberta", "parcial", "vencida"} and conta.valor_aberto > 0:
+                abatimento = min(pagamento.valor_liquidado, conta.valor_aberto)
+                conta.valor_aberto -= abatimento
+                conta.atualizar_status_automatico()
+                conta.save()
+                RecebimentoConta.objects.create(
+                    conta=conta,
+                    pagamento=pagamento,
+                    valor=pagamento.valor,
+                    desconto=min(pagamento.desconto, abatimento),
+                    referencia=pagamento.referencia or "",
+                    usuario=usuario,
+                )
+                log_financeiro_cb(
+                    "conta_receber_baixa_pagamento",
+                    usuario,
+                    conta=conta,
+                    pagamento=pagamento,
+                    valor=abatimento,
+                )
+            processar_evento_servico_finalizado_cb(pagamento.ordem_servico, evento="SERVICO_FINALIZADO")
+            if pagamento.ordem_servico.status == "concluida" and conta and conta.status == "paga":
+                processar_evento_retirada_cliente_cb(pagamento.ordem_servico, evento="RETIRADA_CLIENTE")
+
+    return pagamento

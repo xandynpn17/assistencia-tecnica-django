@@ -62,6 +62,7 @@
       <strong class="mr-2">Prioridades:</strong>
       <a href="{% url 'caixa:contas_pagar' %}?prioridade=hoje" class="btn btn-sm {% if prioridade_filtro == 'hoje' %}btn-primary{% else %}btn-outline-primary{% endif %}">Pagar hoje ({{ pagar_hoje_qtd }})</a>
       <a href="{% url 'caixa:contas_pagar' %}?prioridade=vencidas" class="btn btn-sm {% if prioridade_filtro == 'vencidas' %}btn-danger{% else %}btn-outline-danger{% endif %}">Vencidas ({{ pagar_vencidas_qtd }})</a>
+      <a href="{% url 'caixa:contas_pagar' %}?prioridade=criticas" class="btn btn-sm {% if prioridade_filtro == 'criticas' %}btn-dark{% else %}btn-outline-dark{% endif %}">Criticas ({{ pagar_criticas_qtd }})</a>
       <a href="{% url 'caixa:contas_pagar' %}?prioridade=semana" class="btn btn-sm {% if prioridade_filtro == 'semana' %}btn-warning{% else %}btn-outline-warning{% endif %}">Próx. 7 dias ({{ pagar_proximos_7d_qtd }})</a>
       <a href="{% url 'caixa:contas_pagar' %}?prioridade=sem_categoria" class="btn btn-sm {% if prioridade_filtro == 'sem_categoria' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Sem categoria ({{ pagar_sem_categoria_qtd }})</a>
       {% if filtros_salvos_existem %}

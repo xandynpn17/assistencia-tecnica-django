@@ -1,4 +1,4 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -236,6 +236,27 @@
                     <p>Pedidos por Status</p>
                   </a>
                 </li>
+                <li class="nav-item">
+                  <a href="{% url 'ordens:expedir_parceiro' %}"
+                     class="nav-link {% if menu_sub == 'expedir_parceiro' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Expedir Parceiro</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'ordens:recepcionar_parceiro' %}"
+                     class="nav-link {% if menu_sub == 'recepcionar_parceiro' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Recepcionar Parceiro</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'ordens:guias_expedicao' %}"
+                     class="nav-link {% if menu_sub == 'guias_expedicao' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Guias de Expedição</p>
+                  </a>
+                </li>
               </ul>
             </li>
 
@@ -273,6 +294,7 @@
             </li>
 
             <!-- Estoque -->
+            {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.tipo_usuario == 'atendente' or user.tipo_usuario == 'tecnico' or user.acesso_estoque_extra %}
             <li class="nav-item has-treeview {% if menu_app == 'estoque' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'estoque' %}active{% endif %}">
                 <i class="nav-icon fas fa-boxes"></i>
@@ -283,99 +305,89 @@
               </a>
               <ul class="nav nav-treeview">
                 <li class="nav-item">
-                  <a href="{% url 'estoque:lista_produtos' %}"
-                     class="nav-link {% if menu_sub == 'lista_produtos' %}active{% endif %}">
+                  <a href="{% url 'estoque:lista_produtos' %}" class="nav-link {% if menu_sub == 'lista_produtos' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Listar Produtos</p>
                   </a>
                 </li>
-                {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
+                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_estoque_cadastro_produto %}
                 <li class="nav-item">
-                  <a href="{% url 'estoque:criar_produto' %}"
-                     class="nav-link {% if menu_sub == 'criar_produto' %}active{% endif %}">
+                  <a href="{% url 'estoque:criar_produto' %}" class="nav-link {% if menu_sub == 'criar_produto' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Adicionar Produto</p>
                   </a>
                 </li>
                 {% endif %}
                 <li class="nav-item">
-                  <a href="{% url 'estoque:consulta_artigos' %}"
-                     class="nav-link {% if menu_sub == 'consulta_artigos' %}active{% endif %}">
+                  <a href="{% url 'estoque:consulta_artigos' %}" class="nav-link {% if menu_sub == 'consulta_artigos' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Consulta de Artigos</p>
                   </a>
                 </li>
                 <li class="nav-item">
-                  <a href="{% url 'estoque:movimentacoes' %}"
-                     class="nav-link {% if menu_sub == 'movimentacoes' %}active{% endif %}">
+                  <a href="{% url 'estoque:movimentacoes' %}" class="nav-link {% if menu_sub == 'movimentacoes' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Movimentações</p>
+                    <p>Movimentacoes</p>
                   </a>
                 </li>
                 <li class="nav-item">
-                  <a href="{% url 'estoque:reservas_clientes' %}"
-                     class="nav-link {% if menu_sub == 'reservas_clientes' %}active{% endif %}">
+                  <a href="{% url 'estoque:reservas_clientes' %}" class="nav-link {% if menu_sub == 'reservas_clientes' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Reservas Clientes</p>
                   </a>
                 </li>
-                {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
+                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_estoque_transferencia %}
                 <li class="nav-item">
-                  <a href="{% url 'estoque:transferir_estoque' %}"
-                     class="nav-link {% if menu_sub == 'transferir_estoque' %}active{% endif %}">
+                  <a href="{% url 'estoque:transferir_estoque' %}" class="nav-link {% if menu_sub == 'transferir_estoque' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Transpasse</p>
                   </a>
                 </li>
                 <li class="nav-item">
-                  <a href="{% url 'estoque:reposicao_estoque' %}"
-                     class="nav-link {% if menu_sub == 'reposicao_estoque' %}active{% endif %}">
+                  <a href="{% url 'estoque:reposicao_estoque' %}" class="nav-link {% if menu_sub == 'reposicao_estoque' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Reposição Inteligente</p>
+                    <p>Reposicao Inteligente</p>
                   </a>
                 </li>
+                {% endif %}
                 <li class="nav-item">
-                  <a href="{% url 'estoque:indicadores_estoque' %}"
-                     class="nav-link {% if menu_sub == 'indicadores_estoque' %}active{% endif %}">
+                  <a href="{% url 'estoque:indicadores_estoque' %}" class="nav-link {% if menu_sub == 'indicadores_estoque' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Indicadores</p>
                   </a>
                 </li>
+                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_estoque_cadastro_produto %}
                 <li class="nav-item">
-                  <a href="{% url 'estoque:tabelas_preco' %}"
-                     class="nav-link {% if menu_sub == 'tabelas_preco' %}active{% endif %}">
+                  <a href="{% url 'estoque:tabelas_preco' %}" class="nav-link {% if menu_sub == 'tabelas_preco' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Tabelas de Preço</p>
+                    <p>Tabelas de Preco</p>
                   </a>
                 </li>
                 <li class="nav-item">
-                  <a href="{% url 'estoque:relatorio_divergencias' %}"
-                     class="nav-link {% if menu_sub == 'relatorio_divergencias' %}active{% endif %}">
-                    <i class="far fa-circle nav-icon"></i>
-                    <p>Divergências</p>
-                  </a>
-                </li>
-                {% endif %}
-                {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
-                <li class="nav-item">
-                  <a href="{% url 'estoque:pontos_operacionais' %}"
-                     class="nav-link {% if menu_sub == 'pontos_operacionais' %}active{% endif %}">
+                  <a href="{% url 'estoque:pontos_operacionais' %}" class="nav-link {% if menu_sub == 'pontos_operacionais' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Pontos Operacionais</p>
                   </a>
                 </li>
                 <li class="nav-item">
-                  <a href="{% url 'estoque:ubicacoes_estoque' %}"
-                     class="nav-link {% if menu_sub == 'ubicacoes_estoque' %}active{% endif %}">
+                  <a href="{% url 'estoque:ubicacoes_estoque' %}" class="nav-link {% if menu_sub == 'ubicacoes_estoque' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Ubicações</p>
+                    <p>Ubicacoes</p>
+                  </a>
+                </li>
+                {% endif %}
+                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_estoque_transferencia %}
+                <li class="nav-item">
+                  <a href="{% url 'estoque:relatorio_divergencias' %}" class="nav-link {% if menu_sub == 'relatorio_divergencias' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Divergencias</p>
                   </a>
                 </li>
                 {% endif %}
               </ul>
             </li>
-
-            {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+            {% endif %}
+{% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
             <li class="nav-item">
               <a href="{% url 'fiscal:painel_fiscal' %}" class="nav-link {% if menu_app == 'fiscal' %}active{% endif %}">
                 <i class="nav-icon fas fa-file-invoice"></i>
@@ -392,7 +404,7 @@
                 <p>Prêmios e Comissões</p>
               </a>
             </li>
-            {% if user.is_superuser or user.tipo_usuario != 'tecnico' %}
+            {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.tipo_usuario == 'atendente' or user.acesso_caixa_operacional_extra %}
             <li class="nav-item has-treeview {% if menu_app == 'caixa' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'caixa' %}active{% endif %}">
                 <i class="nav-icon fas fa-cash-register"></i>
@@ -526,6 +538,13 @@
                 </p>
               </a>
               <ul class="nav nav-treeview">
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:setup_inicial' %}"
+                     class="nav-link {% if menu_sub == 'setup_inicial' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Setup Inicial</p>
+                  </a>
+                </li>
                 <li class="nav-item">
                   <a href="{% url 'configuracoes:painel' %}"
                      class="nav-link {% if menu_sub == 'painel' %}active{% endif %}">
@@ -796,6 +815,9 @@ document.addEventListener("DOMContentLoaded", function () {
 {% block extra_js %}{% endblock %}
 </body>
 </html>
+
+
+
 
 
 

@@ -11,7 +11,9 @@ from .forms import (
     EmpresaForm, AliquotaForm, UserForm,
     ConfiguracaoOrdemServicoForm, ConfiguracaoSistemaForm,
     FornecedorGarantiaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm,
+    ParceiroExpedicaoForm,
     ModeloMensagemForm,
+    SetupInicialSistemaForm,
     UsuarioArquivoForm,
     )
 from .models import (
@@ -20,14 +22,22 @@ from .models import (
     ConfiguracaoSistema,
     Empresa,
     FornecedorGarantia,
+    LinhaAtuacaoCatalogo,
     MarcaGarantia,
     ModeloMensagem,
+    ParceiroExpedicao,
     RegraGarantiaMarca,
+    SetupInicialSistema,
     TipoEquipamentoConfig,
     UsuarioArquivo,
     UsuarioLog,
 )
 from .forms import TipoEquipamentoConfigForm
+from .services.setup_inicial import (
+    garantir_catalogo_padrao,
+    setup_inicial_concluido,
+    sincronizar_tipos_ativos_por_linhas,
+)
 import requests
 import json
 import logging
@@ -40,36 +50,11 @@ from .permissions import role_required, ADM_ROLES, MANAGER_ROLES, ORDER_CREATION
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
-TIPOS_EQUIPAMENTO_PADRAO = [
-    ("celular", "Celular"),
-    ("notebook", "Notebook"),
-    ("tablet", "Tablet"),
-    ("computador", "Computador"),
-    ("secador", "Secador"),
-    ("alisador", "Alisador"),
-    ("modelador", "Modelador"),
-    ("escova", "Escova"),
-    ("ventilador", "Ventilador"),
-    ("climatizador", "Climatizador"),
-    ("aspirador", "Aspirador"),
-    ("cafeteira", "Cafeteira"),
-    ("outros", "Outros"),
-]
-
-
 def _request_ip(request):
     forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR", "")
-
-
-def _garantir_tipos_equipamento_padrao():
-    for ordem, (codigo, nome) in enumerate(TIPOS_EQUIPAMENTO_PADRAO):
-        TipoEquipamentoConfig.objects.get_or_create(
-            codigo=codigo,
-            defaults={"nome": nome, "ativo": True, "ordem": ordem},
-        )
 
 
 def _log_usuario(usuario_alvo, acao, descricao, usuario_responsavel=None):
@@ -88,6 +73,85 @@ def _log_usuario(usuario_alvo, acao, descricao, usuario_responsavel=None):
 @role_required(MANAGER_ROLES)
 def painel(request):
     return render(request, 'configuracoes/painel.html')
+
+
+@role_required(MANAGER_ROLES)
+def setup_inicial(request):
+    garantir_catalogo_padrao()
+    setup = SetupInicialSistema.get_setup()
+    empresa = Empresa.objects.first()
+    config_os = ConfiguracaoOrdemServico.objects.first()
+
+    tipo_empresa_query = (request.GET.get("tipo_empresa") or "").strip()
+    tipo_empresa_post = (request.POST.get("tipo_empresa") or "").strip() if request.method == "POST" else ""
+    tipo_empresa_inicial = tipo_empresa_post or tipo_empresa_query or setup.tipo_empresa or "assistencia_tecnica"
+
+    if request.method == "POST":
+        form = SetupInicialSistemaForm(request.POST, tipo_empresa=tipo_empresa_inicial)
+        if form.is_valid():
+            linhas = form.cleaned_data["linhas_atuacao"]
+            if not linhas:
+                form.add_error("linhas_atuacao", "Selecione pelo menos uma linha de atuação.")
+            else:
+                if not empresa:
+                    empresa = Empresa.objects.create(nome=form.cleaned_data["nome_empresa"])
+                empresa.nome = form.cleaned_data["nome_empresa"]
+                empresa.cnpj = form.cleaned_data["cnpj"]
+                empresa.telefone = form.cleaned_data["telefone"]
+                empresa.email = form.cleaned_data["email"]
+                empresa.endereco = form.cleaned_data["endereco"]
+                empresa.save()
+
+                if not config_os:
+                    config_os = ConfiguracaoOrdemServico.objects.create(
+                        prefixo_os=form.cleaned_data["prefixo_os"],
+                        inicio_id_ordem=1,
+                        gerar_numero_automatico=True,
+                    )
+                else:
+                    config_os.prefixo_os = form.cleaned_data["prefixo_os"]
+                    config_os.save(update_fields=["prefixo_os"])
+
+                setup.empresa = empresa
+                setup.tipo_empresa = form.cleaned_data["tipo_empresa"]
+                setup.concluido = True
+                setup.save()
+                setup.linhas_atuacao.set(linhas)
+                sincronizar_tipos_ativos_por_linhas(linhas)
+
+                messages.success(request, "Setup inicial concluído com sucesso.")
+                return redirect("core:dashboard")
+    else:
+        linhas_iniciais = list(setup.linhas_atuacao.values_list("id", flat=True))
+        initial = {
+            "nome_empresa": (empresa.nome if empresa else ""),
+            "cnpj": (empresa.cnpj if empresa else ""),
+            "telefone": (empresa.telefone if empresa else ""),
+            "email": (empresa.email if empresa else ""),
+            "endereco": (empresa.endereco if empresa else ""),
+            "prefixo_os": (config_os.prefixo_os if config_os else "OS"),
+            "tipo_empresa": tipo_empresa_inicial,
+            "linhas_atuacao": linhas_iniciais,
+        }
+        form = SetupInicialSistemaForm(initial=initial, tipo_empresa=initial["tipo_empresa"])
+
+    linhas_disponiveis = (
+        LinhaAtuacaoCatalogo.objects.filter(ativo=True, segmento__codigo=tipo_empresa_inicial)
+        .select_related("segmento")
+        .order_by("segmento__ordem", "ordem", "nome")
+    )
+    return render(
+        request,
+        "configuracoes/setup_inicial.html",
+        {
+            "form": form,
+            "linhas_disponiveis": linhas_disponiveis,
+            "tipo_empresa_ativo": tipo_empresa_inicial,
+            "setup_concluido": setup_inicial_concluido(),
+            "menu_app": "configuracoes",
+            "menu_sub": "setup_inicial",
+        },
+    )
 
 
 @role_required(MANAGER_ROLES)
@@ -594,12 +658,15 @@ def preview_documento(request):
 def marcas_fornecedores(request):
     busca_fornecedor = (request.GET.get("qf") or "").strip()
     busca_marca = (request.GET.get("qm") or "").strip()
+    busca_parceiro = (request.GET.get("qp") or "").strip()
     edit_fornecedor_id = (request.GET.get("edit_fornecedor") or "").strip()
     edit_marca_id = (request.GET.get("edit_marca") or "").strip()
+    edit_parceiro_id = (request.GET.get("edit_parceiro") or "").strip()
     edit_regra_id = (request.GET.get("edit_regra") or "").strip()
 
     fornecedor_form = FornecedorGarantiaForm()
     marca_form = MarcaGarantiaForm()
+    parceiro_form = ParceiroExpedicaoForm()
     regra_form = RegraGarantiaMarcaForm()
     marca_em_edicao = None
     regra_em_edicao = None
@@ -644,6 +711,24 @@ def marcas_fornecedores(request):
             marca = get_object_or_404(MarcaGarantia, id=request.POST.get("marca_id"))
             marca.delete()
             messages.success(request, "Marca excluída com sucesso.")
+            return redirect("configuracoes:marcas_fornecedores")
+        elif form_type == "parceiro":
+            parceiro_form = ParceiroExpedicaoForm(request.POST)
+            if parceiro_form.is_valid():
+                parceiro_form.save()
+                messages.success(request, "Parceiro salvo com sucesso.")
+                return redirect("configuracoes:marcas_fornecedores")
+        elif form_type == "parceiro_edit":
+            parceiro = get_object_or_404(ParceiroExpedicao, id=request.POST.get("parceiro_id"))
+            parceiro_form = ParceiroExpedicaoForm(request.POST, instance=parceiro)
+            if parceiro_form.is_valid():
+                parceiro_form.save()
+                messages.success(request, "Parceiro atualizado com sucesso.")
+                return redirect("configuracoes:marcas_fornecedores")
+        elif form_type == "parceiro_delete":
+            parceiro = get_object_or_404(ParceiroExpedicao, id=request.POST.get("parceiro_id"))
+            parceiro.delete()
+            messages.success(request, "Parceiro excluido com sucesso.")
             return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "regra_add":
             marca_id_post = (request.POST.get("marca_id") or "").strip()
@@ -702,6 +787,10 @@ def marcas_fornecedores(request):
                     regra_form = RegraGarantiaMarcaForm(instance=regra_em_edicao)
                 else:
                     regra_form = RegraGarantiaMarcaForm(initial={"marca": marca_em_edicao.id})
+        if edit_parceiro_id.isdigit():
+            parceiro_obj = ParceiroExpedicao.objects.filter(id=int(edit_parceiro_id)).first()
+            if parceiro_obj:
+                parceiro_form = ParceiroExpedicaoForm(instance=parceiro_obj)
 
     fornecedores_qs = (
         FornecedorGarantia.objects.filter(nome__icontains=busca_fornecedor)
@@ -713,8 +802,14 @@ def marcas_fornecedores(request):
         if busca_marca
         else MarcaGarantia.objects.select_related("fornecedor").all()
     )
+    parceiros_qs = (
+        ParceiroExpedicao.objects.filter(nome__icontains=busca_parceiro)
+        if busca_parceiro
+        else ParceiroExpedicao.objects.all()
+    )
     fornecedores_page = Paginator(fornecedores_qs.order_by("nome"), 10).get_page(request.GET.get("page_f"))
     marcas_page = Paginator(marcas_qs.order_by("nome"), 10).get_page(request.GET.get("page_m"))
+    parceiros_page = Paginator(parceiros_qs.order_by("nome"), 10).get_page(request.GET.get("page_p"))
     regras_marca = RegraGarantiaMarca.objects.none()
     if marca_em_edicao:
         regras_marca = RegraGarantiaMarca.objects.filter(marca=marca_em_edicao).order_by("-inicio_vigencia", "tipo_produto")
@@ -725,15 +820,19 @@ def marcas_fornecedores(request):
         {
             "fornecedor_form": fornecedor_form,
             "marca_form": marca_form,
+            "parceiro_form": parceiro_form,
             "regra_form": regra_form,
             "fornecedores": fornecedores_page,
             "marcas": marcas_page,
+            "parceiros": parceiros_page,
             "regras": RegraGarantiaMarca.objects.select_related("marca", "marca__fornecedor").all(),
             "regras_marca": regras_marca,
             "busca_fornecedor": busca_fornecedor,
             "busca_marca": busca_marca,
+            "busca_parceiro": busca_parceiro,
             "edit_fornecedor_id": int(edit_fornecedor_id) if edit_fornecedor_id.isdigit() else None,
             "edit_marca_id": int(edit_marca_id) if edit_marca_id.isdigit() else None,
+            "edit_parceiro_id": int(edit_parceiro_id) if edit_parceiro_id.isdigit() else None,
             "edit_regra_id": int(edit_regra_id) if edit_regra_id.isdigit() else None,
             "marca_em_edicao": marca_em_edicao,
             "menu_app": "configuracoes",

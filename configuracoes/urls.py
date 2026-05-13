@@ -5,6 +5,7 @@ app_name = 'configuracoes'
 
 urlpatterns = [
     # Painel e outras rotas
+    path('setup-inicial/', views.setup_inicial, name='setup_inicial'),
     path('painel/', views.painel, name='painel'),
     path('empresa/', views.empresa_edit, name='empresa'),
     path('aliquotas/', views.lista_aliquotas, name='lista_aliquotas'),

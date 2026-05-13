@@ -4,7 +4,6 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -16,8 +15,9 @@ from configuracoes.permissions import (
     role_required,
 )
 
-from ..forms import ContaPagarForm, PagamentoContaPagarForm
-from ..models import CategoriaFinanceira, ContaPagar, LancamentoCaixa
+from ..forms import ContaPagarEdicaoForm, ContaPagarForm, PagamentoContaPagarForm
+from ..models import CategoriaFinanceira, ContaPagar
+from ..services.contas import processar_pagamento_conta_pagar
 from .common import caixa_atual
 from .helpers import (
     _atualizar_status_contas_pagar_abertas,
@@ -94,6 +94,9 @@ def contas_pagar(request):
         or Decimal("0.00")
     )
     pagar_sem_categoria_total = pendentes_qs.filter(categoria__isnull=True).aggregate(total=Sum("valor_total"))["total"] or Decimal("0.00")
+    pagar_criticas_qs = pendentes_qs.filter(Q(vencimento__lt=hoje) | Q(categoria__isnull=True))
+    pagar_criticas_qtd = pagar_criticas_qs.count()
+    pagar_criticas_total = sum((conta.valor_aberto for conta in pagar_criticas_qs), Decimal("0.00"))
     pagar_aging_map = {
         "a_vencer": {"titulo": "A vencer", "classe": "info", "total": Decimal("0.00"), "quantidade": 0},
         "vencidas_1_30": {"titulo": "1 a 30 dias", "classe": "warning", "total": Decimal("0.00"), "quantidade": 0},
@@ -139,6 +142,8 @@ def contas_pagar(request):
         queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"], vencimento__gte=hoje, vencimento__lte=hoje + timedelta(days=7))
     elif prioridade == "sem_categoria":
         queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"], categoria__isnull=True)
+    elif prioridade == "criticas":
+        queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"]).filter(Q(vencimento__lt=hoje) | Q(categoria__isnull=True))
     if aging_filtro in {"a_vencer", "vencidas_1_30", "vencidas_31_60", "vencidas_61_90", "vencidas_90_plus"}:
         queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"])
         if aging_filtro == "a_vencer":
@@ -246,6 +251,8 @@ def contas_pagar(request):
             "pagar_proximos_7d_total": pagar_proximos_7d_total,
             "pagar_sem_categoria_qtd": pagar_sem_categoria_qtd,
             "pagar_sem_categoria_total": pagar_sem_categoria_total,
+            "pagar_criticas_qtd": pagar_criticas_qtd,
+            "pagar_criticas_total": pagar_criticas_total,
             "pagar_aging": pagar_aging,
             "hoje": hoje,
             "limite_curto_prazo": hoje + timedelta(days=7),
@@ -281,7 +288,59 @@ def criar_conta_pagar(request):
     return render(
         request,
         "caixa/contas_pagar_form.html",
-        {"form": form, "menu_app": "caixa", "menu_sub": "contas_pagar"},
+        {
+            "form": form,
+            "titulo_pagina": "Nova conta a pagar",
+            "texto_botao_salvar": "Salvar",
+            "url_voltar": "caixa:contas_pagar",
+            "menu_app": "caixa",
+            "menu_sub": "contas_pagar",
+        },
+    )
+
+
+@role_required(CAIXA_FINANCIAL_ROLES)
+def editar_conta_pagar(request, conta_id):
+    _garantir_categorias_financeiras_padrao()
+    _garantir_centros_custo_padrao()
+    require_sensitive_permission(request.user, "perm_caixa_editar_conta_pagar")
+    conta = get_object_or_404(ContaPagar.objects.select_related("categoria", "centro_custo"), id=conta_id)
+    if conta.status == "cancelada":
+        messages.warning(request, "Contas canceladas nao podem ser editadas.")
+        return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
+
+    edicao_restrita = conta.pagamentos.exists()
+    if request.method == "POST":
+        form = ContaPagarEdicaoForm(
+            request.POST,
+            instance=conta,
+            allow_financial_changes=not edicao_restrita,
+        )
+        if form.is_valid():
+            conta = form.save()
+            _log_financeiro("conta_pagar_editada", request.user, valor=conta.valor_total, descricao=f"Conta pagar #{conta.id}")
+            if edicao_restrita:
+                messages.success(request, "Conta atualizada. Campos financeiros foram preservados porque ja existem pagamentos.")
+            else:
+                messages.success(request, "Conta a pagar atualizada com sucesso.")
+            return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
+    else:
+        form = ContaPagarEdicaoForm(instance=conta, allow_financial_changes=not edicao_restrita)
+
+    return render(
+        request,
+        "caixa/contas_pagar_form.html",
+        {
+            "form": form,
+            "conta": conta,
+            "titulo_pagina": f"Editar conta a pagar #{conta.id}",
+            "texto_botao_salvar": "Salvar alteracoes",
+            "url_voltar": "caixa:detalhe_conta_pagar",
+            "url_voltar_args": [conta.id],
+            "edicao_restrita": edicao_restrita,
+            "menu_app": "caixa",
+            "menu_sub": "contas_pagar",
+        },
     )
 
 
@@ -334,27 +393,14 @@ def detalhe_conta_pagar(request, conta_id):
                 messages.error(request, "Abra o caixa antes de registrar pagamento de conta a pagar.")
                 return redirect("caixa:abrir_caixa")
 
-            with transaction.atomic():
-                pagamento = form.save(commit=False)
-                pagamento.conta = conta
-                pagamento.usuario = request.user
-                pagamento.caixa = caixa
-                pagamento.save()
-
-                conta.valor_pago = (conta.valor_pago or Decimal("0.00")) + valor_pg
-                conta.atualizar_status_automatico()
-                conta.save(update_fields=["valor_pago", "status", "atualizado_em"])
-
-                LancamentoCaixa.objects.create(
-                    caixa=caixa,
-                    descricao=f"Pagamento conta a pagar #{conta.id}",
-                    categoria=conta.categoria,
-                    centro_custo=conta.centro_custo,
-                    valor=valor_pg,
-                    tipo="saida",
-                    usuario=request.user,
-                )
-                _log_financeiro("conta_pagar_baixa_manual", request.user, valor=valor_pg, descricao=f"Conta pagar #{conta.id}")
+            processar_pagamento_conta_pagar(
+                conta=conta,
+                caixa=caixa,
+                usuario=request.user,
+                valor=valor_pg,
+                pagamento_form=form,
+                log_financeiro_cb=_log_financeiro,
+            )
 
             messages.success(request, "Pagamento registrado com sucesso.")
             return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
@@ -371,6 +417,7 @@ def detalhe_conta_pagar(request, conta_id):
             "dias_atraso": dias_atraso,
             "pode_baixar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar"),
             "pode_cancelar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_cancelar_conta_pagar"),
+            "pode_editar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_editar_conta_pagar"),
             "menu_app": "caixa",
             "menu_sub": "contas_pagar",
         },
@@ -437,4 +484,5 @@ __all__ = [
     "contas_pagar",
     "criar_conta_pagar",
     "detalhe_conta_pagar",
+    "editar_conta_pagar",
 ]

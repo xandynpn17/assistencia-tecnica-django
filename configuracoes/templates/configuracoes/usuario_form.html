@@ -164,6 +164,7 @@
         </div>
 
         <div class="section-title mt-3">Permissoes Sensiveis</div>
+        <div class="text-muted small mb-2">Ordens</div>
         <div class="module-grid">
           <div class="module-option">
             <label class="mb-0">{{ form.perm_os_editar_numero_serie }} {{ form.perm_os_editar_numero_serie.label }}</label>
@@ -185,11 +186,19 @@
             <small>Permite reabrir OS ja fechada.</small>
             {{ form.perm_os_reabrir.errors }}
           </div>
+        </div>
+
+        <div class="text-muted small mt-3 mb-2">Orcamentos</div>
+        <div class="module-grid">
           <div class="module-option">
             <label class="mb-0">{{ form.perm_orcamento_excluir_item }} {{ form.perm_orcamento_excluir_item.label }}</label>
             <small>Permite excluir item individual do orcamento.</small>
             {{ form.perm_orcamento_excluir_item.errors }}
           </div>
+        </div>
+
+        <div class="text-muted small mt-3 mb-2">Caixa</div>
+        <div class="module-grid">
           <div class="module-option">
             <label class="mb-0">{{ form.perm_caixa_excluir_pagamento }} {{ form.perm_caixa_excluir_pagamento.label }}</label>
             <small>Permite excluir pagamentos ja lancados no caixa.</small>
@@ -209,6 +218,45 @@
             <label class="mb-0">{{ form.perm_caixa_ver_auditoria }} {{ form.perm_caixa_ver_auditoria.label }}</label>
             <small>Permite abrir a auditoria operacional do caixa.</small>
             {{ form.perm_caixa_ver_auditoria.errors }}
+          </div>
+        </div>
+
+        <div class="text-muted small mt-3 mb-2">Estoque</div>
+        <div class="module-grid">
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_estoque_cadastro_produto }} {{ form.perm_estoque_cadastro_produto.label }}</label>
+            <small>Permite gerir cadastro, importacao, tabelas e estrutura tecnica de produtos.</small>
+            {{ form.perm_estoque_cadastro_produto.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_estoque_excluir_produto }} {{ form.perm_estoque_excluir_produto.label }}</label>
+            <small>Permite excluir definitivamente produtos do cadastro.</small>
+            {{ form.perm_estoque_excluir_produto.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_estoque_ajuste_manual }} {{ form.perm_estoque_ajuste_manual.label }}</label>
+            <small>Permite registrar movimentacoes manuais e correcoes operacionais.</small>
+            {{ form.perm_estoque_ajuste_manual.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_estoque_transferencia }} {{ form.perm_estoque_transferencia.label }}</label>
+            <small>Permite transferencias entre pontos e reposicao inteligente.</small>
+            {{ form.perm_estoque_transferencia.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_estoque_inventario_finalizar }} {{ form.perm_estoque_inventario_finalizar.label }}</label>
+            <small>Permite fechar inventarios e aplicar ajustes finais de saldo.</small>
+            {{ form.perm_estoque_inventario_finalizar.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_estoque_converter_reserva }} {{ form.perm_estoque_converter_reserva.label }}</label>
+            <small>Permite converter reservas em consumo ou saida operacional.</small>
+            {{ form.perm_estoque_converter_reserva.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_estoque_cancelar_reserva }} {{ form.perm_estoque_cancelar_reserva.label }}</label>
+            <small>Permite cancelar reservas ativas e devolver saldo ao ponto.</small>
+            {{ form.perm_estoque_cancelar_reserva.errors }}
           </div>
         </div>
 
