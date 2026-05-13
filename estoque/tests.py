@@ -16,6 +16,7 @@ from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema, Empresa
 from estoque.forms import MovimentacaoEstoqueForm, ProdutoForm
 from estoque.models import (
+    EstoqueEvento,
     ConfiguracaoRateioCustoFixo,
     InventarioEstoque,
     MovimentacaoEstoque,
@@ -40,6 +41,13 @@ class ConsultaArtigosTests(TestCase):
             username="estoque_tester",
             password="senha-forte-123",
             tipo_usuario="atendente",
+            perm_estoque_cadastro_produto=True,
+            perm_estoque_excluir_produto=True,
+            perm_estoque_ajuste_manual=True,
+            perm_estoque_transferencia=True,
+            perm_estoque_inventario_finalizar=True,
+            perm_estoque_converter_reserva=True,
+            perm_estoque_cancelar_reserva=True,
         )
         self.tecnico = user_model.objects.create_user(
             username="estoque_tecnico",
@@ -187,7 +195,7 @@ class ConsultaArtigosTests(TestCase):
             ativo=True,
         )
         Produto.objects.create(
-            nome="Motor GenÃ©rico",
+            nome="Motor Generico",
             sku="SKU-MOTOR-GEN",
             ean="7894561230002",
             descricao="Motor similar",
@@ -378,7 +386,7 @@ class ConsultaArtigosTests(TestCase):
     def test_produto_form_rejeita_ean_com_tamanho_invalido(self):
         form = ProdutoForm(
             data={
-                "nome": "Produto EAN invÃ¡lido",
+            "nome": "Produto EAN invalido",
                 "ean": "1234",
                 "tipo_item": "produto",
                 "modo_preco": "avancado",
@@ -530,6 +538,44 @@ class ConsultaArtigosTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("sem itens", response.json()["erro"])
 
+    def test_inventario_finalizar_exige_permissao_granular(self):
+        user_model = get_user_model()
+        operador = user_model.objects.create_user(
+            username="estoque_sem_perm_inventario",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(operador)
+        resp_ini = self.client.post(reverse("estoque:api_inventario_iniciar"), {"ponto_id": self.ponto_loja.id})
+        inventario_id = resp_ini.json()["inventario_id"]
+        self.client.post(
+            reverse("estoque:api_inventario_adicionar_item", args=[inventario_id]),
+            {"produto_id": self.produto.id, "quantidade_contada": 2},
+        )
+        response = self.client.post(reverse("estoque:api_inventario_finalizar", args=[inventario_id]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_converter_reserva_exige_permissao_granular(self):
+        reserva = ReservaEstoque.objects.create(
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            nome_contato="Cliente Reserva",
+            telefone_contato="910000000",
+            valido_ate=timezone.localdate() + timedelta(days=2),
+            status="ativa",
+            usuario=self.user,
+        )
+        user_model = get_user_model()
+        operador = user_model.objects.create_user(
+            username="estoque_sem_perm_reserva",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(operador)
+        response = self.client.post(reverse("estoque:api_converter_reserva", args=[reserva.codigo_reserva]))
+        self.assertEqual(response.status_code, 403)
+
     def test_alertas_estoque_minimo(self):
         self.produto.estoque_minimo = 10
         self.produto.save(update_fields=["estoque_minimo"])
@@ -550,6 +596,194 @@ class ConsultaArtigosTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_tecnico_pode_criar_reserva(self):
+        self.client.force_login(self.tecnico)
+        response = self.client.post(
+            reverse("estoque:api_criar_reserva"),
+            {
+                "produto_id": self.produto.id,
+                "ponto_id": self.ponto_loja.id,
+                "nome": "Cliente Tecnico",
+                "telefone": "910000000",
+                "quantidade": 1,
+                "valido_ate": (timezone.localdate() + timedelta(days=2)).isoformat(),
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["codigo_reserva"].startswith("RES-"))
+
+    def test_restrito_sem_perm_nao_pode_excluir_produto(self):
+        user_model = get_user_model()
+        operador = user_model.objects.create_user(
+            username="estoque_sem_perm_excluir",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(operador)
+        response = self.client.post(reverse("estoque:excluir_produto", args=[self.produto.id]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_restrito_sem_perm_nao_pode_transferencia_ou_reposicao(self):
+        user_model = get_user_model()
+        operador = user_model.objects.create_user(
+            username="estoque_sem_perm_transfer",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(operador)
+        response_transfer = self.client.get(reverse("estoque:transferir_estoque"))
+        self.assertEqual(response_transfer.status_code, 403)
+        response_reposicao = self.client.get(reverse("estoque:reposicao_estoque"))
+        self.assertEqual(response_reposicao.status_code, 403)
+
+    def test_restrito_sem_perm_nao_pode_cancelar_reserva(self):
+        reserva = ReservaEstoque.objects.create(
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            nome_contato="Cliente Reserva",
+            telefone_contato="910000001",
+            valido_ate=timezone.localdate() + timedelta(days=2),
+            status="ativa",
+            usuario=self.user,
+        )
+        user_model = get_user_model()
+        operador = user_model.objects.create_user(
+            username="estoque_sem_perm_cancelar_reserva",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(operador)
+        response = self.client.post(
+            reverse("estoque:api_cancelar_reserva", args=[reserva.codigo_reserva]),
+            {"motivo": "teste"},
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_auditoria_estoque_filtra_evento_para_gerente(self):
+        gerente = get_user_model().objects.create_user(
+            username="gerente_auditoria_estoque",
+            password="senha-forte-123",
+            tipo_usuario="gerente",
+        )
+        EstoqueEvento.objects.create(
+            evento="reserva_criada",
+            usuario=self.user,
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            dados={"origem": "teste"},
+        )
+        EstoqueEvento.objects.create(
+            evento="inventario_finalizado",
+            usuario=self.user,
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=2,
+            dados={"origem": "teste"},
+        )
+
+        self.client.force_login(gerente)
+        response = self.client.get(
+            reverse("estoque:auditoria_estoque"),
+            {"evento": "reserva_criada", "q": "reserva_criada"},
+        )
+        self.assertEqual(response.status_code, 200)
+        eventos_page = response.context["eventos_page"]
+        self.assertGreaterEqual(eventos_page.paginator.count, 1)
+        self.assertTrue(all(evt.evento == "reserva_criada" for evt in eventos_page.object_list))
+
+    def test_eventos_operacionais_estoque_sao_persistidos_nominalmente(self):
+        self.client.force_login(self.user)
+
+        response_venda = self.client.post(
+            reverse("estoque:api_venda_rapida"),
+            {
+                "produto_id": self.produto.id,
+                "ponto_id": self.ponto_loja.id,
+                "quantidade": 1,
+                "funcionario_numero": self.vendedor_numero,
+            },
+        )
+        self.assertEqual(response_venda.status_code, 200)
+
+        response_reserva = self.client.post(
+            reverse("estoque:api_criar_reserva"),
+            {
+                "produto_id": self.produto.id,
+                "ponto_id": self.ponto_loja.id,
+                "nome": "Cliente Reserva 1",
+                "telefone": "910000002",
+                "quantidade": 1,
+                "valido_ate": (timezone.localdate() + timedelta(days=2)).isoformat(),
+            },
+        )
+        self.assertEqual(response_reserva.status_code, 200)
+        codigo_reserva = response_reserva.json()["codigo_reserva"]
+
+        reserva_expirar = ReservaEstoque.objects.create(
+            codigo_reserva="RES-EXP-EVT1",
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            nome_contato="Cliente Expirar",
+            telefone_contato="910000003",
+            valido_ate=timezone.localdate() - timedelta(days=1),
+            status="ativa",
+            usuario=self.user,
+        )
+        self.assertIsNotNone(reserva_expirar.id)
+        response_expirar = self.client.post(reverse("estoque:api_expirar_reservas"))
+        self.assertEqual(response_expirar.status_code, 200)
+
+        response_converter = self.client.post(reverse("estoque:api_converter_reserva", args=[codigo_reserva]))
+        self.assertEqual(response_converter.status_code, 200)
+
+        response_cancelar = self.client.post(
+            reverse("estoque:api_cancelar_reserva", args=[codigo_reserva]),
+            {"motivo": "cancelamento para teste"},
+        )
+        self.assertEqual(response_cancelar.status_code, 200)
+
+        response_transferir = self.client.post(
+            reverse("estoque:transferir_estoque"),
+            {
+                "produto_id": self.produto.id,
+                "origem_id": self.ponto_loja.id,
+                "destino_id": self.ponto_avaria.id,
+                "quantidade": 1,
+            },
+        )
+        self.assertEqual(response_transferir.status_code, 302)
+
+        resp_ini = self.client.post(reverse("estoque:api_inventario_iniciar"), {"ponto_id": self.ponto_loja.id})
+        self.assertEqual(resp_ini.status_code, 200)
+        inventario_id = resp_ini.json()["inventario_id"]
+        resp_item = self.client.post(
+            reverse("estoque:api_inventario_adicionar_item", args=[inventario_id]),
+            {"produto_id": self.produto.id, "quantidade_contada": 2},
+        )
+        self.assertEqual(resp_item.status_code, 200)
+        resp_fim = self.client.post(reverse("estoque:api_inventario_finalizar", args=[inventario_id]))
+        self.assertEqual(resp_fim.status_code, 200)
+
+        eventos_esperados = [
+            "venda_pre_reserva_criada",
+            "reserva_criada",
+            "reservas_expiradas_execucao",
+            "reserva_convertida",
+            "reserva_cancelada",
+            "transferencia_estoque",
+            "inventario_finalizado",
+        ]
+        for nome_evento in eventos_esperados:
+            self.assertTrue(
+                EstoqueEvento.objects.filter(evento=nome_evento).exists(),
+                msg=f"Evento esperado nao encontrado: {nome_evento}",
+            )
 
     def test_venda_rapida_cria_pre_reserva_sem_baixa_imediata(self):
         saldo_inicial = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_loja).quantidade
@@ -614,6 +848,99 @@ class ConsultaArtigosTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "GUIA-VENDIDA-01")
         self.assertContains(response, self.produto.nome)
+
+    def test_api_guia_status_retorna_pendente(self):
+        venda = VendaRapidaEstoque.objects.create(
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            valor_unitario=Decimal("150.00"),
+            valor_total=Decimal("150.00"),
+            funcionario_numero=self.vendedor_numero,
+            cesto_codigo="CES-GUIA-PEND-01",
+            guia_pagamento="GUIA-PENDENTE-01",
+            status="pre_reserva",
+            usuario=self.user,
+        )
+        response = self.client.get(reverse("estoque:api_guia_status", args=[venda.guia_pagamento]))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "pendente")
+        self.assertTrue(payload["pode_ir_caixa"])
+        self.assertEqual(payload["itens_pre_reserva"], 1)
+        self.assertEqual(payload["itens_total"], 1)
+
+    def test_api_guia_status_retorna_divergente_quando_misto(self):
+        codigo = "GUIA-DIVERGENTE-01"
+        VendaRapidaEstoque.objects.create(
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            valor_unitario=Decimal("150.00"),
+            valor_total=Decimal("150.00"),
+            funcionario_numero=self.vendedor_numero,
+            cesto_codigo="CES-GUIA-DIV-01",
+            guia_pagamento=codigo,
+            status="pre_reserva",
+            usuario=self.user,
+        )
+        VendaRapidaEstoque.objects.create(
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            valor_unitario=Decimal("150.00"),
+            valor_total=Decimal("150.00"),
+            funcionario_numero=self.vendedor_numero,
+            cesto_codigo="CES-GUIA-DIV-01",
+            guia_pagamento=codigo,
+            status="vendida",
+            usuario=self.user,
+            concluido_em=timezone.now(),
+        )
+
+        response = self.client.get(reverse("estoque:api_guia_status", args=[codigo]))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "divergente")
+        self.assertEqual(payload["itens_pre_reserva"], 1)
+        self.assertEqual(payload["itens_vendida"], 1)
+
+    def test_api_guias_recentes_respeita_ordem_e_limite(self):
+        VendaRapidaEstoque.objects.create(
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            valor_unitario=Decimal("150.00"),
+            valor_total=Decimal("150.00"),
+            funcionario_numero=self.vendedor_numero,
+            cesto_codigo="CES-GUIA-OLD-01",
+            guia_pagamento="GUIA-OLD-01",
+            status="pre_reserva",
+            usuario=self.user,
+        )
+        VendaRapidaEstoque.objects.create(
+            produto=self.produto,
+            ponto_operacional=self.ponto_loja,
+            quantidade=1,
+            valor_unitario=Decimal("150.00"),
+            valor_total=Decimal("150.00"),
+            funcionario_numero=self.vendedor_numero,
+            cesto_codigo="CES-GUIA-NEW-01",
+            guia_pagamento="GUIA-NEW-01",
+            status="vendida",
+            usuario=self.user,
+            concluido_em=timezone.now(),
+        )
+
+        response = self.client.get(reverse("estoque:api_guias_recentes"), {"limit": 1})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["guias"]), 1)
+        self.assertEqual(payload["guias"][0]["guia"], "GUIA-NEW-01")
+        self.assertIn("caixa_url", payload["guias"][0])
+        self.assertIn("guia_url", payload["guias"][0])
 
     def test_venda_rapida_rejeita_cesto_ja_finalizado(self):
         response_item = self.client.post(
@@ -1187,6 +1514,7 @@ class EstruturaProdutoTests(TestCase):
             username="estoque_estrutura",
             password="senha-forte-123",
             tipo_usuario="atendente",
+            perm_estoque_cadastro_produto=True,
         )
         self.client.force_login(self.user)
         self.ponto = PontoOperacional.objects.create(codigo="PO3", nome="Loja", ativo=True)
@@ -1256,6 +1584,7 @@ class ProdutoCadastroAprimoradoTests(TestCase):
             username="estoque_cadastro_aprimorado",
             password="senha-forte-123",
             tipo_usuario="atendente",
+            perm_estoque_cadastro_produto=True,
         )
         self.client.force_login(self.user)
         self.ponto = PontoOperacional.objects.create(codigo="PO3", nome="Loja", ativo=True)
@@ -1303,6 +1632,20 @@ class ProdutoCadastroAprimoradoTests(TestCase):
                 acao="CRIACAO",
             ).exists()
         )
+
+    def test_criar_produto_exige_permissao_granular(self):
+        user_model = get_user_model()
+        operador = user_model.objects.create_user(
+            username="estoque_sem_perm_cadastro",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(operador)
+        response = self.client.post(
+            reverse("estoque:criar_produto"),
+            data=self._payload_produto(nome="Produto Bloqueado"),
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_form_produto_exibe_abas_operacionais(self):
         response = self.client.get(reverse("estoque:criar_produto"))
@@ -1369,7 +1712,7 @@ class ProdutoCadastroAprimoradoTests(TestCase):
             {"arquivo": arquivo_validar, "acao": "validar"},
         )
         self.assertEqual(response_validar.status_code, 200)
-        self.assertContains(response_validar, "Pré-visualização")
+        self.assertContains(response_validar, "Pre-visualizacao")
 
         arquivo_importar = SimpleUploadedFile(
             "produtos.csv",
@@ -1532,8 +1875,8 @@ class ProdutoCadastroAprimoradoTests(TestCase):
         response = self.client.get(reverse("estoque:indicadores_estoque"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Resumo do Rateio Atual")
-        self.assertContains(response, "Configuração do Rateio")
-        self.assertContains(response, "Evolução Previsto x Realizado")
+        self.assertContains(response, "Configuracao do Rateio")
+        self.assertContains(response, "Evolucao Previsto x Realizado")
 
     def test_gerar_snapshot_rateio_pelo_dashboard(self):
         self.user.is_superuser = True
