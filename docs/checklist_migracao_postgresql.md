@@ -18,13 +18,15 @@ Definir:
 - `DJANGO_DB_USER=<usuario>`
 - `DJANGO_DB_PASSWORD=<senha>`
 - `DJANGO_DB_HOST=127.0.0.1`
-- `DJANGO_DB_PORT=5432` (opcional, padrao 5432)
+- `DJANGO_DB_PORT=5432` (ou `5433`, conforme instancia local ativa)
 - `DJANGO_DB_CONN_MAX_AGE=60` (opcional)
 
 ## 3) Validacoes iniciais
 
 1. `python manage.py check`
-2. `python manage.py showmigrations`
+2. `python manage.py check_postgres_ready`
+3. `python manage.py check_postgres_ready --check-connection`
+4. `python manage.py showmigrations`
 
 Se houver erro de conexao, revisar host/porta/usuario/senha e se o banco existe.
 
@@ -51,6 +53,8 @@ Executar validacoes minimas apos migrar:
 - Rodar testes automatizados principais.
 - Conferir consultas de listagem (OS, clientes, estoque, caixa).
 - Revisar performance inicial e necessidade de indices adicionais.
+- Se necessario, guardar um `.env` local baseado em `.env.postgres.example`.
+- Confirmar que o terminal atual carregou as variaveis corretas de porta/host antes de `runserver`.
 
 ## 7) Rollback rapido (somente desenvolvimento)
 

@@ -1,0 +1,110 @@
+{% extends "core/base.html" %}
+{% block title %}Setup Inicial{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0">
+  <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+    <h3 class="card-title mb-0">Setup inicial do sistema</h3>
+    {% if setup_concluido %}
+    <span class="badge badge-success">Concluído</span>
+    {% else %}
+    <span class="badge badge-warning">Pendente</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <p class="text-muted mb-4">
+      Configure a empresa, o prefixo da OS e as linhas de atuação para ativar automaticamente os tipos de equipamentos.
+    </p>
+
+    <form method="get" class="mb-4">
+      <div class="form-row align-items-end">
+        <div class="col-md-4">
+          <label class="font-weight-bold" for="filtro_tipo_empresa">Tipo de empresa</label>
+          <select id="filtro_tipo_empresa" name="tipo_empresa" class="form-control">
+            <option value="assistencia_tecnica" {% if tipo_empresa_ativo == "assistencia_tecnica" %}selected{% endif %}>Assistência técnica</option>
+            <option value="oficina_mecanica" {% if tipo_empresa_ativo == "oficina_mecanica" %}selected{% endif %}>Oficina mecânica</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-outline-primary btn-block">Atualizar linhas</button>
+        </div>
+      </div>
+    </form>
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="form-row">
+        <div class="form-group col-md-6">
+          <label class="font-weight-bold">{{ form.nome_empresa.label }}</label>
+          {{ form.nome_empresa }}
+          {% if form.nome_empresa.errors %}<div class="text-danger small mt-1">{{ form.nome_empresa.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div class="form-group col-md-3">
+          <label class="font-weight-bold">{{ form.cnpj.label }}</label>
+          {{ form.cnpj }}
+          {% if form.cnpj.errors %}<div class="text-danger small mt-1">{{ form.cnpj.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div class="form-group col-md-3">
+          <label class="font-weight-bold">{{ form.prefixo_os.label }}</label>
+          {{ form.prefixo_os }}
+          {% if form.prefixo_os.errors %}<div class="text-danger small mt-1">{{ form.prefixo_os.errors|join:", " }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group col-md-4">
+          <label class="font-weight-bold">{{ form.telefone.label }}</label>
+          {{ form.telefone }}
+          {% if form.telefone.errors %}<div class="text-danger small mt-1">{{ form.telefone.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div class="form-group col-md-4">
+          <label class="font-weight-bold">{{ form.email.label }}</label>
+          {{ form.email }}
+          {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div class="form-group col-md-4">
+          <label class="font-weight-bold">{{ form.tipo_empresa.label }}</label>
+          {{ form.tipo_empresa }}
+          {% if form.tipo_empresa.errors %}<div class="text-danger small mt-1">{{ form.tipo_empresa.errors|join:", " }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="font-weight-bold">{{ form.endereco.label }}</label>
+        {{ form.endereco }}
+        {% if form.endereco.errors %}<div class="text-danger small mt-1">{{ form.endereco.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <div class="border rounded p-3 mt-3">
+        <h5 class="mb-3">Linhas de atuação disponíveis</h5>
+        {% if form.linhas_atuacao.errors %}
+        <div class="alert alert-warning py-2">{{ form.linhas_atuacao.errors|join:", " }}</div>
+        {% endif %}
+        {% if linhas_disponiveis %}
+        <div class="row">
+          {% for checkbox in form.linhas_atuacao %}
+          <div class="col-md-6 col-lg-4 mb-2">
+            <label class="border rounded p-2 d-flex align-items-center mb-0">
+              {{ checkbox.tag }}
+              <span class="ml-2">{{ checkbox.choice_label }}</span>
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Nenhuma linha cadastrada para este tipo de empresa.</p>
+        {% endif %}
+      </div>
+
+      {% if form.non_field_errors %}
+      <div class="alert alert-danger mt-3 mb-0">{{ form.non_field_errors|join:", " }}</div>
+      {% endif %}
+
+      <div class="d-flex justify-content-end mt-4">
+        <button type="submit" class="btn btn-success">Concluir setup inicial</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

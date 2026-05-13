@@ -1,4 +1,20 @@
-﻿# Changelog
+# Changelog
+
+## v0.2.0 - 2026-05-13
+
+Consolidacao do ciclo de evolucao operacional com foco em PostgreSQL, permissoes granulares, expedicoes e amadurecimento de estoque/caixa.
+
+### Principais entregas
+- Migracao e homologacao em PostgreSQL com `check_postgres_ready`, ajustes de compatibilidade e suite principal validada.
+- Setup inicial orientado ao primeiro uso com catalogo de linhas/tipos de equipamento e fluxo de configuracao de empresa.
+- Expedicoes de ordens com fluxo de envio/recepcao por parceiro, guias e status operacional dedicados.
+- Permissoes granulares ampliadas por acao sensivel (ordens, estoque, caixa, configuracoes) com bloqueios consistentes.
+- Estoque evoluido com services transacionais, auditoria operacional (`EstoqueEvento`), indicadores e testes reforcados.
+- Caixa evoluido em services, comissoes, recebiveis/pagaveis, dashboards e cobertura de testes ampliada.
+- Fechamento da Fase E7 do estoque com relatorios de homologacao e evidencias em PostgreSQL.
+
+### Validacao
+- Regressao principal em PostgreSQL: `478 testes OK` (`core ordens estoque caixa orcamentos configuracoes`).
 
 ## v0.1.0 - 2026-02-28
 
