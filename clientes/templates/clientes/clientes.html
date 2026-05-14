@@ -1,156 +1,172 @@
 {% extends 'core/base.html' %}
-{% load static %}
 
-{% block title %}Gestao de Clientes{% endblock %}
+{% block title %}Clientes{% endblock %}
+
+{% block header %}
+<div class="d-flex justify-content-between align-items-center flex-wrap" style="gap: 10px;">
+    <div>
+        <h1 class="page-title"><i class="fas fa-users mr-2"></i>Clientes</h1>
+        <small class="text-muted">Cadastro, consulta e manutencao de clientes</small>
+    </div>
+    {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+    <a href="{% url 'clientes:unificar_clientes' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-object-group mr-1"></i>Unificar cadastros
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
 
 {% block content %}
-<section class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1><i class="fas fa-users mr-1"></i> Gestao de Clientes</h1>
-                <small class="text-muted">Cadastro, edicao e exclusao de clientes</small>
-            </div>
-            <div class="col-sm-6">
-                <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">Home</a></li>
-                    <li class="breadcrumb-item active">Clientes</li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="content">
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-12 mb-3">
-                <div class="card">
-                    <div class="card-body">
-                        <form method="GET" action="{% url 'clientes:lista_clientes' %}">
-                            <div class="input-group">
-                                <input type="text" name="query" class="form-control"
-                                       placeholder="Buscar cliente por nome, telefone, CPF, CNPJ ou número..."
-                                       value="{{ query|default:'' }}">
-                                <div class="input-group-append">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-search"></i> Buscar
-                                    </button>
-                                    {% if query %}
-                                    <a href="{% url 'clientes:lista_clientes' %}" class="btn btn-secondary">
-                                        <i class="fas fa-times"></i> Limpar
-                                    </a>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title mb-0">
-                            {% if query %}Resultados da Busca{% else %}Clientes{% endif %}
-                            <span class="badge badge-primary ml-2">{{ clientes|length }}</span>
-                        </h3>
-                        {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
-                        <div class="card-tools">
-                            <a href="{% url 'clientes:unificar_clientes' %}" class="btn btn-outline-secondary btn-sm">
-                                <i class="fas fa-object-group"></i> Unificar cadastros
-                            </a>
-                        </div>
-                        {% endif %}
-                    </div>
-
-                    <div class="card-body p-0">
-                        {% if clientes %}
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th>N Cliente</th>
-                                        <th>Nome</th>
-                                        <th>Telefone</th>
-                                        <th>Email</th>
-                                        <th>Documento</th>
-                                        <th>Cadastrado em</th>
-                                        <th style="width: 90px" class="text-center">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for cliente in clientes %}
-                                    <tr>
-                                        <td><span class="badge bg-primary">{{ cliente.numero_cliente }}</span></td>
-                                        <td><strong>{{ cliente.nome }}</strong></td>
-                                        <td>{{ cliente.telefone|default:"-" }}</td>
-                                        <td>{{ cliente.email|default:"-" }}</td>
-                                        <td>{{ cliente.get_documento_formatado|default:"-" }}</td>
-                                        <td>{{ cliente.data_cadastro|date:"d/m/Y" }}</td>
-                                        <td class="text-center">
-                                            <div class="btn-group">
-                                                <a href="{% url 'clientes:detalhes_cliente' cliente.id %}" class="btn btn-info btn-xs" title="Detalhes">
-                                                    <i class="fas fa-eye"></i>
-                                                </a>
-                                                <a href="{% url 'clientes:editar_cliente' cliente.id %}" class="btn btn-warning btn-xs" title="Editar">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                                {% if user.is_superuser or user.tipo_usuario == 'gerente' %}
-                                                <a href="{% url 'clientes:excluir_cliente' cliente.id %}" class="btn btn-danger btn-xs" title="Excluir">
-                                                    <i class="fas fa-trash"></i>
-                                                </a>
-                                                {% endif %}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% elif query %}
-                        <div class="text-center py-5">
-                            <i class="fas fa-search fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">Cliente não encontrado</h5>
-                            <p class="text-muted">Cadastre um novo cliente para continuar.</p>
-                            <a href="{% url 'ordens:verificar_cliente_os' %}?cpf_telefone={{ query|urlencode }}&novo_cliente=true" class="btn btn-primary btn-sm">
-                                <i class="fas fa-user-plus"></i> Cadastrar novo cliente
-                            </a>
-                        </div>
-                        {% else %}
-                        <div class="text-center py-5">
-                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">Pesquise pelo CPF ou telefone</h5>
-                            <p class="text-muted">Use nome, documento, telefone ou numero de cliente.</p>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
 <style>
-.table th {
-    font-size: 0.9rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    border-top: none;
-}
-.table td {
-    font-size: 0.9rem;
-    vertical-align: middle;
-}
-.btn-xs {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-    line-height: 1.5;
-    border-radius: 0.2rem;
-}
-.badge {
-    font-size: 0.75rem;
-    font-weight: 600;
-}
+    .clientes-filter-card { border-radius: 10px; }
+    .clientes-filter-row label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #5c6f83;
+        margin-bottom: 4px;
+        font-weight: 700;
+    }
+    .clientes-table thead th {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+    .clientes-table td {
+        font-size: .9rem;
+        vertical-align: middle;
+    }
+    .clientes-row-main {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .clientes-row-main small {
+        color: #60748a;
+        font-size: 12px;
+    }
+    .clientes-row {
+        cursor: pointer;
+    }
+    .clientes-row:hover {
+        background: #f7faff;
+    }
+    .clientes-empty {
+        text-align: center;
+        padding: 34px 18px;
+        color: #60748a;
+    }
 </style>
+
+<div class="card clientes-filter-card mb-3">
+    <div class="card-body">
+        <form method="GET" action="{% url 'clientes:lista_clientes' %}">
+            <div class="form-row align-items-end clientes-filter-row">
+                <div class="col-md-9 mb-2 mb-md-0">
+                    <label>Busca rapida</label>
+                    <input
+                        type="text"
+                        name="query"
+                        class="form-control"
+                        placeholder="Nome, telefone, CPF/CNPJ ou numero do cliente"
+                        value="{{ query|default:'' }}"
+                    >
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary btn-block mb-2">
+                        <i class="fas fa-search mr-1"></i>Buscar
+                    </button>
+                    {% if query %}
+                    <a href="{% url 'clientes:lista_clientes' %}" class="btn btn-outline-secondary btn-block">Limpar</a>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">
+            {% if query %}Resultados da busca{% else %}Clientes cadastrados{% endif %}
+        </h3>
+        <span class="badge badge-primary">{{ clientes|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        {% if clientes %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 clientes-table">
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Contato</th>
+                        <th>Documento</th>
+                        <th>Cadastro</th>
+                        <th class="text-center" style="width: 110px;">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cliente in clientes %}
+                    <tr class="clientes-row" data-detalhes-url="{% url 'clientes:detalhes_cliente' cliente.id %}">
+                        <td>
+                            <div class="clientes-row-main">
+                                <strong>{{ cliente.nome }}</strong>
+                                <small>Nº {{ cliente.numero_cliente }}</small>
+                            </div>
+                        </td>
+                        <td>
+                            <div>{{ cliente.telefone|default:"-" }}</div>
+                            <small class="text-muted">{{ cliente.email|default:"-" }}</small>
+                        </td>
+                        <td>{{ cliente.get_documento_formatado|default:"-" }}</td>
+                        <td>{{ cliente.data_cadastro|date:"d/m/Y" }}</td>
+                        <td class="text-center">
+                            <div class="btn-group">
+                                <a href="{% url 'clientes:detalhes_cliente' cliente.id %}" class="btn btn-info btn-xs" title="Detalhes">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'clientes:editar_cliente' cliente.id %}" class="btn btn-warning btn-xs" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                {% if user.is_superuser or user.tipo_usuario == 'gerente' %}
+                                <a href="{% url 'clientes:excluir_cliente' cliente.id %}" class="btn btn-danger btn-xs" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% elif query %}
+        <div class="clientes-empty">
+            <i class="fas fa-search fa-2x mb-3"></i>
+            <h5>Cliente nao encontrado</h5>
+            <p class="mb-3">Cadastre um novo cliente para continuar o atendimento.</p>
+            <a href="{% url 'ordens:verificar_cliente_os' %}?cpf_telefone={{ query|urlencode }}&novo_cliente=true" class="btn btn-primary btn-sm">
+                <i class="fas fa-user-plus mr-1"></i>Cadastrar novo cliente
+            </a>
+        </div>
+        {% else %}
+        <div class="clientes-empty">
+            <i class="fas fa-users fa-2x mb-3"></i>
+            <h5>Pesquise por nome, telefone ou documento</h5>
+            <p class="mb-0">A busca rapida ajuda a evitar cadastros duplicados.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".clientes-row").forEach(function (row) {
+        row.addEventListener("dblclick", function () {
+            const url = row.getAttribute("data-detalhes-url");
+            if (url) window.location.href = url;
+        });
+    });
+});
+</script>
 {% endblock %}

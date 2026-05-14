@@ -6,8 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Assistência{% endblock %}</title>
 
-    <!-- Google Font: Source Sans Pro -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
 
     <!-- Font Awesome -->
     <link rel="stylesheet" href="{% static 'adminlte/plugins/fontawesome-free/css/all.min.css' %}">
@@ -17,6 +16,7 @@
 
     <!-- AdminLTE -->
     <link rel="stylesheet" href="{% static 'adminlte/dist/css/adminlte.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/app_ui.css' %}">
 
     {% block extra_css %}{% endblock %}
 </head>
@@ -49,24 +49,24 @@
 
     <!-- Sidebar -->
     {% if user.is_authenticated %}
-    <aside class="main-sidebar sidebar-dark-dark elevation-4">
-        <a href="{% url 'core:dashboard' %}" class="brand-link bg-primary text-white text-center">
+    <aside class="main-sidebar sidebar-dark-primary elevation-4">
+        <a href="{% url 'core:dashboard' %}" class="brand-link text-white text-center">
             <span class="brand-text font-weight-bold">Assistência</span>
         </a>
 
-        <div class="sidebar bg-light">
+        <div class="sidebar">
             <nav class="mt-2">
                 <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
 
                     <li class="nav-item">
-                        <a href="{% url 'core:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %} bg-info text-white">
+                        <a href="{% url 'core:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
                             <i class="nav-icon fas fa-tachometer-alt"></i>
                             <p>Dashboard</p>
                         </a>
                     </li>
                     {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
                     <li class="nav-item">
-                        <a href="{% url 'core:dashboard_indicadores' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard_indicadores' %}active{% endif %} bg-secondary text-white">
+                        <a href="{% url 'core:dashboard_indicadores' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard_indicadores' %}active{% endif %}">
                             <i class="nav-icon fas fa-chart-line"></i>
                             <p>Indicadores</p>
                         </a>
@@ -74,14 +74,14 @@
                     {% endif %}
 
                     <li class="nav-item">
-                        <a href="{% url 'clientes:lista_clientes' %}" class="nav-link {% if request.resolver_match.app_name == 'clientes' %}active{% endif %} bg-secondary text-white">
+                        <a href="{% url 'clientes:lista_clientes' %}" class="nav-link {% if request.resolver_match.app_name == 'clientes' %}active{% endif %}">
                             <i class="nav-icon fas fa-users"></i>
                             <p>Clientes</p>
                         </a>
                     </li>
 
                     <li class="nav-item has-treeview {% if request.resolver_match.app_name == 'ordens' %}menu-open{% endif %}">
-                        <a href="#" class="nav-link {% if request.resolver_match.app_name == 'ordens' %}active{% endif %} bg-primary text-white">
+                        <a href="#" class="nav-link {% if request.resolver_match.app_name == 'ordens' %}active{% endif %}">
                             <i class="nav-icon fas fa-tools"></i>
                             <p>
                                 Ordens de Serviço
@@ -113,13 +113,13 @@
     <!-- Content Wrapper -->
     <div class="content-wrapper">
         <section class="content-header">
-            <div class="container-fluid">
+            <div class="container-fluid ui-page-shell">
                 {% block header %}{% endblock %}
             </div>
         </section>
 
         <section class="content">
-            <div class="container-fluid">
+            <div class="container-fluid ui-page-shell">
                 {% block content %}{% endblock %}
             </div>
         </section>

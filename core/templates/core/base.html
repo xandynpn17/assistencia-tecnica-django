@@ -7,10 +7,11 @@
   <title>{% block title %}Assistência{% endblock %}</title>
 
   <!-- Fonts & Icons -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="{% static 'adminlte/plugins/fontawesome-free/css/all.min.css' %}">
   <link rel="stylesheet" href="{% static 'adminlte/plugins/bootstrap/css/bootstrap.min.css' %}">
   <link rel="stylesheet" href="{% static 'adminlte/dist/css/adminlte.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app_ui.css' %}">
 
 
   {% block extra_css %}
@@ -625,10 +626,10 @@
     <!-- Content Wrapper -->
     <div class="content-wrapper">
       <section class="content-header">
-        <div class="container-fluid">{% block header %}{% endblock %}</div>
+        <div class="container-fluid ui-page-shell">{% block header %}{% endblock %}</div>
       </section>
       <section class="content">
-        <div class="container-fluid">{% block content %}{% endblock %}</div>
+        <div class="container-fluid ui-page-shell">{% block content %}{% endblock %}</div>
       </section>
     </div>
 

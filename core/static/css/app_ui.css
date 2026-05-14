@@ -1,0 +1,216 @@
+:root {
+  --ui-font-sans: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
+  --ui-bg-page: #f3f6fb;
+  --ui-bg-surface: #ffffff;
+  --ui-bg-muted: #ecf1f7;
+  --ui-bg-strong: #1f2f46;
+  --ui-border: #d8e1ec;
+  --ui-border-strong: #bccad9;
+  --ui-text: #1b2b3a;
+  --ui-text-muted: #5c6f83;
+  --ui-accent: #1976d2;
+  --ui-accent-strong: #125ea8;
+  --ui-success: #238b55;
+  --ui-warning: #cb7a00;
+  --ui-danger: #ba2f2f;
+  --ui-radius-xs: 6px;
+  --ui-radius-sm: 8px;
+  --ui-radius-md: 10px;
+  --ui-shadow-sm: 0 1px 2px rgba(15, 32, 55, 0.08);
+  --ui-shadow-md: 0 8px 18px rgba(20, 41, 70, 0.1);
+}
+
+body {
+  font-family: var(--ui-font-sans);
+  color: var(--ui-text);
+  background: var(--ui-bg-page);
+}
+
+.main-header.navbar {
+  border-bottom: 1px solid var(--ui-border);
+  background: linear-gradient(90deg, #f8fbff 0%, #eef4fb 100%);
+}
+
+.main-sidebar {
+  background: linear-gradient(180deg, #2f3f53 0%, #2a3748 100%);
+}
+
+.main-sidebar .brand-link {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.nav-sidebar > .nav-item > .nav-link {
+  margin: 2px 8px;
+  border-radius: var(--ui-radius-sm);
+  color: #d6dee7;
+}
+
+.nav-sidebar > .nav-item > .nav-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f6f9fc;
+}
+
+.nav-sidebar > .nav-item > .nav-link.active {
+  background: #1976d2;
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.nav-treeview > .nav-item > .nav-link {
+  margin: 1px 8px 1px 26px;
+  border-radius: var(--ui-radius-xs);
+  color: #b8c6d4;
+  font-size: 13px;
+}
+
+.nav-treeview > .nav-item > .nav-link:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #f1f5fa;
+}
+
+.nav-treeview > .nav-item > .nav-link.active {
+  background: rgba(25, 118, 210, 0.26);
+  color: #ffffff;
+}
+
+.nav-sidebar .nav-link p {
+  margin-bottom: 0;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.sidebar-footer-profile {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.content-wrapper {
+  background-color: var(--ui-bg-page);
+}
+
+.content-header {
+  padding: 14px 0 8px;
+}
+
+.content-header h1,
+.content-header .h1,
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ui-text);
+  margin: 0;
+}
+
+.card {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.card-header {
+  background: #f7faff;
+  border-bottom: 1px solid var(--ui-border);
+  border-top-left-radius: var(--ui-radius-md);
+  border-top-right-radius: var(--ui-radius-md);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.form-control,
+.custom-select {
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: none;
+}
+
+.form-control:focus,
+.custom-select:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 0.14rem rgba(25, 118, 210, 0.14);
+}
+
+.btn {
+  border-radius: var(--ui-radius-sm);
+  font-weight: 600;
+}
+
+.btn-primary {
+  background-color: var(--ui-accent);
+  border-color: var(--ui-accent);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: var(--ui-accent-strong);
+  border-color: var(--ui-accent-strong);
+}
+
+.table {
+  color: var(--ui-text);
+  background: var(--ui-bg-surface);
+}
+
+.table thead th {
+  background: var(--ui-bg-muted);
+  border-bottom: 1px solid var(--ui-border-strong);
+  font-weight: 700;
+  color: #24374b;
+}
+
+.table td,
+.table th {
+  border-top: 1px solid #e6edf5;
+  vertical-align: middle;
+}
+
+.main-footer {
+  border-top: 1px solid var(--ui-border);
+  background: #f8fbff;
+}
+
+.search-feedback {
+  color: #7a2518;
+  background: #fff1ee;
+  border: 1px solid #f3c0b6;
+  border-radius: 8px;
+}
+
+.ui-page-shell {
+  max-width: 1140px;
+}
+
+.ui-no-permission {
+  border: 1px solid #e7c37d;
+  background: #fffaf0;
+}
+
+.ui-no-permission .card-header {
+  background: #fff3db;
+  border-bottom-color: #ecd4a6;
+}
+
+.ui-no-permission h3 {
+  font-weight: 700;
+  color: #8a5d00;
+}
+
+@media (max-width: 991.98px) {
+  .main-header .search-container {
+    width: 190px !important;
+  }
+
+  .content-header h1,
+  .content-header .h1,
+  .page-title {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .main-header .search-container {
+    width: 150px !important;
+  }
+}

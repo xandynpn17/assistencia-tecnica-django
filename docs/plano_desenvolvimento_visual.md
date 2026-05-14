@@ -36,7 +36,7 @@ O foco nao e criar uma aparencia "bonita" isolada. O foco e reduzir tempo de ope
 ## Fases
 
 ### Fase V1 - Inventario visual e tokens base
-Status: pendente
+Status: em andamento
 Prioridade: alta
 
 Objetivo:
@@ -69,8 +69,13 @@ Entregas:
 Resultado esperado:
 - base consistente para evoluir sem reescrever cada tela de forma isolada.
 
+Progresso:
+- criado stylesheet global `core/static/css/app_ui.css` com tokens de cor, espacamento, tipografia e componentes base;
+- `core/templates/core/base.html` agora carrega essa camada global;
+- estrutura de container visual padrao aplicada no wrapper de conteudo (`ui-page-shell`).
+
 ### Fase V2 - Layout global, sidebar e navegacao
-Status: pendente
+Status: em andamento
 Prioridade: alta
 
 Objetivo:
@@ -94,8 +99,14 @@ Entregas:
 Resultado esperado:
 - usuario entende onde esta, o que pode fazer e por que algo esta bloqueado.
 
+Progresso:
+- sidebar recebeu padronizacao de densidade/contraste/estados ativos via CSS global;
+- ajuste de quebra de texto nos itens de menu para evitar truncamentos visuais;
+- tela `403` passou a usar estilo visual dedicado (`ui-no-permission`) mais consistente com o sistema.
+- `core/base_inner.html` alinhado ao mesmo padrao visual do layout principal para evitar experiencias divergentes.
+
 ### Fase V3 - Padronizacao de listagens e filtros
-Status: pendente
+Status: em andamento
 Prioridade: alta
 
 Objetivo:
@@ -127,6 +138,14 @@ Entregas:
 
 Resultado esperado:
 - menos tempo procurando informacao e menos botoes repetidos.
+
+Progresso:
+- tela `clientes` reestruturada com:
+  - header padrao por bloco;
+  - filtro em linha operacional;
+  - tabela mais enxuta;
+  - estado vazio mais claro;
+  - duplo clique para abrir detalhes.
 
 ### Fase V4 - OS como tela operacional principal
 Status: pendente
