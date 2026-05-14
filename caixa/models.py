@@ -152,6 +152,13 @@ class ContaReceber(models.Model):
         ("vencida", "Vencida"),
         ("cancelada", "Cancelada"),
     ]
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contas_receber",
+    )
     ordem_servico = models.ForeignKey("ordens.OrdemServico", on_delete=models.SET_NULL, null=True, blank=True)
     ponto_operacional = models.ForeignKey("estoque.PontoOperacional", on_delete=models.SET_NULL, null=True, blank=True)
     categoria = models.ForeignKey(CategoriaFinanceira, on_delete=models.SET_NULL, null=True, blank=True)
@@ -699,6 +706,13 @@ class ContaPagar(models.Model):
         ("cancelada", "Cancelada"),
     ]
 
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contas_pagar",
+    )
     fornecedor = models.CharField(max_length=150, blank=True)
     descricao = models.CharField(max_length=220)
     valor_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)

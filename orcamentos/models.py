@@ -15,6 +15,13 @@ class Orcamento(models.Model):
         ('recusado', 'Recusado'),
     )
 
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orcamentos",
+    )
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE)
     ordem_servico = models.ForeignKey(
         OrdemServico,

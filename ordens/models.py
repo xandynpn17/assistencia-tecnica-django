@@ -24,6 +24,13 @@ class OrdemServico(models.Model):
         "pronto_contactar": "pronto_contactado",
     }
 
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ordens_servico",
+    )
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='ordens')
     numero_os = models.CharField(max_length=10, unique=True, blank=True, editable=False)
     codigo_portal = models.CharField(max_length=12, unique=True, blank=True, editable=False)

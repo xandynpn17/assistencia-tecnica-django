@@ -64,6 +64,13 @@ ESTADOS_BRASIL = [
 
 
 class Cliente(models.Model):
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="clientes",
+    )
     numero_cliente = models.CharField(
         max_length=10,
         unique=True,

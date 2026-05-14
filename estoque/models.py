@@ -104,6 +104,13 @@ class Produto(models.Model):
         ("servico", "Servico"),
     ]
 
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="produtos",
+    )
     nome = models.CharField(max_length=100)
     sku = models.CharField(max_length=50, blank=True, null=True)
     ean = models.CharField(max_length=50, blank=True, null=True, unique=True)
