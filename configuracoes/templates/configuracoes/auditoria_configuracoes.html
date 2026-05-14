@@ -1,0 +1,79 @@
+{% extends "core/base.html" %}
+{% block title %}Auditoria de Configuracoes{% endblock %}
+
+{% block content %}
+<div class="card card-modern">
+  <div class="card-modern-header">
+    <i class="fas fa-shield-alt"></i> Auditoria de Configuracoes
+  </div>
+  <div class="card-modern-body">
+    <form method="get" class="form-row mb-3">
+      <div class="col-md-4">
+        <label for="acao">Acao</label>
+        <input id="acao" name="acao" class="form-control" value="{{ acao }}" placeholder="Ex.: restore">
+      </div>
+      <div class="col-md-3">
+        <label for="origem">Origem</label>
+        <select id="origem" name="origem" class="form-control">
+          <option value="">Todas</option>
+          {% for codigo, nome in origens %}
+          <option value="{{ codigo }}" {% if origem == codigo %}selected{% endif %}>{{ nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 align-self-end">
+        <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-striped">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Usuario</th>
+            <th>Acao</th>
+            <th>Origem</th>
+            <th>Alvo</th>
+            <th>Detalhes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for evento in eventos %}
+          <tr>
+            <td>{{ evento.criado_em|date:"d/m/Y H:i:s" }}</td>
+            <td>{% if evento.usuario %}{{ evento.usuario.username }}{% else %}-{% endif %}</td>
+            <td>{{ evento.acao }}</td>
+            <td>{{ evento.get_origem_display }}</td>
+            <td>{{ evento.alvo|default:"-" }}</td>
+            <td>
+              {% if evento.depois_json %}
+              <small class="text-muted">{{ evento.depois_json|truncatechars:120 }}</small>
+              {% else %}
+              -
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted">Nenhum evento encontrado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if eventos.has_other_pages %}
+    <nav>
+      <ul class="pagination pagination-sm">
+        {% if eventos.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page={{ eventos.previous_page_number }}&acao={{ acao }}&origem={{ origem }}">Anterior</a></li>
+        {% endif %}
+        <li class="page-item disabled"><span class="page-link">Pagina {{ eventos.number }} de {{ eventos.paginator.num_pages }}</span></li>
+        {% if eventos.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ eventos.next_page_number }}&acao={{ acao }}&origem={{ origem }}">Proxima</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

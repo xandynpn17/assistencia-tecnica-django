@@ -1,4 +1,4 @@
-from io import BytesIO
+﻿from io import BytesIO
 import re
 
 from django import forms
@@ -23,6 +23,7 @@ from .models import (
     User,
 )
 from django.contrib.auth.models import Group
+from .services.capabilities import aplicar_preset, listar_presets
 
 
 class EmpresaForm(forms.ModelForm):
@@ -249,9 +250,15 @@ class UserForm(forms.ModelForm):
     )
     numero_vendedor = forms.CharField(
         required=False,
-        label="Número de vendedor",
+        label="NÃºmero de vendedor",
     )
 
+    preset_perfil = forms.ChoiceField(
+        required=False,
+        choices=[],
+        label="Preset de permissoes",
+        help_text="Opcional: aplica um conjunto base de permissoes para o perfil.",
+    )
     class Meta:
         model = User
         fields = [
@@ -358,6 +365,8 @@ class UserForm(forms.ModelForm):
         self.fields["percentual_comissao_vendas"].initial = self.fields["percentual_comissao_vendas"].initial or 0
         self.fields["numero_vendedor"].required = False
         self.fields["numero_vendedor"].help_text = "Se ficar vazio, o sistema gera automaticamente (2 ou 3 digitos)."
+        self.fields["preset_perfil"].choices = listar_presets()
+        self.fields["preset_perfil"].widget.attrs.update({"class": "form-control"})
         self.fields["password"].widget.attrs.update(
             {
                 "placeholder": "Informe uma senha segura",
@@ -415,7 +424,7 @@ class UserForm(forms.ModelForm):
         self.fields["acesso_estoque_extra"].label = "Estoque"
         self.fields["acesso_caixa_operacional_extra"].label = "Caixa operacional"
         self.fields["acesso_caixa_financeiro_extra"].label = "Caixa financeiro"
-        self.fields["acesso_configuracoes_extra"].label = "Configurações"
+        self.fields["acesso_configuracoes_extra"].label = "ConfiguraÃ§Ãµes"
 
         self.fields["perm_os_editar_numero_serie"].label = "Editar numero de serie"
         self.fields["perm_os_editar_observacoes_internas"].label = "Editar observacoes internas da OS"
@@ -495,10 +504,10 @@ class UserForm(forms.ModelForm):
         tipo_pessoa = self.cleaned_data.get("tipo_pessoa") or "fisica"
         if tipo_pessoa == "fisica":
             if not self._validar_cpf(digits):
-                raise forms.ValidationError("CPF inválido.")
+                raise forms.ValidationError("CPF invÃ¡lido.")
         else:
             if not self._validar_cnpj(digits):
-                raise forms.ValidationError("CNPJ inválido.")
+                raise forms.ValidationError("CNPJ invÃ¡lido.")
         return digits
 
     def clean_numero_vendedor(self):
@@ -506,7 +515,7 @@ class UserForm(forms.ModelForm):
         if not valor:
             return ""
         if not valor.isdigit() or len(valor) < 2:
-            raise forms.ValidationError('Informe um número de vendedor com ao menos 2 dígitos.')
+            raise forms.ValidationError('Informe um nÃºmero de vendedor com ao menos 2 dÃ­gitos.')
         return valor
 
     def clean_password(self):
@@ -524,11 +533,14 @@ class UserForm(forms.ModelForm):
         admissao = cleaned.get("data_admissao")
         demissao = cleaned.get("data_demissao")
         if admissao and demissao and demissao < admissao:
-            self.add_error("data_demissao", "Data de demissão não pode ser anterior à admissão.")
+            self.add_error("data_demissao", "Data de demissÃ£o nÃ£o pode ser anterior Ã  admissÃ£o.")
         return cleaned
 
     def save(self, commit=True):
         user = super().save(commit=False)
+        preset = self.cleaned_data.get("preset_perfil")
+        if preset:
+            aplicar_preset(user, preset)
         password = self.cleaned_data.get('password')
         if password:
             user.set_password(password)
@@ -550,7 +562,7 @@ class ConfiguracaoOrdemServicoForm(forms.ModelForm):
         }
 
 
-# NOVO FORMULÁRIO
+# NOVO FORMULÃRIO
 class ConfiguracaoSistemaForm(forms.ModelForm):
     MAX_CARACTERES_TERMOS_OS = 1800
     MAX_CARACTERES_CONDICOES_ORCAMENTO = 500
@@ -647,24 +659,24 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             if isinstance(self.fields[field_name], forms.BooleanField):
                 self.fields[field_name].widget.attrs.update({'class': 'form-check-input'})
         self.fields["condicoes_orcamento"].help_text = (
-            f"Máximo recomendado: {self.MAX_CARACTERES_CONDICOES_ORCAMENTO} caracteres."
+            f"MÃ¡ximo recomendado: {self.MAX_CARACTERES_CONDICOES_ORCAMENTO} caracteres."
         )
         self.fields["termos_ordem_servico"].help_text = (
-            f"Máximo recomendado para não comprometer a impressão: {self.MAX_CARACTERES_TERMOS_OS} caracteres."
+            f"MÃ¡ximo recomendado para nÃ£o comprometer a impressÃ£o: {self.MAX_CARACTERES_TERMOS_OS} caracteres."
         )
-        self.fields["layout_os_impressao"].help_text = "Preset base para organizar espaços na OS de impressão."
+        self.fields["layout_os_impressao"].help_text = "Preset base para organizar espaÃ§os na OS de impressÃ£o."
         self.fields["layout_os_frente_espaco_assinaturas_cm"].help_text = "Ajuste fino em cm no bloco de assinatura da frente."
         self.fields["layout_os_verso_espaco_assinatura_cm"].help_text = "Ajuste fino em cm para descer/subir assinatura abaixo dos termos."
         self.fields["layout_os_data_fonte_pt"].help_text = "Tamanho da fonte das datas (bloco de assinatura)."
-        self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com número da OS na linha de recorte."
-        self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressão, relatório e orçamento)."
+        self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com nÃºmero da OS na linha de recorte."
+        self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressÃ£o, relatÃ³rio e orÃ§amento)."
         self.fields["layout_documentos_cor"].help_text = "Escolha se os PDFs saem em colorido ou escala de cinza (preto e branco)."
 
     def clean_condicoes_orcamento(self):
         valor = (self.cleaned_data.get("condicoes_orcamento") or "").strip()
         if len(valor) > self.MAX_CARACTERES_CONDICOES_ORCAMENTO:
             raise forms.ValidationError(
-                f"As condições do orçamento podem ter no máximo {self.MAX_CARACTERES_CONDICOES_ORCAMENTO} caracteres."
+                f"As condiÃ§Ãµes do orÃ§amento podem ter no mÃ¡ximo {self.MAX_CARACTERES_CONDICOES_ORCAMENTO} caracteres."
             )
         return valor
 
@@ -672,7 +684,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         valor = (self.cleaned_data.get("termos_ordem_servico") or "").strip()
         if len(valor) > self.MAX_CARACTERES_TERMOS_OS:
             raise forms.ValidationError(
-                f"Os termos da OS podem ter no máximo {self.MAX_CARACTERES_TERMOS_OS} caracteres."
+                f"Os termos da OS podem ter no mÃ¡ximo {self.MAX_CARACTERES_TERMOS_OS} caracteres."
             )
         return valor
 
@@ -726,7 +738,7 @@ class FornecedorGarantiaForm(forms.ModelForm):
             return ""
         digits = self._somente_digitos(raw)
         if len(digits) != 14:
-            raise forms.ValidationError("Informe um CNPJ válido com 14 dígitos.")
+            raise forms.ValidationError("Informe um CNPJ vÃ¡lido com 14 dÃ­gitos.")
         return digits
 
     def clean_telefone(self):
@@ -735,7 +747,7 @@ class FornecedorGarantiaForm(forms.ModelForm):
             return ""
         digits = self._somente_digitos(raw)
         if len(digits) not in {10, 11}:
-            raise forms.ValidationError("Informe um telefone válido com DDD.")
+            raise forms.ValidationError("Informe um telefone vÃ¡lido com DDD.")
         return digits
 
     def clean_cep(self):
@@ -744,7 +756,7 @@ class FornecedorGarantiaForm(forms.ModelForm):
             return ""
         digits = self._somente_digitos(raw)
         if len(digits) != 8:
-            raise forms.ValidationError("Informe um CEP válido com 8 dígitos.")
+            raise forms.ValidationError("Informe um CEP vÃ¡lido com 8 dÃ­gitos.")
         return digits
 
 
@@ -841,7 +853,7 @@ class RegraGarantiaMarcaForm(forms.ModelForm):
         if not tipo_produto:
             self.add_error("tipo_produto", "Selecione o tipo de equipamento.")
         if inicio and fim and fim < inicio:
-            self.add_error("fim_vigencia", "Fim da vigência não pode ser anterior ao início.")
+            self.add_error("fim_vigencia", "Fim da vigÃªncia nÃ£o pode ser anterior ao inÃ­cio.")
         return cleaned_data
 
 class ModeloMensagemForm(forms.ModelForm):
@@ -889,7 +901,7 @@ class SetupInicialSistemaForm(forms.Form):
         widget=forms.EmailInput(attrs={"class": "form-control"}),
     )
     endereco = forms.CharField(
-        label="Endereço (opcional)",
+        label="EndereÃ§o (opcional)",
         required=False,
         widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
     )
@@ -902,14 +914,14 @@ class SetupInicialSistemaForm(forms.Form):
     tipo_empresa = forms.ChoiceField(
         label="Tipo de empresa",
         choices=[
-            ("assistencia_tecnica", "Assistência técnica"),
-            ("oficina_mecanica", "Oficina mecânica"),
+            ("assistencia_tecnica", "AssistÃªncia tÃ©cnica"),
+            ("oficina_mecanica", "Oficina mecÃ¢nica"),
         ],
         widget=forms.Select(attrs={"class": "form-control"}),
     )
     linhas_atuacao = forms.ModelMultipleChoiceField(
         queryset=LinhaAtuacaoCatalogo.objects.none(),
-        label="Linhas de atuação",
+        label="Linhas de atuaÃ§Ã£o",
         required=False,
         widget=forms.CheckboxSelectMultiple(),
     )

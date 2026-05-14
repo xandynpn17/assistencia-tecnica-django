@@ -168,6 +168,16 @@ class CheckPostgresReadyCommandTests(TestCase):
             call_command("check_postgres_ready", "--strict")
 
 
+class CheckSaasReadinessCommandTests(TestCase):
+    def test_check_saas_readiness_exibe_diagnostico(self):
+        out = StringIO()
+        call_command("check_saas_readiness", stdout=out)
+        output = out.getvalue()
+        self.assertIn("Tenant middleware ativo:", output)
+        self.assertIn("Modelos criticos:", output)
+        self.assertIn("clientes.Cliente", output)
+
+
 class PermissoesConfiguracoesTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
@@ -304,6 +314,33 @@ class PermissoesConfiguracoesTests(TestCase):
         self.assertTrue(usuario.acesso_configuracoes_extra)
         self.assertFalse(usuario.acesso_estoque_extra)
 
+    def test_cadastro_usuario_aplica_preset_permissoes(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            reverse("configuracoes:adicionar_usuario"),
+            {
+                "username": "usuario_preset_caixa",
+                "email": "preset@teste.com",
+                "password": "Senha@123",
+                "tipo_vinculo": "FUNCIONARIO",
+                "percentual_comissao_servico": "0",
+                "percentual_comissao_peca": "0",
+                "percentual_comissao_vendas": "0",
+                "is_active": "on",
+                "is_staff": "on",
+                "tipo_usuario": "atendente",
+                "numero_vendedor": "",
+                "preset_perfil": "atendente_caixa",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        user_model = get_user_model()
+        usuario = user_model.objects.get(username="usuario_preset_caixa")
+        self.assertTrue(usuario.acesso_caixa_operacional_extra)
+        self.assertTrue(usuario.acesso_estoque_extra)
+        self.assertTrue(usuario.perm_os_concluir)
+        self.assertTrue(usuario.perm_os_reabrir)
+
     def test_gerente_nao_pode_criar_admin(self):
         self.client.force_login(self.gerente)
         response = self.client.post(
@@ -368,6 +405,45 @@ class PermissoesConfiguracoesTests(TestCase):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:marcas_fornecedores"))
         self.assertEqual(response.status_code, 200)
+
+    def test_gerente_acessa_auditoria_configuracoes(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:auditoria_configuracoes"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_gerente_acessa_simulador_permissoes(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(
+            reverse("configuracoes:simulador_permissoes"),
+            {"preset": "atendente_caixa"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("impactos", payload)
+        self.assertTrue(any("caixa" in item.lower() for item in payload.get("impactos", [])))
+
+    def test_gerente_acessa_contrato_webhooks(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:contrato_webhooks"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("eventos", payload)
+        self.assertIn("configuracoes.alterada", payload["eventos"])
+
+    def test_tenant_context_resolve_por_header(self):
+        empresa_a = Empresa.objects.create(nome="Empresa A")
+        empresa_b = Empresa.objects.create(nome="Empresa B")
+        self.admin.empresa = empresa_a
+        self.admin.save(update_fields=["empresa"])
+        self.client.force_login(self.admin)
+
+        response = self.client.get(
+            reverse("configuracoes:painel"),
+            HTTP_X_TENANT=str(empresa_b.id),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["empresa"].id, empresa_b.id)
 
     def test_gerente_edita_e_exclui_fornecedor_na_tela_unica(self):
         fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor X")

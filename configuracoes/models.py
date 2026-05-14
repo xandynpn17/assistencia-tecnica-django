@@ -895,3 +895,31 @@ class ModeloMensagem(models.Model):
     def __str__(self):
         return self.nome
 
+
+class ConfiguracaoAuditoria(models.Model):
+    ORIGEM_CHOICES = [
+        ("ui", "Interface"),
+        ("comando", "Comando"),
+        ("api", "API"),
+    ]
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="auditorias_configuracoes",
+    )
+    acao = models.CharField(max_length=80)
+    origem = models.CharField(max_length=20, choices=ORIGEM_CHOICES, default="ui")
+    alvo = models.CharField(max_length=120, blank=True)
+    antes_json = models.TextField(blank=True)
+    depois_json = models.TextField(blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+
+    def __str__(self):
+        return f"{self.acao} - {self.alvo or '-'}"
+

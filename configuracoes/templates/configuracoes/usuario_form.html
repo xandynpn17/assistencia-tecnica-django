@@ -83,6 +83,19 @@
           </div>
           <div class="col-lg-4 form-group">{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>
         </div>
+        <div class="form-row">
+          <div class="col-lg-6 form-group">
+            {{ form.preset_perfil.label_tag }}{{ form.preset_perfil }}
+            <small class="form-text text-muted">{{ form.preset_perfil.help_text }}</small>
+            {{ form.preset_perfil.errors }}
+          </div>
+          <div class="col-lg-6 form-group">
+            <label>Impacto estimado do preset</label>
+            <div id="impacto-preset-box" class="border rounded p-2 bg-light text-muted small">
+              Selecione um preset para visualizar o impacto nas permissoes.
+            </div>
+          </div>
+        </div>
 
         <div class="section-title mt-3">Perfil e Documento</div>
         <div class="form-row">
@@ -272,4 +285,40 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const presetSelect = document.getElementById("id_preset_perfil");
+  const box = document.getElementById("impacto-preset-box");
+  if (!presetSelect || !box) return;
+
+  function renderImpacto(data) {
+    if (!data || !Array.isArray(data.impactos) || data.impactos.length === 0) {
+      box.classList.add("text-muted");
+      box.innerHTML = "Sem impacto adicional (preset vazio ou sem permissoes extras).";
+      return;
+    }
+    box.classList.remove("text-muted");
+    box.innerHTML = data.impactos.map(item => `<div>• ${item}</div>`).join("");
+  }
+
+  async function carregarImpacto() {
+    const preset = presetSelect.value || "";
+    const url = "{% url 'configuracoes:simulador_permissoes' %}?preset=" + encodeURIComponent(preset);
+    try {
+      const response = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+      const data = await response.json();
+      renderImpacto(data);
+    } catch (err) {
+      box.classList.add("text-muted");
+      box.textContent = "Nao foi possivel carregar o impacto do preset.";
+    }
+  }
+
+  presetSelect.addEventListener("change", carregarImpacto);
+  carregarImpacto();
+});
+</script>
 {% endblock %}

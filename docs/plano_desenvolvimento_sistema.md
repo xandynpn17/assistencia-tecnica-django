@@ -34,7 +34,7 @@ Status: concluida
 - Dependencia remanescente do legado foi corrigida em `caixa/services/garantias.py`.
 - Validacao rapida executada com `python manage.py check`.
 
-## Etapas pendentes
+## Etapas do plano
 
 ### Fase 1 - Mapa oficial do fluxo da OS
 Status: concluida
@@ -113,7 +113,7 @@ Feito nesta etapa:
 - testes focados de OS, caixa e orcamento executados com sucesso apos a refatoracao.
 
 ### Fase 3 - Permissoes granulares
-Status: implementacao inicial concluida / ampliacao pendente
+Status: concluida
 Prioridade: alta
 
 Objetivo:

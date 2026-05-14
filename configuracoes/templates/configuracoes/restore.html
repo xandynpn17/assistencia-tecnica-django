@@ -1,0 +1,35 @@
+{% extends "core/base.html" %}
+{% block title %}Restaurar Backup{% endblock %}
+
+{% block content %}
+<div class="card card-modern">
+  <div class="card-modern-header">
+    <i class="fas fa-upload"></i> Restaurar Backup
+  </div>
+  <div class="card-modern-body">
+    <p class="text-muted">
+      Selecione um arquivo da pasta <code>{{ backup_dir }}</code> e confirme digitando <strong>RESTAURAR</strong>.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="arquivo">Arquivo de backup</label>
+        <select id="arquivo" name="arquivo" class="form-control" required>
+          <option value="">Selecione...</option>
+          {% for item in backups %}
+          <option value="{{ item }}">{{ item.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="confirmar">Confirmacao</label>
+        <input id="confirmar" type="text" name="confirmar" class="form-control" placeholder="Digite RESTAURAR" required>
+      </div>
+      <button type="submit" class="btn btn-danger">
+        <i class="fas fa-exclamation-triangle"></i> Executar Restore
+      </button>
+      <a href="{% url 'configuracoes:painel' %}" class="btn btn-outline-secondary">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

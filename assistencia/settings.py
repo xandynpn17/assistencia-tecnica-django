@@ -52,6 +52,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'configuracoes.middleware.TenantContextMiddleware',
     'configuracoes.middleware.SetupInicialMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -173,6 +174,7 @@ SETUP_INICIAL_GATE_ENABLED = os.getenv(
     "DJANGO_SETUP_GATE_ENABLED",
     "0" if RUNNING_TESTS else "1",
 ) == "1"
+TENANT_CONTEXT_ENABLED = os.getenv("DJANGO_TENANT_CONTEXT_ENABLED", "1") == "1"
 
 # Email / notificacoes
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")

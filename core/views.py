@@ -64,7 +64,7 @@ def _dashboard_shared_context(request):
     )
 
     return {
-        "empresa": Empresa.objects.first(),
+        "empresa": getattr(request, "empresa_ativa", None) or Empresa.objects.first(),
         "total_clientes": total_clientes,
         "total_ordens": total_ordens,
         "total_ordens_abertas": total_ordens_abertas,
