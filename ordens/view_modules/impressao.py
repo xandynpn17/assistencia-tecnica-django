@@ -692,6 +692,8 @@ def imprimir_ordem_servico_impressao(request, pk):
             allowOrphans=0,
         )
     )
+    altura_etiqueta_corte = 0.90 * cm
+    faixa_corte = (altura_etiqueta_corte + 0.24 * cm) if layout_cfg.get("exibir_etiqueta_corte", True) else 0.36 * cm
 
     def _draw_cut(canv, _doc):
         canv.saveState()
@@ -713,7 +715,7 @@ def imprimir_ordem_servico_impressao(request, pk):
 
             texto_os = f"OS-{ordem.numero_os}"
             largura_etiqueta = 3.0 * cm
-            altura_etiqueta = 0.90 * cm
+            altura_etiqueta = altura_etiqueta_corte
             area_util = width
             quantidade = max(1, int(area_util // largura_etiqueta))
             if quantidade == 1:
@@ -771,8 +773,20 @@ def imprimir_ordem_servico_impressao(request, pk):
         )
         canv.restoreState()
 
-    frame_top = Frame(margin, margin + half_height, frame_width, half_height, id="top")
-    frame_bottom = Frame(margin, margin, frame_width, half_height, id="bottom")
+    frame_top = Frame(
+        margin,
+        margin + half_height + (faixa_corte / 2.0),
+        frame_width,
+        half_height - (faixa_corte / 2.0),
+        id="top",
+    )
+    frame_bottom = Frame(
+        margin,
+        margin,
+        frame_width,
+        half_height - (faixa_corte / 2.0),
+        id="bottom",
+    )
     template = PageTemplate(id="main", frames=[frame_top, frame_bottom], onPage=_draw_cut)
     doc.addPageTemplates([template])
 

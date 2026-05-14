@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import Paragraph as reportlab_paragraph
+from reportlab.platypus import Frame, Paragraph as reportlab_paragraph
 
 from caixa.models import Caixa, Pagamento
 from caixa.models import AuditoriaGarantia
@@ -2764,6 +2764,22 @@ class ImpressaoPdfHeadersTests(TestCase):
         counts = self._pdf_page_counts(response.content)
         self.assertTrue(counts)
         self.assertLessEqual(max(counts), 2)
+
+    def test_imprimir_ordem_servico_impressao_reserva_faixa_para_etiqueta(self):
+        frames = []
+
+        class FrameSpy(Frame):
+            def __init__(self, x1, y1, width, height, *args, **kwargs):
+                frames.append({"id": kwargs.get("id"), "y1": y1, "height": height})
+                super().__init__(x1, y1, width, height, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Frame", FrameSpy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        frame_top = next(frame for frame in frames if frame["id"] == "top")
+        frame_bottom = next(frame for frame in frames if frame["id"] == "bottom")
+        self.assertGreater(frame_top["y1"], frame_bottom["y1"] + frame_bottom["height"])
 
     def test_imprimir_relatorio_tecnico_longo_gera_multiplas_paginas_com_total(self):
         ServicoPeca.objects.bulk_create(
