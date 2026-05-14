@@ -96,3 +96,18 @@ E um pre-check rapido para validar configuracao:
 .\.venv\Scripts\python.exe manage.py check_postgres_ready
 .\.venv\Scripts\python.exe manage.py check_postgres_ready --check-connection
 ```
+
+## Deploy no Render
+
+Este repositório já inclui `render.yaml` para deploy por Blueprint.
+
+Passos:
+
+1. No Render, clique em `New +` -> `Blueprint`.
+2. Selecione este repositório.
+3. Confirme os recursos `assistencia-web` e `assistencia-db`.
+4. Após o primeiro deploy, abra o Shell do serviço web e execute:
+
+```bash
+python manage.py createsuperuser
+```
