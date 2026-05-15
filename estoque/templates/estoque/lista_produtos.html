@@ -3,7 +3,16 @@
 {% block title %}Estoque - Lista de Produtos{% endblock %}
 
 {% block header %}
-<h1 class="m-0 text-dark">Lista de Produtos</h1>
+<div class="ui-module-header">
+    <div>
+        <h1 class="ui-module-title">Lista de Produtos</h1>
+        <p class="ui-module-subtitle">Visão consolidada de estoque, perfil de item e ações rápidas de cadastro.</p>
+    </div>
+    <div class="ui-module-actions">
+        <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-info btn-sm"><i class="fas fa-exchange-alt mr-1"></i> Movimentações</a>
+        <a href="{% url 'estoque:criar_produto' %}" class="btn btn-success btn-sm"><i class="fas fa-plus mr-1"></i> Novo Produto</a>
+    </div>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -77,10 +86,8 @@
     <div class="card-modern-header d-flex justify-content-between align-items-center">
         Produtos cadastrados
         <div>
-            <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-info btn-sm"><i class="fas fa-exchange-alt"></i> Movimentacoes</a>
             <a href="{% url 'estoque:tabelas_preco' %}" class="btn btn-outline-secondary btn-sm">Tabelas de preco</a>
             <a href="{% url 'estoque:importar_produtos' %}" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-import"></i> Importar</a>
-            <a href="{% url 'estoque:criar_produto' %}" class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Novo Produto</a>
         </div>
     </div>
     <div class="card-modern-body">

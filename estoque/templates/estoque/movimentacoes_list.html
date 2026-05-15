@@ -1,6 +1,17 @@
 {% extends "core/base.html" %}
 
-{% block header %}<h1 class="m-0 text-dark">Movimentacoes de Estoque</h1>{% endblock %}
+{% block header %}
+<div class="ui-module-header">
+  <div>
+    <h1 class="ui-module-title">Movimentações de Estoque</h1>
+    <p class="ui-module-subtitle">Rastreio operacional de entradas, saídas, consumos e transferências por período.</p>
+  </div>
+  <div class="ui-module-actions">
+    <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm">Nova movimentação</a>
+    <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&quick={{ quick }}&export=csv" class="btn btn-outline-secondary btn-sm">Exportar CSV</a>
+  </div>
+</div>
+{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -30,8 +41,7 @@
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>Historico de movimentacoes</span>
     <div class="d-flex">
-      <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm mr-2">Nova movimentacao</a>
-      <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&quick={{ quick }}&export=csv" class="btn btn-outline-secondary btn-sm">Exportar CSV</a>
+      <span class="text-muted small">Operação por filtros e período</span>
     </div>
   </div>
 

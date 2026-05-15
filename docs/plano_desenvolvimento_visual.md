@@ -216,6 +216,7 @@ Progresso:
 - tela `consulta_artigos` consolidada no padrao operacional (busca + resumo + fechamento no mesmo contexto visual);
 - base pronta para o proximo ajuste de micro-hierarquia em cabecalho/acoes e estados da venda.
 - cabecalho da venda a mostrador padronizado com titulo, subtitulo operacional e estado rapido da operacao.
+- telas `lista_produtos` e `movimentacoes` passaram a usar cabecalho modular unico (titulo + contexto + acoes), com melhor distribuicao entre cabecalho e conteudo.
 
 ### Fase V6 - Caixa e financeiro operacional
 Status: pendente
