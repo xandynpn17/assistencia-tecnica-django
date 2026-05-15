@@ -243,6 +243,7 @@ Resultado esperado:
 Progresso:
 - tela `contas_receber_list` alinhada ao header modular (titulo + contexto + acao principal), reduzindo redundancia no corpo;
 - continuidade da padronizacao no caixa operacional em curso para dashboards e tabelas financeiras.
+- telas `contas_pagar_list` e `dashboard_caixa_operacional` avancaram para o padrao de header modular e shell de formulario para filtros.
 
 ### Fase V7 - Formularios, modais e mensagens do sistema
 Status: em andamento
@@ -281,6 +282,7 @@ Progresso:
 - formulario de agendamento recebeu cabecalho contextual padrao com acao de retorno;
 - tela de `modelos_mensagem` recebeu cabecalho modular para separar contexto da lista/edicao.
 - camada global passou a incluir `ui-form-shell`, padrao de modais e mensagens (`ui-message-info`/`ui-message-warning`) para acelerar uniformizacao entre apps.
+- tela `verificar_cliente_os` recebeu ajuste de layout escopado para eliminar conflito entre formulario aberto e rodape, sem hack global.
 
 ### Fase V8 - PDFs e documentos emitidos
 Status: em andamento

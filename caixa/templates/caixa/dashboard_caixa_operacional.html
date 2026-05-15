@@ -2,7 +2,7 @@
 
 {% block content %}
 {% include 'caixa/_subnav_caixa.html' %}
-<div class="d-flex flex-wrap justify-content-between align-items-start mb-3" style="gap: 12px;">
+<div class="ui-module-header">
   <div>
     {% if data_inicio == data_fim %}
       <h1 class="mb-1">Operação do caixa - {{ data_inicio_ref|date:"d/m/Y" }}</h1>
@@ -11,7 +11,7 @@
       <div class="text-muted small">{{ data_inicio_ref|date:"d/m/Y" }} at? {{ data_fim_ref|date:"d/m/Y" }}</div>
     {% endif %}
   </div>
-  <form method="get" class="card p-2 mb-0" style="min-width: 360px;">
+  <form method="get" class="card p-2 mb-0 ui-form-shell" style="min-width: 360px;">
     <div class="form-row align-items-end">
       <div class="col-md-4">
         <label class="small mb-1">Data de início</label>

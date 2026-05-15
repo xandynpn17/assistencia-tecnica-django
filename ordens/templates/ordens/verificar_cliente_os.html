@@ -3,6 +3,25 @@
 
 {% block title %}Verificar Cliente | Assistência Técnica{% endblock %}
 
+{% block extra_css %}
+<style>
+body.verificar-cliente-page .content-wrapper {
+    min-height: calc(100vh - 56px) !important;
+    padding-bottom: 4.5rem !important;
+}
+
+body.verificar-cliente-page .content-header {
+    padding-top: 8px !important;
+}
+
+body.verificar-cliente-page .main-footer {
+    position: relative;
+    z-index: 5;
+    clear: both;
+}
+</style>
+{% endblock %}
+
 {% block header %}
 <div class="row mb-2">
     <div class="col-sm-6">
@@ -652,7 +671,7 @@
 
 .verificar-cliente-layout {
     margin-bottom: 2rem;
-    padding-bottom: 6rem;
+    padding-bottom: 1rem;
 }
 </style>
 
@@ -660,6 +679,7 @@
 <script src="{% static 'js/ordens/verificar_cliente_os.js' %}"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    document.body.classList.add("verificar-cliente-page");
     document.querySelectorAll(".cliente-row-clickable").forEach(function (row) {
         row.addEventListener("dblclick", function () {
             const href = row.getAttribute("data-href");
