@@ -19,7 +19,7 @@
         <h5 class="mb-0">{% if edit_modelo_id %}Editar Modelo Manual{% else %}Novo Modelo Manual{% endif %}</h5>
       </div>
       <div class="card-body">
-        <form method="post">
+        <form method="post" class="ui-form-shell">
           {% csrf_token %}
           {% if edit_modelo_id %}<input type="hidden" name="modelo_id" value="{{ edit_modelo_id }}">{% endif %}
           <div class="form-group">

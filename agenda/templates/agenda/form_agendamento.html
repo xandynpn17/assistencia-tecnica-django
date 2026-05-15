@@ -18,7 +18,7 @@
     <h3 class="card-title mb-0">{% if agendamento %}Editar agendamento{% else %}Novo agendamento{% endif %}</h3>
   </div>
   <div class="card-body">
-    <form method="post">
+    <form method="post" class="ui-form-shell">
       {% csrf_token %}
       {{ form.modo_preventiva }}
       <div class="form-row">

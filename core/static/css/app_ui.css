@@ -239,6 +239,48 @@ body {
   gap: 8px;
 }
 
+.ui-form-shell {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: #fff;
+  padding: 14px;
+}
+
+.ui-form-shell .form-group > label,
+.ui-form-shell .form-row label {
+  font-weight: 700;
+  color: #25394e;
+}
+
+.ui-message-info {
+  border: 1px solid #d5e7fb;
+  background: #f2f8ff;
+  color: #1f4b73;
+  border-radius: 10px;
+}
+
+.ui-message-warning {
+  border: 1px solid #f4ddb0;
+  background: #fff7e8;
+  color: #7c4a00;
+  border-radius: 10px;
+}
+
+.modal-content {
+  border: 1px solid #d9e3ef;
+  border-radius: 12px;
+}
+
+.modal-header {
+  background: #f7faff;
+  border-bottom: 1px solid #d9e3ef;
+}
+
+.modal-title {
+  font-weight: 700;
+  color: #15314a;
+}
+
 @media (max-width: 991.98px) {
   .main-header .search-container {
     width: 190px !important;

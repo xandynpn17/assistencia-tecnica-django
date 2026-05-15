@@ -280,6 +280,7 @@ Resultado esperado:
 Progresso:
 - formulario de agendamento recebeu cabecalho contextual padrao com acao de retorno;
 - tela de `modelos_mensagem` recebeu cabecalho modular para separar contexto da lista/edicao.
+- camada global passou a incluir `ui-form-shell`, padrao de modais e mensagens (`ui-message-info`/`ui-message-warning`) para acelerar uniformizacao entre apps.
 
 ### Fase V8 - PDFs e documentos emitidos
 Status: em andamento
@@ -311,6 +312,7 @@ Resultado esperado:
 Progresso:
 - faixa de etiqueta/corte da OS impressa corrigida em `ordens/view_modules/impressao.py`;
 - teste automatizado adicionado em `ordens/tests.py`.
+- fase mantida em andamento para padronizar acentuacao e acabamento visual dos documentos emitidos.
 
 ### Fase V9 - Responsividade e homologacao visual
 Status: pendente
