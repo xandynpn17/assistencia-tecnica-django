@@ -26,6 +26,10 @@ body {
   background: var(--ui-bg-page);
 }
 
+.wrapper {
+  min-height: 100vh;
+}
+
 .main-header.navbar {
   border-bottom: 1px solid var(--ui-border);
   background: linear-gradient(90deg, #f8fbff 0%, #eef4fb 100%);
@@ -86,6 +90,8 @@ body {
 
 .content-wrapper {
   background-color: var(--ui-bg-page);
+  min-height: calc(100vh - 114px);
+  padding-bottom: 0.5rem;
 }
 
 .content-header {

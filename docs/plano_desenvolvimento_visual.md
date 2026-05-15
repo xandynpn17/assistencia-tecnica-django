@@ -148,7 +148,7 @@ Progresso:
   - duplo clique para abrir detalhes.
 
 ### Fase V4 - OS como tela operacional principal
-Status: pendente
+Status: em andamento
 Prioridade: alta
 
 Objetivo:
@@ -181,8 +181,12 @@ Entregas:
 Resultado esperado:
 - tecnico/atendente trabalha pela OS sem se perder entre abas e acoes.
 
+Progresso:
+- estrutura da tela de verificacao de cliente/abertura de OS alinhada ao layout base (header padrao + bloco de conteudo unico), eliminando sobreposicoes com o rodape;
+- fluxo de cadastro e busca mantido com a mesma operacao, agora em estrutura visual consistente com os demais modulos.
+
 ### Fase V5 - Estoque, consulta de artigos e venda a mostrador
-Status: pendente
+Status: em andamento
 Prioridade: media/alta
 
 Objetivo:
@@ -206,6 +210,10 @@ Entregas:
 
 Resultado esperado:
 - atendente consegue consultar, reservar ou vender sem interpretar blocos confusos.
+
+Progresso:
+- tela `consulta_artigos` consolidada no padrao operacional (busca + resumo + fechamento no mesmo contexto visual);
+- base pronta para o proximo ajuste de micro-hierarquia em cabecalho/acoes e estados da venda.
 
 ### Fase V6 - Caixa e financeiro operacional
 Status: pendente

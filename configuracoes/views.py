@@ -1,5 +1,6 @@
 import logging
 
+from django.contrib.auth.decorators import login_required
 from django.views.decorators.clickjacking import xframe_options_exempt
 
 from .permissions import MANAGER_ROLES, ORDER_CREATION_ROLES, role_required
@@ -128,7 +129,7 @@ def marcas_fornecedores(request):
     return marcas_fornecedores_impl(request)
 
 
-@role_required(ORDER_CREATION_ROLES)
+@login_required(login_url="core:login")
 def buscar_cep(request):
     return buscar_cep_impl(request)
 

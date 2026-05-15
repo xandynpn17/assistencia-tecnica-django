@@ -3,110 +3,104 @@
 
 {% block title %}Verificar Cliente | Assistência Técnica{% endblock %}
 
+{% block header %}
+<div class="row mb-2">
+    <div class="col-sm-6">
+        <h1><i class="fas fa-search mr-2"></i> Verificar Cliente</h1>
+        <small class="text-muted">Busque cliente por CPF, CNPJ ou telefone</small>
+    </div>
+    <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-right">
+            <li class="breadcrumb-item"><a href="{% url 'core:home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'ordens:lista_ordens' %}">Ordens</a></li>
+            <li class="breadcrumb-item active">Verificar Cliente</li>
+        </ol>
+    </div>
+</div>
+{% endblock %}
+
 {% block content %}
-<section class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1><i class="fas fa-search mr-2"></i> Verificar Cliente</h1>
-                <small class="text-muted">Busque cliente por CPF, CNPJ ou telefone</small>
+<div class="row">
+    <!-- Busca Simples -->
+    <div class="col-12 mb-3">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-search mr-1"></i> Buscar Cliente
+                </h3>
             </div>
-            <div class="col-sm-6">
-                <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">Home</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'ordens:lista_ordens' %}">Ordens</a></li>
-                    <li class="breadcrumb-item active">Verificar Cliente</li>
-                </ol>
+            <div class="card-body">
+                <div id="js-system-messages" class="mb-3"></div>
+                <form method="GET" action="{% url 'ordens:verificar_cliente_os' %}" id="buscaForm">
+                    <div class="input-group">
+                        <input type="text"
+                               name="cpf_telefone"
+                               class="form-control"
+                               placeholder="Digite CPF (11 dígitos), CNPJ (14 dígitos) ou telefone..."
+                               value="{{ cpf_telefone|default:'' }}"
+                               required
+                               id="campoBusca">
+                        <div class="input-group-append">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                            {% if cpf_telefone %}
+                            <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Limpar
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center mt-2" style="gap: 8px;">
+                        <small class="form-text text-muted mb-0">
+                            Digite apenas números (mínimo {% if config_sistema %}{{ config_sistema.busca_minimo_caracteres }}{% else %}3{% endif %} dígitos)
+                        </small>
+                        <a class="text-info" data-toggle="collapse" href="#guiaBuscaCliente" role="button" aria-expanded="false" aria-controls="guiaBuscaCliente" title="Como buscar">
+                            <i class="fas fa-info-circle"></i>
+                        </a>
+                    </div>
+                    <div class="collapse mt-3" id="guiaBuscaCliente">
+                        <div class="border rounded bg-light p-3">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                                <strong class="text-dark">Como buscar</strong>
+                                <span class="badge badge-info">Somente n&uacute;meros</span>
+                            </div>
+                            <div class="mt-2">
+                                <span class="badge badge-light border mr-1 mb-1">11999999999</span>
+                                <span class="badge badge-light border mr-1 mb-1">1132654321</span>
+                                <span class="badge badge-light border mr-1 mb-1">52998224725</span>
+                                <span class="badge badge-light border mb-1">12345678000199</span>
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                Telefone, CPF e CNPJ devem ser digitados sem letras. Se a busca for curta demais, o sistema bloqueia antes de consultar.
+                            </small>
+                        </div>
+                    </div>
+
+                    {% if mensagem_erro %}
+                    <div class="alert alert-warning alert-dismissible fade show mt-3" role="alert">
+                        <div class="d-flex align-items-start">
+                            <i class="fas fa-exclamation-circle mr-2 mt-1"></i>
+                            <div>
+                                <strong>Busca n&atilde;o executada</strong><br>
+                                {{ mensagem_erro }}
+                                <div class="small mt-1 text-muted">
+                                    Revise o n&uacute;mero digitado e tente novamente usando apenas CPF, CNPJ ou telefone.
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    {% endif %}
+                </form>
             </div>
         </div>
     </div>
-</section>
-
-<section class="content">
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Busca Simples -->
-            <div class="col-12 mb-3">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-search mr-1"></i> Buscar Cliente
-                        </h3>
-                    </div>
-                    <div class="card-body">
-                        <div id="js-system-messages" class="mb-3"></div>
-                        <form method="GET" action="{% url 'ordens:verificar_cliente_os' %}" id="buscaForm">
-                            <div class="input-group">
-                                <input type="text"
-                                       name="cpf_telefone"
-                                       class="form-control"
-                                       placeholder="Digite CPF (11 dígitos), CNPJ (14 dígitos) ou telefone..."
-                                       value="{{ cpf_telefone|default:'' }}"
-                                       required
-                                       id="campoBusca">
-                                <div class="input-group-append">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-search"></i> Buscar
-                                    </button>
-                                    {% if cpf_telefone %}
-                                    <a href="{% url 'ordens:verificar_cliente_os' %}" class="btn btn-secondary">
-                                        <i class="fas fa-times"></i> Limpar
-                                    </a>
-                                    {% endif %}
-                                </div>
-                            </div>
-
-                            <div class="d-flex align-items-center mt-2" style="gap: 8px;">
-                                <small class="form-text text-muted mb-0">
-                                    Digite apenas números (mínimo {% if config_sistema %}{{ config_sistema.busca_minimo_caracteres }}{% else %}3{% endif %} dígitos)
-                                </small>
-                                <a class="text-info" data-toggle="collapse" href="#guiaBuscaCliente" role="button" aria-expanded="false" aria-controls="guiaBuscaCliente" title="Como buscar">
-                                    <i class="fas fa-info-circle"></i>
-                                </a>
-                            </div>
-                            <div class="collapse mt-3" id="guiaBuscaCliente">
-                                <div class="border rounded bg-light p-3">
-                                    <div class="d-flex justify-content-between align-items-center flex-wrap">
-                                        <strong class="text-dark">Como buscar</strong>
-                                        <span class="badge badge-info">Somente n&uacute;meros</span>
-                                    </div>
-                                    <div class="mt-2">
-                                        <span class="badge badge-light border mr-1 mb-1">11999999999</span>
-                                        <span class="badge badge-light border mr-1 mb-1">1132654321</span>
-                                        <span class="badge badge-light border mr-1 mb-1">52998224725</span>
-                                        <span class="badge badge-light border mb-1">12345678000199</span>
-                                    </div>
-                                    <small class="text-muted d-block mt-2">
-                                        Telefone, CPF e CNPJ devem ser digitados sem letras. Se a busca for curta demais, o sistema bloqueia antes de consultar.
-                                    </small>
-                                </div>
-                            </div>
-
-                            <!-- Mensagens de erro -->
-                            {% if mensagem_erro %}
-                            <div class="alert alert-warning alert-dismissible fade show mt-3" role="alert">
-                                <div class="d-flex align-items-start">
-                                    <i class="fas fa-exclamation-circle mr-2 mt-1"></i>
-                                    <div>
-                                        <strong>Busca n&atilde;o executada</strong><br>
-                                        {{ mensagem_erro }}
-                                        <div class="small mt-1 text-muted">
-                                            Revise o n&uacute;mero digitado e tente novamente usando apenas CPF, CNPJ ou telefone.
-                                        </div>
-                                    </div>
-                                </div>
-                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-                            {% endif %}
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Seção de Resultados OU Cadastro -->
-            <div class="col-12">
+    <!-- Seção de Resultados OU Cadastro -->
+    <div class="col-12">
 
                 {% if form %}
 
@@ -521,10 +515,8 @@
                 </div>
                 {% endif %}
 
-            </div>
-        </div>
     </div>
-</section>
+</div>
 
 <style>
 /* Estilos para validação visual */

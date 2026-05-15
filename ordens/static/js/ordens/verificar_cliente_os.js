@@ -137,11 +137,29 @@ async function buscarCEP() {
     }
 
     try {
-        const response = await fetch(`/configuracoes/buscar-cep/?cep=${cep}`, {
+        let data = null;
+        let response = await fetch(`/configuracoes/buscar-cep/?cep=${cep}`, {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         });
         const contentType = (response.headers.get('content-type') || '').toLowerCase();
-        const data = contentType.includes('application/json') ? await response.json() : {};
+        data = contentType.includes('application/json') ? await response.json() : {};
+
+        if (!response.ok || data.erro || data.error) {
+            const viaCepResp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+            if (viaCepResp.ok) {
+                const viaCepData = await viaCepResp.json();
+                if (!viaCepData.erro) {
+                    data = {
+                        logradouro: viaCepData.logradouro || '',
+                        bairro: viaCepData.bairro || '',
+                        cidade: viaCepData.localidade || '',
+                        estado: viaCepData.uf || '',
+                        complemento: viaCepData.complemento || ''
+                    };
+                    response = { ok: true, status: 200 };
+                }
+            }
+        }
 
         if (!response.ok) {
             let mensagem = data.erro || data.error || 'Falha ao consultar CEP.';
