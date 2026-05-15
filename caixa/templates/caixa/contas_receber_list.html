@@ -50,16 +50,23 @@
 </style>
 {% endblock %}
 
-{% block content %}
-<div class="container-fluid mt-3">
-  {% include 'caixa/_subnav_caixa.html' %}
-
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Contas a receber</h3>
+{% block header %}
+<div class="ui-module-header">
+  <div>
+    <h1 class="ui-module-title">Contas a Receber</h1>
+    <p class="ui-module-subtitle">Gestão de pendências, vencimentos e recebimentos com foco em prioridade diária.</p>
+  </div>
+  <div class="ui-module-actions">
     {% if pode_criar_conta_receber %}
     <a href="{% url 'caixa:criar_conta_receber' %}" class="btn btn-primary btn-sm">Nova conta</a>
     {% endif %}
   </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
 
   <div class="card mb-3">
     <div class="card-body py-2 d-flex flex-wrap align-items-center" style="gap: 8px;">

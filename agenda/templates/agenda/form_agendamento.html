@@ -1,5 +1,17 @@
 {% extends "core/base.html" %}
 
+{% block header %}
+<div class="ui-module-header">
+  <div>
+    <h1 class="ui-module-title">{% if agendamento %}Editar Agendamento{% else %}Novo Agendamento{% endif %}</h1>
+    <p class="ui-module-subtitle">Preencha data, técnico, cliente e contexto da OS para organizar a agenda operacional.</p>
+  </div>
+  <div class="ui-module-actions">
+    <a href="{% url 'agenda:calendario_agenda' %}" class="btn btn-outline-secondary btn-sm">Voltar ao calendário</a>
+  </div>
+</div>
+{% endblock %}
+
 {% block content %}
 <div class="card">
   <div class="card-header">

@@ -219,7 +219,7 @@ Progresso:
 - telas `lista_produtos` e `movimentacoes` passaram a usar cabecalho modular unico (titulo + contexto + acoes), com melhor distribuicao entre cabecalho e conteudo.
 
 ### Fase V6 - Caixa e financeiro operacional
-Status: pendente
+Status: em andamento
 Prioridade: media/alta
 
 Objetivo:
@@ -240,8 +240,12 @@ Entregas:
 Resultado esperado:
 - menos risco de erro em pagamentos, descontos, contas e fechamento.
 
+Progresso:
+- tela `contas_receber_list` alinhada ao header modular (titulo + contexto + acao principal), reduzindo redundancia no corpo;
+- continuidade da padronizacao no caixa operacional em curso para dashboards e tabelas financeiras.
+
 ### Fase V7 - Formularios, modais e mensagens do sistema
-Status: pendente
+Status: em andamento
 Prioridade: media
 
 Objetivo:
@@ -273,8 +277,12 @@ Entregas:
 Resultado esperado:
 - menos duvidas ao preencher e menos risco em acoes criticas.
 
+Progresso:
+- formulario de agendamento recebeu cabecalho contextual padrao com acao de retorno;
+- tela de `modelos_mensagem` recebeu cabecalho modular para separar contexto da lista/edicao.
+
 ### Fase V8 - PDFs e documentos emitidos
-Status: iniciado
+Status: em andamento
 Prioridade: alta
 
 Objetivo:
