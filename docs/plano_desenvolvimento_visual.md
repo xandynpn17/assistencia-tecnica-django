@@ -184,6 +184,7 @@ Resultado esperado:
 Progresso:
 - estrutura da tela de verificacao de cliente/abertura de OS alinhada ao layout base (header padrao + bloco de conteudo unico), eliminando sobreposicoes com o rodape;
 - fluxo de cadastro e busca mantido com a mesma operacao, agora em estrutura visual consistente com os demais modulos.
+- abas da OS receberam shell visual unico (navegacao/tabs/conteudo) para leitura mais clara e menor ruído operacional.
 
 ### Fase V5 - Estoque, consulta de artigos e venda a mostrador
 Status: em andamento
@@ -214,6 +215,7 @@ Resultado esperado:
 Progresso:
 - tela `consulta_artigos` consolidada no padrao operacional (busca + resumo + fechamento no mesmo contexto visual);
 - base pronta para o proximo ajuste de micro-hierarquia em cabecalho/acoes e estados da venda.
+- cabecalho da venda a mostrador padronizado com titulo, subtitulo operacional e estado rapido da operacao.
 
 ### Fase V6 - Caixa e financeiro operacional
 Status: pendente

@@ -326,7 +326,18 @@
 {% endblock %}
 
 {% block header %}
-<h1 class="m-0 text-dark">Venda a Mostrador</h1>
+<div class="ui-module-header">
+  <div>
+    <h1 class="ui-module-title">Venda a Mostrador</h1>
+    <p class="ui-module-subtitle">Consulta de artigos, montagem de cesto e geração de guia em fluxo único.</p>
+  </div>
+  <div class="ui-module-actions">
+    <span class="pdv-ready mb-0">
+      <span class="pdv-ready-dot"></span>
+      <span>Operação ativa</span>
+    </span>
+  </div>
+</div>
 {% endblock %}
 
 {% block content %}

@@ -177,6 +177,38 @@
     text-decoration: none;
     outline: none;
 }
+.os-tabs-shell {
+    margin-top: 8px;
+}
+.os-tabs-shell .nav-tabs {
+    border-bottom: 1px solid #d9e3ef;
+    gap: 4px;
+}
+.os-tabs-shell .nav-tabs .nav-link {
+    border: 1px solid transparent;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    color: #4d6278;
+    font-weight: 700;
+    padding: 0.45rem 0.75rem;
+}
+.os-tabs-shell .nav-tabs .nav-link:hover {
+    color: #15314a;
+    background: #f3f8fe;
+}
+.os-tabs-shell .nav-tabs .nav-link.active {
+    color: #15314a;
+    background: #fff;
+    border-color: #d9e3ef #d9e3ef #fff;
+}
+.os-tabs-shell .tab-content {
+    background: #fff;
+    border: 1px solid #d9e3ef;
+    border-top: 0;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    padding: 12px;
+}
 @media (max-width: 767.98px) {
     .fab-menu {
         right: 18px;
@@ -335,7 +367,7 @@
 
 
 
-    <!-- Nav Tabs -->
+<div class="os-tabs-shell">
     <ul class="nav nav-tabs" id="ordemTabs" role="tablist">
         {% for tab in tabs %}
         <li class="nav-item">

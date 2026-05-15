@@ -210,6 +210,35 @@ body {
   color: #8a5d00;
 }
 
+.ui-module-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ui-module-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #15314a;
+}
+
+.ui-module-subtitle {
+  margin: 2px 0 0;
+  color: var(--ui-text-muted);
+  font-size: 0.92rem;
+}
+
+.ui-module-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 @media (max-width: 991.98px) {
   .main-header .search-container {
     width: 190px !important;
