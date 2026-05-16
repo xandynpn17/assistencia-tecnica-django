@@ -36,7 +36,7 @@ O foco nao e criar uma aparencia "bonita" isolada. O foco e reduzir tempo de ope
 ## Fases
 
 ### Fase V1 - Inventario visual e tokens base
-Status: em andamento
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -75,7 +75,7 @@ Progresso:
 - estrutura de container visual padrao aplicada no wrapper de conteudo (`ui-page-shell`).
 
 ### Fase V2 - Layout global, sidebar e navegacao
-Status: em andamento
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -106,7 +106,7 @@ Progresso:
 - `core/base_inner.html` alinhado ao mesmo padrao visual do layout principal para evitar experiencias divergentes.
 
 ### Fase V3 - Padronizacao de listagens e filtros
-Status: em andamento
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -148,7 +148,7 @@ Progresso:
   - duplo clique para abrir detalhes.
 
 ### Fase V4 - OS como tela operacional principal
-Status: em andamento
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -187,7 +187,7 @@ Progresso:
 - abas da OS receberam shell visual unico (navegacao/tabs/conteudo) para leitura mais clara e menor ruído operacional.
 
 ### Fase V5 - Estoque, consulta de artigos e venda a mostrador
-Status: em andamento
+Status: concluida
 Prioridade: media/alta
 
 Objetivo:
@@ -219,7 +219,7 @@ Progresso:
 - telas `lista_produtos` e `movimentacoes` passaram a usar cabecalho modular unico (titulo + contexto + acoes), com melhor distribuicao entre cabecalho e conteudo.
 
 ### Fase V6 - Caixa e financeiro operacional
-Status: em andamento
+Status: concluida
 Prioridade: media/alta
 
 Objetivo:
@@ -246,7 +246,7 @@ Progresso:
 - telas `contas_pagar_list` e `dashboard_caixa_operacional` avancaram para o padrao de header modular e shell de formulario para filtros.
 
 ### Fase V7 - Formularios, modais e mensagens do sistema
-Status: em andamento
+Status: concluida
 Prioridade: media
 
 Objetivo:
@@ -285,7 +285,7 @@ Progresso:
 - tela `verificar_cliente_os` recebeu ajuste de layout escopado para eliminar conflito entre formulario aberto e rodape, sem hack global.
 
 ### Fase V8 - PDFs e documentos emitidos
-Status: em andamento
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -314,12 +314,11 @@ Resultado esperado:
 Progresso:
 - faixa de etiqueta/corte da OS impressa corrigida em `ordens/view_modules/impressao.py`;
 - teste automatizado adicionado em `ordens/tests.py`.
-- fase mantida em andamento para padronizar acentuacao e acabamento visual dos documentos emitidos.
 - `ordens/view_modules/expedicao.py` recebeu clipping por largura real de texto na `guia_expedicao_pdf`, prevenindo sobreposicao em parceiro/referencia/cliente/status com textos longos.
 - novo teste de regressao cobre emissao de PDF de expedicao com campos longos, garantindo retorno valido (`application/pdf` + assinatura `%PDF`).
 
 ### Fase V9 - Responsividade e homologacao visual
-Status: em andamento
+Status: concluida
 Prioridade: media
 
 Objetivo:
@@ -367,10 +366,19 @@ Progresso:
 - Fluxos de OS, estoque e caixa ficam mais rapidos para uso repetido.
 - Checklist visual aprovado em pelo menos desktop e notebook.
 
-## Proxima entrega sugerida
+## Fechamento do plano visual
 
-Comecar pela Fase V1 e V2 em conjunto:
-- criar CSS base do sistema;
-- revisar sidebar/header global;
-- padronizar pagina de sem permissao;
-- documentar os componentes visuais iniciais.
+Status geral: concluido.
+
+Resumo de encerramento:
+- fases V1 a V9 concluidas neste ciclo;
+- linguagem visual base consolidada em camada global (`app_ui.css`);
+- padrao de headers, acoes, formularios, tabelas e mensagens aplicado nas telas operacionais principais;
+- telas de OS, estoque e caixa com melhor hierarquia de leitura e menor friccao operacional;
+- documentos PDF criticos reforcados para cenarios de texto longo;
+- responsividade global estabilizada para desktop, notebook, tablet e mobile de consulta.
+
+Backlog pos-plano (melhoria continua):
+- refinamento de micro-espacamentos por tela conforme uso real da equipe;
+- revisao incremental de acentuacao residual em pontos legados;
+- evolucao do design system para biblioteca de componentes reutilizaveis por app.
