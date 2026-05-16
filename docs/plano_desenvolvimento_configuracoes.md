@@ -228,3 +228,247 @@ Atualizado em 14/05/2026
 - Cfg4: trilha de auditoria expandida para operacoes de usuarios e catalogo administrativo.
 - Cfg5: contrato de webhooks internos publicado em `/configuracoes/integracoes/webhooks/contrato/`.
 - Cfg7: checklist e relatorio de homologacao dedicados para configuracoes adicionados em `docs/`.
+
+## Ciclo 2 - Produto interno, venda local e preparacao progressiva para SaaS
+
+Atualizado em 16/05/2026
+
+### Contexto de produto
+
+Nesta fase, o sistema sera usado inicialmente de forma interna na empresa principal e possivelmente em uma segunda empresa familiar, com instalacao local ou ambiente online apenas para teste/homologacao.
+
+Render, neste momento, deve ser tratado como ambiente de teste e demonstracao, nao como operacao SaaS definitiva.
+
+Direcao recomendada:
+- manter uma versao local/interna robusta e vendavel para empresas pequenas;
+- preparar o sistema para instalacao assistida com PostgreSQL, backup, usuario admin inicial e checklist de atualizacao;
+- evoluir para SaaS apenas depois de validar o uso real, endurecer tenant obrigatorio e amadurecer suporte, billing, observabilidade e isolamento de dados.
+
+### Principios do ciclo 2
+
+- Operacao da loja nao deve ser travada: atendente e tecnico precisam abrir, tratar, vender, finalizar e acompanhar sua rotina.
+- Risco financeiro e fraude devem ser protegidos: faturamento, DRE, comissoes gerais, exclusao de pagamentos e configuracoes criticas ficam restritos.
+- Dados que comprometem rastreabilidade do equipamento devem ser protegidos: numero de serie, identificadores sensiveis e dados confirmados da OS exigem permissao especifica.
+- Configuracoes devem virar o painel de controle do produto: regras, documentos, alertas, garantias, integracoes, usuarios e readiness comercial.
+- SaaS deve ser preparado em camadas, sem obrigar complexidade antes de o produto estar validado em operacao real.
+
+## Fases do ciclo 2
+
+### Fase Cfg8 - Higiene tecnica, textos e preparo para internacionalizacao
+Status: planejada
+Prioridade: alta
+
+Objetivo:
+- eliminar mojibake e textos quebrados remanescentes;
+- padronizar labels, mensagens e textos administrativos;
+- preparar o caminho para traducao futura, moedas e formatos internacionais.
+
+Escopo:
+- varrer models, forms, templates, services, commands e PDFs em busca de caracteres quebrados;
+- corrigir labels como `UsuÃ¡rio`, `TÃ©cnico`, `ConfiguraÃ§Ãµes`, `CrÃ©dito`, `NÃºmero` e similares;
+- criar teste de guarda mais abrangente contra mojibake;
+- documentar padrao UTF-8 e regra de escrita de novos textos;
+- iniciar convencao para futura extracao de textos com `gettext`, sem traduzir tudo agora.
+
+Resultado esperado:
+- interface mais profissional;
+- menor risco de regressao textual;
+- base pronta para idioma, moeda e tributacao por pais em ciclo futuro.
+
+### Fase Cfg9 - Permissoes 2.0: perfis operacionais e riscos
+Status: planejada
+Prioridade: alta
+
+Objetivo:
+- reduzir confusao entre tipo de usuario, preset e permissoes individuais;
+- preservar liberdade operacional para atendente e tecnico;
+- proteger dados financeiros, configuracoes e acoes com risco de fraude.
+
+Modelo funcional desejado:
+- `Atendente`: pode abrir, tratar e finalizar OS, realizar venda, cancelar venda operacional dentro de regra, consultar seu desempenho/comissao individual.
+- `Tecnico`: pode tratar OS, registrar diagnostico/servico, finalizar etapa tecnica e consultar sua comissao individual.
+- `Gerente`: ve financeiro, indicadores, comissoes da equipe e pode liberar excecoes.
+- `Administrador`: controla configuracoes criticas, usuarios, regras e auditoria.
+
+Permissoes sensiveis por categoria:
+- Financeiro: DRE, faturamento, relatorios financeiros, comissoes gerais, excluir pagamento, cancelar conta, aplicar desconto critico.
+- Rastreabilidade da OS: alterar numero de serie, dados confirmados, tecnico responsavel, reabrir OS fechada, excluir servico/peca.
+- Estoque: ajuste manual, inventario, transferencia, cancelamento de reserva, exclusao de produto.
+- Sistema: configuracoes gerais, documentos, integracoes, backup/restore, usuarios e permissoes.
+
+Entregas:
+- tela de usuario reorganizada por `Perfil operacional`, `Acessos da rotina`, `Permissoes sensiveis` e `Risco liberado`;
+- resumo antes de salvar indicando impactos reais do perfil;
+- presets renomeados para linguagem de loja;
+- testes de permissao para garantir que atendente/tecnico operam a loja sem ver faturamento ou alterar dados criticos.
+
+Resultado esperado:
+- permissao fica compreensivel para o dono/gerente;
+- operacao nao trava;
+- riscos financeiros e de rastreabilidade ficam explicitamente protegidos.
+
+### Fase Cfg10 - Documentos e PDFs profissionais configuraveis
+Status: planejada
+Prioridade: alta
+
+Objetivo:
+- padronizar PDFs sem gambiarras visuais;
+- permitir escolha de layout pelo usuario nas configuracoes;
+- tornar documentos claros para atendente, cliente e parceiro.
+
+Layouts sugeridos:
+- `Classico`: completo, formal, adequado para cliente.
+- `Compacto`: economico, ideal para impressao rapida.
+- `Parceiro`: foco em expedicao, retorno e dados tecnicos.
+- `Tecnico`: foco em diagnostico, servicos, pecas e assinatura.
+
+Configuracoes por layout:
+- logo e logo PDF;
+- cor principal;
+- rodape e termos;
+- campos visiveis;
+- exibicao de etiqueta/corte;
+- assinatura de entrada/saida;
+- observacoes e clausulas.
+
+Entregas:
+- service/base de PDF com componentes reutilizaveis: cabecalho, bloco de dados, tabela, status, assinatura, rodape;
+- truncamento/quebra de texto por largura real;
+- preview visual nas configuracoes quando viavel;
+- testes com nomes longos, textos longos e campos vazios.
+
+Resultado esperado:
+- PDFs consistentes e profissionais;
+- menor risco de sobreposicao;
+- documentos com percepcao de produto maduro.
+
+### Fase Cfg11 - SLA, alertas e painel de pendencias
+Status: planejada
+Prioridade: alta
+
+Objetivo:
+- transformar tempo parado em alerta acionavel;
+- reduzir esquecimento operacional;
+- alimentar indicadores da gestao.
+
+Regras configuraveis iniciais:
+- OS parada sem movimentacao;
+- orcamento sem resposta;
+- peca reservada vencendo;
+- equipamento pronto ha muitos dias;
+- parceiro externo atrasado.
+
+Configuracoes por regra:
+- ativo/inativo;
+- prazo em horas/dias;
+- severidade;
+- responsavel padrao;
+- acao sugerida;
+- canal futuro de notificacao.
+
+Entregas:
+- modelos de regra de SLA/alerta;
+- service para calcular pendencias;
+- painel operacional de alertas;
+- badges nas telas de OS, estoque e expedicao;
+- integracao com indicadores.
+
+Resultado esperado:
+- equipe sabe o que esta atrasado antes do cliente reclamar;
+- indicadores passam a mostrar gargalos reais.
+
+### Fase Cfg12 - Garantia pos-servico e reincidencia
+Status: planejada
+Prioridade: alta
+
+Objetivo:
+- controlar garantia por item/servico;
+- identificar reincidencia por cliente/equipamento;
+- vincular OS de garantia a OS original.
+
+Escopo:
+- prazo de garantia por servico, peca, tipo de reparo ou regra geral;
+- OS de garantia vinculada a OS original;
+- classificacao de retorno: mesmo defeito, novo defeito, mau uso, garantia de peca, garantia de mao de obra;
+- indicador de retorno por tecnico, peca, marca e tipo de equipamento.
+
+Entregas:
+- campos/modelos para vinculo de garantia;
+- alerta de OS em garantia ao abrir nova ordem para mesmo cliente/equipamento;
+- painel de reincidencias;
+- indicadores de qualidade tecnica e produto.
+
+Resultado esperado:
+- melhor controle de custo de garantia;
+- leitura clara de problemas recorrentes;
+- base para melhorar qualidade e treinamento.
+
+### Fase Cfg13 - Integracoes, mensagens e automacoes
+Status: planejada
+Prioridade: media/alta
+
+Objetivo:
+- centralizar canais e logs de comunicacao;
+- manter WhatsApp Web como caminho atual;
+- preparar troca futura para API/automatizacoes sem reescrever fluxos.
+
+Escopo:
+- catalogo de eventos: OS criada, orcamento pronto, orcamento aprovado, equipamento pronto, expedicao criada, retorno de parceiro, garantia aberta;
+- templates por evento;
+- canal configuravel: WhatsApp Web, email, API futura, webhook;
+- log de envio/tentativa;
+- fallback manual quando API falhar.
+
+Resultado esperado:
+- comunicacao deixa de depender de memoria do atendente;
+- autorizacoes e assinaturas futuras entram por evento, nao por improviso.
+
+### Fase Cfg14 - SaaS-ready e modo comercial local
+Status: planejada
+Prioridade: media/alta
+
+Objetivo:
+- preparar o produto para venda local agora e SaaS depois;
+- fortalecer tenant sem obrigar operacao SaaS imediata.
+
+Escopo local/comercial:
+- checklist de instalacao local;
+- modo empresa unica;
+- backup/restore orientado;
+- atualizacao assistida;
+- verificacao de ambiente (`check_go_live`, `check_postgres_ready`, `check_saas_readiness`);
+- remocao de `staticfiles` versionado e uso correto de `collectstatic`.
+
+Escopo SaaS futuro:
+- tenant obrigatorio em queries e services;
+- comandos para detectar objetos sem empresa;
+- limites por plano;
+- auditoria por tenant;
+- resolucao por dominio/subdominio;
+- politica de dados, LGPD e exportacao por cliente.
+
+Resultado esperado:
+- produto vendavel localmente com manutencao previsivel;
+- caminho SaaS tecnico claro, sem pular etapas.
+
+## Ordem recomendada do ciclo 2
+
+1. Cfg8 - Higiene tecnica e textos.
+2. Cfg9 - Permissoes 2.0.
+3. Cfg14 - Staticfiles, modo local comercial e readiness.
+4. Cfg10 - PDFs profissionais configuraveis.
+5. Cfg11 - SLA e alertas.
+6. Cfg12 - Garantia pos-servico e reincidencia.
+7. Cfg13 - Integracoes e automacoes.
+8. Revisao SaaS final dentro da Cfg14, somente apos validacao em uso real.
+
+## Criterios de aceite do ciclo 2
+
+- Atendente e tecnico conseguem operar loja sem acesso a faturamento, DRE, comissoes gerais ou configuracoes criticas.
+- Acoes de risco ficam bloqueadas por permissao sensivel e registradas em auditoria quando aplicavel.
+- Textos visiveis nao apresentam mojibake.
+- PDFs principais usam padrao profissional e suportam textos longos.
+- Alertas mostram OS/orcamentos/reservas/parceiros atrasados de forma acionavel.
+- Garantia pos-servico identifica reincidencia e vincula OS original.
+- `staticfiles` deixa de ser fonte versionada e passa a ser artefato de deploy.
+- SaaS permanece como caminho preparado, nao como dependencia para vender localmente.
