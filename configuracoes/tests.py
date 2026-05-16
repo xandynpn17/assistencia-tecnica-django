@@ -422,6 +422,24 @@ class PermissoesConfiguracoesTests(TestCase):
         payload = response.json()
         self.assertIn("impactos", payload)
         self.assertTrue(any("caixa" in item.lower() for item in payload.get("impactos", [])))
+        self.assertIn("resumo_risco", payload)
+
+    def test_simulador_permissoes_considera_overrides_do_formulario(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(
+            reverse("configuracoes:simulador_permissoes"),
+            {
+                "preset": "atendente_caixa",
+                "perm_caixa_ver_dre": "1",
+                "perm_caixa_gerir_comissoes": "1",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        resumo = payload.get("resumo_risco") or {}
+        self.assertTrue(resumo.get("possui_financeiro"))
+        self.assertIn(resumo.get("nivel"), {"moderado", "alto", "critico"})
 
     def test_gerente_acessa_contrato_webhooks(self):
         self.client.force_login(self.gerente)

@@ -584,6 +584,7 @@ class ConfiguracaoSistema(models.Model):
         ("classico", "Clássico"),
         ("clean", "Clean"),
         ("tecnico", "Técnico"),
+        ("parceiro", "Parceiro"),
         ("compacto", "Compacto"),
         ("executivo", "Executivo"),
     ]

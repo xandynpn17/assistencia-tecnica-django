@@ -281,7 +281,7 @@ Progresso atual:
 - ajuste em `configuracoes/tests.py` para manter o teste anti-mojibake sem depender de literal corrompido.
 
 ### Fase Cfg9 - Permissoes 2.0: perfis operacionais e riscos
-Status: planejada
+Status: em andamento
 Prioridade: alta
 
 Objetivo:
@@ -312,8 +312,15 @@ Resultado esperado:
 - operacao nao trava;
 - riscos financeiros e de rastreabilidade ficam explicitamente protegidos.
 
+Progresso atual:
+- simulador de permissoes evoluido para aceitar overrides do formulario e calcular risco consolidado;
+- resumo de risco por categoria implementado (`financeiro`, `rastreabilidade_os`, `estoque_critico`, `sistema`);
+- tela de cadastro/edicao de usuario reorganizada por perfil operacional, acessos da rotina e permissoes sensiveis por categoria;
+- resumo dinamico \"antes de salvar\" com nivel de risco (`baixo`, `moderado`, `alto`, `critico`) e lista de permissoes ativas;
+- testes expandidos para cobrir retorno de `resumo_risco` e aplicacao de overrides no simulador.
+
 ### Fase Cfg10 - Documentos e PDFs profissionais configuraveis
-Status: planejada
+Status: em andamento
 Prioridade: alta
 
 Objetivo:
@@ -346,6 +353,11 @@ Resultado esperado:
 - PDFs consistentes e profissionais;
 - menor risco de sobreposicao;
 - documentos com percepcao de produto maduro.
+
+Progresso atual:
+- presets de documento ampliados com opcoes `tecnico` e `parceiro` para contexto operacional distinto;
+- tema visual e perfil tipografico/espacamento dos novos presets implementados em `core/pdf_theme.py`;
+- comparador de presets na configuracao do sistema atualizado para incluir os novos presets nas duas colunas de preview.
 
 ### Fase Cfg11 - SLA, alertas e painel de pendencias
 Status: planejada

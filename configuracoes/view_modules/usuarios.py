@@ -1,4 +1,4 @@
-from django.contrib import messages
+﻿from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.http import JsonResponse
@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from configuracoes.forms import UserForm, UsuarioArquivoForm
 from configuracoes.services.auditoria import registrar_evento_configuracao
-from configuracoes.services.capabilities import capacidades_usuario, simular_impacto_preset
+from configuracoes.services.capabilities import PERMISSION_LABELS, capacidades_usuario, simular_impacto_preset
 from configuracoes.services.integracoes import emitir_evento_interno
 from configuracoes.view_modules.common import log_usuario, request_ip
 
@@ -53,7 +53,7 @@ def detalhes_usuario_impl(request, usuario_id):
         form_type = request.POST.get("form_type")
         if form_type == "toggle_ativo":
             if user == request.user:
-                messages.error(request, "Não é permitido inativar seu próprio usuário.")
+                messages.error(request, "Nao e permitido inativar seu proprio usuario.")
                 return redirect("configuracoes:detalhes_usuario", usuario_id=user.id)
             user.is_active = not user.is_active
             user.save(update_fields=["is_active"])
@@ -61,7 +61,7 @@ def detalhes_usuario_impl(request, usuario_id):
             log_usuario(
                 user,
                 acao,
-                f"Usuário {'reativado' if user.is_active else 'inativado'} pelo painel.",
+                f"Usuario {'reativado' if user.is_active else 'inativado'} pelo painel.",
                 usuario_responsavel=request.user,
             )
             registrar_evento_configuracao(
@@ -72,7 +72,7 @@ def detalhes_usuario_impl(request, usuario_id):
                 depois={"is_active": user.is_active},
             )
             emitir_evento_interno("usuario.alterado", {"usuario_alvo": user.id, "acao": acao})
-            messages.success(request, f"Usuário {'reativado' if user.is_active else 'inativado'} com sucesso.")
+            messages.success(request, f"Usuario {'reativado' if user.is_active else 'inativado'} com sucesso.")
             return redirect("configuracoes:detalhes_usuario", usuario_id=user.id)
         if form_type == "anexo":
             anexo_form = UsuarioArquivoForm(request.POST, request.FILES)
@@ -122,14 +122,14 @@ def adicionar_usuario_impl(request, logger):
         if form.is_valid():
             novo_tipo = form.cleaned_data.get("tipo_usuario")
             if request.user.tipo_usuario == "gerente" and novo_tipo == "adm":
-                form.add_error("tipo_usuario", "Gerente não pode criar usuário Administrador.")
+                form.add_error("tipo_usuario", "Gerente nao pode criar usuario Administrador.")
                 return render(request, "configuracoes/usuario_form.html", {"form": form})
 
             novo_usuario = form.save()
             log_usuario(
                 novo_usuario,
                 "criacao",
-                "Usuário criado no painel de configurações.",
+                "Usuario criado no painel de configuracoes.",
                 usuario_responsavel=request.user,
             )
             registrar_evento_configuracao(
@@ -149,7 +149,7 @@ def adicionar_usuario_impl(request, logger):
                     "tipo_usuario_novo": novo_tipo,
                 },
             )
-            messages.success(request, "Usuário adicionado com sucesso!")
+            messages.success(request, "Usuario adicionado com sucesso!")
             if request.user.tipo_usuario == "gerente":
                 return redirect("configuracoes:painel")
             return redirect("configuracoes:lista_usuarios")
@@ -175,18 +175,24 @@ def editar_usuario_impl(request, usuario_id):
         form = UserForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
             if request.user.tipo_usuario == "gerente" and form.cleaned_data.get("tipo_usuario") == "adm":
-                form.add_error("tipo_usuario", "Gerente não pode promover usuário para Administrador.")
+                form.add_error("tipo_usuario", "Gerente nao pode promover usuario para Administrador.")
                 return render(
                     request,
                     "configuracoes/usuario_form.html",
-                    {"form": form, "editando": True, "usuario_obj": user, "menu_app": "configuracoes", "menu_sub": "usuarios"},
+                    {
+                        "form": form,
+                        "editando": True,
+                        "usuario_obj": user,
+                        "menu_app": "configuracoes",
+                        "menu_sub": "usuarios",
+                    },
                 )
             form.save()
-            messages.success(request, "Usuário atualizado com sucesso!")
+            messages.success(request, "Usuario atualizado com sucesso!")
             log_usuario(
                 user,
                 "edicao",
-                "Cadastro de usuário atualizado.",
+                "Cadastro de usuario atualizado.",
                 usuario_responsavel=request.user,
             )
             registrar_evento_configuracao(
@@ -203,7 +209,13 @@ def editar_usuario_impl(request, usuario_id):
     return render(
         request,
         "configuracoes/usuario_form.html",
-        {"form": form, "editando": True, "usuario_obj": user, "menu_app": "configuracoes", "menu_sub": "usuarios"},
+        {
+            "form": form,
+            "editando": True,
+            "usuario_obj": user,
+            "menu_app": "configuracoes",
+            "menu_sub": "usuarios",
+        },
     )
 
 
@@ -211,14 +223,14 @@ def excluir_usuario_impl(request, usuario_id):
     user = get_object_or_404(User, id=usuario_id)
     if request.method == "POST":
         if user == request.user:
-            messages.error(request, "Não é permitido inativar seu próprio usuário.")
+            messages.error(request, "Nao e permitido inativar seu proprio usuario.")
             return redirect("configuracoes:detalhes_usuario", usuario_id=user.id)
         user.is_active = False
         user.save(update_fields=["is_active"])
         log_usuario(
             user,
             "inativacao",
-            "Usuário inativado pelo menu de exclusão.",
+            "Usuario inativado pelo menu de exclusao.",
             usuario_responsavel=request.user,
         )
         registrar_evento_configuracao(
@@ -229,11 +241,16 @@ def excluir_usuario_impl(request, usuario_id):
             depois={"is_active": False},
         )
         emitir_evento_interno("usuario.alterado", {"usuario_alvo": user.id, "acao": "inativacao"})
-        messages.success(request, "Usuário inativado com sucesso!")
+        messages.success(request, "Usuario inativado com sucesso!")
         return redirect("configuracoes:lista_usuarios")
     return render(request, "configuracoes/confirm_delete.html", {"obj": user, "titulo": "Inativar usuario"})
 
 
 def simulador_permissoes_impl(request):
     preset = (request.GET.get("preset") or "").strip()
-    return JsonResponse(simular_impacto_preset(preset))
+    overrides = {
+        field_name: request.GET.get(field_name)
+        for field_name in PERMISSION_LABELS
+        if field_name in request.GET
+    }
+    return JsonResponse(simular_impacto_preset(preset, overrides=overrides))

@@ -1,5 +1,5 @@
-{% extends "core/base.html" %}
-{% block title %}{% if editando %}Editar{% else %}Novo{% endif %} Usuário{% endblock %}
+﻿{% extends "core/base.html" %}
+{% block title %}{% if editando %}Editar{% else %}Novo{% endif %} Usuario{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -53,6 +53,17 @@
     margin-top: 4px;
     line-height: 1.35;
   }
+  .user-form-wrap .status-chip {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    margin-left: 8px;
+  }
+  .user-form-wrap .status-baixo { background: #e6f8ee; color: #1e7e4f; }
+  .user-form-wrap .status-moderado { background: #fff5e6; color: #a86711; }
+  .user-form-wrap .status-alto { background: #ffe8e8; color: #b4232d; }
+  .user-form-wrap .status-critico { background: #ffdcdc; color: #8e101a; }
 </style>
 {% endblock %}
 
@@ -61,10 +72,10 @@
   <div class="card-modern">
     <div class="card-modern-header">
       <i class="fas fa-id-card mr-2"></i>
-      {% if editando %}Editar{% else %}Cadastrar{% endif %} Usuário
+      {% if editando %}Editar{% else %}Cadastrar{% endif %} Usuario
     </div>
     <div class="card-modern-body">
-      <form method="post" enctype="multipart/form-data" autocomplete="off">
+      <form method="post" enctype="multipart/form-data" autocomplete="off" id="usuario-form-cfg9">
         {% csrf_token %}
         <input type="text" name="fake_username" autocomplete="username" style="display:none">
         <input type="password" name="fake_password" autocomplete="current-password" style="display:none">
@@ -83,6 +94,8 @@
           </div>
           <div class="col-lg-4 form-group">{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>
         </div>
+
+        <div class="section-title mt-3">Perfil operacional</div>
         <div class="form-row">
           <div class="col-lg-6 form-group">
             {{ form.preset_perfil.label_tag }}{{ form.preset_perfil }}
@@ -90,14 +103,14 @@
             {{ form.preset_perfil.errors }}
           </div>
           <div class="col-lg-6 form-group">
-            <label>Impacto estimado do preset</label>
+            <label>Impacto do perfil selecionado</label>
             <div id="impacto-preset-box" class="border rounded p-2 bg-light text-muted small">
-              Selecione um preset para visualizar o impacto nas permissoes.
+              Selecione um perfil para visualizar impactos e riscos.
             </div>
           </div>
         </div>
 
-        <div class="section-title mt-3">Perfil e Documento</div>
+        <div class="section-title mt-3">Perfil e documento</div>
         <div class="form-row">
           <div class="col-lg-4 form-group">{{ form.nome_completo.label_tag }}{{ form.nome_completo }}{{ form.nome_completo.errors }}</div>
           <div class="col-lg-2 form-group">{{ form.tipo_usuario.label_tag }}{{ form.tipo_usuario }}{{ form.tipo_usuario.errors }}</div>
@@ -113,7 +126,7 @@
           <div class="col-lg-3 form-group">{{ form.foto_perfil.label_tag }}{{ form.foto_perfil }}{{ form.foto_perfil.errors }}</div>
         </div>
 
-        <div class="section-title mt-3">Dados Trabalhistas</div>
+        <div class="section-title mt-3">Dados trabalhistas</div>
         <div class="form-row">
           <div class="col-lg-3 form-group">{{ form.cargo.label_tag }}{{ form.cargo }}{{ form.cargo.errors }}</div>
           <div class="col-lg-3 form-group">{{ form.departamento.label_tag }}{{ form.departamento }}{{ form.departamento.errors }}</div>
@@ -135,11 +148,11 @@
           <div class="col-lg-3 form-group">{{ form.groups.label_tag }}{{ form.groups }}{{ form.groups.errors }}</div>
         </div>
 
-        <div class="section-title mt-3">Controles</div>
+        <div class="section-title mt-3">Controles basicos</div>
         <div class="form-row">
           <div class="col-lg-8 form-group">{{ form.observacoes_internas.label_tag }}{{ form.observacoes_internas }}{{ form.observacoes_internas.errors }}</div>
           <div class="col-lg-4 form-group">
-            <label class="d-block mb-2">Permissoes basicas</label>
+            <label class="d-block mb-2">Status da conta</label>
             <div class="inline-checks">
               <label class="mb-0">{{ form.is_active }} {{ form.is_active.label }}</label>
               <label class="mb-0">{{ form.is_staff }} {{ form.is_staff.label }}</label>
@@ -147,56 +160,57 @@
           </div>
         </div>
 
-        <div class="section-title mt-3">Funções Extras por Módulo</div>
+        <div class="section-title mt-3">Acessos da rotina</div>
         <div class="module-grid">
           <div class="module-option">
             <label class="mb-0">{{ form.acesso_ordens_extra }} {{ form.acesso_ordens_extra.label|default:"Ordens" }}</label>
-            <small>Liberar acesso ao fluxo de ordens além do perfil base.</small>
+            <small>Liberar acesso ao fluxo de ordens alem do perfil base.</small>
             {{ form.acesso_ordens_extra.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.acesso_estoque_extra }} {{ form.acesso_estoque_extra.label|default:"Estoque" }}</label>
-            <small>Liberar consulta e operações de estoque para este usuário.</small>
+            <small>Liberar consulta e operacoes de estoque para este usuario.</small>
             {{ form.acesso_estoque_extra.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.acesso_caixa_operacional_extra }} {{ form.acesso_caixa_operacional_extra.label|default:"Caixa operacional" }}</label>
-            <small>Liberar recebimentos, saídas e rotinas operacionais do caixa.</small>
+            <small>Liberar recebimentos, saidas e rotinas operacionais do caixa.</small>
             {{ form.acesso_caixa_operacional_extra.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.acesso_caixa_financeiro_extra }} {{ form.acesso_caixa_financeiro_extra.label|default:"Caixa financeiro" }}</label>
-            <small>Liberar contas, relatórios, DRE e rotinas financeiras.</small>
+            <small>Liberar contas, relatorios, DRE e rotinas financeiras.</small>
             {{ form.acesso_caixa_financeiro_extra.errors }}
           </div>
           <div class="module-option">
-            <label class="mb-0">{{ form.acesso_configuracoes_extra }} {{ form.acesso_configuracoes_extra.label|default:"Configurações" }}</label>
-            <small>Liberar acesso ao painel de configurações além do perfil base.</small>
+            <label class="mb-0">{{ form.acesso_configuracoes_extra }} {{ form.acesso_configuracoes_extra.label|default:"Configuracoes" }}</label>
+            <small>Liberar acesso ao painel de configuracoes alem do perfil base.</small>
             {{ form.acesso_configuracoes_extra.errors }}
           </div>
         </div>
 
-        <div class="section-title mt-3">Permissoes Sensiveis</div>
-        <div class="text-muted small mb-2">Ordens</div>
+        <div class="section-title mt-3">Permissoes sensiveis por categoria</div>
+
+        <div class="text-muted small mb-2">Rastreabilidade da OS</div>
         <div class="module-grid">
           <div class="module-option">
             <label class="mb-0">{{ form.perm_os_editar_numero_serie }} {{ form.perm_os_editar_numero_serie.label }}</label>
-            <small>Permite alterar o numero de serie do equipamento dentro da OS.</small>
+            <small>Permite alterar o numero de serie do equipamento.</small>
             {{ form.perm_os_editar_numero_serie.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_os_alterar_tecnico }} {{ form.perm_os_alterar_tecnico.label }}</label>
-            <small>Permite trocar o tecnico responsavel depois da abertura da OS.</small>
+            <small>Permite trocar tecnico responsavel apos abertura.</small>
             {{ form.perm_os_alterar_tecnico.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_os_concluir }} {{ form.perm_os_concluir.label }}</label>
-            <small>Permite concluir, fechar a OS e acionar o fluxo para caixa.</small>
+            <small>Permite concluir e fechar OS.</small>
             {{ form.perm_os_concluir.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_os_reabrir }} {{ form.perm_os_reabrir.label }}</label>
-            <small>Permite reabrir OS ja fechada.</small>
+            <small>Permite reabrir OS fechada.</small>
             {{ form.perm_os_reabrir.errors }}
           </div>
         </div>
@@ -210,70 +224,75 @@
           </div>
         </div>
 
-        <div class="text-muted small mt-3 mb-2">Caixa</div>
+        <div class="text-muted small mt-3 mb-2">Financeiro e caixa</div>
         <div class="module-grid">
           <div class="module-option">
             <label class="mb-0">{{ form.perm_caixa_excluir_pagamento }} {{ form.perm_caixa_excluir_pagamento.label }}</label>
-            <small>Permite excluir pagamentos ja lancados no caixa.</small>
+            <small>Permite excluir pagamentos ja lancados.</small>
             {{ form.perm_caixa_excluir_pagamento.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_caixa_ver_dre }} {{ form.perm_caixa_ver_dre.label }}</label>
-            <small>Permite abrir o DRE e leitura financeira consolidada.</small>
+            <small>Permite abrir DRE e leitura financeira consolidada.</small>
             {{ form.perm_caixa_ver_dre.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_caixa_gerir_comissoes }} {{ form.perm_caixa_gerir_comissoes.label }}</label>
-            <small>Permite gerir calculo, liberacao e pagamento de comissoes.</small>
+            <small>Permite gerir calculo e pagamento de comissoes.</small>
             {{ form.perm_caixa_gerir_comissoes.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_caixa_ver_auditoria }} {{ form.perm_caixa_ver_auditoria.label }}</label>
-            <small>Permite abrir a auditoria operacional do caixa.</small>
+            <small>Permite abrir auditoria operacional do caixa.</small>
             {{ form.perm_caixa_ver_auditoria.errors }}
           </div>
         </div>
 
-        <div class="text-muted small mt-3 mb-2">Estoque</div>
+        <div class="text-muted small mt-3 mb-2">Estoque critico</div>
         <div class="module-grid">
           <div class="module-option">
             <label class="mb-0">{{ form.perm_estoque_cadastro_produto }} {{ form.perm_estoque_cadastro_produto.label }}</label>
-            <small>Permite gerir cadastro, importacao, tabelas e estrutura tecnica de produtos.</small>
+            <small>Permite gerir cadastro e estrutura tecnica de produtos.</small>
             {{ form.perm_estoque_cadastro_produto.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_estoque_excluir_produto }} {{ form.perm_estoque_excluir_produto.label }}</label>
-            <small>Permite excluir definitivamente produtos do cadastro.</small>
+            <small>Permite excluir produtos do cadastro.</small>
             {{ form.perm_estoque_excluir_produto.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_estoque_ajuste_manual }} {{ form.perm_estoque_ajuste_manual.label }}</label>
-            <small>Permite registrar movimentacoes manuais e correcoes operacionais.</small>
+            <small>Permite ajustes manuais e correcoes de estoque.</small>
             {{ form.perm_estoque_ajuste_manual.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_estoque_transferencia }} {{ form.perm_estoque_transferencia.label }}</label>
-            <small>Permite transferencias entre pontos e reposicao inteligente.</small>
+            <small>Permite transferencias e reposicoes entre pontos.</small>
             {{ form.perm_estoque_transferencia.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_estoque_inventario_finalizar }} {{ form.perm_estoque_inventario_finalizar.label }}</label>
-            <small>Permite fechar inventarios e aplicar ajustes finais de saldo.</small>
+            <small>Permite fechar inventarios com ajuste final.</small>
             {{ form.perm_estoque_inventario_finalizar.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_estoque_converter_reserva }} {{ form.perm_estoque_converter_reserva.label }}</label>
-            <small>Permite converter reservas em consumo ou saida operacional.</small>
+            <small>Permite converter reservas em consumo/saida.</small>
             {{ form.perm_estoque_converter_reserva.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_estoque_cancelar_reserva }} {{ form.perm_estoque_cancelar_reserva.label }}</label>
-            <small>Permite cancelar reservas ativas e devolver saldo ao ponto.</small>
+            <small>Permite cancelar reservas e devolver saldo.</small>
             {{ form.perm_estoque_cancelar_reserva.errors }}
           </div>
         </div>
 
-        <div class="mt-2">
+        <div class="section-title mt-3">Resumo de risco antes de salvar</div>
+        <div id="risco-perfil-box" class="border rounded p-3 bg-light small text-muted">
+          Sem simulacao ainda.
+        </div>
+
+        <div class="mt-3">
           <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i>Salvar</button>
           {% if editando and usuario_obj %}
           <a href="{% url 'configuracoes:detalhes_usuario' usuario_obj.id %}" class="btn btn-outline-secondary">Cancelar</a>
@@ -290,35 +309,106 @@
 {% block extra_js %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("usuario-form-cfg9");
   const presetSelect = document.getElementById("id_preset_perfil");
-  const box = document.getElementById("impacto-preset-box");
-  if (!presetSelect || !box) return;
+  const impactoBox = document.getElementById("impacto-preset-box");
+  const riscoBox = document.getElementById("risco-perfil-box");
+
+  if (!form || !presetSelect || !impactoBox || !riscoBox) return;
+
+  const trackedCheckboxes = Array.from(
+    form.querySelectorAll("input[type='checkbox'][name^='perm_'], input[type='checkbox'][name^='acesso_']")
+  );
+
+  function nivelClass(nivel) {
+    if (!nivel) return "status-baixo";
+    return "status-" + nivel;
+  }
 
   function renderImpacto(data) {
-    if (!data || !Array.isArray(data.impactos) || data.impactos.length === 0) {
-      box.classList.add("text-muted");
-      box.innerHTML = "Sem impacto adicional (preset vazio ou sem permissoes extras).";
+    const impactos = Array.isArray(data?.impactos) ? data.impactos : [];
+    const nomePerfil = data?.perfil_nome || "Sem preset";
+    const descricaoPerfil = data?.perfil_descricao || "";
+
+    if (!impactos.length) {
+      impactoBox.classList.add("text-muted");
+      impactoBox.innerHTML = `<div><strong>${nomePerfil}</strong></div><div>${descricaoPerfil}</div><div class="mt-1">Sem impacto adicional.</div>`;
       return;
     }
-    box.classList.remove("text-muted");
-    box.innerHTML = data.impactos.map(item => `<div>• ${item}</div>`).join("");
+
+    impactoBox.classList.remove("text-muted");
+    const itens = impactos.map(item => `<li>${item}</li>`).join("");
+    impactoBox.innerHTML = `
+      <div><strong>${nomePerfil}</strong></div>
+      <div class="mb-1">${descricaoPerfil}</div>
+      <ul class="mb-0 pl-3">${itens}</ul>
+    `;
   }
 
-  async function carregarImpacto() {
-    const preset = presetSelect.value || "";
-    const url = "{% url 'configuracoes:simulador_permissoes' %}?preset=" + encodeURIComponent(preset);
+  function renderRisco(data) {
+    const resumo = data?.resumo_risco || {};
+    const nivel = resumo?.nivel || "baixo";
+    const score = Number(resumo?.score || 0);
+    const total = Number(resumo?.total_sensiveis_ativas || 0);
+    const categorias = Array.isArray(resumo?.categorias) ? resumo.categorias : [];
+
+    const header = `
+      <div class="mb-2">
+        <strong>Nivel de risco</strong>
+        <span class="status-chip ${nivelClass(nivel)}">${nivel.toUpperCase()}</span>
+      </div>
+      <div class="mb-2">Score: <strong>${score}</strong> | Permissoes sensiveis ativas: <strong>${total}</strong></div>
+    `;
+
+    if (!categorias.length) {
+      riscoBox.classList.add("text-muted");
+      riscoBox.innerHTML = header + "<div>Nenhuma permissao sensivel ativa.</div>";
+      return;
+    }
+
+    riscoBox.classList.remove("text-muted");
+    const htmlCategorias = categorias.map(cat => {
+      const itens = (cat.ativas || []).map(item => `<li>${item.label}</li>`).join("");
+      return `
+        <div class="mb-2">
+          <strong>${cat.label}</strong> (${cat.total_ativas})
+          <ul class="mb-0 pl-3">${itens}</ul>
+        </div>
+      `;
+    }).join("");
+
+    riscoBox.innerHTML = header + htmlCategorias;
+  }
+
+  async function carregarSimulacao() {
+    const url = new URL("{% url 'configuracoes:simulador_permissoes' %}", window.location.origin);
+    url.searchParams.set("preset", presetSelect.value || "");
+
+    trackedCheckboxes.forEach((checkbox) => {
+      url.searchParams.set(checkbox.name, checkbox.checked ? "1" : "0");
+    });
+
     try {
-      const response = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+      const response = await fetch(url.toString(), {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+      });
       const data = await response.json();
       renderImpacto(data);
-    } catch (err) {
-      box.classList.add("text-muted");
-      box.textContent = "Nao foi possivel carregar o impacto do preset.";
+      renderRisco(data);
+    } catch (error) {
+      impactoBox.classList.add("text-muted");
+      impactoBox.textContent = "Nao foi possivel carregar o impacto do perfil.";
+      riscoBox.classList.add("text-muted");
+      riscoBox.textContent = "Nao foi possivel calcular o resumo de risco.";
     }
   }
 
-  presetSelect.addEventListener("change", carregarImpacto);
-  carregarImpacto();
+  presetSelect.addEventListener("change", carregarSimulacao);
+  trackedCheckboxes.forEach((checkbox) => {
+    checkbox.addEventListener("change", carregarSimulacao);
+  });
+
+  carregarSimulacao();
 });
 </script>
 {% endblock %}

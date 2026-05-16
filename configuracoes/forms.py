@@ -256,8 +256,8 @@ class UserForm(forms.ModelForm):
     preset_perfil = forms.ChoiceField(
         required=False,
         choices=[],
-        label="Preset de permissoes",
-        help_text="Opcional: aplica um conjunto base de permissoes para o perfil.",
+        label="Perfil operacional (preset)",
+        help_text="Opcional: aplica um perfil base e permite ajustes finos de risco abaixo.",
     )
     class Meta:
         model = User
