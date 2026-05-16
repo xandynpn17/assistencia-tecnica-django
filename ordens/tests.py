@@ -1379,6 +1379,35 @@ class GuiasExpedicaoParceiroTests(TestCase):
         self.assertEqual(self.ordem.status, "em_andamento")
         self.assertIsNotNone(item.recepcionada_em)
 
+    def test_guia_expedicao_pdf_com_textos_longos_retorna_pdf_valido(self):
+        parceiro_longo = "Parceiro " + ("MuitoLongo" * 25)
+        guia = GuiaExpedicaoParceiro.objects.create(
+            parceiro_nome=parceiro_longo,
+            referencia_externa="REF-" + ("1234567890" * 8),
+            expedida_por=self.user,
+        )
+        cliente_longo = Cliente.objects.create(
+            nome="Cliente " + ("ComNomeExtremamenteLongo" * 8),
+            documento="12345678901",
+            telefone="11999999999",
+            estado="SP",
+        )
+        ordem_longa = OrdemServico.objects.create(
+            cliente=cliente_longo,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Teste",
+            modelo_equipamento="Modelo Muito Longo",
+            defeito="Teste",
+            tipo_reparo="Fora de Garantia",
+            status="enviado_parceiro",
+        )
+        GuiaExpedicaoItem.objects.create(guia=guia, ordem_servico=ordem_longa)
+
+        response = self.client.get(reverse("ordens:guia_expedicao_pdf", args=[guia.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Type"].startswith("application/pdf"))
+        self.assertTrue(response.content.startswith(b"%PDF"))
+
 
 class PortalClienteTests(TestCase):
     def setUp(self):

@@ -315,9 +315,11 @@ Progresso:
 - faixa de etiqueta/corte da OS impressa corrigida em `ordens/view_modules/impressao.py`;
 - teste automatizado adicionado em `ordens/tests.py`.
 - fase mantida em andamento para padronizar acentuacao e acabamento visual dos documentos emitidos.
+- `ordens/view_modules/expedicao.py` recebeu clipping por largura real de texto na `guia_expedicao_pdf`, prevenindo sobreposicao em parceiro/referencia/cliente/status com textos longos.
+- novo teste de regressao cobre emissao de PDF de expedicao com campos longos, garantindo retorno valido (`application/pdf` + assinatura `%PDF`).
 
 ### Fase V9 - Responsividade e homologacao visual
-Status: pendente
+Status: em andamento
 Prioridade: media
 
 Objetivo:
@@ -339,6 +341,11 @@ Entregas:
 
 Resultado esperado:
 - experiencia confiavel fora do desktop ideal.
+
+Progresso:
+- ajustes responsivos globais adicionados em `core/static/css/app_ui.css` (header, shell de pagina, acoes, tabelas e footer em telas estreitas);
+- checklist de homologacao criado em `docs/checklist_homologacao_visual.md`;
+- layout global ajustado para `sticky footer` sem sobrepor formularios e mantendo o rodape no fim da viewport.
 
 ## Ordem recomendada
 

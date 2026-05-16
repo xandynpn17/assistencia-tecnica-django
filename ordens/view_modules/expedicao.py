@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -6,17 +6,18 @@ from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
+from reportlab.graphics import renderPDF
 from reportlab.graphics.barcode import code128
 from reportlab.graphics.barcode import qr
-from reportlab.graphics import renderPDF
 from reportlab.graphics.shapes import Drawing
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
-from configuracoes.permissions import ORDER_ROLES, role_required
 from configuracoes.models import Empresa
+from configuracoes.permissions import ORDER_ROLES, role_required
 
 from ..forms import ExpedicaoParceiroForm, RecepcaoParceiroForm
 from ..models import GuiaExpedicaoItem, GuiaExpedicaoParceiro, LinhaTrabalho, LogOS
@@ -193,6 +194,20 @@ def guia_expedicao_pdf(request, guia_id):
     width, height = A4
     margem = 16 * mm
 
+    def _clip_text(texto, fonte, tamanho, largura_max):
+        valor = str(texto or "-").strip() or "-"
+        if pdfmetrics.stringWidth(valor, fonte, tamanho) <= largura_max:
+            return valor
+        sufixo = "..."
+        limite = max(0, largura_max - pdfmetrics.stringWidth(sufixo, fonte, tamanho))
+        parcial = ""
+        for caractere in valor:
+            candidato = f"{parcial}{caractere}"
+            if pdfmetrics.stringWidth(candidato, fonte, tamanho) > limite:
+                break
+            parcial = candidato
+        return f"{parcial}{sufixo}" if parcial else sufixo
+
     expedida_em = timezone.localtime(guia.expedida_em)
     usuario = getattr(guia.expedida_por, "get_full_name", lambda: "")() or getattr(guia.expedida_por, "username", "-")
 
@@ -203,8 +218,7 @@ def guia_expedicao_pdf(request, guia_id):
         if logo_field:
             logo_path = logo_field.path
 
-    # Cabeçalho
-    pdf.setTitle(f"Guia de Expedição {guia.numero_guia}")
+    pdf.setTitle(f"Guia de Expedicao {guia.numero_guia}")
     if logo_path:
         try:
             logo = ImageReader(logo_path)
@@ -213,26 +227,27 @@ def guia_expedicao_pdf(request, guia_id):
             pass
 
     pdf.setFont("Helvetica-Bold", 15)
-    pdf.drawString(margem + 34 * mm, height - margem, "GUIA DE EXPEDIÇÃO")
+    pdf.drawString(margem + 34 * mm, height - margem, "GUIA DE EXPEDICAO")
     pdf.setFont("Helvetica", 9)
     pdf.drawRightString(width - margem, height - margem + 2, f"Emitido em {expedida_em.strftime('%d/%m/%Y %H:%M')}")
 
     barcode = code128.Code128(str(guia.numero_guia), barHeight=10 * mm, barWidth=0.35)
     barcode.drawOn(pdf, width - margem - 65 * mm, height - margem - 12 * mm)
 
-    # Bloco de identificação
     topo_bloco = height - margem - 20 * mm
     altura_bloco = 35 * mm
     pdf.rect(margem, topo_bloco - altura_bloco, width - (2 * margem), altura_bloco, stroke=1, fill=0)
-    pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawString(margem + 4 * mm, topo_bloco - 6 * mm, f"Guia: {guia.numero_guia}")
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(margem + 4 * mm, topo_bloco - 12 * mm, f"Parceiro destino: {guia.parceiro_nome}")
-    pdf.drawString(margem + 4 * mm, topo_bloco - 18 * mm, f"Referência externa: {guia.referencia_externa or '-'}")
-    pdf.drawString(margem + 4 * mm, topo_bloco - 24 * mm, f"Usuário expedição: {usuario}")
-    pdf.drawString(margem + 4 * mm, topo_bloco - 30 * mm, f"Total de ordens: {guia.total_ordens}")
 
-    # QR Code para abrir a guia
+    texto_x = margem + 4 * mm
+    texto_max_w = (width - (2 * margem)) - 32 * mm
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(texto_x, topo_bloco - 6 * mm, _clip_text(f"Guia: {guia.numero_guia}", "Helvetica-Bold", 10, texto_max_w))
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(texto_x, topo_bloco - 12 * mm, _clip_text(f"Parceiro destino: {guia.parceiro_nome}", "Helvetica", 10, texto_max_w))
+    pdf.drawString(texto_x, topo_bloco - 18 * mm, _clip_text(f"Referencia externa: {guia.referencia_externa or '-'}", "Helvetica", 10, texto_max_w))
+    pdf.drawString(texto_x, topo_bloco - 24 * mm, _clip_text(f"Usuario expedicao: {usuario}", "Helvetica", 10, texto_max_w))
+    pdf.drawString(texto_x, topo_bloco - 30 * mm, _clip_text(f"Total de ordens: {guia.total_ordens}", "Helvetica", 10, texto_max_w))
+
     guia_url = request.build_absolute_uri()
     qr_code = qr.QrCodeWidget(guia_url)
     qr_bounds = qr_code.getBounds()
@@ -245,11 +260,13 @@ def guia_expedicao_pdf(request, guia_id):
     pdf.setFont("Helvetica", 7)
     pdf.drawRightString(width - margem, topo_bloco - 33 * mm, "Abrir guia digital")
 
-    # Tabela de ordens
     y = topo_bloco - altura_bloco - 8 * mm
     col1 = margem + 2 * mm
     col2 = margem + 35 * mm
     col3 = margem + 115 * mm
+    largura_col1 = 28 * mm
+    largura_col2 = 76 * mm
+    largura_col3 = (width - margem) - col3 - 2 * mm
 
     pdf.setFont("Helvetica-Bold", 9)
     pdf.drawString(col1, y, "OS")
@@ -273,18 +290,17 @@ def guia_expedicao_pdf(request, guia_id):
             y -= 4 * mm
             pdf.setFont("Helvetica", 9)
         ordem = item.ordem_servico
-        pdf.drawString(col1, y, str(ordem.numero_os))
-        pdf.drawString(col2, y, str(ordem.cliente.nome)[:45])
-        pdf.drawString(col3, y, item.get_status_display())
+        pdf.drawString(col1, y, _clip_text(str(ordem.numero_os), "Helvetica", 9, largura_col1))
+        pdf.drawString(col2, y, _clip_text(str(ordem.cliente.nome), "Helvetica", 9, largura_col2))
+        pdf.drawString(col3, y, _clip_text(item.get_status_display(), "Helvetica", 9, largura_col3))
         y -= 5 * mm
 
-    # Rodapé com assinatura
     y_ass = 22 * mm
     pdf.line(margem, y_ass, margem + 75 * mm, y_ass)
     pdf.line(width - margem - 75 * mm, y_ass, width - margem, y_ass)
     pdf.setFont("Helvetica", 8)
-    pdf.drawString(margem, y_ass - 4 * mm, "Assinatura expedição")
-    pdf.drawString(width - margem - 75 * mm, y_ass - 4 * mm, "Assinatura recepção parceiro")
+    pdf.drawString(margem, y_ass - 4 * mm, "Assinatura expedicao")
+    pdf.drawString(width - margem - 75 * mm, y_ass - 4 * mm, "Assinatura recepcao parceiro")
 
     pdf.save()
     return response
