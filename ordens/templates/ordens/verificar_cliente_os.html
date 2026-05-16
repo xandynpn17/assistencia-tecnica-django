@@ -12,9 +12,16 @@
     display: none !important;
 }
 
+.page-verificar-cliente .wrapper {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
 .page-verificar-cliente .content-wrapper {
+    flex: 1 0 auto;
     margin-top: 0 !important;
-    min-height: 100vh !important;
+    min-height: 0 !important;
     padding-bottom: 0 !important;
 }
 
@@ -32,15 +39,9 @@
     padding-bottom: 1rem;
 }
 
-.verificar-cliente-local-footer {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 1rem;
-    padding: 12px 0 0;
-    border-top: 1px solid #d8e1ec;
-    color: #1b2b3a;
-    font-size: 0.92rem;
+.page-verificar-cliente .main-footer {
+    flex-shrink: 0;
+    position: relative !important;
 }
 </style>
 {% endblock %}
@@ -561,11 +562,6 @@
     </div>
 </div>
 
-<div class="verificar-cliente-local-footer">
-    <span>&copy; 2025 Alexandre Bentivoglio. Todos os direitos reservados.</span>
-    <span><strong>Versão</strong> 1.0.0</span>
-</div>
-
 <style>
 /* Estilos para validação visual */
 .is-valid {
@@ -718,5 +714,3 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 {% endblock %}
-
-{% block footer %}{% endblock %}
