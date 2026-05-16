@@ -1016,7 +1016,7 @@ class PreviewDocumentoTests(TestCase):
         html = response.content.decode(response.charset or "utf-8")
         texto = unescape(html)
         self.assertIn("Pré-visualização dos Layouts", texto)
-        self.assertNotIn("PrÃ©-visualizaÃ§Ã£o dos Layouts", texto)
+        self.assertNotIn("Pr\u00c3\u00a9-visualiza\u00c3\u00a7\u00c3\u00a3o dos Layouts", texto)
 
 class SetupInicialSyncCompatTests(TestCase):
     def test_sync_reaproveita_tipo_existente_com_mesmo_nome_e_codigo_legado(self):

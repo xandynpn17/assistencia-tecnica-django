@@ -255,7 +255,7 @@ Direcao recomendada:
 ## Fases do ciclo 2
 
 ### Fase Cfg8 - Higiene tecnica, textos e preparo para internacionalizacao
-Status: planejada
+Status: em andamento
 Prioridade: alta
 
 Objetivo:
@@ -274,6 +274,11 @@ Resultado esperado:
 - interface mais profissional;
 - menor risco de regressao textual;
 - base pronta para idioma, moeda e tributacao por pais em ciclo futuro.
+
+Progresso atual:
+- varredura inicial de mojibake executada nos fontes da app `configuracoes` (excluindo migrations);
+- correcoes aplicadas em `configuracoes/forms.py` para labels, mensagens de validacao e help texts quebrados;
+- ajuste em `configuracoes/tests.py` para manter o teste anti-mojibake sem depender de literal corrompido.
 
 ### Fase Cfg9 - Permissoes 2.0: perfis operacionais e riscos
 Status: planejada
@@ -424,7 +429,7 @@ Resultado esperado:
 - autorizacoes e assinaturas futuras entram por evento, nao por improviso.
 
 ### Fase Cfg14 - SaaS-ready e modo comercial local
-Status: planejada
+Status: em andamento
 Prioridade: media/alta
 
 Objetivo:
@@ -450,6 +455,11 @@ Escopo SaaS futuro:
 Resultado esperado:
 - produto vendavel localmente com manutencao previsivel;
 - caminho SaaS tecnico claro, sem pular etapas.
+
+Progresso atual:
+- `staticfiles/` adicionado ao `.gitignore` como artefato de deploy;
+- arquivos de `staticfiles/` removidos do versionamento com `git rm -r --cached staticfiles`;
+- projeto alinhado ao fluxo correto de publicacao com `collectstatic` no build/deploy.
 
 ## Ordem recomendada do ciclo 2
 

@@ -250,7 +250,7 @@ class UserForm(forms.ModelForm):
     )
     numero_vendedor = forms.CharField(
         required=False,
-        label="NÃºmero de vendedor",
+        label="Numero de vendedor",
     )
 
     preset_perfil = forms.ChoiceField(
@@ -424,7 +424,7 @@ class UserForm(forms.ModelForm):
         self.fields["acesso_estoque_extra"].label = "Estoque"
         self.fields["acesso_caixa_operacional_extra"].label = "Caixa operacional"
         self.fields["acesso_caixa_financeiro_extra"].label = "Caixa financeiro"
-        self.fields["acesso_configuracoes_extra"].label = "ConfiguraÃ§Ãµes"
+        self.fields["acesso_configuracoes_extra"].label = "Configuracoes"
 
         self.fields["perm_os_editar_numero_serie"].label = "Editar numero de serie"
         self.fields["perm_os_editar_observacoes_internas"].label = "Editar observacoes internas da OS"
@@ -504,10 +504,10 @@ class UserForm(forms.ModelForm):
         tipo_pessoa = self.cleaned_data.get("tipo_pessoa") or "fisica"
         if tipo_pessoa == "fisica":
             if not self._validar_cpf(digits):
-                raise forms.ValidationError("CPF invÃ¡lido.")
+                raise forms.ValidationError("CPF invalido.")
         else:
             if not self._validar_cnpj(digits):
-                raise forms.ValidationError("CNPJ invÃ¡lido.")
+                raise forms.ValidationError("CNPJ invalido.")
         return digits
 
     def clean_numero_vendedor(self):
@@ -515,7 +515,7 @@ class UserForm(forms.ModelForm):
         if not valor:
             return ""
         if not valor.isdigit() or len(valor) < 2:
-            raise forms.ValidationError('Informe um nÃºmero de vendedor com ao menos 2 dÃ­gitos.')
+            raise forms.ValidationError("Informe um numero de vendedor com ao menos 2 digitos.")
         return valor
 
     def clean_password(self):
@@ -533,7 +533,7 @@ class UserForm(forms.ModelForm):
         admissao = cleaned.get("data_admissao")
         demissao = cleaned.get("data_demissao")
         if admissao and demissao and demissao < admissao:
-            self.add_error("data_demissao", "Data de demissÃ£o nÃ£o pode ser anterior Ã  admissÃ£o.")
+            self.add_error("data_demissao", "Data de demissao nao pode ser anterior a admissao.")
         return cleaned
 
     def save(self, commit=True):
@@ -562,7 +562,7 @@ class ConfiguracaoOrdemServicoForm(forms.ModelForm):
         }
 
 
-# NOVO FORMULÃRIO
+# NOVO FORMULARIO
 class ConfiguracaoSistemaForm(forms.ModelForm):
     MAX_CARACTERES_TERMOS_OS = 1800
     MAX_CARACTERES_CONDICOES_ORCAMENTO = 500
@@ -659,24 +659,24 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             if isinstance(self.fields[field_name], forms.BooleanField):
                 self.fields[field_name].widget.attrs.update({'class': 'form-check-input'})
         self.fields["condicoes_orcamento"].help_text = (
-            f"MÃ¡ximo recomendado: {self.MAX_CARACTERES_CONDICOES_ORCAMENTO} caracteres."
+            f"Maximo recomendado: {self.MAX_CARACTERES_CONDICOES_ORCAMENTO} caracteres."
         )
         self.fields["termos_ordem_servico"].help_text = (
-            f"MÃ¡ximo recomendado para nÃ£o comprometer a impressÃ£o: {self.MAX_CARACTERES_TERMOS_OS} caracteres."
+            f"Maximo recomendado para nao comprometer a impressao: {self.MAX_CARACTERES_TERMOS_OS} caracteres."
         )
-        self.fields["layout_os_impressao"].help_text = "Preset base para organizar espaÃ§os na OS de impressÃ£o."
+        self.fields["layout_os_impressao"].help_text = "Preset base para organizar espacos na OS de impressao."
         self.fields["layout_os_frente_espaco_assinaturas_cm"].help_text = "Ajuste fino em cm no bloco de assinatura da frente."
         self.fields["layout_os_verso_espaco_assinatura_cm"].help_text = "Ajuste fino em cm para descer/subir assinatura abaixo dos termos."
         self.fields["layout_os_data_fonte_pt"].help_text = "Tamanho da fonte das datas (bloco de assinatura)."
-        self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com nÃºmero da OS na linha de recorte."
-        self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressÃ£o, relatÃ³rio e orÃ§amento)."
+        self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com numero da OS na linha de recorte."
+        self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressao, relatorio e orcamento)."
         self.fields["layout_documentos_cor"].help_text = "Escolha se os PDFs saem em colorido ou escala de cinza (preto e branco)."
 
     def clean_condicoes_orcamento(self):
         valor = (self.cleaned_data.get("condicoes_orcamento") or "").strip()
         if len(valor) > self.MAX_CARACTERES_CONDICOES_ORCAMENTO:
             raise forms.ValidationError(
-                f"As condiÃ§Ãµes do orÃ§amento podem ter no mÃ¡ximo {self.MAX_CARACTERES_CONDICOES_ORCAMENTO} caracteres."
+                f"As condicoes do orcamento podem ter no maximo {self.MAX_CARACTERES_CONDICOES_ORCAMENTO} caracteres."
             )
         return valor
 
@@ -684,7 +684,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         valor = (self.cleaned_data.get("termos_ordem_servico") or "").strip()
         if len(valor) > self.MAX_CARACTERES_TERMOS_OS:
             raise forms.ValidationError(
-                f"Os termos da OS podem ter no mÃ¡ximo {self.MAX_CARACTERES_TERMOS_OS} caracteres."
+                f"Os termos da OS podem ter no maximo {self.MAX_CARACTERES_TERMOS_OS} caracteres."
             )
         return valor
 
@@ -738,7 +738,7 @@ class FornecedorGarantiaForm(forms.ModelForm):
             return ""
         digits = self._somente_digitos(raw)
         if len(digits) != 14:
-            raise forms.ValidationError("Informe um CNPJ vÃ¡lido com 14 dÃ­gitos.")
+            raise forms.ValidationError("Informe um CNPJ valido com 14 digitos.")
         return digits
 
     def clean_telefone(self):
@@ -747,7 +747,7 @@ class FornecedorGarantiaForm(forms.ModelForm):
             return ""
         digits = self._somente_digitos(raw)
         if len(digits) not in {10, 11}:
-            raise forms.ValidationError("Informe um telefone vÃ¡lido com DDD.")
+            raise forms.ValidationError("Informe um telefone valido com DDD.")
         return digits
 
     def clean_cep(self):
@@ -756,7 +756,7 @@ class FornecedorGarantiaForm(forms.ModelForm):
             return ""
         digits = self._somente_digitos(raw)
         if len(digits) != 8:
-            raise forms.ValidationError("Informe um CEP vÃ¡lido com 8 dÃ­gitos.")
+            raise forms.ValidationError("Informe um CEP valido com 8 digitos.")
         return digits
 
 
@@ -853,7 +853,7 @@ class RegraGarantiaMarcaForm(forms.ModelForm):
         if not tipo_produto:
             self.add_error("tipo_produto", "Selecione o tipo de equipamento.")
         if inicio and fim and fim < inicio:
-            self.add_error("fim_vigencia", "Fim da vigÃªncia nÃ£o pode ser anterior ao inÃ­cio.")
+            self.add_error("fim_vigencia", "Fim da vigencia nao pode ser anterior ao inicio.")
         return cleaned_data
 
 class ModeloMensagemForm(forms.ModelForm):
@@ -901,7 +901,7 @@ class SetupInicialSistemaForm(forms.Form):
         widget=forms.EmailInput(attrs={"class": "form-control"}),
     )
     endereco = forms.CharField(
-        label="EndereÃ§o (opcional)",
+        label="Endereco (opcional)",
         required=False,
         widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
     )
@@ -914,14 +914,14 @@ class SetupInicialSistemaForm(forms.Form):
     tipo_empresa = forms.ChoiceField(
         label="Tipo de empresa",
         choices=[
-            ("assistencia_tecnica", "AssistÃªncia tÃ©cnica"),
-            ("oficina_mecanica", "Oficina mecÃ¢nica"),
+            ("assistencia_tecnica", "Assistencia tecnica"),
+            ("oficina_mecanica", "Oficina mecanica"),
         ],
         widget=forms.Select(attrs={"class": "form-control"}),
     )
     linhas_atuacao = forms.ModelMultipleChoiceField(
         queryset=LinhaAtuacaoCatalogo.objects.none(),
-        label="Linhas de atuaÃ§Ã£o",
+        label="Linhas de atuacao",
         required=False,
         widget=forms.CheckboxSelectMultiple(),
     )
