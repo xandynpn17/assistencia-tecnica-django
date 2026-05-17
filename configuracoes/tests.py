@@ -1,3 +1,4 @@
+from datetime import timedelta
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -20,8 +21,11 @@ from configuracoes.models import (
     ConfiguracaoSistema,
     Empresa,
     FornecedorGarantia,
+    IntegracaoEventoLog,
+    ModeloMensagem,
     LinhaAtuacaoCatalogo,
     MarcaGarantia,
+    RegraSLAAlerta,
     SegmentoEmpresaCatalogo,
     SetupInicialSistema,
     TipoEquipamentoCatalogo,
@@ -37,8 +41,14 @@ from django.conf import settings
 from clientes.models import Cliente
 from estoque.models import CategoriaProduto, Produto
 from configuracoes.models import RegraGarantiaMarca, TipoEquipamentoConfig
-from ordens.models import OrdemServico
+from ordens.models import GuiaExpedicaoItem, GuiaExpedicaoParceiro, OrdemServico
 from orcamentos.models import Orcamento
+from configuracoes.services.sla import calcular_pendencias_sla, carregar_regras_sla
+from configuracoes.services.integracoes import (
+    EVENTOS_COMUNICACAO,
+    emitir_evento_interno,
+    registrar_evento_integracao,
+)
 
 
 class PermissoesSensiveisHelperTests(TestCase):
@@ -176,6 +186,13 @@ class CheckSaasReadinessCommandTests(TestCase):
         self.assertIn("Tenant middleware ativo:", output)
         self.assertIn("Modelos criticos:", output)
         self.assertIn("clientes.Cliente", output)
+
+    def test_check_tenant_data_exibe_diagnostico(self):
+        out = StringIO()
+        call_command("check_tenant_data", stdout=out)
+        output = out.getvalue()
+        self.assertIn("Diagnostico de dados por empresa", output)
+        self.assertIn("ordens.OrdemServico", output)
 
 
 class PermissoesConfiguracoesTests(TestCase):
@@ -1055,3 +1072,156 @@ class SetupInicialSyncCompatTests(TestCase):
         registro = TipoEquipamentoConfig.objects.get(nome=tipo_catalogo.nome)
         self.assertEqual(registro.codigo, tipo_catalogo.codigo)
         self.assertTrue(registro.ativo)
+
+
+class RegrasSLATests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.gerente = user_model.objects.create_user(
+            username="gerente_sla",
+            password="senha123",
+            tipo_usuario="gerente",
+        )
+        self.client.force_login(self.gerente)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente SLA",
+            documento="39053344705",
+            telefone="11999998888",
+            estado="SP",
+        )
+
+    def _criar_ordem(self, numero_sufixo):
+        return OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca SLA",
+            modelo_equipamento=f"Modelo {numero_sufixo}",
+            defeito="Teste SLA",
+            tipo_reparo="Fora de Garantia",
+            status="diagnosticar",
+        )
+
+    def test_tela_regras_sla_carrega_com_seed_padrao(self):
+        response = self.client.get(reverse("configuracoes:regras_sla"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(RegraSLAAlerta.objects.count(), 5)
+
+    def test_calculo_identifica_os_sem_movimentacao(self):
+        ordem = self._criar_ordem("SemMov")
+        OrdemServico.objects.filter(id=ordem.id).update(data_abertura=timezone.now() - timedelta(days=4))
+        pendencias = calcular_pendencias_sla()
+        self.assertTrue(any(p.codigo_regra == "os_sem_movimentacao" and p.ordem_id == ordem.id for p in pendencias))
+
+    def test_calculo_identifica_parceiro_externo_atrasado(self):
+        ordem = self._criar_ordem("Parceiro")
+        guia = GuiaExpedicaoParceiro.objects.create(parceiro_nome="Assistência Parceira", expedida_por=self.gerente)
+        item = GuiaExpedicaoItem.objects.create(guia=guia, ordem_servico=ordem, status="expedida")
+        GuiaExpedicaoParceiro.objects.filter(id=guia.id).update(expedida_em=timezone.now() - timedelta(days=7))
+        pendencias = calcular_pendencias_sla()
+        self.assertTrue(any(p.codigo_regra == "parceiro_externo_atrasado" and p.guia_item_id == item.id for p in pendencias))
+
+    def test_painel_sla_permite_filtro_por_regra(self):
+        carregar_regras_sla()
+        response = self.client.get(reverse("configuracoes:painel_sla"), {"regra": "os_sem_movimentacao"})
+        self.assertEqual(response.status_code, 200)
+
+
+class GarantiaReincidenciaPainelTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.gerente = user_model.objects.create_user(
+            username="gerente_garantia_painel",
+            password="senha123",
+            tipo_usuario="gerente",
+        )
+        self.tecnico = user_model.objects.create_user(
+            username="tecnico_garantia_painel",
+            password="senha123",
+            tipo_usuario="tecnico",
+        )
+        self.client.force_login(self.gerente)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Garantia",
+            documento="39053344705",
+            telefone="11999998888",
+            estado="SP",
+        )
+
+    def test_painel_reincidencias_exibe_resumo(self):
+        origem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca X",
+            modelo_equipamento="Modelo X",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="concluida",
+            fechada=True,
+            tecnico_responsavel=self.tecnico,
+            data_conclusao=timezone.now() - timedelta(days=5),
+        )
+        OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca X",
+            modelo_equipamento="Modelo X",
+            defeito="Nao liga novamente",
+            tipo_reparo="Garantia de servico",
+            status="diagnosticar",
+            tecnico_responsavel=self.tecnico,
+            ordem_origem_garantia=origem,
+            garantia_reincidencia=True,
+            garantia_classificacao_retorno="mesmo_defeito",
+        )
+
+        response = self.client.get(reverse("configuracoes:painel_reincidencias"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Garantia e Reincidencias")
+        self.assertContains(response, "Total de retornos")
+
+
+class IntegracoesLogsTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.gerente = user_model.objects.create_user(
+            username="gerente_integracoes",
+            password="senha123",
+            tipo_usuario="gerente",
+        )
+        self.client.force_login(self.gerente)
+
+    def test_registra_evento_integracao_manual(self):
+        registrar_evento_integracao(
+            canal="email",
+            evento="notificacao.orcamento",
+            status="sucesso",
+            destino="cliente@dominio.com",
+            payload={"ordem": "OS0001"},
+            resposta="enviado",
+        )
+        self.assertEqual(IntegracaoEventoLog.objects.count(), 1)
+
+    @patch.dict("os.environ", {"WEBHOOK_INTERNO_URL": ""}, clear=False)
+    def test_emitir_evento_interno_gera_log_quando_endpoint_ausente(self):
+        resultado = emitir_evento_interno("configuracoes.alterada", {"origem": "teste"})
+        self.assertFalse(resultado["enviado"])
+        self.assertTrue(IntegracaoEventoLog.objects.filter(canal="webhook", evento="configuracoes.alterada").exists())
+
+    def test_tela_logs_integracoes(self):
+        IntegracaoEventoLog.objects.create(canal="sistema", evento="notificacao.manual", status="sucesso")
+        response = self.client.get(reverse("configuracoes:logs_integracoes"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "notificacao.manual")
+
+    def test_popular_modelos_por_evento(self):
+        response = self.client.post(
+            reverse("configuracoes:modelos_mensagem"),
+            {"form_type": "popular_eventos"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        total_eventos = len(EVENTOS_COMUNICACAO)
+        self.assertGreaterEqual(
+            ModeloMensagem.objects.exclude(evento_chave="").count(),
+            total_eventos,
+        )

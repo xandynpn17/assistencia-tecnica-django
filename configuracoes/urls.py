@@ -27,6 +27,10 @@ urlpatterns = [
     path("marcas-fornecedores/", views.marcas_fornecedores, name="marcas_fornecedores"),
     path("modelos-mensagem/", views.modelos_mensagem, name="modelos_mensagem"),
     path("tipos-equipamento/", views.tipos_equipamento, name="tipos_equipamento"),
+    path("sla/regras/", views.regras_sla, name="regras_sla"),
+    path("sla/painel/", views.painel_sla, name="painel_sla"),
+    path("sla/reincidencias/", views.painel_reincidencias, name="painel_reincidencias"),
     path("buscar-cep/", views.buscar_cep, name="buscar_cep"),
     path("integracoes/webhooks/contrato/", views.contrato_webhooks, name="contrato_webhooks"),
+    path("integracoes/logs/", views.logs_integracoes, name="logs_integracoes"),
 ]

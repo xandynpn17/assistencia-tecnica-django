@@ -10,10 +10,10 @@
         </div>
         <div class="card-body">
             <div class="alert alert-warning">
-                Esta ação remove o pagamento do caixa e exige justificativa. Use apenas para correções operacionais.
+                Esta acao remove o pagamento do caixa e exige justificativa. Use apenas para correcoes operacionais.
             </div>
             <div class="row mb-3">
-                <div class="col-md-3"><strong>Talão:</strong> {{ pagamento.numero_talao|default:"-" }}</div>
+                <div class="col-md-3"><strong>Talao:</strong> {{ pagamento.numero_talao|default:"-" }}</div>
                 <div class="col-md-3"><strong>Valor:</strong> R$ {{ pagamento.valor|floatformat:2 }}</div>
                 <div class="col-md-3"><strong>Forma:</strong> {{ pagamento.metodo_display }}</div>
                 <div class="col-md-3"><strong>OS:</strong> {{ pagamento.ordem_servico.numero_os|default:"-" }}</div>
@@ -22,8 +22,17 @@
                 {% csrf_token %}
                 <div class="form-group">
                     <label for="id_justificativa"><strong>Justificativa</strong></label>
-                    <textarea id="id_justificativa" name="justificativa" class="form-control" rows="4" required placeholder="Explique o motivo da exclusóo do pagamento."></textarea>
+                    <textarea id="id_justificativa" name="justificativa" class="form-control" rows="4" required minlength="{{ antifraude_config.antifraude_motivo_minimo_caracteres }}" placeholder="Explique o motivo da exclusao do pagamento."></textarea>
+                    <small class="form-text text-muted">Minimo de {{ antifraude_config.antifraude_motivo_minimo_caracteres }} caracteres.</small>
                 </div>
+                {% if antifraude_config.antifraude_exigir_dupla_confirmacao_exclusao_pagamento %}
+                <div class="form-group form-check">
+                    <input type="checkbox" class="form-check-input" id="id_confirmar_exclusao_pagamento" name="confirmar_exclusao_pagamento" value="1" required>
+                    <label class="form-check-label" for="id_confirmar_exclusao_pagamento">
+                        Confirmo que revisei os dados e desejo excluir este pagamento.
+                    </label>
+                </div>
+                {% endif %}
                 <div class="d-flex justify-content-end gap-2">
                     <a href="{% url 'caixa:taloes' %}" class="btn btn-outline-secondary">Cancelar</a>
                     <button type="submit" class="btn btn-danger">Excluir pagamento</button>

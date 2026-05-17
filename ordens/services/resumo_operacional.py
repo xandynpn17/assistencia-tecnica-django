@@ -55,6 +55,10 @@ class ResumoOperacionalService:
             resumo_alertas.append("Numero de serie nao informado.")
         if ordem.status in {"pronto_contactado", "em_andamento", "autorizado"} and not (ordem.relatorio_tecnico or "").strip():
             resumo_alertas.append("Relatorio tecnico ainda nao preenchido.")
+        if ordem.ordem_origem_garantia_id:
+            resumo_alertas.append(f"Retorno de garantia vinculado a OS {ordem.ordem_origem_garantia.numero_os}.")
+        elif ordem.garantia_reincidencia:
+            resumo_alertas.append("Possivel reincidencia identificada. Validar historico de garantia.")
 
         policy = FluxoOSPolicyService.obter_policy(ordem.status)
         proxima_acao = policy.proxima_acao

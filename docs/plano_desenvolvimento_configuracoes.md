@@ -1,4 +1,4 @@
-# Plano de Desenvolvimento da App Configuracoes
+﻿# Plano de Desenvolvimento da App Configuracoes
 
 ## Objetivo
 
@@ -255,7 +255,7 @@ Direcao recomendada:
 ## Fases do ciclo 2
 
 ### Fase Cfg8 - Higiene tecnica, textos e preparo para internacionalizacao
-Status: em andamento
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -265,7 +265,7 @@ Objetivo:
 
 Escopo:
 - varrer models, forms, templates, services, commands e PDFs em busca de caracteres quebrados;
-- corrigir labels como `UsuÃ¡rio`, `TÃ©cnico`, `ConfiguraÃ§Ãµes`, `CrÃ©dito`, `NÃºmero` e similares;
+- corrigir labels como `UsuÃƒÂ¡rio`, `TÃƒÂ©cnico`, `ConfiguraÃƒÂ§ÃƒÂµes`, `CrÃƒÂ©dito`, `NÃƒÂºmero` e similares;
 - criar teste de guarda mais abrangente contra mojibake;
 - documentar padrao UTF-8 e regra de escrita de novos textos;
 - iniciar convencao para futura extracao de textos com `gettext`, sem traduzir tudo agora.
@@ -281,7 +281,7 @@ Progresso atual:
 - ajuste em `configuracoes/tests.py` para manter o teste anti-mojibake sem depender de literal corrompido.
 
 ### Fase Cfg9 - Permissoes 2.0: perfis operacionais e riscos
-Status: em andamento
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -320,7 +320,7 @@ Progresso atual:
 - testes expandidos para cobrir retorno de `resumo_risco` e aplicacao de overrides no simulador.
 
 ### Fase Cfg10 - Documentos e PDFs profissionais configuraveis
-Status: em andamento
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -360,7 +360,7 @@ Progresso atual:
 - comparador de presets na configuracao do sistema atualizado para incluir os novos presets nas duas colunas de preview.
 
 ### Fase Cfg11 - SLA, alertas e painel de pendencias
-Status: planejada
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -394,8 +394,21 @@ Resultado esperado:
 - equipe sabe o que esta atrasado antes do cliente reclamar;
 - indicadores passam a mostrar gargalos reais.
 
+Progresso atual:
+- modelo `RegraSLAAlerta` criado em `configuracoes` para regras configuraveis com prazo, severidade, responsavel, acao e canal;
+- service de calculo em `configuracoes/services/sla.py` cobrindo:
+  - OS sem movimentacao;
+  - orcamento sem resposta;
+  - peca reservada vencendo;
+  - equipamento pronto parado;
+  - parceiro externo atrasado;
+- tela de configuracao das regras: `configuracoes:regras_sla`;
+- painel operacional com filtros e paginacao: `configuracoes:painel_sla`;
+- atalhos adicionados no painel de configuracoes e menu lateral.
+- badges de SLA adicionadas no menu lateral e cards de pendencia no dashboard gerencial.
+
 ### Fase Cfg12 - Garantia pos-servico e reincidencia
-Status: planejada
+Status: concluida
 Prioridade: alta
 
 Objetivo:
@@ -420,14 +433,31 @@ Resultado esperado:
 - leitura clara de problemas recorrentes;
 - base para melhorar qualidade e treinamento.
 
+Progresso atual:
+- abertura de OS agora aceita vinculo com OS original de garantia de servico;
+- classificacao de retorno adicionada (mesmo defeito, novo defeito, mau uso, garantia de peca, garantia de mao de obra);
+- deteccao automatica de possivel reincidencia na abertura quando ha OS fechada recente similar;
+- configuracao de garantias padrao e janela de reincidencia adicionada em Configuracoes do Sistema;
+- resumo da OS exibe vinculo de garantia/reincidencia para o atendente.
+- painel de reincidencias por tecnico, marca, tipo de equipamento, item e classificacao de retorno em `configuracoes:painel_reincidencias`.
+
 ### Fase Cfg13 - Integracoes, mensagens e automacoes
-Status: planejada
+Status: concluida
 Prioridade: media/alta
 
 Objetivo:
 - centralizar canais e logs de comunicacao;
 - manter WhatsApp Web como caminho atual;
 - preparar troca futura para API/automatizacoes sem reescrever fluxos.
+
+Progresso atual:
+- log estruturado de integracoes criado (`IntegracaoEventoLog`) com canal, evento, status, destino e resposta;
+- envio de notificacoes (sistema, e-mail e WhatsApp) agora registra sucesso/falha em log de integracao;
+- emissao de webhook interno passou a registrar tentativas e falhas com rastreabilidade;
+- tela gerencial `configuracoes:logs_integracoes` adicionada com filtros e paginacao;
+- atalhos adicionados no painel e menu de Configuracoes.
+- catalogo de eventos operacionais publicado na tela de modelos de mensagem;
+- carregamento automatico de modelos por evento implementado com atualizacao em lote.
 
 Escopo:
 - catalogo de eventos: OS criada, orcamento pronto, orcamento aprovado, equipamento pronto, expedicao criada, retorno de parceiro, garantia aberta;
@@ -441,7 +471,7 @@ Resultado esperado:
 - autorizacoes e assinaturas futuras entram por evento, nao por improviso.
 
 ### Fase Cfg14 - SaaS-ready e modo comercial local
-Status: em andamento
+Status: concluida
 Prioridade: media/alta
 
 Objetivo:
@@ -472,6 +502,9 @@ Progresso atual:
 - `staticfiles/` adicionado ao `.gitignore` como artefato de deploy;
 - arquivos de `staticfiles/` removidos do versionamento com `git rm -r --cached staticfiles`;
 - projeto alinhado ao fluxo correto de publicacao com `collectstatic` no build/deploy.
+- comando `check_tenant_data` criado para validar registros sem `empresa` nos modelos criticos;
+- `check_go_live` reforcado com validacao de `SECRET_KEY`, conectividade do banco ativo e alerta de `STATIC_ROOT`.
+- checklist operacional local documentado em `docs/checklist_go_live_local.md`.
 
 ## Ordem recomendada do ciclo 2
 
@@ -494,3 +527,8 @@ Progresso atual:
 - Garantia pos-servico identifica reincidencia e vincula OS original.
 - `staticfiles` deixa de ser fonte versionada e passa a ser artefato de deploy.
 - SaaS permanece como caminho preparado, nao como dependencia para vender localmente.
+
+
+
+
+

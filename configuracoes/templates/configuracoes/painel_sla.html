@@ -1,0 +1,120 @@
+{% extends "core/base.html" %}
+
+{% block title %}Painel de Pendências SLA{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="fas fa-exclamation-triangle mr-2"></i>Painel de Pendências SLA</h5>
+    <a href="{% url 'configuracoes:regras_sla' %}" class="btn btn-sm btn-outline-primary">
+      <i class="fas fa-cog mr-1"></i> Regras de SLA
+    </a>
+  </div>
+  <div class="card-body">
+    <form method="get" class="mb-3">
+      <div class="form-row align-items-end">
+        <div class="col-md-3">
+          <label class="mb-1">Regra</label>
+          <select name="regra" class="form-control">
+            <option value="">Todas</option>
+            <option value="os_sem_movimentacao" {% if regra_filtro == "os_sem_movimentacao" %}selected{% endif %}>OS sem movimentação</option>
+            <option value="orcamento_sem_resposta" {% if regra_filtro == "orcamento_sem_resposta" %}selected{% endif %}>Orçamento sem resposta</option>
+            <option value="peca_reservada_vencendo" {% if regra_filtro == "peca_reservada_vencendo" %}selected{% endif %}>Peça reservada vencendo</option>
+            <option value="equipamento_pronto_parado" {% if regra_filtro == "equipamento_pronto_parado" %}selected{% endif %}>Equipamento pronto parado</option>
+            <option value="parceiro_externo_atrasado" {% if regra_filtro == "parceiro_externo_atrasado" %}selected{% endif %}>Parceiro externo atrasado</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="mb-1">Severidade</label>
+          <select name="severidade" class="form-control">
+            <option value="">Todas</option>
+            <option value="critica" {% if severidade_filtro == "critica" %}selected{% endif %}>Crítica</option>
+            <option value="alta" {% if severidade_filtro == "alta" %}selected{% endif %}>Alta</option>
+            <option value="media" {% if severidade_filtro == "media" %}selected{% endif %}>Média</option>
+            <option value="baixa" {% if severidade_filtro == "baixa" %}selected{% endif %}>Baixa</option>
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label class="mb-1">Busca rápida</label>
+          <input type="text" class="form-control" name="q" value="{{ busca }}" placeholder="OS, guia, reserva, regra...">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-search mr-1"></i>Filtrar</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="row mb-3">
+      {% for item in resumo_regras %}
+      <div class="col-md-4 col-lg-3 mb-2">
+        <div class="border rounded p-2 h-100">
+          <div class="small text-muted">{{ item.severidade_label }}</div>
+          <div><strong>{{ item.label }}</strong></div>
+          <div class="h5 mb-0">{{ item.total }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered">
+        <thead>
+          <tr>
+            <th>Severidade</th>
+            <th>Regra</th>
+            <th>Descrição</th>
+            <th>Referência</th>
+            <th>Responsável</th>
+            <th>Ação sugerida</th>
+            <th>Abrir</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pendencias %}
+          <tr>
+            <td>
+              {% if p.severidade == "critica" %}
+              <span class="badge badge-danger">Crítica</span>
+              {% elif p.severidade == "alta" %}
+              <span class="badge badge-warning">Alta</span>
+              {% elif p.severidade == "media" %}
+              <span class="badge badge-info">Média</span>
+              {% else %}
+              <span class="badge badge-secondary">Baixa</span>
+              {% endif %}
+            </td>
+            <td>{{ p.regra_label }}</td>
+            <td>{{ p.descricao }}</td>
+            <td>{{ p.referencia }}</td>
+            <td>{{ p.responsavel_padrao|default:"-" }}</td>
+            <td>{{ p.acao_sugerida|default:"-" }}</td>
+            <td><a class="btn btn-sm btn-outline-primary" href="{{ p.destino_url }}">Abrir</a></td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-success">Nenhuma pendência para os filtros aplicados.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if pendencias_page.has_other_pages %}
+    <nav aria-label="Paginação SLA">
+      <ul class="pagination pagination-sm">
+        {% if pendencias_page.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ pendencias_page.previous_page_number }}&regra={{ regra_filtro }}&severidade={{ severidade_filtro }}&q={{ busca }}">Anterior</a>
+        </li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ pendencias_page.number }}</span></li>
+        {% if pendencias_page.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ pendencias_page.next_page_number }}&regra={{ regra_filtro }}&severidade={{ severidade_filtro }}&q={{ busca }}">Próxima</a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

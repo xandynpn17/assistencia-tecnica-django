@@ -231,6 +231,13 @@
                   </a>
                 </li>
                 <li class="nav-item">
+                  <a href="{% url 'ordens:fila_bancada_tecnicos' %}"
+                     class="nav-link {% if menu_sub == 'fila_bancada' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Fila de Bancada</p>
+                  </a>
+                </li>
+                <li class="nav-item">
                   <a href="{% url 'ordens:dashboard_pedidos' %}"
                      class="nav-link {% if menu_sub == 'dashboard_pedidos' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
@@ -255,7 +262,11 @@
                   <a href="{% url 'ordens:guias_expedicao' %}"
                      class="nav-link {% if menu_sub == 'guias_expedicao' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
-                    <p>Guias de Expedição</p>
+                    <p>Guias de Expedição
+                      {% if sla_badges.parceiro_externo_atrasado %}
+                      <span class="right badge badge-danger">{{ sla_badges.parceiro_externo_atrasado }}</span>
+                      {% endif %}
+                    </p>
                   </a>
                 </li>
               </ul>
@@ -579,6 +590,31 @@
                      class="nav-link {% if menu_sub == 'modelos_mensagem' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Modelos de Mensagens</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:regras_sla' %}"
+                     class="nav-link {% if menu_sub == 'regras_sla' or menu_sub == 'painel_sla' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>SLA e Alertas
+                      {% if sla_badges.total %}
+                      <span class="right badge badge-warning">{{ sla_badges.total }}</span>
+                      {% endif %}
+                    </p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:painel_reincidencias' %}"
+                     class="nav-link {% if menu_sub == 'painel_reincidencias' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Garantia e Reincidencias</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="{% url 'configuracoes:logs_integracoes' %}"
+                     class="nav-link {% if menu_sub == 'logs_integracoes' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Logs de Integracoes</p>
                   </a>
                 </li>
                 {% if user.is_superuser or user.tipo_usuario == 'adm' %}

@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from datetime import datetime
@@ -27,6 +28,7 @@ from reportlab.platypus import (
 
 from configuracoes.models import ConfiguracaoSistema, Empresa
 from configuracoes.permissions import ORDER_ROLES, role_required
+from configuracoes.services.tenant_guard import obter_empresa_ativa
 from core.pdf_preview import (
     apply_document_preview_overrides,
     apply_preview_xframe_headers,
@@ -37,6 +39,8 @@ from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragrap
 from core.pdf_theme import get_document_profile, get_document_theme, resolve_layout_preset
 
 from ..models import OrdemServico, ServicoPeca
+
+logger = logging.getLogger(__name__)
 
 
 def _split_termos(termos):
@@ -56,7 +60,7 @@ def _formatar_data_hora(data):
         return "-"
     try:
         return data.strftime("%d/%m/%Y %H:%M")
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return "-"
 
 
@@ -65,7 +69,7 @@ def _formatar_data(data):
         return "-"
     try:
         return data.strftime("%d/%m/%Y")
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return "-"
 
 
@@ -130,7 +134,7 @@ def _resolve_upload_path(upload):
         return None
     try:
         caminho = upload.path
-    except Exception:
+    except (AttributeError, OSError, ValueError):
         return None
     if not caminho or not os.path.exists(caminho):
         return None
@@ -151,7 +155,15 @@ def _image_from_upload(upload, largura_max, altura_max):
         if hasattr(imagem, "hAlign"):
             imagem.hAlign = "LEFT"
         return imagem
-    except Exception:
+    except (OSError, TypeError, ValueError):
+        logger.warning(
+            "os_pdf_imagem_upload_invalida",
+            extra={
+                "modulo": "ordens_pdf",
+                "acao": "image_from_upload",
+                "arquivo": caminho,
+            },
+        )
         return None
 
 
@@ -181,15 +193,15 @@ def _parametros_layout_os(config):
 
     try:
         ajuste_frente = float(getattr(config, "layout_os_frente_espaco_assinaturas_cm", 0) or 0)
-    except Exception:
+    except (TypeError, ValueError):
         ajuste_frente = 0.0
     try:
         ajuste_verso = float(getattr(config, "layout_os_verso_espaco_assinatura_cm", 0) or 0)
-    except Exception:
+    except (TypeError, ValueError):
         ajuste_verso = 0.0
     try:
         data_fonte_pt = float(getattr(config, "layout_os_data_fonte_pt", cfg["data_fonte_pt"]) or cfg["data_fonte_pt"])
-    except Exception:
+    except (TypeError, ValueError):
         data_fonte_pt = cfg["data_fonte_pt"]
 
     cfg["frente_gap_cm"] = max(0.0, cfg["frente_gap_cm"] + ajuste_frente)
@@ -259,7 +271,7 @@ def _aplicar_xframe_preview(request, response):
 @role_required(ORDER_ROLES)
 def imprimir_ordem_servico(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
-    empresa = Empresa.objects.first()
+    empresa = obter_empresa_ativa(request, strict=False) or ordem.empresa
     config = _config_layout_para_request(request)
     layout_cfg = _parametros_layout_os(config)
     layout_preset = resolve_layout_preset(config)
@@ -632,7 +644,7 @@ def imprimir_ordem_servico(request, pk):
 @role_required(ORDER_ROLES)
 def imprimir_ordem_servico_impressao(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
-    empresa = Empresa.objects.first()
+    empresa = obter_empresa_ativa(request, strict=False) or ordem.empresa
     config = _config_layout_para_request(request)
     layout_cfg = _parametros_layout_os(config)
     layout_preset = resolve_layout_preset(config)
@@ -1341,7 +1353,7 @@ def imprimir_ordem_servico_impressao(request, pk):
 @role_required(ORDER_ROLES)
 def imprimir_relatorio_tecnico(request, pk):
     ordem = get_object_or_404(OrdemServico, pk=pk)
-    empresa = Empresa.objects.first()
+    empresa = obter_empresa_ativa(request, strict=False) or ordem.empresa
     config = _config_layout_para_request(request)
     layout_preset = resolve_layout_preset(config)
     tema_docs = _tema_layout_documentos(config)

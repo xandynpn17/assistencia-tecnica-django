@@ -1,20 +1,22 @@
+import logging
 import os
 from pathlib import Path
 from threading import Lock
 
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import Image, Paragraph
-from reportlab.lib.utils import ImageReader
-from reportlab.lib.units import cm
-from reportlab.lib.styles import ParagraphStyle
 
 
 _FONT_LOCK = Lock()
 _FONT_CACHE = None
 _FONT_ALIAS_REGULAR = "AssistenciaSans"
 _FONT_ALIAS_BOLD = "AssistenciaSans-Bold"
+logger = logging.getLogger(__name__)
 
 
 def _font_pairs_candidates():
@@ -59,7 +61,7 @@ def get_pdf_fonts():
                     pdfmetrics.registerFont(TTFont(_FONT_ALIAS_BOLD, bold_path))
                 _FONT_CACHE = {"regular": _FONT_ALIAS_REGULAR, "bold": _FONT_ALIAS_BOLD}
                 return _FONT_CACHE
-            except Exception:
+            except (OSError, TypeError, ValueError):
                 continue
 
         _FONT_CACHE = {"regular": "Helvetica", "bold": "Helvetica-Bold"}
@@ -74,7 +76,7 @@ def add_paragraph_styles(stylesheet, fonts, specs):
             "fontName": font_name,
             "fontSize": cfg["font_size"],
             "leading": cfg["leading"],
-            # Evita sobreposição horizontal quando há tokens longos (e-mail, código, URL etc.).
+            # Evita sobreposicao horizontal quando ha tokens longos (e-mail, codigo, URL etc.).
             "splitLongWords": int(bool(cfg.get("split_long_words", True))),
         }
         if "text_color" in cfg:
@@ -117,7 +119,16 @@ def resolve_logo_path(empresa, field_name="logo_pdf"):
             campo = getattr(empresa, field_name)
             if campo.name and os.path.exists(campo.path):
                 return campo.path
-        except Exception:
+        except (AttributeError, OSError, ValueError):
+            logger.warning(
+                "pdf_logo_path_invalido",
+                extra={
+                    "modulo": "pdf",
+                    "acao": "resolve_logo_path",
+                    "empresa_id": getattr(empresa, "id", None),
+                    "campo": field_name,
+                },
+            )
             return None
     return None
 
@@ -132,15 +143,23 @@ def logo_or_paragraph(empresa, style, fallback, width, height, field_name="logo_
                 scale = min(width / float(img_width or 1), height / float(img_height or 1))
                 render_width = max(0.1 * cm, img_width * scale)
                 render_height = max(0.1 * cm, img_height * scale)
-            except Exception:
+            except (OSError, TypeError, ValueError):
                 render_width = width
                 render_height = height
             logo = Image(logo_path, width=render_width, height=render_height)
             if hasattr(logo, "hAlign"):
                 logo.hAlign = align
             return logo
-        except Exception:
-            pass
+        except (OSError, TypeError, ValueError):
+            logger.warning(
+                "pdf_logo_render_falha",
+                extra={
+                    "modulo": "pdf",
+                    "acao": "logo_or_paragraph",
+                    "empresa_id": getattr(empresa, "id", None),
+                    "campo": field_name,
+                },
+            )
 
     fallback_text = fallback
     if empresa and getattr(empresa, "nome", ""):

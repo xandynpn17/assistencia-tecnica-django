@@ -45,7 +45,7 @@ def _resolve_empresa_by_key(key: str):
 def resolve_tenant_context(request):
     enabled = getattr(settings, "TENANT_CONTEXT_ENABLED", True)
     if not enabled:
-        empresa = Empresa.objects.first()
+        empresa = Empresa.objects.order_by("id").first()
         return TenantContext(empresa=empresa, source="disabled", tenant_key="")
 
     candidates = [
@@ -69,5 +69,5 @@ def resolve_tenant_context(request):
     except Exception:
         pass
 
-    empresa = Empresa.objects.first()
+    empresa = Empresa.objects.order_by("id").first()
     return TenantContext(empresa=empresa, source="fallback", tenant_key=str(empresa.id) if empresa else "")

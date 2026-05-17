@@ -8,7 +8,8 @@ from django.core.mail import send_mail
 from django.urls import reverse
 from django.utils import timezone
 
-from configuracoes.models import ConfiguracaoSistema, Empresa
+from configuracoes.models import ConfiguracaoSistema
+from configuracoes.services.integracoes import registrar_evento_integracao
 from orcamentos.models import Orcamento
 
 from ..models import LinhaTrabalho, NotificacaoCliente
@@ -115,6 +116,14 @@ def enviar_notificacao(notif):
         notif.enviado_em = timezone.now()
         notif.erro = ""
         notif.save(update_fields=["status", "enviado_em", "erro"])
+        registrar_evento_integracao(
+            canal="sistema",
+            evento=f"notificacao.{notif.tipo}",
+            status="sucesso",
+            destino="interno",
+            payload={"ordem": notif.ordem.numero_os, "canal": notif.canal},
+            resposta="registrado",
+        )
         return {"enviada": True, "url": ""}
 
     if notif.canal == "email":
@@ -122,6 +131,14 @@ def enviar_notificacao(notif):
             notif.status = "erro"
             notif.erro = "Cliente sem email cadastrado."
             notif.save(update_fields=["status", "erro"])
+            registrar_evento_integracao(
+                canal="email",
+                evento=f"notificacao.{notif.tipo}",
+                status="falha",
+                destino="sem_destinatario",
+                payload={"ordem": notif.ordem.numero_os, "canal": notif.canal},
+                resposta=notif.erro,
+            )
             return {"enviada": False, "url": ""}
         try:
             send_mail(
@@ -135,11 +152,27 @@ def enviar_notificacao(notif):
             notif.enviado_em = timezone.now()
             notif.erro = ""
             notif.save(update_fields=["status", "enviado_em", "erro"])
+            registrar_evento_integracao(
+                canal="email",
+                evento=f"notificacao.{notif.tipo}",
+                status="sucesso",
+                destino=notif.destinatario,
+                payload={"ordem": notif.ordem.numero_os, "assunto": notif.assunto},
+                resposta="enviado",
+            )
             return {"enviada": True, "url": ""}
         except Exception as exc:
             notif.status = "erro"
             notif.erro = str(exc)[:255]
             notif.save(update_fields=["status", "erro"])
+            registrar_evento_integracao(
+                canal="email",
+                evento=f"notificacao.{notif.tipo}",
+                status="falha",
+                destino=notif.destinatario,
+                payload={"ordem": notif.ordem.numero_os},
+                resposta=notif.erro,
+            )
             return {"enviada": False, "url": ""}
 
     if notif.canal == "whatsapp":
@@ -148,6 +181,14 @@ def enviar_notificacao(notif):
             notif.status = "erro"
             notif.erro = "Cliente sem telefone cadastrado."
             notif.save(update_fields=["status", "erro"])
+            registrar_evento_integracao(
+                canal="whatsapp",
+                evento=f"notificacao.{notif.tipo}",
+                status="falha",
+                destino="sem_destinatario",
+                payload={"ordem": notif.ordem.numero_os},
+                resposta=notif.erro,
+            )
             return {"enviada": False, "url": ""}
         texto = quote(notif.mensagem)
         url = f"https://wa.me/55{telefone}?text={texto}"
@@ -156,6 +197,14 @@ def enviar_notificacao(notif):
         notif.enviado_em = timezone.now()
         notif.erro = ""
         notif.save(update_fields=["status", "enviado_em", "erro"])
+        registrar_evento_integracao(
+            canal="whatsapp",
+            evento=f"notificacao.{notif.tipo}",
+            status="sucesso",
+            destino=f"55{telefone}",
+            payload={"ordem": notif.ordem.numero_os},
+            resposta="url_gerada",
+        )
         return {"enviada": True, "url": url, "app_url": app_url}
 
     return {"enviada": False, "url": ""}
@@ -163,7 +212,7 @@ def enviar_notificacao(notif):
 
 def contexto_variaveis_mensagem(ordem, request=None):
     config = ConfiguracaoSistema.get_configuracao()
-    empresa = Empresa.objects.first()
+    empresa = ordem.empresa
     orcamento = Orcamento.objects.filter(ordem_servico=ordem).prefetch_related("itens").order_by("-id").first()
     linha_pronto = (
         LinhaTrabalho.objects.filter(ordem=ordem, status="pronto_contactado")

@@ -4,9 +4,10 @@ param(
     [string]$PythonExe = "C:\Users\Xandy\AppData\Local\Programs\Python\Python312\python.exe",
     [string]$DbName = "assistencia_dev",
     [string]$DbUser = "alexandre",
-    [string]$DbPassword = "Xandy1234*",
+    [string]$DbPassword = "",
     [string]$DbHost = "127.0.0.1",
     [int]$DbPort = 5433,
+    [string]$LocalEnvPath = ".env.postgres.local",
     [switch]$StartLocalPg = $true,
     [switch]$CheckOnly
 )
@@ -66,6 +67,36 @@ function Ensure-LocalPostgres {
     }
 }
 
+function Load-LocalEnvConfig {
+    param([string]$Path)
+
+    if (-not $Path) {
+        return
+    }
+    if (-not (Test-Path $Path)) {
+        return
+    }
+
+    Get-Content $Path | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line.StartsWith("#")) {
+            return
+        }
+        $parts = $line.Split("=", 2)
+        if ($parts.Count -ne 2) {
+            return
+        }
+        $key = $parts[0].Trim()
+        $value = $parts[1].Trim().Trim("'").Trim('"')
+        if (-not $key) {
+            return
+        }
+        if (-not [Environment]::GetEnvironmentVariable($key, "Process")) {
+            [Environment]::SetEnvironmentVariable($key, $value, "Process")
+        }
+    }
+}
+
 if (-not (Test-Path $PythonExe)) {
     throw "Python 3.12 nao encontrado em '$PythonExe'."
 }
@@ -79,10 +110,20 @@ if ($StartLocalPg) {
     Ensure-LocalPostgres -TargetPort $DbPort
 }
 
+Load-LocalEnvConfig -Path (Join-Path $PSScriptRoot $LocalEnvPath)
+
+$resolvedPassword = $DbPassword
+if (-not $resolvedPassword) {
+    $resolvedPassword = $env:DJANGO_DB_PASSWORD
+}
+if (-not $resolvedPassword) {
+    throw "Senha do PostgreSQL nao definida. Use -DbPassword ou DJANGO_DB_PASSWORD (ex.: arquivo local .env.postgres.local)."
+}
+
 $env:DJANGO_DB_ENGINE = "postgres"
 $env:DJANGO_DB_NAME = $DbName
 $env:DJANGO_DB_USER = $DbUser
-$env:DJANGO_DB_PASSWORD = $DbPassword
+$env:DJANGO_DB_PASSWORD = $resolvedPassword
 $env:DJANGO_DB_HOST = $DbHost
 $env:DJANGO_DB_PORT = [string]$DbPort
 

@@ -122,7 +122,7 @@ def adicionar_usuario_impl(request, logger):
         if form.is_valid():
             novo_tipo = form.cleaned_data.get("tipo_usuario")
             if request.user.tipo_usuario == "gerente" and novo_tipo == "adm":
-                form.add_error("tipo_usuario", "Gerente nao pode criar usuario Administrador.")
+                form.add_error("tipo_usuario", "Gerente não pode criar usuário Administrador.")
                 return render(request, "configuracoes/usuario_form.html", {"form": form})
 
             novo_usuario = form.save()
@@ -175,7 +175,7 @@ def editar_usuario_impl(request, usuario_id):
         form = UserForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
             if request.user.tipo_usuario == "gerente" and form.cleaned_data.get("tipo_usuario") == "adm":
-                form.add_error("tipo_usuario", "Gerente nao pode promover usuario para Administrador.")
+                form.add_error("tipo_usuario", "Gerente não pode promover usuário para Administrador.")
                 return render(
                     request,
                     "configuracoes/usuario_form.html",

@@ -1,0 +1,95 @@
+{% extends "core/base.html" %}
+
+{% block title %}Logs de Integrações{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="fas fa-plug mr-2"></i>Logs de Integrações</h5>
+    <a href="{% url 'configuracoes:painel' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+  </div>
+  <div class="card-body">
+    <form method="get" class="mb-3">
+      <div class="form-row align-items-end">
+        <div class="col-md-2">
+          <label class="mb-1">Canal</label>
+          <select name="canal" class="form-control">
+            <option value="">Todos</option>
+            <option value="webhook" {% if canal == "webhook" %}selected{% endif %}>Webhook</option>
+            <option value="email" {% if canal == "email" %}selected{% endif %}>E-mail</option>
+            <option value="whatsapp" {% if canal == "whatsapp" %}selected{% endif %}>WhatsApp</option>
+            <option value="sistema" {% if canal == "sistema" %}selected{% endif %}>Sistema</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="mb-1">Status</label>
+          <select name="status" class="form-control">
+            <option value="">Todos</option>
+            <option value="sucesso" {% if status_filtro == "sucesso" %}selected{% endif %}>Sucesso</option>
+            <option value="falha" {% if status_filtro == "falha" %}selected{% endif %}>Falha</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="mb-1">Evento</label>
+          <input type="text" name="evento" value="{{ evento }}" class="form-control" placeholder="notificacao.orcamento, backup.executado...">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-search mr-1"></i>Filtrar</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered">
+        <thead>
+          <tr>
+            <th>Data/Hora</th>
+            <th>Canal</th>
+            <th>Evento</th>
+            <th>Status</th>
+            <th>Destino</th>
+            <th>Resposta</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in logs %}
+          <tr>
+            <td>{{ item.criado_em|date:"d/m/Y H:i:s" }}</td>
+            <td>{{ item.get_canal_display }}</td>
+            <td>{{ item.evento }}</td>
+            <td>
+              {% if item.status == "sucesso" %}
+              <span class="badge badge-success">Sucesso</span>
+              {% else %}
+              <span class="badge badge-danger">Falha</span>
+              {% endif %}
+            </td>
+            <td>{{ item.destino|default:"-" }}</td>
+            <td>{{ item.resposta|default:"-" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted">Sem eventos registrados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if logs_page.has_other_pages %}
+    <nav aria-label="Paginação logs integrações">
+      <ul class="pagination pagination-sm">
+        {% if logs_page.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ logs_page.previous_page_number }}&canal={{ canal }}&status={{ status_filtro }}&evento={{ evento }}">Anterior</a>
+        </li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ logs_page.number }}</span></li>
+        {% if logs_page.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ logs_page.next_page_number }}&canal={{ canal }}&status={{ status_filtro }}&evento={{ evento }}">Próxima</a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

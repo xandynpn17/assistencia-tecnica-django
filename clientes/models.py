@@ -87,7 +87,7 @@ class Cliente(models.Model):
     )
 
     nome = models.CharField(
-        max_length=100,
+        max_length=255,
         verbose_name="Nome Completo / Razão Social"
     )
 
@@ -288,3 +288,5 @@ class Cliente(models.Model):
         documento_fmt = self.get_documento_formatado()
         doc_str = f" ({documento_fmt})" if documento_fmt else ""
         return f"{self.nome}{doc_str}"
+
+

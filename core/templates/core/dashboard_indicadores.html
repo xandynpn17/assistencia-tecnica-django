@@ -1,4 +1,4 @@
-{% extends 'core/base.html' %}
+﻿{% extends 'core/base.html' %}
 
 {% block title %}Indicadores Gerenciais - Assistencia{% endblock %}
 
@@ -108,6 +108,8 @@
                 <div class="col-md-6 col-lg-4 mb-3"><a href="{{ dashboard_links.prontas }}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.prontas }}</div><div class="stat-card-title">Prontas para Entrega</div><div class="stat-card-icon"><i class="fas fa-hand-holding text-primary"></i></div></div></div></a></div>
                 <div class="col-md-6 col-lg-4 mb-3"><a href="{% url 'ordens:lista_ordens' %}?carregar=1&status=pendente_cliente" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.pendente_cliente }}</div><div class="stat-card-title">Pendente cliente</div><div class="stat-card-icon"><i class="fas fa-user-clock text-primary"></i></div></div></div></a></div>
                 <div class="col-md-6 col-lg-4 mb-3"><a href="{% url 'ordens:lista_ordens' %}?carregar=1&status=pendente_pecas" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.pendente_pecas }}</div><div class="stat-card-title">Pendente pecas</div><div class="stat-card-icon"><i class="fas fa-box-open text-primary"></i></div></div></div></a></div>
+                <div class="col-md-6 col-lg-4 mb-3"><a href="{% url 'configuracoes:painel_sla' %}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.pendencias_sla_total }}</div><div class="stat-card-title">Pendencias SLA</div><div class="stat-card-icon"><i class="fas fa-stopwatch text-primary"></i></div></div></div></a></div>
+                <div class="col-md-6 col-lg-4 mb-3"><a href="{% url 'ordens:recepcionar_parceiro' %}" class="stat-card-link"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ gerencial_cards.pendencias_sla_parceiro }}</div><div class="stat-card-title">Parceiro externo atrasado</div><div class="stat-card-icon"><i class="fas fa-truck-loading text-primary"></i></div></div></div></a></div>
             </div>
         </div>
     </div>
@@ -315,4 +317,5 @@
     {% endcomment %}
 </div>
 {% endblock %}
+
 

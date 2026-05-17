@@ -1,7 +1,8 @@
+import logging
 import re
 from calendar import monthrange
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -60,6 +61,8 @@ from .helpers import (
     _vincular_talao_itens_ordem,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def abrir_caixa(request):
@@ -107,7 +110,7 @@ def abrir_caixa(request):
         saldo_bruto = (request.POST.get("saldo_inicial", "0") or "0").strip()
         try:
             saldo_inicial = Decimal(str(saldo_bruto))
-        except Exception:
+        except (InvalidOperation, TypeError, ValueError):
             messages.error(request, "Informe um saldo inicial valido para abrir o caixa.")
             return render(
                 request,
@@ -821,36 +824,57 @@ def registrar_pagamento(request):
         return f"{request.path}?{urlencode(query)}"
 
     def _context_pagamento(form):
+        config_sistema = ConfiguracaoSistema.get_configuracao()
         troco_sugerido = None
         valor_recebido = None
+        mensagem_antifraude = ""
         if form.is_bound:
             try:
                 valor_recebido = Decimal(str(form.data.get("valor_recebido") or "0"))
-            except Exception:
+            except (InvalidOperation, TypeError, ValueError):
                 valor_recebido = None
             try:
                 valor_form = Decimal(str(form.data.get("valor") or "0"))
-            except Exception:
+            except (InvalidOperation, TypeError, ValueError):
                 valor_form = Decimal("0.00")
             try:
                 desconto_form = Decimal(str(form.data.get("desconto_valor") or "0"))
-            except Exception:
+            except (InvalidOperation, TypeError, ValueError):
                 desconto_form = Decimal("0.00")
             try:
                 desconto_percentual_form = Decimal(str(form.data.get("desconto_percentual") or "0"))
-            except Exception:
+            except (InvalidOperation, TypeError, ValueError):
                 desconto_percentual_form = Decimal("0.00")
             if desconto_percentual_form > Decimal("0.00"):
                 desconto_form = min((valor_form * desconto_percentual_form) / Decimal("100.00"), valor_form)
             desconto_form = min(max(desconto_form, Decimal("0.00")), valor_form)
             valor_final_form = valor_form - desconto_form
+            if valor_form > Decimal("0.00"):
+                percentual_desconto_form = (desconto_form / valor_form) * Decimal("100.00")
+                limiar = Decimal(str(config_sistema.antifraude_desconto_critico_percentual or 0))
+                if percentual_desconto_form >= limiar and limiar > Decimal("0.00"):
+                    mensagem_antifraude = (
+                        f"Desconto critico detectado ({percentual_desconto_form:.2f}%). "
+                        f"Sera exigida confirmacao extra e justificativa minima de "
+                        f"{int(config_sistema.antifraude_motivo_minimo_caracteres or 12)} caracteres."
+                    )
             if valor_recebido is not None and valor_recebido >= valor_final_form:
                 troco_sugerido = valor_recebido - valor_final_form
         emitir_fiscal_url = ""
         if pagamento_sucesso:
             try:
                 emitir_fiscal_url = reverse("fiscal:novo_documento_fiscal")
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "caixa_emitir_fiscal_url_falha",
+                    extra={
+                        "modulo": "caixa",
+                        "acao": "registrar_pagamento",
+                        "usuario_id": getattr(request.user, "id", None),
+                        "pagamento_id": getattr(pagamento_sucesso, "id", None),
+                        "erro": str(exc),
+                    },
+                )
                 emitir_fiscal_url = ""
             if emitir_fiscal_url:
                 origem_fiscal = "OS" if pagamento_sucesso.ordem_servico_id else ("VENDA_BALCAO" if guia_codigo or venda or pagamento_sucesso.stock_item_id else "MANUAL")
@@ -881,6 +905,8 @@ def registrar_pagamento(request):
             "troco_sugerido": troco_sugerido,
             "valor_recebido": valor_recebido,
             "valor_base_pagamento": ordem_valor_aberto if ordem else (guia_total if vendas_guia else (venda.valor_total if venda else None)),
+            "antifraude_config": config_sistema,
+            "mensagem_antifraude": mensagem_antifraude,
             "menu_app": "caixa",
             "menu_sub": "registrar_pagamento",
         }
@@ -916,6 +942,31 @@ def registrar_pagamento(request):
                 except PermissionDenied as exc:
                     form.add_error("desconto_valor", str(exc) or "Permissao insuficiente.")
                     return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
+            config_sistema = ConfiguracaoSistema.get_configuracao()
+            percentual_desconto = Decimal("0.00")
+            if valor_bruto_pagamento > Decimal("0.00"):
+                percentual_desconto = (desconto_aplicado / valor_bruto_pagamento) * Decimal("100.00")
+            limiar_critico = Decimal(str(config_sistema.antifraude_desconto_critico_percentual or 0))
+            desconto_critico = desconto_aplicado > Decimal("0.00") and percentual_desconto >= limiar_critico and limiar_critico > Decimal("0.00")
+            if desconto_critico and bool(config_sistema.antifraude_exigir_dupla_confirmacao_desconto):
+                confirmacao_desconto = (request.POST.get("confirmar_desconto_critico") or "").strip() == "1"
+                justificativa_desconto = (request.POST.get("justificativa_desconto_critico") or "").strip()
+                minimo = int(config_sistema.antifraude_motivo_minimo_caracteres or 12)
+                if not confirmacao_desconto:
+                    form.add_error(None, "Desconto critico exige confirmacao adicional antes de finalizar.")
+                    return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
+                if len(justificativa_desconto) < minimo:
+                    form.add_error(
+                        "observacao",
+                        f"Informe justificativa com pelo menos {minimo} caracteres para desconto critico.",
+                    )
+                    return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
+                observacao_atual = (pagamento_preview.observacao or "").strip()
+                trilha_antifraude = (
+                    f"[ANTIFRAUDE] desconto_critico={percentual_desconto:.2f}% "
+                    f"limiar={limiar_critico:.2f}% justificativa={justificativa_desconto}"
+                )
+                pagamento_preview.observacao = f"{observacao_atual}\n{trilha_antifraude}".strip()
             if desconto_aplicado > Decimal("0.00") and valor_liquido_pagamento <= Decimal("0.00"):
                 form.add_error("desconto_valor", "O desconto nao pode zerar o pagamento.")
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
@@ -996,9 +1047,29 @@ def registrar_pagamento(request):
                 if pagamento_existente:
                     messages.info(request, f"Este pagamento ja foi registrado. Talao: {pagamento_existente.numero_talao}.")
                     return redirect(_redirect_sucesso(pagamento_existente.id))
+                logger.exception(
+                    "caixa_pagamento_integrity_error",
+                    extra={
+                        "modulo": "caixa",
+                        "acao": "registrar_pagamento",
+                        "usuario_id": getattr(request.user, "id", None),
+                        "ordem_id": getattr(ordem, "id", None),
+                        "guia_codigo": guia_codigo,
+                    },
+                )
                 form.add_error(None, "Nao foi possivel concluir o pagamento. Tente novamente.")
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             except ValueError as exc:
+                logger.warning(
+                    "caixa_pagamento_validacao_negocio",
+                    extra={
+                        "modulo": "caixa",
+                        "acao": "registrar_pagamento",
+                        "usuario_id": getattr(request.user, "id", None),
+                        "ordem_id": getattr(ordem, "id", None),
+                        "erro": str(exc),
+                    },
+                )
                 form.add_error(None, str(exc))
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
 
@@ -1036,10 +1107,17 @@ def excluir_pagamento(request, pagamento_id):
         message="Voce nao tem permissao para excluir pagamentos.",
     )
     pagamento = get_object_or_404(Pagamento.objects.select_related("ordem_servico", "forma_pagamento"), id=pagamento_id)
+    config_sistema = ConfiguracaoSistema.get_configuracao()
     if request.method == "POST":
         justificativa = (request.POST.get("justificativa") or "").strip()
+        confirmar_exclusao = (request.POST.get("confirmar_exclusao_pagamento") or "").strip() == "1"
+        minimo = int(config_sistema.antifraude_motivo_minimo_caracteres or 12)
         if not justificativa:
             messages.error(request, "Informe a justificativa para excluir o pagamento.")
+        elif len(justificativa) < minimo:
+            messages.error(request, f"A justificativa precisa ter pelo menos {minimo} caracteres.")
+        elif bool(config_sistema.antifraude_exigir_dupla_confirmacao_exclusao_pagamento) and not confirmar_exclusao:
+            messages.error(request, "Confirme a exclusao para concluir a operacao sensivel.")
         else:
             try:
                 pagamento_info = f"{pagamento.numero_talao or pagamento.id}"
@@ -1057,6 +1135,16 @@ def excluir_pagamento(request, pagamento_id):
                 messages.success(request, "Pagamento excluido com sucesso.")
                 return redirect("caixa:taloes")
             except ValueError as exc:
+                logger.warning(
+                    "caixa_excluir_pagamento_bloqueado",
+                    extra={
+                        "modulo": "caixa",
+                        "acao": "excluir_pagamento",
+                        "usuario_id": getattr(request.user, "id", None),
+                        "pagamento_id": pagamento_id,
+                        "erro": str(exc),
+                    },
+                )
                 messages.error(request, str(exc))
 
     return render(
@@ -1064,6 +1152,7 @@ def excluir_pagamento(request, pagamento_id):
         "caixa/excluir_pagamento.html",
         {
             "pagamento": pagamento,
+            "antifraude_config": config_sistema,
             "menu_app": "caixa",
             "menu_sub": "taloes",
         },

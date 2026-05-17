@@ -191,11 +191,19 @@
                         <small class="text-muted">F2 valor | F3 forma | F4 finalizar</small>
                     </div>
                     <div class="card-body">
-                        <form method="post" id="form-pagamento-pos">
+                        <form
+                            method="post"
+                            id="form-pagamento-pos"
+                            data-antifraude-exige-desconto="{{ antifraude_config.antifraude_exigir_dupla_confirmacao_desconto|yesno:'1,0' }}"
+                            data-antifraude-limiar="{{ antifraude_config.antifraude_desconto_critico_percentual|floatformat:2 }}"
+                            data-antifraude-minimo="{{ antifraude_config.antifraude_motivo_minimo_caracteres }}"
+                        >
                             {% csrf_token %}
                             {{ form.non_field_errors }}
 
                             <input type="hidden" name="os_numero" value="{{ numero_os_busca|default:'' }}">
+                            <input type="hidden" name="confirmar_desconto_critico" id="id_confirmar_desconto_critico" value="0">
+                            <input type="hidden" name="justificativa_desconto_critico" id="id_justificativa_desconto_critico" value="">
                             <div class="d-none">
                                 {{ form.ordem_servico|add_class:"form-control" }}
                                 {{ form.metodo }}
@@ -249,6 +257,11 @@
                                     </div>
                                 </div>
                             </div>
+                            {% if mensagem_antifraude %}
+                            <div class="alert alert-warning py-2">
+                                <i class="fas fa-shield-alt mr-1"></i>{{ mensagem_antifraude }}
+                            </div>
+                            {% endif %}
 
                             <div class="mb-3">
                                 <label class="d-block mb-2"><strong>Atalhos de pagamento</strong></label>
@@ -430,6 +443,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const descontoPercentualInput = document.getElementById("id_desconto_percentual_pos");
     const formPagamento = document.getElementById("form-pagamento-pos");
     const btnFinalizar = document.getElementById("btn-finalizar-pos");
+    const confirmarDescontoInput = document.getElementById("id_confirmar_desconto_critico");
+    const justificativaDescontoInput = document.getElementById("id_justificativa_desconto_critico");
     const botoesRapidos = document.querySelectorAll(".js-valor-rapido");
     const botoesForma = document.querySelectorAll(".js-forma-rapida");
     const blocoDinheiro = document.getElementById("bloco-dinheiro");
@@ -562,7 +577,36 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     if (formPagamento && btnFinalizar) {
-        formPagamento.addEventListener("submit", function () {
+        formPagamento.addEventListener("submit", function (event) {
+            const exigeAntifraudeDesconto = (formPagamento.dataset.antifraudeExigeDesconto || "0") === "1";
+            const limiarAntifraude = parseMoney(formPagamento.dataset.antifraudeLimiar || "0");
+            const minimoMotivo = parseInt(formPagamento.dataset.antifraudeMinimo || "12", 10);
+            if (confirmarDescontoInput) confirmarDescontoInput.value = "0";
+            if (justificativaDescontoInput) justificativaDescontoInput.value = "";
+            if (exigeAntifraudeDesconto && limiarAntifraude > 0) {
+                const totais = calcularTotaisPagamento();
+                const percentualDesconto = totais.subtotal > 0 ? (totais.desconto / totais.subtotal) * 100 : 0;
+                if (percentualDesconto >= limiarAntifraude && totais.desconto > 0) {
+                    const confirmar = window.confirm(
+                        "Desconto critico detectado. Deseja confirmar a operacao?"
+                    );
+                    if (!confirmar) {
+                        event.preventDefault();
+                        return;
+                    }
+                    const motivo = (window.prompt(
+                        "Informe a justificativa para o desconto critico:",
+                        ""
+                    ) || "").trim();
+                    if (motivo.length < minimoMotivo) {
+                        event.preventDefault();
+                        window.alert("A justificativa precisa ter pelo menos " + minimoMotivo + " caracteres.");
+                        return;
+                    }
+                    if (confirmarDescontoInput) confirmarDescontoInput.value = "1";
+                    if (justificativaDescontoInput) justificativaDescontoInput.value = motivo;
+                }
+            }
             btnFinalizar.disabled = true;
             btnFinalizar.textContent = "A processar...";
         });

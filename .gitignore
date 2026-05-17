@@ -16,6 +16,9 @@ venv/
 .venv/
 .venv_codex/
 .env
+.env.*
+.env.local
+.env.postgres.local
 
 # IDE
 .idea/

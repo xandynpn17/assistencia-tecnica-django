@@ -15,6 +15,11 @@ from configuracoes.services.setup_inicial import (
     setup_inicial_concluido,
     sincronizar_tipos_ativos_por_linhas,
 )
+from configuracoes.services.tenant_guard import obter_empresa_ativa
+from configuracoes.services.integracoes import (
+    garantir_modelos_operacionais_padrao,
+    listar_eventos_comunicacao,
+)
 
 
 def painel_impl(request):
@@ -24,7 +29,7 @@ def painel_impl(request):
 def setup_inicial_impl(request):
     garantir_catalogo_padrao()
     setup = SetupInicialSistema.get_setup()
-    empresa = getattr(request, "empresa_ativa", None) or Empresa.objects.first()
+    empresa = obter_empresa_ativa(request, strict=False)
     config_os = ConfiguracaoOrdemServico.objects.first()
 
     tipo_empresa_query = (request.GET.get("tipo_empresa") or "").strip()
@@ -107,6 +112,14 @@ def modelos_mensagem_impl(request):
 
     if request.method == "POST":
         form_type = request.POST.get("form_type")
+        if form_type == "popular_eventos":
+            sobrescrever = request.POST.get("sobrescrever") == "1"
+            total = garantir_modelos_operacionais_padrao(sobrescrever=sobrescrever)
+            if total:
+                messages.success(request, f"{total} modelos operacionais criados/atualizados.")
+            else:
+                messages.info(request, "Nenhum novo modelo foi criado. Os modelos por evento ja existem.")
+            return redirect("configuracoes:modelos_mensagem")
         if form_type == "delete":
             modelo = get_object_or_404(ModeloMensagem, id=request.POST.get("modelo_id"))
             modelo.delete()
@@ -138,6 +151,7 @@ def modelos_mensagem_impl(request):
         {
             "form": form,
             "modelos": modelos,
+            "eventos_catalogo": listar_eventos_comunicacao(),
             "edit_modelo_id": instancia.id if instancia else None,
             "menu_app": "configuracoes",
             "menu_sub": "modelos_mensagem",

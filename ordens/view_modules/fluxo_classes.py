@@ -160,6 +160,11 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
         payload["create_nonce"] = post_data.get("create_nonce", "")
         return payload
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["cliente_id"] = self.kwargs.get("cliente_id")
+        return kwargs
+
     def form_valid(self, form):
         cliente_id = self.kwargs.get("cliente_id")
         form.instance.cliente_id = cliente_id
@@ -196,6 +201,44 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
             usuario=self.request.user,
             dados_extras={"status": self.object.status},
         )
+        ordem_origem_garantia = form.cleaned_data.get("ordem_origem_garantia")
+        classificacao_retorno = form.cleaned_data.get("garantia_classificacao_retorno")
+        if ordem_origem_garantia:
+            self.object.ordem_origem_garantia = ordem_origem_garantia
+            self.object.garantia_reincidencia = True
+            if classificacao_retorno:
+                self.object.garantia_classificacao_retorno = classificacao_retorno
+            self.object.save(
+                update_fields=[
+                    "ordem_origem_garantia",
+                    "garantia_reincidencia",
+                    "garantia_classificacao_retorno",
+                ]
+            )
+            LinhaTrabalho.objects.create(
+                ordem=self.object,
+                descricao=f"Retorno de garantia vinculado à OS {ordem_origem_garantia.numero_os}.",
+                status="diagnosticar",
+                usuario=self.request.user,
+                tipo_evento="manual",
+            )
+        else:
+            reincidencia = detectar_reincidencia_ordem(self.object)
+            if reincidencia:
+                self.object.garantia_reincidencia = True
+                self.object.save(update_fields=["garantia_reincidencia"])
+                OrdemAlerta.objects.create(
+                    ordem=self.object,
+                    mensagem=(
+                        f"Possível reincidência: existe OS fechada recente ({reincidencia.numero_os}) para o mesmo cliente/equipamento. "
+                        "Valide se é retorno de garantia."
+                    ),
+                    criado_por=self.request.user,
+                )
+                messages.info(
+                    self.request,
+                    f"Foi detectada possível reincidência com a OS {reincidencia.numero_os}.",
+                )
         marca_garantia = form.cleaned_data.get("marca_garantia")
         garantia_sem_contrato = (
             self.object.tipo_reparo == "Garantia"
@@ -268,6 +311,8 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
                 for m in MarcaGarantia.objects.filter(ativo=True)
             }
         )
+        cliente_id = self.kwargs.get("cliente_id")
+        context["garantia_candidatas"] = buscar_candidatas_garantia_cliente(cliente_id) if cliente_id else []
         return context
 
 

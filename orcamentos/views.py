@@ -28,6 +28,7 @@ from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoq
 from estoque.services import cancelar_reserva
 from caixa.services.comissoes import cancelar_comissoes_por_item
 from configuracoes.permissions import ORDER_ROLES, require_sensitive_permission, role_required
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 from core.pdf_preview import apply_document_preview_overrides, apply_preview_xframe_headers
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
 from core.pdf_theme import get_document_profile, get_document_theme, resolve_layout_preset
@@ -200,8 +201,11 @@ def criar_orcamento(request, ordem_id):
         return bloqueio
     orcamento, _ = Orcamento.objects.get_or_create(
         ordem_servico=ordem,
-        defaults={"cliente": ordem.cliente},
+        defaults={"cliente": ordem.cliente, "empresa": ordem.empresa},
     )
+    if orcamento.empresa_id != ordem.empresa_id:
+        orcamento.empresa = ordem.empresa
+        orcamento.save(update_fields=["empresa"])
     if request.method != "POST":
         return _redirect_orcamento_na_os(ordem)
     if _payload_tem_desconto_orcamento(request.POST):
@@ -508,16 +512,18 @@ def recusar_itens_orcamento(request, orcamento_id):
 
 @role_required(ORDER_ROLES)
 def lista_orcamentos(request):
-    orcamentos = Orcamento.objects.all()
+    empresa = obter_empresa_ativa(request, strict=False)
+    orcamentos = filtrar_queryset_empresa(Orcamento.objects.all(), empresa).order_by("-data_criacao", "-id")
     return render(request, 'orcamentos/lista_orcamentos.html', {'orcamentos': orcamentos})
 
 
 @role_required(ORDER_ROLES)
 def buscar_produtos(request):
     termo = request.GET.get('q', '').strip()
+    empresa = obter_empresa_ativa(request, strict=False)
     produtos = []
     if termo:
-        produtos = Produto.objects.filter(
+        produtos = filtrar_queryset_empresa(Produto.objects.all(), empresa).filter(
             Q(nome__icontains=termo) | Q(ean__icontains=termo),
             ativo=True
         )[:50]
@@ -569,7 +575,7 @@ def migrar_para_servicos(request, orcamento_id):
 def imprimir_orcamento(request, pk):
     orcamento = get_object_or_404(Orcamento, pk=pk)
     ordem = orcamento.ordem_servico
-    empresa = Empresa.objects.first()
+    empresa = obter_empresa_ativa(request, strict=False) or ordem.empresa
     config = _config_layout_para_request(request)
     layout_preset = resolve_layout_preset(config)
     tema_docs = _tema_layout_documentos(config)

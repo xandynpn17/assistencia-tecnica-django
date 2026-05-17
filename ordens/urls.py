@@ -35,6 +35,7 @@ urlpatterns = [
     path("expedicoes/expedir/", views.expedir_parceiro, name="expedir_parceiro"),
     path("expedicoes/recepcionar/", views.recepcionar_parceiro, name="recepcionar_parceiro"),
     path("expedicoes/guias/", views.guias_expedicao, name="guias_expedicao"),
+    path("fila-bancada/", views.fila_bancada_tecnicos, name="fila_bancada_tecnicos"),
     path("expedicoes/guias/<int:guia_id>/pdf/", views.guia_expedicao_pdf, name="guia_expedicao_pdf"),
     path(
         "pedidos/<int:pedido_id>/toggle-fechamento/",

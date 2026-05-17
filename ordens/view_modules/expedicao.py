@@ -18,6 +18,7 @@ from reportlab.pdfgen import canvas
 
 from configuracoes.models import Empresa
 from configuracoes.permissions import ORDER_ROLES, role_required
+from configuracoes.services.tenant_guard import obter_empresa_ativa
 
 from ..forms import ExpedicaoParceiroForm, RecepcaoParceiroForm
 from ..models import GuiaExpedicaoItem, GuiaExpedicaoParceiro, LinhaTrabalho, LogOS
@@ -42,8 +43,12 @@ def _registrar_log(ordem, descricao, usuario, *, tipo_evento="alteracao_status",
 
 @role_required(ORDER_ROLES)
 def expedir_parceiro(request):
-    form = ExpedicaoParceiroForm(request.POST or None)
-    guias_abertas = GuiaExpedicaoParceiro.objects.prefetch_related("itens__ordem_servico").all()[:10]
+    empresa = obter_empresa_ativa(request, strict=False)
+    form = ExpedicaoParceiroForm(request.POST or None, empresa=empresa)
+    guias_abertas = GuiaExpedicaoParceiro.objects.prefetch_related("itens__ordem_servico")
+    if empresa:
+        guias_abertas = guias_abertas.filter(itens__ordem_servico__empresa=empresa).distinct()
+    guias_abertas = guias_abertas[:10]
 
     if request.method == "POST" and form.is_valid():
         ordens = list(form.cleaned_data["ordens_servico"])
@@ -92,7 +97,8 @@ def expedir_parceiro(request):
 
 @role_required(ORDER_ROLES)
 def recepcionar_parceiro(request):
-    form = RecepcaoParceiroForm(request.POST or None)
+    empresa = obter_empresa_ativa(request, strict=False)
+    form = RecepcaoParceiroForm(request.POST or None, empresa=empresa)
 
     if request.method == "POST" and form.is_valid():
         itens = list(form.cleaned_data["itens_expedicao"].select_related("guia", "ordem_servico"))
@@ -147,7 +153,10 @@ def recepcionar_parceiro(request):
 
 @role_required(ORDER_ROLES)
 def guias_expedicao(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     guias_qs = GuiaExpedicaoParceiro.objects.prefetch_related("itens__ordem_servico__cliente", "expedida_por")
+    if empresa:
+        guias_qs = guias_qs.filter(itens__ordem_servico__empresa=empresa).distinct()
     status = (request.GET.get("status") or "").strip()
     data_inicio = (request.GET.get("data_inicio") or "").strip()
     data_fim = (request.GET.get("data_fim") or "").strip()
@@ -184,10 +193,11 @@ def guias_expedicao(request):
 
 @role_required(ORDER_ROLES)
 def guia_expedicao_pdf(request, guia_id):
-    guia = get_object_or_404(
-        GuiaExpedicaoParceiro.objects.prefetch_related("itens__ordem_servico__cliente").select_related("expedida_por"),
-        id=guia_id,
-    )
+    empresa_ativa = obter_empresa_ativa(request, strict=False)
+    guia_qs = GuiaExpedicaoParceiro.objects.prefetch_related("itens__ordem_servico__cliente").select_related("expedida_por")
+    if empresa_ativa:
+        guia_qs = guia_qs.filter(itens__ordem_servico__empresa=empresa_ativa).distinct()
+    guia = get_object_or_404(guia_qs, id=guia_id)
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{guia.numero_guia}.pdf"'
     pdf = canvas.Canvas(response, pagesize=A4)
@@ -211,7 +221,7 @@ def guia_expedicao_pdf(request, guia_id):
     expedida_em = timezone.localtime(guia.expedida_em)
     usuario = getattr(guia.expedida_por, "get_full_name", lambda: "")() or getattr(guia.expedida_por, "username", "-")
 
-    empresa = Empresa.objects.first()
+    empresa = empresa_ativa or Empresa.objects.order_by("id").first()
     logo_path = None
     if empresa:
         logo_field = empresa.logo_pdf or empresa.logo

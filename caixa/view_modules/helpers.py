@@ -461,7 +461,7 @@ def _vincular_talao_itens_ordem(ordem, numero_talao, pagamento=None):
     if OrdemTalao:
         nomes_itens = [i.nome for i in ordem.servicos_pecas.all()[:3]]
         resumo_itens = ", ".join(nomes_itens) if nomes_itens else "Servicos/Pecas da OS"
-        empresa = Empresa.objects.first()
+        empresa = getattr(ordem, "empresa", None) or Empresa.objects.order_by("id").first()
         descricao_auto = f"Recibo referente a OS {ordem.numero_os}. Empresa: {empresa.nome if empresa else '-'}."
         talao, created = OrdemTalao.objects.get_or_create(
             ordem=ordem,

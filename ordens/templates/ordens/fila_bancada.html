@@ -1,0 +1,97 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Fila de Bancada por Técnico</h1>
+    <small class="text-muted">Duplo clique abre a OS.</small>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body">
+      <form method="get" class="form-row align-items-end">
+        <div class="col-md-4 mb-2">
+          <label for="id_tecnico"><strong>Técnico</strong></label>
+          <select id="id_tecnico" name="tecnico_id" class="form-control">
+            <option value="">Todos</option>
+            {% for tecnico in tecnicos %}
+            <option value="{{ tecnico.id }}" {% if filtro_tecnico_id == tecnico.id|stringformat:"s" %}selected{% endif %}>{{ tecnico.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4 mb-2">
+          <label for="id_status"><strong>Status</strong></label>
+          <select id="id_status" name="status" class="form-control">
+            <option value="">Todos</option>
+            {% for status_codigo, status_label in status_disponiveis %}
+            <option value="{{ status_codigo }}" {% if filtro_status == status_codigo %}selected{% endif %}>{{ status_label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3 mb-2">
+          <label for="id_prioridade"><strong>Prioridade</strong></label>
+          <select id="id_prioridade" name="prioridade" class="form-control">
+            <option value="">Todas</option>
+            <option value="Critica" {% if filtro_prioridade == "Critica" %}selected{% endif %}>Crítica</option>
+            <option value="Alta" {% if filtro_prioridade == "Alta" %}selected{% endif %}>Alta</option>
+            <option value="Media" {% if filtro_prioridade == "Media" %}selected{% endif %}>Média</option>
+            <option value="Baixa" {% if filtro_prioridade == "Baixa" %}selected{% endif %}>Baixa</option>
+          </select>
+        </div>
+        <div class="col-md-1 mb-2">
+          <button class="btn btn-primary btn-block" type="submit">Filtrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-white"><strong>Ordens na fila</strong></div>
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Prioridade</th>
+            <th>OS</th>
+            <th>Cliente</th>
+            <th>Status</th>
+            <th>Técnico</th>
+            <th>Tempo parado</th>
+            <th>Próxima ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in itens %}
+          <tr class="js-open-os" data-url="{% url 'ordens:detalhes_ordem' item.ordem.id %}" style="cursor:pointer;">
+            <td><span class="badge badge-{% if item.prioridade_label == 'Critica' %}danger{% elif item.prioridade_label == 'Alta' %}warning{% elif item.prioridade_label == 'Media' %}info{% else %}secondary{% endif %}">{{ item.prioridade_label }}</span></td>
+            <td>{{ item.ordem.numero_os }}</td>
+            <td>{{ item.ordem.cliente.nome }}</td>
+            <td>{{ item.ordem.status_listagem_label }}</td>
+            <td>{{ item.ordem.tecnico_responsavel_valido|default:"-" }}</td>
+            <td>{{ item.horas_parada }}h</td>
+            <td>{{ item.proxima_acao }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center text-muted py-4">Nenhuma ordem encontrada para os filtros informados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".js-open-os").forEach(function (row) {
+    row.addEventListener("dblclick", function () {
+      const url = row.getAttribute("data-url");
+      if (url) {
+        window.location.href = url;
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

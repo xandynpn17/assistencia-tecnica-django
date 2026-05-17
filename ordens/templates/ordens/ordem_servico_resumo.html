@@ -38,6 +38,11 @@
         <div class="d-flex flex-wrap align-items-center">
           <span class="badge badge-light text-dark mr-2 mb-1">{{ ordem.status_listagem_label }}</span>
           <span class="badge badge-warning mr-2 mb-1">{{ ordem.tipo_reparo }}</span>
+          {% if ordem.ordem_origem_garantia_id %}
+          <span class="badge badge-info mr-2 mb-1">Vínculo garantia: {{ ordem.ordem_origem_garantia.numero_os }}</span>
+          {% elif ordem.garantia_reincidencia %}
+          <span class="badge badge-secondary mr-2 mb-1">Possível reincidência</span>
+          {% endif %}
           <span class="badge badge-{% if confirmacao_status_class == 'success' %}success{% elif confirmacao_status_class == 'info' %}info{% elif confirmacao_status_class == 'danger' %}danger{% else %}warning{% endif %} mb-1">
             Confirmacao: {{ confirmacao_status }}
           </span>
@@ -131,6 +136,20 @@
               <div class="col-md-6 mb-2">
                 <div class="resume-label">Tecnico responsavel</div>
                 <div class="resume-value">{{ ordem.tecnico_responsavel_valido|default:"-" }}</div>
+              </div>
+              <div class="col-md-6 mb-2">
+                <div class="resume-label">OS original da garantia</div>
+                <div class="resume-value">
+                  {% if ordem.ordem_origem_garantia_id %}
+                  {{ ordem.ordem_origem_garantia.numero_os }}
+                  {% else %}
+                  -
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-6 mb-2">
+                <div class="resume-label">Classificação do retorno</div>
+                <div class="resume-value">{{ ordem.get_garantia_classificacao_retorno_display|default:"-" }}</div>
               </div>
             </div>
           </div>

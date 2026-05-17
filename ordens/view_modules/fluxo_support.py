@@ -36,6 +36,7 @@ from ..models import (
     ServicoPeca,
 )
 from ..services.confirmacao_service import ConfirmacaoOSService
+from ..services.garantia_pos_servico import buscar_candidatas_garantia_cliente, detectar_reincidencia_ordem
 from ..services.log_os_service import LogOSService
 from ..services.os_policy_service import OSAccessPolicyService
 from ..utils import registrar_auditoria

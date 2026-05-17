@@ -1,4 +1,4 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 {% block title %}Configura&ccedil;&otilde;es do Sistema{% endblock %}
 
 {% block content %}
@@ -10,10 +10,10 @@
     <form method="post">
       {% csrf_token %}
       
-      <!-- Localização -->
+      <!-- Localizacao -->
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-map-marker-alt mr-2"></i> Localização Padrão</h5>
+          <h5 class="mb-0"><i class="fas fa-map-marker-alt mr-2"></i> Localizacao Padrao</h5>
         </div>
         <div class="card-body">
           <div class="form-group form-check">
@@ -22,7 +22,7 @@
               {{ form.usar_confirmacao_assinatura_digital.label }}
             </label>
             <small class="form-text text-muted">
-              Quando desmarcado, a abertura da OS não envia automaticamente o WhatsApp com link de confirmação; o sistema exibe apenas o número da ordem.
+              Quando desmarcado, a abertura da OS nao envia automaticamente o WhatsApp com link de confirmacao; o sistema exibe apenas o numero da ordem.
             </small>
           </div>
           <div class="row">
@@ -42,7 +42,7 @@
               <div class="form-group">
                 <label>{{ form.numero_loja_talao.label }}</label>
                 {{ form.numero_loja_talao }}
-                <small class="form-text text-muted">Usado no número do talão (2 dígitos).</small>
+                <small class="form-text text-muted">Usado no numero do talao (2 digitos).</small>
               </div>
             </div>
           </div>
@@ -52,13 +52,13 @@
       <!-- Busca -->
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-search mr-2"></i> Configurações de Busca</h5>
+          <h5 class="mb-0"><i class="fas fa-search mr-2"></i> Configuracoes de Busca</h5>
         </div>
         <div class="card-body">
           <div class="form-group">
             <label>{{ form.busca_minimo_caracteres.label }}</label>
             {{ form.busca_minimo_caracteres }}
-            <small class="form-text text-muted">Mínimo de números para buscar clientes (recomendado: 7)</small>
+            <small class="form-text text-muted">Minimo de numeros para buscar clientes (recomendado: 7)</small>
           </div>
         </div>
       </div>
@@ -66,7 +66,7 @@
       <!-- Campos Cliente -->
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-user mr-2"></i> Campos Obrigatórios - Cliente</h5>
+          <h5 class="mb-0"><i class="fas fa-user mr-2"></i> Campos Obrigatorios - Cliente</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -87,7 +87,7 @@
       <!-- Campos Ordem -->
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-tools mr-2"></i> Campos Obrigatórios - Ordem</h5>
+          <h5 class="mb-0"><i class="fas fa-tools mr-2"></i> Campos Obrigatorios - Ordem</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -124,7 +124,7 @@
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-boxes mr-2"></i> Estoque, Inventário e Backup</h5>
+          <h5 class="mb-0"><i class="fas fa-boxes mr-2"></i> Estoque, Inventario e Backup</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -162,7 +162,7 @@
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-stopwatch mr-2"></i> Bônus por Retirada Rápida</h5>
+          <h5 class="mb-0"><i class="fas fa-stopwatch mr-2"></i> Bonus por Retirada Rapida</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -197,7 +197,7 @@
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-percentage mr-2"></i> Percentuais Padrão (Meu Desempenho)</h5>
+          <h5 class="mb-0"><i class="fas fa-percentage mr-2"></i> Percentuais Padrao (Meu Desempenho)</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -210,23 +210,90 @@
               {{ form.percentual_padrao_desempenho_peca }}
             </div>
           </div>
-          <small class="text-muted">Esses valores preencherão automaticamente a tela Meu Desempenho e podem ser alterados no filtro.</small>
+          <small class="text-muted">Esses valores preencherao automaticamente a tela Meu Desempenho e podem ser alterados no filtro.</small>
         </div>
       </div>
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens Automáticas</h5>
+          <h5 class="mb-0"><i class="fas fa-shield-alt mr-2"></i> Garantia p&oacute;s-servi&ccedil;o</h5>
         </div>
         <div class="card-body">
-          <p class="text-muted">Esses textos são usados pelo fluxo automático da OS, como envio de orçamento e aviso de pronto contactado. Variáveis disponíveis: <code>{cliente_nome}</code>, <code>{saudacao_cliente}</code>, <code>{numero_os}</code>, <code>{equipamento_resumo}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>, <code>{itens_orcamento}</code>, <code>{itens_orcamento_resumidos}</code>, <code>{quantidade_itens_orcamento}</code>, <code>{status_os}</code>, <code>{empresa_nome}</code>, <code>{telefone_loja}</code>, <code>{email_loja}</code>, <code>{link_orcamento_pdf}</code>, <code>{link_ordem_pdf}</code>.</p>
+          <div class="row">
+            <div class="col-md-4 form-group">
+              <label>{{ form.garantia_padrao_servico_dias.label }}</label>
+              {{ form.garantia_padrao_servico_dias }}
+              {% if form.garantia_padrao_servico_dias.help_text %}<small class="form-text text-muted">{{ form.garantia_padrao_servico_dias.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-4 form-group">
+              <label>{{ form.garantia_padrao_peca_dias.label }}</label>
+              {{ form.garantia_padrao_peca_dias }}
+              {% if form.garantia_padrao_peca_dias.help_text %}<small class="form-text text-muted">{{ form.garantia_padrao_peca_dias.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-4 form-group">
+              <label>{{ form.garantia_reincidencia_janela_dias.label }}</label>
+              {{ form.garantia_reincidencia_janela_dias }}
+              {% if form.garantia_reincidencia_janela_dias.help_text %}<small class="form-text text-muted">{{ form.garantia_reincidencia_janela_dias.help_text }}</small>{% endif %}
+            </div>
+          </div>
+          <small class="text-muted">Esses par&acirc;metros alimentam a sugest&atilde;o de reincid&ecirc;ncia e o v&iacute;nculo de garantia na abertura de nova OS.</small>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-user-shield mr-2"></i> Antifraude no Caixa</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="form-check mb-3">
+                {{ form.antifraude_exigir_dupla_confirmacao_desconto }}
+                <label class="form-check-label" for="{{ form.antifraude_exigir_dupla_confirmacao_desconto.id_for_label }}">
+                  {{ form.antifraude_exigir_dupla_confirmacao_desconto.label }}
+                </label>
+                {% if form.antifraude_exigir_dupla_confirmacao_desconto.help_text %}
+                <small class="form-text text-muted">{{ form.antifraude_exigir_dupla_confirmacao_desconto.help_text }}</small>
+                {% endif %}
+              </div>
+              <div class="form-check mb-3">
+                {{ form.antifraude_exigir_dupla_confirmacao_exclusao_pagamento }}
+                <label class="form-check-label" for="{{ form.antifraude_exigir_dupla_confirmacao_exclusao_pagamento.id_for_label }}">
+                  {{ form.antifraude_exigir_dupla_confirmacao_exclusao_pagamento.label }}
+                </label>
+                {% if form.antifraude_exigir_dupla_confirmacao_exclusao_pagamento.help_text %}
+                <small class="form-text text-muted">{{ form.antifraude_exigir_dupla_confirmacao_exclusao_pagamento.help_text }}</small>
+                {% endif %}
+              </div>
+            </div>
+            <div class="col-md-3 form-group">
+              <label>{{ form.antifraude_desconto_critico_percentual.label }}</label>
+              {{ form.antifraude_desconto_critico_percentual }}
+              {% if form.antifraude_desconto_critico_percentual.help_text %}<small class="form-text text-muted">{{ form.antifraude_desconto_critico_percentual.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-3 form-group">
+              <label>{{ form.antifraude_motivo_minimo_caracteres.label }}</label>
+              {{ form.antifraude_motivo_minimo_caracteres }}
+              {% if form.antifraude_motivo_minimo_caracteres.help_text %}<small class="form-text text-muted">{{ form.antifraude_motivo_minimo_caracteres.help_text }}</small>{% endif %}
+            </div>
+          </div>
+          <small class="text-muted">Essas regras aumentam a seguranca em operacoes sensiveis (descontos criticos e exclusao de pagamentos).</small>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens Automaticas</h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted">Esses textos sao usados pelo fluxo automatico da OS, como envio de orcamento e aviso de pronto contactado. Variaveis disponiveis: <code>{cliente_nome}</code>, <code>{saudacao_cliente}</code>, <code>{numero_os}</code>, <code>{equipamento_resumo}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>, <code>{itens_orcamento}</code>, <code>{itens_orcamento_resumidos}</code>, <code>{quantidade_itens_orcamento}</code>, <code>{status_os}</code>, <code>{empresa_nome}</code>, <code>{telefone_loja}</code>, <code>{email_loja}</code>, <code>{link_orcamento_pdf}</code>, <code>{link_ordem_pdf}</code>.</p>
           <div class="row">
             <div class="col-md-6 form-group">
-              <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orçamento (E-mail)" }}</label>
+              <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orcamento (E-mail)" }}</label>
               {{ form.mensagem_orcamento_email }}
             </div>
             <div class="col-md-6 form-group">
-              <label>{{ form.mensagem_orcamento_whatsapp.label|default:"Mensagem Orçamento (WhatsApp)" }}</label>
+              <label>{{ form.mensagem_orcamento_whatsapp.label|default:"Mensagem Orcamento (WhatsApp)" }}</label>
               {{ form.mensagem_orcamento_whatsapp }}
             </div>
             <div class="col-md-6 form-group">
@@ -238,15 +305,15 @@
               {{ form.mensagem_pronto_whatsapp }}
             </div>
             <div class="col-md-12 form-group">
-              <label>{{ form.condicoes_orcamento.label|default:"Condições do Orçamento" }}</label>
+              <label>{{ form.condicoes_orcamento.label|default:"Condicoes do Orcamento" }}</label>
               {{ form.condicoes_orcamento }}
               {% if form.condicoes_orcamento.help_text %}<small class="form-text text-muted">{{ form.condicoes_orcamento.help_text }}</small>{% endif %}
               {{ form.condicoes_orcamento.errors }}
             </div>
             <div class="col-md-12 form-group">
-              <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Serviço" }}</label>
+              <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Servico" }}</label>
               {{ form.termos_ordem_servico }}
-              <small class="form-text text-muted">Usado nos PDFs de OS (digital e impressão).</small>
+              <small class="form-text text-muted">Usado nos PDFs de OS (digital e impressao).</small>
               {% if form.termos_ordem_servico.help_text %}<small class="form-text text-muted">{{ form.termos_ordem_servico.help_text }}</small>{% endif %}
               {{ form.termos_ordem_servico.errors }}
             </div>
@@ -256,7 +323,7 @@
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-print mr-2"></i> Layout de Impressão da OS</h5>
+          <h5 class="mb-0"><i class="fas fa-print mr-2"></i> Layout de Impressao da OS</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -308,7 +375,7 @@
               {% if form.layout_os_exibir_etiqueta_corte.help_text %}<small class="form-text text-muted">{{ form.layout_os_exibir_etiqueta_corte.help_text }}</small>{% endif %}
             </div>
           </div>
-          <small class="text-muted">Use esse bloco para ajustar o A4 com corte ao meio sem alterar código.</small>
+          <small class="text-muted">Use esse bloco para ajustar o A4 com corte ao meio sem alterar codigo.</small>
         </div>
       </div>
 
@@ -350,9 +417,9 @@
               <label class="small text-muted">Tipo de Documento</label>
               <select id="preview_compare_tipo" class="form-control form-control-sm">
                 <option value="os_digital">OS Digital</option>
-                <option value="os_impressao">OS Impressão</option>
-                <option value="relatorio">Relatório Técnico</option>
-                <option value="orcamento">Orçamento</option>
+                <option value="os_impressao">OS Impressao</option>
+                <option value="relatorio">Relatorio Tecnico</option>
+                <option value="orcamento">Orcamento</option>
               </select>
             </div>
             <div class="col-md-4 form-group">
@@ -517,3 +584,6 @@
   })();
 </script>
 {% endblock %}
+
+
+

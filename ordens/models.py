@@ -15,7 +15,7 @@ from ordens.services.numeracao import gerar_codigo_portal_disponivel, gerar_nume
 
 
 # ===========================
-# ORDEM DE SERVIÃ‡O
+# ORDEM DE SERVIÇO
 # ===========================
 class OrdemServico(models.Model):
     STATUS_ALIASES = {
@@ -77,6 +77,14 @@ class OrdemServico(models.Model):
         ('Garantia de serviço', 'Garantia de serviço'),
     ]
 
+    CLASSIFICACAO_RETORNO_CHOICES = [
+        ("mesmo_defeito", "Mesmo defeito"),
+        ("novo_defeito", "Novo defeito"),
+        ("mau_uso", "Mau uso"),
+        ("garantia_peca", "Garantia de peça"),
+        ("garantia_mao_obra", "Garantia de mão de obra"),
+    ]
+
     TIPOS_REPARACAO = [
         ("substituicao", "Substituição de Peças"),
         ("reparacao_sem_pecas", "Reparação sem Peças"),
@@ -122,15 +130,28 @@ class OrdemServico(models.Model):
     data_compra = models.DateField(blank=True, null=True)
     numero_nota_fiscal = models.CharField(max_length=60, blank=True)
     referencia_parceiro = models.CharField(max_length=120, blank=True)
+    ordem_origem_garantia = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="retornos_garantia",
+    )
+    garantia_classificacao_retorno = models.CharField(
+        max_length=30,
+        choices=CLASSIFICACAO_RETORNO_CHOICES,
+        blank=True,
+    )
+    garantia_reincidencia = models.BooleanField(default=False)
     manutencao_preventiva_meses = models.PositiveSmallIntegerField(
         blank=True,
         null=True,
-        help_text="Intervalo sugerido para manutenÃ§Ã£o preventiva futura.",
+        help_text="Intervalo sugerido para manutenção preventiva futura.",
     )
     notas_internas = models.TextField(blank=True)
 
     # ===========================
-    # RELATÃ“RIO TÃ‰CNICO
+    # RELATÓRIO TÉCNICO
     # ===========================
     relatorio_tecnico = models.TextField(blank=True, null=True)
 
@@ -144,7 +165,7 @@ class OrdemServico(models.Model):
         blank=True,
         related_name="ordens_responsaveis",
         limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
-        verbose_name="TÃ©cnico responsÃ¡vel"
+        verbose_name="Técnico responsável"
     )
 
     def __str__(self):
@@ -163,7 +184,7 @@ class OrdemServico(models.Model):
     def status_listagem_label(self):
         status = self.normalizar_status_os(self.status)
         if self.fechada:
-            return "ConcluÃ­da"
+            return "Concluída"
         if status == "concluida":
             return "Reaberta"
         return dict(self.STATUS_CHOICES).get(status, status)
@@ -229,7 +250,7 @@ class OrdemServico(models.Model):
     fechada = models.BooleanField(default=False)
     token_confirmacao = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     TIPO_CONFIRMACAO_CHOICES = [
-        ("link", "ConfirmaÃ§Ã£o por link"),
+        ("link", "Confirmação por link"),
         ("presencial_assinatura", "Presencial com assinatura"),
         ("impresso", "Impresso"),
     ]
@@ -273,26 +294,26 @@ class OrdemServico(models.Model):
 
     def atualizar_status_fechamento(self, fechar=True, usuario=None):
         """
-        Fecha ou reabre a Ordem de ServiÃ§o.
-        - fechar=True: marca como concluÃ­da, bloqueia ediÃ§Ã£o e define data_conclusao
-        - fechar=False: reabre a OS, desbloqueia ediÃ§Ã£o e limpa data_conclusao
+        Fecha ou reabre a Ordem de Serviço.
+        - fechar=True: marca como concluída, bloqueia edição e define data_conclusao
+        - fechar=False: reabre a OS, desbloqueia edição e limpa data_conclusao
         """
 
         if fechar:
-            # ðŸ”’ Validacao obrigatÃ³ria
+            #  Validacao obrigatória
             if not self.relatorio_tecnico or not self.tipo_reparacao:
-                raise ValueError("NÃ£o Ã© possÃ­vel fechar a OS sem RelatÃ³rio TÃ©cnico e Tipo de ReparaÃ§Ã£o.")
+                raise ValueError("Não é possível fechar a OS sem Relatório Técnico e Tipo de Reparação.")
 
             self.status = 'concluida'
             self.data_conclusao = timezone.now()
             self.fechada = True
 
-            # âž• Cria linha de trabalho de conclusÃ£o
+            #  Cria linha de trabalho de conclusão
             from .models import LinhaTrabalho
             LinhaTrabalho.objects.create(
                 ordem=self,
                 status="concluida",
-                descricao="Ordem concluÃ­da.",
+                descricao="Ordem concluída.",
                 usuario=usuario,
                 tipo_evento="sistema",
             )
@@ -314,17 +335,17 @@ class OrdemServico(models.Model):
 
     def pode_transicionar_para(self, novo_status):
         # Fluxo livre entre status validos da OS.
-        # "criada" existe apenas na LinhaTrabalho, nÃ£o como status de OS.
+        # "criada" existe apenas na LinhaTrabalho, não como status de OS.
         return novo_status in self.status_validos()
 
     def transicionar_status(self, novo_status, usuario=None, motivo=""):
         novo_status = self.normalizar_status_os(novo_status)
         if novo_status not in self.status_validos():
-            raise ValueError("Status de destino invÃ¡lido.")
+            raise ValueError("Status de destino inválido.")
 
         if not self.pode_transicionar_para(novo_status):
             raise ValueError(
-                f"TransiÃ§Ã£o de status invÃ¡lida: {self.status} -> {novo_status}."
+                f"Transição de status inválida: {self.status} -> {novo_status}."
             )
 
         status_anterior = self.status
@@ -334,7 +355,7 @@ class OrdemServico(models.Model):
         if novo_status == "concluida":
             if not self.relatorio_tecnico or not self.tipo_reparacao:
                 raise ValueError(
-                    "NÃ£o Ã© possÃ­vel concluir sem relatÃ³rio tÃ©cnico e tipo de reparaÃ§Ã£o."
+                    "Não é possível concluir sem relatório técnico e tipo de reparação."
                 )
             self.fechada = True
             self.data_conclusao = timezone.now()
@@ -359,7 +380,7 @@ class OrdemServico(models.Model):
     def aplicar_status_sem_historico(self, novo_status):
         novo_status = self.normalizar_status_os(novo_status)
         if novo_status not in self.status_validos():
-            raise ValueError("Status de destino invÃ¡lido.")
+            raise ValueError("Status de destino inválido.")
 
         if self.status == novo_status:
             return
@@ -367,7 +388,7 @@ class OrdemServico(models.Model):
         if novo_status == "concluida":
             if not self.relatorio_tecnico or not self.tipo_reparacao:
                 raise ValueError(
-                    "NÃ£o Ã© possÃ­vel concluir sem relatÃ³rio tÃ©cnico e tipo de reparaÃ§Ã£o."
+                    "Não é possível concluir sem relatório técnico e tipo de reparação."
                 )
             self.fechada = True
             self.data_conclusao = timezone.now()
@@ -482,7 +503,7 @@ class LinhaTrabalho(models.Model):
 
 
         # ==============================
-        # ServiÃ§os & PeÃ§as
+        # Serviços & Peças
         # ==============================
 
 class ServicoPeca(models.Model):
@@ -819,7 +840,7 @@ class OrdemArquivo(models.Model):
 
 class GuiaExpedicaoParceiro(models.Model):
     numero_guia = models.CharField(max_length=20, unique=True, blank=True)
-    parceiro_nome = models.CharField(max_length=120)
+    parceiro_nome = models.TextField()
     referencia_externa = models.CharField(max_length=120, blank=True)
     observacoes_saida = models.TextField(blank=True)
     expedida_em = models.DateTimeField(auto_now_add=True)

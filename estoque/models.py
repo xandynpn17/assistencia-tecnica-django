@@ -238,12 +238,14 @@ class Produto(models.Model):
         if self.usar_aliquota_manual:
             return Decimal(str(self.aliquota_manual or 0))
 
-        try:
-            from configuracoes.models import Empresa
+        empresa = self.empresa
+        if not empresa:
+            try:
+                from configuracoes.models import Empresa
 
-            empresa = Empresa.objects.first()
-        except Exception:
-            empresa = None
+                empresa = Empresa.objects.order_by("id").first()
+            except Exception:
+                empresa = None
 
         if empresa:
             regime = (empresa.regime_tributario or "simples")

@@ -12,10 +12,11 @@ from .view_modules.empresa import (
     excluir_aliquota_impl,
     lista_aliquotas_impl,
 )
-from .view_modules.integracoes import buscar_cep_impl, contrato_webhooks_impl
+from .view_modules.integracoes import buscar_cep_impl, contrato_webhooks_impl, logs_integracoes_impl
 from .view_modules.operacao import auditoria_configuracoes_impl, backup_banco_impl, restore_banco_impl
 from .view_modules.painel import modelos_mensagem_impl, painel_impl, setup_inicial_impl, tipos_equipamento_impl
 from .view_modules.sistema import configuracao_os_edit_impl, configuracao_sistema_edit_impl, preview_documento_impl
+from .view_modules.sla import painel_reincidencias_impl, painel_sla_impl, regras_sla_impl
 from .view_modules.usuarios import (
     adicionar_usuario_impl,
     detalhes_usuario_impl,
@@ -147,3 +148,23 @@ def simulador_permissoes(request):
 @role_required(MANAGER_ROLES)
 def contrato_webhooks(request):
     return contrato_webhooks_impl(request)
+
+
+@role_required(MANAGER_ROLES)
+def regras_sla(request):
+    return regras_sla_impl(request)
+
+
+@role_required(MANAGER_ROLES)
+def painel_sla(request):
+    return painel_sla_impl(request)
+
+
+@role_required(MANAGER_ROLES)
+def painel_reincidencias(request):
+    return painel_reincidencias_impl(request)
+
+
+@role_required(MANAGER_ROLES)
+def logs_integracoes(request):
+    return logs_integracoes_impl(request)

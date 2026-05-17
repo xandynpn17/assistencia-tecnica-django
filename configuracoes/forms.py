@@ -17,6 +17,7 @@ from .models import (
     MarcaGarantia,
     ModeloMensagem,
     ParceiroExpedicao,
+    RegraSLAAlerta,
     RegraGarantiaMarca,
     TipoEquipamentoConfig,
     UsuarioArquivo,
@@ -24,6 +25,7 @@ from .models import (
 )
 from django.contrib.auth.models import Group
 from .services.capabilities import aplicar_preset, listar_presets
+from .services.integracoes import listar_eventos_comunicacao
 
 
 class EmpresaForm(forms.ModelForm):
@@ -599,6 +601,13 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'valor_bonus_3',
             'percentual_padrao_desempenho_servico',
             'percentual_padrao_desempenho_peca',
+            'garantia_padrao_servico_dias',
+            'garantia_padrao_peca_dias',
+            'garantia_reincidencia_janela_dias',
+            'antifraude_exigir_dupla_confirmacao_desconto',
+            'antifraude_exigir_dupla_confirmacao_exclusao_pagamento',
+            'antifraude_desconto_critico_percentual',
+            'antifraude_motivo_minimo_caracteres',
             'termos_ordem_servico',
             'layout_os_impressao',
             'layout_os_frente_espaco_assinaturas_cm',
@@ -637,6 +646,11 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'valor_bonus_3': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
             'percentual_padrao_desempenho_servico': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
             'percentual_padrao_desempenho_peca': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
+            'garantia_padrao_servico_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'max': 3650}),
+            'garantia_padrao_peca_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'max': 3650}),
+            'garantia_reincidencia_janela_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 3650}),
+            'antifraude_desconto_critico_percentual': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0, 'max': 100}),
+            'antifraude_motivo_minimo_caracteres': forms.NumberInput(attrs={'class': 'form-control', 'min': 5, 'max': 200}),
             'termos_ordem_servico': forms.Textarea(
                 attrs={
                     'class': 'form-control',
@@ -671,6 +685,13 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com numero da OS na linha de recorte."
         self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressao, relatorio e orcamento)."
         self.fields["layout_documentos_cor"].help_text = "Escolha se os PDFs saem em colorido ou escala de cinza (preto e branco)."
+        self.fields["garantia_padrao_servico_dias"].help_text = "Usado quando a OS original não possui item com garantia definida."
+        self.fields["garantia_padrao_peca_dias"].help_text = "Prazo base para retorno vinculado a peça sem garantia específica."
+        self.fields["garantia_reincidencia_janela_dias"].help_text = "Janela para sugerir possível reincidência no ato da abertura."
+        self.fields["antifraude_exigir_dupla_confirmacao_desconto"].help_text = "Solicita confirmação extra em descontos críticos no caixa."
+        self.fields["antifraude_exigir_dupla_confirmacao_exclusao_pagamento"].help_text = "Exige dupla confirmação para excluir pagamentos."
+        self.fields["antifraude_desconto_critico_percentual"].help_text = "Percentual a partir do qual o desconto exige validação adicional."
+        self.fields["antifraude_motivo_minimo_caracteres"].help_text = "Quantidade mínima de caracteres para justificativas sensíveis."
 
     def clean_condicoes_orcamento(self):
         valor = (self.cleaned_data.get("condicoes_orcamento") or "").strip()
@@ -687,6 +708,36 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
                 f"Os termos da OS podem ter no maximo {self.MAX_CARACTERES_TERMOS_OS} caracteres."
             )
         return valor
+
+
+class RegraSLAAlertaForm(forms.ModelForm):
+    class Meta:
+        model = RegraSLAAlerta
+        fields = [
+            "codigo",
+            "ativo",
+            "prazo_valor",
+            "prazo_unidade",
+            "severidade",
+            "responsavel_padrao",
+            "acao_sugerida",
+            "canal_notificacao",
+            "observacoes",
+        ]
+        widgets = {
+            "codigo": forms.Select(attrs={"class": "form-control"}),
+            "prazo_valor": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+            "prazo_unidade": forms.Select(attrs={"class": "form-control"}),
+            "severidade": forms.Select(attrs={"class": "form-control"}),
+            "responsavel_padrao": forms.TextInput(attrs={"class": "form-control"}),
+            "acao_sugerida": forms.TextInput(attrs={"class": "form-control"}),
+            "canal_notificacao": forms.Select(attrs={"class": "form-control"}),
+            "observacoes": forms.TextInput(attrs={"class": "form-control"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["ativo"].widget.attrs.update({"class": "form-check-input"})
 
 
 class FornecedorGarantiaForm(forms.ModelForm):
@@ -857,15 +908,28 @@ class RegraGarantiaMarcaForm(forms.ModelForm):
         return cleaned_data
 
 class ModeloMensagemForm(forms.ModelForm):
+    evento_chave = forms.ChoiceField(
+        required=False,
+        label="Evento operacional",
+        choices=[],
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+
     class Meta:
         model = ModeloMensagem
-        fields = ["nome", "tipo", "assunto", "corpo", "ativo"]
+        fields = ["nome", "evento_chave", "tipo", "assunto", "corpo", "ativo"]
         widgets = {
             "nome": forms.TextInput(attrs={"class": "form-control"}),
             "tipo": forms.Select(attrs={"class": "form-control"}),
             "assunto": forms.TextInput(attrs={"class": "form-control"}),
             "corpo": forms.Textarea(attrs={"class": "form-control", "rows": 5}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        opcoes = [("", "Manual / sem evento")]
+        opcoes.extend((item["codigo"], f"{item['nome']} ({item['codigo']})") for item in listar_eventos_comunicacao())
+        self.fields["evento_chave"].choices = opcoes
 
 
 class TipoEquipamentoConfigForm(forms.ModelForm):

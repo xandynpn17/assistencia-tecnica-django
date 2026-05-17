@@ -1,0 +1,166 @@
+﻿{% extends "core/base.html" %}
+
+{% block title %}Painel de Reincidencias{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="fas fa-shield-alt mr-2"></i>Garantia e Reincidencias</h5>
+    <form method="get" class="form-inline">
+      <label class="mr-2 mb-0">Janela (dias)</label>
+      <input type="number" class="form-control form-control-sm mr-2" name="dias" min="30" max="3650" value="{{ dias_filtro }}">
+      <select class="form-control form-control-sm mr-2" name="tecnico_id">
+        <option value="">Todos os tecnicos</option>
+        {% for tecnico in tecnicos %}
+        <option value="{{ tecnico.id }}" {% if tecnico_id_filtro == tecnico.id|stringformat:"s" %}selected{% endif %}>{{ tecnico.nome_exibicao|default:tecnico.username }}</option>
+        {% endfor %}
+      </select>
+      <select class="form-control form-control-sm mr-2" name="linha">
+        <option value="">Todas as linhas</option>
+        {% for linha in linhas %}
+        <option value="{{ linha.codigo }}" {% if linha_filtro == linha.codigo %}selected{% endif %}>{{ linha.nome }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm btn-primary" type="submit">Aplicar</button>
+    </form>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-3 mb-2">
+        <div class="alert alert-info mb-0">
+          <strong>Total de retornos:</strong><br>{{ resumo.total_retorno }}
+        </div>
+      </div>
+      <div class="col-md-3 mb-2">
+        <div class="alert alert-secondary mb-0">
+          <strong>Janela analisada:</strong><br>{{ resumo.janela_dias }} dias
+        </div>
+      </div>
+      {% for metrica in resumo.metricas_30_60_90 %}
+      <div class="col-md-2 mb-2">
+        <div class="alert alert-light border mb-0">
+          <strong>Retorno {{ metrica.janela_dias }}d</strong><br>
+          {{ metrica.retornos }} / {{ metrica.base_fechadas }}<br>
+          <span class="text-muted">{{ metrica.taxa_percentual }}%</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><strong>Retorno por tecnico</strong></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Tecnico</th><th class="text-right">Total</th></tr></thead>
+          <tbody>
+            {% for row in resumo.por_tecnico %}
+            <tr><td>{{ row.tecnico_responsavel__username|default:"Sem tecnico" }}</td><td class="text-right">{{ row.total }}</td></tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-center text-muted">Sem dados.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><strong>Retorno por classificacao</strong></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Classificacao</th><th class="text-right">Total</th></tr></thead>
+          <tbody>
+            {% for row in resumo.por_classificacao %}
+            <tr><td>{{ row.garantia_classificacao_retorno|default:"-" }}</td><td class="text-right">{{ row.total }}</td></tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-center text-muted">Sem dados.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><strong>Retorno por marca</strong></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Marca</th><th class="text-right">Total</th></tr></thead>
+          <tbody>
+            {% for row in resumo.por_marca %}
+            <tr><td>{{ row.marca_equipamento|default:"-" }}</td><td class="text-right">{{ row.total }}</td></tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-center text-muted">Sem dados.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><strong>Retorno por tipo de equipamento</strong></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Tipo</th><th class="text-right">Total</th></tr></thead>
+          <tbody>
+            {% for row in resumo.por_tipo %}
+            <tr><td>{{ row.tipo_equipamento|default:"-" }}</td><td class="text-right">{{ row.total }}</td></tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-center text-muted">Sem dados.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><strong>Itens mais recorrentes</strong></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Item</th><th class="text-right">Total</th></tr></thead>
+          <tbody>
+            {% for row in resumo.por_item %}
+            <tr><td>{{ row.nome|default:"-" }}</td><td class="text-right">{{ row.total }}</td></tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-center text-muted">Sem dados.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><strong>Ultimos retornos</strong></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>OS retorno</th><th>OS origem</th><th>Cliente</th><th class="text-right">Abertura</th></tr></thead>
+          <tbody>
+            {% for ordem in resumo.ultimos_retornos %}
+            <tr>
+              <td><a href="{% url 'ordens:detalhes_ordem' ordem.id %}">{{ ordem.numero_os }}</a></td>
+              <td>{{ ordem.ordem_origem_garantia.numero_os|default:"-" }}</td>
+              <td>{{ ordem.cliente.nome }}</td>
+              <td class="text-right">{{ ordem.data_abertura|date:"d/m/Y" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted">Sem retornos no periodo.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -12,8 +12,8 @@ from django.utils import timezone
 
 from caixa.models import ContaReceber, Pagamento, PagamentoContaPagar
 from clientes.models import Cliente, ORIGEM_CLIENTE_CHOICES
-from configuracoes.models import Empresa
 from configuracoes.permissions import ORDER_ROLES, has_role
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 from ordens.models import LinhaTrabalho, OrdemServico
 from orcamentos.models import Orcamento
 
@@ -22,21 +22,25 @@ def _dashboard_shared_context(request):
     tipo_usuario = getattr(request.user, "tipo_usuario", "")
     is_managerial = request.user.is_superuser or tipo_usuario in {"adm", "gerente"}
     is_operational = (tipo_usuario in {"atendente", "tecnico"}) and not is_managerial
+    empresa = obter_empresa_ativa(request, strict=False)
 
-    total_clientes = Cliente.objects.count()
-    total_ordens = OrdemServico.objects.count()
-    total_ordens_abertas = OrdemServico.objects.filter(fechada=False).count()
-    total_ordens_finalizadas = OrdemServico.objects.filter(fechada=True).count()
+    clientes_qs = filtrar_queryset_empresa(Cliente.objects.all(), empresa)
+    ordens_qs = filtrar_queryset_empresa(OrdemServico.objects.all(), empresa)
+
+    total_clientes = clientes_qs.count()
+    total_ordens = ordens_qs.count()
+    total_ordens_abertas = ordens_qs.filter(fechada=False).count()
+    total_ordens_finalizadas = ordens_qs.filter(fechada=True).count()
     today = timezone.localdate()
     inicio_mes = today.replace(day=1)
-    ordens_finalizadas_mes = OrdemServico.objects.filter(
+    ordens_finalizadas_mes = ordens_qs.filter(
         fechada=True,
         data_conclusao__date__gte=inicio_mes,
         data_conclusao__date__lte=today,
     ).count()
 
     status_counts = (
-        OrdemServico.objects.filter(fechada=False)
+        ordens_qs.filter(fechada=False)
         .values("status")
         .annotate(total=Count("id"))
     )
@@ -52,7 +56,7 @@ def _dashboard_shared_context(request):
         if status != "concluida"
     ]
     ordens_recentes = (
-        OrdemServico.objects.select_related("cliente", "tecnico_responsavel")
+        ordens_qs.select_related("cliente", "tecnico_responsavel")
         .prefetch_related(
             Prefetch(
                 "linhas_trabalho",
@@ -64,7 +68,7 @@ def _dashboard_shared_context(request):
     )
 
     return {
-        "empresa": getattr(request, "empresa_ativa", None) or Empresa.objects.first(),
+        "empresa": empresa,
         "total_clientes": total_clientes,
         "total_ordens": total_ordens,
         "total_ordens_abertas": total_ordens_abertas,
@@ -87,44 +91,50 @@ def _dashboard_shared_context(request):
     }
 
 
-def _dashboard_managerial_context():
+def _dashboard_managerial_context(*, empresa=None):
+    from configuracoes.services.sla import calcular_pendencias_sla
+
     sem_tecnico_q = Q(tecnico_responsavel__isnull=True) | ~Q(tecnico_responsavel__tipo_usuario="tecnico")
-    total_clientes = Cliente.objects.count()
-    total_ordens = OrdemServico.objects.count()
-    total_ordens_abertas = OrdemServico.objects.filter(fechada=False).count()
-    total_ordens_finalizadas = OrdemServico.objects.filter(fechada=True).count()
+    clientes_qs = filtrar_queryset_empresa(Cliente.objects.all(), empresa)
+    ordens_qs = filtrar_queryset_empresa(OrdemServico.objects.all(), empresa)
+    total_clientes = clientes_qs.count()
+    total_ordens = ordens_qs.count()
+    total_ordens_abertas = ordens_qs.filter(fechada=False).count()
+    total_ordens_finalizadas = ordens_qs.filter(fechada=True).count()
     today = timezone.localdate()
     inicio_mes = today.replace(day=1)
-    ordens_finalizadas_mes = OrdemServico.objects.filter(
+    ordens_finalizadas_mes = ordens_qs.filter(
         fechada=True,
         data_conclusao__date__gte=inicio_mes,
         data_conclusao__date__lte=today,
     ).count()
 
-    ordens_sem_tecnico = OrdemServico.objects.filter(fechada=False).filter(sem_tecnico_q).count()
-    ordens_prontas = OrdemServico.objects.filter(
+    ordens_sem_tecnico = ordens_qs.filter(fechada=False).filter(sem_tecnico_q).count()
+    ordens_prontas = ordens_qs.filter(
         fechada=False, status="pronto_contactado"
     ).count()
-    ordens_criticas = OrdemServico.objects.filter(
+    ordens_criticas = ordens_qs.filter(
         fechada=False,
         status__in={"pendente_cliente", "pendente_tecnico", "pendente_pecas", "pendente_marca"},
     ).count()
     limite_parada = timezone.now() - timedelta(days=15)
-    ordens_paradas = OrdemServico.objects.filter(
+    ordens_paradas = ordens_qs.filter(
         fechada=False,
         status__in={"pendente_cliente", "pendente_tecnico", "pendente_pecas", "pendente_marca"},
         data_abertura__lte=limite_parada,
     ).count()
-    ordens_pendente_cliente = OrdemServico.objects.filter(fechada=False, status="pendente_cliente").count()
-    ordens_pendente_pecas = OrdemServico.objects.filter(fechada=False, status="pendente_pecas").count()
-    ordens_autorizadas = OrdemServico.objects.filter(fechada=False, status="autorizado").count()
-    ordens_recusadas = OrdemServico.objects.filter(status="recusado").count()
-    ordens_reabertas = OrdemServico.objects.filter(fechada=False, status="concluida").count()
-    clientes_mes = Cliente.objects.filter(data_cadastro__date__gte=inicio_mes, data_cadastro__date__lte=today).count()
+    ordens_pendente_cliente = ordens_qs.filter(fechada=False, status="pendente_cliente").count()
+    ordens_pendente_pecas = ordens_qs.filter(fechada=False, status="pendente_pecas").count()
+    ordens_autorizadas = ordens_qs.filter(fechada=False, status="autorizado").count()
+    ordens_recusadas = ordens_qs.filter(status="recusado").count()
+    ordens_reabertas = ordens_qs.filter(fechada=False, status="concluida").count()
+    clientes_mes = clientes_qs.filter(data_cadastro__date__gte=inicio_mes, data_cadastro__date__lte=today).count()
     despesas_pagas_mes_qs = PagamentoContaPagar.objects.filter(
         data__date__gte=inicio_mes,
         data__date__lte=today,
     )
+    if empresa:
+        despesas_pagas_mes_qs = despesas_pagas_mes_qs.filter(conta__empresa=empresa)
     despesas_totais_mes = despesas_pagas_mes_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     despesas_marketing_mes = (
         despesas_pagas_mes_qs.filter(
@@ -141,7 +151,7 @@ def _dashboard_managerial_context():
             "total": row["total"],
         }
         for row in (
-            Cliente.objects.filter(data_cadastro__date__gte=inicio_mes, data_cadastro__date__lte=today)
+            clientes_qs.filter(data_cadastro__date__gte=inicio_mes, data_cadastro__date__lte=today)
             .values("origem_cliente")
             .annotate(total=Count("id"))
             .order_by("-total", "origem_cliente")
@@ -153,6 +163,8 @@ def _dashboard_managerial_context():
         status__in=["aberta", "parcial", "vencida"],
         valor_aberto__gt=0,
     )
+    if empresa:
+        contas_os_abertas = contas_os_abertas.filter(ordem_servico__empresa=empresa)
     ordens_concluidas_sem_pagamento = contas_os_abertas.filter(ordem_servico__fechada=True).count()
     valor_aberto_ordens = contas_os_abertas.aggregate(total=Sum("valor_aberto"))["total"] or 0
     prontas_sem_recebimento_total = (
@@ -160,15 +172,17 @@ def _dashboard_managerial_context():
         .aggregate(total=Sum("valor_aberto"))["total"]
         or 0
     )
-    recebimentos_mes_os = (
-        Pagamento.objects.filter(
-            ordem_servico__isnull=False,
-            data__date__gte=inicio_mes,
-            data__date__lte=today,
-        ).aggregate(total=Sum("valor"))["total"]
-        or 0
+    recebimentos_mes_qs = Pagamento.objects.filter(
+        ordem_servico__isnull=False,
+        data__date__gte=inicio_mes,
+        data__date__lte=today,
     )
+    if empresa:
+        recebimentos_mes_qs = recebimentos_mes_qs.filter(ordem_servico__empresa=empresa)
+    recebimentos_mes_os = recebimentos_mes_qs.aggregate(total=Sum("valor"))["total"] or 0
     orcamentos_qs = Orcamento.objects.filter(data_criacao__date__gte=inicio_mes, data_criacao__date__lte=today)
+    if empresa:
+        orcamentos_qs = orcamentos_qs.filter(empresa=empresa)
     orcamentos_total_mes = orcamentos_qs.count()
     orcamentos_aprovados_mes = orcamentos_qs.filter(status="aprovado").count()
     orcamentos_recusados_mes = orcamentos_qs.filter(status="recusado").count()
@@ -179,7 +193,7 @@ def _dashboard_managerial_context():
     decisoes_orcamento = orcamentos_aprovados_mes + orcamentos_recusados_mes
     if decisoes_orcamento:
         taxa_recusa = round((orcamentos_recusados_mes / decisoes_orcamento) * 100, 1)
-    ordens_concluidas_mes_qs = OrdemServico.objects.filter(
+    ordens_concluidas_mes_qs = ordens_qs.filter(
         fechada=True,
         data_conclusao__date__gte=inicio_mes,
         data_conclusao__date__lte=today,
@@ -189,6 +203,9 @@ def _dashboard_managerial_context():
     if total_concluidas_mes:
         total_receita_mes = sum((ordem.receita_total_financeira() for ordem in ordens_concluidas_mes_qs), 0)
         ticket_medio_os_mes = round(total_receita_mes / total_concluidas_mes, 2)
+    pendencias_sla = calcular_pendencias_sla(empresa=empresa)
+    total_pendencias_sla = len(pendencias_sla)
+    pendencias_parceiro = sum(1 for p in pendencias_sla if p.codigo_regra == "parceiro_externo_atrasado")
 
     return {
         "gerencial_cards": {
@@ -220,6 +237,8 @@ def _dashboard_managerial_context():
             "despesas_totais_mes": despesas_totais_mes,
             "despesas_marketing_mes": despesas_marketing_mes,
             "cac_medio": cac_medio,
+            "pendencias_sla_total": total_pendencias_sla,
+            "pendencias_sla_parceiro": pendencias_parceiro,
         },
         "origens_clientes_mes": origens_clientes_mes,
     }
@@ -248,7 +267,7 @@ def dashboard_indicadores(request):
         raise PermissionDenied
 
     context = _dashboard_shared_context(request)
-    context.update(_dashboard_managerial_context())
+    context.update(_dashboard_managerial_context(empresa=context.get("empresa")))
     context["menu_sub"] = "dashboard_indicadores"
     return render(request, "core/dashboard_indicadores.html", context)
 

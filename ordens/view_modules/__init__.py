@@ -1,5 +1,6 @@
 from .busca import OrdemServicoListView, buscar_ordens
 from .expedicao import expedir_parceiro, guia_expedicao_pdf, guias_expedicao, recepcionar_parceiro
+from .fila import fila_bancada_tecnicos
 from .fluxo import (
     DetalhesOrdemView,
     OrdemServicoCreateView,
@@ -49,6 +50,7 @@ __all__ = [
     "confirmar_ordem_token_publico",
     "dashboard_pedidos_compra",
     "expedir_parceiro",
+    "fila_bancada_tecnicos",
     "guia_expedicao_pdf",
     "guias_expedicao",
     "imprimir_confirmacao_os",

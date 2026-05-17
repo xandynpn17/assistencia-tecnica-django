@@ -5,10 +5,11 @@ from configuracoes.forms import AliquotaForm, EmpresaForm
 from configuracoes.models import Aliquota, Empresa
 from configuracoes.services.auditoria import registrar_evento_configuracao
 from configuracoes.services.integracoes import emitir_evento_interno
+from configuracoes.services.tenant_guard import obter_empresa_ativa
 
 
 def empresa_edit_impl(request):
-    empresa = getattr(request, "empresa_ativa", None) or Empresa.objects.first()
+    empresa = obter_empresa_ativa(request, strict=False)
     if request.method == "POST":
         form = EmpresaForm(request.POST, request.FILES, instance=empresa)
         if form.is_valid():

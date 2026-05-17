@@ -1,4 +1,4 @@
-from django.db import IntegrityError, models, transaction
+﻿from django.db import IntegrityError, models, transaction
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
@@ -731,7 +731,7 @@ class ConfiguracaoSistema(models.Model):
     )
     condicoes_orcamento = models.TextField(
         blank=True,
-        default="Validade de 7 dias. Valores sujeitos à aprovação do cliente.",
+        default="Validade de 7 dias. Valores sujeitos Ã  aprovação do cliente.",
     )
     dias_bonus_retirada_1 = models.PositiveIntegerField(default=0)
     valor_bonus_1 = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -751,10 +751,17 @@ class ConfiguracaoSistema(models.Model):
         default=0,
         verbose_name="Percentual padrão de desempenho (peças)",
     )
+    garantia_padrao_servico_dias = models.PositiveIntegerField(default=90)
+    garantia_padrao_peca_dias = models.PositiveIntegerField(default=90)
+    garantia_reincidencia_janela_dias = models.PositiveIntegerField(default=180)
+    antifraude_exigir_dupla_confirmacao_desconto = models.BooleanField(default=False)
+    antifraude_exigir_dupla_confirmacao_exclusao_pagamento = models.BooleanField(default=False)
+    antifraude_desconto_critico_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=20)
+    antifraude_motivo_minimo_caracteres = models.PositiveSmallIntegerField(default=12)
     termos_ordem_servico = models.TextField(
         blank=True,
         default=(
-            "O equipamento descrito nesta OS será submetido à análise técnica e eventual reparo mediante aprovação do orçamento. "
+            "O equipamento descrito nesta OS será submetido Ã  análise técnica e eventual reparo mediante aprovação do orçamento. "
             "O prazo informado é estimado e poderá variar conforme a complexidade do reparo ou disponibilidade de peças. "
             "Poderão ser utilizadas peças originais ou compatíveis. Peças substituídas somente serão devolvidas mediante solicitação prévia. "
             "Garantia de 90 dias, limitada ao serviço executado. Perde-se a garantia em caso de violação do lacre, intervenção de terceiros, "
@@ -869,6 +876,58 @@ class SetupInicialSistema(models.Model):
         return "Setup inicial"
 
 
+class RegraSLAAlerta(models.Model):
+    REGRA_CHOICES = [
+        ("os_sem_movimentacao", "OS sem movimentação"),
+        ("orcamento_sem_resposta", "Orçamento sem resposta"),
+        ("peca_reservada_vencendo", "Peça reservada vencendo"),
+        ("equipamento_pronto_parado", "Equipamento pronto há muitos dias"),
+        ("parceiro_externo_atrasado", "Parceiro externo atrasado"),
+    ]
+    UNIDADE_PRAZO_CHOICES = [
+        ("dias", "Dias"),
+        ("horas", "Horas"),
+    ]
+    SEVERIDADE_CHOICES = [
+        ("baixa", "Baixa"),
+        ("media", "Média"),
+        ("alta", "Alta"),
+        ("critica", "Crítica"),
+    ]
+    CANAL_CHOICES = [
+        ("painel", "Painel"),
+        ("email", "E-mail"),
+        ("whatsapp", "WhatsApp"),
+        ("nenhum", "Nenhum"),
+    ]
+
+    codigo = models.CharField(max_length=40, choices=REGRA_CHOICES, unique=True)
+    ativo = models.BooleanField(default=True)
+    prazo_valor = models.PositiveIntegerField(default=2)
+    prazo_unidade = models.CharField(max_length=10, choices=UNIDADE_PRAZO_CHOICES, default="dias")
+    severidade = models.CharField(max_length=10, choices=SEVERIDADE_CHOICES, default="media")
+    responsavel_padrao = models.CharField(max_length=120, blank=True)
+    acao_sugerida = models.CharField(max_length=220, blank=True)
+    canal_notificacao = models.CharField(max_length=20, choices=CANAL_CHOICES, default="painel")
+    observacoes = models.CharField(max_length=220, blank=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Regra de SLA"
+        verbose_name_plural = "Regras de SLA"
+        ordering = ["codigo"]
+
+    def __str__(self):
+        return self.get_codigo_display()
+
+    @property
+    def prazo_label(self):
+        unidade = "dia" if self.prazo_unidade == "dias" else "hora"
+        if self.prazo_valor != 1:
+            unidade += "s"
+        return f"{self.prazo_valor} {unidade}"
+
+
 class ModeloMensagem(models.Model):
     TIPO_CHOICES = [
         ("email", "Email"),
@@ -877,6 +936,7 @@ class ModeloMensagem(models.Model):
     ]
 
     nome = models.CharField(max_length=120, unique=True)
+    evento_chave = models.CharField(max_length=80, blank=True, db_index=True)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="ambos")
     assunto = models.CharField(max_length=180, blank=True)
     corpo = models.TextField()
@@ -923,4 +983,32 @@ class ConfiguracaoAuditoria(models.Model):
 
     def __str__(self):
         return f"{self.acao} - {self.alvo or '-'}"
+
+
+class IntegracaoEventoLog(models.Model):
+    CANAL_CHOICES = [
+        ("webhook", "Webhook"),
+        ("email", "E-mail"),
+        ("whatsapp", "WhatsApp"),
+        ("sistema", "Sistema"),
+    ]
+    STATUS_CHOICES = [
+        ("sucesso", "Sucesso"),
+        ("falha", "Falha"),
+    ]
+
+    canal = models.CharField(max_length=20, choices=CANAL_CHOICES)
+    evento = models.CharField(max_length=80)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    destino = models.CharField(max_length=220, blank=True)
+    payload_json = models.TextField(blank=True)
+    resposta = models.CharField(max_length=220, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+
+    def __str__(self):
+        return f"{self.canal}:{self.evento} ({self.status})"
+
 

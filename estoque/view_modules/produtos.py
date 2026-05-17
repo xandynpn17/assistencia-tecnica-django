@@ -15,6 +15,7 @@ from configuracoes.permissions import (
     require_sensitive_permission,
     role_required,
 )
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
 from ..forms import ProdutoEquivalenteForm, ProdutoForm, ProdutoKitItemForm, ProdutoPrecoTabelaForm, TabelaPrecoForm
 from ..models import PontoOperacional, Produto, ProdutoEquivalente, ProdutoKitItem, ProdutoPrecoTabela, TabelaPreco
@@ -43,18 +44,20 @@ def buscar_produtos(request):
 
 @role_required(STOCK_VIEW_ROLES)
 def lista_produtos(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     filtro = request.GET.get("tipo", "todos")
     ponto_id = request.GET.get("ponto")
     q = (request.GET.get("q") or "").strip()
     quick = (request.GET.get("quick") or "").strip()
     page_number = request.GET.get("page")
 
+    produtos_base = filtrar_queryset_empresa(Produto.objects.all(), empresa)
     if filtro == "servicos":
-        produtos = Produto.objects.ativos().servicos()
+        produtos = produtos_base.ativos().servicos()
     elif filtro == "produtos":
-        produtos = Produto.objects.ativos().nao_servicos()
+        produtos = produtos_base.ativos().nao_servicos()
     else:
-        produtos = Produto.objects.ativos()
+        produtos = produtos_base.ativos()
 
     if ponto_id:
         produtos = produtos.filter(ponto_operacional_id=ponto_id)
@@ -106,7 +109,8 @@ def lista_produtos(request):
 @role_required(STOCK_MANAGE_ROLES)
 def criar_produto(request):
     require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
-    ultimo = Produto.objects.order_by("-id").first()
+    empresa = obter_empresa_ativa(request, strict=False)
+    ultimo = filtrar_queryset_empresa(Produto.objects.all(), empresa).order_by("-id").first()
     initial = {}
     if ultimo:
         initial = {
@@ -123,7 +127,7 @@ def criar_produto(request):
     duplicar_id = request.GET.get("duplicar")
     produto_origem = None
     if duplicar_id and str(duplicar_id).isdigit():
-        produto_origem = Produto.objects.filter(id=int(duplicar_id), ativo=True).first()
+        produto_origem = filtrar_queryset_empresa(Produto.objects.all(), empresa).filter(id=int(duplicar_id), ativo=True).first()
         if produto_origem:
             initial.update(_initial_produto_from_origem(produto_origem))
             initial["nome"] = f"{produto_origem.nome} (copia)"
@@ -135,6 +139,9 @@ def criar_produto(request):
         form = ProdutoForm(request.POST, request.FILES)
         if form.is_valid():
             produto = form.save()
+            if produto.empresa_id != getattr(empresa, "id", None):
+                produto.empresa = empresa
+                produto.save(update_fields=["empresa"])
             estoque_inicial = form.cleaned_data.get("estoque_inicial") or 0
             custo_entrada = form.cleaned_data.get("custo_entrada_inicial")
             _aplicar_estoque_inicial(produto, estoque_inicial=estoque_inicial, custo_entrada=custo_entrada, usuario=request.user, observacao="Entrada inicial gerada no cadastro do produto.")
@@ -159,7 +166,7 @@ def criar_produto(request):
             "produto_origem": produto_origem,
             "modo_edicao": False,
             "rateio_context": _contexto_rateio_produto(produto_origem),
-            "empresa": Empresa.objects.first(),
+            "empresa": empresa,
         },
     )
 
@@ -167,7 +174,8 @@ def criar_produto(request):
 @role_required(STOCK_MANAGE_ROLES)
 def editar_produto(request, produto_id):
     require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
-    produto = get_object_or_404(Produto, id=produto_id)
+    empresa = obter_empresa_ativa(request, strict=False)
+    produto = get_object_or_404(filtrar_queryset_empresa(Produto.objects.all(), empresa), id=produto_id)
     if request.method == "POST":
         snapshot_antes = _snapshot_produto(produto)
         form = ProdutoForm(request.POST, request.FILES, instance=produto)
@@ -192,7 +200,7 @@ def editar_produto(request, produto_id):
         {
             "form": form,
             "produto": produto,
-            "empresa": Empresa.objects.first(),
+            "empresa": empresa,
             "menu_app": "estoque",
             "menu_sub": "lista_produtos",
             "modo_edicao": True,

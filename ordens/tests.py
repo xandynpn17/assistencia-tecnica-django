@@ -1388,7 +1388,7 @@ class GuiasExpedicaoParceiroTests(TestCase):
         )
         cliente_longo = Cliente.objects.create(
             nome="Cliente " + ("ComNomeExtremamenteLongo" * 8),
-            documento="12345678901",
+            documento="11144477735",
             telefone="11999999999",
             estado="SP",
         )
@@ -2922,5 +2922,104 @@ class AgendamentoOrdemServicoTests(TestCase):
         self.assertTrue(bool(inicio))
         dt_inicio = datetime.fromisoformat(inicio)
         self.assertEqual(dt_inicio.hour, 9)
+
+
+class GarantiaPosServicoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="garantia_operador",
+            password="senha123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Garantia",
+            documento="39053344705",
+            telefone="11988887777",
+            estado="SP",
+        )
+        self.tipo_reparo_garantia_servico = next(
+            (valor for valor, _rotulo in OrdemServico.TIPO_REPARO_CHOICES if str(valor).lower().startswith("garantia de servi")),
+            "Garantia de serviço",
+        )
+
+    def _payload_base(self):
+        return {
+            "tipo_equipamento": "celular",
+            "marca_catalogo": "__outros__",
+            "marca_manual": "Marca Garantia",
+            "marca_equipamento": "",
+            "modelo_equipamento": "Modelo G",
+            "numero_serie_equipamento": "SER-GAR-001",
+            "peritagem": "Sem avarias",
+            "defeito": "Nao liga",
+            "acessorios": "Carregador",
+            "notas_internas": "Teste garantia pos-servico",
+            "confirmar_criacao": "1",
+        }
+
+    def test_garantia_servico_exige_os_origem(self):
+        payload = self._payload_base()
+        payload.update(
+            {
+                "tipo_reparo": self.tipo_reparo_garantia_servico,
+                "garantia_classificacao_retorno": "mesmo_defeito",
+            }
+        )
+        response = self.client.post(reverse("ordens:nova_ordem_cliente", args=[self.cliente.id]), payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Selecione a OS original para vincular a garantia de serviço.")
+
+    def test_garantia_servico_vincula_os_origem(self):
+        origem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Garantia",
+            modelo_equipamento="Modelo G",
+            numero_serie_equipamento="SER-GAR-001",
+            defeito="Falha anterior",
+            tipo_reparo="Fora de Garantia",
+            status="concluida",
+            fechada=True,
+            data_conclusao=timezone.now() - timedelta(days=7),
+        )
+        payload = self._payload_base()
+        payload.update(
+            {
+                "tipo_reparo": self.tipo_reparo_garantia_servico,
+                "ordem_origem_garantia": str(origem.id),
+                "garantia_classificacao_retorno": "garantia_mao_obra",
+            }
+        )
+        response = self.client.post(reverse("ordens:nova_ordem_cliente", args=[self.cliente.id]), payload)
+        self.assertEqual(response.status_code, 302)
+        nova = OrdemServico.objects.latest("id")
+        self.assertEqual(nova.ordem_origem_garantia_id, origem.id)
+        self.assertEqual(nova.garantia_classificacao_retorno, "garantia_mao_obra")
+        self.assertTrue(nova.garantia_reincidencia)
+
+    def test_abertura_detecta_possivel_reincidencia_automaticamente(self):
+        anterior = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Garantia",
+            modelo_equipamento="Modelo G",
+            numero_serie_equipamento="SER-GAR-001",
+            defeito="Falha anterior",
+            tipo_reparo="Fora de Garantia",
+            status="concluida",
+            fechada=True,
+            data_conclusao=timezone.now() - timedelta(days=20),
+        )
+        payload = self._payload_base()
+        payload.update({"tipo_reparo": "Fora de Garantia"})
+        response = self.client.post(reverse("ordens:nova_ordem_cliente", args=[self.cliente.id]), payload)
+        self.assertEqual(response.status_code, 302)
+        nova = OrdemServico.objects.latest("id")
+        self.assertTrue(nova.garantia_reincidencia)
+        alerta = nova.alertas.first()
+        self.assertIsNotNone(alerta)
+        self.assertIn(anterior.numero_os, alerta.mensagem)
 
 

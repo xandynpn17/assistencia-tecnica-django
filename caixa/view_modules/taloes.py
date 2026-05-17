@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from configuracoes.models import Empresa
 from configuracoes.permissions import CAIXA_OPERATIONAL_ROLES, role_required
+from configuracoes.services.tenant_guard import obter_empresa_ativa
 
 from ..models import Pagamento
 from .helpers import (
@@ -17,9 +18,12 @@ from .helpers import (
 
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def taloes(request):
+    empresa_ativa = obter_empresa_ativa(request, strict=False)
     busca = (request.GET.get("q") or "").strip()
     exportar = (request.GET.get("export") or "").strip().lower()
     pagamentos = Pagamento.objects.select_related("ordem_servico", "forma_pagamento").order_by("-data", "-id")
+    if empresa_ativa:
+        pagamentos = pagamentos.filter(Q(ordem_servico__isnull=True) | Q(ordem_servico__empresa=empresa_ativa))
     if busca:
         pagamentos = pagamentos.filter(
             Q(numero_talao__icontains=busca)
@@ -65,8 +69,12 @@ def taloes(request):
 
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def imprimir_talao(request, pagamento_id):
-    pagamento = get_object_or_404(Pagamento.objects.select_related("ordem_servico", "forma_pagamento"), id=pagamento_id)
-    empresa = Empresa.objects.first()
+    empresa = obter_empresa_ativa(request, strict=False)
+    pagamentos_qs = Pagamento.objects.select_related("ordem_servico", "forma_pagamento")
+    if empresa:
+        pagamentos_qs = pagamentos_qs.filter(Q(ordem_servico__isnull=True) | Q(ordem_servico__empresa=empresa))
+    pagamento = get_object_or_404(pagamentos_qs, id=pagamento_id)
+    empresa = empresa or Empresa.objects.order_by("id").first()
     return render(
         request,
         "caixa/talao_print.html",

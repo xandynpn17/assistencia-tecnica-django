@@ -2,6 +2,7 @@
 from ..services.anexos import EXTENSOES_IMAGEM, MAX_FOTOS_POR_OS, preparar_arquivo_anexo
 from django.core.exceptions import PermissionDenied
 from configuracoes.permissions import has_sensitive_permission, is_management_user, require_sensitive_permission
+from configuracoes.services.tenant_guard import obter_empresa_ativa
 from ..services import FechamentoOSService, ResumoOperacionalService
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
@@ -20,8 +21,11 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
         orcamento, _ = Orcamento.objects.get_or_create(
             ordem_servico=ordem,
-            defaults={"cliente": ordem.cliente, "descricao": "Orçamento"}
+            defaults={"cliente": ordem.cliente, "descricao": "Orçamento", "empresa": ordem.empresa}
         )
+        if orcamento.empresa_id != ordem.empresa_id:
+            orcamento.empresa = ordem.empresa
+            orcamento.save(update_fields=["empresa"])
 
         context["linhas"] = ordem.linhas_trabalho.exclude(
             tipo_evento="automatico",
@@ -34,7 +38,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["item_form"] = ItemOrcamentoForm()
         context["itens"] = ordem.servicos_pecas.all()
         context["taloes_os"] = ordem.taloes.select_related("criado_por", "pagamento").all()
-        context["empresa_talao"] = Empresa.objects.first()
+        context["empresa_talao"] = obter_empresa_ativa(self.request, strict=False) or ordem.empresa
         context["total_os"] = sum(item.total() for item in context["itens"])
         pagamentos_os = Pagamento.objects.filter(ordem_servico=ordem).order_by("-data")
         total_pago = sum((p.valor for p in pagamentos_os), Decimal("0.00"))

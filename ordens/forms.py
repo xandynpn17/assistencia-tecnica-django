@@ -26,9 +26,17 @@ class OrdemServicoForm(forms.ModelForm):
         label="Marca (quando selecionar Outros)",
         widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Digite a marca manualmente"}),
     )
+    ordem_origem_garantia = forms.ModelChoiceField(
+        required=False,
+        queryset=OrdemServico.objects.none(),
+        label="OS original (garantia de serviço)",
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
 
     def __init__(self, *args, **kwargs):
+        cliente_id = kwargs.pop("cliente_id", None)
         super().__init__(*args, **kwargs)
+        self._cliente_id = cliente_id
         tipos_cfg = list(TipoEquipamentoConfig.objects.filter(ativo=True).order_by("nome"))
         opcoes_tipo = []
         if tipos_cfg:
@@ -57,6 +65,15 @@ class OrdemServicoForm(forms.ModelForm):
 
         if "marca_equipamento" in self.fields:
             self.fields["marca_equipamento"].required = False
+
+        ordens_fechadas = OrdemServico.objects.filter(fechada=True).exclude(data_conclusao__isnull=True)
+        if cliente_id:
+            ordens_fechadas = ordens_fechadas.filter(cliente_id=cliente_id)
+        self.fields["ordem_origem_garantia"].queryset = ordens_fechadas.order_by("-data_conclusao", "-id")
+        self.fields["ordem_origem_garantia"].label_from_instance = (
+            lambda ordem: f"{ordem.numero_os} - {ordem.marca_equipamento} {ordem.modelo_equipamento}"
+        )
+        self.fields["garantia_classificacao_retorno"].required = False
 
     def clean(self):
         cleaned_data = super().clean()
@@ -90,10 +107,20 @@ class OrdemServicoForm(forms.ModelForm):
 
         data_compra = cleaned_data.get("data_compra")
         numero_nota = (cleaned_data.get("numero_nota_fiscal") or "").strip()
+        ordem_origem_garantia = cleaned_data.get("ordem_origem_garantia")
+        tipo_reparo_normalizado = (tipo_reparo or "").strip().lower()
+        garantia_servico = tipo_reparo_normalizado.startswith("garantia de servi")
+
         if tipo_reparo == "Garantia" and not data_compra:
             self.add_error("data_compra", "Para OS de garantia, informe a data da compra.")
         if tipo_reparo == "Garantia" and not numero_nota:
             self.add_error("numero_nota_fiscal", "Para OS de garantia, informe o número da nota fiscal.")
+        if garantia_servico and not ordem_origem_garantia:
+            self.add_error("ordem_origem_garantia", "Selecione a OS original para vincular a garantia de serviço.")
+        if ordem_origem_garantia and not garantia_servico:
+            self.add_error("tipo_reparo", "Para vincular OS original, use o tipo de reparo Garantia de serviço.")
+        if ordem_origem_garantia and self._cliente_id and ordem_origem_garantia.cliente_id != int(self._cliente_id):
+            self.add_error("ordem_origem_garantia", "A OS original selecionada pertence a outro cliente.")
 
         return cleaned_data
 
@@ -110,6 +137,8 @@ class OrdemServicoForm(forms.ModelForm):
             "data_compra",
             "numero_nota_fiscal",
             "referencia_parceiro",
+            "ordem_origem_garantia",
+            "garantia_classificacao_retorno",
             "defeito",
             "acessorios",
             "notas_internas",
@@ -124,6 +153,8 @@ class OrdemServicoForm(forms.ModelForm):
             "data_compra": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
             "numero_nota_fiscal": forms.TextInput(attrs={"class": "form-control", "placeholder": "Número da nota fiscal"}),
             "referencia_parceiro": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex: OS externa, parceiro ou referência interna"}),
+            "ordem_origem_garantia": forms.Select(attrs={"class": "form-control"}),
+            "garantia_classificacao_retorno": forms.Select(attrs={"class": "form-control"}),
             "defeito": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Descreva o defeito"}),
             "acessorios": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "Acessórios inclusos"}),
             "notas_internas": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Notas internas (somente sistema)"}),
@@ -134,6 +165,8 @@ class OrdemServicoForm(forms.ModelForm):
             "tipo_reparo": "Tipo de reparo",
             "numero_nota_fiscal": "Número da nota fiscal",
             "referencia_parceiro": "Referência parceiro",
+            "ordem_origem_garantia": "OS original da garantia",
+            "garantia_classificacao_retorno": "Classificação do retorno",
             "acessorios": "Acessórios",
             "notas_internas": "Notas internas",
         }
@@ -279,12 +312,16 @@ class ExpedicaoParceiroForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        self.fields["ordens_servico"].queryset = (
+        queryset_ordens = (
             OrdemServico.objects.filter(fechada=False, status="pronto_envio_parceiro")
             .exclude(itens_expedicao__status="expedida")
             .order_by("-data_abertura")
         )
+        if empresa:
+            queryset_ordens = queryset_ordens.filter(empresa=empresa)
+        self.fields["ordens_servico"].queryset = queryset_ordens
         self.fields["ordens_servico"].label_from_instance = lambda ordem: (
             f"{ordem.numero_os} - {ordem.cliente.nome} - {ordem.status_listagem_label}"
         )
@@ -331,12 +368,16 @@ class RecepcaoParceiroForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        self.fields["itens_expedicao"].queryset = (
+        itens_qs = (
             GuiaExpedicaoItem.objects.select_related("guia", "ordem_servico__cliente")
             .filter(status="expedida")
             .order_by("guia__numero_guia", "ordem_servico__numero_os")
         )
+        if empresa:
+            itens_qs = itens_qs.filter(ordem_servico__empresa=empresa)
+        self.fields["itens_expedicao"].queryset = itens_qs
         self.fields["itens_expedicao"].label_from_instance = lambda item: (
             f"{item.guia.numero_guia} - {item.ordem_servico.numero_os} - {item.ordem_servico.cliente.nome}"
         )
