@@ -583,6 +583,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'busca_minimo_caracteres',
             'estoque_permitir_negativo',
             'estoque_pre_reserva_exige_saldo',
+            'estoque_reserva_os_validade_dias',
             'inventario_ciclico_dias',
             'inventario_ultima_execucao',
             'backup_retencao_dias',
@@ -623,6 +624,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'ddd_padrao': forms.Select(attrs={'class': 'form-control'}),
             'numero_loja_talao': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 2}),
             'busca_minimo_caracteres': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 20}),
+            'estoque_reserva_os_validade_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 60}),
             'inventario_ciclico_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 365}),
             'inventario_ultima_execucao': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'backup_retencao_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 365}),
@@ -685,6 +687,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com numero da OS na linha de recorte."
         self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressao, relatorio e orcamento)."
         self.fields["layout_documentos_cor"].help_text = "Escolha se os PDFs saem em colorido ou escala de cinza (preto e branco)."
+        self.fields["estoque_reserva_os_validade_dias"].help_text = "Dias de validade para reservas automaticas criadas ao adicionar pecas na OS."
         self.fields["garantia_padrao_servico_dias"].help_text = "Usado quando a OS original não possui item com garantia definida."
         self.fields["garantia_padrao_peca_dias"].help_text = "Prazo base para retorno vinculado a peça sem garantia específica."
         self.fields["garantia_reincidencia_janela_dias"].help_text = "Janela para sugerir possível reincidência no ato da abertura."

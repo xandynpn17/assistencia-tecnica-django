@@ -82,6 +82,7 @@ WSGI_APPLICATION = 'assistencia.wsgi.application'
 
 # Database
 DB_ENGINE = os.getenv("DJANGO_DB_ENGINE", "sqlite").strip().lower()
+DB_CONN_MAX_AGE_DEFAULT = "0" if DEBUG else "60"
 
 if DB_ENGINE == "postgres":
     required_envs = [
@@ -104,9 +105,12 @@ if DB_ENGINE == "postgres":
             'PASSWORD': os.getenv("DJANGO_DB_PASSWORD"),
             'HOST': os.getenv("DJANGO_DB_HOST"),
             'PORT': os.getenv("DJANGO_DB_PORT", "5432"),
-            'CONN_MAX_AGE': int(os.getenv("DJANGO_DB_CONN_MAX_AGE", "60")),
+            'CONN_MAX_AGE': int(os.getenv("DJANGO_DB_CONN_MAX_AGE", DB_CONN_MAX_AGE_DEFAULT)),
+            'CONN_HEALTH_CHECKS': os.getenv("DJANGO_DB_CONN_HEALTH_CHECKS", "1") == "1",
             'OPTIONS': {
                 'sslmode': os.getenv("DJANGO_DB_SSLMODE", "prefer"),
+                'connect_timeout': int(os.getenv("DJANGO_DB_CONNECT_TIMEOUT", "5")),
+                'application_name': os.getenv("DJANGO_DB_APP_NAME", "assistencia_django"),
             },
         }
     }

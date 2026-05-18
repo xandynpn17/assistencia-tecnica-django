@@ -1,6 +1,7 @@
 ﻿from . import fluxo_support as _support
 from ..services.anexos import EXTENSOES_IMAGEM, MAX_FOTOS_POR_OS, preparar_arquivo_anexo
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from configuracoes.permissions import has_sensitive_permission, is_management_user, require_sensitive_permission
 from configuracoes.services.tenant_guard import obter_empresa_ativa
 from ..services import FechamentoOSService, ResumoOperacionalService
@@ -37,6 +38,20 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["tipos_reparacao"] = OrdemServico.TIPOS_REPARACAO
         context["item_form"] = ItemOrcamentoForm()
         context["itens"] = ordem.servicos_pecas.all()
+        from estoque.models import ReservaEstoque
+
+        context["reservas_auto_os"] = list(
+            ReservaEstoque.objects.filter(
+                ordem_servico=ordem,
+                motivo_status__startswith="AUTO_OS_ITEM:",
+            )
+            .select_related("produto", "ponto_operacional")
+            .order_by("status", "valido_ate", "-id")
+        )
+        cfg_reserva = ConfiguracaoSistema.get_configuracao()
+        context["reserva_auto_validade_dias"] = max(
+            1, int(getattr(cfg_reserva, "estoque_reserva_os_validade_dias", 3) or 3)
+        )
         context["taloes_os"] = ordem.taloes.select_related("criado_por", "pagamento").all()
         context["empresa_talao"] = obter_empresa_ativa(self.request, strict=False) or ordem.empresa
         context["total_os"] = sum(item.total() for item in context["itens"])
@@ -288,22 +303,53 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         elif form_type == "servico_peca":
             servico_form = ServicoPecaForm(request.POST)
             if servico_form.is_valid():
-                item = servico_form.save(commit=False)
-                item.ordem = self.object
-                item.produto_estoque = servico_form.cleaned_data.get("produto_estoque")
-                tipo_reparo = (self.object.tipo_reparo or "").strip().lower()
-                if tipo_reparo.startswith("garantia de servi"):
-                    item.comissionavel = item.tipo != "servico" or bool(request.POST.get("comissionavel"))
-                else:
-                    item.comissionavel = True
-                item.save()
-                _log_os(
-                    self.object,
-                    "edicao_critica",
-                    f"Serviço/Peça adicionado: {item.nome}.",
-                    usuario=request.user,
-                    dados_extras={"item_id": item.id, "tipo": item.tipo},
-                )
+                try:
+                    with transaction.atomic():
+                        item = servico_form.save(commit=False)
+                        item.ordem = self.object
+                        item.produto_estoque = servico_form.cleaned_data.get("produto_estoque")
+                        item.ponto_operacional_reserva = servico_form.cleaned_data.get("ponto_operacional_reserva")
+                        tipo_reparo = (self.object.tipo_reparo or "").strip().lower()
+                        if tipo_reparo.startswith("garantia de servi"):
+                            item.comissionavel = item.tipo != "servico" or bool(request.POST.get("comissionavel"))
+                        else:
+                            item.comissionavel = True
+                        item.save()
+
+                        if item.tipo == "peca" and item.produto_estoque:
+                            produto = item.produto_estoque
+                            ponto = item.ponto_operacional_reserva or getattr(produto, "ponto_operacional", None)
+                            if not ponto:
+                                raise ValueError("Este produto nao possui ponto operacional padrao para reserva.")
+                            config = ConfiguracaoSistema.get_configuracao()
+                            dias_validade = max(1, int(getattr(config, "estoque_reserva_os_validade_dias", 3) or 3))
+                            valido_ate = timezone.localdate() + timedelta(days=dias_validade)
+                            telefone_cliente = (
+                                getattr(self.object.cliente, "telefone", "")
+                                or getattr(self.object.cliente, "whatsapp", "")
+                                or ""
+                            )
+                            criar_reserva_estoque(
+                                produto=produto,
+                                ponto_operacional=ponto,
+                                quantidade=item.quantidade,
+                                nome_contato=f"OS {self.object.numero_os} - {self.object.cliente.nome}",
+                                telefone_contato=telefone_cliente,
+                                valido_ate=valido_ate,
+                                usuario=request.user,
+                                ordem_servico=self.object,
+                                item_os_id=item.id,
+                            )
+
+                        _log_os(
+                            self.object,
+                            "edicao_critica",
+                            f"Serviço/Peça adicionado: {item.nome}.",
+                            usuario=request.user,
+                            dados_extras={"item_id": item.id, "tipo": item.tipo},
+                        )
+                except ValueError as exc:
+                    messages.error(request, str(exc))
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
         elif form_type == "excluir_servico_peca":
@@ -331,6 +377,17 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                     motivo="Serviço/Peça removido da OS.",
                     evento="CANCELAMENTO_ITEM",
                 )
+            from estoque.models import ReservaEstoque
+
+            ReservaEstoque.objects.filter(
+                ordem_servico=self.object,
+                status="ativa",
+                motivo_status=f"AUTO_OS_ITEM:{item.id}",
+            ).update(
+                status="cancelada",
+                cancelada_em=timezone.now(),
+                motivo_status="Cancelada automaticamente pela remocao da peca da OS.",
+            )
             item.delete()
             _log_os(
                 self.object,
@@ -340,6 +397,46 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 dados_extras={"item_id": item_id},
             )
             messages.success(request, "Item removido com sucesso.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+
+        elif form_type == "renovar_reserva_auto":
+            from estoque.models import ReservaEstoque
+
+            reserva_id = request.POST.get("reserva_id")
+            reserva = get_object_or_404(
+                ReservaEstoque,
+                id=reserva_id,
+                ordem_servico=self.object,
+                motivo_status__startswith="AUTO_OS_ITEM:",
+            )
+            if reserva.status != "ativa":
+                messages.error(request, "Somente reservas ativas podem ser renovadas.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+            cfg = ConfiguracaoSistema.get_configuracao()
+            dias_validade = max(1, int(getattr(cfg, "estoque_reserva_os_validade_dias", 3) or 3))
+            reserva.valido_ate = timezone.localdate() + timedelta(days=dias_validade)
+            reserva.save(update_fields=["valido_ate"])
+            messages.success(request, f"Reserva {reserva.codigo_reserva} renovada por {dias_validade} dia(s).")
+            return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+
+        elif form_type == "cancelar_reserva_auto":
+            from estoque.models import ReservaEstoque
+
+            reserva_id = request.POST.get("reserva_id")
+            reserva = get_object_or_404(
+                ReservaEstoque,
+                id=reserva_id,
+                ordem_servico=self.object,
+                motivo_status__startswith="AUTO_OS_ITEM:",
+            )
+            if reserva.status != "ativa":
+                messages.error(request, "Reserva ja nao esta ativa.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+            reserva.status = "cancelada"
+            reserva.cancelada_em = timezone.now()
+            reserva.motivo_status = "Cancelada manualmente na OS."
+            reserva.save(update_fields=["status", "cancelada_em", "motivo_status"])
+            messages.success(request, f"Reserva {reserva.codigo_reserva} cancelada.")
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
         elif form_type == "atualizar_taloes_item":
@@ -804,6 +901,8 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
         messages.warning(request, "A ação enviada não foi reconhecida.")
         return redirect(f"{self.object.get_absolute_url()}?tab={request.GET.get('tab', 'detalhes')}")
+
+
 
 
 

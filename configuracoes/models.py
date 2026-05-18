@@ -692,6 +692,10 @@ class ConfiguracaoSistema(models.Model):
         default=False,
         verbose_name="Exigir saldo para pre-reserva de venda",
     )
+    estoque_reserva_os_validade_dias = models.PositiveIntegerField(
+        default=3,
+        verbose_name="Validade da reserva automatica de peca na OS (dias)",
+    )
     inventario_ciclico_dias = models.PositiveIntegerField(
         default=30,
         verbose_name="Periodicidade do inventário cíclico (dias)",

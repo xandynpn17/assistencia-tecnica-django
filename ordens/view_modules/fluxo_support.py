@@ -41,6 +41,7 @@ from ..services.log_os_service import LogOSService
 from ..services.os_policy_service import OSAccessPolicyService
 from ..utils import registrar_auditoria
 from estoque.services import (
+    criar_reserva_estoque,
     consumir_itens_estoque_ordem,
     consumir_reservas_ordem,
     devolver_itens_estoque_ordem,

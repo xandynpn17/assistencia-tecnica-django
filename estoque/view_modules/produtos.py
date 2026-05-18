@@ -12,6 +12,7 @@ from configuracoes.permissions import (
     ORDER_ROLES,
     STOCK_MANAGE_ROLES,
     STOCK_VIEW_ROLES,
+    has_sensitive_permission,
     require_sensitive_permission,
     role_required,
 )
@@ -138,6 +139,24 @@ def criar_produto(request):
     if request.method == "POST":
         form = ProdutoForm(request.POST, request.FILES)
         if form.is_valid():
+            abaixo_minimo = bool(form.cleaned_data.get("preco_abaixo_minimo_detectado"))
+            permitir_abaixo = bool(form.cleaned_data.get("permitir_preco_abaixo_minimo"))
+            justificativa_abaixo = (form.cleaned_data.get("justificativa_preco_abaixo_minimo") or "").strip()
+            if abaixo_minimo and permitir_abaixo and not has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"):
+                form.add_error("permitir_preco_abaixo_minimo", "Somente gerente/administrador pode aprovar preco abaixo do minimo.")
+                return render(
+                    request,
+                    "estoque/form_produto.html",
+                    {
+                        "form": form,
+                        "menu_app": "estoque",
+                        "menu_sub": "criar_produto",
+                        "produto_origem": produto_origem,
+                        "modo_edicao": False,
+                        "rateio_context": _contexto_rateio_produto(produto_origem),
+                        "empresa": empresa,
+                    },
+                )
             produto = form.save()
             if produto.empresa_id != getattr(empresa, "id", None):
                 produto.empresa = empresa
@@ -147,7 +166,16 @@ def criar_produto(request):
             _aplicar_estoque_inicial(produto, estoque_inicial=estoque_inicial, custo_entrada=custo_entrada, usuario=request.user, observacao="Entrada inicial gerada no cadastro do produto.")
             _normalizar_saldos_produto(produto)
             _recalcular_total_produto(produto)
-            _registrar_historico_produto(produto, usuario=request.user, acao="DUPLICACAO" if produto_origem else "CRIACAO", dados_antes=_snapshot_produto(produto_origem) if produto_origem else {}, observacao="Cadastro inicial de produto.")
+            observacao_historico = "Cadastro inicial de produto."
+            if abaixo_minimo and permitir_abaixo and justificativa_abaixo:
+                observacao_historico = f"{observacao_historico} Aprovado abaixo do minimo: {justificativa_abaixo}"
+            _registrar_historico_produto(
+                produto,
+                usuario=request.user,
+                acao="DUPLICACAO" if produto_origem else "CRIACAO",
+                dados_antes=_snapshot_produto(produto_origem) if produto_origem else {},
+                observacao=observacao_historico,
+            )
             if "_save_and_new" in request.POST:
                 messages.success(request, "Produto cadastrado. Pronto para incluir o proximo.")
                 return redirect("estoque:criar_produto")
@@ -180,13 +208,40 @@ def editar_produto(request, produto_id):
         snapshot_antes = _snapshot_produto(produto)
         form = ProdutoForm(request.POST, request.FILES, instance=produto)
         if form.is_valid():
+            abaixo_minimo = bool(form.cleaned_data.get("preco_abaixo_minimo_detectado"))
+            permitir_abaixo = bool(form.cleaned_data.get("permitir_preco_abaixo_minimo"))
+            justificativa_abaixo = (form.cleaned_data.get("justificativa_preco_abaixo_minimo") or "").strip()
+            if abaixo_minimo and permitir_abaixo and not has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"):
+                form.add_error("permitir_preco_abaixo_minimo", "Somente gerente/administrador pode aprovar preco abaixo do minimo.")
+                return render(
+                    request,
+                    "estoque/form_produto.html",
+                    {
+                        "form": form,
+                        "produto": produto,
+                        "empresa": empresa,
+                        "menu_app": "estoque",
+                        "menu_sub": "lista_produtos",
+                        "modo_edicao": True,
+                        "rateio_context": _contexto_rateio_produto(produto),
+                    },
+                )
             produto = form.save()
             estoque_inicial = form.cleaned_data.get("estoque_inicial") or 0
             custo_entrada = form.cleaned_data.get("custo_entrada_inicial")
             _aplicar_estoque_inicial(produto, estoque_inicial=estoque_inicial, custo_entrada=custo_entrada, usuario=request.user, observacao="Entrada manual adicional no cadastro do produto.")
             _normalizar_saldos_produto(produto)
             _recalcular_total_produto(produto)
-            _registrar_historico_produto(produto, usuario=request.user, acao="EDICAO", dados_antes=snapshot_antes, observacao="Atualizacao de cadastro do produto.")
+            observacao_historico = "Atualizacao de cadastro do produto."
+            if abaixo_minimo and permitir_abaixo and justificativa_abaixo:
+                observacao_historico = f"{observacao_historico} Aprovado abaixo do minimo: {justificativa_abaixo}"
+            _registrar_historico_produto(
+                produto,
+                usuario=request.user,
+                acao="EDICAO",
+                dados_antes=snapshot_antes,
+                observacao=observacao_historico,
+            )
             messages.success(request, "Produto atualizado com sucesso!")
             if "_save_and_new" in request.POST:
                 return redirect("estoque:criar_produto")
@@ -488,12 +543,12 @@ def api_sugerir_pecas_os(request):
     if servico:
         produtos = produtos.filter(Q(servicos_compativeis__nome__icontains=servico) | Q(nome__icontains=servico)).distinct()
 
-    candidatos = list(produtos.select_related("categoria_config").order_by("nome")[:120])
+    candidatos = list(produtos.select_related("categoria_config", "ponto_operacional").order_by("nome")[:120])
     if not candidatos:
         fallback = base_qs
         if q:
             fallback = fallback.filter(Q(nome__icontains=q) | Q(ean__icontains=q) | Q(sku__icontains=q))
-        candidatos = list(fallback.select_related("categoria_config").order_by("nome")[:60])
+        candidatos = list(fallback.select_related("categoria_config", "ponto_operacional").order_by("nome")[:60])
 
     historico_por_nome = {}
     try:
@@ -565,6 +620,8 @@ def api_sugerir_pecas_os(request):
                 "garantia_peca_dias": produto.garantia_peca_dias or 0,
                 "modelos_compativeis": produto.modelos_compativeis or "",
                 "quantidade": int(produto.quantidade or 0),
+                "ponto_operacional_id": produto.ponto_operacional_id or None,
+                "ponto_operacional_codigo": (produto.ponto_operacional.codigo if produto.ponto_operacional_id and produto.ponto_operacional else ""),
                 "score": int(score),
                 "frequencia_historica": int(historico),
                 "motivos": motivos[:3],

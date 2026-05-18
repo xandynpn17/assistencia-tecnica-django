@@ -515,6 +515,13 @@ class ServicoPeca(models.Model):
         blank=True,
         related_name="itens_os",
     )
+    ponto_operacional_reserva = models.ForeignKey(
+        "estoque.PontoOperacional",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_os_reserva",
+    )
     item_orcamento = models.ForeignKey(
         "orcamentos.ItemOrcamento",
         on_delete=models.SET_NULL,

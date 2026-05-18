@@ -44,6 +44,19 @@ class ProdutoForm(forms.ModelForm):
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
         help_text="Marque para permitir preco final abaixo do minimo calculado.",
     )
+    justificativa_preco_abaixo_minimo = forms.CharField(
+        label="Justificativa para preco abaixo do minimo",
+        required=False,
+        max_length=200,
+        widget=forms.Textarea(
+            attrs={
+                "class": "form-control",
+                "rows": 2,
+                "placeholder": "Explique o motivo (campanha, reposicionamento, queima de estoque etc.)",
+            }
+        ),
+        help_text="Obrigatorio quando o preco final ficar abaixo do minimo e a permissao for marcada.",
+    )
 
     class Meta:
         model = Produto
@@ -158,6 +171,33 @@ class ProdutoForm(forms.ModelForm):
         self.fields["previsao_venda_mensal"].label = "Previsao venda mensal"
         self.fields["previsao_venda_mensal"].help_text = "Quantidade estimada de unidades vendidas por mes para usar o rateio."
         self.fields["incluir_rateio_custo_fixo"].label = "Incluir rateio de custo fixo"
+        self.fields["categoria_config"].label = "Categoria (catalogo)"
+        self.fields["categoria_config"].help_text = "Use esta opcao primeiro. A categoria manual deve ser excecao."
+        self.fields["categoria"].label = "Categoria manual (opcional)"
+        self.fields["categoria"].help_text = "Preencha apenas se a categoria ainda nao existir no catalogo."
+        self.fields["fornecedor_config"].label = "Fornecedor (catalogo)"
+        self.fields["fornecedor_manual"].label = "Fornecedor manual (opcional)"
+        self.fields["fornecedor_manual"].help_text = "Use apenas quando o fornecedor nao estiver cadastrado."
+        self.fields["custo_unitario"].label = "Custo unitario (R$)"
+        self.fields["custo_operacional"].label = "Custo operacional (R$)"
+        self.fields["custo_frete"].label = "Custo frete (R$)"
+        self.fields["custo_impostos"].label = "Custo impostos (R$)"
+        self.fields["custo_comissao"].label = "Custo comissao (R$)"
+        self.fields["custo_marketplace"].label = "Custo marketplace (R$)"
+        self.fields["custo_cac"].label = "Custo CAC (R$)"
+        self.fields["bonus_venda"].label = "Bonus venda (R$)"
+        self.fields["custo_medio"].label = "Custo medio (R$)"
+        self.fields["preco_final"].label = "Preco final (R$)"
+        self.fields["percentual_comissao_peca"].label = "Comissao peca (%)"
+        self.fields["margem_lucro"].label = "Margem lucro (%)"
+        self.fields["margem_minima"].label = "Margem minima (%)"
+        self.fields["taxa_cartao"].label = "Taxa cartao (%)"
+        self.fields["aliquota_manual"].label = "Aliquota manual (%)"
+        self.fields["icms"].label = "ICMS (%)"
+        self.fields["ipi"].label = "IPI (%)"
+        self.fields["pis"].label = "PIS (%)"
+        self.fields["cofins"].label = "COFINS (%)"
+        self.fields["pis_cofins"].label = "PIS/COFINS (%)"
         numeric_optional_fields = [
             "percentual_comissao_peca",
             "bonus_venda",
@@ -309,11 +349,14 @@ class ProdutoForm(forms.ModelForm):
         else:
             preco_minimo = custo_base
 
-        if preco_final > 0 and preco_final < preco_minimo and not permitir_abaixo:
-            self.add_error(
-                "preco_final",
-                f"Preco final abaixo do minimo calculado ({preco_minimo:.2f}). Marque a opcao de confirmacao para salvar.",
-            )
+        preco_abaixo = preco_final > 0 and preco_final < preco_minimo
+        justificativa = (cleaned.get("justificativa_preco_abaixo_minimo") or "").strip()
+        cleaned["preco_abaixo_minimo_detectado"] = bool(preco_abaixo)
+        if preco_abaixo and not permitir_abaixo:
+            self.add_error("preco_final", f"Preco final abaixo do minimo calculado ({preco_minimo:.2f}).")
+            self.add_error("permitir_preco_abaixo_minimo", "Confirme para permitir valor abaixo do minimo.")
+        if preco_abaixo and permitir_abaixo and not justificativa:
+            self.add_error("justificativa_preco_abaixo_minimo", "Informe a justificativa para salvar abaixo do minimo.")
 
         return cleaned
 

@@ -74,6 +74,72 @@
                 </div>
             </div>
 
+            <div class="border rounded p-2 mb-2 bg-light small">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="fas fa-boxes mr-1"></i>Reservas automáticas da OS</h6>
+                    <span class="text-muted">Validade padrão: {{ reserva_auto_validade_dias }} dia(s)</span>
+                </div>
+                {% if reservas_auto_os %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Peça</th>
+                                <th>Ponto</th>
+                                <th>Qtd</th>
+                                <th>Validade</th>
+                                <th>Status</th>
+                                <th class="text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for reserva in reservas_auto_os %}
+                            <tr>
+                                <td>{{ reserva.codigo_reserva }}</td>
+                                <td>{{ reserva.produto.nome|default:"-" }}</td>
+                                <td>{% if reserva.ponto_operacional %}{{ reserva.ponto_operacional.codigo }}{% else %}-{% endif %}</td>
+                                <td>{{ reserva.quantidade }}</td>
+                                <td>{{ reserva.valido_ate|date:"d/m/Y" }}</td>
+                                <td>
+                                    {% if reserva.status == "ativa" %}
+                                    <span class="badge badge-success">Ativa</span>
+                                    {% elif reserva.status == "expirada" %}
+                                    <span class="badge badge-warning">Expirada</span>
+                                    {% elif reserva.status == "convertida" %}
+                                    <span class="badge badge-primary">Convertida</span>
+                                    {% else %}
+                                    <span class="badge badge-secondary">{{ reserva.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if reserva.status == "ativa" and not ordem.fechada %}
+                                    <form method="post" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="form_type" value="renovar_reserva_auto">
+                                        <input type="hidden" name="reserva_id" value="{{ reserva.id }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">Renovar</button>
+                                    </form>
+                                    <form method="post" class="d-inline" onsubmit="return window.AppMessages.confirmSync('Cancelar esta reserva automática?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="form_type" value="cancelar_reserva_auto">
+                                        <input type="hidden" name="reserva_id" value="{{ reserva.id }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar</button>
+                                    </form>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-muted">Sem reservas automáticas para esta OS.</div>
+                {% endif %}
+            </div>
+
             <div class="alert {% if os_pago %}alert-success{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center py-2 mb-2">
                 <div>
                     <strong>Pago?</strong> {% if os_pago %}Sim{% else %}Não{% endif %}
@@ -116,7 +182,7 @@
                         <h6 class="mb-1">{{ item.nome }} <span class="badge badge-light border">{{ item.get_tipo_display }}</span></h6>
                         <p class="mb-1 small">R$ {{ item.valor_unitario|floatformat:2 }} x {{ item.quantidade }} = R$ {{ item.total|floatformat:2 }}</p>
                         {% if item.produto_estoque %}
-                        <small class="text-muted">Estoque vinculado: {{ item.produto_estoque.nome }}{% if item.estoque_consumido_em %} | Baixado{% endif %}</small><br>
+                        <small class="text-muted">Estoque vinculado: {{ item.produto_estoque.nome }}{% if item.ponto_operacional_reserva %} | Ponto {{ item.ponto_operacional_reserva.codigo }}{% elif item.produto_estoque.ponto_operacional %} | Ponto {{ item.produto_estoque.ponto_operacional.codigo }}{% endif %}{% if item.estoque_consumido_em %} | Baixado{% endif %}</small><br>
                         {% endif %}
                         <small class="text-muted">Responsável: {{ item.tecnico_responsavel.username|default:"-" }}</small>
                         {% if item.garantia_dias %}
@@ -220,6 +286,7 @@
                         </div>
                     </div>
                     <div id="sp_resultado_busca" class="mb-2" style="max-height:180px;overflow-y:auto;"></div>
+                    <small class="text-muted d-block mb-2">A reserva automatica usa o ponto escolhido aqui. Se vazio, utiliza o ponto padrao do produto.</small>
                     <div class="form-row">
                         <div class="form-group col-md-4 mb-2">
                             <label>Tipo</label>
@@ -252,6 +319,15 @@
                         <div class="form-group col-md-4 mb-2">
                             <label>Garantia (dias)</label>
                             <input type="number" name="garantia_dias" id="sp_garantia" class="form-control" min="0" value="">
+                        </div>
+                        <div class="form-group col-md-4 mb-2">
+                            <label>Ponto da reserva</label>
+                            <select name="ponto_operacional_reserva" id="sp_ponto_reserva" class="form-control">
+                                <option value="">Ponto padrao do produto</option>
+                                {% for ponto in servico_form.fields.ponto_operacional_reserva.queryset %}
+                                <option value="{{ ponto.id }}">{{ ponto.codigo }} - {{ ponto.nome }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
                     <div class="form-row">
@@ -346,6 +422,10 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('sp_valor').value = produto.preco || '';
         document.getElementById('sp_garantia').value = produto.garantia_peca_dias || '';
         document.getElementById('sp_quantidade').value = 1;
+        const pontoSelect = document.getElementById('sp_ponto_reserva');
+        if (pontoSelect) {
+            pontoSelect.value = produto.ponto_operacional_id ? String(produto.ponto_operacional_id) : '';
+        }
         resultado.innerHTML = '';
     }
 

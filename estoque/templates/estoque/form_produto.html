@@ -37,6 +37,11 @@
         font-weight: 700;
         color: #0f172a;
     }
+    .kpi-value-sm {
+        font-size: 0.92rem;
+        font-weight: 600;
+        color: #334155;
+    }
     .modo-avancado {
         display: none;
     }
@@ -93,6 +98,24 @@
     .produto-header-value {
         font-weight: 700;
         color: #0f172a;
+    }
+    .hint-unidade {
+        font-size: 0.78rem;
+        color: #64748b;
+        margin-top: 2px;
+    }
+    .calc-readonly {
+        background: #eef2f7;
+    }
+    .simulador-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+    @media (max-width: 991.98px) {
+        .simulador-grid {
+            grid-template-columns: 1fr;
+        }
     }
     @media (max-width: 991.98px) {
         .produto-header-grid {
@@ -203,6 +226,9 @@
 
                 <div class="secao">
                     <div class="secao-titulo">Classificacao e origem</div>
+                    <div class="alert alert-light border py-2 mb-2 small">
+                        Priorize os campos de <strong>catalogo</strong> (categoria/fornecedor). Use os campos manuais apenas quando o cadastro ainda nao existir.
+                    </div>
                     <div class="row campo-compacto">
                         <div class="col-md-3">{{ form.categoria_config.label_tag }}{{ form.categoria_config }}</div>
                         <div class="col-md-3 modo-avancado">{{ form.categoria.label_tag }}{{ form.categoria }}</div>
@@ -220,6 +246,11 @@
             <div class="produto-tab-pane" data-produto-tab="estoque">
                 <div class="secao" id="secao-estoque">
                     <div class="secao-titulo">Estoque</div>
+                    {% if not modo_edicao %}
+                    <div class="alert alert-info py-2 mb-2">
+                        Defina aqui o <strong>estoque inicial</strong> para entrada automatica no historico de movimentacoes.
+                    </div>
+                    {% endif %}
                     {% if modo_edicao %}
                     <div class="text-muted small mb-2">Nesta tela, o campo de estoque inicial funciona como <strong>entrada adicional</strong>.</div>
                     {% endif %}
@@ -252,6 +283,9 @@
             <div class="produto-tab-pane" data-produto-tab="precos">
                 <div class="secao">
                     <div class="secao-titulo">Custos e precificacao</div>
+                    <div class="alert alert-light border py-2 mb-2 small">
+                        Campos com <strong>(R$)</strong> sao valores monetarios. Campos com <strong>(%)</strong> sao percentuais.
+                    </div>
                     <div class="row campo-compacto">
                         <div class="col-md-2">{{ form.custo_unitario.label_tag }}{{ form.custo_unitario }}</div>
                         <div class="col-md-2">{{ form.custo_frete.label_tag }}{{ form.custo_frete }}</div>
@@ -278,6 +312,13 @@
                         <div class="col-md-2 modo-avancado">{{ form.custo_medio.label_tag }}{{ form.custo_medio }}</div>
                         <div class="col-md-2">{{ form.margem_lucro.label_tag }}{{ form.margem_lucro }}</div>
                     </div>
+                    <div class="row mt-1">
+                        <div class="col-md-6">
+                            <small class="text-muted" id="hint-custo-operacional">
+                                Se informar custos detalhados, o custo operacional e recalculado automaticamente.
+                            </small>
+                        </div>
+                    </div>
                     <div class="row mt-2 campo-compacto">
                         <div class="col-md-2 text-muted small">
                             Competencia do rateio
@@ -302,15 +343,32 @@
                         <div class="col-md-3">
                             <label for="id_preco_sugerido_ui">Preco sugerido</label>
                             <input id="id_preco_sugerido_ui" class="form-control" readonly>
+                            <div class="hint-unidade">R$</div>
                         </div>
                         <div class="col-md-3">
                             <label for="id_preco_minimo_ui">Preco minimo</label>
                             <input id="id_preco_minimo_ui" class="form-control" readonly>
+                            <div class="hint-unidade">R$</div>
                         </div>
                         <div class="col-md-3">
                             {{ form.preco_final.label_tag }}{{ form.preco_final }}
+                            <div class="mt-1 d-flex flex-wrap" style="gap:6px;">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-usar-preco-sugerido">Usar sugerido</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-usar-preco-minimo">Usar minimo</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-arredondar-90">Arred. ,90</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-arredondar-99">Arred. ,99</button>
+                            </div>
                         </div>
                         <div class="col-md-3 form-check mt-4">{{ form.permitir_preco_abaixo_minimo }} {{ form.permitir_preco_abaixo_minimo.label_tag }}</div>
+                    </div>
+                    <div class="row mt-2" id="bloco-justificativa-abaixo-minimo" style="display:none;">
+                        <div class="col-md-8">
+                            {{ form.justificativa_preco_abaixo_minimo.label_tag }}
+                            {{ form.justificativa_preco_abaixo_minimo }}
+                            {% if form.justificativa_preco_abaixo_minimo.help_text %}
+                            <small class="text-muted">{{ form.justificativa_preco_abaixo_minimo.help_text }}</small>
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="row mt-1">
                         <div class="col-12 text-muted small">
@@ -343,6 +401,39 @@
                             <div class="kpi-box">
                                 <div class="kpi-label">Lucro no cartao</div>
                                 <div class="kpi-value" id="kpi-lucro-cartao">R$ 0,00</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="secao mt-3 mb-0">
+                        <div class="secao-titulo mb-2">Simulador por forma de pagamento</div>
+                        <div class="row campo-compacto">
+                            <div class="col-md-2">
+                                <label for="id_taxa_pix_ui">Taxa PIX (%)</label>
+                                <input id="id_taxa_pix_ui" class="form-control" type="number" step="0.01" min="0" value="0.00">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="id_taxa_dinheiro_ui">Taxa dinheiro (%)</label>
+                                <input id="id_taxa_dinheiro_ui" class="form-control" type="number" step="0.01" min="0" value="0.00">
+                            </div>
+                            <div class="col-md-8 text-muted small mt-4">
+                                Compare margem e lucro por meio de recebimento sem alterar o cadastro base do produto.
+                            </div>
+                        </div>
+                        <div class="simulador-grid mt-2">
+                            <div class="kpi-box">
+                                <div class="kpi-label">Dinheiro</div>
+                                <div class="kpi-value" id="sim-lucro-dinheiro">R$ 0,00</div>
+                                <div class="kpi-value-sm" id="sim-margem-dinheiro">Margem 0,00%</div>
+                            </div>
+                            <div class="kpi-box">
+                                <div class="kpi-label">PIX</div>
+                                <div class="kpi-value" id="sim-lucro-pix">R$ 0,00</div>
+                                <div class="kpi-value-sm" id="sim-margem-pix">Margem 0,00%</div>
+                            </div>
+                            <div class="kpi-box">
+                                <div class="kpi-label">Cartao</div>
+                                <div class="kpi-value" id="sim-lucro-cartao">R$ 0,00</div>
+                                <div class="kpi-value-sm" id="sim-margem-cartao">Margem 0,00%</div>
                             </div>
                         </div>
                     </div>
@@ -388,6 +479,14 @@ function moeda(valor) {
 
 function percentual(valor) {
     return `${valor.toFixed(2).replace(".", ",")}%`;
+}
+
+function precoArredondadoComCentavos(valor, centavosDesejados) {
+    if (!Number.isFinite(valor) || valor <= 0) return 0;
+    const inteiro = Math.floor(valor);
+    const ajuste = centavosDesejados / 100;
+    const candidato = inteiro + ajuste;
+    return candidato >= valor ? candidato : (inteiro + 1 + ajuste);
 }
 
 function definirModoAvancado(ativo) {
@@ -523,10 +622,22 @@ function recalcularPreco() {
     const custosDetalhados = frete + impostos + comissao + marketplace + cac + rateioFixo;
     const custoOperacionalFinal = custosDetalhados > 0 ? custosDetalhados : custoOperacional;
     const custoTotal = custoUnitario + custoOperacionalFinal;
+    const campoCustoOper = document.getElementById("id_custo_operacional");
+    const hintCustoOper = document.getElementById("hint-custo-operacional");
 
     if (custosDetalhados > 0) {
-        const campoCustoOper = document.getElementById("id_custo_operacional");
-        if (campoCustoOper) campoCustoOper.value = custoOperacionalFinal.toFixed(2);
+        if (campoCustoOper) {
+            campoCustoOper.value = custoOperacionalFinal.toFixed(2);
+            campoCustoOper.readOnly = true;
+            campoCustoOper.classList.add("calc-readonly");
+        }
+        if (hintCustoOper) hintCustoOper.textContent = "Custos detalhados ativos: campo recalculado automaticamente.";
+    } else {
+        if (campoCustoOper) {
+            campoCustoOper.readOnly = false;
+            campoCustoOper.classList.remove("calc-readonly");
+        }
+        if (hintCustoOper) hintCustoOper.textContent = "Sem custos detalhados: campo operacional editavel manualmente.";
     }
 
     let precoSugerido = custoTotal;
@@ -556,14 +667,37 @@ function recalcularPreco() {
     const lucroCartao = recebidoCartao - custoTotal;
 
     const alerta = document.getElementById("alerta-minimo");
+    const blocoJustificativa = document.getElementById("bloco-justificativa-abaixo-minimo");
+    const checkAbaixoMin = document.getElementById("id_permitir_preco_abaixo_minimo");
     if (alerta) {
         alerta.style.display = (precoUsado > 0 && precoUsado < precoMinimo) ? "block" : "none";
+    }
+    if (blocoJustificativa) {
+        const precisaJustificativa = precoUsado > 0 && precoUsado < precoMinimo && !!checkAbaixoMin?.checked;
+        blocoJustificativa.style.display = precisaJustificativa ? "" : "none";
     }
 
     document.getElementById("kpi-custo").textContent = moeda(custoTotal);
     document.getElementById("kpi-lucro").textContent = moeda(lucro);
     document.getElementById("kpi-margem").textContent = percentual(margemReal);
     document.getElementById("kpi-lucro-cartao").textContent = moeda(lucroCartao);
+
+    const taxaDinheiro = numero("id_taxa_dinheiro_ui");
+    const taxaPix = numero("id_taxa_pix_ui");
+    const taxas = [
+        { taxa: taxaDinheiro, lucroId: "sim-lucro-dinheiro", margemId: "sim-margem-dinheiro" },
+        { taxa: taxaPix, lucroId: "sim-lucro-pix", margemId: "sim-margem-pix" },
+        { taxa: taxaCartao, lucroId: "sim-lucro-cartao", margemId: "sim-margem-cartao" },
+    ];
+    taxas.forEach((item) => {
+        const recebido = precoUsado * (1 - (item.taxa / 100));
+        const lucroCanal = recebido - custoTotal;
+        const margemCanal = recebido > 0 ? (lucroCanal / recebido) * 100 : 0;
+        const elLucro = document.getElementById(item.lucroId);
+        const elMargem = document.getElementById(item.margemId);
+        if (elLucro) elLucro.textContent = moeda(lucroCanal);
+        if (elMargem) elMargem.textContent = `Margem ${percentual(margemCanal)}`;
+    });
 }
 
 function configurarGeracaoEAN() {
@@ -612,6 +746,12 @@ document.addEventListener("DOMContentLoaded", () => {
         el.addEventListener("input", recalcularPreco);
         el.addEventListener("change", recalcularPreco);
     });
+    ["id_taxa_pix_ui", "id_taxa_dinheiro_ui", "id_permitir_preco_abaixo_minimo"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener("input", recalcularPreco);
+        el.addEventListener("change", recalcularPreco);
+    });
 
     document.getElementById("btn-modo-rapido")?.addEventListener("click", () => definirModoAvancado(false));
     document.getElementById("btn-modo-avancado")?.addEventListener("click", () => definirModoAvancado(true));
@@ -622,13 +762,47 @@ document.addEventListener("DOMContentLoaded", () => {
         recalcularPreco();
     });
     document.getElementById("id_modo_preco")?.addEventListener("change", atualizarCamposTributarios);
+    document.getElementById("btn-usar-preco-sugerido")?.addEventListener("click", () => {
+        const campoSug = document.getElementById("id_preco_sugerido_ui");
+        const campoFinal = document.getElementById("id_preco_final");
+        if (!campoSug || !campoFinal) return;
+        const valor = parseFloat((campoSug.value || "0").replace(",", "."));
+        if (!Number.isFinite(valor) || valor <= 0) return;
+        campoFinal.value = valor.toFixed(2);
+        recalcularPreco();
+    });
+    document.getElementById("btn-usar-preco-minimo")?.addEventListener("click", () => {
+        const campoMin = document.getElementById("id_preco_minimo_ui");
+        const campoFinal = document.getElementById("id_preco_final");
+        if (!campoMin || !campoFinal) return;
+        const valor = parseFloat((campoMin.value || "0").replace(",", "."));
+        if (!Number.isFinite(valor) || valor <= 0) return;
+        campoFinal.value = valor.toFixed(2);
+        recalcularPreco();
+    });
+    document.getElementById("btn-arredondar-90")?.addEventListener("click", () => {
+        const campoFinal = document.getElementById("id_preco_final");
+        if (!campoFinal) return;
+        const valorAtual = numero("id_preco_final");
+        if (valorAtual <= 0) return;
+        campoFinal.value = precoArredondadoComCentavos(valorAtual, 90).toFixed(2);
+        recalcularPreco();
+    });
+    document.getElementById("btn-arredondar-99")?.addEventListener("click", () => {
+        const campoFinal = document.getElementById("id_preco_final");
+        if (!campoFinal) return;
+        const valorAtual = numero("id_preco_final");
+        if (valorAtual <= 0) return;
+        campoFinal.value = precoArredondadoComCentavos(valorAtual, 99).toFixed(2);
+        recalcularPreco();
+    });
     document.querySelectorAll("[data-produto-tab-btn]").forEach((btn) => {
         btn.addEventListener("click", () => selecionarAbaProduto(btn.dataset.produtoTabBtn));
     });
 
     configurarGeracaoEAN();
-    definirModoAvancado(true);
-    selecionarAbaProduto("essencial");
+    definirModoAvancado({% if modo_edicao %}true{% else %}false{% endif %});
+    selecionarAbaProduto("{% if modo_edicao %}essencial{% else %}estoque{% endif %}");
     atualizarVisibilidadeTipoItem();
     atualizarCamposTributarios();
     recalcularPreco();

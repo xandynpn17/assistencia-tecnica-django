@@ -37,10 +37,18 @@ from ordens.models import LinhaTrabalho, OrdemServico, ServicoPeca
 class ConsultaArtigosTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
+        self.empresa = Empresa.objects.create(
+            nome="Empresa Teste",
+            regime_tributario="simples",
+            modo_tributario="basico",
+            aliquota_comercio=6,
+            aliquota_servico=8,
+        )
         self.user = user_model.objects.create_user(
             username="estoque_tester",
             password="senha-forte-123",
             tipo_usuario="atendente",
+            empresa=self.empresa,
             perm_estoque_cadastro_produto=True,
             perm_estoque_excluir_produto=True,
             perm_estoque_ajuste_manual=True,
@@ -53,6 +61,7 @@ class ConsultaArtigosTests(TestCase):
             username="estoque_tecnico",
             password="senha-forte-123",
             tipo_usuario="tecnico",
+            empresa=self.empresa,
         )
         self.client.force_login(self.user)
         self.vendedor_numero = self.user.numero_vendedor
@@ -60,6 +69,7 @@ class ConsultaArtigosTests(TestCase):
         self.ponto_loja = PontoOperacional.objects.create(codigo="PO3", nome="Loja")
         self.ponto_avaria = PontoOperacional.objects.create(codigo="AVARIA", nome="Avariados")
         self.produto = Produto.objects.create(
+            empresa=self.empresa,
             nome="Tela A10",
             sku="SKU-TELA-A10",
             ean="7890001112223",
@@ -74,13 +84,6 @@ class ConsultaArtigosTests(TestCase):
         SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=self.ponto_loja, quantidade=8)
         SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=self.ponto_avaria, quantidade=2)
         Caixa.objects.create(aberto=True, saldo_inicial=0)
-        Empresa.objects.create(
-            nome="Empresa Teste",
-            regime_tributario="simples",
-            modo_tributario="basico",
-            aliquota_comercio=6,
-            aliquota_servico=8,
-        )
         ConfiguracaoSistema.get_configuracao()
 
     def test_pagina_consulta_artigos(self):
@@ -137,6 +140,7 @@ class ConsultaArtigosTests(TestCase):
     def test_lista_produtos_com_paginacao(self):
         for i in range(40):
             Produto.objects.create(
+                empresa=self.empresa,
                 nome=f"Produto Extra {i}",
                 sku=f"SKU-EXTRA-{i:03d}",
                 ean=f"7899991000{i:03d}"[-13:],
@@ -152,6 +156,7 @@ class ConsultaArtigosTests(TestCase):
 
     def test_lista_produtos_filtra_por_busca_e_atalho(self):
         Produto.objects.create(
+            empresa=self.empresa,
             nome="Bateria sem saldo",
             sku="SKU-BAT-000",
             ean="7899991110001",
@@ -1676,6 +1681,7 @@ class ProdutoCadastroAprimoradoTests(TestCase):
                 margem_minima="50.00",
                 estoque_inicial="0",
                 permitir_preco_abaixo_minimo="on",
+                justificativa_preco_abaixo_minimo="Campanha promocional planejada.",
             )
         )
         self.assertTrue(form_ok.is_valid())

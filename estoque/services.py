@@ -22,6 +22,8 @@ from .models import (
     VendaRapidaEstoque,
 )
 
+RESERVA_AUTO_OS_PREFIX = "AUTO_OS_ITEM:"
+
 
 def normalizar_saldos_produto(produto):
     if not produto or not produto.ponto_operacional or not produto.quantidade:
@@ -205,6 +207,20 @@ def _codigo_guia_interno():
         codigo = "GUIA-" + "".join(random.choices(string.digits, k=8))
         if not VendaRapidaEstoque.objects.filter(guia_pagamento=codigo).exists():
             return codigo
+
+
+def _marcador_reserva_auto_os(item_os_id):
+    return f"{RESERVA_AUTO_OS_PREFIX}{int(item_os_id)}"
+
+
+def _extrair_item_os_do_motivo(motivo_status):
+    texto = (motivo_status or "").strip()
+    if not texto.startswith(RESERVA_AUTO_OS_PREFIX):
+        return None
+    valor = texto[len(RESERVA_AUTO_OS_PREFIX) :].strip()
+    if not valor.isdigit():
+        return None
+    return int(valor)
 
 
 def gerar_codigo_cesto_venda_rapida():
@@ -499,6 +515,9 @@ def criar_reserva_estoque(
     telefone_contato="",
     valido_ate=None,
     usuario=None,
+    ordem_servico=None,
+    item_os_id=None,
+    motivo_status="",
 ):
     try:
         quantidade_int = int(quantidade or 0)
@@ -546,6 +565,11 @@ def criar_reserva_estoque(
     if disponivel < quantidade_int:
         raise ValueError("Sem saldo disponivel para reservar neste ponto.")
 
+    marcador_auto = ""
+    if item_os_id:
+        marcador_auto = _marcador_reserva_auto_os(item_os_id)
+    motivo_final = (marcador_auto or motivo_status or "").strip()[:180]
+
     return ReservaEstoque.objects.create(
         codigo_reserva=_codigo_reserva_interno(),
         produto=produto,
@@ -555,6 +579,8 @@ def criar_reserva_estoque(
         telefone_contato=telefone_contato,
         valido_ate=valido_ate,
         status="ativa",
+        motivo_status=motivo_final,
+        ordem_servico=ordem_servico,
         usuario=usuario,
     )
 
@@ -724,19 +750,37 @@ def cancelar_reserva(reserva, usuario=None, motivo="Cancelada manualmente"):
     return reserva
 
 
-def consumir_reservas_ordem(ordem, usuario=None):
+def consumir_reservas_ordem(ordem, usuario=None, *, incluir_auto=True, incluir_manuais=True):
     reservas = ReservaEstoque.objects.filter(
         ordem_servico=ordem,
         status="ativa",
     ).select_related("produto", "ponto_operacional")
+    if incluir_auto and not incluir_manuais:
+        reservas = reservas.filter(motivo_status__startswith=RESERVA_AUTO_OS_PREFIX)
+    elif incluir_manuais and not incluir_auto:
+        reservas = reservas.exclude(motivo_status__startswith=RESERVA_AUTO_OS_PREFIX)
+
+    item_ids_convertidos = set()
     total = 0
     for reserva in reservas:
+        item_os_id = _extrair_item_os_do_motivo(reserva.motivo_status)
         converter_reserva(
             reserva,
             usuario=usuario,
             motivo=f"Consumo automatico no fechamento da OS {ordem.numero_os}",
         )
+        if item_os_id:
+            item_ids_convertidos.add(item_os_id)
         total += 1
+
+    if item_ids_convertidos:
+        from ordens.models import ServicoPeca
+
+        ServicoPeca.objects.filter(
+            id__in=item_ids_convertidos,
+            ordem=ordem,
+            estoque_consumido_em__isnull=True,
+        ).update(estoque_consumido_em=timezone.now())
     return total
 
 
@@ -759,13 +803,26 @@ def devolver_reservas_ordem(ordem, usuario=None):
 @transaction.atomic
 def consumir_itens_estoque_ordem(ordem, usuario=None):
     total = 0
+    reservas_auto_item_ids = set(
+        ReservaEstoque.objects.filter(
+            ordem_servico=ordem,
+            motivo_status__startswith=RESERVA_AUTO_OS_PREFIX,
+        ).values_list("motivo_status", flat=True)
+    )
+    reservas_auto_item_ids = {
+        item_id
+        for item_id in (_extrair_item_os_do_motivo(motivo) for motivo in reservas_auto_item_ids)
+        if item_id
+    }
     itens = (
         ordem.servicos_pecas.select_related("produto_estoque", "produto_estoque__ponto_operacional")
         .filter(tipo="peca", produto_estoque__isnull=False, estoque_consumido_em__isnull=True)
     )
     for item in itens:
+        if item.id in reservas_auto_item_ids:
+            continue
         produto = item.produto_estoque
-        ponto = getattr(produto, "ponto_operacional", None)
+        ponto = item.ponto_operacional_reserva or getattr(produto, "ponto_operacional", None)
         if not produto or not ponto:
             raise ValueError(f"O item '{item.nome}' nao possui ponto operacional para baixa de estoque.")
         registrar_movimentacao_estoque(
@@ -783,6 +840,21 @@ def consumir_itens_estoque_ordem(ordem, usuario=None):
 
 
 @transaction.atomic
+def consumir_estoque_ordem_no_pagamento(ordem, usuario=None):
+    reservas_convertidas = consumir_reservas_ordem(
+        ordem,
+        usuario=usuario,
+        incluir_auto=True,
+        incluir_manuais=False,
+    )
+    itens_consumidos = consumir_itens_estoque_ordem(ordem, usuario=usuario)
+    return {
+        "reservas_convertidas": reservas_convertidas,
+        "itens_consumidos": itens_consumidos,
+    }
+
+
+@transaction.atomic
 def devolver_itens_estoque_ordem(ordem, usuario=None):
     total = 0
     itens = (
@@ -791,7 +863,7 @@ def devolver_itens_estoque_ordem(ordem, usuario=None):
     )
     for item in itens:
         produto = item.produto_estoque
-        ponto = getattr(produto, "ponto_operacional", None)
+        ponto = item.ponto_operacional_reserva or getattr(produto, "ponto_operacional", None)
         if not produto or not ponto:
             continue
         registrar_movimentacao_estoque(

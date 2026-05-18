@@ -1,7 +1,7 @@
 ﻿from django import forms
 from django.contrib.auth import get_user_model
 from configuracoes.models import ParceiroExpedicao
-from estoque.models import Produto
+from estoque.models import PontoOperacional, Produto
 from configuracoes.models import MarcaGarantia, TipoEquipamentoConfig
 from orcamentos.models import Orcamento
 
@@ -217,6 +217,8 @@ class ServicoPecaForm(forms.ModelForm):
             .objects.filter(is_active=True, tipo_usuario="tecnico")
             .order_by("username")
         )
+        self.fields["ponto_operacional_reserva"].queryset = PontoOperacional.objects.filter(ativo=True).order_by("codigo")
+        self.fields["ponto_operacional_reserva"].required = False
 
     def clean(self):
         cleaned = super().clean()
@@ -229,8 +231,11 @@ class ServicoPecaForm(forms.ModelForm):
                 return cleaned
 
         tipo = cleaned.get("tipo")
+        ponto_reserva = cleaned.get("ponto_operacional_reserva")
         if produto:
             cleaned["produto_estoque"] = produto
+            if not ponto_reserva and produto.ponto_operacional_id:
+                cleaned["ponto_operacional_reserva"] = produto.ponto_operacional
             if tipo == "peca" and produto.tipo_item == "servico":
                 self.add_error("tipo", "O item selecionado no estoque é um serviço, não uma peça.")
             if tipo == "servico" and produto.tipo_item != "servico" and not produto.is_servico:
@@ -243,12 +248,14 @@ class ServicoPecaForm(forms.ModelForm):
                 cleaned["garantia_dias"] = produto.garantia_peca_dias
         else:
             cleaned["produto_estoque"] = None
+            if tipo == "peca":
+                cleaned["ponto_operacional_reserva"] = None
 
         return cleaned
 
     class Meta:
         model = ServicoPeca
-        fields = ["tipo", "nome", "descricao", "quantidade", "valor_unitario", "garantia_dias", "tecnico_responsavel", "comissionavel", "numeros_taloes"]
+        fields = ["tipo", "nome", "descricao", "quantidade", "valor_unitario", "garantia_dias", "tecnico_responsavel", "ponto_operacional_reserva", "comissionavel", "numeros_taloes"]
         widgets = {
             "tipo": forms.Select(attrs={"class": "form-control"}),
             "nome": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nome do serviço/peça"}),
@@ -257,6 +264,7 @@ class ServicoPecaForm(forms.ModelForm):
             "valor_unitario": forms.NumberInput(attrs={"class": "form-control", "step": 0.01, "placeholder": "0,00"}),
             "garantia_dias": forms.NumberInput(attrs={"class": "form-control", "min": 0, "placeholder": "Dias de garantia"}),
             "tecnico_responsavel": forms.Select(attrs={"class": "form-control"}),
+            "ponto_operacional_reserva": forms.Select(attrs={"class": "form-control"}),
             "comissionavel": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "numeros_taloes": forms.TextInput(
                 attrs={

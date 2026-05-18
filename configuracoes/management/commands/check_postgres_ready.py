@@ -16,7 +16,8 @@ class Command(BaseCommand):
 
     optional_envs = (
         ("DJANGO_DB_PORT", "5432"),
-        ("DJANGO_DB_CONN_MAX_AGE", "60"),
+        ("DJANGO_DB_CONN_MAX_AGE", "0"),
+        ("DJANGO_DB_CONNECT_TIMEOUT", "5"),
     )
 
     def add_arguments(self, parser):

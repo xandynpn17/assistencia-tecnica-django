@@ -126,6 +126,12 @@ $env:DJANGO_DB_USER = $DbUser
 $env:DJANGO_DB_PASSWORD = $resolvedPassword
 $env:DJANGO_DB_HOST = $DbHost
 $env:DJANGO_DB_PORT = [string]$DbPort
+if (-not $env:DJANGO_DB_CONN_MAX_AGE) {
+    $env:DJANGO_DB_CONN_MAX_AGE = "0"
+}
+if (-not $env:DJANGO_DB_CONNECT_TIMEOUT) {
+    $env:DJANGO_DB_CONNECT_TIMEOUT = "5"
+}
 
 Write-Host ""
 Write-Host "Ambiente PostgreSQL configurado:"
@@ -133,6 +139,7 @@ Write-Host "  DB:   $env:DJANGO_DB_NAME"
 Write-Host "  USER: $env:DJANGO_DB_USER"
 Write-Host "  HOST: $env:DJANGO_DB_HOST"
 Write-Host "  PORT: $env:DJANGO_DB_PORT"
+Write-Host "  CONN_MAX_AGE: $env:DJANGO_DB_CONN_MAX_AGE"
 Write-Host ""
 
 & $PythonExe $managePy check_postgres_ready --check-connection

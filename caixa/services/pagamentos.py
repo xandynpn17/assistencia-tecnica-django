@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
@@ -23,7 +23,7 @@ def excluir_pagamento_com_justificativa(*, pagamento, usuario, justificativa):
 
     from caixa.models import RecebimentoConta
     from estoque.models import MovimentacaoEstoque, VendaRapidaEstoque
-    from estoque.services import ajustar_saldo
+    from estoque.services import ajustar_saldo, consumir_estoque_ordem_no_pagamento, consumir_estoque_ordem_no_pagamento
     from ordens.models import OrdemTalao, ServicoPeca
 
     with transaction.atomic():
@@ -132,7 +132,7 @@ def processar_pagamento_pos_transacional(
     from caixa.models import LancamentoCaixa, RecebimentoConta
     from configuracoes.models import ConfiguracaoSistema
     from estoque.models import MovimentacaoEstoque
-    from estoque.services import ajustar_saldo
+    from estoque.services import ajustar_saldo, consumir_estoque_ordem_no_pagamento
 
     desconto_aplicado = Decimal(desconto_aplicado or Decimal("0.00"))
     desconto_percentual = Decimal(desconto_percentual or Decimal("0.00"))
@@ -254,6 +254,8 @@ def processar_pagamento_pos_transacional(
                 )
             processar_evento_servico_finalizado_cb(pagamento.ordem_servico, evento="SERVICO_FINALIZADO")
             if pagamento.ordem_servico.status == "concluida" and conta and conta.status == "paga":
+                consumir_estoque_ordem_no_pagamento(pagamento.ordem_servico, usuario=usuario)
                 processar_evento_retirada_cliente_cb(pagamento.ordem_servico, evento="RETIRADA_CLIENTE")
 
     return pagamento
+

@@ -47,7 +47,12 @@ class FechamentoOSService:
             acao = "Ordem fechada" if ordem.fechada else "Ordem reaberta"
 
             if ordem.fechada:
-                reservas_processadas = consumir_reservas_ordem(ordem, usuario=usuario)
+                reservas_processadas = consumir_reservas_ordem(
+                    ordem,
+                    usuario=usuario,
+                    incluir_auto=False,
+                    incluir_manuais=True,
+                )
                 itens_estoque_processados = consumir_itens_estoque_ordem(ordem, usuario=usuario)
             else:
                 reservas_processadas = devolver_reservas_ordem(ordem, usuario=usuario)
@@ -94,7 +99,12 @@ class FechamentoOSService:
                 usuario=usuario,
                 motivo="Finalizacao e lancamento no caixa",
             )
-            reservas_processadas = consumir_reservas_ordem(ordem, usuario=usuario)
+            reservas_processadas = consumir_reservas_ordem(
+                ordem,
+                usuario=usuario,
+                incluir_auto=False,
+                incluir_manuais=True,
+            )
             itens_estoque_processados = consumir_itens_estoque_ordem(ordem, usuario=usuario)
             total_os = sum((item.total() for item in ordem.servicos_pecas.all()), Decimal("0.00"))
 
