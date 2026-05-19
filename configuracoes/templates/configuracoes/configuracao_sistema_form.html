@@ -153,6 +153,21 @@
                 {% if form.estoque_reserva_os_validade_dias.help_text %}<small class="form-text text-muted">{{ form.estoque_reserva_os_validade_dias.help_text }}</small>{% endif %}
               </div>
               <div class="form-group">
+                <label>{{ form.estoque_pre_reserva_limpeza_horas.label }}</label>
+                {{ form.estoque_pre_reserva_limpeza_horas }}
+                {% if form.estoque_pre_reserva_limpeza_horas.help_text %}<small class="form-text text-muted">{{ form.estoque_pre_reserva_limpeza_horas.help_text }}</small>{% endif %}
+              </div>
+              <div class="form-group">
+                <label>{{ form.estoque_reposicao_origem_codigo.label }}</label>
+                {{ form.estoque_reposicao_origem_codigo }}
+                {% if form.estoque_reposicao_origem_codigo.help_text %}<small class="form-text text-muted">{{ form.estoque_reposicao_origem_codigo.help_text }}</small>{% endif %}
+              </div>
+              <div class="form-group">
+                <label>{{ form.estoque_reposicao_destino_codigo.label }}</label>
+                {{ form.estoque_reposicao_destino_codigo }}
+                {% if form.estoque_reposicao_destino_codigo.help_text %}<small class="form-text text-muted">{{ form.estoque_reposicao_destino_codigo.help_text }}</small>{% endif %}
+              </div>
+              <div class="form-group">
                 <label>{{ form.inventario_ultima_execucao.label }}</label>
                 {{ form.inventario_ultima_execucao }}
               </div>

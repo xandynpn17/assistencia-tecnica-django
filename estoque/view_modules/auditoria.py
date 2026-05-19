@@ -3,12 +3,14 @@ from django.db.models import Q
 from django.shortcuts import render
 
 from configuracoes.permissions import STOCK_VIEW_ROLES, role_required
+from configuracoes.services.tenant_guard import obter_empresa_ativa
 
 from ..models import EstoqueEvento
 
 
 @role_required(STOCK_VIEW_ROLES)
 def auditoria_estoque(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     q = (request.GET.get("q") or "").strip()
     evento = (request.GET.get("evento") or "").strip()
     usuario = (request.GET.get("usuario") or "").strip()
@@ -24,6 +26,10 @@ def auditoria_estoque(request):
         "venda",
         "inventario",
     )
+    if empresa:
+        eventos = eventos.filter(produto__empresa=empresa)
+    else:
+        eventos = eventos.none()
 
     if q:
         eventos = eventos.filter(
@@ -47,7 +53,7 @@ def auditoria_estoque(request):
     eventos_page = Paginator(eventos, 50).get_page(page_number)
 
     tipos_evento = (
-        EstoqueEvento.objects.order_by("evento")
+        EstoqueEvento.objects.filter(produto__empresa=empresa).order_by("evento")
         .values_list("evento", flat=True)
         .distinct()
     )

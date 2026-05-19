@@ -32,7 +32,6 @@ PRESETS: dict[str, PresetPermissao] = {
             "acesso_ordens_extra": True,
             "perm_os_editar_numero_serie": True,
             "perm_os_editar_observacoes_internas": True,
-            "perm_os_editar_local_armazenamento": True,
             "perm_os_concluir": True,
         },
     ),

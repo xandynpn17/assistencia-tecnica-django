@@ -2,6 +2,7 @@
 from decimal import Decimal
 import random
 import string
+import unicodedata
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
@@ -61,6 +62,29 @@ class CategoriaProduto(models.Model):
 
     class Meta:
         ordering = ["ordem", "nome"]
+
+    @staticmethod
+    def nome_canonico(valor):
+        texto = " ".join(str(valor or "").strip().split())
+        if not texto:
+            return ""
+        texto = unicodedata.normalize("NFKD", texto)
+        texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+        return texto.casefold()
+
+    def clean(self):
+        super().clean()
+        self.nome = " ".join(str(self.nome or "").strip().split())
+        canonico = self.nome_canonico(self.nome)
+        if not canonico:
+            raise ValidationError({"nome": "Informe o nome da categoria."})
+        for categoria in CategoriaProduto.objects.exclude(pk=self.pk).only("id", "nome"):
+            if self.nome_canonico(categoria.nome) == canonico:
+                raise ValidationError({"nome": "Ja existe categoria equivalente (considerando acentos e caixa)."})
+
+    def save(self, *args, **kwargs):
+        self.nome = " ".join(str(self.nome or "").strip().split())
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.nome
@@ -208,7 +232,10 @@ class Produto(models.Model):
     objects = ProdutoQuerySet.as_manager()
 
     def _gerar_codigo_ean(self):
-        ultimo = Produto.objects.order_by("-id").first()
+        base_qs = Produto.objects.all()
+        if self.empresa_id:
+            base_qs = base_qs.filter(empresa_id=self.empresa_id)
+        ultimo = base_qs.order_by("-id").first()
         if ultimo and ultimo.ean:
             try:
                 base = int(ultimo.ean)
@@ -226,11 +253,17 @@ class Produto(models.Model):
         if self.sku:
             return str(self.sku).strip().upper()
 
-        ultimo = Produto.objects.order_by("-id").first()
+        base_qs = Produto.objects.all()
+        if self.empresa_id:
+            base_qs = base_qs.filter(empresa_id=self.empresa_id)
+        ultimo = base_qs.order_by("-id").first()
         base = (ultimo.id + 1) if ultimo else 1
         while True:
             candidato = f"SKU-{base:06d}"
-            if not Produto.objects.filter(sku=candidato).exclude(pk=self.pk).exists():
+            sku_qs = Produto.objects.filter(sku=candidato)
+            if self.empresa_id:
+                sku_qs = sku_qs.filter(empresa_id=self.empresa_id)
+            if not sku_qs.exclude(pk=self.pk).exists():
                 return candidato
             base += 1
 
@@ -239,13 +272,6 @@ class Produto(models.Model):
             return Decimal(str(self.aliquota_manual or 0))
 
         empresa = self.empresa
-        if not empresa:
-            try:
-                from configuracoes.models import Empresa
-
-                empresa = Empresa.objects.order_by("id").first()
-            except Exception:
-                empresa = None
 
         if empresa:
             regime = (empresa.regime_tributario or "simples")
@@ -930,6 +956,13 @@ class InventarioEstoque(models.Model):
     ]
 
     ponto_operacional = models.ForeignKey(PontoOperacional, on_delete=models.PROTECT, related_name="inventarios")
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventarios_estoque",
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="aberto")
     observacao = models.CharField(max_length=200, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)

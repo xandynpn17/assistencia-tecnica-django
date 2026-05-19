@@ -158,10 +158,12 @@ def ajustar_saldo(produto, ponto_operacional, delta, allow_negative=False):
         return saldo
 
 
-def expirar_reservas_vencidas(usuario=None):
+def expirar_reservas_vencidas(usuario=None, empresa=None):
     hoje = timezone.localdate()
     agora = timezone.now()
     reservas = ReservaEstoque.objects.filter(status="ativa", valido_ate__lt=hoje)
+    if empresa:
+        reservas = reservas.filter(produto__empresa=empresa)
     total = 0
     for reserva in reservas:
         reserva.status = "expirada"
@@ -172,15 +174,24 @@ def expirar_reservas_vencidas(usuario=None):
     return total
 
 
-def limpar_pre_reservas_antigas(*, dias=1):
-    try:
-        dias = int(dias or 1)
-    except (TypeError, ValueError):
-        dias = 1
-    dias = max(1, dias)
+def limpar_pre_reservas_antigas(*, dias=None, horas=None):
+    config = ConfiguracaoSistema.get_configuracao()
+    if horas is not None:
+        try:
+            janela_horas = int(horas or 0)
+        except (TypeError, ValueError):
+            janela_horas = 0
+    elif dias is not None:
+        try:
+            janela_horas = int(dias or 0) * 24
+        except (TypeError, ValueError):
+            janela_horas = 0
+    else:
+        janela_horas = int(getattr(config, "estoque_pre_reserva_limpeza_horas", 24) or 24)
+    janela_horas = max(1, janela_horas)
 
     agora = timezone.now()
-    limite = agora - timedelta(days=dias)
+    limite = agora - timedelta(hours=janela_horas)
     qs = VendaRapidaEstoque.objects.filter(status="pre_reserva", criado_em__lt=limite)
     total = qs.count()
     if total:
@@ -535,7 +546,7 @@ def criar_reserva_estoque(
     if valido_ate < timezone.localdate():
         raise ValueError("Data de validade da reserva nao pode ser passada.")
 
-    expirar_reservas_vencidas(usuario=usuario)
+    expirar_reservas_vencidas(usuario=usuario, empresa=getattr(produto, "empresa", None))
     normalizar_saldos_produto(produto)
 
     saldo = (

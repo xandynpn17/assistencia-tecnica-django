@@ -321,6 +321,31 @@
         </small>
       </div>
     </div>
+    <div class="card mt-3">
+      <div class="card-header"><strong>Auditoria de Rateio</strong></div>
+      <div class="card-body p-0 table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Quando</th>
+              <th>Evento</th>
+              <th>Usuario</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for evento in rateio_eventos %}
+            <tr>
+              <td>{{ evento.criado_em|date:"d/m H:i" }}</td>
+              <td>{{ evento.evento }}</td>
+              <td>{{ evento.usuario.username|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-center text-muted py-3">Sem eventos de rateio recentes.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 

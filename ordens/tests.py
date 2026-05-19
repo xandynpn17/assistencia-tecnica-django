@@ -2225,9 +2225,9 @@ class PermissoesGranularesOSTests(TestCase):
         self.ordem.refresh_from_db()
         self.assertEqual(self.ordem.local_armazenamento, "")
 
-    def test_atualizar_local_funciona_com_permissao(self):
-        self.user.perm_os_editar_local_armazenamento = True
-        self.user.save(update_fields=["perm_os_editar_local_armazenamento"])
+    def test_atualizar_local_funciona_para_gerente(self):
+        self.user.tipo_usuario = "gerente"
+        self.user.save(update_fields=["tipo_usuario"])
         response = self.client.post(
             reverse("ordens:atualizar_local", args=[self.ordem.id]),
             data='{"local":"Prateleira A"}',

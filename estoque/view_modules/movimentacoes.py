@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from configuracoes.models import ConfiguracaoSistema
 from configuracoes.permissions import (
     STOCK_MANAGE_ROLES,
     STOCK_VIEW_ROLES,
@@ -18,11 +19,21 @@ from configuracoes.permissions import (
     require_sensitive_permission,
     role_required,
 )
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
 from ..forms import ConfiguracaoRateioCustoFixoForm, GerarSnapshotRateioForm, MovimentacaoEstoqueForm, PontoOperacionalForm, UbicacaoEstoqueForm
-from ..models import ConfiguracaoRateioCustoFixo, MovimentacaoEstoque, PontoOperacional, Produto, RateioCustoFixoCompetencia, ReservaEstoque, SaldoEstoquePonto, UbicacaoEstoque, VendaRapidaEstoque
+from ..models import ConfiguracaoRateioCustoFixo, EstoqueEvento, MovimentacaoEstoque, PontoOperacional, Produto, RateioCustoFixoCompetencia, ReservaEstoque, SaldoEstoquePonto, UbicacaoEstoque, VendaRapidaEstoque
 from ..services import registrar_movimentacao_estoque
 from .helpers import _registrar_evento_estoque, _resumo_rateio_atual, saldo_disponivel
+
+
+def _pontos_reposicao_por_config():
+    config = ConfiguracaoSistema.get_configuracao()
+    codigo_origem = (getattr(config, "estoque_reposicao_origem_codigo", "PO2") or "PO2").strip().upper()
+    codigo_destino = (getattr(config, "estoque_reposicao_destino_codigo", "PO3") or "PO3").strip().upper()
+    ponto_origem = PontoOperacional.objects.filter(codigo__iexact=codigo_origem, ativo=True).first()
+    ponto_destino = PontoOperacional.objects.filter(codigo__iexact=codigo_destino, ativo=True).first()
+    return config, ponto_origem, ponto_destino, codigo_origem, codigo_destino
 
 
 @role_required(STOCK_MANAGE_ROLES)
@@ -55,7 +66,12 @@ def registrar_movimentacao(request):
 
 @role_required(STOCK_VIEW_ROLES)
 def listar_movimentacoes(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     movimentacoes = MovimentacaoEstoque.objects.select_related("produto", "origem", "destino", "usuario")
+    if empresa:
+        movimentacoes = movimentacoes.filter(produto__empresa=empresa)
+    else:
+        movimentacoes = movimentacoes.none()
     tipo = (request.GET.get("tipo") or "").strip()
     ponto = (request.GET.get("ponto") or "").strip()
     q = (request.GET.get("q") or "").strip()
@@ -147,6 +163,7 @@ def listar_movimentacoes(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def pontos_operacionais(request):
+    require_sensitive_permission(request.user, "perm_estoque_configurar_estrutura")
     if request.method == "POST":
         form = PontoOperacionalForm(request.POST)
         if form.is_valid():
@@ -160,6 +177,7 @@ def pontos_operacionais(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def ubicacoes_estoque(request):
+    require_sensitive_permission(request.user, "perm_estoque_configurar_estrutura")
     if request.method == "POST":
         form = UbicacaoEstoqueForm(request.POST)
         if form.is_valid():
@@ -174,9 +192,10 @@ def ubicacoes_estoque(request):
 @role_required(STOCK_MANAGE_ROLES)
 def transferir_estoque(request):
     require_sensitive_permission(request.user, "perm_estoque_transferencia")
+    empresa = obter_empresa_ativa(request, strict=False)
     q = (request.GET.get("q") or "").strip()
     produto_id = (request.GET.get("produto_id") or request.POST.get("produto_id") or "").strip()
-    produtos = Produto.objects.ativos().nao_servicos()
+    produtos = filtrar_queryset_empresa(Produto.objects.ativos().nao_servicos(), empresa)
     if q:
         produtos = produtos.filter(Q(nome__icontains=q) | Q(ean__icontains=q) | Q(sku__icontains=q))
     produtos = produtos.order_by("nome")[:50]
@@ -185,7 +204,7 @@ def transferir_estoque(request):
     produto_selecionado = None
     if produto_id.isdigit():
         produto_selecionado = (
-            Produto.objects.ativos().nao_servicos().filter(id=int(produto_id))
+            filtrar_queryset_empresa(Produto.objects.ativos().nao_servicos(), empresa).filter(id=int(produto_id))
             .select_related("marca", "ponto_operacional")
             .first()
         )
@@ -202,7 +221,10 @@ def transferir_estoque(request):
         return redirect(url)
 
     if request.method == "POST":
-        produto = get_object_or_404(Produto.objects.ativos().nao_servicos(), id=request.POST.get("produto_id"))
+        produto = get_object_or_404(
+            filtrar_queryset_empresa(Produto.objects.ativos().nao_servicos(), empresa),
+            id=request.POST.get("produto_id"),
+        )
         origem = get_object_or_404(PontoOperacional, id=request.POST.get("origem_id"), ativo=True)
         destino = get_object_or_404(PontoOperacional, id=request.POST.get("destino_id"), ativo=True)
         destino_ubicacao_id = request.POST.get("destino_ubicacao_id")
@@ -287,15 +309,21 @@ def transferir_estoque(request):
 @role_required(STOCK_MANAGE_ROLES)
 def reposicao_estoque(request):
     require_sensitive_permission(request.user, "perm_estoque_transferencia")
-    po2 = PontoOperacional.objects.filter(codigo__iexact="PO2", ativo=True).first()
-    po3 = PontoOperacional.objects.filter(codigo__iexact="PO3", ativo=True).first()
+    empresa = obter_empresa_ativa(request, strict=False)
+    _, ponto_origem, ponto_destino, codigo_origem, codigo_destino = _pontos_reposicao_por_config()
     q = (request.GET.get("q") or "").strip()
     quick = (request.GET.get("quick") or "").strip()
-    if not po2 or not po3:
-        messages.error(request, "Configure os pontos PO2 (Armazem) e PO3 (Loja) para usar reposicao inteligente.")
+    if not ponto_origem or not ponto_destino:
+        messages.error(
+            request,
+            f"Configure os pontos de reposicao ({codigo_origem} -> {codigo_destino}) nas configuracoes do sistema.",
+        )
         return redirect("estoque:pontos_operacionais")
     if request.method == "POST":
-        produto = get_object_or_404(Produto.objects.ativos().nao_servicos(), id=request.POST.get("produto_id"))
+        produto = get_object_or_404(
+            filtrar_queryset_empresa(Produto.objects.ativos().nao_servicos(), empresa),
+            id=request.POST.get("produto_id"),
+        )
         try:
             quantidade = int(request.POST.get("quantidade") or "0")
         except ValueError:
@@ -304,19 +332,22 @@ def reposicao_estoque(request):
             messages.error(request, "Quantidade invalida para reposicao.")
             return redirect("estoque:reposicao_estoque")
         with transaction.atomic():
-            saldo_origem = SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=po2)[0]
-            SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=po3)
+            saldo_origem = SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=ponto_origem)[0]
+            SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=ponto_destino)
             if saldo_origem.quantidade < quantidade:
-                messages.error(request, f"Saldo insuficiente no PO2 para {produto.nome}. Disponivel: {saldo_origem.quantidade}.")
+                messages.error(
+                    request,
+                    f"Saldo insuficiente no {ponto_origem.codigo} para {produto.nome}. Disponivel: {saldo_origem.quantidade}.",
+                )
                 return redirect("estoque:reposicao_estoque")
             try:
                 registrar_movimentacao_estoque(
                     produto=produto,
                     tipo="transferencia",
                     quantidade=quantidade,
-                    origem=po2,
-                    destino=po3,
-                    observacao="Reposicao inteligente PO2 -> PO3",
+                    origem=ponto_origem,
+                    destino=ponto_destino,
+                    observacao=f"Reposicao inteligente {ponto_origem.codigo} -> {ponto_destino.codigo}",
                     usuario=request.user,
                 )
             except ValueError as exc:
@@ -324,7 +355,7 @@ def reposicao_estoque(request):
                 return redirect("estoque:reposicao_estoque")
         messages.success(request, f"Reposicao realizada: {quantidade} un de {produto.nome}.")
         return redirect("estoque:reposicao_estoque")
-    produtos = Produto.objects.ativos().nao_servicos().order_by("nome")
+    produtos = filtrar_queryset_empresa(Produto.objects.ativos().nao_servicos(), empresa).order_by("nome")
     if q:
         produtos = produtos.filter(Q(nome__icontains=q) | Q(sku__icontains=q) | Q(ean__icontains=q))
     produtos = list(produtos)
@@ -332,7 +363,7 @@ def reposicao_estoque(request):
     if produtos:
         saldos_qs = SaldoEstoquePonto.objects.filter(
             produto__in=produtos,
-            ponto_operacional__in=[po2, po3],
+            ponto_operacional__in=[ponto_origem, ponto_destino],
         ).values("produto_id", "ponto_operacional_id", "quantidade")
         saldos_map = {
             (row["produto_id"], row["ponto_operacional_id"]): int(row["quantidade"] or 0)
@@ -340,13 +371,23 @@ def reposicao_estoque(request):
         }
     linhas = []
     for p in produtos:
-        saldo_po2 = saldos_map.get((p.id, po2.id), 0)
-        saldo_po3 = saldos_map.get((p.id, po3.id), 0)
+        saldo_origem = saldos_map.get((p.id, ponto_origem.id), 0)
+        saldo_destino = saldos_map.get((p.id, ponto_destino.id), 0)
         minimo = int(p.estoque_minimo or 0)
-        sugestao = max(minimo - int(saldo_po3), 0)
+        sugestao = max(minimo - int(saldo_destino), 0)
         if sugestao <= 0:
             continue
-        linhas.append({"produto": p, "saldo_po2": int(saldo_po2), "saldo_po3": int(saldo_po3), "minimo": minimo, "sugestao": sugestao, "pode_repor": max(min(sugestao, int(saldo_po2)), 0), "faltante_compra": max(sugestao - int(saldo_po2), 0)})
+        linhas.append(
+            {
+                "produto": p,
+                "saldo_origem": int(saldo_origem),
+                "saldo_destino": int(saldo_destino),
+                "minimo": minimo,
+                "sugestao": sugestao,
+                "pode_repor": max(min(sugestao, int(saldo_origem)), 0),
+                "faltante_compra": max(sugestao - int(saldo_origem), 0),
+            }
+        )
     resumo = {
         "itens": len(linhas),
         "repor_agora": sum(1 for linha in linhas if linha["pode_repor"] > 0),
@@ -362,8 +403,8 @@ def reposicao_estoque(request):
         "estoque/reposicao_estoque.html",
         {
             "linhas": linhas,
-            "po2": po2,
-            "po3": po3,
+            "ponto_origem": ponto_origem,
+            "ponto_destino": ponto_destino,
             "q": q,
             "quick": quick,
             "resumo": resumo,
@@ -375,6 +416,7 @@ def reposicao_estoque(request):
 
 @role_required(STOCK_VIEW_ROLES)
 def indicadores_estoque(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     hoje = timezone.localdate()
     corte_30 = timezone.now() - timedelta(days=30)
     corte_60 = timezone.now() - timedelta(days=60)
@@ -382,25 +424,53 @@ def indicadores_estoque(request):
     config_form = ConfiguracaoRateioCustoFixoForm(instance=rateio_config)
     snapshot_form = GerarSnapshotRateioForm(initial={"competencia": hoje.replace(day=1)})
     if request.method == "POST" and has_role(request.user, STOCK_MANAGE_ROLES):
+        require_sensitive_permission(request.user, "perm_estoque_configurar_rateio")
         acao_rateio = request.POST.get("acao_rateio")
         if acao_rateio == "salvar_configuracao":
+            criterio_anterior = rateio_config.criterio_rateio
             config_form = ConfiguracaoRateioCustoFixoForm(request.POST, instance=rateio_config)
             if config_form.is_valid():
-                config_form.save()
+                config_salva = config_form.save()
+                _registrar_evento_estoque(
+                    "rateio_config_atualizada",
+                    usuario=request.user,
+                    dados={
+                        "empresa_id": getattr(empresa, "id", None),
+                        "criterio_anterior": criterio_anterior,
+                        "criterio_novo": config_salva.criterio_rateio,
+                    },
+                )
                 messages.success(request, "Regra de rateio atualizada.")
                 return redirect("estoque:indicadores_estoque")
             messages.error(request, "Revise a configuracao da regra de rateio.")
         elif acao_rateio == "gerar_snapshot":
             snapshot_form = GerarSnapshotRateioForm(request.POST)
             if snapshot_form.is_valid():
-                snapshot, criado = RateioCustoFixoCompetencia.gerar_snapshot(competencia=snapshot_form.cleaned_data["competencia"], usuario=request.user, observacao=snapshot_form.cleaned_data.get("observacao", ""))
+                snapshot, criado = RateioCustoFixoCompetencia.gerar_snapshot(
+                    competencia=snapshot_form.cleaned_data["competencia"],
+                    usuario=request.user,
+                    observacao=snapshot_form.cleaned_data.get("observacao", ""),
+                )
+                _registrar_evento_estoque(
+                    "rateio_snapshot_gerado",
+                    usuario=request.user,
+                    dados={
+                        "empresa_id": getattr(empresa, "id", None),
+                        "snapshot_id": snapshot.id,
+                        "competencia": snapshot.competencia.isoformat(),
+                        "criado_novo": bool(criado),
+                    },
+                )
                 if criado:
                     messages.success(request, f"Snapshot do rateio de {snapshot.competencia:%m/%Y} gerado com sucesso.")
                 else:
                     messages.warning(request, f"Ja existe snapshot fechado para {snapshot.competencia:%m/%Y}.")
                 return redirect("estoque:indicadores_estoque")
             messages.error(request, "Informe uma competencia valida para gerar o snapshot.")
-    produtos_qs = Produto.objects.ativos().nao_servicos().annotate(ultima_mov=Max("movimentacoes__criado_em"))
+    produtos_qs = filtrar_queryset_empresa(
+        Produto.objects.ativos().nao_servicos(),
+        empresa,
+    ).annotate(ultima_mov=Max("movimentacoes__criado_em"))
     total_itens = produtos_qs.count()
     ruptura = produtos_qs.filter(quantidade__lte=0).count()
     abaixo_minimo = produtos_qs.filter(quantidade__lte=F("estoque_minimo")).count()
@@ -416,16 +486,58 @@ def indicadores_estoque(request):
         )["total"]
         or Decimal("0.00")
     )
-    negativos_ponto = SaldoEstoquePonto.objects.select_related("produto", "ponto_operacional").filter(quantidade__lt=0).order_by("ponto_operacional__codigo", "produto__nome")
-    top_mov = MovimentacaoEstoque.objects.filter(tipo__in=["venda", "consumo_os"], criado_em__gte=corte_30).values("produto__nome", "produto_id").annotate(total=Sum("quantidade")).order_by("total")[:10]
+    negativos_ponto = (
+        SaldoEstoquePonto.objects.select_related("produto", "ponto_operacional")
+        .filter(produto__empresa=empresa, quantidade__lt=0)
+        .order_by("ponto_operacional__codigo", "produto__nome")
+    )
+    top_mov = (
+        MovimentacaoEstoque.objects.filter(produto__empresa=empresa, tipo__in=["venda", "consumo_os"], criado_em__gte=corte_30)
+        .values("produto__nome", "produto_id")
+        .annotate(total=Sum("quantidade"))
+        .order_by("total")[:10]
+    )
     top_saidas = [{"produto_id": r["produto_id"], "produto": r["produto__nome"], "unidades": abs(int(r["total"] or 0))} for r in top_mov if int(r["total"] or 0) < 0]
-    rateio_resumo = _resumo_rateio_atual()
-    return render(request, "estoque/indicadores_estoque.html", {"kpis": {"total_itens": total_itens, "ruptura": ruptura, "abaixo_minimo": abaixo_minimo, "parados_60": parados_60, "valor_estoque": valor_estoque}, "top_saidas": top_saidas, "negativos_ponto": negativos_ponto[:100], "hoje": hoje, "rateio_resumo": rateio_resumo, "rateio_config_form": config_form, "rateio_snapshot_form": snapshot_form, "pode_gerenciar_rateio": has_role(request.user, STOCK_MANAGE_ROLES), "menu_app": "estoque", "menu_sub": "indicadores_estoque"})
+    rateio_resumo = _resumo_rateio_atual(empresa=empresa)
+    rateio_eventos = (
+        EstoqueEvento.objects.select_related("usuario")
+        .filter(evento__in=["rateio_config_atualizada", "rateio_snapshot_gerado"], usuario__empresa=empresa)
+        .order_by("-criado_em", "-id")[:10]
+    )
+    return render(
+        request,
+        "estoque/indicadores_estoque.html",
+        {
+            "kpis": {
+                "total_itens": total_itens,
+                "ruptura": ruptura,
+                "abaixo_minimo": abaixo_minimo,
+                "parados_60": parados_60,
+                "valor_estoque": valor_estoque,
+            },
+            "top_saidas": top_saidas,
+            "negativos_ponto": negativos_ponto[:100],
+            "hoje": hoje,
+            "rateio_resumo": rateio_resumo,
+            "rateio_eventos": rateio_eventos,
+            "rateio_config_form": config_form,
+            "rateio_snapshot_form": snapshot_form,
+            "pode_gerenciar_rateio": has_role(request.user, STOCK_MANAGE_ROLES),
+            "menu_app": "estoque",
+            "menu_sub": "indicadores_estoque",
+        },
+    )
 
 
 @role_required(STOCK_VIEW_ROLES)
 def detalhe_rateio_competencia(request, snapshot_id):
-    snapshot = get_object_or_404(RateioCustoFixoCompetencia.objects.select_related("gerado_por"), pk=snapshot_id)
+    empresa = obter_empresa_ativa(request, strict=False)
+    snapshot_qs = RateioCustoFixoCompetencia.objects.select_related("gerado_por")
+    if empresa:
+        snapshot_qs = snapshot_qs.filter(itens__produto__empresa=empresa).distinct()
+    else:
+        snapshot_qs = snapshot_qs.none()
+    snapshot = get_object_or_404(snapshot_qs, pk=snapshot_id)
     itens = snapshot.itens.select_related("produto").all()
     totais = {"faturamento_realizado": sum((item.faturamento_realizado for item in itens), Decimal("0.00")), "margem_realizada": sum((item.margem_realizada for item in itens), Decimal("0.00")), "quantidade_realizada": sum((item.quantidade_realizada for item in itens), 0)}
     return render(request, "estoque/rateio_competencia_detalhe.html", {"snapshot": snapshot, "itens": itens, "totais": totais, "menu_app": "estoque", "menu_sub": "indicadores_estoque"})
@@ -433,7 +545,13 @@ def detalhe_rateio_competencia(request, snapshot_id):
 
 @role_required(STOCK_VIEW_ROLES)
 def exportar_rateio_competencia(request, snapshot_id):
-    snapshot = get_object_or_404(RateioCustoFixoCompetencia.objects.select_related("gerado_por"), pk=snapshot_id)
+    empresa = obter_empresa_ativa(request, strict=False)
+    snapshot_qs = RateioCustoFixoCompetencia.objects.select_related("gerado_por")
+    if empresa:
+        snapshot_qs = snapshot_qs.filter(itens__produto__empresa=empresa).distinct()
+    else:
+        snapshot_qs = snapshot_qs.none()
+    snapshot = get_object_or_404(snapshot_qs, pk=snapshot_id)
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="rateio_{snapshot.competencia:%Y_%m}.csv"'
     response.write("\ufeff")
@@ -446,7 +564,13 @@ def exportar_rateio_competencia(request, snapshot_id):
 
 @role_required(STOCK_VIEW_ROLES)
 def exportar_rateio_competencia_excel(request, snapshot_id):
-    snapshot = get_object_or_404(RateioCustoFixoCompetencia.objects.select_related("gerado_por"), pk=snapshot_id)
+    empresa = obter_empresa_ativa(request, strict=False)
+    snapshot_qs = RateioCustoFixoCompetencia.objects.select_related("gerado_por")
+    if empresa:
+        snapshot_qs = snapshot_qs.filter(itens__produto__empresa=empresa).distinct()
+    else:
+        snapshot_qs = snapshot_qs.none()
+    snapshot = get_object_or_404(snapshot_qs, pk=snapshot_id)
     response = HttpResponse(content_type="application/vnd.ms-excel; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="rateio_{snapshot.competencia:%Y_%m}.xls"'
     response.write("\ufeff")
@@ -460,17 +584,38 @@ def exportar_rateio_competencia_excel(request, snapshot_id):
 
 @role_required(STOCK_MANAGE_ROLES)
 def relatorio_divergencias_estoque(request):
+    empresa = obter_empresa_ativa(request, strict=False)
+    config = ConfiguracaoSistema.get_configuracao()
     hoje = timezone.localdate()
-    pre_reservas_antigas = VendaRapidaEstoque.objects.filter(status="pre_reserva", criado_em__date__lt=hoje)
+    pre_reservas_antigas = VendaRapidaEstoque.objects.filter(produto__empresa=empresa, status="pre_reserva", criado_em__date__lt=hoje)
     total_pre_reservas_antigas = pre_reservas_antigas.count()
-    reservas_vencidas_ativas = ReservaEstoque.objects.filter(status="ativa", valido_ate__lt=hoje)
-    produtos_abaixo = Produto.objects.ativos().nao_servicos().filter(quantidade__lte=F("estoque_minimo")).order_by("nome")
-    negativos_ponto = SaldoEstoquePonto.objects.select_related("produto", "ponto_operacional").filter(quantidade__lt=0).order_by("ponto_operacional__codigo", "produto__nome")
+    reservas_vencidas_ativas = ReservaEstoque.objects.filter(produto__empresa=empresa, status="ativa", valido_ate__lt=hoje)
+    produtos_abaixo = filtrar_queryset_empresa(Produto.objects.ativos().nao_servicos(), empresa).filter(quantidade__lte=F("estoque_minimo")).order_by("nome")
+    negativos_ponto = SaldoEstoquePonto.objects.select_related("produto", "ponto_operacional").filter(produto__empresa=empresa, quantidade__lt=0).order_by("ponto_operacional__codigo", "produto__nome")
     po2 = PontoOperacional.objects.filter(codigo__iexact="PO2").first()
     mov_po2_sem_ubicacao = MovimentacaoEstoque.objects.none()
     if po2:
-        mov_po2_sem_ubicacao = MovimentacaoEstoque.objects.select_related("produto", "origem", "destino").filter(tipo="transferencia", destino=po2).filter(Q(destino_ubicacao__isnull=True) | Q(destino_ubicacao__exact="")).order_by("-criado_em")
-    return render(request, "estoque/relatorio_divergencias.html", {"pre_reservas_antigas": pre_reservas_antigas[:200], "total_pre_reservas_antigas": total_pre_reservas_antigas, "dias_limpeza_pre_reserva": 1, "reservas_vencidas_ativas": reservas_vencidas_ativas[:200], "produtos_abaixo": produtos_abaixo[:200], "negativos_ponto": negativos_ponto[:200], "mov_po2_sem_ubicacao": mov_po2_sem_ubicacao[:200], "menu_app": "estoque", "menu_sub": "relatorio_divergencias"})
+        mov_po2_sem_ubicacao = (
+            MovimentacaoEstoque.objects.select_related("produto", "origem", "destino")
+            .filter(produto__empresa=empresa, tipo="transferencia", destino=po2)
+            .filter(Q(destino_ubicacao__isnull=True) | Q(destino_ubicacao__exact=""))
+            .order_by("-criado_em")
+        )
+    return render(
+        request,
+        "estoque/relatorio_divergencias.html",
+        {
+            "pre_reservas_antigas": pre_reservas_antigas[:200],
+            "total_pre_reservas_antigas": total_pre_reservas_antigas,
+            "dias_limpeza_pre_reserva": max(1, int((getattr(config, "estoque_pre_reserva_limpeza_horas", 24) or 24) / 24)),
+            "reservas_vencidas_ativas": reservas_vencidas_ativas[:200],
+            "produtos_abaixo": produtos_abaixo[:200],
+            "negativos_ponto": negativos_ponto[:200],
+            "mov_po2_sem_ubicacao": mov_po2_sem_ubicacao[:200],
+            "menu_app": "estoque",
+            "menu_sub": "relatorio_divergencias",
+        },
+    )
 
 
 __all__ = [

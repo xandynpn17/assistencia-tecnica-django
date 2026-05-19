@@ -1,4 +1,5 @@
-﻿from decimal import Decimal
+from decimal import Decimal
+import logging
 
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -19,7 +20,7 @@ from configuracoes.permissions import (
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
 from ..forms import ProdutoEquivalenteForm, ProdutoForm, ProdutoKitItemForm, ProdutoPrecoTabelaForm, TabelaPrecoForm
-from ..models import PontoOperacional, Produto, ProdutoEquivalente, ProdutoKitItem, ProdutoPrecoTabela, TabelaPreco
+from ..models import CategoriaProduto, PontoOperacional, Produto, ProdutoEquivalente, ProdutoKitItem, ProdutoPrecoTabela, TabelaPreco
 from .helpers import (
     Empresa,
     FornecedorGarantia,
@@ -35,6 +36,8 @@ from .helpers import (
     _registrar_historico_produto,
     _snapshot_produto,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @role_required(STOCK_VIEW_ROLES)
@@ -138,6 +141,8 @@ def criar_produto(request):
 
     if request.method == "POST":
         form = ProdutoForm(request.POST, request.FILES)
+        if empresa:
+            form.instance.empresa = empresa
         if form.is_valid():
             abaixo_minimo = bool(form.cleaned_data.get("preco_abaixo_minimo_detectado"))
             permitir_abaixo = bool(form.cleaned_data.get("permitir_preco_abaixo_minimo"))
@@ -153,7 +158,7 @@ def criar_produto(request):
                         "menu_sub": "criar_produto",
                         "produto_origem": produto_origem,
                         "modo_edicao": False,
-                        "rateio_context": _contexto_rateio_produto(produto_origem),
+                        "rateio_context": _contexto_rateio_produto(produto_origem, empresa=empresa),
                         "empresa": empresa,
                     },
                 )
@@ -193,7 +198,7 @@ def criar_produto(request):
             "menu_sub": "criar_produto",
             "produto_origem": produto_origem,
             "modo_edicao": False,
-            "rateio_context": _contexto_rateio_produto(produto_origem),
+            "rateio_context": _contexto_rateio_produto(produto_origem, empresa=empresa),
             "empresa": empresa,
         },
     )
@@ -223,7 +228,7 @@ def editar_produto(request, produto_id):
                         "menu_app": "estoque",
                         "menu_sub": "lista_produtos",
                         "modo_edicao": True,
-                        "rateio_context": _contexto_rateio_produto(produto),
+                        "rateio_context": _contexto_rateio_produto(produto, empresa=empresa),
                     },
                 )
             produto = form.save()
@@ -259,7 +264,7 @@ def editar_produto(request, produto_id):
             "menu_app": "estoque",
             "menu_sub": "lista_produtos",
             "modo_edicao": True,
-            "rateio_context": _contexto_rateio_produto(produto),
+            "rateio_context": _contexto_rateio_produto(produto, empresa=empresa),
         },
     )
 
@@ -272,6 +277,7 @@ def duplicar_produto(request, produto_id):
 @role_required(STOCK_MANAGE_ROLES)
 def importar_produtos(request):
     require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
+    empresa = obter_empresa_ativa(request, strict=False)
     preview = []
     erros = []
     importados = 0
@@ -290,6 +296,7 @@ def importar_produtos(request):
         normalizadas = []
         nomes_arquivo = set()
         eans_arquivo = set()
+        produtos_empresa_qs = filtrar_queryset_empresa(Produto.objects.all(), empresa)
         for idx, linha in enumerate(linhas, start=2):
             row = _normalizar_linha_importacao(linha)
             row["linha"] = idx
@@ -316,26 +323,26 @@ def importar_produtos(request):
                 row["preco_final_dec"] = Decimal(str(row["preco_final"] or "0"))
                 if row["preco_final_dec"] < 0:
                     row["erros"].append("Preco final nao pode ser negativo.")
-            except Exception:
+            except (ArithmeticError, ValueError, TypeError):
                 row["erros"].append("Preco final invalido.")
                 row["preco_final_dec"] = Decimal("0")
             try:
                 row["custo_unitario_dec"] = Decimal(str(row["custo_unitario"] or "0"))
                 if row["custo_unitario_dec"] < 0:
                     row["erros"].append("Custo unitario nao pode ser negativo.")
-            except Exception:
+            except (ArithmeticError, ValueError, TypeError):
                 row["erros"].append("Custo unitario invalido.")
                 row["custo_unitario_dec"] = Decimal("0")
             try:
                 row["estoque_minimo_int"] = max(0, int(str(row["estoque_minimo"] or "0")))
                 row["estoque_inicial_int"] = max(0, int(str(row["estoque_inicial"] or "0")))
-            except Exception:
+            except (TypeError, ValueError):
                 row["erros"].append("Estoque minimo/inicial invalido.")
                 row["estoque_minimo_int"] = 0
                 row["estoque_inicial_int"] = 0
-            if row["nome"] and Produto.objects.filter(nome__iexact=row["nome"]).exists():
+            if row["nome"] and produtos_empresa_qs.filter(nome__iexact=row["nome"]).exists():
                 row["erros"].append("Ja existe produto com este nome no sistema.")
-            if row["ean"] and Produto.objects.filter(ean=row["ean"]).exists():
+            if row["ean"] and produtos_empresa_qs.filter(ean=row["ean"]).exists():
                 row["erros"].append("Ja existe produto com este EAN no sistema.")
 
             normalizadas.append(row)
@@ -348,12 +355,23 @@ def importar_produtos(request):
                 for row in normalizadas:
                     marca = MarcaGarantia.objects.filter(nome__iexact=row["marca_nome"], ativo=True).first() if row["marca_nome"] else None
                     fornecedor = FornecedorGarantia.objects.filter(nome__iexact=row["fornecedor_nome"], ativo=True).first() if row["fornecedor_nome"] else None
+                    categoria_config = None
+                    categoria_manual = (row.get("categoria") or "").strip()
+                    if categoria_manual:
+                        categoria_canonica = CategoriaProduto.nome_canonico(categoria_manual)
+                        for categoria in CategoriaProduto.objects.filter(ativo=True).only("id", "nome"):
+                            if CategoriaProduto.nome_canonico(categoria.nome) == categoria_canonica:
+                                categoria_config = categoria
+                                categoria_manual = categoria.nome
+                                break
                     produto = Produto.objects.create(
+                        empresa=empresa,
                         nome=row["nome"],
                         sku=row["sku"] or None,
                         ean=row["ean"] or None,
                         tipo_item=row["tipo_item"],
-                        categoria=row["categoria"],
+                        categoria=categoria_manual,
+                        categoria_config=categoria_config,
                         marca=marca,
                         fornecedor_config=fornecedor,
                         custo_unitario=row["custo_unitario_dec"],
@@ -380,7 +398,7 @@ def importar_produtos(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def tabelas_preco(request):
-    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
+    require_sensitive_permission(request.user, "perm_estoque_configurar_estrutura")
     if request.method == "POST":
         acao = (request.POST.get("acao") or "").strip()
         if acao == "excluir":
@@ -404,8 +422,9 @@ def tabelas_preco(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def estrutura_produto(request, produto_id):
-    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
-    produto = get_object_or_404(Produto, id=produto_id)
+    require_sensitive_permission(request.user, "perm_estoque_configurar_estrutura")
+    empresa = obter_empresa_ativa(request, strict=False)
+    produto = get_object_or_404(filtrar_queryset_empresa(Produto.objects.all(), empresa), id=produto_id)
     if request.method == "POST":
         acao = (request.POST.get("acao") or "").strip()
         if acao == "adicionar_preco_tabela":
@@ -470,7 +489,8 @@ def estrutura_produto(request, produto_id):
 @role_required(STOCK_MANAGE_ROLES)
 def excluir_produto(request, produto_id):
     require_sensitive_permission(request.user, "perm_estoque_excluir_produto")
-    produto = get_object_or_404(Produto, id=produto_id)
+    empresa = obter_empresa_ativa(request, strict=False)
+    produto = get_object_or_404(filtrar_queryset_empresa(Produto.objects.all(), empresa), id=produto_id)
     if request.method == "POST":
         produto.delete()
         messages.success(request, "Produto excluido com sucesso!")
@@ -480,12 +500,13 @@ def excluir_produto(request, produto_id):
 
 @role_required(STOCK_VIEW_ROLES)
 def buscar_produto(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     q = (request.GET.get("q") or "").strip()
     tipo = (request.GET.get("tipo") or "").strip().lower()
     if len(q) < 2:
         return JsonResponse([], safe=False)
 
-    produtos = Produto.objects.filter(ativo=True, permite_os=True)
+    produtos = filtrar_queryset_empresa(Produto.objects.filter(ativo=True, permite_os=True), empresa)
     if tipo == "servico":
         produtos = produtos.filter(tipo_item="servico")
     elif tipo in {"peca", "nao_servico"}:
@@ -524,6 +545,7 @@ def api_gerar_ean(request):
 
 @role_required(ORDER_ROLES)
 def api_sugerir_pecas_os(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     q = (request.GET.get("q") or "").strip()
     modelo = (request.GET.get("modelo") or "").strip()
     servico = (request.GET.get("servico") or "").strip()
@@ -532,7 +554,10 @@ def api_sugerir_pecas_os(request):
     if not modelo and not servico and not q:
         return JsonResponse({"ok": True, "resultados": []})
 
-    base_qs = Produto.objects.ativos().nao_servicos().filter(permite_os=True).prefetch_related("servicos_compativeis")
+    base_qs = filtrar_queryset_empresa(
+        Produto.objects.ativos().nao_servicos().filter(permite_os=True),
+        empresa,
+    ).prefetch_related("servicos_compativeis")
     produtos = base_qs
     if q:
         produtos = produtos.filter(
@@ -555,6 +580,8 @@ def api_sugerir_pecas_os(request):
         from ordens.models import ServicoPeca
 
         historico = ServicoPeca.objects.filter(tipo="peca")
+        if empresa:
+            historico = historico.filter(ordem__empresa=empresa)
         if modelo:
             historico = historico.filter(ordem__modelo_equipamento__icontains=modelo)
         if tipo_equipamento:
@@ -573,6 +600,15 @@ def api_sugerir_pecas_os(request):
             atual = int(historico_por_nome.get(chave, 0))
             historico_por_nome[chave] = max(atual, int(row.get("total") or 0))
     except Exception:
+        logger.exception(
+            "falha_sugestao_pecas_os",
+            extra={
+                "empresa_id": getattr(empresa, "id", None),
+                "modelo": modelo,
+                "servico": servico,
+                "tipo_equipamento": tipo_equipamento,
+            },
+        )
         historico_por_nome = {}
 
     modelo_norm = _normalizar_texto(modelo)
@@ -646,4 +682,5 @@ __all__ = [
     "api_gerar_ean",
     "api_sugerir_pecas_os",
 ]
+
 

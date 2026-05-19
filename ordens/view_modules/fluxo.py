@@ -6,7 +6,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.utils.timezone import localtime
 
-from configuracoes.permissions import ORDER_ROLES, RoleRequiredMixin, require_sensitive_permission, role_required
+from configuracoes.permissions import ORDER_ROLES, RoleRequiredMixin, is_management_user, require_sensitive_permission, role_required
 
 from ..models import LinhaTrabalho, OrdemServico
 from ..services.os_policy_service import OSAccessPolicyService
@@ -41,11 +41,8 @@ def atualizar_local(request, os_id):
         ordem = OrdemServico.objects.get(id=os_id)
         try:
             OSAccessPolicyService.ensure_can_edit(ordem, "edicao_local", usuario=request.user)
-            require_sensitive_permission(
-                request.user,
-                "perm_os_editar_local_armazenamento",
-                message="Voce nao tem permissao para editar o local de armazenamento desta OS.",
-            )
+            if not is_management_user(request.user):
+                raise PermissionDenied("Voce nao tem permissao para editar o local de armazenamento desta OS.")
         except ValueError as exc:
             return JsonResponse({"success": False, "message": str(exc)}, status=400)
         except PermissionDenied as exc:

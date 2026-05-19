@@ -1,10 +1,13 @@
-﻿from django.contrib import messages
+from datetime import timedelta
+
+from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+from configuracoes.models import ConfiguracaoSistema
 from configuracoes.permissions import (
     ORDER_ROLES,
     STOCK_MANAGE_ROLES,
@@ -13,6 +16,7 @@ from configuracoes.permissions import (
     require_sensitive_permission,
     role_required,
 )
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
 from ..models import PontoOperacional, Produto, ReservaEstoque
 from ..services import criar_reserva_estoque
@@ -29,9 +33,14 @@ from .helpers import (
 
 @role_required(ORDER_ROLES)
 def api_criar_reserva(request):
+    empresa = obter_empresa_ativa(request, strict=False)
+    config = ConfiguracaoSistema.get_configuracao()
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
-    produto = get_object_or_404(Produto.objects.ativos().nao_servicos().filter(permite_os=True), id=request.POST.get("produto_id"))
+    produto = get_object_or_404(
+        filtrar_queryset_empresa(Produto.objects.ativos().nao_servicos().filter(permite_os=True), empresa),
+        id=request.POST.get("produto_id"),
+    )
     ponto = get_object_or_404(PontoOperacional, id=request.POST.get("ponto_id"), ativo=True)
     nome = (request.POST.get("nome") or "").strip()
     telefone = (request.POST.get("telefone") or "").strip()
@@ -42,10 +51,13 @@ def api_criar_reserva(request):
     if not nome:
         return JsonResponse({"ok": False, "erro": "Informe nome para reserva."}, status=400)
     valido_ate_raw = (request.POST.get("valido_ate") or "").strip()
-    try:
-        valido_ate = datetime.strptime(valido_ate_raw, "%Y-%m-%d").date()
-    except Exception:
-        return JsonResponse({"ok": False, "erro": "Data de validade invalida. Use YYYY-MM-DD."}, status=400)
+    if not valido_ate_raw:
+        valido_ate = timezone.localdate() + timedelta(days=int(getattr(config, "estoque_reserva_os_validade_dias", 3) or 3))
+    else:
+        try:
+            valido_ate = datetime.strptime(valido_ate_raw, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "erro": "Data de validade invalida. Use YYYY-MM-DD."}, status=400)
     if quantidade <= 0:
         return JsonResponse({"ok": False, "erro": "Quantidade invalida."}, status=400)
     if valido_ate < timezone.localdate():
@@ -76,19 +88,21 @@ def api_criar_reserva(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_expirar_reservas(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
-    total = expirar_reservas_vencidas(usuario=request.user)
+    total = expirar_reservas_vencidas(usuario=request.user, empresa=empresa)
     _registrar_evento_estoque("reservas_expiradas_execucao", usuario=request.user, quantidade=total)
     return JsonResponse({"ok": True, "reservas_expiradas": total})
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_converter_reserva(request, codigo_reserva):
+    empresa = obter_empresa_ativa(request, strict=False)
     require_sensitive_permission(request.user, "perm_estoque_converter_reserva")
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
-    reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
+    reserva = get_object_or_404(ReservaEstoque.objects.filter(produto__empresa=empresa), codigo_reserva=codigo_reserva)
     try:
         converter_reserva(reserva, usuario=request.user, motivo="Conversao manual")
         _registrar_evento_estoque("reserva_convertida", usuario=request.user, reserva_id=reserva.id)
@@ -99,11 +113,12 @@ def api_converter_reserva(request, codigo_reserva):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_cancelar_reserva(request, codigo_reserva):
+    empresa = obter_empresa_ativa(request, strict=False)
     require_sensitive_permission(request.user, "perm_estoque_cancelar_reserva")
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     motivo = (request.POST.get("motivo") or "").strip() or "Cancelada manualmente"
-    reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
+    reserva = get_object_or_404(ReservaEstoque.objects.filter(produto__empresa=empresa), codigo_reserva=codigo_reserva)
     try:
         cancelar_reserva(reserva, usuario=request.user, motivo=motivo)
         _registrar_evento_estoque("reserva_cancelada", usuario=request.user, reserva_id=reserva.id)
@@ -116,12 +131,14 @@ def api_cancelar_reserva(request, codigo_reserva):
 def reservas_clientes(request):
     from ordens.models import LinhaTrabalho
 
+    empresa = obter_empresa_ativa(request, strict=False)
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
     quick = (request.GET.get("quick") or "").strip()
     page_number = request.GET.get("page")
     reservas = (
         ReservaEstoque.objects.select_related("produto", "ponto_operacional", "ordem_servico", "ordem_servico__tecnico_responsavel")
+        .filter(produto__empresa=empresa)
         .prefetch_related(
             Prefetch(
                 "ordem_servico__linhas_trabalho",
@@ -172,15 +189,16 @@ def reservas_clientes(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def associar_reserva_ordem(request, codigo_reserva):
+    empresa = obter_empresa_ativa(request, strict=False)
     if request.method != "POST":
         return redirect("estoque:reservas_clientes")
-    reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
+    reserva = get_object_or_404(ReservaEstoque.objects.filter(produto__empresa=empresa), codigo_reserva=codigo_reserva)
     ordem_ref = (request.POST.get("ordem_id") or "").strip()
     if not ordem_ref:
         messages.error(request, "Informe o ID ou numero da ordem.")
         return redirect("estoque:reservas_clientes")
     from ordens.models import OrdemServico
-    ordem = OrdemServico.objects.filter(Q(numero_os__iexact=ordem_ref) | Q(id=ordem_ref if ordem_ref.isdigit() else None)).first()
+    ordem = OrdemServico.objects.filter(empresa=empresa).filter(Q(numero_os__iexact=ordem_ref) | Q(id=ordem_ref if ordem_ref.isdigit() else None)).first()
     if not ordem:
         messages.error(request, "Ordem nao encontrada.")
         return redirect("estoque:reservas_clientes")
@@ -192,17 +210,19 @@ def associar_reserva_ordem(request, codigo_reserva):
 
 @role_required(STOCK_MANAGE_ROLES)
 def expirar_reservas_web(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     if request.method == "POST":
-        total = expirar_reservas_vencidas(usuario=request.user)
+        total = expirar_reservas_vencidas(usuario=request.user, empresa=empresa)
         messages.success(request, f"Reservas expiradas: {total}.")
     return redirect("estoque:reservas_clientes")
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def converter_reserva_web(request, codigo_reserva):
+    empresa = obter_empresa_ativa(request, strict=False)
     require_sensitive_permission(request.user, "perm_estoque_converter_reserva")
     if request.method == "POST":
-        reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
+        reserva = get_object_or_404(ReservaEstoque.objects.filter(produto__empresa=empresa), codigo_reserva=codigo_reserva)
         try:
             converter_reserva(reserva, usuario=request.user, motivo="Conversao manual")
             messages.success(request, f"Reserva {reserva.codigo_reserva} convertida.")
@@ -213,9 +233,10 @@ def converter_reserva_web(request, codigo_reserva):
 
 @role_required(STOCK_MANAGE_ROLES)
 def cancelar_reserva_web(request, codigo_reserva):
+    empresa = obter_empresa_ativa(request, strict=False)
     require_sensitive_permission(request.user, "perm_estoque_cancelar_reserva")
     if request.method == "POST":
-        reserva = get_object_or_404(ReservaEstoque, codigo_reserva=codigo_reserva)
+        reserva = get_object_or_404(ReservaEstoque.objects.filter(produto__empresa=empresa), codigo_reserva=codigo_reserva)
         try:
             cancelar_reserva(reserva, usuario=request.user, motivo="Cancelamento manual")
             messages.success(request, f"Reserva {reserva.codigo_reserva} cancelada.")
@@ -245,4 +266,6 @@ __all__ = [
     "integrar_reservas_no_fechamento",
     "integrar_reservas_na_reabertura",
 ]
+
+
 

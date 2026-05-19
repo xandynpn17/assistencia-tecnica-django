@@ -3,7 +3,7 @@
 {% block title %}Reposicao Inteligente{% endblock %}
 
 {% block header %}
-<h1 class="m-0 text-dark">Reposicao Inteligente ({{ po2.codigo }} -> {{ po3.codigo }})</h1>
+<h1 class="m-0 text-dark">Reposicao Inteligente ({{ ponto_origem.codigo }} -> {{ ponto_destino.codigo }})</h1>
 {% endblock %}
 
 {% block content %}
@@ -90,9 +90,9 @@
       <thead>
         <tr>
           <th>Produto</th>
-          <th>Saldo {{ po3.codigo }}</th>
+          <th>Saldo {{ ponto_destino.codigo }}</th>
           <th>Minimo</th>
-          <th>Saldo {{ po2.codigo }}</th>
+          <th>Saldo {{ ponto_origem.codigo }}</th>
           <th>Sugestao</th>
           <th>Repor agora</th>
           <th>Faltante compra</th>
@@ -106,9 +106,9 @@
             <div class="font-weight-bold">{{ l.produto.nome }}</div>
             <small class="text-muted">SKU {{ l.produto.sku|default:"-" }} | EAN {{ l.produto.ean|default:"-" }}</small>
           </td>
-          <td>{{ l.saldo_po3 }}</td>
+          <td>{{ l.saldo_destino }}</td>
           <td>{{ l.minimo }}</td>
-          <td>{{ l.saldo_po2 }}</td>
+          <td>{{ l.saldo_origem }}</td>
           <td>{{ l.sugestao }}</td>
           <td>
             {% if l.pode_repor > 0 %}
@@ -133,7 +133,7 @@
               <button type="submit" class="btn btn-sm btn-primary">Repor</button>
             </form>
             {% else %}
-            <span class="text-muted">Sem saldo {{ po2.codigo }}</span>
+            <span class="text-muted">Sem saldo {{ ponto_origem.codigo }}</span>
             {% endif %}
           </td>
         </tr>

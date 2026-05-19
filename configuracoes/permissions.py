@@ -25,6 +25,7 @@ ORDER_ROLES = RoleSpec({"adm", "gerente", "atendente", "tecnico"}, capability="a
 ORDER_CREATION_ROLES = RoleSpec(ALL_USER_ROLES if ALL_USER_ROLES else ORDER_ROLES, capability="acesso_ordens_extra")
 STOCK_VIEW_ROLES = RoleSpec({"adm", "gerente", "atendente", "tecnico"}, capability="acesso_estoque_extra")
 STOCK_MANAGE_ROLES = RoleSpec({"adm", "gerente", "atendente"}, capability="acesso_estoque_extra")
+STOCK_CONFIG_ROLES = RoleSpec({"adm", "gerente"}, capability="acesso_configuracoes_extra")
 CAIXA_FINANCIAL_ROLES = RoleSpec({"adm", "gerente"}, capability="acesso_caixa_financeiro_extra")
 CAIXA_OPERATIONAL_ROLES = RoleSpec({"adm", "gerente", "atendente"}, capability="acesso_caixa_operacional_extra")
 CAIXA_ROLES = CAIXA_OPERATIONAL_ROLES
@@ -64,11 +65,15 @@ SENSITIVE_PERMISSION_MESSAGES = {
     "perm_estoque_inventario_finalizar": "Voce nao tem permissao para finalizar inventarios de estoque.",
     "perm_estoque_converter_reserva": "Voce nao tem permissao para converter reservas de estoque.",
     "perm_estoque_cancelar_reserva": "Voce nao tem permissao para cancelar reservas de estoque.",
+    "perm_estoque_configurar_estrutura": "Voce nao tem permissao para configurar estrutura de estoque (pontos, ubicacoes e tabelas).",
+    "perm_estoque_configurar_rateio": "Voce nao tem permissao para configurar regras de rateio de estoque.",
 }
 
 SENSITIVE_PERMISSION_DEFAULT_ROLES = {
     "perm_os_concluir": ORDER_ROLES,
     "perm_os_reabrir": ORDER_ROLES,
+    "perm_estoque_configurar_estrutura": STOCK_CONFIG_ROLES,
+    "perm_estoque_configurar_rateio": STOCK_CONFIG_ROLES,
 }
 
 

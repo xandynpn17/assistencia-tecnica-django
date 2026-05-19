@@ -186,6 +186,7 @@ class ConsultaArtigosTests(TestCase):
 
     def test_sugestao_ranking_por_historico(self):
         produto_hist = Produto.objects.create(
+            empresa=self.empresa,
             nome="Motor Turbo X",
             sku="SKU-MOTOR-TURBO",
             ean="7894561230001",
@@ -200,6 +201,7 @@ class ConsultaArtigosTests(TestCase):
             ativo=True,
         )
         Produto.objects.create(
+            empresa=self.empresa,
             nome="Motor Generico",
             sku="SKU-MOTOR-GEN",
             ean="7894561230002",
@@ -219,6 +221,7 @@ class ConsultaArtigosTests(TestCase):
             telefone="11999998888",
         )
         ordem = OrdemServico.objects.create(
+            empresa=self.empresa,
             cliente=cliente,
             tipo_equipamento="secador",
             marca_equipamento="Marca X",
@@ -1033,6 +1036,7 @@ class ConsultaArtigosTests(TestCase):
 
     def test_preco_sugerido_simples_comercio(self):
         p = Produto.objects.create(
+            empresa=self.empresa,
             nome="Mouse USB",
             ean="7891110002223",
             custo_unitario=Decimal("100.00"),
@@ -1160,6 +1164,36 @@ class ConsultaArtigosTests(TestCase):
         self.assertEqual(s2.quantidade, 4)
         self.assertEqual(s3.quantidade, 4)
 
+    def test_reposicao_inteligente_respeita_pontos_configurados(self):
+        cfg = ConfiguracaoSistema.get_configuracao()
+        cfg.estoque_reposicao_origem_codigo = "EST"
+        cfg.estoque_reposicao_destino_codigo = "LOJ"
+        cfg.save(
+            update_fields=[
+                "estoque_reposicao_origem_codigo",
+                "estoque_reposicao_destino_codigo",
+                "data_atualizacao",
+            ]
+        )
+        ponto_origem = PontoOperacional.objects.create(codigo="EST", nome="Estoque Central")
+        ponto_destino = PontoOperacional.objects.create(codigo="LOJ", nome="Loja Front")
+        SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=ponto_origem, quantidade=5)
+        SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=ponto_destino, quantidade=0)
+
+        response = self.client.get(reverse("estoque:reposicao_estoque"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["ponto_origem"].codigo, "EST")
+        self.assertEqual(response.context["ponto_destino"].codigo, "LOJ")
+
+    def test_inventario_iniciar_persiste_empresa(self):
+        response = self.client.post(
+            reverse("estoque:api_inventario_iniciar"),
+            {"ponto_id": self.ponto_loja.id, "observacao": "Inventario teste"},
+        )
+        self.assertEqual(response.status_code, 200)
+        inventario = InventarioEstoque.objects.get(id=response.json()["inventario_id"])
+        self.assertEqual(inventario.empresa, self.empresa)
+
     def test_reposicao_inteligente_filtra_por_faltante_compra(self):
         po2 = PontoOperacional.objects.create(codigo="PO2", nome="Armazem")
         SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=po2, quantidade=1)
@@ -1282,6 +1316,7 @@ class ConsultaArtigosTests(TestCase):
 
     def test_associar_reserva_ordem_aceita_numero_os(self):
         ordem = OrdemServico.objects.create(
+            empresa=self.empresa,
             cliente=Cliente.objects.create(
                 nome="Cliente Numero OS",
                 documento="11144477735",
@@ -1515,15 +1550,22 @@ class AuditoriaEstoqueCommandTests(TestCase):
 class EstruturaProdutoTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
+        self.empresa = Empresa.objects.create(
+            nome="Empresa Estrutura",
+            regime_tributario="simples",
+            modo_tributario="basico",
+        )
         self.user = user_model.objects.create_user(
             username="estoque_estrutura",
             password="senha-forte-123",
-            tipo_usuario="atendente",
+            tipo_usuario="gerente",
+            empresa=self.empresa,
             perm_estoque_cadastro_produto=True,
         )
         self.client.force_login(self.user)
         self.ponto = PontoOperacional.objects.create(codigo="PO3", nome="Loja", ativo=True)
         self.produto = Produto.objects.create(
+            empresa=self.empresa,
             nome="Motor Principal",
             ean="7895550000011",
             sku="SKU-MOTOR-01",
@@ -1534,6 +1576,7 @@ class EstruturaProdutoTests(TestCase):
             ativo=True,
         )
         self.equivalente = Produto.objects.create(
+            empresa=self.empresa,
             nome="Motor Alternativo",
             ean="7895550000012",
             sku="SKU-MOTOR-02",
@@ -1585,10 +1628,16 @@ class EstruturaProdutoTests(TestCase):
 class ProdutoCadastroAprimoradoTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
+        self.empresa = Empresa.objects.create(
+            nome="Empresa Cadastro",
+            regime_tributario="simples",
+            modo_tributario="basico",
+        )
         self.user = user_model.objects.create_user(
             username="estoque_cadastro_aprimorado",
             password="senha-forte-123",
             tipo_usuario="atendente",
+            empresa=self.empresa,
             perm_estoque_cadastro_produto=True,
         )
         self.client.force_login(self.user)
@@ -1688,6 +1737,7 @@ class ProdutoCadastroAprimoradoTests(TestCase):
 
     def test_duplicar_produto_redireciona_para_criacao(self):
         produto = Produto.objects.create(
+            empresa=self.empresa,
             nome="Produto Base Duplicacao",
             ean="7897770000001",
             sku="SKU-DUP-0001",
@@ -1746,6 +1796,7 @@ class ProdutoCadastroAprimoradoTests(TestCase):
             ativo=True,
         )
         produto_base = Produto.objects.create(
+            empresa=self.empresa,
             nome="Produto Base Rateio",
             ean="7894440000002",
             sku="SKU-RATEIO-BASE",
@@ -1759,6 +1810,7 @@ class ProdutoCadastroAprimoradoTests(TestCase):
             ativo=True,
         )
         produto = Produto.objects.create(
+            empresa=self.empresa,
             nome="Produto Rateado",
             ean="7894440000003",
             sku="SKU-RATEIO-01",
@@ -1813,6 +1865,7 @@ class ProdutoCadastroAprimoradoTests(TestCase):
             ativo=True,
         )
         produto = Produto.objects.create(
+            empresa=self.empresa,
             nome="Produto Recalculo Rateio",
             ean="7894440000005",
             sku="SKU-RATEIO-03",
@@ -1847,6 +1900,7 @@ class ProdutoCadastroAprimoradoTests(TestCase):
             ativo=True,
         )
         produto_a = Produto.objects.create(
+            empresa=self.empresa,
             nome="Produto Faturamento A",
             ean="7894440000006",
             sku="SKU-RATEIO-04",
@@ -1860,6 +1914,7 @@ class ProdutoCadastroAprimoradoTests(TestCase):
             ativo=True,
         )
         produto_b = Produto.objects.create(
+            empresa=self.empresa,
             nome="Produto Faturamento B",
             ean="7894440000007",
             sku="SKU-RATEIO-05",
@@ -1896,6 +1951,7 @@ class ProdutoCadastroAprimoradoTests(TestCase):
             ativo=True,
         )
         produto = Produto.objects.create(
+            empresa=self.empresa,
             nome="Produto Snapshot Rateio",
             ean="7894440000008",
             sku="SKU-RATEIO-06",

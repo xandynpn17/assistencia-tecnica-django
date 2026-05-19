@@ -189,10 +189,9 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             self.request.user,
             "perm_os_editar_observacoes_internas",
         )
-        context["pode_editar_local_armazenamento"] = has_sensitive_permission(
-            self.request.user,
-            "perm_os_editar_local_armazenamento",
-        )
+        # Local de armazenamento impacta rastreabilidade fisica do equipamento.
+        # Mantemos restrito a perfil de gestao (adm/gerente).
+        context["pode_editar_local_armazenamento"] = is_management_user(self.request.user)
         context["pode_alterar_tecnico"] = has_sensitive_permission(
             self.request.user,
             "perm_os_alterar_tecnico",

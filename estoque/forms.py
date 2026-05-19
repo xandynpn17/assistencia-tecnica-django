@@ -3,7 +3,7 @@
 from django import forms
 from django.utils import timezone
 
-from configuracoes.models import FornecedorGarantia, MarcaGarantia
+from configuracoes.models import ConfiguracaoSistema, FornecedorGarantia, MarcaGarantia
 
 from .models import (
     ConfiguracaoRateioCustoFixo,
@@ -249,6 +249,9 @@ class ProdutoForm(forms.ModelForm):
         if not nome:
             return nome
         qs = Produto.objects.filter(nome__iexact=nome)
+        empresa = getattr(self.instance, "empresa", None)
+        if empresa:
+            qs = qs.filter(empresa=empresa)
         if self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
@@ -277,7 +280,17 @@ class ProdutoForm(forms.ModelForm):
         if categoria_cfg:
             cleaned["categoria"] = categoria_cfg.nome
         elif categoria_manual:
-            cleaned["categoria"] = categoria_manual
+            categoria_canonica = CategoriaProduto.nome_canonico(categoria_manual)
+            categoria_existente = None
+            for categoria in CategoriaProduto.objects.filter(ativo=True).only("id", "nome").order_by("ordem", "nome"):
+                if CategoriaProduto.nome_canonico(categoria.nome) == categoria_canonica:
+                    categoria_existente = categoria
+                    break
+            if categoria_existente:
+                cleaned["categoria_config"] = categoria_existente
+                cleaned["categoria"] = categoria_existente.nome
+            else:
+                cleaned["categoria"] = categoria_manual
 
         fornecedor_cfg = cleaned.get("fornecedor_config")
         fornecedor_manual = (cleaned.get("fornecedor_manual") or "").strip()
@@ -420,11 +433,17 @@ class MovimentacaoEstoqueForm(forms.ModelForm):
             tipo == "transferencia"
             and origem
             and destino
-            and (origem.codigo or "").upper() == "PO3"
-            and (destino.codigo or "").upper() == "PO2"
+            and (
+                (origem.codigo or "").upper()
+                == (getattr(ConfiguracaoSistema.get_configuracao(), "estoque_reposicao_destino_codigo", "PO3") or "PO3").strip().upper()
+            )
+            and (
+                (destino.codigo or "").upper()
+                == (getattr(ConfiguracaoSistema.get_configuracao(), "estoque_reposicao_origem_codigo", "PO2") or "PO2").strip().upper()
+            )
             and not destino_ubicacao
         ):
-            self.add_error("destino_ubicacao", "Informe a localizacao de destino no PO2.")
+            self.add_error("destino_ubicacao", "Informe a localizacao no ponto de destino para este retorno.")
         observacao = (cleaned.get("observacao") or "").strip()
         if tipo in {"ajuste", "avaria", "inventario"} and not observacao:
             self.add_error("observacao", "Informe observacao para este tipo de movimentacao.")

@@ -49,6 +49,15 @@
     .step-two-layout #id_acessorios { min-height: 72px; }
     .step-two-layout #id_notas_internas { min-height: 82px; }
     .compact-note { font-size: .8rem; color: #64748b; margin-top: 6px; }
+    .garantia-servico-wrap {
+        border: 1px solid #f8d7a2;
+        background: #fff9ef;
+        border-radius: 8px;
+        padding: 10px;
+    }
+    .garantia-servico-wrap .form-group:last-child {
+        margin-bottom: 0;
+    }
     .sidebar-stack.align-top { align-content: start; }
     .review-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 12px; }
     .review-card { border: 1px solid #e9edf3; border-radius: 10px; background: #fff; }
@@ -303,16 +312,18 @@
                                                 {{ form.referencia_parceiro.errors }}
                                                 <small class="compact-note">Somente para OS externa ou parceiro.</small>
                                             </div>
-                                            <div class="form-group full-span">
-                                                {{ form.ordem_origem_garantia.label_tag }}
-                                                {{ form.ordem_origem_garantia }}
-                                                {{ form.ordem_origem_garantia.errors }}
-                                                <small class="compact-note">Use ao abrir retorno em garantia de serviço.</small>
-                                            </div>
-                                            <div class="form-group full-span">
-                                                {{ form.garantia_classificacao_retorno.label_tag }}
-                                                {{ form.garantia_classificacao_retorno }}
-                                                {{ form.garantia_classificacao_retorno.errors }}
+                                            <div class="full-span garantia-servico-wrap" id="garantia-servico-fields" style="display:none;">
+                                                <div class="form-group mb-2">
+                                                    {{ form.ordem_origem_garantia.label_tag }}
+                                                    {{ form.ordem_origem_garantia }}
+                                                    {{ form.ordem_origem_garantia.errors }}
+                                                    <small class="compact-note">Use ao abrir retorno em garantia de serviço.</small>
+                                                </div>
+                                                <div class="form-group mb-0">
+                                                    {{ form.garantia_classificacao_retorno.label_tag }}
+                                                    {{ form.garantia_classificacao_retorno }}
+                                                    {{ form.garantia_classificacao_retorno.errors }}
+                                                </div>
                                             </div>
                                             <div class="form-group full-span">
                                                 {{ form.notas_internas.label_tag }}
@@ -381,6 +392,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const numeroNotaFiscal = document.getElementById("id_numero_nota_fiscal");
     const ordemOrigemGarantia = document.getElementById("id_ordem_origem_garantia");
     const classificacaoRetornoGarantia = document.getElementById("id_garantia_classificacao_retorno");
+    const garantiaServicoFields = document.getElementById("garantia-servico-fields");
     const garantiaWarningBox = document.getElementById("garantia-warning-box");
     const garantiaWarningText = document.getElementById("garantia-warning-text");
     const garantiaContextTitle = document.getElementById("garantia-context-title");
@@ -458,12 +470,21 @@ document.addEventListener("DOMContentLoaded", function () {
         return true;
     }
 
+    function normalizarTexto(valor) {
+        return (valor || "")
+            .toString()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim()
+            .toLowerCase();
+    }
+
     function isGarantia() {
-        return tipoReparo && tipoReparo.value === "Garantia";
+        return normalizarTexto(tipoReparo ? tipoReparo.value : "") === "garantia";
     }
 
     function isGarantiaServico() {
-        return tipoReparo && String(tipoReparo.value || "").indexOf("Garantia de servi") === 0;
+        return normalizarTexto(tipoReparo ? tipoReparo.value : "").startsWith("garantia de servico");
     }
 
     function atualizarPainelContexto() {
@@ -508,6 +529,14 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         if (classificacaoRetornoGarantia) {
             classificacaoRetornoGarantia.required = false;
+        }
+        if (garantiaServicoFields) {
+            const exibirGarantiaServico = isGarantiaServico();
+            garantiaServicoFields.style.display = exibirGarantiaServico ? "" : "none";
+            if (!exibirGarantiaServico) {
+                if (ordemOrigemGarantia) ordemOrigemGarantia.value = "";
+                if (classificacaoRetornoGarantia) classificacaoRetornoGarantia.value = "";
+            }
         }
         atualizarPainelContexto();
         syncGarantiaMarcaWarning();

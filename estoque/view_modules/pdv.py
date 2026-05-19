@@ -8,7 +8,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from configuracoes.models import ConfiguracaoSistema
 from configuracoes.permissions import CAIXA_OPERATIONAL_ROLES, ORDER_ROLES, STOCK_MANAGE_ROLES, has_role, role_required
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
 from ..models import PontoOperacional, Produto, ReservaEstoque, VendaRapidaEstoque
 from ..services import (
@@ -24,10 +26,11 @@ from .helpers import _normalizar_saldos_produto, _registrar_evento_estoque, expi
 
 @role_required(ORDER_ROLES)
 def consulta_artigos(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     user_model = get_user_model()
-    tecnicos_qs = user_model.objects.filter(is_active=True).exclude(numero_vendedor__isnull=True).exclude(numero_vendedor="").order_by("username")
+    tecnicos_qs = user_model.objects.filter(is_active=True, empresa=empresa).exclude(numero_vendedor__isnull=True).exclude(numero_vendedor="").order_by("username")
     if not tecnicos_qs.exists():
-        tecnicos_qs = user_model.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username")
+        tecnicos_qs = user_model.objects.filter(is_active=True, tipo_usuario="tecnico", empresa=empresa).order_by("username")
     tecnicos = tecnicos_qs.values("id", "username", "numero_vendedor")
     return render(
         request,
@@ -44,6 +47,7 @@ def consulta_artigos(request):
 
 @role_required(ORDER_ROLES)
 def api_consulta_artigos(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     q = (request.GET.get("q") or "").strip()
     try:
         page = max(1, int(request.GET.get("page") or "1"))
@@ -52,7 +56,7 @@ def api_consulta_artigos(request):
     page_size = 20
     if len(q) < 2:
         return JsonResponse({"resultados": [], "page": 1, "has_next": False, "has_prev": False, "total": 0})
-    produtos = Produto.objects.ativos().nao_servicos().filter(permite_os=True)
+    produtos = filtrar_queryset_empresa(Produto.objects.ativos().nao_servicos().filter(permite_os=True), empresa)
     q_low = q.lower()
     if q_low.isdigit():
         produtos = produtos.filter(Q(id=int(q_low)) | Q(ean__icontains=q) | Q(sku__icontains=q) | Q(nome__icontains=q) | Q(modelos_compativeis__icontains=q))
@@ -92,9 +96,13 @@ def api_consulta_artigos(request):
 
 @role_required(ORDER_ROLES)
 def api_resumo_artigo(request, produto_id):
-    expirar_reservas_vencidas()
+    empresa = obter_empresa_ativa(request, strict=False)
+    expirar_reservas_vencidas(empresa=empresa)
     produto = get_object_or_404(
-        Produto.objects.select_related("ponto_operacional").only(
+        filtrar_queryset_empresa(
+            Produto.objects.select_related("ponto_operacional"),
+            empresa,
+        ).only(
             "id",
             "nome",
             "ean",
@@ -161,6 +169,7 @@ def api_resumo_artigo(request, produto_id):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_venda_rapida(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     produto_id = request.POST.get("produto_id")
@@ -171,7 +180,10 @@ def api_venda_rapida(request):
         quantidade = int(request.POST.get("quantidade") or "1")
     except ValueError:
         return JsonResponse({"ok": False, "erro": "Quantidade invalida."}, status=400)
-    produto = get_object_or_404(Produto.objects.ativos().nao_servicos().filter(permite_os=True), id=produto_id)
+    produto = get_object_or_404(
+        filtrar_queryset_empresa(Produto.objects.ativos().nao_servicos().filter(permite_os=True), empresa),
+        id=produto_id,
+    )
     ponto = get_object_or_404(PontoOperacional, id=ponto_id, ativo=True)
     _normalizar_saldos_produto(produto)
     try:
@@ -200,15 +212,27 @@ def api_venda_rapida(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_cesto_resumo(request, cesto_codigo):
+    empresa = obter_empresa_ativa(request, strict=False)
+    qs_cesto = VendaRapidaEstoque.objects.filter(cesto_codigo=cesto_codigo)
+    if not qs_cesto.filter(produto__empresa=empresa).exists() or qs_cesto.exclude(produto__empresa=empresa).exists():
+        return JsonResponse({"ok": False, "erro": "Cesto nao encontrado."}, status=404)
     return JsonResponse(resumir_cesto_venda_rapida(cesto_codigo))
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_cesto_finalizar(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
+    cesto_codigo = (request.POST.get("cesto_codigo") or "").strip()
+    qs_cesto = VendaRapidaEstoque.objects.filter(cesto_codigo=cesto_codigo, status="pre_reserva")
+    if qs_cesto.exists() and (
+        not qs_cesto.filter(produto__empresa=empresa).exists()
+        or qs_cesto.exclude(produto__empresa=empresa).exists()
+    ):
+        return JsonResponse({"ok": False, "erro": "Cesto nao encontrado."}, status=404)
     try:
-        resultado = finalizar_cesto_venda_rapida((request.POST.get("cesto_codigo") or "").strip())
+        resultado = finalizar_cesto_venda_rapida(cesto_codigo)
     except ValueError as exc:
         return JsonResponse({"ok": False, "erro": str(exc)}, status=400)
     return JsonResponse({"ok": True, "guia": resultado["guia"], "total": resultado["resumo"]["total"], "itens": len(resultado["resumo"]["itens"]), "redirect_caixa": resultado["redirect_caixa"], "imprimir_url": resultado["imprimir_url"]})
@@ -216,6 +240,10 @@ def api_cesto_finalizar(request):
 
 @role_required(ORDER_ROLES)
 def api_guia_status(request, guia_codigo):
+    empresa = obter_empresa_ativa(request, strict=False)
+    qs_guia = VendaRapidaEstoque.objects.filter(guia_pagamento=guia_codigo)
+    if not qs_guia.filter(produto__empresa=empresa).exists() or qs_guia.exclude(produto__empresa=empresa).exists():
+        return JsonResponse({"ok": False, "erro": "Guia nao encontrada."}, status=404)
     try:
         resumo = resumir_guia_venda_rapida(guia_codigo)
     except ValueError as exc:
@@ -228,8 +256,13 @@ def api_guia_status(request, guia_codigo):
 
 @role_required(ORDER_ROLES)
 def api_guias_recentes(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     limit = request.GET.get("limit") or 10
-    resumos = listar_guias_recentes_venda_rapida(limit=limit)
+    resumos = [
+        resumo
+        for resumo in listar_guias_recentes_venda_rapida(limit=limit)
+        if VendaRapidaEstoque.objects.filter(guia_pagamento=resumo.get("guia"), produto__empresa=empresa).exists()
+    ]
     for resumo in resumos:
         resumo["guia_url"] = reverse("estoque:guia_pagamento", args=[resumo["guia"]])
         resumo["caixa_url"] = f"{reverse('caixa:registrar_pagamento')}?guia={resumo['guia']}"
@@ -238,9 +271,10 @@ def api_guias_recentes(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_cesto_item_remover(request, venda_id):
+    empresa = obter_empresa_ativa(request, strict=False)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
-    venda = get_object_or_404(VendaRapidaEstoque, id=venda_id)
+    venda = get_object_or_404(VendaRapidaEstoque.objects.filter(produto__empresa=empresa), id=venda_id)
     try:
         resumo = remover_item_cesto_venda_rapida(
             venda,
@@ -253,9 +287,10 @@ def api_cesto_item_remover(request, venda_id):
 
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def guia_pagamento(request, guia_codigo):
+    empresa = obter_empresa_ativa(request, strict=False)
     vendas_qs = (
         VendaRapidaEstoque.objects.select_related("produto", "ponto_operacional", "usuario", "pagamento")
-        .filter(guia_pagamento=guia_codigo)
+        .filter(guia_pagamento=guia_codigo, produto__empresa=empresa)
         .order_by("id")
     )
     if not vendas_qs.exists():
@@ -285,11 +320,24 @@ def guia_pagamento(request, guia_codigo):
 @role_required(STOCK_MANAGE_ROLES)
 def limpar_pre_reservas_antigas_web(request):
     if request.method == "POST":
+        config = ConfiguracaoSistema.get_configuracao()
+        horas = None
         try:
-            dias = int(request.POST.get("dias") or "1")
+            horas = int(request.POST.get("horas") or "0")
+            if horas <= 0:
+                horas = None
         except ValueError:
-            dias = 1
-        total = limpar_pre_reservas_antigas(dias=dias)
+            horas = None
+        if horas is None:
+            try:
+                dias = int(request.POST.get("dias") or "0")
+            except ValueError:
+                dias = 0
+            if dias > 0:
+                horas = dias * 24
+        if horas is None:
+            horas = int(getattr(config, "estoque_pre_reserva_limpeza_horas", 24) or 24)
+        total = limpar_pre_reservas_antigas(horas=horas)
         messages.success(request, f"Pre-reservas antigas limpas: {total}.")
     return redirect("estoque:relatorio_divergencias")
 

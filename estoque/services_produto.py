@@ -117,5 +117,7 @@ def atualizar_produtos_relacionados_rateio(produto):
     produtos_rateio = Produto.objects.ativos().nao_servicos().filter(
         incluir_rateio_custo_fixo=True,
     ).exclude(pk=produto.pk)
+    if getattr(produto, "empresa_id", None):
+        produtos_rateio = produtos_rateio.filter(empresa_id=produto.empresa_id)
     for produto_rateio in produtos_rateio:
         produto_rateio.save(_skip_rateio_refresh=True)

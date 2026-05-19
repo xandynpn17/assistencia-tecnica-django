@@ -696,6 +696,22 @@ class ConfiguracaoSistema(models.Model):
         default=3,
         verbose_name="Validade da reserva automatica de peca na OS (dias)",
     )
+    estoque_pre_reserva_limpeza_horas = models.PositiveIntegerField(
+        default=24,
+        verbose_name="Limpeza automatica de pre-reserva (horas)",
+    )
+    estoque_reposicao_origem_codigo = models.CharField(
+        max_length=10,
+        default="PO2",
+        verbose_name="Codigo do ponto de origem da reposicao",
+        help_text="Normalmente o armazem/estoque central.",
+    )
+    estoque_reposicao_destino_codigo = models.CharField(
+        max_length=10,
+        default="PO3",
+        verbose_name="Codigo do ponto de destino da reposicao",
+        help_text="Normalmente a loja/balcao tecnico.",
+    )
     inventario_ciclico_dias = models.PositiveIntegerField(
         default=30,
         verbose_name="Periodicidade do inventário cíclico (dias)",

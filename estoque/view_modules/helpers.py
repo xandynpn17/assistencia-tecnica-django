@@ -1,6 +1,6 @@
 import csv
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import io
 import logging
 import random
@@ -57,7 +57,7 @@ def _decimal_to_str(valor):
         return "0"
     try:
         return str(Decimal(str(valor)))
-    except Exception:
+    except (InvalidOperation, ValueError, TypeError):
         return str(valor)
 
 
@@ -88,7 +88,7 @@ def _registrar_evento_estoque(evento, *, usuario=None, **dados):
             evento_modelo["inventario_id"] = dados.get("inventario_id")
         EstoqueEvento.objects.create(**evento_modelo)
     except Exception:
-        logger.exception("falha_persistir_estoque_evento")
+        logger.exception("falha_persistir_estoque_evento", extra={"evento": evento})
 
 
 def _snapshot_produto(produto):
@@ -240,7 +240,7 @@ def _ler_arquivo_importacao_produtos(uploaded_file):
         texto = data.decode("utf-8-sig", errors="ignore")
         try:
             dialect = csv.Sniffer().sniff(texto[:4096], delimiters=",;")
-        except Exception:
+        except csv.Error:
             dialect = csv.excel
         leitor = csv.DictReader(io.StringIO(texto), dialect=dialect)
         rows = []
@@ -253,7 +253,7 @@ def _ler_arquivo_importacao_produtos(uploaded_file):
     if nome.endswith(".xlsx"):
         try:
             from openpyxl import load_workbook
-        except Exception as exc:
+        except ImportError as exc:
             raise ValueError("Importacao XLSX requer openpyxl instalado.") from exc
 
         wb = load_workbook(uploaded_file, data_only=True)
@@ -294,7 +294,7 @@ def _normalizar_linha_importacao(linha):
     }
 
 
-def _contexto_rateio_produto(produto=None):
+def _contexto_rateio_produto(produto=None, empresa=None):
     competencia = timezone.localdate().replace(day=1)
     configuracao = ConfiguracaoRateioCustoFixo.get_solo()
     total_fixos = Decimal("0.00")
@@ -307,10 +307,12 @@ def _contexto_rateio_produto(produto=None):
             .aggregate(total=Sum("valor_previsto"))["total"]
             or Decimal("0.00")
         )
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
         total_fixos = Decimal("0.00")
 
     produtos_base = Produto.objects.ativos().nao_servicos().filter(incluir_rateio_custo_fixo=True, previsao_venda_mensal__gt=0)
+    if empresa:
+        produtos_base = produtos_base.filter(empresa=empresa)
     if produto and getattr(produto, "pk", None):
         produtos_base = produtos_base.exclude(pk=produto.pk)
 
@@ -327,7 +329,7 @@ def _contexto_rateio_produto(produto=None):
     }
 
 
-def _resumo_rateio_atual():
+def _resumo_rateio_atual(empresa=None):
     competencia = timezone.localdate().replace(day=1)
     configuracao = ConfiguracaoRateioCustoFixo.get_solo()
     total_fixos = Decimal("0.00")
@@ -340,12 +342,14 @@ def _resumo_rateio_atual():
             .aggregate(total=Sum("valor_previsto"))["total"]
             or Decimal("0.00")
         )
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
         total_fixos = Decimal("0.00")
 
     produtos = list(
         Produto.objects.ativos().nao_servicos().filter(incluir_rateio_custo_fixo=True, previsao_venda_mensal__gt=0).order_by("nome")
     )
+    if empresa:
+        produtos = [produto for produto in produtos if produto.empresa_id == empresa.id]
     detalhes = []
     total_base = Decimal("0.00")
     realizado_por_produto = RateioCustoFixoCompetencia._realizado_por_produto(competencia)

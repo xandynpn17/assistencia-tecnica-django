@@ -584,6 +584,9 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'estoque_permitir_negativo',
             'estoque_pre_reserva_exige_saldo',
             'estoque_reserva_os_validade_dias',
+            'estoque_pre_reserva_limpeza_horas',
+            'estoque_reposicao_origem_codigo',
+            'estoque_reposicao_destino_codigo',
             'inventario_ciclico_dias',
             'inventario_ultima_execucao',
             'backup_retencao_dias',
@@ -625,6 +628,9 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'numero_loja_talao': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 2}),
             'busca_minimo_caracteres': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 20}),
             'estoque_reserva_os_validade_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 60}),
+            'estoque_pre_reserva_limpeza_horas': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 240}),
+            'estoque_reposicao_origem_codigo': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 10}),
+            'estoque_reposicao_destino_codigo': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 10}),
             'inventario_ciclico_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 365}),
             'inventario_ultima_execucao': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'backup_retencao_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 365}),
@@ -688,6 +694,9 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressao, relatorio e orcamento)."
         self.fields["layout_documentos_cor"].help_text = "Escolha se os PDFs saem em colorido ou escala de cinza (preto e branco)."
         self.fields["estoque_reserva_os_validade_dias"].help_text = "Dias de validade para reservas automaticas criadas ao adicionar pecas na OS."
+        self.fields["estoque_pre_reserva_limpeza_horas"].help_text = "Tempo maximo de uma pre-reserva de venda a mostrador antes do cancelamento automatico."
+        self.fields["estoque_reposicao_origem_codigo"].help_text = "Codigo do ponto operacional de origem na reposicao inteligente."
+        self.fields["estoque_reposicao_destino_codigo"].help_text = "Codigo do ponto operacional de destino na reposicao inteligente."
         self.fields["garantia_padrao_servico_dias"].help_text = "Usado quando a OS original não possui item com garantia definida."
         self.fields["garantia_padrao_peca_dias"].help_text = "Prazo base para retorno vinculado a peça sem garantia específica."
         self.fields["garantia_reincidencia_janela_dias"].help_text = "Janela para sugerir possível reincidência no ato da abertura."
@@ -711,6 +720,22 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
                 f"Os termos da OS podem ter no maximo {self.MAX_CARACTERES_TERMOS_OS} caracteres."
             )
         return valor
+
+    def clean_estoque_reposicao_origem_codigo(self):
+        valor = (self.cleaned_data.get("estoque_reposicao_origem_codigo") or "PO2").strip().upper()
+        return valor
+
+    def clean_estoque_reposicao_destino_codigo(self):
+        valor = (self.cleaned_data.get("estoque_reposicao_destino_codigo") or "PO3").strip().upper()
+        return valor
+
+    def clean(self):
+        cleaned = super().clean()
+        origem = (cleaned.get("estoque_reposicao_origem_codigo") or "").strip().upper()
+        destino = (cleaned.get("estoque_reposicao_destino_codigo") or "").strip().upper()
+        if origem and destino and origem == destino:
+            self.add_error("estoque_reposicao_destino_codigo", "Origem e destino da reposicao nao podem ser iguais.")
+        return cleaned
 
 
 class RegraSLAAlertaForm(forms.ModelForm):
