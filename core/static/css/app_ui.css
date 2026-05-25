@@ -190,6 +190,72 @@ body {
   z-index: 2;
 }
 
+body.layout-navbar-fixed .wrapper {
+  padding-top: 0 !important;
+}
+
+body.layout-navbar-fixed .wrapper .main-header {
+  position: relative !important;
+  top: 0 !important;
+}
+
+body.layout-navbar-fixed .wrapper .content-wrapper,
+body.layout-navbar-fixed .wrapper .main-sidebar,
+body.layout-navbar-fixed .wrapper .main-footer {
+  margin-top: 0 !important;
+}
+
+body.layout-footer-fixed .wrapper .main-footer {
+  position: relative !important;
+  bottom: auto !important;
+}
+
+body.layout-footer-fixed .wrapper .content-wrapper {
+  padding-bottom: 0.5rem !important;
+}
+
+.ui-login-body {
+  min-height: 100vh;
+  margin: 0;
+  background: radial-gradient(circle at top right, #dbe9f8 0%, #eef3fa 38%, #f5f8fd 100%);
+  font-family: var(--ui-font-sans);
+}
+
+.ui-login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 14px;
+}
+
+.ui-login-card {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid #d6e0ec;
+  border-radius: 14px;
+  box-shadow: 0 22px 44px rgba(19, 45, 73, 0.12);
+  overflow: hidden;
+}
+
+.ui-login-header {
+  padding: 26px 26px 10px;
+}
+
+.ui-login-brand {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: #14304a;
+}
+
+.ui-login-subtitle {
+  margin: 6px 0 0;
+  color: #5f7286;
+  font-size: 0.96rem;
+}
+
 .search-feedback {
   color: #7a2518;
   background: #fff1ee;
@@ -345,4 +411,61 @@ body {
     align-items: flex-start;
     gap: 4px;
   }
+}
+
+/* Hard fix: neutraliza layouts fixed do AdminLTE que criam faixa branca superior
+   e sobreposição de rodapé quando classes "layout-*-fixed" ficam ativas. */
+body .wrapper {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+body .wrapper .main-header,
+body.layout-navbar-fixed .wrapper .main-header,
+body.layout-sm-navbar-fixed .wrapper .main-header,
+body.layout-md-navbar-fixed .wrapper .main-header,
+body.layout-lg-navbar-fixed .wrapper .main-header,
+body.layout-xl-navbar-fixed .wrapper .main-header {
+  position: relative !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+
+body .wrapper .content-wrapper,
+body.layout-navbar-fixed .wrapper .content-wrapper,
+body.layout-sm-navbar-fixed .wrapper .content-wrapper,
+body.layout-md-navbar-fixed .wrapper .content-wrapper,
+body.layout-lg-navbar-fixed .wrapper .content-wrapper,
+body.layout-xl-navbar-fixed .wrapper .content-wrapper {
+  margin-top: 0 !important;
+}
+
+body .wrapper .brand-link,
+body.layout-navbar-fixed .wrapper .brand-link,
+body.layout-sm-navbar-fixed .wrapper .brand-link,
+body.layout-md-navbar-fixed .wrapper .brand-link,
+body.layout-lg-navbar-fixed .wrapper .brand-link,
+body.layout-xl-navbar-fixed .wrapper .brand-link {
+  position: relative !important;
+  top: 0 !important;
+}
+
+body .wrapper .sidebar,
+body.layout-navbar-fixed .wrapper .sidebar,
+body.layout-sm-navbar-fixed .wrapper .sidebar,
+body.layout-md-navbar-fixed .wrapper .sidebar,
+body.layout-lg-navbar-fixed .wrapper .sidebar,
+body.layout-xl-navbar-fixed .wrapper .sidebar {
+  margin-top: 0 !important;
+}
+
+body .wrapper .main-footer,
+body.layout-footer-fixed .wrapper .main-footer,
+body.layout-sm-footer-fixed .wrapper .main-footer,
+body.layout-md-footer-fixed .wrapper .main-footer,
+body.layout-lg-footer-fixed .wrapper .main-footer,
+body.layout-xl-footer-fixed .wrapper .main-footer {
+  position: relative !important;
+  bottom: auto !important;
 }

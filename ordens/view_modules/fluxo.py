@@ -6,7 +6,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.utils.timezone import localtime
 
-from configuracoes.permissions import ORDER_ROLES, RoleRequiredMixin, is_management_user, require_sensitive_permission, role_required
+from configuracoes.permissions import ORDER_ROLES, RoleRequiredMixin, require_sensitive_permission, role_required
 
 from ..models import LinhaTrabalho, OrdemServico
 from ..services.os_policy_service import OSAccessPolicyService
@@ -41,12 +41,10 @@ def atualizar_local(request, os_id):
         ordem = OrdemServico.objects.get(id=os_id)
         try:
             OSAccessPolicyService.ensure_can_edit(ordem, "edicao_local", usuario=request.user)
-            if not is_management_user(request.user):
-                raise PermissionDenied("Voce nao tem permissao para editar o local de armazenamento desta OS.")
         except ValueError as exc:
             return JsonResponse({"success": False, "message": str(exc)}, status=400)
         except PermissionDenied as exc:
-            return JsonResponse({"success": False, "message": str(exc) or "Permissao insuficiente."}, status=403)
+            return JsonResponse({"success": False, "message": str(exc) or "Permissão insuficiente."}, status=403)
 
         local_anterior = (ordem.local_armazenamento or "").strip()
         local_novo = (local or "").strip()
@@ -150,12 +148,12 @@ def atualizar_observacoes(request, os_id):
             require_sensitive_permission(
                 request.user,
                 "perm_os_editar_observacoes_internas",
-                message="Voce nao tem permissao para editar as observacoes internas desta OS.",
+                message="Você não tem permissão para editar as observações internas desta OS.",
             )
         except ValueError as exc:
             return JsonResponse({"success": False, "message": str(exc)}, status=400)
         except PermissionDenied as exc:
-            return JsonResponse({"success": False, "message": str(exc) or "Permissao insuficiente."}, status=403)
+            return JsonResponse({"success": False, "message": str(exc) or "Permissão insuficiente."}, status=403)
 
         ordem.notas_internas = obs
         ordem.save(update_fields=["notas_internas"])
@@ -185,15 +183,15 @@ def atualizar_tecnico(request, os_id):
             require_sensitive_permission(
                 request.user,
                 "perm_os_alterar_tecnico",
-                message="Voce nao tem permissao para alterar o tecnico responsavel desta OS.",
+                message="Você não tem permissão para alterar o técnico responsável desta OS.",
             )
         except ValueError as exc:
             return JsonResponse({"success": False, "message": str(exc)}, status=400)
         except PermissionDenied as exc:
-            return JsonResponse({"success": False, "message": str(exc) or "Permissao insuficiente."}, status=403)
+            return JsonResponse({"success": False, "message": str(exc) or "Permissão insuficiente."}, status=403)
 
         if tecnico_id:
-            tecnico = User.objects.get(id=tecnico_id, is_active=True, tipo_usuario="tecnico")
+            tecnico = usuarios_tecnicos_qs(empresa=ordem.empresa).get(id=tecnico_id)
             ordem.tecnico_responsavel = tecnico
             ordem.save()
             log_os(
@@ -248,12 +246,12 @@ def atualizar_numero_serie(request, os_id):
             require_sensitive_permission(
                 request.user,
                 "perm_os_editar_numero_serie",
-                message="Voce nao tem permissao para editar o numero de serie desta OS.",
+                message="Você não tem permissão para editar o número de série desta OS.",
             )
         except ValueError as exc:
             return JsonResponse({"success": False, "message": str(exc)}, status=400)
         except PermissionDenied as exc:
-            return JsonResponse({"success": False, "message": str(exc) or "Permissao insuficiente."}, status=403)
+            return JsonResponse({"success": False, "message": str(exc) or "Permissão insuficiente."}, status=403)
 
         serie_antiga = (ordem.numero_serie_equipamento or "").strip()
         if numero_serie == serie_antiga:

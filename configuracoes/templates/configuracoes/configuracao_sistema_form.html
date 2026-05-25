@@ -52,13 +52,18 @@
       <!-- Busca -->
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-search mr-2"></i> Configuracoes de Busca</h5>
+          <h5 class="mb-0"><i class="fas fa-search mr-2"></i> Configurações de busca</h5>
         </div>
         <div class="card-body">
           <div class="form-group">
             <label>{{ form.busca_minimo_caracteres.label }}</label>
             {{ form.busca_minimo_caracteres }}
             <small class="form-text text-muted">Minimo de numeros para buscar clientes (recomendado: 7)</small>
+          </div>
+          <div class="form-group mb-0">
+            <label>{{ form.sla_dias_os_sem_movimentacao.label }}</label>
+            {{ form.sla_dias_os_sem_movimentacao }}
+            {% if form.sla_dias_os_sem_movimentacao.help_text %}<small class="form-text text-muted">{{ form.sla_dias_os_sem_movimentacao.help_text }}</small>{% endif %}
           </div>
         </div>
       </div>
@@ -303,17 +308,17 @@
 
       <div class="card mb-3">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens Automaticas</h5>
+          <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens automáticas</h5>
         </div>
         <div class="card-body">
-          <p class="text-muted">Esses textos sao usados pelo fluxo automatico da OS, como envio de orcamento e aviso de pronto contactado. Variaveis disponiveis: <code>{cliente_nome}</code>, <code>{saudacao_cliente}</code>, <code>{numero_os}</code>, <code>{equipamento_resumo}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>, <code>{itens_orcamento}</code>, <code>{itens_orcamento_resumidos}</code>, <code>{quantidade_itens_orcamento}</code>, <code>{status_os}</code>, <code>{empresa_nome}</code>, <code>{telefone_loja}</code>, <code>{email_loja}</code>, <code>{link_orcamento_pdf}</code>, <code>{link_ordem_pdf}</code>.</p>
+          <p class="text-muted">Esses textos são usados pelo fluxo automático da OS, como envio de orçamento e aviso de pronto contactado. Variáveis disponíveis: <code>{cliente_nome}</code>, <code>{saudacao_cliente}</code>, <code>{numero_os}</code>, <code>{equipamento_resumo}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>, <code>{itens_orcamento}</code>, <code>{itens_orcamento_resumidos}</code>, <code>{quantidade_itens_orcamento}</code>, <code>{status_os}</code>, <code>{empresa_nome}</code>, <code>{telefone_loja}</code>, <code>{email_loja}</code>, <code>{link_orcamento_pdf}</code>, <code>{link_ordem_pdf}</code>.</p>
           <div class="row">
             <div class="col-md-6 form-group">
-              <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orcamento (E-mail)" }}</label>
+              <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orçamento (E-mail)" }}</label>
               {{ form.mensagem_orcamento_email }}
             </div>
             <div class="col-md-6 form-group">
-              <label>{{ form.mensagem_orcamento_whatsapp.label|default:"Mensagem Orcamento (WhatsApp)" }}</label>
+              <label>{{ form.mensagem_orcamento_whatsapp.label|default:"Mensagem Orçamento (WhatsApp)" }}</label>
               {{ form.mensagem_orcamento_whatsapp }}
             </div>
             <div class="col-md-6 form-group">
@@ -325,15 +330,15 @@
               {{ form.mensagem_pronto_whatsapp }}
             </div>
             <div class="col-md-12 form-group">
-              <label>{{ form.condicoes_orcamento.label|default:"Condicoes do Orcamento" }}</label>
+              <label>{{ form.condicoes_orcamento.label|default:"Condições do Orçamento" }}</label>
               {{ form.condicoes_orcamento }}
               {% if form.condicoes_orcamento.help_text %}<small class="form-text text-muted">{{ form.condicoes_orcamento.help_text }}</small>{% endif %}
               {{ form.condicoes_orcamento.errors }}
             </div>
             <div class="col-md-12 form-group">
-              <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Servico" }}</label>
+              <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Serviço" }}</label>
               {{ form.termos_ordem_servico }}
-              <small class="form-text text-muted">Usado nos PDFs de OS (digital e impressao).</small>
+              <small class="form-text text-muted">Usado nos PDFs de OS (digital e impressão).</small>
               {% if form.termos_ordem_servico.help_text %}<small class="form-text text-muted">{{ form.termos_ordem_servico.help_text }}</small>{% endif %}
               {{ form.termos_ordem_servico.errors }}
             </div>
@@ -437,9 +442,9 @@
               <label class="small text-muted">Tipo de Documento</label>
               <select id="preview_compare_tipo" class="form-control form-control-sm">
                 <option value="os_digital">OS Digital</option>
-                <option value="os_impressao">OS Impressao</option>
-                <option value="relatorio">Relatorio Tecnico</option>
-                <option value="orcamento">Orcamento</option>
+                <option value="os_impressao">OS Impressão</option>
+                <option value="relatorio">Relatório Técnico</option>
+                <option value="orcamento">Orçamento</option>
               </select>
             </div>
             <div class="col-md-4 form-group">
@@ -449,7 +454,7 @@
                 <option value="executivo">executivo</option>
                 <option value="classico">classico</option>
                 <option value="compacto">compacto</option>
-                <option value="tecnico">tecnico</option>
+                <option value="tecnico">Técnico</option>
                 <option value="parceiro">parceiro</option>
               </select>
             </div>
@@ -460,7 +465,7 @@
                 <option value="clean">clean</option>
                 <option value="classico">classico</option>
                 <option value="compacto">compacto</option>
-                <option value="tecnico">tecnico</option>
+                <option value="tecnico">Técnico</option>
                 <option value="parceiro">parceiro</option>
               </select>
             </div>

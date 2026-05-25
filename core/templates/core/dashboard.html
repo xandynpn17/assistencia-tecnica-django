@@ -84,6 +84,15 @@
 
 .page-title { color: #2c3e50; font-weight: 700; margin-bottom: 4px; }
 .page-subtitle { color: #6c757d; margin-bottom: 0; }
+.card-modern-header.with-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.header-action-link { color: #fff; font-size: 12px; font-weight: 600; text-decoration: none; opacity: 0.9; }
+.header-action-link:hover { color: #fff; text-decoration: underline; opacity: 1; }
+.priority-line { min-height: 40px; }
+.priority-line .badge { font-size: 12px; }
 
 @media (max-width: 991px) {
     .quick-grid .quick-btn { min-height: 48px; font-size: 14px; }
@@ -128,6 +137,42 @@
         <div class="col-md-6 col-lg-3 mb-3"><a href="{{ dashboard_links.fechadas }}" class="stat-card-link"><div class="stat-card stat-card-info"><div class="stat-card-content"><div class="stat-card-number">{{ ordens_finalizadas_mes }}</div><div class="stat-card-title">Concluídas no mês</div><div class="stat-card-subtitle">Acumulado: {{ total_ordens_finalizadas }}</div><div class="stat-card-icon"><i class="fas fa-check-circle"></i></div></div></div></a></div>
         <div class="col-md-6 col-lg-3 mb-3"><div class="stat-card stat-card-primary"><div class="stat-card-content"><div class="stat-card-number">{{ total_ordens }}</div><div class="stat-card-title">Total de Ordens</div><div class="stat-card-icon"><i class="fas fa-tools"></i></div></div></div></div>
         <div class="col-md-6 col-lg-3 mb-3"><div class="stat-card stat-card-light"><div class="stat-card-content"><div class="stat-card-number">{{ total_clientes }}</div><div class="stat-card-title">Total de Clientes</div><div class="stat-card-icon"><i class="fas fa-users text-primary"></i></div></div></div></div>
+    </div>
+
+    <div class="card-modern section-space">
+        <div class="card-modern-header with-action">
+            <span>Prioridades de hoje</span>
+            <a href="{% url 'configuracoes:painel_sla' %}" class="header-action-link">Ver painel SLA</a>
+        </div>
+        <div class="card-modern-body">
+            {% if pendencias_sla_total %}
+            <div class="row">
+                <div class="col-md-6 col-lg-4 mb-2">
+                    <a href="{% url 'configuracoes:painel_sla' %}" class="text-decoration-none">
+                        <div class="status-line priority-line mb-0" style="border-left-color:#e74c3c;">
+                            <strong>Pendências SLA</strong>
+                            <span class="badge bg-secondary rounded-pill">{{ pendencias_sla_total }}</span>
+                        </div>
+                    </a>
+                </div>
+                {% for resumo in pendencias_sla_resumo %}
+                <div class="col-md-6 col-lg-4 mb-2">
+                    <a href="{% url 'configuracoes:painel_sla' %}?regra={{ resumo.codigo|default:'' }}" class="text-decoration-none">
+                        <div class="status-line priority-line mb-0" style="border-left-color:{% if resumo.severidade == 'alta' or resumo.severidade == 'critica' %}#e74c3c{% elif resumo.severidade == 'media' %}#f39c12{% else %}#3498db{% endif %};">
+                            <strong>{{ resumo.label }}</strong>
+                            <span class="badge bg-secondary rounded-pill">{{ resumo.total }}</span>
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="status-line priority-line mb-0" style="border-left-color:#27ae60;">
+                <strong>Nenhuma pendência SLA</strong>
+                <span class="badge bg-success rounded-pill">OK</span>
+            </div>
+            {% endif %}
+        </div>
     </div>
 
     <div class="card-modern section-space">

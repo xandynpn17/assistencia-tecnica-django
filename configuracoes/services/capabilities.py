@@ -26,8 +26,8 @@ PRESETS: dict[str, PresetPermissao] = {
     ),
     "tecnico_campo": PresetPermissao(
         codigo="tecnico_campo",
-        nome="Tecnico de Campo",
-        descricao="Foco em execucao tecnica e atualizacao de ordens.",
+        nome="Técnico de Campo",
+        descricao="Foco em execução técnica e atualização de ordens.",
         valores={
             "acesso_ordens_extra": True,
             "perm_os_editar_numero_serie": True,
@@ -38,7 +38,7 @@ PRESETS: dict[str, PresetPermissao] = {
     "gerente_filial": PresetPermissao(
         codigo="gerente_filial",
         nome="Gerente de Filial",
-        descricao="Visao ampliada operacional e financeira sem superusuario.",
+        descricao="Visão ampliada operacional e financeira sem superusuário.",
         valores={
             "acesso_ordens_extra": True,
             "acesso_estoque_extra": True,
@@ -60,15 +60,15 @@ PRESETS: dict[str, PresetPermissao] = {
 }
 
 CAPABILITY_IMPACTO = {
-    "ordens:acesso_extra": "Acesso ampliado ao fluxo de Ordens de Servico.",
-    "estoque:acesso_extra": "Acesso ampliado ao modulo de Estoque.",
-    "caixa:operacional": "Permite rotina operacional de caixa (recebimentos/saidas).",
+    "ordens:acesso_extra": "Acesso ampliado ao fluxo de Ordens de Serviço.",
+    "estoque:acesso_extra": "Acesso ampliado ao módulo de Estoque.",
+    "caixa:operacional": "Permite rotina operacional de caixa (recebimentos/saídas).",
     "caixa:financeiro": "Permite acesso a rotinas financeiras do caixa.",
     "os:concluir": "Permite concluir e fechar OS.",
     "os:reabrir": "Permite reabrir OS fechada.",
     "caixa:dre": "Permite visualizar DRE.",
-    "caixa:comissoes": "Permite gerir comissoes.",
-    "estoque:inventario_finalizar": "Permite finalizar inventario.",
+    "caixa:comissoes": "Permite gerir comissões.",
+    "estoque:inventario_finalizar": "Permite finalizar inventário.",
 }
 
 PERMISSION_LABELS = {
@@ -76,20 +76,20 @@ PERMISSION_LABELS = {
     "acesso_estoque_extra": "Acesso extra em Estoque",
     "acesso_caixa_operacional_extra": "Acesso extra em Caixa operacional",
     "acesso_caixa_financeiro_extra": "Acesso extra em Caixa financeiro",
-    "acesso_configuracoes_extra": "Acesso extra em Configuracoes",
-    "perm_os_editar_numero_serie": "Editar numero de serie",
-    "perm_os_editar_observacoes_internas": "Editar observacoes internas da OS",
+    "acesso_configuracoes_extra": "Acesso extra em Configurações",
+    "perm_os_editar_numero_serie": "Editar número de série",
+    "perm_os_editar_observacoes_internas": "Editar observações internas da OS",
     "perm_os_editar_local_armazenamento": "Editar local de armazenamento",
-    "perm_os_alterar_tecnico": "Alterar tecnico responsavel",
-    "perm_os_excluir_servico_peca": "Excluir servicos/pecas da OS",
+    "perm_os_alterar_tecnico": "Alterar técnico responsável",
+    "perm_os_excluir_servico_peca": "Excluir serviços/peças da OS",
     "perm_os_concluir": "Concluir/fechar OS",
     "perm_os_reabrir": "Reabrir OS",
-    "perm_orcamento_editar": "Editar orcamento",
-    "perm_orcamento_aprovar_item": "Aprovar item de orcamento",
-    "perm_orcamento_recusar_item": "Recusar item de orcamento",
-    "perm_orcamento_migrar_item": "Migrar item para servicos e pecas",
-    "perm_orcamento_aplicar_desconto": "Aplicar desconto em orcamento",
-    "perm_orcamento_excluir_item": "Excluir item de orcamento",
+    "perm_orcamento_editar": "Editar orçamento",
+    "perm_orcamento_aprovar_item": "Aprovar item de orçamento",
+    "perm_orcamento_recusar_item": "Recusar item de orçamento",
+    "perm_orcamento_migrar_item": "Migrar item para serviços e peças",
+    "perm_orcamento_aplicar_desconto": "Aplicar desconto em orçamento",
+    "perm_orcamento_excluir_item": "Excluir item de orçamento",
     "perm_caixa_criar_conta_receber": "Criar conta a receber",
     "perm_caixa_baixar_conta_receber": "Baixar conta a receber",
     "perm_caixa_cancelar_conta_receber": "Cancelar conta a receber",
@@ -101,13 +101,13 @@ PERMISSION_LABELS = {
     "perm_caixa_aplicar_desconto": "Aplicar desconto no caixa",
     "perm_caixa_excluir_pagamento": "Excluir pagamento",
     "perm_caixa_ver_dre": "Ver DRE/faturamento",
-    "perm_caixa_gerir_comissoes": "Gerir comissoes da equipe",
+    "perm_caixa_gerir_comissoes": "Gerir comissões da equipe",
     "perm_caixa_ver_auditoria": "Ver auditoria operacional do caixa",
     "perm_estoque_cadastro_produto": "Cadastrar/editar produto",
     "perm_estoque_excluir_produto": "Excluir produto",
     "perm_estoque_ajuste_manual": "Ajuste manual de estoque",
-    "perm_estoque_transferencia": "Transferencia de estoque",
-    "perm_estoque_inventario_finalizar": "Finalizar inventario",
+    "perm_estoque_transferencia": "Transferência de estoque",
+    "perm_estoque_inventario_finalizar": "Finalizar inventário",
     "perm_estoque_converter_reserva": "Converter reserva",
     "perm_estoque_cancelar_reserva": "Cancelar reserva",
 }
@@ -145,7 +145,7 @@ SENSITIVE_PERMISSION_GROUPS = {
         ),
     },
     "estoque_critico": {
-        "label": "Estoque critico",
+        "label": "Estoque crítico",
         "fields": (
             "perm_estoque_cadastro_produto",
             "perm_estoque_excluir_produto",
@@ -157,7 +157,7 @@ SENSITIVE_PERMISSION_GROUPS = {
         ),
     },
     "sistema": {
-        "label": "Sistema e governanca",
+        "label": "Sistema e governança",
         "fields": (
             "acesso_configuracoes_extra",
             "perm_orcamento_excluir_item",
@@ -301,7 +301,7 @@ def simular_impacto_preset(codigo_preset: str, overrides: dict | None = None):
     return {
         "preset": codigo_preset or "",
         "perfil_nome": preset_obj.nome if preset_obj else "Sem preset",
-        "perfil_descricao": preset_obj.descricao if preset_obj else "Sem conjunto automatico aplicado.",
+        "perfil_descricao": preset_obj.descricao if preset_obj else "Sem conjunto automático aplicado.",
         "capabilities": caps,
         "impactos": impactos,
         "resumo_risco": risco,

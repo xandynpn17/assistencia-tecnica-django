@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -90,6 +93,8 @@ def setup_inicial_impl(request):
         .select_related("segmento")
         .order_by("segmento__ordem", "ordem", "nome")
     )
+    backup_dir = Path(settings.BASE_DIR) / "backups"
+    backups_disponiveis = bool(backup_dir.exists() and any(backup_dir.iterdir()))
     return render(
         request,
         "configuracoes/setup_inicial.html",
@@ -98,6 +103,8 @@ def setup_inicial_impl(request):
             "linhas_disponiveis": linhas_disponiveis,
             "tipo_empresa_ativo": tipo_empresa_inicial,
             "setup_concluido": setup_inicial_concluido(),
+            "backups_disponiveis": backups_disponiveis,
+            "backup_dir": backup_dir,
             "menu_app": "configuracoes",
             "menu_sub": "setup_inicial",
         },

@@ -428,10 +428,10 @@ class UserForm(forms.ModelForm):
         self.fields["acesso_caixa_financeiro_extra"].label = "Caixa financeiro"
         self.fields["acesso_configuracoes_extra"].label = "Configuracoes"
 
-        self.fields["perm_os_editar_numero_serie"].label = "Editar numero de serie"
+        self.fields["perm_os_editar_numero_serie"].label = "Editar número de série"
         self.fields["perm_os_editar_observacoes_internas"].label = "Editar observacoes internas da OS"
         self.fields["perm_os_editar_local_armazenamento"].label = "Editar local de armazenamento"
-        self.fields["perm_os_alterar_tecnico"].label = "Alterar tecnico responsavel"
+        self.fields["perm_os_alterar_tecnico"].label = "Alterar técnico responsável"
         self.fields["perm_os_excluir_servico_peca"].label = "Excluir servico ou peca da OS"
         self.fields["perm_os_concluir"].label = "Concluir e fechar OS"
         self.fields["perm_os_reabrir"].label = "Reabrir OS fechada"
@@ -440,7 +440,7 @@ class UserForm(forms.ModelForm):
         self.fields["perm_orcamento_recusar_item"].label = "Recusar item de orcamento"
         self.fields["perm_orcamento_migrar_item"].label = "Migrar item para servicos e pecas"
         self.fields["perm_orcamento_aplicar_desconto"].label = "Aplicar desconto em orcamento"
-        self.fields["perm_orcamento_excluir_item"].label = "Excluir item de orcamento"
+        self.fields["perm_orcamento_excluir_item"].label = "Excluir item de orçamento"
         self.fields["perm_caixa_criar_conta_receber"].label = "Criar conta a receber"
         self.fields["perm_caixa_baixar_conta_receber"].label = "Baixar conta a receber"
         self.fields["perm_caixa_cancelar_conta_receber"].label = "Cancelar conta a receber"
@@ -581,6 +581,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'ordem_defeito_obrigatorio', 'ordem_observacoes_obrigatorio',
             'usar_api_cep', 'api_cep_provedor',
             'busca_minimo_caracteres',
+            'sla_dias_os_sem_movimentacao',
             'estoque_permitir_negativo',
             'estoque_pre_reserva_exige_saldo',
             'estoque_reserva_os_validade_dias',
@@ -627,6 +628,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'ddd_padrao': forms.Select(attrs={'class': 'form-control'}),
             'numero_loja_talao': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 2}),
             'busca_minimo_caracteres': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 20}),
+            'sla_dias_os_sem_movimentacao': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 90}),
             'estoque_reserva_os_validade_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 60}),
             'estoque_pre_reserva_limpeza_horas': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 240}),
             'estoque_reposicao_origem_codigo': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 10}),
@@ -693,6 +695,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com numero da OS na linha de recorte."
         self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressao, relatorio e orcamento)."
         self.fields["layout_documentos_cor"].help_text = "Escolha se os PDFs saem em colorido ou escala de cinza (preto e branco)."
+        self.fields["sla_dias_os_sem_movimentacao"].help_text = "Quantidade de dias sem evolução para sinalizar OS parada no painel."
         self.fields["estoque_reserva_os_validade_dias"].help_text = "Dias de validade para reservas automaticas criadas ao adicionar pecas na OS."
         self.fields["estoque_pre_reserva_limpeza_horas"].help_text = "Tempo maximo de uma pre-reserva de venda a mostrador antes do cancelamento automatico."
         self.fields["estoque_reposicao_origem_codigo"].help_text = "Codigo do ponto operacional de origem na reposicao inteligente."

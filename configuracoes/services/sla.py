@@ -275,6 +275,7 @@ def resumo_pendencias_por_regra(pendencias: list[PendenciaSLA]):
         bloco = resumo.setdefault(
             item.codigo_regra,
             {
+                "codigo": item.codigo_regra,
                 "label": item.regra_label,
                 "severidade": item.severidade,
                 "severidade_label": item.severidade_label,

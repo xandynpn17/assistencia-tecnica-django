@@ -21,6 +21,7 @@ from clientes.forms import ClienteForm
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema, Empresa, MarcaGarantia, ModeloMensagem
 from configuracoes.permissions import ORDER_CREATION_ROLES, ORDER_ROLES, RoleRequiredMixin, role_required
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 from orcamentos.forms import ItemOrcamentoForm, OrcamentoForm
 from orcamentos.models import Orcamento
 from ..forms import LinhaTrabalhoForm, OrdemSerieForm, OrdemServicoForm, ServicoPecaForm
@@ -39,6 +40,7 @@ from ..services.confirmacao_service import ConfirmacaoOSService
 from ..services.garantia_pos_servico import buscar_candidatas_garantia_cliente, detectar_reincidencia_ordem
 from ..services.log_os_service import LogOSService
 from ..services.os_policy_service import OSAccessPolicyService
+from ..services.tecnicos import filtro_sem_tecnico, usuario_apto_tecnico, usuarios_tecnicos_qs
 from ..utils import registrar_auditoria
 from estoque.services import (
     criar_reserva_estoque,

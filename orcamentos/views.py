@@ -1,7 +1,6 @@
 ﻿# orcamentos/views.py
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta
@@ -33,6 +32,7 @@ from core.pdf_preview import apply_document_preview_overrides, apply_preview_xfr
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
 from core.pdf_theme import get_document_profile, get_document_theme, resolve_layout_preset
 from ordens.services.os_policy_service import OSAccessPolicyService
+from ordens.services.tecnicos import usuarios_tecnicos_qs
 
 
 def _codigo_reserva():
@@ -130,7 +130,7 @@ def _exigir_permissao_desconto_orcamento(request, ordem):
         require_sensitive_permission(
             request.user,
             "perm_orcamento_aplicar_desconto",
-            message="Voce nao tem permissao para aplicar desconto no orcamento.",
+            message="Você não tem permissão para aplicar desconto no orçamento.",
         )
     except PermissionDenied as exc:
         messages.error(request, str(exc) or "Permissao insuficiente.")
@@ -275,7 +275,7 @@ def adicionar_item(request, orcamento_id):
         try:
             quantidade = int(request.POST.get("quantidade", 1))
         except (TypeError, ValueError):
-            messages.error(request, "Quantidade invalida. Informe um numero inteiro maior que zero.")
+            messages.error(request, "Quantidade inválida. Informe um número inteiro maior que zero.")
             return _redirect_orcamento_na_os(orcamento.ordem_servico, open_modal="adicionar_item")
         if quantidade <= 0:
             messages.error(request, "Quantidade invalida. Informe um valor maior que zero.")
@@ -298,11 +298,7 @@ def adicionar_item(request, orcamento_id):
         tecnico = None
         tecnico_id = request.POST.get("tecnico_responsavel")
         if tecnico_id:
-            tecnico = get_user_model().objects.filter(
-                id=tecnico_id,
-                is_active=True,
-                tipo_usuario="tecnico",
-            ).first()
+            tecnico = usuarios_tecnicos_qs(empresa=orcamento.ordem_servico.empresa).filter(id=tecnico_id).first()
 
         produto = _detectar_produto_estoque(ean=ean, nome=nome)
         origem = "estoque" if produto else "manual"
@@ -383,7 +379,7 @@ def editar_item(request, item_id):
         try:
             quantidade = int(request.POST.get("quantidade", item.quantidade))
         except (TypeError, ValueError):
-            messages.error(request, "Quantidade invalida. Informe um numero inteiro maior que zero.")
+            messages.error(request, "Quantidade inválida. Informe um número inteiro maior que zero.")
             return _redirect_orcamento_na_os(item.orcamento.ordem_servico)
         if quantidade <= 0:
             messages.error(request, "Quantidade invalida. Informe um valor maior que zero.")
@@ -415,11 +411,7 @@ def editar_item(request, item_id):
         item.comissionavel = _item_comissionavel_ajustado(item.orcamento.ordem_servico, item.tipo_item, request.POST)
         tecnico_id = request.POST.get("tecnico_responsavel")
         if tecnico_id:
-            item.tecnico_responsavel = get_user_model().objects.filter(
-                id=tecnico_id,
-                is_active=True,
-                tipo_usuario="tecnico",
-            ).first()
+            item.tecnico_responsavel = usuarios_tecnicos_qs(empresa=item.orcamento.ordem_servico.empresa).filter(id=tecnico_id).first()
         else:
             item.tecnico_responsavel = None
         item.save()
@@ -453,7 +445,7 @@ def excluir_item(request, item_id):
             require_sensitive_permission(
                 request.user,
                 "perm_orcamento_excluir_item",
-                message="Voce nao tem permissao para excluir itens do orcamento.",
+                message="Você não tem permissão para excluir itens do orçamento.",
             )
         except PermissionDenied as exc:
             messages.error(request, str(exc) or "Permissao insuficiente.")
@@ -721,11 +713,11 @@ def imprimir_orcamento(request, pk):
         painel = Table(
             [
                 [
-                    Paragraph("<b>Investimento em Servicos</b>", styles["OrcLabel"]),
+                    Paragraph("<b>Investimento em Serviços</b>", styles["OrcLabel"]),
                     Paragraph(f"R$ {total_servicos:.2f}", styles["OrcValue"]),
                 ],
                 [
-                    Paragraph("<b>Investimento em Pecas</b>", styles["OrcLabel"]),
+                    Paragraph("<b>Investimento em Peças</b>", styles["OrcLabel"]),
                     Paragraph(f"R$ {total_pecas:.2f}", styles["OrcValue"]),
                 ],
                 [

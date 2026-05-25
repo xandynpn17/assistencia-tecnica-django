@@ -19,6 +19,8 @@ from orcamentos.models import Orcamento
 
 
 def _dashboard_shared_context(request):
+    from configuracoes.services.sla import calcular_pendencias_sla, resumo_pendencias_por_regra
+
     tipo_usuario = getattr(request.user, "tipo_usuario", "")
     is_managerial = request.user.is_superuser or tipo_usuario in {"adm", "gerente"}
     is_operational = (tipo_usuario in {"atendente", "tecnico"}) and not is_managerial
@@ -66,6 +68,9 @@ def _dashboard_shared_context(request):
         .filter(fechada=False)
         .order_by("-data_abertura")[:5]
     )
+    pendencias_sla = calcular_pendencias_sla(empresa=empresa)
+    pendencias_sla_preview = pendencias_sla[:5]
+    resumo_sla = resumo_pendencias_por_regra(pendencias_sla)
 
     return {
         "empresa": empresa,
@@ -77,6 +82,9 @@ def _dashboard_shared_context(request):
         "dashboard_mes_referencia": today,
         "status_cards": status_cards,
         "ordens_recentes": ordens_recentes,
+        "pendencias_sla_total": len(pendencias_sla),
+        "pendencias_sla_preview": pendencias_sla_preview,
+        "pendencias_sla_resumo": resumo_sla,
         "is_operational": is_operational,
         "is_managerial": is_managerial,
         "dashboard_links": {

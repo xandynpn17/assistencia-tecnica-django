@@ -319,11 +319,6 @@
                                                     {{ form.ordem_origem_garantia.errors }}
                                                     <small class="compact-note">Use ao abrir retorno em garantia de serviço.</small>
                                                 </div>
-                                                <div class="form-group mb-0">
-                                                    {{ form.garantia_classificacao_retorno.label_tag }}
-                                                    {{ form.garantia_classificacao_retorno }}
-                                                    {{ form.garantia_classificacao_retorno.errors }}
-                                                </div>
                                             </div>
                                             <div class="form-group full-span">
                                                 {{ form.notas_internas.label_tag }}
@@ -391,7 +386,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const dataCompra = document.getElementById("id_data_compra");
     const numeroNotaFiscal = document.getElementById("id_numero_nota_fiscal");
     const ordemOrigemGarantia = document.getElementById("id_ordem_origem_garantia");
-    const classificacaoRetornoGarantia = document.getElementById("id_garantia_classificacao_retorno");
     const garantiaServicoFields = document.getElementById("garantia-servico-fields");
     const garantiaWarningBox = document.getElementById("garantia-warning-box");
     const garantiaWarningText = document.getElementById("garantia-warning-text");
@@ -504,7 +498,7 @@ document.addEventListener("DOMContentLoaded", function () {
             garantiaContextTitle.textContent = "Garantia de serviço";
             garantiaContextBadge.textContent = "Fluxo interno";
             garantiaContextBadge.classList.add("success");
-            garantiaContextText.textContent = "Use este tipo quando o retorno estiver coberto pela assistência. Selecione a OS original e classifique o retorno.";
+            garantiaContextText.textContent = "Use este tipo quando o retorno estiver coberto pela assistência. Selecione a OS original vinculada.";
             return;
         }
 
@@ -527,15 +521,11 @@ document.addEventListener("DOMContentLoaded", function () {
         if (ordemOrigemGarantia) {
             ordemOrigemGarantia.required = isGarantiaServico();
         }
-        if (classificacaoRetornoGarantia) {
-            classificacaoRetornoGarantia.required = false;
-        }
         if (garantiaServicoFields) {
             const exibirGarantiaServico = isGarantiaServico();
             garantiaServicoFields.style.display = exibirGarantiaServico ? "" : "none";
             if (!exibirGarantiaServico) {
                 if (ordemOrigemGarantia) ordemOrigemGarantia.value = "";
-                if (classificacaoRetornoGarantia) classificacaoRetornoGarantia.value = "";
             }
         }
         atualizarPainelContexto();
@@ -570,11 +560,11 @@ document.addEventListener("DOMContentLoaded", function () {
     btnNext.forEach((btn) => {
         btn.addEventListener("click", function () {
             if (currentStep === 0 && !validateStep1()) {
-                mostrarMensagemWizard("Preencha os campos obrigatorios da pagina 1 antes de avancar.", "warning");
+                mostrarMensagemWizard("Preencha os campos obrigatórios da página 1 antes de avançar.", "warning");
                 return;
             }
             if (currentStep === 1 && isGarantiaServico() && ordemOrigemGarantia && !String(ordemOrigemGarantia.value || "").trim()) {
-                mostrarMensagemWizard("Selecione a OS original para continuar com garantia de servico.", "warning");
+                mostrarMensagemWizard("Selecione a OS original para continuar com garantia de serviço.", "warning");
                 ordemOrigemGarantia.focus();
                 return;
             }
@@ -668,7 +658,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
             if (currentStep === 0 && !validateStep1()) {
-                mostrarMensagemWizard("Preencha os campos obrigatorios da pagina 1 antes de avancar.", "warning");
+                mostrarMensagemWizard("Preencha os campos obrigatórios da página 1 antes de avançar.", "warning");
                 return;
             }
             showStep(Math.min(currentStep + 1, steps.length - 1));
@@ -680,7 +670,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (semDataCompra || semNota) {
                 event.preventDefault();
                 showStep(1);
-                mostrarMensagemWizard("Para OS de garantia, informe a data da compra e o numero da nota fiscal.", "danger");
+                mostrarMensagemWizard("Para OS de garantia, informe a data da compra e o número da nota fiscal.", "danger");
                 if (semDataCompra && dataCompra) {
                     dataCompra.focus();
                 } else if (semNota && numeroNotaFiscal) {
@@ -691,7 +681,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (isGarantiaServico() && ordemOrigemGarantia && !String(ordemOrigemGarantia.value || "").trim()) {
                 event.preventDefault();
                 showStep(1);
-                mostrarMensagemWizard("Para garantia de servico, selecione a OS original vinculada.", "danger");
+                mostrarMensagemWizard("Para garantia de serviço, selecione a OS original vinculada.", "danger");
                 ordemOrigemGarantia.focus();
             }
         });

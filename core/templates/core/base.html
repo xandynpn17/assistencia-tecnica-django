@@ -119,6 +119,23 @@
 {% endblock %}
 </head>
 <body class="hold-transition sidebar-mini layout-fixed {% block body_class %}{% endblock %}">
+<script>
+  (function () {
+    const classesRemover = [
+      "layout-navbar-fixed",
+      "layout-footer-fixed",
+      "layout-sm-navbar-fixed",
+      "layout-md-navbar-fixed",
+      "layout-lg-navbar-fixed",
+      "layout-xl-navbar-fixed",
+      "layout-sm-footer-fixed",
+      "layout-md-footer-fixed",
+      "layout-lg-footer-fixed",
+      "layout-xl-footer-fixed"
+    ];
+    classesRemover.forEach((cls) => document.body.classList.remove(cls));
+  })();
+</script>
 <div class="wrapper">
 
   <!-- Navbar -->

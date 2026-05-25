@@ -1,5 +1,5 @@
 ﻿{% extends "core/base.html" %}
-{% block title %}{% if editando %}Editar{% else %}Novo{% endif %} Usuario{% endblock %}
+{% block title %}{% if editando %}Editar{% else %}Novo{% endif %} Usuário{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -72,7 +72,7 @@
   <div class="card-modern">
     <div class="card-modern-header">
       <i class="fas fa-id-card mr-2"></i>
-      {% if editando %}Editar{% else %}Cadastrar{% endif %} Usuario
+      {% if editando %}Editar{% else %}Cadastrar{% endif %} Usuário
     </div>
     <div class="card-modern-body">
       <form method="post" enctype="multipart/form-data" autocomplete="off" id="usuario-form-cfg9">
@@ -179,28 +179,28 @@
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.acesso_caixa_financeiro_extra }} {{ form.acesso_caixa_financeiro_extra.label|default:"Caixa financeiro" }}</label>
-            <small>Liberar contas, relatorios, DRE e rotinas financeiras.</small>
+            <small>Liberar contas, relatórios, DRE e rotinas financeiras.</small>
             {{ form.acesso_caixa_financeiro_extra.errors }}
           </div>
           <div class="module-option">
-            <label class="mb-0">{{ form.acesso_configuracoes_extra }} {{ form.acesso_configuracoes_extra.label|default:"Configuracoes" }}</label>
-            <small>Liberar acesso ao painel de configuracoes alem do perfil base.</small>
+            <label class="mb-0">{{ form.acesso_configuracoes_extra }} {{ form.acesso_configuracoes_extra.label|default:"Configurações" }}</label>
+            <small>Liberar acesso ao painel de configurações além do perfil base.</small>
             {{ form.acesso_configuracoes_extra.errors }}
           </div>
         </div>
 
-        <div class="section-title mt-3">Permissoes sensiveis por categoria</div>
+        <div class="section-title mt-3">Permissões sensíveis por categoria</div>
 
         <div class="text-muted small mb-2">Rastreabilidade da OS</div>
         <div class="module-grid">
           <div class="module-option">
             <label class="mb-0">{{ form.perm_os_editar_numero_serie }} {{ form.perm_os_editar_numero_serie.label }}</label>
-            <small>Permite alterar o numero de serie do equipamento.</small>
+            <small>Permite alterar o número de série do equipamento.</small>
             {{ form.perm_os_editar_numero_serie.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_os_alterar_tecnico }} {{ form.perm_os_alterar_tecnico.label }}</label>
-            <small>Permite trocar tecnico responsavel apos abertura.</small>
+            <small>Permite trocar técnico responsável após abertura.</small>
             {{ form.perm_os_alterar_tecnico.errors }}
           </div>
           <div class="module-option">
@@ -215,11 +215,11 @@
           </div>
         </div>
 
-        <div class="text-muted small mt-3 mb-2">Orcamentos</div>
+        <div class="text-muted small mt-3 mb-2">Orçamentos</div>
         <div class="module-grid">
           <div class="module-option">
             <label class="mb-0">{{ form.perm_orcamento_excluir_item }} {{ form.perm_orcamento_excluir_item.label }}</label>
-            <small>Permite excluir item individual do orcamento.</small>
+            <small>Permite excluir item individual do orçamento.</small>
             {{ form.perm_orcamento_excluir_item.errors }}
           </div>
         </div>
@@ -357,12 +357,12 @@ document.addEventListener("DOMContentLoaded", function () {
         <strong>Nivel de risco</strong>
         <span class="status-chip ${nivelClass(nivel)}">${nivel.toUpperCase()}</span>
       </div>
-      <div class="mb-2">Score: <strong>${score}</strong> | Permissoes sensiveis ativas: <strong>${total}</strong></div>
+      <div class="mb-2">Score: <strong>${score}</strong> | Permissões sensíveis ativas: <strong>${total}</strong></div>
     `;
 
     if (!categorias.length) {
       riscoBox.classList.add("text-muted");
-      riscoBox.innerHTML = header + "<div>Nenhuma permissao sensivel ativa.</div>";
+      riscoBox.innerHTML = header + "<div>Nenhuma permissão sensível ativa.</div>";
       return;
     }
 
@@ -397,9 +397,9 @@ document.addEventListener("DOMContentLoaded", function () {
       renderRisco(data);
     } catch (error) {
       impactoBox.classList.add("text-muted");
-      impactoBox.textContent = "Nao foi possivel carregar o impacto do perfil.";
+      impactoBox.textContent = "Não foi possível carregar o impacto do perfil.";
       riscoBox.classList.add("text-muted");
-      riscoBox.textContent = "Nao foi possivel calcular o resumo de risco.";
+      riscoBox.textContent = "Não foi possível calcular o resumo de risco.";
     }
   }
 

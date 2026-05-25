@@ -111,6 +111,7 @@
                             <th>Desconto (%)</th>
                             <th>Qtd</th>
                             <th>Total</th>
+                            <th>Status</th>
                             <th>Tipo</th>
                             <th>Origem</th>
                             <th>Responsável</th>
@@ -118,7 +119,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for item in orcamento.itens.all %}
+                        {% for item in orcamento_itens %}
                         <tr>
                             <td><input type="checkbox" name="itens_selecionados" value="{{ item.id }}"></td>
                             <td>{{ item.ean }}</td>
@@ -129,6 +130,15 @@
                             <td>{{ item.desconto_percentual|floatformat:2 }}%</td>
                             <td>{{ item.quantidade }}</td>
                             <td>{{ item.total|floatformat:2 }}</td>
+                            <td>
+                                {% if item.status == "aprovado" %}
+                                    <span class="badge badge-success">Aprovado</span>
+                                {% elif item.status == "recusado" %}
+                                    <span class="badge badge-danger">Recusado</span>
+                                {% else %}
+                                    <span class="badge badge-warning">Pendente</span>
+                                {% endif %}
+                            </td>
                             <td>{{ item.get_tipo_item_display|default:"Serviço" }}</td>
                             <td>{{ item.origem }}</td>
                             <td>{{ item.tecnico_responsavel.username|default:"-" }}</td>
@@ -156,7 +166,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="13" class="text-center text-muted">Nenhum item adicionado</td>
+                            <td colspan="14" class="text-center text-muted">Nenhum item adicionado</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -190,7 +200,7 @@ function mostrarMensagemPagina(mensagem, tipo = 'warning') {
 function validarSelecao(acao) {
     const selecionados = document.querySelectorAll('input[name="itens_selecionados"]:checked');
     if (selecionados.length === 0) {
-        mostrarMensagemPagina(`Selecione ao menos um item antes de ${acao === 'migrar' ? 'migrar' : acao + ' o orcamento'}.`, 'warning');
+        mostrarMensagemPagina(`Selecione ao menos um item antes de ${acao === 'migrar' ? 'migrar' : acao + ' o orçamento'}.`, 'warning');
         return false;
     }
     return window.AppMessages.confirmSync(`Tem certeza que deseja ${acao} os itens selecionados?`);
@@ -210,7 +220,7 @@ if (checkAll) {
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalAdicionarItem2Label">
-                    <i class="fas fa-plus-circle mr-2"></i>Adicionar item ao orcamento
+                    <i class="fas fa-plus-circle mr-2"></i>Adicionar item ao orçamento
                 </h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
                     <span aria-hidden="true">&times;</span>
@@ -281,7 +291,7 @@ if (checkAll) {
                         <div class="col-md-3 mb-2">
                             <label for="id_desconto_percentual2">Desconto (%)</label>
                             <input type="number" step="0.01" min="0" max="100" name="desconto_percentual" id="id_desconto_percentual2" class="form-control" value="0.00" {% if not pode_aplicar_desconto_orcamento %}disabled{% endif %}>
-                            <small class="form-text text-muted">Use valor ou percentual, nao os dois.</small>
+                            <small class="form-text text-muted">Use valor ou percentual, não os dois.</small>
                         </div>
                     </div>
 
@@ -290,8 +300,8 @@ if (checkAll) {
                             <label for="id_tipo_item2">Tipo do Item</label>
                             <select name="tipo_item" id="id_tipo_item2" class="form-control" required>
                                 <option value="" selected>Selecione</option>
-                                <option value="servico">Servico</option>
-                                <option value="peca">Peca</option>
+                                <option value="servico">Serviço</option>
+                                <option value="peca">Peça</option>
                             </select>
                         </div>
                         <div class="col-md-4 mb-2">
@@ -303,7 +313,7 @@ if (checkAll) {
                             <input type="hidden" name="origem" id="id_origem2" value="manual">
                         </div>
                         <div class="col-md-4 mb-2">
-                            <label for="id_tecnico_responsavel2">Responsavel da Comissao</label>
+                            <label for="id_tecnico_responsavel2">Responsável da comissão</label>
                             <select name="tecnico_responsavel" id="id_tecnico_responsavel2" class="form-control">
                                 <option value="">-- Selecione --</option>
                                 {% for user in tecnicos %}
@@ -504,6 +514,3 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-
-
-

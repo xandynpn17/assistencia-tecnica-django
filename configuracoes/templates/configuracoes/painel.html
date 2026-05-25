@@ -1,12 +1,12 @@
 ﻿{% extends "core/base.html" %}
-{% block title %}Painel de Configuracoes{% endblock %}
+{% block title %}Painel de Configurações{% endblock %}
 
 {% block content %}
 <div class="row">
   <div class="col-12 mb-4">
     <div class="card">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="fas fa-cogs mr-2"></i> Configuracoes Principais</h5>
+        <h5 class="mb-0"><i class="fas fa-cogs mr-2"></i> Configurações principais</h5>
       </div>
       <div class="card-body">
         <div class="row">
@@ -98,19 +98,19 @@
           <div class="col-md-4 mb-3">
             <div class="card card-modern h-100 border">
               <div class="card-modern-header bg-light">
-                <i class="fas fa-users text-secondary"></i> Usuarios
+                <i class="fas fa-users text-secondary"></i> Usuários
               </div>
               <div class="card-modern-body text-center py-4">
                 <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
                 {% if user.is_superuser or user.tipo_usuario == 'adm' %}
-                  <p class="mb-3">Gerencie usuarios e permissoes.</p>
+                  <p class="mb-3">Gerencie usuários e permissões.</p>
                   <a href="{% url 'configuracoes:lista_usuarios' %}" class="btn btn-outline-secondary">
                     <i class="fas fa-user-cog mr-1"></i> Gerenciar
                   </a>
                 {% else %}
-                  <p class="mb-3">Cadastre novos usuarios operacionais.</p>
+                  <p class="mb-3">Cadastre novos usuários operacionais.</p>
                   <a href="{% url 'configuracoes:adicionar_usuario' %}" class="btn btn-outline-secondary">
-                    <i class="fas fa-user-plus mr-1"></i> Novo Usuario
+                    <i class="fas fa-user-plus mr-1"></i> Novo usuário
                   </a>
                 {% endif %}
               </div>
@@ -177,11 +177,11 @@
           <div class="col-md-4 mb-3">
             <div class="card card-modern h-100 border">
               <div class="card-modern-header bg-light">
-                <i class="fas fa-shield-alt text-secondary"></i> Garantia e Reincidencias
+                <i class="fas fa-shield-alt text-secondary"></i> Garantia e reincidências
               </div>
               <div class="card-modern-body text-center py-4">
                 <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                <p class="mb-3">Acompanhe retornos de garantia por tecnico, marca e equipamento.</p>
+                <p class="mb-3">Acompanhe retornos de garantia por técnico, marca e equipamento.</p>
                 <a href="{% url 'configuracoes:painel_reincidencias' %}" class="btn btn-outline-secondary">
                   <i class="fas fa-chart-bar mr-1"></i> Visualizar
                 </a>
@@ -191,11 +191,11 @@
           <div class="col-md-4 mb-3">
             <div class="card card-modern h-100 border">
               <div class="card-modern-header bg-light">
-                <i class="fas fa-shield-alt text-secondary"></i> Auditoria de Configuracoes
+                <i class="fas fa-shield-alt text-secondary"></i> Auditoria de configurações
               </div>
               <div class="card-modern-body text-center py-4">
                 <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
-                <p class="mb-3">Acompanhe os eventos criticos de alteracao e operacoes sensiveis.</p>
+                <p class="mb-3">Acompanhe os eventos críticos de alteração e operações sensíveis.</p>
                 <a href="{% url 'configuracoes:auditoria_configuracoes' %}" class="btn btn-outline-secondary">
                   <i class="fas fa-search mr-1"></i> Visualizar
                 </a>
@@ -233,7 +233,7 @@
           <div class="col-md-6">
             <div class="alert alert-info">
               <h6><i class="fas fa-lightbulb mr-2"></i> Dica:</h6>
-              <p class="mb-0">Configure primeiro os Dados da Empresa e depois as Configuracoes do Sistema.</p>
+              <p class="mb-0">Configure primeiro os dados da empresa e depois as configurações do sistema.</p>
             </div>
           </div>
           <div class="col-md-6">

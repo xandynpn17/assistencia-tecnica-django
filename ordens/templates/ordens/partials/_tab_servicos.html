@@ -231,26 +231,26 @@
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Talao {{ talao.numero }}</h5>
+                <h5 class="modal-title">Talão {{ talao.numero }}</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <div class="modal-body">
                 <div class="border rounded p-3 bg-light">
                     <h6 class="mb-2">RECIBO</h6>
-                    <p class="mb-1"><strong>Talao:</strong> {{ talao.numero }}</p>
+                    <p class="mb-1"><strong>Talão:</strong> {{ talao.numero }}</p>
                     <p class="mb-1"><strong>Data:</strong> {{ talao.criado_em|date:"d/m/Y H:i" }}</p>
                     <p class="mb-1"><strong>OS:</strong> {{ ordem.numero_os }}</p>
                     <p class="mb-1"><strong>Cliente:</strong> {{ ordem.cliente.nome }}</p>
                     <p class="mb-1"><strong>Tipo:</strong> {{ talao.get_origem_display }}</p>
-                    <p class="mb-1"><strong>Produto/Servico:</strong> {{ talao.item_referencia|default:"-" }}</p>
+                    <p class="mb-1"><strong>Produto/Serviço:</strong> {{ talao.item_referencia|default:"-" }}</p>
                     <p class="mb-2"><strong>Valor:</strong> {% if talao.valor %}R$ {{ talao.valor|floatformat:2 }}{% else %}-{% endif %}</p>
                     <hr>
                     <p class="mb-1"><strong>Empresa:</strong> {{ empresa_talao.nome|default:"-" }}</p>
                     <p class="mb-1"><strong>CNPJ:</strong> {{ empresa_talao.cnpj|default:"-" }}</p>
                     <p class="mb-1"><strong>Telefone:</strong> {{ empresa_talao.telefone|default:"-" }}</p>
-                    <p class="mb-0"><strong>Endereco:</strong> {{ empresa_talao.endereco|default:"-" }}</p>
+                    <p class="mb-0"><strong>Endereço:</strong> {{ empresa_talao.endereco|default:"-" }}</p>
                 </div>
-                {% if talao.criado_por %}<p class="mt-2 mb-2"><strong>Usuario:</strong> {{ talao.criado_por.username }}</p>{% endif %}
+                {% if talao.criado_por %}<p class="mt-2 mb-2"><strong>Usuário:</strong> {{ talao.criado_por.username }}</p>{% endif %}
                 {% if talao.descricao %}
                 <p class="mb-2"><strong>Descricao:</strong><br>{{ talao.descricao|linebreaksbr }}</p>
                 {% endif %}
@@ -269,7 +269,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-plus-circle mr-2"></i>Adicionar servico ou peca</h5>
+                <h5 class="modal-title"><i class="fas fa-plus-circle mr-2"></i>Adicionar serviço ou peça</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form method="post">
@@ -286,13 +286,13 @@
                         </div>
                     </div>
                     <div id="sp_resultado_busca" class="mb-2" style="max-height:180px;overflow-y:auto;"></div>
-                    <small class="text-muted d-block mb-2">A reserva automatica usa o ponto escolhido aqui. Se vazio, utiliza o ponto padrao do produto.</small>
+                    <small class="text-muted d-block mb-2">A reserva automática usa o ponto escolhido aqui. Se vazio, utiliza o ponto padrão do produto.</small>
                     <div class="form-row">
                         <div class="form-group col-md-4 mb-2">
                             <label>Tipo</label>
                             <select name="tipo" class="form-control" id="sp_tipo">
-                                <option value="peca">Peca</option>
-                                <option value="servico">Servico</option>
+                                <option value="peca">Peça</option>
+                                <option value="servico">Serviço</option>
                             </select>
                         </div>
                         <div class="form-group col-md-8 mb-2">
@@ -301,7 +301,7 @@
                         </div>
                     </div>
                     <div class="form-group mb-2">
-                        <label>Descricao</label>
+                        <label>Descrição</label>
                         <textarea name="descricao" id="sp_descricao" rows="2" class="form-control"></textarea>
                     </div>
                     <div class="form-row">
@@ -310,7 +310,7 @@
                             <input type="number" name="quantidade" id="sp_quantidade" class="form-control" min="1" value="1" required>
                         </div>
                         <div class="form-group col-md-4 mb-2">
-                            <label>Valor unitario</label>
+                            <label>Valor unitário</label>
                             <div class="input-group">
                                 <div class="input-group-prepend"><span class="input-group-text">R$</span></div>
                                 <input type="number" step="0.01" name="valor_unitario" id="sp_valor" class="form-control" required>
@@ -323,7 +323,7 @@
                         <div class="form-group col-md-4 mb-2">
                             <label>Ponto da reserva</label>
                             <select name="ponto_operacional_reserva" id="sp_ponto_reserva" class="form-control">
-                                <option value="">Ponto padrao do produto</option>
+                                <option value="">Ponto padrão do produto</option>
                                 {% for ponto in servico_form.fields.ponto_operacional_reserva.queryset %}
                                 <option value="{{ ponto.id }}">{{ ponto.codigo }} - {{ ponto.nome }}</option>
                                 {% endfor %}
@@ -332,7 +332,7 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group col-md-4 mb-2">
-                            <label>Responsavel da comissao</label>
+                            <label>Responsável da comissão</label>
                             <select name="tecnico_responsavel" class="form-control">
                                 <option value="">-- Selecione --</option>
                                 {% for user in tecnicos %}
@@ -340,12 +340,12 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        {% if ordem.tipo_reparo == 'Garantia de servico' %}
+                        {% if ordem.tipo_reparo == 'Garantia de serviço' %}
                         <div class="form-group col-md-8 d-flex align-items-end mb-2">
                             <div class="form-check mb-2">
                                 <input type="checkbox" name="comissionavel" id="sp_comissionavel" class="form-check-input">
-                                <label class="form-check-label" for="sp_comissionavel">Servico extra comissionavel</label>
-                                <small class="form-text text-muted">Em garantia de servico, deixe desmarcado para retorno sem comissao e marque apenas se houver venda adicional.</small>
+                                <label class="form-check-label" for="sp_comissionavel">Serviço extra comissionável</label>
+                                <small class="form-text text-muted">Em garantia de serviço, deixe desmarcado para retorno sem comissão e marque apenas se houver venda adicional.</small>
                             </div>
                         </div>
                         {% endif %}
@@ -372,7 +372,7 @@
                 <input type="hidden" name="form_type" value="adicionar_talao">
                 <div class="modal-body">
                     <div class="form-group mb-2">
-                        <label>Numero do talao</label>
+                        <label>Número do talão</label>
                         <input type="text" name="numero_talao" class="form-control" required>
                     </div>
                     <div class="form-row">
@@ -381,8 +381,8 @@
                             <input type="number" step="0.01" min="0" name="valor_talao" class="form-control">
                         </div>
                         <div class="form-group col-md-6 mb-2">
-                            <label>Produto/Servico</label>
-                            <input type="text" name="item_talao" class="form-control" placeholder="Ex: Mao de obra">
+                            <label>Produto/Serviço</label>
+                            <input type="text" name="item_talao" class="form-control" placeholder="Ex: Mão de obra">
                         </div>
                     </div>
                     <div class="form-group mb-2">

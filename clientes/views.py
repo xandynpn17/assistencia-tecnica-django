@@ -6,6 +6,7 @@ from decimal import Decimal
 from ordens.models import OrdemServico, LinhaTrabalho
 from caixa.models import Pagamento
 from configuracoes.permissions import has_role, role_required, STAFF_ROLES
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
 from .models import Cliente
 from .forms import ClienteForm
@@ -26,10 +27,11 @@ def lista_clientes(request):
     """Tela principal: apenas busca, não lista todos."""
     query = request.GET.get("query", "").strip()
     clientes = []
+    empresa = obter_empresa_ativa(request, strict=False)
 
     if query:
         query_digits = "".join(filter(str.isdigit, query))
-        clientes = Cliente.objects.filter(
+        clientes = filtrar_queryset_empresa(Cliente.objects.all(), empresa).filter(
             Q(nome__icontains=query)
             | Q(telefone__icontains=query)
             | Q(telefone__icontains=query_digits)
@@ -56,11 +58,12 @@ def buscar_cliente(request):
     """Busca cliente via AJAX para busca em tempo real"""
     query = request.GET.get("q", "").strip()
     cliente = None
+    empresa = obter_empresa_ativa(request, strict=False)
 
     if query:
         query_limpa = "".join(filter(str.isdigit, query))
 
-        cliente = Cliente.objects.filter(
+        cliente = filtrar_queryset_empresa(Cliente.objects.all(), empresa).filter(
             Q(documento__icontains=query_limpa)
             | Q(cpf__icontains=query_limpa)
             | Q(cnpj__icontains=query_limpa)
@@ -91,7 +94,8 @@ def buscar_cliente(request):
 
 @role_required(STAFF_ROLES)
 def detalhes_cliente(request, pk):
-    cliente = get_object_or_404(Cliente, pk=pk)
+    empresa = obter_empresa_ativa(request, strict=False)
+    cliente = get_object_or_404(filtrar_queryset_empresa(Cliente.objects.all(), empresa), pk=pk)
 
     ordens = list(
         OrdemServico.objects.filter(cliente=cliente)
@@ -102,7 +106,7 @@ def detalhes_cliente(request, pk):
     ordens_concluidas_lista = [ordem for ordem in ordens if ordem.fechada]
 
     try:
-        orcamentos = Orcamento.objects.filter(cliente=cliente).order_by("-data_criacao")
+        orcamentos = filtrar_queryset_empresa(Orcamento.objects.filter(cliente=cliente), empresa).order_by("-data_criacao")
     except Exception:
         orcamentos = []
 
@@ -201,15 +205,16 @@ def detalhes_cliente(request, pk):
 
 @role_required(STAFF_ROLES)
 def editar_cliente(request, cliente_id):
-    cliente = get_object_or_404(Cliente, id=cliente_id)
+    empresa = obter_empresa_ativa(request, strict=False)
+    cliente = get_object_or_404(filtrar_queryset_empresa(Cliente.objects.all(), empresa), id=cliente_id)
 
     if request.method == "POST":
-        form = ClienteForm(request.POST, instance=cliente)
+        form = ClienteForm(request.POST, instance=cliente, empresa=empresa)
         if form.is_valid():
             form.save()
             return redirect("clientes:detalhes_cliente", pk=cliente.id)
     else:
-        form = ClienteForm(instance=cliente)
+        form = ClienteForm(instance=cliente, empresa=empresa)
 
     return render(
         request,
@@ -224,7 +229,8 @@ def editar_cliente(request, cliente_id):
 
 @role_required({"gerente"})
 def excluir_cliente(request, cliente_id):
-    cliente = get_object_or_404(Cliente, id=cliente_id)
+    empresa = obter_empresa_ativa(request, strict=False)
+    cliente = get_object_or_404(filtrar_queryset_empresa(Cliente.objects.all(), empresa), id=cliente_id)
     ordens = OrdemServico.objects.filter(cliente=cliente).count()
 
     if request.method == "POST":
@@ -255,10 +261,11 @@ def excluir_cliente(request, cliente_id):
 @role_required({"adm", "gerente"})
 def unificar_clientes(request):
     query = request.GET.get("query", "").strip()
+    empresa = obter_empresa_ativa(request, strict=False)
     candidatos = Cliente.objects.none()
     if query:
         query_digits = "".join(filter(str.isdigit, query))
-        candidatos = Cliente.objects.filter(
+        candidatos = filtrar_queryset_empresa(Cliente.objects.all(), empresa).filter(
             Q(nome__icontains=query)
             | Q(documento__icontains=query_digits or query)
             | Q(cpf__icontains=query_digits or query)
@@ -294,8 +301,9 @@ def unificar_clientes(request):
                 },
             )
 
-        principal = get_object_or_404(Cliente, id=principal_id)
-        duplicado = get_object_or_404(Cliente, id=duplicado_id)
+        clientes_empresa = filtrar_queryset_empresa(Cliente.objects.all(), empresa)
+        principal = get_object_or_404(clientes_empresa, id=principal_id)
+        duplicado = get_object_or_404(clientes_empresa, id=duplicado_id)
 
         OrdemServico.objects.filter(cliente=duplicado).update(cliente=principal)
         Orcamento.objects.filter(cliente=duplicado).update(cliente=principal)

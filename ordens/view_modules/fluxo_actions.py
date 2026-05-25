@@ -15,6 +15,7 @@ def verificar_cliente_os(request):
     novo_cliente = request.GET.get("novo_cliente", False)
     form = None
     mensagem_erro = None
+    empresa = obter_empresa_ativa(request, strict=False)
 
     # Obter configuracoes do sistema
     config = ConfiguracaoSistema.get_configuracao()
@@ -41,14 +42,15 @@ def verificar_cliente_os(request):
     # Busca so se nao houver mensagem de erro
     if cpf_digits and not mensagem_erro:
         # Busca exata primeiro (documento completo ou telefone)
-        clientes = Cliente.objects.filter(
+        clientes_base = filtrar_queryset_empresa(Cliente.objects.all(), empresa)
+        clientes = clientes_base.filter(
             Q(documento=cpf_digits) |
             Q(telefone__contains=cpf_digits)
         ).order_by('nome')
 
         # Se nao encontrou, tenta busca parcial com limite
         if not clientes and len(cpf_digits) >= busca_minimo:
-            clientes = Cliente.objects.filter(
+            clientes = clientes_base.filter(
                 Q(documento__contains=cpf_digits) |
                 Q(telefone__contains=cpf_digits)
             ).order_by('nome')[:10]
@@ -82,14 +84,15 @@ def verificar_cliente_os(request):
         if not initial_data.get('ddd') and config.ddd_padrao:
             initial_data['ddd'] = config.ddd_padrao
 
-        form = ClienteForm(initial=initial_data)
+        form = ClienteForm(initial=initial_data, empresa=empresa)
 
     # Se enviou formulario de cadastro (POST)
     if request.method == "POST":
-        form = ClienteForm(request.POST)
+        form = ClienteForm(request.POST, empresa=empresa)
         if form.is_valid():
             documento = form.cleaned_data.get("documento")
-            clientes_duplicados = Cliente.objects.filter(documento=documento).order_by("nome") if documento else Cliente.objects.none()
+            clientes_base = filtrar_queryset_empresa(Cliente.objects.all(), empresa)
+            clientes_duplicados = clientes_base.filter(documento=documento).order_by("nome") if documento else Cliente.objects.none()
 
             if clientes_duplicados.exists():
                 form.add_error(
@@ -102,13 +105,17 @@ def verificar_cliente_os(request):
                     "form": form,
                     "mensagem_erro": mensagem_erro,
                     "config": config,
+                    "config_sistema": config,
                     "menu_app": "ordens",
                     "menu_sub": "verificar_cliente_os",
                     "clientes_duplicados": clientes_duplicados,
                 }
                 return render(request, "ordens/verificar_cliente_os.html", context)
 
-            cliente = form.save()
+            cliente = form.save(commit=False)
+            if empresa:
+                cliente.empresa = empresa
+            cliente.save()
             registrar_auditoria(
                 logger,
                 request,
@@ -126,6 +133,7 @@ def verificar_cliente_os(request):
         "form": form,
         "mensagem_erro": mensagem_erro,
         "config": config,
+        "config_sistema": config,
         "menu_app": "ordens",
         "menu_sub": "verificar_cliente_os",
         "clientes_duplicados": Cliente.objects.none(),
@@ -137,7 +145,8 @@ def verificar_cliente_os(request):
 # ===========================
 @role_required(ORDER_CREATION_ROLES)
 def selecionar_cliente_os(request):
-    clientes = Cliente.objects.all()
+    empresa = obter_empresa_ativa(request, strict=False)
+    clientes = filtrar_queryset_empresa(Cliente.objects.all(), empresa)
     if request.method == "POST":
         cliente_id = request.POST.get("cliente_id")
         if cliente_id:
@@ -157,7 +166,8 @@ def selecionar_cliente_os(request):
 @role_required(ORDER_ROLES)
 def lista_ordens(request):
     status = request.GET.get("status")
-    ordens = OrdemServico.objects.all()
+    empresa = obter_empresa_ativa(request, strict=False)
+    ordens = filtrar_queryset_empresa(OrdemServico.objects.all(), empresa)
     if status:
         ordens = ordens.filter(status=status)
 
@@ -202,7 +212,7 @@ def dashboard_pedidos_compra(request):
 
     pedidos_scope = pedidos_base
 
-    sem_tecnico_q = Q(ordem__tecnico_responsavel__isnull=True) | ~Q(ordem__tecnico_responsavel__tipo_usuario="tecnico")
+    sem_tecnico_q = filtro_sem_tecnico(prefixo="ordem__tecnico_responsavel")
 
     if quick_filter == "sem_tecnico":
         pedidos_base = pedidos_base.filter(sem_tecnico_q)
@@ -277,9 +287,9 @@ def dashboard_pedidos_compra(request):
         "q": buscar,
         "os_filtro": os_filtro,
         "tecnico_filtro": tecnico_id,
-        "tecnicos": User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username"),
+        "tecnicos": usuarios_tecnicos_qs(empresa=obter_empresa_ativa(request, strict=False)),
         "tecnico_filtro_nome": (
-            User.objects.filter(is_active=True, tipo_usuario="tecnico", id=int(tecnico_id)).values_list("username", flat=True).first()
+            usuarios_tecnicos_qs(empresa=obter_empresa_ativa(request, strict=False)).filter(id=int(tecnico_id)).values_list("username", flat=True).first()
             if tecnico_id.isdigit()
             else ""
         ),

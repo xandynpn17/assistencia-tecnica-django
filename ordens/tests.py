@@ -14,7 +14,9 @@ from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm
 from reportlab.platypus import Frame, Paragraph as reportlab_paragraph
 
 from caixa.models import Caixa, Pagamento
@@ -2215,15 +2217,21 @@ class PermissoesGranularesOSTests(TestCase):
             status="diagnosticar",
         )
 
-    def test_atualizar_local_exige_permissao_granular(self):
+    def test_atualizar_local_permite_usuario_operacional_e_audita(self):
         response = self.client.post(
             reverse("ordens:atualizar_local", args=[self.ordem.id]),
             data='{"local":"Prateleira A"}',
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
         self.ordem.refresh_from_db()
-        self.assertEqual(self.ordem.local_armazenamento, "")
+        self.assertEqual(self.ordem.local_armazenamento, "Prateleira A")
+        self.assertTrue(
+            LinhaTrabalho.objects.filter(
+                ordem=self.ordem,
+                descricao__icontains="Local de armazenamento alterado",
+            ).exists()
+        )
 
     def test_atualizar_local_funciona_para_gerente(self):
         self.user.tipo_usuario = "gerente"
@@ -2809,6 +2817,14 @@ class ImpressaoPdfHeadersTests(TestCase):
         frame_top = next(frame for frame in frames if frame["id"] == "top")
         frame_bottom = next(frame for frame in frames if frame["id"] == "bottom")
         self.assertGreater(frame_top["y1"], frame_bottom["y1"] + frame_bottom["height"])
+        page_height = A4[1]
+        margin = 1.2 * cm
+        half_height = (page_height - 2 * margin) / 2
+        cut_y = margin + half_height
+        label_half_height = 0.45 * cm
+        min_clearance = 0.30 * cm
+        self.assertGreaterEqual(frame_top["y1"], cut_y + label_half_height + min_clearance)
+        self.assertGreaterEqual(cut_y - label_half_height - (frame_bottom["y1"] + frame_bottom["height"]), min_clearance)
 
     def test_imprimir_relatorio_tecnico_longo_gera_multiplas_paginas_com_total(self):
         ServicoPeca.objects.bulk_create(

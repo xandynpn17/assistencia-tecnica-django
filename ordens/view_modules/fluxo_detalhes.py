@@ -3,7 +3,7 @@ from ..services.anexos import EXTENSOES_IMAGEM, MAX_FOTOS_POR_OS, preparar_arqui
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from configuracoes.permissions import has_sensitive_permission, is_management_user, require_sensitive_permission
-from configuracoes.services.tenant_guard import obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 from ..services import FechamentoOSService, ResumoOperacionalService
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
@@ -14,6 +14,17 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
     model = OrdemServico
     template_name = "ordens/ordem_servico_detalhes.html"
     context_object_name = "ordem"
+
+    def get_queryset(self):
+        empresa = obter_empresa_ativa(self.request, strict=False)
+        queryset = super().get_queryset().select_related(
+            "cliente",
+            "empresa",
+            "marca_garantia",
+            "ordem_origem_garantia",
+            "tecnico_responsavel",
+        )
+        return filtrar_queryset_empresa(queryset, empresa)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -37,7 +48,11 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["orcamento_form"] = OrcamentoForm()
         context["tipos_reparacao"] = OrdemServico.TIPOS_REPARACAO
         context["item_form"] = ItemOrcamentoForm()
-        context["itens"] = ordem.servicos_pecas.all()
+        context["itens"] = ordem.servicos_pecas.select_related(
+            "produto_estoque",
+            "ponto_operacional_reserva",
+            "tecnico_responsavel",
+        )
         from estoque.models import ReservaEstoque
 
         context["reservas_auto_os"] = list(
@@ -101,8 +116,11 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 #orcamento
         context["orcamento"], _ = Orcamento.objects.get_or_create(
             ordem_servico=ordem,
-            defaults={"cliente": ordem.cliente},
+            defaults={"cliente": ordem.cliente, "empresa": ordem.empresa},
         )
+        if context["orcamento"].empresa_id != ordem.empresa_id:
+            context["orcamento"].empresa = ordem.empresa
+            context["orcamento"].save(update_fields=["empresa"])
         context["item_form"] = ItemOrcamentoForm()
         itens_orcamento = list(
             context["orcamento"].itens.select_related("tecnico_responsavel").order_by("-id")
@@ -180,7 +198,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         if context["tem_alertas"]:
             tabs.append({"id": "alertas", "label": "Alertas", "icon": "bi bi-exclamation-triangle"})
         context["tabs"] = tabs
-        context["tecnicos"] = User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username")
+        context["tecnicos"] = usuarios_tecnicos_qs(empresa=obter_empresa_ativa(self.request, strict=False))
         context["pode_editar_serie"] = has_sensitive_permission(
             self.request.user,
             "perm_os_editar_numero_serie",
@@ -189,9 +207,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             self.request.user,
             "perm_os_editar_observacoes_internas",
         )
-        # Local de armazenamento impacta rastreabilidade fisica do equipamento.
-        # Mantemos restrito a perfil de gestao (adm/gerente).
-        context["pode_editar_local_armazenamento"] = is_management_user(self.request.user)
+        context["pode_editar_local_armazenamento"] = True
         context["pode_alterar_tecnico"] = has_sensitive_permission(
             self.request.user,
             "perm_os_alterar_tecnico",

@@ -6,7 +6,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 
 from configuracoes.forms import ConfiguracaoOrdemServicoForm, ConfiguracaoSistemaForm
-from configuracoes.models import ConfiguracaoOrdemServico, ConfiguracaoSistema
+from configuracoes.models import ConfiguracaoOrdemServico, ConfiguracaoSistema, RegraSLAAlerta
 from configuracoes.services.auditoria import registrar_evento_configuracao
 from configuracoes.services.integracoes import emitir_evento_interno
 
@@ -44,6 +44,24 @@ def configuracao_sistema_edit_impl(request):
             if not pode_editar_termos_os:
                 obj.termos_ordem_servico = config.termos_ordem_servico
             obj.save()
+            prazo_os_sem_mov = max(int(getattr(obj, "sla_dias_os_sem_movimentacao", 2) or 2), 1)
+            regra, criada = RegraSLAAlerta.objects.get_or_create(
+                codigo="os_sem_movimentacao",
+                defaults={
+                    "ativo": True,
+                    "prazo_valor": prazo_os_sem_mov,
+                    "prazo_unidade": "dias",
+                    "severidade": "alta",
+                    "responsavel_padrao": "Atendimento",
+                    "acao_sugerida": "Atualizar linha de trabalho e validar próximo passo.",
+                    "canal_notificacao": "painel",
+                    "observacoes": "Monitora ordens sem evolução técnica recente.",
+                },
+            )
+            if not criada:
+                regra.prazo_valor = prazo_os_sem_mov
+                regra.prazo_unidade = "dias"
+                regra.save(update_fields=["prazo_valor", "prazo_unidade", "atualizado_em"])
             registrar_evento_configuracao(
                 usuario=request.user,
                 acao="config_sistema_editada",

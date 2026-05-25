@@ -7,8 +7,19 @@
     <i class="fas fa-upload"></i> Restaurar Backup
   </div>
   <div class="card-modern-body">
+    {% if setup_pendente %}
+    <div class="alert alert-info">
+      <strong>Setup inicial pendente:</strong> se você já tem um backup válido, restaure-o agora para recuperar empresa,
+      usuários, configurações, ordens e arquivos antes de começar a usar.
+    </div>
+    {% endif %}
+    <div class="alert alert-warning">
+      <strong>Atenção:</strong> restaure backups preferencialmente fora do horário de atendimento.
+      Em PostgreSQL, o ideal é parar o servidor Django antes de restaurar a base.
+    </div>
     <p class="text-muted">
-      Selecione um arquivo da pasta <code>{{ backup_dir }}</code> e confirme digitando <strong>RESTAURAR</strong>.
+      Selecione um backup da pasta <code>{{ backup_dir }}</code> e confirme digitando <strong>RESTAURAR</strong>.
+      Backups PostgreSQL aparecem como pastas <code>backup_...</code>.
     </p>
     <form method="post">
       {% csrf_token %}
@@ -17,12 +28,38 @@
         <select id="arquivo" name="arquivo" class="form-control" required>
           <option value="">Selecione...</option>
           {% for item in backups %}
-          <option value="{{ item }}">{{ item.name }}</option>
+          <option value="{{ item }}">
+            {% if item.is_dir %}[pasta] {% endif %}{{ item.name }}
+          </option>
           {% endfor %}
         </select>
       </div>
+      <div class="form-group form-check">
+        <input id="restore_media" type="checkbox" name="restore_media" class="form-check-input">
+        <label for="restore_media" class="form-check-label">
+          Restaurar também arquivos enviados, logos, assinaturas e anexos (<code>media.zip</code>)
+        </label>
+        <small class="form-text text-muted">
+          Ao marcar, a pasta media atual será arquivada antes da restauração.
+        </small>
+      </div>
+      <div class="form-group form-check">
+        <input id="repair_single_tenant" type="checkbox" name="repair_single_tenant" class="form-check-input" checked>
+        <label for="repair_single_tenant" class="form-check-label">
+          Reparar dados antigos sem empresa ativa para uso local
+        </label>
+        <small class="form-text text-muted">
+          Recomendado para backups de testes ou versões antigas: evita que OS, clientes, produtos ou contas fiquem invisíveis após o restore.
+        </small>
+      </div>
+      <div class="form-group form-check">
+        <input id="ciente_restore" type="checkbox" name="ciente_restore" value="1" class="form-check-input" required>
+        <label for="ciente_restore" class="form-check-label">
+          Entendo que o restore substitui os dados atuais e deve ser feito com os usuários fora do sistema.
+        </label>
+      </div>
       <div class="form-group">
-        <label for="confirmar">Confirmacao</label>
+        <label for="confirmar">Confirmação</label>
         <input id="confirmar" type="text" name="confirmar" class="form-control" placeholder="Digite RESTAURAR" required>
       </div>
       <button type="submit" class="btn btn-danger">

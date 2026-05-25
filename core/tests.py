@@ -103,6 +103,8 @@ class DashboardTests(TestCase):
         self.assertContains(response, "Abrir Nova Ordem")
         self.assertContains(response, "Registrar Pagamento")
         self.assertContains(response, "Consultar Estoque")
+        self.assertContains(response, "Prioridades de hoje")
+        self.assertIn("pendencias_sla_total", response.context)
         self.assertContains(response, "Ordens por Status (Abertas)")
         self.assertContains(response, "Concluídas no mês")
         self.assertContains(response, "Acumulado:")

@@ -31,6 +31,7 @@ class SetupInicialMiddleware:
         caminho = request.path or ""
         caminhos_liberados = (
             reverse("configuracoes:setup_inicial"),
+            reverse("configuracoes:restore_banco"),
             reverse("core:login"),
             reverse("core:logout"),
             "/admin/",

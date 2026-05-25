@@ -30,6 +30,7 @@ def obter_empresa_ativa(request, *, strict: bool = False) -> Empresa | None:
 
 def filtrar_queryset_empresa(queryset: QuerySet, empresa: Empresa | None, *, campo: str = "empresa") -> QuerySet:
     if not empresa:
+        if not Empresa.objects.exists():
+            return queryset
         return queryset.none()
     return queryset.filter(**{campo: empresa})
-

@@ -29,5 +29,5 @@ urlpatterns = [
     path('os/confirmar/<uuid:token>/', confirmar_ordem_token_publico, name='confirmar_os_publico'),
 ]
 
-if settings.DEBUG:
+if settings.DEBUG or settings.LOCAL_NETWORK_MODE:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

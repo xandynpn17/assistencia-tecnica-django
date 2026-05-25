@@ -684,6 +684,10 @@ class ConfiguracaoSistema(models.Model):
         default=3,
         verbose_name='Mínimo de caracteres para busca'
     )
+    sla_dias_os_sem_movimentacao = models.PositiveIntegerField(
+        default=2,
+        verbose_name="Alerta: OS sem movimentação (dias)",
+    )
     estoque_permitir_negativo = models.BooleanField(
         default=True,
         verbose_name="Permitir saldo negativo no estoque",
@@ -751,7 +755,7 @@ class ConfiguracaoSistema(models.Model):
     )
     condicoes_orcamento = models.TextField(
         blank=True,
-        default="Validade de 7 dias. Valores sujeitos Ã  aprovação do cliente.",
+        default="Validade de 7 dias. Valores sujeitos à aprovação do cliente.",
     )
     dias_bonus_retirada_1 = models.PositiveIntegerField(default=0)
     valor_bonus_1 = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -781,7 +785,7 @@ class ConfiguracaoSistema(models.Model):
     termos_ordem_servico = models.TextField(
         blank=True,
         default=(
-            "O equipamento descrito nesta OS será submetido Ã  análise técnica e eventual reparo mediante aprovação do orçamento. "
+            "O equipamento descrito nesta OS será submetido à análise técnica e eventual reparo mediante aprovação do orçamento. "
             "O prazo informado é estimado e poderá variar conforme a complexidade do reparo ou disponibilidade de peças. "
             "Poderão ser utilizadas peças originais ou compatíveis. Peças substituídas somente serão devolvidas mediante solicitação prévia. "
             "Garantia de 90 dias, limitada ao serviço executado. Perde-se a garantia em caso de violação do lacre, intervenção de terceiros, "

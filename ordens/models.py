@@ -192,8 +192,10 @@ class OrdemServico(models.Model):
     @property
     def tecnico_responsavel_valido(self):
         tecnico = self.tecnico_responsavel
-        if tecnico and getattr(tecnico, "tipo_usuario", "") == "tecnico":
-            return tecnico
+        if tecnico:
+            from ordens.services.tecnicos import usuario_apto_tecnico
+            if usuario_apto_tecnico(tecnico):
+                return tecnico
         return None
 
     @property

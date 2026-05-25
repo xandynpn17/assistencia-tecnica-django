@@ -108,6 +108,7 @@ class ClienteForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
 
         # Obter configurações do sistema
@@ -200,6 +201,8 @@ class ClienteForm(forms.ModelForm):
 
         # Verifica se já existe no banco (exceto para edição atual)
         qs = Cliente.objects.filter(documento=doc_limpo)
+        if self.empresa:
+            qs = qs.filter(empresa=self.empresa)
         if self.instance and self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
 

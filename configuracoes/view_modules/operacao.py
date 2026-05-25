@@ -9,6 +9,7 @@ from django.shortcuts import redirect, render
 from configuracoes.models import ConfiguracaoAuditoria
 from configuracoes.services.auditoria import registrar_evento_configuracao
 from configuracoes.services.integracoes import emitir_evento_interno
+from configuracoes.services.setup_inicial import setup_inicial_concluido
 from configuracoes.view_modules.common import request_ip
 
 
@@ -28,7 +29,7 @@ def backup_banco_impl(request, logger):
         messages.info(request, "Backup ignorado: banco em memória (ambiente de teste).")
         return redirect("configuracoes:painel")
     try:
-        call_command("backup_db", output_dir=str(backup_dir), gzip=True)
+        call_command("backup_db", output_dir=str(backup_dir), gzip=True, include_media=True)
         registrar_evento_configuracao(
             usuario=request.user,
             acao="backup_executado",
@@ -56,20 +57,27 @@ def restore_banco_impl(request, logger):
     backup_dir = Path(settings.BASE_DIR) / "backups"
     if request.method != "POST":
         backups = sorted(
-            [p for p in backup_dir.glob("*") if p.is_file()],
+            [p for p in backup_dir.glob("*") if p.is_file() or p.is_dir()],
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )[:30] if backup_dir.exists() else []
         return render(
             request,
             "configuracoes/restore.html",
-            {"backups": backups, "backup_dir": backup_dir},
+            {
+                "backups": backups,
+                "backup_dir": backup_dir,
+                "setup_pendente": not setup_inicial_concluido(),
+            },
         )
 
     backup_path = (request.POST.get("arquivo") or "").strip()
     confirmar = (request.POST.get("confirmar") or "").strip().upper()
     if confirmar != "RESTAURAR":
         messages.error(request, "Confirmação inválida. Digite RESTAURAR para continuar.")
+        return redirect("configuracoes:restore_banco")
+    if request.POST.get("ciente_restore") != "1":
+        messages.error(request, "Confirme que entende o risco do restore antes de continuar.")
         return redirect("configuracoes:restore_banco")
     if not backup_path:
         messages.error(request, "Selecione um arquivo de backup.")
@@ -80,7 +88,7 @@ def restore_banco_impl(request, logger):
     if backup_dir_abs not in backup_absoluto.parents:
         messages.error(request, "Arquivo inválido: use apenas backups da pasta oficial.")
         return redirect("configuracoes:restore_banco")
-    if backup_absoluto.suffix.lower() not in {".sqlite3", ".gz"}:
+    if backup_absoluto.is_file() and backup_absoluto.suffix.lower() not in {".sqlite3", ".gz", ".dump"}:
         messages.error(request, "Formato de arquivo inválido para restore.")
         return redirect("configuracoes:restore_banco")
     if not backup_absoluto.exists():
@@ -95,7 +103,13 @@ def restore_banco_impl(request, logger):
             alvo="database",
             depois={"arquivo": str(backup_absoluto)},
         )
-        call_command("restore_db", str(backup_absoluto), force=True)
+        call_command(
+            "restore_db",
+            str(backup_absoluto),
+            force=True,
+            restore_media=bool(request.POST.get("restore_media")),
+            repair_single_tenant=bool(request.POST.get("repair_single_tenant")),
+        )
         registrar_evento_configuracao(
             usuario=request.user,
             acao="restore_executado",

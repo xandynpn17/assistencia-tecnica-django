@@ -9,6 +9,8 @@ from django.views.generic import ListView
 
 from configuracoes.models import ConfiguracaoSistema
 from configuracoes.permissions import ORDER_ROLES, RoleRequiredMixin, role_required
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
+from ordens.services.tecnicos import filtro_sem_tecnico
 
 from ..models import LinhaTrabalho, OrdemServico
 
@@ -110,7 +112,7 @@ def _mensagem_busca_ordens_invalida(termo_busca):
 
 def _aplicar_filtro_rapido_ordens(queryset, quick_filter, user):
     quick = (quick_filter or "").strip()
-    sem_tecnico_q = Q(tecnico_responsavel__isnull=True) | ~Q(tecnico_responsavel__tipo_usuario="tecnico")
+    sem_tecnico_q = filtro_sem_tecnico()
     if not quick:
         return queryset
     if quick == "minhas":
@@ -138,10 +140,11 @@ def _aplicar_filtro_rapido_ordens(queryset, quick_filter, user):
 def buscar_ordens(request):
     query = request.GET.get("q", "").strip()
     resultados = OrdemServico.objects.none()
+    empresa = obter_empresa_ativa(request, strict=False)
 
     if query:
         resultados = _aplicar_busca_ordens(
-            OrdemServico.objects.select_related("cliente").all(),
+            filtrar_queryset_empresa(OrdemServico.objects.select_related("cliente").all(), empresa),
             query,
         ).order_by("-data_abertura")
 
@@ -175,9 +178,9 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
         )
 
     def _get_base_queryset(self):
+        empresa = obter_empresa_ativa(self.request, strict=False)
         queryset = (
-            super()
-            .get_queryset()
+            filtrar_queryset_empresa(super().get_queryset(), empresa)
             .select_related("cliente", "tecnico_responsavel")
             .prefetch_related(
                 Prefetch(

@@ -1,9 +1,10 @@
 ﻿from django import forms
-from django.contrib.auth import get_user_model
+from django.db.models import Q
 from configuracoes.models import ParceiroExpedicao
 from estoque.models import PontoOperacional, Produto
 from configuracoes.models import MarcaGarantia, TipoEquipamentoConfig
 from orcamentos.models import Orcamento
+from ordens.services.tecnicos import usuarios_tecnicos_qs
 
 from .models import GuiaExpedicaoItem, GuiaExpedicaoParceiro, LinhaTrabalho, NotificacaoCliente, OrdemServico, ServicoPeca
 
@@ -35,8 +36,10 @@ class OrdemServicoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         cliente_id = kwargs.pop("cliente_id", None)
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
         self._cliente_id = cliente_id
+        self._empresa = empresa
         tipos_cfg = list(TipoEquipamentoConfig.objects.filter(ativo=True).order_by("nome"))
         opcoes_tipo = []
         if tipos_cfg:
@@ -66,14 +69,16 @@ class OrdemServicoForm(forms.ModelForm):
         if "marca_equipamento" in self.fields:
             self.fields["marca_equipamento"].required = False
 
-        ordens_fechadas = OrdemServico.objects.filter(fechada=True).exclude(data_conclusao__isnull=True)
+        ordens_fechadas = OrdemServico.objects.filter(Q(fechada=True) | Q(status="concluida"))
+        if empresa:
+            ordens_fechadas = ordens_fechadas.filter(empresa=empresa)
         if cliente_id:
             ordens_fechadas = ordens_fechadas.filter(cliente_id=cliente_id)
         self.fields["ordem_origem_garantia"].queryset = ordens_fechadas.order_by("-data_conclusao", "-id")
+        self.fields["ordem_origem_garantia"].empty_label = "Selecione a OS original"
         self.fields["ordem_origem_garantia"].label_from_instance = (
-            lambda ordem: f"{ordem.numero_os} - {ordem.marca_equipamento} {ordem.modelo_equipamento}"
+            lambda ordem: f"{ordem.numero_os} - {ordem.marca_equipamento} {ordem.modelo_equipamento} ({ordem.get_status_display()})"
         )
-        self.fields["garantia_classificacao_retorno"].required = False
 
     def clean(self):
         cleaned_data = super().clean()
@@ -138,7 +143,6 @@ class OrdemServicoForm(forms.ModelForm):
             "numero_nota_fiscal",
             "referencia_parceiro",
             "ordem_origem_garantia",
-            "garantia_classificacao_retorno",
             "defeito",
             "acessorios",
             "notas_internas",
@@ -154,7 +158,6 @@ class OrdemServicoForm(forms.ModelForm):
             "numero_nota_fiscal": forms.TextInput(attrs={"class": "form-control", "placeholder": "Número da nota fiscal"}),
             "referencia_parceiro": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex: OS externa, parceiro ou referência interna"}),
             "ordem_origem_garantia": forms.Select(attrs={"class": "form-control"}),
-            "garantia_classificacao_retorno": forms.Select(attrs={"class": "form-control"}),
             "defeito": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Descreva o defeito"}),
             "acessorios": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "Acessórios inclusos"}),
             "notas_internas": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Notas internas (somente sistema)"}),
@@ -166,7 +169,6 @@ class OrdemServicoForm(forms.ModelForm):
             "numero_nota_fiscal": "Número da nota fiscal",
             "referencia_parceiro": "Referência parceiro",
             "ordem_origem_garantia": "OS original da garantia",
-            "garantia_classificacao_retorno": "Classificação do retorno",
             "acessorios": "Acessórios",
             "notas_internas": "Notas internas",
         }
@@ -212,11 +214,7 @@ class ServicoPecaForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["tecnico_responsavel"].queryset = (
-            get_user_model()
-            .objects.filter(is_active=True, tipo_usuario="tecnico")
-            .order_by("username")
-        )
+        self.fields["tecnico_responsavel"].queryset = usuarios_tecnicos_qs()
         self.fields["ponto_operacional_reserva"].queryset = PontoOperacional.objects.filter(ativo=True).order_by("codigo")
         self.fields["ponto_operacional_reserva"].required = False
 

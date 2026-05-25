@@ -1,10 +1,10 @@
-from django.contrib.auth import get_user_model
 from django.shortcuts import render
 
 from configuracoes.permissions import ORDER_ROLES, role_required
 from configuracoes.services.tenant_guard import obter_empresa_ativa
 from ordens.models import OrdemServico
 from ordens.services.fila_bancada import STATUS_ATIVOS_FILA, montar_fila_bancada
+from ordens.services.tecnicos import usuarios_tecnicos_qs
 
 
 @role_required(ORDER_ROLES)
@@ -20,11 +20,7 @@ def fila_bancada_tecnicos(request):
         status=status,
         prioridade=prioridade,
     )
-    tecnicos = (
-        get_user_model()
-        .objects.filter(is_active=True, tipo_usuario="tecnico")
-        .order_by("username")
-    )
+    tecnicos = usuarios_tecnicos_qs(empresa=empresa)
 
     return render(
         request,

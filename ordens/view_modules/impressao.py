@@ -706,6 +706,10 @@ def imprimir_ordem_servico_impressao(request, pk):
     )
     altura_etiqueta_corte = 0.90 * cm
     faixa_corte = (altura_etiqueta_corte + 0.24 * cm) if layout_cfg.get("exibir_etiqueta_corte", True) else 0.36 * cm
+    # A etiqueta fica centralizada na linha de corte; reservar a faixa inteira
+    # em cada via evita que tabelas/assinaturas invadam a area de recorte.
+    reserva_corte = min(max(faixa_corte, 0.36 * cm), half_height - (1.0 * cm))
+    altura_frame_via = max(1.0 * cm, half_height - reserva_corte)
 
     def _draw_cut(canv, _doc):
         canv.saveState()
@@ -787,16 +791,16 @@ def imprimir_ordem_servico_impressao(request, pk):
 
     frame_top = Frame(
         margin,
-        margin + half_height + (faixa_corte / 2.0),
+        margin + half_height + reserva_corte,
         frame_width,
-        half_height - (faixa_corte / 2.0),
+        altura_frame_via,
         id="top",
     )
     frame_bottom = Frame(
         margin,
         margin,
         frame_width,
-        half_height - (faixa_corte / 2.0),
+        altura_frame_via,
         id="bottom",
     )
     template = PageTemplate(id="main", frames=[frame_top, frame_bottom], onPage=_draw_cut)
@@ -1278,9 +1282,9 @@ def imprimir_ordem_servico_impressao(request, pk):
                 Spacer(1, cfg["gap_summary"]),
                 *bloco_info,
             ]
-            altura_sem_gap_assin = _altura_total_flowables(bloco_base + [assin], frame_width, half_height)
+            altura_sem_gap_assin = _altura_total_flowables(bloco_base + [assin], frame_width, altura_frame_via)
             # Deixa um respiro visual no rodapé da meia-página da frente.
-            alvo_assinatura_frente = half_height - 0.95 * cm
+            alvo_assinatura_frente = altura_frame_via - 0.95 * cm
             if altura_sem_gap_assin >= alvo_assinatura_frente:
                 gap_assinatura = 0.0
             else:
@@ -1290,7 +1294,7 @@ def imprimir_ordem_servico_impressao(request, pk):
 
         for idx in range(len(densidades)):
             bloco = _montar(idx)
-            if _altura_total_flowables(bloco, frame_width, half_height) <= (half_height - 0.42 * cm):
+            if _altura_total_flowables(bloco, frame_width, altura_frame_via) <= (altura_frame_via - 0.42 * cm):
                 return bloco
         return _montar(len(densidades) - 1)
 
@@ -1313,11 +1317,11 @@ def imprimir_ordem_servico_impressao(request, pk):
         )
         bloco = [titulo, Spacer(1, 0.07 * cm), barra, Spacer(1, 0.08 * cm)]
         itens_termos = _split_termos(termos_os) or ["-"]
-        limite_bloco = half_height - 0.22 * cm
+        limite_bloco = altura_frame_via - 0.22 * cm
         corpo = []
         for idx_item, item in enumerate(itens_termos):
             candidato = corpo + [Paragraph(_limitar_texto(item, 220), styles["PrintSmall"], bulletText="•")]
-            altura_candidato = _altura_total_flowables(bloco + candidato, frame_width, half_height)
+            altura_candidato = _altura_total_flowables(bloco + candidato, frame_width, altura_frame_via)
             if altura_candidato <= limite_bloco:
                 corpo = candidato
                 continue
@@ -1334,7 +1338,7 @@ def imprimir_ordem_servico_impressao(request, pk):
         bloco.append(Paragraph("Assinaturas na frente desta folha.", styles["PrintSmall"]))
         return bloco
 
-    limite_half_h = max(1.0 * cm, half_height - 0.18 * cm)
+    limite_half_h = max(1.0 * cm, altura_frame_via - 0.18 * cm)
     story = [
         KeepInFrame(frame_width, limite_half_h, _bloco_via("ORIGINAL"), mode="truncate"),
         FrameBreak(),

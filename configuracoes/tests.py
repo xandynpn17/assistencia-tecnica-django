@@ -15,6 +15,7 @@ from tempfile import TemporaryDirectory
 from html import unescape
 import csv
 import gzip
+import zipfile
 from io import BytesIO, StringIO
 from PIL import Image
 from configuracoes.models import (
@@ -193,6 +194,34 @@ class CheckSaasReadinessCommandTests(TestCase):
         output = out.getvalue()
         self.assertIn("Diagnostico de dados por empresa", output)
         self.assertIn("ordens.OrdemServico", output)
+
+
+class CheckGoLiveCommandTests(TestCase):
+    @override_settings(
+        DEBUG=True,
+        ALLOWED_HOSTS=["127.0.0.1", "localhost"],
+        CSRF_TRUSTED_ORIGINS=[],
+        LOCAL_NETWORK_MODE=True,
+        DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": "db.sqlite3"}},
+    )
+    def test_check_go_live_strict_falha_com_configuracao_insegura(self):
+        with self.assertRaises(CommandError):
+            call_command("check_go_live", "--strict")
+
+    @override_settings(
+        DEBUG=False,
+        SECRET_KEY="segredo-local-forte-para-teste",
+        ALLOWED_HOSTS=["127.0.0.1", "localhost"],
+        CSRF_TRUSTED_ORIGINS=["http://127.0.0.1:8000"],
+        LOCAL_NETWORK_MODE=True,
+        DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": "db.sqlite3"}},
+    )
+    def test_check_go_live_avisa_sobre_rede_local_limitada(self):
+        out = StringIO()
+        call_command("check_go_live", stdout=out)
+        output = out.getvalue()
+        self.assertIn("ALLOWED_HOSTS esta limitado ao proprio servidor", output)
+        self.assertIn("Checklist concluido com avisos", output)
 
 
 class PermissoesConfiguracoesTests(TestCase):
@@ -410,6 +439,24 @@ class PermissoesConfiguracoesTests(TestCase):
         self.client.force_login(self.atendente)
         response = self.client.get(reverse("configuracoes:backup_banco"))
         self.assertEqual(response.status_code, 403)
+
+    def test_setup_inicial_oferece_restore_de_backup(self):
+        SetupInicialSistema.get_setup().save()
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:setup_inicial"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Já possui um backup?")
+        self.assertContains(response, reverse("configuracoes:restore_banco"))
+
+    def test_restore_fica_acessivel_antes_do_setup(self):
+        setup = SetupInicialSistema.get_setup()
+        setup.concluido = False
+        setup.save(update_fields=["concluido"])
+
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:restore_banco"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Setup inicial pendente")
 
     def test_caixa_financeiro_permite_funcao_extra(self):
         self.tecnico.acesso_caixa_financeiro_extra = True
@@ -896,6 +943,41 @@ class ComandosConfiguracoesTests(TestCase):
             files = list(output_dir.glob("db_*.sqlite3.gz"))
             self.assertEqual(len(files), 1)
 
+    def test_backup_db_postgres_gera_dump_manifesto_e_media(self):
+        with TemporaryDirectory() as tmp_dir:
+            base_dir = Path(tmp_dir)
+            output_dir = base_dir / "backups"
+            media_root = base_dir / "media"
+            media_root.mkdir()
+            (media_root / "logo.txt").write_text("arquivo-media", encoding="utf-8")
+            pg_dump = base_dir / "pg_dump.exe"
+            pg_dump.write_text("", encoding="utf-8")
+            db_settings = {
+                "default": {
+                    "ENGINE": "django.db.backends.postgresql",
+                    "NAME": "assistencia_dev",
+                    "USER": "alexandre",
+                    "PASSWORD": "senha",
+                    "HOST": "127.0.0.1",
+                    "PORT": "5433",
+                    "OPTIONS": {"sslmode": "prefer"},
+                }
+            }
+            with override_settings(DATABASES=db_settings, MEDIA_ROOT=media_root):
+                with patch("configuracoes.management.commands.backup_db.subprocess.run") as run_mock:
+                    call_command(
+                        "backup_db",
+                        output_dir=str(output_dir),
+                        include_media=True,
+                        pg_dump=str(pg_dump),
+                    )
+
+            run_mock.assert_called_once()
+            backup_dirs = list(output_dir.glob("backup_*"))
+            self.assertEqual(len(backup_dirs), 1)
+            self.assertTrue((backup_dirs[0] / "manifest.json").exists())
+            self.assertTrue((backup_dirs[0] / "media.zip").exists())
+
     def test_restore_db_exige_force(self):
         with TemporaryDirectory() as tmp_dir:
             backup_path = Path(tmp_dir) / "origem.sqlite3"
@@ -916,6 +998,72 @@ class ComandosConfiguracoesTests(TestCase):
                 call_command("restore_db", str(backup_path), force=True)
             self.assertTrue(target_path.exists())
             self.assertEqual(target_path.read_bytes(), payload)
+
+    def test_restore_db_postgres_executa_pg_restore_e_restaura_media(self):
+        with TemporaryDirectory() as tmp_dir:
+            base_dir = Path(tmp_dir)
+            backup_dir = base_dir / "backup_20260519_230000"
+            backup_dir.mkdir()
+            (backup_dir / "database.dump").write_bytes(b"dump")
+            with zipfile.ZipFile(backup_dir / "media.zip", "w") as zipf:
+                zipf.writestr("logos/logo.txt", "logo-restaurada")
+            media_root = base_dir / "media"
+            pg_restore = base_dir / "pg_restore.exe"
+            pg_restore.write_text("", encoding="utf-8")
+            db_settings = {
+                "default": {
+                    "ENGINE": "django.db.backends.postgresql",
+                    "NAME": "assistencia_dev",
+                    "USER": "alexandre",
+                    "PASSWORD": "senha",
+                    "HOST": "127.0.0.1",
+                    "PORT": "5433",
+                    "OPTIONS": {"sslmode": "prefer"},
+                }
+            }
+            with override_settings(DATABASES=db_settings, MEDIA_ROOT=media_root):
+                with patch("configuracoes.management.commands.restore_db.subprocess.run") as run_mock:
+                    call_command(
+                        "restore_db",
+                        str(backup_dir),
+                        force=True,
+                        restore_media=True,
+                        pg_restore=str(pg_restore),
+                    )
+
+            run_mock.assert_called_once()
+            self.assertEqual((media_root / "logos" / "logo.txt").read_text(encoding="utf-8"), "logo-restaurada")
+
+    def test_repair_single_tenant_data_associa_registros_sem_empresa(self):
+        empresa = Empresa.objects.create(nome="Empresa Local")
+        setup = SetupInicialSistema.get_setup()
+        setup.empresa = empresa
+        setup.save(update_fields=["empresa"])
+
+        cliente = Cliente.objects.create(nome="Cliente legado")
+        ordem = OrdemServico.objects.create(
+            cliente=cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca",
+            modelo_equipamento="Modelo",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+        )
+        orcamento = Orcamento.objects.create(cliente=cliente, ordem_servico=ordem)
+        produto = Produto.objects.create(nome="Peca legada")
+
+        saida = StringIO()
+        call_command("repair_single_tenant_data", "--force", stdout=saida)
+
+        cliente.refresh_from_db()
+        ordem.refresh_from_db()
+        orcamento.refresh_from_db()
+        produto.refresh_from_db()
+        self.assertEqual(cliente.empresa, empresa)
+        self.assertEqual(ordem.empresa, empresa)
+        self.assertEqual(orcamento.empresa, empresa)
+        self.assertEqual(produto.empresa, empresa)
+        self.assertIn("Registros associados com sucesso", saida.getvalue())
 
     def test_import_shoficina_dry_run_nao_grava(self):
         with TemporaryDirectory() as tmp_dir:

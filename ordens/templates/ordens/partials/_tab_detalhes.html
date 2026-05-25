@@ -10,7 +10,7 @@
                         data-toggle="tooltip"
                         data-placement="top"
                         aria-label="Ver detalhes das assinaturas"
-                        title="Assinatura de entrada: {% if assinatura_entrada_data %}{{ assinatura_entrada_data|date:'d/m/Y H:i' }}{% else %}-{% endif %} | Arquivo entrada: {% if assinatura_entrada_tem_arquivo %}Sim{% else %}Nao{% endif %} | Assinatura de saida: {% if assinatura_saida_data %}{{ assinatura_saida_data|date:'d/m/Y H:i' }}{% else %}-{% endif %} | Arquivo saida: {% if assinatura_saida_tem_arquivo %}Sim{% else %}Nao{% endif %}">
+                        title="Assinatura de entrada: {% if assinatura_entrada_data %}{{ assinatura_entrada_data|date:'d/m/Y H:i' }}{% else %}-{% endif %} | Arquivo entrada: {% if assinatura_entrada_tem_arquivo %}Sim{% else %}Não{% endif %} | Assinatura de saída: {% if assinatura_saida_data %}{{ assinatura_saida_data|date:'d/m/Y H:i' }}{% else %}-{% endif %} | Arquivo saída: {% if assinatura_saida_tem_arquivo %}Sim{% else %}Não{% endif %}">
                     <i class="fas fa-signature"></i>
                 </button>
             </div>
@@ -28,9 +28,9 @@
                         <p class="bloco-detalhe-conteudo">{{ ordem.defeito|default:"-" }}</p>
                     </div>
 
-                    <!-- Caixa Acessorios -->
+                        <!-- Caixa Acessórios -->
                     <div class="border rounded bg-light p-3 mb-3 bloco-detalhe bloco-acessorios">
-                        <h6 class="font-weight-bold mb-2">Acessorios</h6>
+                        <h6 class="font-weight-bold mb-2">Acessórios</h6>
                         <p class="bloco-detalhe-conteudo">{{ ordem.acessorios|default:"-" }}</p>
                     </div>
 
@@ -41,7 +41,7 @@
                             {% if ordem.peritagem %}
                             {{ ordem.peritagem }}
                             {% else %}
-                            <span class="text-muted">Nao informado</span>
+                            <span class="text-muted">Não informado</span>
                             {% endif %}
                         </p>
                     </div>
@@ -57,7 +57,7 @@
                             <p class="mb-1 text-break"><strong>Marca:</strong> {{ ordem.marca_equipamento }}</p>
                             <p class="mb-1 text-break"><strong>Modelo:</strong> {{ ordem.modelo_equipamento }}</p>
                             <p class="mb-1 text-break">
-                                <strong>No Serie:</strong>
+                                <strong>Nº Série:</strong>
                                 <span id="serie-view"
                                       class="{% if pode_editar_serie %}text-primary{% endif %}"
                                       {% if pode_editar_serie %}style="cursor:pointer;" title="Duplo clique para editar"{% endif %}>
@@ -82,22 +82,22 @@
                                     {% endif %}
                                 </p>
                                 <p class="mb-0 text-break">
-                                    <strong>Referencia parceiro:</strong> {{ ordem.referencia_parceiro|default:"-" }}
+                                    <strong>Referência parceiro:</strong> {{ ordem.referencia_parceiro|default:"-" }}
                                 </p>
                             </div>
                         </div>
 
-                        <!-- Observacoes Internas -->
+                        <!-- Observações Internas -->
                         <div class="observacoes-wrap">
-                            <label class="font-weight-bold mb-1" for="observacoes">Observacoes (internas)</label>
+                            <label class="font-weight-bold mb-1" for="observacoes">Observações (internas)</label>
                             <textarea id="observacoes"
                                       class="form-control form-control-sm"
                                       rows="4"
                                       data-os-id="{{ ordem.id }}"
-                                      placeholder="Somente visivel internamente..."
+                                       placeholder="Somente visível internamente..."
                                       {% if not pode_editar_observacoes_internas %}disabled{% endif %}>{{ ordem.notas_internas|default:"" }}</textarea>
                             {% if not pode_editar_observacoes_internas %}
-                            <small class="text-muted d-block mt-1">Edicao das observacoes internas controlada por permissao.</small>
+                            <small class="text-muted d-block mt-1">Edição das observações internas controlada por permissão.</small>
                             {% endif %}
                             <div id="observacoes-feedback" class="small mt-1"></div>
                         </div>
@@ -105,7 +105,7 @@
                         <div class="detalhes-footer-meta">
                             <div class="mb-1">
                                 <div class="meta-stacked">
-                                    <label class="meta-label" for="tecnicoResponsavel">Tecnico responsavel:</label>
+                                    <label class="meta-label" for="tecnicoResponsavel">Técnico responsável:</label>
                                     <select id="tecnicoResponsavel"
                                             class="form-control form-control-sm"
                                             style="height: 31px;"
@@ -119,7 +119,7 @@
                                         {% endfor %}
                                     </select>
                                     {% if not pode_alterar_tecnico %}
-                                    <small class="text-muted d-block mt-1">Alteracao do tecnico controlada por permissao.</small>
+                                    <small class="text-muted d-block mt-1">Alteração do técnico controlada por permissão.</small>
                                     {% endif %}
                                 </div>
                                 <div id="tecnico-feedback" class="small mt-1"></div>
@@ -135,7 +135,7 @@
                                            placeholder="Local..."
                                            {% if not pode_editar_local_armazenamento %}disabled{% endif %}>
                                     {% if not pode_editar_local_armazenamento %}
-                                    <small class="text-muted d-block mt-1">Edicao do local de armazenamento controlada por permissao.</small>
+                                    <small class="text-muted d-block mt-1">Edição do local de armazenamento controlada por permissão.</small>
                                     {% endif %}
                                 </div>
                                 <div id="local-feedback" class="small mt-1"></div>

@@ -1,6 +1,7 @@
 from . import fluxo_support as _support
 import uuid
 from datetime import timedelta
+from django.core.exceptions import PermissionDenied
 from ..services import ResumoOperacionalService
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
@@ -25,6 +26,7 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
         return uuid.uuid4().hex
 
     def _buscar_ordem_por_nonce(self, nonce):
+        empresa = obter_empresa_ativa(self.request, strict=False)
         if not nonce:
             return None
         try:
@@ -33,7 +35,7 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
             return None
         if not ordem_id:
             return None
-        return OrdemServico.objects.filter(id=ordem_id).first()
+        return filtrar_queryset_empresa(OrdemServico.objects.filter(id=ordem_id), empresa).first()
 
     def _registrar_nonce_usado(self, nonce, ordem_id):
         if not nonce:
@@ -64,7 +66,8 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
             "data_abertura__gte": timezone.now() - timedelta(minutes=self.DUPLICATE_WINDOW_MINUTES),
             "numero_serie_equipamento__iexact": numero_serie,
         }
-        return OrdemServico.objects.filter(**filtros).order_by("-id").first()
+        empresa = obter_empresa_ativa(self.request, strict=False)
+        return filtrar_queryset_empresa(OrdemServico.objects.filter(**filtros), empresa).order_by("-id").first()
 
     def post(self, request, *args, **kwargs):
         self.object = None
@@ -117,7 +120,8 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
         cliente_id = self.kwargs.get("cliente_id")
         if not cliente_id:
             return None
-        return Cliente.objects.filter(id=cliente_id).first()
+        empresa = obter_empresa_ativa(self.request, strict=False)
+        return filtrar_queryset_empresa(Cliente.objects.filter(id=cliente_id), empresa).first()
 
     def _montar_resumo_revisao(self, dados, form):
         tipo_equipamento = self._valor_choice(form, "tipo_equipamento", dados.get("tipo_equipamento"))
@@ -163,12 +167,23 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["cliente_id"] = self.kwargs.get("cliente_id")
+        kwargs["empresa"] = obter_empresa_ativa(self.request, strict=False)
         return kwargs
 
     def form_valid(self, form):
         cliente_id = self.kwargs.get("cliente_id")
+        empresa = obter_empresa_ativa(self.request, strict=False)
+        cliente = Cliente.objects.filter(id=cliente_id).first() if cliente_id else None
+        if cliente and empresa:
+            if cliente.empresa_id and cliente.empresa_id != empresa.id:
+                raise PermissionDenied("Cliente pertence a outra empresa.")
+            if not cliente.empresa_id:
+                cliente.empresa = empresa
+                cliente.save(update_fields=["empresa"])
+        if empresa:
+            form.instance.empresa = empresa
         form.instance.cliente_id = cliente_id
-        if getattr(self.request.user, "tipo_usuario", "") == "tecnico":
+        if usuario_apto_tecnico(self.request.user):
             form.instance.tecnico_responsavel = self.request.user
         else:
             form.instance.tecnico_responsavel = None
@@ -295,11 +310,12 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         cliente_id = self.kwargs.get("cliente_id")
         if cliente_id:
-            context["cliente"] = Cliente.objects.get(id=cliente_id)
+            empresa = obter_empresa_ativa(self.request, strict=False)
+            context["cliente"] = filtrar_queryset_empresa(Cliente.objects.filter(id=cliente_id), empresa).get()
         context["menu_app"] = "ordens"
         context["menu_sub"] = "nova_ordem_cliente"
         context["criar_orcamento_form"] = OrcamentoForm()
-        context["tecnicos"] = User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username")
+        context["tecnicos"] = usuarios_tecnicos_qs(empresa=obter_empresa_ativa(self.request, strict=False))
         context["create_nonce"] = self._get_or_make_create_nonce()
         context["marcas_info_json"] = json.dumps(
             {
@@ -327,7 +343,11 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related("cliente", "tecnico_responsavel").order_by("-data_abertura")
+        empresa = obter_empresa_ativa(self.request, strict=False)
+        queryset = filtrar_queryset_empresa(
+            super().get_queryset(),
+            empresa,
+        ).select_related("cliente", "tecnico_responsavel").order_by("-data_abertura")
         incluir_fechadas = self.request.GET.get("incluir_fechadas") == "1"
         if not incluir_fechadas:
             queryset = queryset.filter(fechada=False)
@@ -396,7 +416,7 @@ class OrdemServicoResumoView(RoleRequiredMixin, DetailView):
 
         context["menu_app"] = "ordens"
         context["menu_sub"] = "lista_ordens"
-        context["tecnicos"] = User.objects.filter(is_active=True, tipo_usuario="tecnico").order_by("username")
+        context["tecnicos"] = usuarios_tecnicos_qs(empresa=obter_empresa_ativa(self.request, strict=False))
         context["usar_confirmacao_digital"] = usar_confirmacao_digital
         context["confirmacao_status"] = confirmacao_status
         context["confirmacao_status_class"] = confirmacao_status_class

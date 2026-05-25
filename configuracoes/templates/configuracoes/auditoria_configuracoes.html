@@ -1,15 +1,15 @@
 {% extends "core/base.html" %}
-{% block title %}Auditoria de Configuracoes{% endblock %}
+{% block title %}Auditoria de Configurações{% endblock %}
 
 {% block content %}
 <div class="card card-modern">
   <div class="card-modern-header">
-    <i class="fas fa-shield-alt"></i> Auditoria de Configuracoes
+    <i class="fas fa-shield-alt"></i> Auditoria de configurações
   </div>
   <div class="card-modern-body">
     <form method="get" class="form-row mb-3">
       <div class="col-md-4">
-        <label for="acao">Acao</label>
+        <label for="acao">Ação</label>
         <input id="acao" name="acao" class="form-control" value="{{ acao }}" placeholder="Ex.: restore">
       </div>
       <div class="col-md-3">
@@ -31,8 +31,8 @@
         <thead>
           <tr>
             <th>Data</th>
-            <th>Usuario</th>
-            <th>Acao</th>
+            <th>Usuário</th>
+            <th>Ação</th>
             <th>Origem</th>
             <th>Alvo</th>
             <th>Detalhes</th>

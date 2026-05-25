@@ -1,4 +1,5 @@
 from django import forms
+from ordens.services.tecnicos import usuarios_tecnicos_qs
 from .models import Orcamento, ItemOrcamento
 
 
@@ -74,10 +75,7 @@ class ItemOrcamentoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["tecnico_responsavel"].queryset = self.fields["tecnico_responsavel"].queryset.filter(
-            is_active=True,
-            tipo_usuario="tecnico",
-        ).order_by("username")
+        self.fields["tecnico_responsavel"].queryset = usuarios_tecnicos_qs()
         self.fields["valor_unitario"].label = "Valor unitário (R$)"
         self.fields["desconto_valor"].label = "Desconto (R$)"
         self.fields["desconto_percentual"].label = "Desconto (%)"
