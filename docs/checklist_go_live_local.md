@@ -8,8 +8,11 @@
 ## 2) Banco e aplicacao
 - Rodar migracoes: `manage.py migrate`.
 - Criar superusuario: `manage.py createsuperuser`.
+- Gerar ambiente local em rede: `powershell.exe -ExecutionPolicy Bypass -File .\setup_local_env.ps1 -Overwrite`.
+- Iniciar em modo local em rede: `powershell.exe -ExecutionPolicy Bypass -File .\run_local.ps1`.
 - Executar validacoes:
   - `manage.py check_go_live`
+  - `manage.py check_go_live --strict`
   - `manage.py check_postgres_ready --check-connection`
   - `manage.py check_tenant_data --strict`
   - `manage.py check_saas_readiness`
@@ -24,8 +27,18 @@
 - Confirmar `DEBUG=False` no ambiente de producao.
 - Garantir `SECRET_KEY` forte e exclusiva.
 - Testar backup/restore:
-  - `manage.py backup_db`
-  - `manage.py restore_db <arquivo> --force` (somente homologacao)
+  - SQLite: `manage.py backup_db --gzip --include-media`
+  - PostgreSQL: `manage.py backup_db --include-media`
+  - Restore: `manage.py restore_db <arquivo-ou-pasta-backup> --force`
+  - Restore com uploads/logos/anexos: `manage.py restore_db <arquivo-ou-pasta-backup> --force --restore-media`
+  - Restore de backup antigo/local: `manage.py restore_db <arquivo-ou-pasta-backup> --force --restore-media --repair-single-tenant`
+  - Em PostgreSQL, prefira executar restore com o servidor Django parado.
+
+## 4.1) Rede local
+- No PC servidor: `powershell.exe -ExecutionPolicy Bypass -File .\run_local.ps1 -CheckOnly`.
+- Nos PCs clientes: `powershell.exe -ExecutionPolicy Bypass -File .\test_local_network.ps1 -ServerIp <IP_DO_SERVIDOR> -OpenBrowser`.
+- Validar os fluxos do documento `docs/homologacao_rede_local.md`.
+- Se o `check_go_live` avisar que `ALLOWED_HOSTS` esta limitado ao proprio servidor, recrie `.env.local` com o IP correto usando `setup_local_env.ps1 -Overwrite`.
 
 ## 5) Parametros de negocio
 - Revisar `Configuracoes do Sistema`:

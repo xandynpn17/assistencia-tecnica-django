@@ -8,6 +8,7 @@
 - `plano_desenvolvimento_configuracoes.md`: diagnostico e roadmap tecnico da app configuracoes com foco em integracoes e preparacao SaaS.
 - `plano_desenvolvimento_visual.md`: roadmap de padronizacao visual, UX operacional e documentos/PDFs.
 - `plano_fechamento_fase_inicial_v1.md`: plano final de hardening, tenant, observabilidade, refino tecnico, fila tecnica, metricas e antifraude.
+- `plano_fase_a_pre_uso_local.md`: plano de refinamento e homologacao antes do uso real local em rede.
 - `entrega_1_fluxo_permissoes.md`: diagnostico inicial de fluxo e permissoes.
 - `permissoes_por_perfil.md`: visao funcional de acessos por perfil.
 - `revisao_arquitetura.md`: fotografia arquitetural atual do sistema.
@@ -16,6 +17,9 @@
 - `checklist_homologacao_estoque.md`: roteiro de homologacao manual por perfil do estoque (Fase E7).
 - `checklist_homologacao_configuracoes.md`: roteiro de homologacao manual por perfil da app configuracoes.
 - `checklist_migracao_postgresql.md`: guia de validacao da futura migracao de banco.
+- `backup_restore_local.md`: procedimento operacional de backup/restore local com PostgreSQL e media.
+- `trocar_servidor_local.md`: checklist para migrar a instalacao local para outro PC usando backup.
+- `homologacao_rede_local.md`: roteiro de validacao com 2 ou 3 PCs acessando o servidor local.
 - `relatorio_homologacao_estoque.md`: template operacional para registrar execucao manual da E7.
 - `relatorio_homologacao_estoque_2026-05-13.md`: consolidacao da evidencia automatizada e pendencias manuais da E7.
 - `relatorio_homologacao_postgresql_2026-05-12.md`: homologacao da migracao para PostgreSQL no ambiente de desenvolvimento.
