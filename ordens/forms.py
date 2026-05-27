@@ -33,6 +33,12 @@ class OrdemServicoForm(forms.ModelForm):
         label="OS original (garantia de serviço)",
         widget=forms.Select(attrs={"class": "form-control"}),
     )
+    garantia_classificacao_retorno = forms.ChoiceField(
+        required=False,
+        choices=[("", "---------"), *OrdemServico.CLASSIFICACAO_RETORNO_CHOICES],
+        label="Classificação do retorno",
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
 
     def __init__(self, *args, **kwargs):
         cliente_id = kwargs.pop("cliente_id", None)
@@ -143,6 +149,7 @@ class OrdemServicoForm(forms.ModelForm):
             "numero_nota_fiscal",
             "referencia_parceiro",
             "ordem_origem_garantia",
+            "garantia_classificacao_retorno",
             "defeito",
             "acessorios",
             "notas_internas",
@@ -158,6 +165,7 @@ class OrdemServicoForm(forms.ModelForm):
             "numero_nota_fiscal": forms.TextInput(attrs={"class": "form-control", "placeholder": "Número da nota fiscal"}),
             "referencia_parceiro": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex: OS externa, parceiro ou referência interna"}),
             "ordem_origem_garantia": forms.Select(attrs={"class": "form-control"}),
+            "garantia_classificacao_retorno": forms.Select(attrs={"class": "form-control"}),
             "defeito": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Descreva o defeito"}),
             "acessorios": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "Acessórios inclusos"}),
             "notas_internas": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Notas internas (somente sistema)"}),
@@ -169,6 +177,7 @@ class OrdemServicoForm(forms.ModelForm):
             "numero_nota_fiscal": "Número da nota fiscal",
             "referencia_parceiro": "Referência parceiro",
             "ordem_origem_garantia": "OS original da garantia",
+            "garantia_classificacao_retorno": "Classificação do retorno",
             "acessorios": "Acessórios",
             "notas_internas": "Notas internas",
         }
