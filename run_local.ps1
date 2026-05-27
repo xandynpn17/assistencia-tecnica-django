@@ -3,6 +3,7 @@ param(
     [string]$BindHost = "0.0.0.0",
     [string]$EnvPath = ".env.local",
     [string]$PythonExe = "",
+    [switch]$StartProjectPg = $true,
     [switch]$CheckOnly
 )
 
@@ -49,6 +50,64 @@ function Resolve-PythonExe {
     return @{ File = "py"; Args = @("-3.12") }
 }
 
+function Test-TcpPort {
+    param(
+        [string]$TargetHost,
+        [int]$TargetPort,
+        [int]$TimeoutMs = 1200
+    )
+
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $iar = $client.BeginConnect($TargetHost, $TargetPort, $null, $null)
+        $ok = $iar.AsyncWaitHandle.WaitOne($TimeoutMs, $false)
+        if (-not $ok) {
+            return $false
+        }
+        $client.EndConnect($iar) | Out-Null
+        return $true
+    } catch {
+        return $false
+    } finally {
+        $client.Close()
+    }
+}
+
+function Ensure-ProjectPostgres {
+    param(
+        [string]$DbHost,
+        [int]$DbPort
+    )
+
+    if (Test-TcpPort -TargetHost $DbHost -TargetPort $DbPort) {
+        return
+    }
+
+    $isLocalHost = $DbHost -in @("127.0.0.1", "localhost", "::1")
+    if (-not $isLocalHost) {
+        throw "PostgreSQL indisponivel em ${DbHost}:$DbPort e host nao local."
+    }
+
+    $pgCtl = "C:\Program Files\PostgreSQL\16\bin\pg_ctl.exe"
+    $pgData = Join-Path $PSScriptRoot "pgdata_codex"
+    $pgLog = Join-Path $PSScriptRoot "backups\pg5433.log"
+
+    if (-not (Test-Path $pgCtl)) {
+        throw "pg_ctl nao encontrado em '$pgCtl'."
+    }
+    if (-not (Test-Path $pgData)) {
+        throw "Diretorio pgdata_codex nao encontrado em '$pgData'."
+    }
+
+    Write-Host "PostgreSQL em ${DbHost}:$DbPort nao respondeu. Tentando iniciar pgdata_codex..."
+    & $pgCtl -D $pgData -l $pgLog -o "-p $DbPort" start | Out-Host
+    Start-Sleep -Seconds 2
+
+    if (-not (Test-TcpPort -TargetHost $DbHost -TargetPort $DbPort -TimeoutMs 2000)) {
+        throw "Nao foi possivel iniciar PostgreSQL em ${DbHost}:$DbPort. Verifique $pgLog"
+    }
+}
+
 $envFullPath = Join-Path $PSScriptRoot $EnvPath
 $managePy = Join-Path $PSScriptRoot "manage.py"
 
@@ -58,6 +117,12 @@ if (-not (Test-Path $managePy)) {
 
 Load-EnvFile -Path $envFullPath
 $python = Resolve-PythonExe -Preferred $PythonExe
+
+if ($StartProjectPg -and $env:DJANGO_DB_ENGINE -eq "postgres") {
+    $dbHost = if ($env:DJANGO_DB_HOST) { $env:DJANGO_DB_HOST } else { "127.0.0.1" }
+    $dbPort = if ($env:DJANGO_DB_PORT) { [int]$env:DJANGO_DB_PORT } else { 5432 }
+    Ensure-ProjectPostgres -DbHost $dbHost -DbPort $dbPort
+}
 
 Write-Host ""
 Write-Host "Assistencia - modo local em rede"

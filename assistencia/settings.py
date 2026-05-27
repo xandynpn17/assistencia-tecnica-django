@@ -11,6 +11,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+RUNNING_TESTS = "test" in sys.argv
 
 
 # Quick-start development settings - unsuitable for production
@@ -116,6 +117,13 @@ if DB_ENGINE == "postgres":
         }
     }
 elif DB_ENGINE == "sqlite":
+    allow_sqlite_dev = os.getenv("DJANGO_ALLOW_SQLITE_DEV", "0") == "1"
+    if not RUNNING_TESTS and not allow_sqlite_dev:
+        raise ImproperlyConfigured(
+            "SQLite bloqueado neste projeto para evitar uso acidental. "
+            "Inicie com PostgreSQL via 'powershell -ExecutionPolicy Bypass -File .\\run_local.ps1'. "
+            "Se precisar usar SQLite de forma intencional, defina DJANGO_ALLOW_SQLITE_DEV=1."
+        )
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -179,7 +187,6 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = Path(os.getenv("DJANGO_MEDIA_ROOT", str(BASE_DIR / "media")))
 
 AUTH_USER_MODEL = 'configuracoes.User'
-RUNNING_TESTS = "test" in sys.argv
 SETUP_INICIAL_GATE_ENABLED = os.getenv(
     "DJANGO_SETUP_GATE_ENABLED",
     "0" if RUNNING_TESTS else "1",
