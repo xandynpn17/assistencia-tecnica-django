@@ -1,11 +1,12 @@
 """assistencia URL Configuration"""
 
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from core.views import home_redirect
 from ordens.views import confirmar_ordem_token_publico
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.static import serve as media_serve
 
 urlpatterns = [
     # Admin
@@ -29,5 +30,9 @@ urlpatterns = [
     path('os/confirmar/<uuid:token>/', confirmar_ordem_token_publico, name='confirmar_os_publico'),
 ]
 
-if settings.DEBUG or settings.LOCAL_NETWORK_MODE:
+if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+elif settings.LOCAL_NETWORK_MODE:
+    urlpatterns += [
+        re_path(r"^media/(?P<path>.*)$", media_serve, {"document_root": settings.MEDIA_ROOT}),
+    ]
