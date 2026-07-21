@@ -72,6 +72,12 @@ class PermissoesClientesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Cadastrar novo cliente")
 
+    def test_rota_textual_invalida_nao_vira_listagem(self):
+        self.client.force_login(self.atendente)
+        response = self.client.get("/clientes/Heloise Julia Goncalves/")
+        self.assertEqual(response.status_code, 404)
+        self.assertNotContains(response, self.cliente.nome, status_code=404)
+
     def test_unificar_clientes_bloqueia_atendente(self):
         self.client.force_login(self.atendente)
         response = self.client.get(reverse("clientes:unificar_clientes"))

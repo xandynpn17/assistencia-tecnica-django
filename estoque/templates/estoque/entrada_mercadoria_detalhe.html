@@ -1,0 +1,181 @@
+﻿{% extends "core/base.html" %}
+
+{% block header %}
+<div class="ui-module-header">
+  <div>
+    <h1 class="ui-module-title">{{ entrada.numero }}</h1>
+    <p class="ui-module-subtitle">{{ entrada.fornecedor_nome }} &bull; {{ entrada.ponto_operacional.codigo }} / {{ entrada.ubicacao.codigo }}</p>
+  </div>
+  <div class="ui-module-actions">
+    {% if entrada.status == 'rascunho' %}
+    <a href="{% url 'estoque:editar_entrada_mercadoria' entrada.id %}" class="btn btn-outline-primary btn-sm">Editar entrada</a>
+    <form method="post" action="{% url 'estoque:receber_entrada_mercadoria' entrada.id %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-success btn-sm">Receber no estoque</button>
+    </form>
+    <form method="post" action="{% url 'estoque:cancelar_entrada_mercadoria' entrada.id %}" onsubmit="return confirm('Cancelar este rascunho? Nenhum saldo ser&aacute; movimentado.');">
+      {% csrf_token %}
+      <input type="hidden" name="motivo" value="Cancelada manualmente antes do recebimento">
+      <button type="submit" class="btn btn-outline-danger btn-sm">Cancelar rascunho</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .entrada-detail-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .entrada-detail-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f2f7fb 100%);
+    padding: 12px;
+  }
+  .entrada-detail-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .entrada-detail-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #183247;
+  }
+  .entrada-detail-note {
+    border: 1px solid #dce6ef;
+    border-radius: 12px;
+    background: #f8fbff;
+    color: #24415d;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 991.98px) {
+    .entrada-detail-summary {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="entrada-detail-summary">
+  <div class="entrada-detail-card">
+    <div class="entrada-detail-label">Status</div>
+    <div class="entrada-detail-value">{{ entrada.get_status_display }}</div>
+  </div>
+  <div class="entrada-detail-card">
+    <div class="entrada-detail-label">Destino fisico</div>
+    <div class="entrada-detail-value">{{ entrada.ponto_operacional.codigo }} / {{ entrada.ubicacao.codigo }}</div>
+  </div>
+  <div class="entrada-detail-card">
+    <div class="entrada-detail-label">Itens</div>
+    <div class="entrada-detail-value">{{ entrada.quantidade_total_itens }}</div>
+  </div>
+  <div class="entrada-detail-card">
+    <div class="entrada-detail-label">Total geral</div>
+    <div class="entrada-detail-value">R$ {{ entrada.total_geral|floatformat:2 }}</div>
+  </div>
+</div>
+
+<div class="entrada-detail-note">
+  <strong>Leitura operacional desta entrada:</strong>
+  confira documento, fornecedor, custo final e destino f&iacute;sico antes do recebimento. Depois de recebida, a entrada vira base de saldo, custo, lote e rastreabilidade.
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-3"><strong>Status:</strong> {{ entrada.get_status_display }}</div>
+      <div class="col-md-3"><strong>Documento:</strong> {{ entrada.documento_numero|default:"-" }}</div>
+      <div class="col-md-3"><strong>Emissao:</strong> {{ entrada.data_emissao|date:"d/m/Y" }}</div>
+      <div class="col-md-3"><strong>Entrada:</strong> {{ entrada.data_entrada|date:"d/m/Y" }}</div>
+    </div>
+    <div class="row mt-2">
+      <div class="col-md-3"><strong>Frete:</strong> R$ {{ entrada.frete_total|floatformat:2 }}</div>
+      <div class="col-md-3"><strong>Seguro:</strong> R$ {{ entrada.seguro_total|floatformat:2 }}</div>
+      <div class="col-md-3"><strong>Outras despesas:</strong> R$ {{ entrada.outras_despesas_total|floatformat:2 }}</div>
+      <div class="col-md-3"><strong>Desconto:</strong> R$ {{ entrada.desconto_total|floatformat:2 }}</div>
+    </div>
+    <div class="row mt-2">
+      <div class="col-md-6"><strong>Fornecedor:</strong> {{ entrada.fornecedor_nome }}</div>
+      <div class="col-md-6"><strong>Destino:</strong> {{ entrada.ponto_operacional.codigo }} - {{ entrada.ponto_operacional.nome }} / {{ entrada.ubicacao.codigo }}{% if entrada.ubicacao.descricao %} ({{ entrada.ubicacao.descricao }}){% endif %}</div>
+    </div>
+    <div class="row mt-2">
+      <div class="col-md-12">
+        <small class="text-muted">
+          {% if entrada.usar_rateio_automatico %}
+          Rateio automatico ativo: custos do cabecalho entram no custo final dos itens.
+          {% else %}
+          Rateio manual por item: o custo final considera os valores digitados em cada linha.
+          {% endif %}
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if entrada.status == 'recebida' %}
+<div class="alert alert-light border d-flex align-items-start gap-2" role="note">
+  <i class="fas fa-lock mt-1" aria-hidden="true"></i>
+  <div><strong>Entrada consolidada.</strong> Para preservar custo, lote e saldo, uma entrada recebida n&atilde;o pode ser editada ou cancelada. Corrija diferen&ccedil;as por invent&aacute;rio ou movimenta&ccedil;&atilde;o auditada.</div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header">Itens recebidos</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Produto</th>
+            <th>Qtd</th>
+            <th>Custo base</th>
+            <th>Impostos</th>
+            <th>Frete</th>
+            <th>Outras despesas</th>
+            <th>Desconto</th>
+            <th>Rateio cabecalho</th>
+            <th>Custo final unit.</th>
+            <th>Subtotal</th>
+            <th>Rastreio</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in entrada.itens.all %}
+          <tr>
+            <td>{{ item.produto.nome }}</td>
+            <td>{{ item.quantidade }}</td>
+            <td>R$ {{ item.custo_unitario|floatformat:2 }}</td>
+            <td>R$ {{ item.impostos_entrada_unitario|floatformat:2 }}</td>
+            <td>R$ {{ item.frete_rateado_unitario|floatformat:2 }}</td>
+            <td>R$ {{ item.outras_despesas_rateadas_unitario|floatformat:2 }}</td>
+            <td>R$ {{ item.desconto_unitario|floatformat:2 }}</td>
+            <td>R$ {{ item.rateio_automatico_unitario|floatformat:2 }}</td>
+            <td><strong>R$ {{ item.custo_entrada_unitario|floatformat:2 }}</strong></td>
+            <td>R$ {{ item.subtotal_item|floatformat:2 }}</td>
+            <td>
+              {% if item.lote_codigo %}<div><strong>Lote:</strong> {{ item.lote_codigo }}</div>{% endif %}
+              {% if item.lote_validade %}<div><strong>Validade:</strong> {{ item.lote_validade|date:"d/m/Y" }}</div>{% endif %}
+              {% if item.numeros_serie %}<div><strong>Series:</strong> {{ item.numeros_serie|linebreaksbr }}</div>{% endif %}
+              {% if not item.lote_codigo and not item.numeros_serie %}<span class="text-muted">Nao controlado</span>{% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="11" class="text-center text-muted py-4">Sem itens nesta entrada.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer d-flex justify-content-between">
+    <div><strong>Qtd. itens:</strong> {{ entrada.quantidade_total_itens }}</div>
+    <div><strong>Total geral:</strong> R$ {{ entrada.total_geral|floatformat:2 }}</div>
+  </div>
+</div>
+{% endblock %}

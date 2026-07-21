@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 from uuid import uuid4
 
 from django import forms
@@ -26,6 +26,17 @@ from .models import (
 class PagamentoForm(forms.ModelForm):
     metodo = forms.CharField(required=False, widget=forms.HiddenInput())
     chave_idempotencia = forms.CharField(required=False, widget=forms.HiddenInput())
+    forma_pagamento_secundaria = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(),
+        required=False,
+    )
+    valor_secundario = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+    )
+    referencia_secundaria = forms.CharField(max_length=50, required=False)
     valor_recebido = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -47,17 +58,42 @@ class PagamentoForm(forms.ModelForm):
 
     class Meta:
         model = Pagamento
-        fields = ["ordem_servico", "valor", "forma_pagamento", "referencia", "observacao", "metodo"]
+        fields = [
+            "ordem_servico",
+            "cliente_nome",
+            "cliente_documento",
+            "cliente_telefone",
+            "valor",
+            "forma_pagamento",
+            "referencia",
+            "observacao",
+            "metodo",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["ordem_servico"].required = False
         self.fields["forma_pagamento"].required = True
         self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(ativa=True).order_by("nome")
+        self.fields["forma_pagamento_secundaria"].queryset = self.fields["forma_pagamento"].queryset
+        self.fields["forma_pagamento_secundaria"].label = "Forma secundaria"
+        self.fields["valor_secundario"].label = "Valor secundario"
+        self.fields["referencia_secundaria"].label = "Referencia secundaria"
+        self.fields["cliente_nome"].label = "Comprador"
+        self.fields["cliente_nome"].required = False
+        self.fields["cliente_nome"].widget = forms.TextInput(
+            attrs={"placeholder": "Nome para garantia, troca ou contato futuro"}
+        )
+        self.fields["cliente_documento"].label = "CPF/CNPJ"
+        self.fields["cliente_documento"].required = False
+        self.fields["cliente_documento"].widget = forms.TextInput(attrs={"placeholder": "Opcional"})
+        self.fields["cliente_telefone"].label = "Telefone/WhatsApp"
+        self.fields["cliente_telefone"].required = False
+        self.fields["cliente_telefone"].widget = forms.TextInput(attrs={"placeholder": "Opcional"})
         self.fields["valor_recebido"].label = "Valor recebido"
         self.fields["desconto_valor"].label = "Desconto em valor"
         self.fields["desconto_percentual"].label = "Desconto em %"
-        self.fields["observacao"].label = "Mensagem adicional no talao"
+        self.fields["observacao"].label = "Mensagem adicional no talão"
         self.fields["observacao"].required = False
         self.fields["observacao"].widget = forms.Textarea(attrs={"rows": 2})
         if not self.is_bound and not self.initial.get("chave_idempotencia"):
@@ -66,11 +102,19 @@ class PagamentoForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         forma_pagamento = cleaned_data.get("forma_pagamento")
+        forma_secundaria = cleaned_data.get("forma_pagamento_secundaria")
         valor = cleaned_data.get("valor") or Decimal("0.00")
         valor_recebido = cleaned_data.get("valor_recebido")
+        valor_secundario = cleaned_data.get("valor_secundario") or Decimal("0.00")
         desconto_valor = cleaned_data.get("desconto_valor") or Decimal("0.00")
         desconto_percentual = cleaned_data.get("desconto_percentual") or Decimal("0.00")
-        if forma_pagamento and forma_pagamento.codigo == "dinheiro" and valor_recebido is not None and valor_recebido < valor:
+        if (
+            forma_pagamento
+            and forma_pagamento.codigo == "dinheiro"
+            and not forma_secundaria
+            and valor_recebido is not None
+            and valor_recebido < valor
+        ):
             self.add_error(
                 "valor_recebido",
                 "O valor recebido nao pode ser menor que o valor do pagamento em dinheiro.",
@@ -79,6 +123,16 @@ class PagamentoForm(forms.ModelForm):
             raise forms.ValidationError("Use desconto por valor ou por percentual, nao os dois ao mesmo tempo.")
         if desconto_percentual > Decimal("100.00"):
             self.add_error("desconto_percentual", "O desconto percentual nao pode ser maior que 100%.")
+        if forma_secundaria and not forma_pagamento:
+            self.add_error("forma_pagamento", "Informe a forma principal antes de adicionar uma forma secundaria.")
+        if forma_secundaria and forma_pagamento and forma_secundaria == forma_pagamento:
+            self.add_error("forma_pagamento_secundaria", "Selecione uma forma diferente da principal.")
+        if valor_secundario > Decimal("0.00") and not forma_secundaria:
+            self.add_error("forma_pagamento_secundaria", "Selecione a forma secundaria para o valor informado.")
+        if forma_secundaria and valor_secundario <= Decimal("0.00"):
+            self.add_error("valor_secundario", "Informe o valor da forma secundaria.")
+        if valor_secundario < Decimal("0.00"):
+            self.add_error("valor_secundario", "O valor secundario nao pode ser negativo.")
         return cleaned_data
 
 
@@ -192,7 +246,7 @@ class BaixaContaReceberForm(forms.Form):
         self.fields["desconto"].label = "Desconto concedido"
         self.fields["juros"].label = "Juros recebidos"
         self.fields["referencia"].label = "Referencia"
-        self.fields["observacao"].label = "Observacao"
+        self.fields["observacao"].label = "Mensagem adicional no talão"
         self.fields["forma_pagamento"].label = "Forma de pagamento"
 
 
@@ -369,3 +423,5 @@ class PagamentoContaPagarForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(ativa=True).order_by("nome")
+
+

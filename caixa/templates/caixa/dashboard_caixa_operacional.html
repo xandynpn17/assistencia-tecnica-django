@@ -1,230 +1,609 @@
 {% extends 'core/base.html' %}
 
+{% block extra_css %}
+<style>
+  .caixa-operacao-shell {
+    display: grid;
+    gap: 1rem;
+  }
+  .caixa-hero {
+    border: 1px solid #e4e8ee;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
+    padding: 1.1rem 1.25rem;
+    box-shadow: 0 18px 32px rgba(30, 51, 74, 0.08);
+  }
+  .caixa-hero-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .caixa-hero-copy h1 {
+    margin-bottom: .3rem;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #1f3247;
+  }
+  .caixa-hero-copy p {
+    margin-bottom: 0;
+    color: #5b6876;
+  }
+  .caixa-hero-status {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    border-radius: 999px;
+    padding: .45rem .85rem;
+    font-size: .82rem;
+    font-weight: 700;
+    border: 1px solid #d7e1eb;
+    background: #fff;
+    color: #28445c;
+  }
+  .caixa-hero-status.is-open {
+    border-color: #cfe8d8;
+    background: #eef8f1;
+    color: #1f7a45;
+  }
+  .caixa-hero-status.is-closed {
+    border-color: #d6dbe1;
+    background: #f3f5f7;
+    color: #5f6b77;
+  }
+  .caixa-filtro-card {
+    margin-top: 1rem;
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: #fff;
+    padding: .85rem 1rem;
+  }
+  .caixa-turno-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .75rem;
+    margin-top: .95rem;
+  }
+  .caixa-turno-chip {
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: #fff;
+    padding: .75rem .9rem;
+  }
+  .caixa-turno-chip-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #70808f;
+    margin-bottom: .25rem;
+  }
+  .caixa-turno-chip strong {
+    display: block;
+    font-size: 1.05rem;
+    color: #223749;
+    line-height: 1.2;
+  }
+  .caixa-turno-chip small {
+    color: #607080;
+  }
+  .caixa-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .9rem;
+  }
+  .caixa-kpi {
+    border: 1px solid #e4e8ee;
+    border-radius: 16px;
+    background: #fff;
+    padding: 1rem 1rem .95rem;
+  }
+  .caixa-kpi-label {
+    font-size: .73rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #70808f;
+    margin-bottom: .35rem;
+  }
+  .caixa-kpi-value {
+    font-size: 1.45rem;
+    line-height: 1.1;
+    font-weight: 700;
+    color: #223749;
+    margin-bottom: .25rem;
+  }
+  .caixa-kpi-note {
+    color: #647282;
+    font-size: .84rem;
+  }
+  .caixa-prioridades {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 1rem;
+  }
+  .caixa-card-clean {
+    border: 1px solid #e4e8ee;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 14px 26px rgba(30, 51, 74, 0.06);
+  }
+  .caixa-card-clean .card-header {
+    background: #fff;
+    border-bottom: 1px solid #eef2f6;
+    padding: .95rem 1rem;
+  }
+  .caixa-card-clean .card-body {
+    padding: 1rem;
+  }
+  .caixa-action-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .9rem;
+  }
+  .caixa-action-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: .95rem 1rem;
+  }
+  .caixa-action-card h3 {
+    font-size: 1rem;
+    margin-bottom: .35rem;
+    color: #223749;
+  }
+  .caixa-action-card p {
+    color: #607080;
+    font-size: .86rem;
+    margin-bottom: .75rem;
+  }
+  .caixa-action-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .8rem;
+  }
+  .caixa-action-meta strong {
+    font-size: 1.2rem;
+    color: #1f3247;
+  }
+  .caixa-risk-list {
+    display: grid;
+    gap: .75rem;
+  }
+  .caixa-risk-row {
+    border: 1px solid #e8edf2;
+    border-radius: 14px;
+    padding: .85rem .95rem;
+    background: #fbfcfe;
+  }
+  .caixa-risk-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .75rem;
+    margin-bottom: .3rem;
+  }
+  .caixa-risk-top strong {
+    color: #223749;
+  }
+  .caixa-risk-row p {
+    margin: 0;
+    color: #667482;
+    font-size: .84rem;
+  }
+  .caixa-table-card .table {
+    margin-bottom: 0;
+  }
+  .caixa-table-card th {
+    white-space: nowrap;
+  }
+  @media (max-width: 991.98px) {
+    .caixa-turno-strip,
+    .caixa-kpis,
+    .caixa-prioridades,
+    .caixa-action-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 {% include 'caixa/_subnav_caixa.html' %}
-<div class="ui-module-header">
-  <div>
-    {% if data_inicio == data_fim %}
-      <h1 class="mb-1">Operação do caixa - {{ data_inicio_ref|date:"d/m/Y" }}</h1>
-    {% else %}
-      <h1 class="mb-1">Operação do caixa por período</h1>
-      <div class="text-muted small">{{ data_inicio_ref|date:"d/m/Y" }} at? {{ data_fim_ref|date:"d/m/Y" }}</div>
-    {% endif %}
-  </div>
-  <form method="get" class="card p-2 mb-0 ui-form-shell" style="min-width: 360px;">
-    <div class="form-row align-items-end">
-      <div class="col-md-4">
-        <label class="small mb-1">Data de início</label>
-        <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control form-control-sm">
+<div class="caixa-operacao-shell">
+  <section class="caixa-hero">
+    <div class="caixa-hero-top">
+      <div class="caixa-hero-copy">
+        {% if data_inicio == data_fim %}
+          <h1>Opera&ccedil;&atilde;o do caixa - {{ data_inicio_ref|date:"d/m/Y" }}</h1>
+          <p>Vis&atilde;o r&aacute;pida do que precisa de recebimento, confer&ecirc;ncia e a&ccedil;&atilde;o financeira no dia.</p>
+        {% else %}
+          <h1>Opera&ccedil;&atilde;o do caixa por per&iacute;odo</h1>
+          <p>{{ data_inicio_ref|date:"d/m/Y" }} at&eacute; {{ data_fim_ref|date:"d/m/Y" }} com leitura operacional e financeira consolidada.</p>
+        {% endif %}
       </div>
-      <div class="col-md-4">
-        <label class="small mb-1">Data de fim</label>
-        <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control form-control-sm">
-      </div>
-      <div class="col-md-4">
-        <label class="small mb-1">Preset</label>
-        <select name="preset" class="form-control form-control-sm">
-          <option value="" {% if not preset_periodo %}selected{% endif %}>Personalizado</option>
-          <option value="hoje" {% if preset_periodo == 'hoje' %}selected{% endif %}>Hoje</option>
-          <option value="7d" {% if preset_periodo == '7d' %}selected{% endif %}>7 dias</option>
-          <option value="30d" {% if preset_periodo == '30d' %}selected{% endif %}>30 dias</option>
-          <option value="mes_atual" {% if preset_periodo == 'mes_atual' %}selected{% endif %}>Mês atual</option>
-          <option value="mes_anterior" {% if preset_periodo == 'mes_anterior' %}selected{% endif %}>Mês anterior</option>
-        </select>
-      </div>
-      <div class="col-12 mt-2 d-flex" style="gap: 6px;">
-        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
-        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Hoje</a>
+      <div>
+        <span class="caixa-hero-status {% if caixa and caixa.aberto %}is-open{% else %}is-closed{% endif %}">
+          <i class="fas {% if caixa and caixa.aberto %}fa-lock-open{% else %}fa-lock{% endif %}"></i>
+          {% if caixa and caixa.aberto %}
+            Caixa aberto
+          {% elif caixa %}
+            Caixa fechado
+          {% else %}
+            Sem caixa do dia
+          {% endif %}
+        </span>
       </div>
     </div>
-  </form>
-</div>
 
-{% if caixa %}
-  <div class="alert {% if caixa.aberto %}alert-success{% else %}alert-secondary{% endif %} py-2">
-    Caixa do dia: <strong>{% if caixa.aberto %}ABERTO{% else %}FECHADO{% endif %}</strong>
-    {% if caixa and not caixa.aberto %}
-      | Diferença no fechamento: <strong>R$ {{ caixa.diferenca_fechamento|floatformat:2 }}</strong>
-    {% endif %}
-  </div>
-{% elif filtro_aplicado %}
-  <div class="alert alert-info py-2">Nenhum caixa encontrado no período informado.</div>
-{% else %}
-  <div class="alert alert-warning py-2">Não existe caixa aberto para hoje.</div>
-{% endif %}
+    <form method="get" class="caixa-filtro-card">
+      <div class="form-row align-items-end">
+        <div class="col-md-4">
+          <label class="small mb-1">Data de in&iacute;cio</label>
+          <input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-4">
+          <label class="small mb-1">Data de fim</label>
+          <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-4">
+          <label class="small mb-1">Preset</label>
+          <select name="preset" class="form-control form-control-sm">
+            <option value="" {% if not preset_periodo %}selected{% endif %}>Personalizado</option>
+            <option value="hoje" {% if preset_periodo == 'hoje' %}selected{% endif %}>Hoje</option>
+            <option value="7d" {% if preset_periodo == '7d' %}selected{% endif %}>7 dias</option>
+            <option value="30d" {% if preset_periodo == '30d' %}selected{% endif %}>30 dias</option>
+            <option value="mes_atual" {% if preset_periodo == 'mes_atual' %}selected{% endif %}>M&ecirc;s atual</option>
+            <option value="mes_anterior" {% if preset_periodo == 'mes_anterior' %}selected{% endif %}>M&ecirc;s anterior</option>
+          </select>
+        </div>
+        <div class="col-12 mt-2 d-flex flex-wrap" style="gap: 6px;">
+          <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+          <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Hoje</a>
+        </div>
+      </div>
+    </form>
 
-<div class="card mb-3">
-  <div class="card-body py-2 d-flex flex-wrap align-items-center" style="gap: 8px;">
-    <span class="badge badge-{% if caixa and caixa.aberto %}success{% else %}secondary{% endif %} px-3 py-2">1. Abertura {% if caixa and caixa.aberto %}concluída{% else %}pendente{% endif %}</span>
-    <span class="badge badge-primary px-3 py-2">2. Operação do dia</span>
-    <span class="badge badge-{% if caixa and caixa.aberto %}warning{% else %}secondary{% endif %} px-3 py-2">3. Fecho com conferência</span>
-    <small class="text-muted ml-auto">{% if caixa and caixa.aberto %}Caixa aberto: siga com pagamentos, saídas e feche no fim do expediente.{% else %}Abra o caixa para começar a operação do dia.{% endif %}</small>
-  </div>
-</div>
+    <div class="caixa-turno-strip">
+      <div class="caixa-turno-chip">
+        <div class="caixa-turno-chip-label">Receber agora</div>
+        <strong>{{ prontas_sem_recebimento_qtd }} OS</strong>
+        <small>R$ {{ prontas_sem_recebimento_total|floatformat:2 }} aguardando caixa.</small>
+      </div>
+      <div class="caixa-turno-chip">
+        <div class="caixa-turno-chip-label">Carteira vencida</div>
+        <strong>R$ {{ vencidas_total|floatformat:2 }}</strong>
+        <small>Clientes e garantias que j&aacute; precisam de retorno.</small>
+      </div>
+      <div class="caixa-turno-chip">
+        <div class="caixa-turno-chip-label">Sa&iacute;das para revisar</div>
+        <strong>{{ saidas_sem_categoria_qtd }} lan&ccedil;.</strong>
+        <small>Movimentos sem categoria travam leitura gerencial e fechamento.</small>
+      </div>
+    </div>
+  </section>
 
-<div class="card mb-3">
-  <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
-    <h3 class="card-title mb-0">Ações do dia</h3>
-    <small class="text-muted">
-      {% if caixa and caixa.aberto %}
-      Caixa pronto para operação
-      {% else %}
-      Abra o caixa para registrar pagamentos e saídas
+  {% if caixa %}
+    <div class="alert {% if caixa.aberto %}alert-success{% else %}alert-secondary{% endif %} py-2 mb-0">
+      Caixa do dia: <strong>{% if caixa.aberto %}aberto{% else %}fechado{% endif %}</strong>.
+      {% if caixa and not caixa.aberto %}
+        Diferen&ccedil;a registrada no fechamento: <strong>R$ {{ caixa.diferenca_fechamento|floatformat:2 }}</strong>.
+      {% elif caixa and caixa.aberto %}
+        Opera&ccedil;&atilde;o pronta para pagamentos, sa&iacute;das e confer&ecirc;ncia final.
       {% endif %}
-    </small>
-  </div>
-  <div class="card-body d-flex flex-wrap align-items-center" style="gap: 8px;">
-    {% if caixa and caixa.aberto %}
-    <a href="{% url 'caixa:fechar_caixa' %}" class="btn btn-danger"><i class="fas fa-stop"></i> Fechar caixa</a>
-    {% else %}
-    <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-success"><i class="fas fa-play"></i> Abrir caixa</a>
-    {% endif %}
-    <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary"><i class="fas fa-plus"></i> Registrar pagamento</a>
-    <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-warning"><i class="fas fa-minus"></i> Registrar saída</a>
-    <a href="{% url 'caixa:contas_receber' %}?prontas_sem_recebimento=1" class="btn btn-outline-secondary">
-      <i class="fas fa-file-invoice-dollar"></i> Prontas sem recebimento ({{ prontas_sem_recebimento_qtd }})
-    </a>
-    <a href="{% url 'caixa:contas_receber' %}" class="btn btn-outline-secondary"><i class="fas fa-list"></i> Contas a receber</a>
-    <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-outline-secondary"><i class="fas fa-file-invoice"></i> Contas a pagar</a>
-  </div>
-</div>
-
-<div class="row mb-3">
-  <div class="col-md-3"><div class="small-box bg-info"><div class="inner"><h4>R$ {{ saldo|floatformat:2 }}</h4><p>Saldo apurado</p></div><div class="icon"><i class="fas fa-wallet"></i></div></div></div>
-  <div class="col-md-3"><div class="small-box bg-success"><div class="inner"><h4>R$ {{ total_entradas|floatformat:2 }}</h4><p>Entradas do período</p></div><div class="icon"><i class="fas fa-arrow-down"></i></div></div></div>
-  <div class="col-md-3"><div class="small-box bg-danger"><div class="inner"><h4>R$ {{ total_saidas|floatformat:2 }}</h4><p>Saídas do período</p></div><div class="icon"><i class="fas fa-arrow-up"></i></div></div></div>
-  <div class="col-md-3"><div class="small-box bg-warning"><div class="inner"><h4>R$ {{ prontas_sem_recebimento_total|floatformat:2 }}</h4><p>Prontas sem recebimento</p></div><div class="icon"><i class="fas fa-hand-holding-usd"></i></div></div></div>
-</div>
-
-<div class="row mb-3">
-  <div class="col-md-3"><div class="small-box bg-secondary"><div class="inner"><h4>R$ {{ vencidas_total|floatformat:2 }}</h4><p>Recebíveis vencidos</p></div></div></div>
-  <div class="col-md-3"><div class="small-box bg-secondary"><div class="inner"><h4>{{ contas_pagar_vencidas|length }}</h4><p>Contas a pagar vencidas</p></div></div></div>
-  <div class="col-md-3"><div class="small-box bg-secondary"><div class="inner"><h4>{{ saidas_sem_categoria_qtd }}</h4><p>Saídas sem categoria</p></div></div></div>
-  <div class="col-md-3"><div class="small-box bg-secondary"><div class="inner"><h4>R$ {{ diferenca_fechamento_total|floatformat:2 }}</h4><p>Diferenças de fechamento</p></div></div></div>
-</div>
-
-<div class="row mb-3">
-  <div class="col-lg-6">
-    <div class="card h-100">
-      <div class="card-header"><h3 class="card-title">Fila de recebimento</h3></div>
-      <div class="card-body p-0">
-        <table class="table table-sm mb-0">
-          <thead><tr><th>Indicador</th><th class="text-right">Valor</th></tr></thead>
-          <tbody>
-            <tr><td>Prontas sem recebimento</td><td class="text-right">{{ prontas_sem_recebimento_qtd }} OS</td></tr>
-            <tr><td>Valor em aberto total</td><td class="text-right">R$ {{ a_receber_total|floatformat:2 }}</td></tr>
-            <tr><td>Recebíveis vencidos</td><td class="text-right">R$ {{ vencidas_total|floatformat:2 }}</td></tr>
-            <tr><td>Receita cliente</td><td class="text-right">R$ {{ receita_cliente|floatformat:2 }}</td></tr>
-            <tr><td>Receita garantia</td><td class="text-right">R$ {{ receita_garantia|floatformat:2 }}</td></tr>
-          </tbody>
-        </table>
-      </div>
     </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card h-100">
-      <div class="card-header"><h3 class="card-title">Fila de saída e despesas</h3></div>
-      <div class="card-body p-0">
-        <table class="table table-sm mb-0">
-          <thead><tr><th>Conta</th><th>Categoria</th><th class="text-right">Aberto</th></tr></thead>
-          <tbody>
-            {% for conta in contas_pagar_vencidas %}
-            <tr>
-              <td>{{ conta.descricao }}</td>
-              <td>{{ conta.categoria.nome|default:"-" }}</td>
-              <td class="text-right">R$ {{ conta.valor_aberto|floatformat:2 }}</td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="3" class="text-center text-muted">Nenhuma conta a pagar vencida.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
+  {% elif filtro_aplicado %}
+    <div class="alert alert-info py-2 mb-0">Nenhum caixa encontrado no per&iacute;odo informado.</div>
+  {% else %}
+    <div class="alert alert-warning py-2 mb-0">N&atilde;o existe caixa aberto para hoje. Abra o caixa antes de receber ou registrar sa&iacute;das.</div>
+  {% endif %}
 
-<div class="row mb-3">
-  <div class="col-lg-6">
-    <div class="card h-100">
-      <div class="card-header"><h3 class="card-title">Pagamentos recentes</h3></div>
-      <div class="card-body table-responsive p-0">
-        <table class="table table-hover table-sm mb-0">
-          <thead><tr><th>OS</th><th class="text-right">Valor</th><th>Forma</th><th>Data</th></tr></thead>
-          <tbody>
-            {% for p in pagamentos_recentes %}
-            <tr>
-              <td>{{ p.ordem_servico|default:"Avulso" }}</td>
-              <td class="text-right">R$ {{ p.valor|floatformat:2 }}</td>
-              <td>{{ p.metodo_display }}</td>
-              <td>{{ p.data|date:"d/m/Y H:i" }}</td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="4" class="text-center">Nenhum pagamento.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card h-100">
-      <div class="card-header"><h3 class="card-title">Saídas recentes</h3></div>
-      <div class="card-body table-responsive p-0">
-        <table class="table table-hover table-sm mb-0">
-          <thead><tr><th>Descrição</th><th>Categoria</th><th class="text-right">Valor</th><th>Data</th></tr></thead>
-          <tbody>
-            {% for l in saidas_recentes %}
-            <tr>
-              <td>{{ l.descricao|default:"-" }}</td>
-              <td>{{ l.categoria_display }}</td>
-              <td class="text-right">R$ {{ l.valor|floatformat:2 }}</td>
-              <td>{{ l.data|date:"d/m/Y H:i" }}</td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="4" class="text-center">Nenhuma saída.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
+  <section class="caixa-kpis">
+    <article class="caixa-kpi">
+      <div class="caixa-kpi-label">Saldo apurado</div>
+      <div class="caixa-kpi-value">R$ {{ saldo|floatformat:2 }}</div>
+      <div class="caixa-kpi-note">Saldo operacional calculado para o per&iacute;odo filtrado.</div>
+    </article>
+    <article class="caixa-kpi">
+      <div class="caixa-kpi-label">Entradas do per&iacute;odo</div>
+      <div class="caixa-kpi-value">R$ {{ total_entradas|floatformat:2 }}</div>
+      <div class="caixa-kpi-note">{{ qtd_pagamentos }} pagamento(s) com ticket m&eacute;dio de R$ {{ ticket_medio_pagamento|floatformat:2 }}.</div>
+    </article>
+    <article class="caixa-kpi">
+      <div class="caixa-kpi-label">Sa&iacute;das do per&iacute;odo</div>
+      <div class="caixa-kpi-value">R$ {{ total_saidas|floatformat:2 }}</div>
+      <div class="caixa-kpi-note">{{ qtd_lancamentos }} lan&ccedil;amento(s) com m&eacute;dia di&aacute;ria de R$ {{ media_saida_diaria|floatformat:2 }}.</div>
+    </article>
+    <article class="caixa-kpi">
+      <div class="caixa-kpi-label">Prontas sem receber</div>
+      <div class="caixa-kpi-value">R$ {{ prontas_sem_recebimento_total|floatformat:2 }}</div>
+      <div class="caixa-kpi-note">{{ prontas_sem_recebimento_qtd }} OS aguardando recebimento e libera&ccedil;&atilde;o.</div>
+    </article>
+  </section>
 
-<div class="card mb-3">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <h3 class="card-title mb-0">Eventos críticos recentes</h3>
-    <a href="{% url 'caixa:auditoria_operacional' %}" class="btn btn-xs btn-outline-danger">Ver auditoria</a>
-  </div>
-  <div class="card-body table-responsive p-0">
-    <table class="table table-sm table-hover mb-0">
-      <thead><tr><th>Quando</th><th>Evento</th><th>Resumo</th><th class="text-right">Valor</th><th>Usuário</th><th class="text-right">Ações</th></tr></thead>
-      <tbody>
-        {% for evento in eventos_criticos_recentes %}
-        <tr>
-          <td>{{ evento.quando|date:"d/m/Y H:i" }}</td>
-          <td>{{ evento.evento_label }}</td>
-          <td>{{ evento.resumo }}</td>
-          <td class="text-right">{% if evento.valor is not None %}R$ {{ evento.valor|floatformat:2 }}{% else %}-{% endif %}</td>
-          <td>{{ evento.usuario.username|default:"-" }}</td>
-          <td class="text-right">
-            {% if evento.descricao %}
-            <button type="button" class="btn btn-xs btn-outline-secondary" data-toggle="modal" data-target="#eventoCritico{{ evento.id }}">
-              Ver motivo
-            </button>
+  <section class="caixa-prioridades">
+    <div class="caixa-card-clean">
+      <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
+        <div>
+          <strong>A&ccedil;&otilde;es do turno</strong>
+          <div class="small text-muted">Atalhos mais usados para abrir, receber, registrar sa&iacute;das e fechar.</div>
+        </div>
+        <small class="text-muted">
+          {% if caixa and caixa.aberto %}
+            Etapa atual: opera&ccedil;&atilde;o do dia
+          {% else %}
+            Etapa atual: abertura pendente
+          {% endif %}
+        </small>
+      </div>
+      <div class="card-body">
+        <div class="caixa-action-grid">
+          <article class="caixa-action-card">
+            <div class="caixa-action-meta">
+              <span class="badge badge-{% if caixa and caixa.aberto %}success{% else %}secondary{% endif %}">
+                {% if caixa and caixa.aberto %}Operando{% else %}Pendente{% endif %}
+              </span>
+              <strong>{% if caixa and caixa.aberto %}3/3{% else %}1/3{% endif %}</strong>
+            </div>
+            <h3>{% if caixa and caixa.aberto %}Fechar caixa no encerramento{% else %}Abrir caixa do dia{% endif %}</h3>
+            <p>{% if caixa and caixa.aberto %}Use esta etapa apenas ap&oacute;s confer&ecirc;ncia de valores e formas de pagamento.{% else %}Confirme o saldo inicial e libere a opera&ccedil;&atilde;o do atendimento.{% endif %}</p>
+            {% if caixa and caixa.aberto %}
+              <a href="{% url 'caixa:fechar_caixa' %}" class="btn btn-danger btn-sm"><i class="fas fa-stop"></i> Fechar caixa</a>
+            {% else %}
+              <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-success btn-sm"><i class="fas fa-play"></i> Abrir caixa</a>
             {% endif %}
-            {% if evento.acao %}
-            <a href="{{ evento.acao.url }}" class="btn btn-xs btn-outline-primary">{{ evento.acao.label }}</a>
-            {% endif %}
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="6" class="text-center text-muted">Sem eventos críticos no período.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+          </article>
+
+          <article class="caixa-action-card">
+            <div class="caixa-action-meta">
+              <span class="badge badge-primary">Recebimento</span>
+              <strong>{{ prontas_sem_recebimento_qtd }}</strong>
+            </div>
+            <h3>Receber OS e vendas do balc&atilde;o</h3>
+            <p>Entrada r&aacute;pida para OS, guia de pagamento e confer&ecirc;ncia de valores antes da entrega.</p>
+            <div class="d-flex flex-wrap" style="gap: 6px;">
+              <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Registrar pagamento</a>
+              <a href="{% url 'caixa:contas_receber' %}?prontas_sem_recebimento=1" class="btn btn-outline-secondary btn-sm">Ver prontas</a>
+            </div>
+          </article>
+
+          <article class="caixa-action-card">
+            <div class="caixa-action-meta">
+              <span class="badge badge-warning">Sa&iacute;das</span>
+              <strong>{{ qtd_lancamentos }}</strong>
+            </div>
+            <h3>Lancar despesas operacionais</h3>
+            <p>Registre retiradas, custos de balc&atilde;o e despesas do turno com rastreabilidade.</p>
+            <div class="d-flex flex-wrap" style="gap: 6px;">
+              <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-warning btn-sm"><i class="fas fa-minus"></i> Registrar sa&iacute;da</a>
+              <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-outline-secondary btn-sm">Contas a pagar</a>
+            </div>
+          </article>
+
+          <article class="caixa-action-card">
+            <div class="caixa-action-meta">
+              <span class="badge badge-dark">Carteira</span>
+              <strong>R$ {{ a_receber_total|floatformat:2 }}</strong>
+            </div>
+            <h3>Tratar carteira do dia</h3>
+            <p>Receb&iacute;veis em aberto, garantias vencidas e pend&ecirc;ncias que impactam o caixa real.</p>
+            <div class="d-flex flex-wrap" style="gap: 6px;">
+              <a href="{% url 'caixa:contas_receber' %}" class="btn btn-outline-dark btn-sm"><i class="fas fa-file-invoice-dollar"></i> Contas a receber</a>
+              <a href="{% url 'caixa:garantias_fabricante' %}" class="btn btn-outline-secondary btn-sm">Garantias</a>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="caixa-card-clean">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <strong>Riscos e pend&ecirc;ncias</strong>
+          <div class="small text-muted">Tudo o que merece aten&ccedil;&atilde;o antes de fechar o dia.</div>
+        </div>
+        <a href="{% url 'caixa:auditoria_operacional' %}" class="btn btn-xs btn-outline-danger">Ver auditoria</a>
+      </div>
+      <div class="card-body">
+        <div class="caixa-risk-list">
+          <div class="caixa-risk-row">
+            <div class="caixa-risk-top">
+              <strong>Receb&iacute;veis vencidos</strong>
+              <span class="badge badge-danger">R$ {{ vencidas_total|floatformat:2 }}</span>
+            </div>
+            <p>Inclui clientes e garantias j&aacute; vencidas que ainda precisam de baixa ou cobran&ccedil;a.</p>
+          </div>
+          <div class="caixa-risk-row">
+            <div class="caixa-risk-top">
+              <strong>Contas a pagar vencidas</strong>
+              <span class="badge badge-warning">{{ contas_pagar_vencidas|length }}</span>
+            </div>
+            <p>Total em aberto: R$ {{ contas_pagar_vencidas_total|floatformat:2 }}.</p>
+          </div>
+          <div class="caixa-risk-row">
+            <div class="caixa-risk-top">
+              <strong>Sa&iacute;das sem categoria</strong>
+              <span class="badge badge-secondary">{{ saidas_sem_categoria_qtd }}</span>
+            </div>
+            <p>Esses lan&ccedil;amentos prejudicam DRE, relat&oacute;rios e confer&ecirc;ncia gerencial.</p>
+          </div>
+          <div class="caixa-risk-row">
+            <div class="caixa-risk-top">
+              <strong>Garantias vencidas ou divergentes</strong>
+              <span class="badge badge-dark">R$ {{ a_receber_garantia_vencida|floatformat:2 }}</span>
+            </div>
+            <p>Diverg&ecirc;ncias mapeadas: R$ {{ a_receber_garantia_divergente|floatformat:2 }}.</p>
+          </div>
+          <div class="caixa-risk-row">
+            <div class="caixa-risk-top">
+              <strong>Diferen&ccedil;as acumuladas de fechamento</strong>
+              <span class="badge badge-info">R$ {{ diferenca_fechamento_total|floatformat:2 }}</span>
+            </div>
+            <p>Acompanhe se o turno tem hist&oacute;rico de sobras, faltas ou confer&ecirc;ncias inconsistentes.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row mb-0">
+    <div class="col-lg-6 mb-3">
+      <div class="caixa-card-clean caixa-table-card h-100">
+        <div class="card-header"><strong>Fila de recebimento</strong></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Indicador</th>
+                <th class="text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Prontas sem recebimento</td><td class="text-right">{{ prontas_sem_recebimento_qtd }} OS</td></tr>
+              <tr><td>Valor em aberto total</td><td class="text-right">R$ {{ a_receber_total|floatformat:2 }}</td></tr>
+              <tr><td>Receb&iacute;veis vencidos</td><td class="text-right">R$ {{ vencidas_total|floatformat:2 }}</td></tr>
+              <tr><td>Receita cliente</td><td class="text-right">R$ {{ receita_cliente|floatformat:2 }}</td></tr>
+              <tr><td>Receita garantia</td><td class="text-right">R$ {{ receita_garantia|floatformat:2 }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6 mb-3">
+      <div class="caixa-card-clean caixa-table-card h-100">
+        <div class="card-header"><strong>Fila de sa&iacute;da e despesas</strong></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Conta</th>
+                <th>Categoria</th>
+                <th class="text-right">Aberto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for conta in contas_pagar_vencidas %}
+              <tr>
+                <td>{{ conta.descricao }}</td>
+                <td>{{ conta.categoria.nome|default:"-" }}</td>
+                <td class="text-right">R$ {{ conta.valor_aberto|floatformat:2 }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-center text-muted">Nenhuma conta a pagar vencida.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6 mb-3">
+      <div class="caixa-card-clean caixa-table-card h-100">
+        <div class="card-header"><strong>Pagamentos recentes</strong></div>
+        <div class="card-body table-responsive p-0">
+          <table class="table table-hover table-sm mb-0">
+            <thead>
+              <tr>
+                <th>OS</th>
+                <th class="text-right">Valor</th>
+                <th>Forma</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in pagamentos_recentes %}
+              <tr>
+                <td>{{ p.ordem_servico|default:"Avulso" }}</td>
+                <td class="text-right">R$ {{ p.valor|floatformat:2 }}</td>
+                <td>{{ p.metodo_display }}</td>
+                <td>{{ p.data|date:"d/m/Y H:i" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center">Nenhum pagamento.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6 mb-3">
+      <div class="caixa-card-clean caixa-table-card h-100">
+        <div class="card-header"><strong>Sa&iacute;das recentes</strong></div>
+        <div class="card-body table-responsive p-0">
+          <table class="table table-hover table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Descri&ccedil;&atilde;o</th>
+                <th>Categoria</th>
+                <th class="text-right">Valor</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in saidas_recentes %}
+              <tr>
+                <td>{{ l.descricao|default:"-" }}</td>
+                <td>{{ l.categoria_display }}</td>
+                <td class="text-right">R$ {{ l.valor|floatformat:2 }}</td>
+                <td>{{ l.data|date:"d/m/Y H:i" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center">Nenhuma sa&iacute;da.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="caixa-card-clean caixa-table-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong>Eventos cr&iacute;ticos recentes</strong>
+      <a href="{% url 'caixa:auditoria_operacional' %}" class="btn btn-xs btn-outline-danger">Ver auditoria</a>
+    </div>
+    <div class="card-body table-responsive p-0">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Quando</th>
+            <th>Evento</th>
+            <th>Resumo</th>
+            <th class="text-right">Valor</th>
+            <th>Usu&aacute;rio</th>
+            <th class="text-right">A&ccedil;&otilde;es</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for evento in eventos_criticos_recentes %}
+          <tr>
+            <td>{{ evento.quando|date:"d/m/Y H:i" }}</td>
+            <td>{{ evento.evento_label }}</td>
+            <td>{{ evento.resumo }}</td>
+            <td class="text-right">{% if evento.valor is not None %}R$ {{ evento.valor|floatformat:2 }}{% else %}-{% endif %}</td>
+            <td>{{ evento.usuario.username|default:"-" }}</td>
+            <td class="text-right">
+              {% if evento.descricao %}
+              <button type="button" class="btn btn-xs btn-outline-secondary" data-toggle="modal" data-target="#eventoCritico{{ evento.id }}">
+                Ver motivo
+              </button>
+              {% endif %}
+              {% if evento.acao %}
+              <a href="{{ evento.acao.url }}" class="btn btn-xs btn-outline-primary">{{ evento.acao.label }}</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted">Sem eventos cr&iacute;ticos no per&iacute;odo.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
 </div>
+
 {% for evento in eventos_criticos_recentes %}
   {% if evento.descricao %}
   <div class="modal fade" id="eventoCritico{{ evento.id }}" tabindex="-1" role="dialog" aria-labelledby="eventoCriticoLabel{{ evento.id }}" aria-hidden="true">

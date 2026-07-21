@@ -4,15 +4,19 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from configuracoes.forms import ConfiguracaoOrdemServicoForm, ConfiguracaoSistemaForm
 from configuracoes.models import ConfiguracaoOrdemServico, ConfiguracaoSistema, RegraSLAAlerta
 from configuracoes.services.auditoria import registrar_evento_configuracao
-from configuracoes.services.integracoes import emitir_evento_interno
+from configuracoes.services.integracoes import emitir_evento_interno, garantir_modelos_operacionais_padrao
+from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
 
 def configuracao_os_edit_impl(request):
-    config = ConfiguracaoOrdemServico.objects.first()
+    config = ConfiguracaoOrdemServico.get_configuracao()
     if request.method == "POST":
         form = ConfiguracaoOrdemServicoForm(request.POST, instance=config)
         if form.is_valid():
@@ -25,18 +29,33 @@ def configuracao_os_edit_impl(request):
                 depois={"prefixo_os": obj.prefixo_os, "inicio_id_ordem": obj.inicio_id_ordem},
             )
             emitir_evento_interno("configuracoes.alterada", {"escopo": "configuracao_os"})
-            messages.success(request, "Configuração da Ordem de Serviço salva com sucesso!")
+            messages.success(request, "Configuracao da Ordem de Servico salva com sucesso!")
             return redirect("configuracoes:painel")
     else:
         form = ConfiguracaoOrdemServicoForm(instance=config)
-    return render(request, "configuracoes/configuracao_os_form.html", {"form": form})
+    return render(
+        request,
+        "configuracoes/configuracao_os_form.html",
+        {
+            "form": form,
+            "config_operacional_tab": "os",
+            "config_operacional_title": "Ordem de servico",
+            "config_operacional_subtitle": (
+                "Padronize a abertura das OS com regras simples de numeracao, automacao e "
+                "texto tecnico de apoio para relatorios e impressao."
+            ),
+        },
+    )
 
 
 def configuracao_sistema_edit_impl(request):
+    garantir_modelos_operacionais_padrao(sobrescrever=False)
     config = ConfiguracaoSistema.get_configuracao()
+    config_os = ConfiguracaoOrdemServico.get_configuracao()
     pode_editar_termos_os = bool(request.user.is_superuser or getattr(request.user, "tipo_usuario", "") == "adm")
     if request.method == "POST":
         form = ConfiguracaoSistemaForm(request.POST, instance=config)
+        form.fields["rodape_relatorio"].initial = config_os.rodape_relatorio
         if not pode_editar_termos_os and "termos_ordem_servico" in form.fields:
             form.fields["termos_ordem_servico"].disabled = True
         if form.is_valid():
@@ -44,6 +63,10 @@ def configuracao_sistema_edit_impl(request):
             if not pode_editar_termos_os:
                 obj.termos_ordem_servico = config.termos_ordem_servico
             obj.save()
+            novo_rodape = (form.cleaned_data.get("rodape_relatorio") or "").strip()
+            if (config_os.rodape_relatorio or "") != novo_rodape:
+                config_os.rodape_relatorio = novo_rodape
+                config_os.save(update_fields=["rodape_relatorio"])
             prazo_os_sem_mov = max(int(getattr(obj, "sla_dias_os_sem_movimentacao", 2) or 2), 1)
             regra, criada = RegraSLAAlerta.objects.get_or_create(
                 codigo="os_sem_movimentacao",
@@ -53,9 +76,9 @@ def configuracao_sistema_edit_impl(request):
                     "prazo_unidade": "dias",
                     "severidade": "alta",
                     "responsavel_padrao": "Atendimento",
-                    "acao_sugerida": "Atualizar linha de trabalho e validar próximo passo.",
+                    "acao_sugerida": "Atualizar linha de trabalho e validar proximo passo.",
                     "canal_notificacao": "painel",
-                    "observacoes": "Monitora ordens sem evolução técnica recente.",
+                    "observacoes": "Monitora ordens sem evolucao tecnica recente.",
                 },
             )
             if not criada:
@@ -74,10 +97,11 @@ def configuracao_sistema_edit_impl(request):
                 },
             )
             emitir_evento_interno("configuracoes.alterada", {"escopo": "configuracao_sistema"})
-            messages.success(request, "Configurações do sistema salvas com sucesso!")
+            messages.success(request, "Configuracoes do sistema salvas com sucesso!")
             return redirect("configuracoes:painel")
     else:
         form = ConfiguracaoSistemaForm(instance=config)
+        form.fields["rodape_relatorio"].initial = config_os.rodape_relatorio
         if not pode_editar_termos_os and "termos_ordem_servico" in form.fields:
             form.fields["termos_ordem_servico"].disabled = True
 
@@ -85,6 +109,12 @@ def configuracao_sistema_edit_impl(request):
         "form": form,
         "estados_brasil": ConfiguracaoSistema.ESTADOS_BRASIL,
         "ddd_brasil": ConfiguracaoSistema.DDD_BRASIL,
+        "config_operacional_tab": "sistema",
+        "config_operacional_title": "Sistema e regras operacionais",
+        "config_operacional_subtitle": (
+            "Aqui ficam os comportamentos globais da operacao: busca, SLA, estoque, garantia, "
+            "integracoes e padroes que impactam todas as areas do sistema."
+        ),
     }
     return render(request, "configuracoes/configuracao_sistema_form.html", context)
 
@@ -122,42 +152,206 @@ def preview_documento_impl(request):
 
     ordem = None
     orcamento = None
+    empresa = obter_empresa_ativa(request, strict=False)
 
     if ordem_id.isdigit():
-        ordem = OrdemServico.objects.filter(id=int(ordem_id)).first()
+        ordem = filtrar_queryset_empresa(OrdemServico.objects.filter(id=int(ordem_id)), empresa).first()
     if orcamento_id.isdigit():
-        orcamento = Orcamento.objects.select_related("ordem_servico").filter(id=int(orcamento_id)).first()
+        orcamento = filtrar_queryset_empresa(
+            Orcamento.objects.select_related("ordem_servico").filter(id=int(orcamento_id)),
+            empresa,
+        ).first()
         if orcamento and not ordem:
             ordem = orcamento.ordem_servico
 
-    if not ordem:
-        ordem = OrdemServico.objects.order_by("-id").first()
-    if not orcamento:
-        if ordem:
-            orcamento = (
-                Orcamento.objects.select_related("ordem_servico")
-                .filter(ordem_servico=ordem)
-                .order_by("-id")
-                .first()
+    if not orcamento and ordem:
+        orcamento = (
+            filtrar_queryset_empresa(
+                Orcamento.objects.select_related("ordem_servico").filter(ordem_servico=ordem),
+                empresa,
             )
-        if not orcamento:
-            orcamento = Orcamento.objects.select_related("ordem_servico").order_by("-id").first()
-            if orcamento and not ordem:
-                ordem = orcamento.ordem_servico
+            .order_by("-id")
+            .first()
+        )
 
     if tipo == "os_digital":
         if not ordem:
-            return HttpResponse("Sem OS cadastrada para pré-visualização.", content_type="text/plain", status=404)
+            return _preview_documento_mock(request, tipo="os_digital")
         return redirect(_build_url("ordens:imprimir_ordem_servico", {"pk": ordem.pk}))
     if tipo == "relatorio":
         if not ordem:
-            return HttpResponse("Sem OS cadastrada para pré-visualização.", content_type="text/plain", status=404)
+            return _preview_documento_mock(request, tipo="relatorio")
         return redirect(_build_url("ordens:imprimir_relatorio_tecnico", {"pk": ordem.pk}))
     if tipo == "orcamento":
         if not orcamento:
-            return HttpResponse("Sem orçamento cadastrado para pré-visualização.", content_type="text/plain", status=404)
+            return _preview_documento_mock(request, tipo="orcamento")
         return redirect(_build_url("orcamentos:imprimir_orcamento", {"pk": orcamento.pk}))
 
     if not ordem:
-        return HttpResponse("Sem OS cadastrada para pré-visualização.", content_type="text/plain", status=404)
+        return _preview_documento_mock(request, tipo="os_impressao")
     return redirect(_build_url("ordens:imprimir_ordem_servico_impressao", {"pk": ordem.pk}))
+
+
+def _preview_documento_mock(request, *, tipo):
+    from reportlab.lib.styles import getSampleStyleSheet
+    from ordens.view_modules.impressao import (
+        _config_layout_para_request,
+        _perfil_layout_documentos,
+        _tema_layout_documentos,
+        add_paragraph_styles,
+        get_pdf_fonts,
+    )
+
+    config = _config_layout_para_request(request)
+    layout_docs = _perfil_layout_documentos(config)
+    tema_docs = _tema_layout_documentos(config)
+    fonts = get_pdf_fonts()
+    styles = getSampleStyleSheet()
+    add_paragraph_styles(
+        styles,
+        fonts,
+        {
+            "PrevTitle": {"bold": True, "font_size": 16, "leading": 19, "text_color": tema_docs["title_color"]},
+            "PrevMeta": {"bold": False, "font_size": 9, "leading": 12, "text_color": tema_docs["meta_color"]},
+            "PrevSection": {"bold": True, "font_size": 10.5, "leading": 13, "text_color": tema_docs["section_text"]},
+            "PrevText": {"bold": False, "font_size": 9.2, "leading": 13},
+            "PrevValue": {"bold": True, "font_size": 11, "leading": 14, "text_color": tema_docs["hero_value"]},
+        },
+    )
+
+    titulos = {
+        "os_impressao": "Previa da OS impressa",
+        "os_digital": "Previa da OS digital",
+        "relatorio": "Previa do relatorio tecnico",
+        "orcamento": "Previa do orcamento",
+    }
+    subtitulos = {
+        "os_impressao": "Amostra gerada sem depender de ordens reais cadastradas.",
+        "os_digital": "Valide hierarquia visual, identidade e espacamento do documento digital.",
+        "relatorio": "Use esta amostra para ajustar legibilidade de secoes, texto tecnico e assinatura.",
+        "orcamento": "Use esta amostra para ajustar apresentacao comercial, totais e destaque visual.",
+    }
+    amostras = {
+        "os_impressao": [
+            "Cliente: Maria Silva",
+            "Equipamento: Notebook Dell Inspiron 15",
+            "Defeito informado: nao liga / sem imagem",
+            "Observacao: preview criado sem usar dados reais do banco.",
+        ],
+        "os_digital": [
+            "Linha de trabalho: Diagnosticar",
+            "Tecnico responsavel: A definir",
+            "Assinatura digital: bloco ilustrativo",
+            "Fluxo pronto para configuracao inicial da operacao.",
+        ],
+        "relatorio": [
+            "Diagnostico: falha em circuito de alimentacao.",
+            "Servico recomendado: reparo em placa e testes finais.",
+            "Conclusao: documento tecnico com foco em clareza e assinatura.",
+        ],
+        "orcamento": [
+            "Servico: reparo em placa principal - R$ 220,00",
+            "Peca: conector de carga - R$ 48,00",
+            "Validade: 7 dias",
+            "Observacao: esta e uma amostra visual do layout comercial.",
+        ],
+    }
+
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="preview_{tipo}.pdf"'
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=A4,
+        leftMargin=1.2 * cm,
+        rightMargin=1.2 * cm,
+        topMargin=1.2 * cm,
+        bottomMargin=1.2 * cm,
+        title=titulos.get(tipo, "Previa de documento"),
+        author="ABGest",
+        subject="Preview de layout",
+        creator="Assistencia PDF Engine",
+        pageCompression=1,
+    )
+    usable_w = A4[0] - (2.4 * cm)
+
+    def _secao(titulo):
+        table = Table([[Paragraph(titulo, styles["PrevSection"])]], colWidths=[usable_w])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), tema_docs["section_bg"]),
+                    ("LINEBELOW", (0, 0), (-1, 0), 0.35, tema_docs["section_line"]),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+        return table
+
+    resumo = Table(
+        [
+            [
+                Paragraph("Preset", styles["PrevMeta"]),
+                Paragraph(config.layout_documentos_preset, styles["PrevValue"]),
+                Paragraph("Cor", styles["PrevMeta"]),
+                Paragraph(config.layout_documentos_cor, styles["PrevValue"]),
+            ],
+            [
+                Paragraph("OS impressa", styles["PrevMeta"]),
+                Paragraph(config.layout_os_impressao, styles["PrevValue"]),
+                Paragraph("Validacao digital", styles["PrevMeta"]),
+                Paragraph("Ativa" if config.layout_os_digital_exibir_validacao else "Oculta", styles["PrevValue"]),
+            ],
+        ],
+        colWidths=[usable_w * 0.18, usable_w * 0.32, usable_w * 0.18, usable_w * 0.32],
+    )
+    resumo.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), tema_docs["hero_bg"]),
+                ("BOX", (0, 0), (-1, -1), 0.4, tema_docs["section_line"]),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, tema_docs["section_line"]),
+                ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    story = [
+        Paragraph(titulos.get(tipo, "Previa de documento"), styles["PrevTitle"]),
+        Spacer(1, 0.15 * cm),
+        Paragraph(subtitulos.get(tipo, ""), styles["PrevMeta"]),
+        Spacer(1, 0.35 * cm),
+        resumo,
+        Spacer(1, 0.35 * cm),
+        _secao("Amostra visual"),
+        Spacer(1, 0.18 * cm),
+    ]
+
+    for linha in amostras.get(tipo, []):
+        story.append(Paragraph(f"- {linha}", styles["PrevText"]))
+        story.append(Spacer(1, 0.07 * cm))
+
+    story.extend(
+        [
+            Spacer(1, 0.18 * cm),
+            _secao("Observacoes"),
+            Spacer(1, 0.18 * cm),
+            Paragraph(
+                "Quando a primeira OS real for cadastrada, a pre-visualizacao volta a usar os documentos reais automaticamente. "
+                "Enquanto isso, esta amostra garante configuracao segura desde o primeiro uso.",
+                styles["PrevText"],
+            ),
+            Spacer(1, 0.12 * cm),
+            Paragraph(
+                f"Escalas ativas: titulo {layout_docs.get('pdf_title_pt', 12)} pt / secao {layout_docs.get('pdf_section_pt', 10)} pt / texto {layout_docs.get('pdf_text_pt', 9)} pt.",
+                styles["PrevMeta"],
+            ),
+        ]
+    )
+    doc.build(story)
+    return response

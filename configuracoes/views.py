@@ -1,9 +1,11 @@
 import logging
 
-from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.shortcuts import redirect
 from django.views.decorators.clickjacking import xframe_options_exempt
 
 from .permissions import MANAGER_ROLES, ORDER_CREATION_ROLES, role_required
+from .services.setup_inicial import setup_inicial_concluido
 from .view_modules.catalogo import marcas_fornecedores_impl
 from .view_modules.empresa import (
     adicionar_aliquota_impl,
@@ -13,7 +15,13 @@ from .view_modules.empresa import (
     lista_aliquotas_impl,
 )
 from .view_modules.integracoes import buscar_cep_impl, contrato_webhooks_impl, logs_integracoes_impl
-from .view_modules.operacao import auditoria_configuracoes_impl, backup_banco_impl, restore_banco_impl
+from .view_modules.operacao import (
+    auditoria_configuracoes_impl,
+    backup_banco_impl,
+    download_backup_impl,
+    restore_banco_impl,
+    restore_banco_publico_impl,
+)
 from .view_modules.painel import modelos_mensagem_impl, painel_impl, setup_inicial_impl, tipos_equipamento_impl
 from .view_modules.sistema import configuracao_os_edit_impl, configuracao_sistema_edit_impl, preview_documento_impl
 from .view_modules.sla import painel_reincidencias_impl, painel_sla_impl, regras_sla_impl
@@ -27,6 +35,10 @@ from .view_modules.usuarios import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _is_ajax_request(request):
+    return (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest"
 
 
 @role_required(MANAGER_ROLES)
@@ -105,8 +117,17 @@ def backup_banco(request):
 
 
 @role_required(MANAGER_ROLES)
+def download_backup(request):
+    return download_backup_impl(request)
+
+
+@role_required(MANAGER_ROLES)
 def restore_banco(request):
     return restore_banco_impl(request, logger)
+
+
+def restore_banco_publico(request):
+    return restore_banco_publico_impl(request, logger)
 
 
 @role_required(MANAGER_ROLES)
@@ -130,9 +151,22 @@ def marcas_fornecedores(request):
     return marcas_fornecedores_impl(request)
 
 
-@login_required(login_url="core:login")
 def buscar_cep(request):
-    return buscar_cep_impl(request)
+    if getattr(request.user, "is_authenticated", False):
+        return buscar_cep_impl(request)
+
+    try:
+        setup_pendente = not setup_inicial_concluido()
+    except Exception:
+        setup_pendente = False
+
+    if setup_pendente:
+        return buscar_cep_impl(request)
+
+    if _is_ajax_request(request):
+        return JsonResponse({"erro": "Sessão expirada. Faça login novamente."}, status=401)
+
+    return redirect("core:login")
 
 
 @role_required(MANAGER_ROLES)

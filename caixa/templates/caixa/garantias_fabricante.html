@@ -2,55 +2,121 @@
 
 {% block title %}Garantias do fabricante{% endblock %}
 
+{% block extra_css %}
+<style>
+  .garantia-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 1rem;
+  }
+  .garantia-strip-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 14px 16px;
+    box-shadow: 0 14px 24px rgba(30, 51, 74, 0.06);
+  }
+  .garantia-strip-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #70808f;
+    margin-bottom: 4px;
+  }
+  .garantia-strip-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #223749;
+  }
+  .garantia-strip-note {
+    margin-top: 4px;
+    color: #607080;
+    font-size: .82rem;
+  }
+  .garantia-toolbar-card,
+  .garantia-filtros-card,
+  .garantia-resumo-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 14px 24px rgba(30, 51, 74, 0.05);
+    margin-bottom: 1rem;
+  }
+  .garantia-toolbar-card .card-body,
+  .garantia-filtros-card .card-body,
+  .garantia-resumo-card .card-body {
+    padding: .95rem 1rem;
+  }
+  .garantia-toolbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .garantia-toolbar-title {
+    font-size: .82rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #70808f;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+  .garantia-table th {
+    white-space: nowrap;
+  }
+  @media (max-width: 991.98px) {
+    .garantia-strip {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-3">
-  {% include 'caixa/_subnav_caixa.html' %}
+  {% include "caixa/_subnav_caixa.html" %}
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Garantias do fabricante</h3>
+  <div class="d-flex justify-content-between align-items-center flex-wrap mb-3" style="gap: 12px;">
+    <div>
+      <h3 class="mb-1">Garantias do fabricante</h3>
+      <div class="text-muted small">Controle de cobran&ccedil;a por marca e fornecedor, com foco em prazo, diverg&ecirc;ncia e baixa.</div>
+    </div>
     <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar ao dashboard</a>
   </div>
 
-  <div class="card mb-3">
-    <div class="card-header bg-white"><strong>Filtros de faturamento</strong></div>
+  <div class="garantia-strip">
+    <article class="garantia-strip-card">
+      <div class="garantia-strip-label">Pendente</div>
+      <div class="garantia-strip-value">R$ {{ resumo.pendente|floatformat:2 }}</div>
+      <div class="garantia-strip-note">Garantias aguardando envio ou confer&ecirc;ncia.</div>
+    </article>
+    <article class="garantia-strip-card">
+      <div class="garantia-strip-label">Em aberto</div>
+      <div class="garantia-strip-value">R$ {{ resumo.contas_abertas|floatformat:2 }}</div>
+      <div class="garantia-strip-note">Carteira ainda sem baixa financeira.</div>
+    </article>
+    <article class="garantia-strip-card">
+      <div class="garantia-strip-label">Vencidas</div>
+      <div class="garantia-strip-value">R$ {{ resumo.vencidas|floatformat:2 }}</div>
+      <div class="garantia-strip-note">Contas que j&aacute; ultrapassaram o prazo de recebimento.</div>
+    </article>
+    <article class="garantia-strip-card">
+      <div class="garantia-strip-label">Receber hoje</div>
+      <div class="garantia-strip-value">R$ {{ resumo.receber_hoje|floatformat:2 }}</div>
+      <div class="garantia-strip-note">Foco operacional para cobran&ccedil;a do dia.</div>
+    </article>
+  </div>
+
+  <div class="card garantia-toolbar-card">
     <div class="card-body">
-      <form method="get" class="form-row align-items-end">
-        <div class="form-group col-md-3">
-          <label>Status</label>
-          <select name="status" class="form-control">
-            <option value="">Todos</option>
-            <option value="pendente" {% if status_filtro == 'pendente' %}selected{% endif %}>Pendente</option>
-            <option value="enviado" {% if status_filtro == 'enviado' %}selected{% endif %}>Enviado</option>
-            <option value="pago" {% if status_filtro == 'pago' %}selected{% endif %}>Pago</option>
-          </select>
-        </div>
-        <div class="form-group col-md-4">
-          <label>Fornecedor</label>
-          <select name="fornecedor" class="form-control">
-            <option value="">Todos</option>
-            {% for f in fornecedores %}
-            <option value="{{ f.id }}" {% if fornecedor_filtro == f.id|stringformat:"s" %}selected{% endif %}>{{ f.nome }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="form-group col-md-2">
-          <label>Mês</label>
-          <input type="number" min="1" max="12" name="mes" class="form-control" value="{{ competencia_mes }}">
-        </div>
-        <div class="form-group col-md-2">
-          <label>Ano</label>
-          <input type="number" min="2020" max="2100" name="ano" class="form-control" value="{{ competencia_ano }}">
-        </div>
-        <div class="form-group col-md-1 d-flex">
-          <button class="btn btn-primary btn-block" type="submit">Filtrar</button>
-        </div>
-      </form>
-      <div class="d-flex flex-wrap mt-2" style="gap: 8px;">
-        <a class="btn btn-sm btn-outline-secondary"
-           href="?status={{ status_filtro }}&fornecedor={{ fornecedor_filtro }}&mes={{ competencia_mes }}&ano={{ competencia_ano }}&export=csv">
-           Exportar CSV
-        </a>
-        <form method="post" class="d-inline">
+      <div class="garantia-toolbar-row">
+        <span class="garantia-toolbar-title">Situa&ccedil;&atilde;o</span>
+        <span class="badge badge-warning">Pendente: R$ {{ resumo.pendente|floatformat:2 }}</span>
+        <span class="badge badge-info">Enviado: R$ {{ resumo.enviado|floatformat:2 }}</span>
+        <span class="badge badge-success">Pago: R$ {{ resumo.pago|floatformat:2 }}</span>
+        <span class="badge badge-dark">Diverg&ecirc;ncias: R$ {{ resumo.divergencias|floatformat:2 }}</span>
+        <form method="post" class="ml-auto mb-0">
           {% csrf_token %}
           <input type="hidden" name="action" value="sincronizar">
           <button type="submit" class="btn btn-sm btn-outline-primary">Sincronizar garantias fechadas</button>
@@ -59,37 +125,122 @@
     </div>
   </div>
 
-  <div class="row mb-3">
-    <div class="col-md-3"><div class="small-box bg-warning"><div class="inner"><h4>R$ {{ resumo.pendente|floatformat:2 }}</h4><p>Pendente</p></div></div></div>
-    <div class="col-md-3"><div class="small-box bg-info"><div class="inner"><h4>R$ {{ resumo.enviado|floatformat:2 }}</h4><p>Enviado</p></div></div></div>
-    <div class="col-md-3"><div class="small-box bg-success"><div class="inner"><h4>R$ {{ resumo.pago|floatformat:2 }}</h4><p>Pago</p></div></div></div>
-    <div class="col-md-3"><div class="small-box bg-secondary"><div class="inner"><h4>R$ {{ resumo.contas_abertas|floatformat:2 }}</h4><p>Contas em aberto (garantia)</p></div></div></div>
+  <div class="card garantia-filtros-card">
+    <div class="card-header bg-white"><strong>Filtros de faturamento</strong></div>
+    <div class="card-body">
+      <form method="get" class="form-row align-items-end">
+        <div class="form-group col-md-2">
+          <label>Status</label>
+          <select name="status" class="form-control">
+            <option value="">Todos</option>
+            <option value="pendente" {% if status_filtro == "pendente" %}selected{% endif %}>Pendente</option>
+            <option value="enviado" {% if status_filtro == "enviado" %}selected{% endif %}>Enviado</option>
+            <option value="pago" {% if status_filtro == "pago" %}selected{% endif %}>Pago</option>
+          </select>
+        </div>
+        <div class="form-group col-md-3">
+          <label>Fornecedor</label>
+          <select name="fornecedor" class="form-control">
+            <option value="">Todos</option>
+            {% for f in fornecedores %}
+            <option value="{{ f.id }}" {% if fornecedor_filtro == f.id|stringformat:"s" %}selected{% endif %}>{{ f.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group col-md-3">
+          <label>Marca</label>
+          <select name="marca" class="form-control">
+            <option value="">Todas</option>
+            {% for marca in marcas %}
+            <option value="{{ marca.id }}" {% if marca_filtro == marca.id|stringformat:"s" %}selected{% endif %}>{{ marca.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group col-md-2">
+          <label>Prioridade</label>
+          <select name="prioridade" class="form-control">
+            <option value="">Todas</option>
+            <option value="vencidas" {% if prioridade_filtro == "vencidas" %}selected{% endif %}>Vencidas</option>
+            <option value="receber_hoje" {% if prioridade_filtro == "receber_hoje" %}selected{% endif %}>Receber hoje</option>
+            <option value="divergentes" {% if prioridade_filtro == "divergentes" %}selected{% endif %}>Divergentes</option>
+          </select>
+        </div>
+        <div class="form-group col-md-1">
+          <label>M&ecirc;s</label>
+          <input type="number" min="1" max="12" name="mes" class="form-control" value="{{ competencia_mes }}">
+        </div>
+        <div class="form-group col-md-1">
+          <label>Ano</label>
+          <input type="number" min="2020" max="2100" name="ano" class="form-control" value="{{ competencia_ano }}">
+        </div>
+        <div class="form-group col-md-12 d-flex flex-wrap mt-2" style="gap: 8px;">
+          <button class="btn btn-primary" type="submit">Filtrar</button>
+          <a class="btn btn-outline-secondary" href="?status={{ status_filtro }}&fornecedor={{ fornecedor_filtro }}&marca={{ marca_filtro }}&prioridade={{ prioridade_filtro }}&mes={{ competencia_mes }}&ano={{ competencia_ano }}&export=csv">Exportar CSV</a>
+        </div>
+      </form>
+    </div>
   </div>
 
-  <div class="card mb-3">
-    <div class="card-header bg-white"><strong>Garantias para faturamento</strong></div>
+  <div class="card mb-3 garantia-resumo-card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+      <strong>Garantias para faturamento</strong>
+      <span class="text-muted small">Diverg&ecirc;ncias somadas: R$ {{ resumo.divergencias|floatformat:2 }}</span>
+    </div>
     <div class="card-body p-0 table-responsive">
-      <table class="table table-sm table-bordered mb-0">
+      <table class="table table-sm table-bordered mb-0 garantia-table">
         <thead>
           <tr>
             <th>OS</th>
             <th>Fornecedor</th>
             <th>Marca</th>
-            <th class="text-right">Valor fabricante</th>
-            <th class="text-right">Comissão prevista</th>
+            <th class="text-right">Previsto</th>
+            <th class="text-right">Aprovado</th>
+            <th class="text-right">Recebido</th>
+            <th>Base</th>
+            <th>Prazo</th>
+            <th>Vencimento</th>
             <th>Status</th>
-            <th>Referência</th>
-            <th>Ação</th>
+            <th>Refer&ecirc;ncia</th>
+            <th>A&ccedil;&atilde;o</th>
           </tr>
         </thead>
         <tbody>
           {% for a in garantias %}
-          <tr>
+          <tr class="{% if a.possui_divergencia %}table-warning{% endif %}">
             <td>{{ a.ordem_servico.numero_os }}</td>
-            <td>{{ a.fornecedor.nome|default:"-" }}</td>
+            <td>
+              <div>{{ a.fornecedor.nome|default:"-" }}</div>
+              {% if a.fornecedor %}
+              <div class="small text-muted">{{ a.fornecedor.email_cobranca|default:a.fornecedor.email|default:"Sem email financeiro" }}</div>
+              {% if a.fornecedor.portal_garantia_url %}
+              <div class="small"><a href="{{ a.fornecedor.portal_garantia_url }}" target="_blank" rel="noopener">Abrir portal</a></div>
+              {% endif %}
+              {% endif %}
+            </td>
             <td>{{ a.marca.nome|default:"-" }}</td>
             <td class="text-right">R$ {{ a.valor_previsto_fabricante|floatformat:2 }}</td>
-            <td class="text-right">R$ {{ a.comissao_prevista_tecnica|floatformat:2 }}</td>
+            <td class="text-right">R$ {{ a.valor_aprovado_fabricante|default:0|floatformat:2 }}</td>
+            <td class="text-right">R$ {{ a.valor_recebido_fabricante|default:0|floatformat:2 }}</td>
+            <td>{{ a.data_base_cobranca|date:"d/m/Y"|default:"-" }}</td>
+            <td>{{ a.prazo_pagamento_dias|default:0 }} dias</td>
+            <td>
+              {% if a.vencimento_previsto %}
+              {{ a.vencimento_previsto|date:"d/m/Y" }}
+              {% if a.dias_para_vencimento is not None %}
+              <div class="small {% if a.dias_para_vencimento < 0 %}text-danger{% elif a.dias_para_vencimento <= 5 %}text-warning{% else %}text-muted{% endif %}">
+                {% if a.dias_para_vencimento < 0 %}
+                {{ a.dias_para_vencimento|add:"0"|cut:"-" }} dia(s) em atraso
+                {% elif a.dias_para_vencimento == 0 %}
+                vence hoje
+                {% else %}
+                {{ a.dias_para_vencimento }} dia(s)
+                {% endif %}
+              </div>
+              {% endif %}
+              {% else %}
+              -
+              {% endif %}
+            </td>
             <td>
               {% if a.status_faturamento == "pago" %}
               <span class="badge badge-success">Pago</span>
@@ -98,40 +249,75 @@
               {% else %}
               <span class="badge badge-warning">Pendente</span>
               {% endif %}
+              {% if a.possui_divergencia %}
+              <div class="small text-warning mt-1">Diverg&ecirc;ncia</div>
+              {% endif %}
             </td>
             <td>{{ a.referencia_faturamento|default:"-" }}</td>
-            <td>
-              <form method="post" class="form-inline">
+            <td style="min-width: 360px;">
+              <form method="post">
                 {% csrf_token %}
                 <input type="hidden" name="auditoria_id" value="{{ a.id }}">
-                <select name="status_faturamento" class="form-control form-control-sm mr-1">
-                  <option value="pendente" {% if a.status_faturamento == 'pendente' %}selected{% endif %}>Pendente</option>
-                  <option value="enviado" {% if a.status_faturamento == 'enviado' %}selected{% endif %}>Enviado</option>
-                  <option value="pago" {% if a.status_faturamento == 'pago' %}selected{% endif %}>Pago</option>
-                </select>
-                <input type="text" name="referencia_faturamento" value="{{ a.referencia_faturamento }}" class="form-control form-control-sm mr-1" placeholder="Ref">
-                <button class="btn btn-sm btn-outline-primary" type="submit">Salvar</button>
+                <div class="form-row">
+                  <div class="col-md-4 mb-1">
+                    <select name="status_faturamento" class="form-control form-control-sm">
+                      <option value="pendente" {% if a.status_faturamento == "pendente" %}selected{% endif %}>Pendente</option>
+                      <option value="enviado" {% if a.status_faturamento == "enviado" %}selected{% endif %}>Enviado</option>
+                      <option value="pago" {% if a.status_faturamento == "pago" %}selected{% endif %}>Pago</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4 mb-1">
+                    <input type="number" step="0.01" min="0" name="valor_aprovado_fabricante" value="{{ a.valor_aprovado_fabricante|default_if_none:'' }}" class="form-control form-control-sm" placeholder="Valor aprovado">
+                  </div>
+                  <div class="col-md-4 mb-1">
+                    <input type="number" step="0.01" min="0" name="valor_recebido_fabricante" value="{{ a.valor_recebido_fabricante|default_if_none:'' }}" class="form-control form-control-sm" placeholder="Valor recebido">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="col-md-5 mb-1">
+                    <input type="text" name="referencia_faturamento" value="{{ a.referencia_faturamento }}" class="form-control form-control-sm" placeholder="Refer&ecirc;ncia">
+                  </div>
+                  <div class="col-md-5 mb-1">
+                    <input type="text" name="observacoes" value="{{ a.observacoes }}" class="form-control form-control-sm" placeholder="Observa&ccedil;&otilde;es">
+                  </div>
+                  <div class="col-md-2 mb-1">
+                    <button class="btn btn-sm btn-outline-primary btn-block" type="submit">Salvar</button>
+                  </div>
+                </div>
               </form>
+              {% if a.fornecedor and a.fornecedor.documentos_exigidos or a.fornecedor and a.fornecedor.procedimento_cobranca %}
+              <details class="mt-2 small">
+                <summary class="text-primary" style="cursor:pointer;">Ver cobran&ccedil;a</summary>
+                <div class="mt-2 text-muted">
+                  <div><strong>Documentos:</strong> {{ a.fornecedor.documentos_exigidos|default:"Nao informado"|linebreaksbr }}</div>
+                  <div class="mt-1"><strong>Procedimento:</strong> {{ a.fornecedor.procedimento_cobranca|default:"Nao informado"|linebreaksbr }}</div>
+                </div>
+              </details>
+              {% endif %}
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="8" class="text-center text-muted">Sem registros de garantia.</td></tr>
+          <tr>
+            <td colspan="12" class="text-center text-muted">Sem registros de garantia.</td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
 
-  <div class="card">
+  <div class="card garantia-resumo-card">
     <div class="card-header bg-white"><strong>Resumo mensal por marca e fornecedor</strong></div>
     <div class="card-body p-0 table-responsive">
-      <table class="table table-sm table-bordered mb-0">
+      <table class="table table-sm table-bordered mb-0 garantia-table">
         <thead>
           <tr>
             <th>Fornecedor</th>
             <th>Marca</th>
-            <th class="text-right">Valor pago</th>
-            <th class="text-right">Mão de obra técnico</th>
+            <th class="text-right">Previsto</th>
+            <th class="text-right">Aprovado</th>
+            <th class="text-right">Recebido</th>
+            <th class="text-right">M&atilde;o de obra t&eacute;cnico</th>
             <th class="text-right">Margem</th>
           </tr>
         </thead>
@@ -140,14 +326,16 @@
           <tr>
             <td>{{ r.fornecedor__nome|default:"-" }}</td>
             <td>{{ r.marca__nome|default:"-" }}</td>
-            <td class="text-right">R$ {{ r.total_valor_pago|default:0|floatformat:2 }}</td>
+            <td class="text-right">R$ {{ r.total_previsto|default:0|floatformat:2 }}</td>
+            <td class="text-right">R$ {{ r.total_aprovado|default:0|floatformat:2 }}</td>
+            <td class="text-right">R$ {{ r.total_recebido|default:0|floatformat:2 }}</td>
             <td class="text-right">R$ {{ r.total_mao_tecnico|default:0|floatformat:2 }}</td>
-            <td class="text-right {% if r.margem < 0 %}text-danger{% else %}text-success{% endif %}">
-              R$ {{ r.margem|default:0|floatformat:2 }}
-            </td>
+            <td class="text-right {% if r.margem < 0 %}text-danger{% else %}text-success{% endif %}">R$ {{ r.margem|default:0|floatformat:2 }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="5" class="text-center text-muted">Sem dados para a competência filtrada.</td></tr>
+          <tr>
+            <td colspan="7" class="text-center text-muted">Sem dados para a compet&ecirc;ncia filtrada.</td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>

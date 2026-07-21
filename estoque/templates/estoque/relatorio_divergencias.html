@@ -7,9 +7,74 @@
 {% endblock %}
 
 {% block content %}
+<style>
+  .div-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .div-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f2f7fb 100%);
+    padding: 12px;
+  }
+  .div-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .div-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #183247;
+  }
+  .div-helper {
+    border: 1px solid #d7e4ef;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #f8fbff 0%, #eef5fb 100%);
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  .div-helper strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #183247;
+  }
+  .div-helper span {
+    color: #5d7286;
+    font-size: 13px;
+  }
+  @media (max-width: 991.98px) {
+    .div-summary { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 575.98px) {
+    .div-summary { grid-template-columns: 1fr; }
+  }
+</style>
+
 <div class="mb-3">
   <a href="{% url 'estoque:auditoria_estoque' %}" class="btn btn-outline-primary btn-sm">Abrir auditoria operacional</a>
 </div>
+
+<div class="div-summary">
+  <div class="div-card"><div class="div-label">Pre-reservas antigas</div><div class="div-value">{{ resumo.pre_reservas_antigas }}</div></div>
+  <div class="div-card"><div class="div-label">Reservas vencidas</div><div class="div-value">{{ resumo.reservas_vencidas }}</div></div>
+  <div class="div-card"><div class="div-label">Abaixo do minimo</div><div class="div-value">{{ resumo.abaixo_minimo }}</div></div>
+  <div class="div-card"><div class="div-label">Sem estrutura</div><div class="div-value">{{ resumo.sem_estrutura }}</div></div>
+  <div class="div-card"><div class="div-label">Reservas sem ubicacao</div><div class="div-value">{{ resumo.sem_ubicacao }}</div></div>
+  <div class="div-card"><div class="div-label">Saldos negativos</div><div class="div-value">{{ resumo.negativos }}</div></div>
+  <div class="div-card"><div class="div-label">Ponto x ubicacao</div><div class="div-value">{{ resumo.delta_ponto_ubicacao }}</div></div>
+  <div class="div-card"><div class="div-label">Transferencias pendentes</div><div class="div-value">{{ resumo.transferencias_pendentes }}</div></div>
+</div>
+
+<div class="div-helper">
+  <strong>Como tratar as divergencias</strong>
+  <span>Comece pelas pre-reservas antigas e reservas vencidas, depois confira produtos sem estrutura fisica e saldos negativos. Isso reduz choque entre venda, reserva, contagem e transferencia.</span>
+</div>
+
 {% if total_pre_reservas_antigas > 0 %}
 <div class="alert alert-warning d-flex justify-content-between align-items-center">
   <div>
@@ -66,6 +131,20 @@
       </div>
     </div>
   </div>
+  <div class="col-md-4 mt-3 mt-md-0">
+    <div class="card">
+      <div class="card-header">Itens sem estrutura fisica</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          {% for p in produtos_sem_estrutura %}
+            <li>{{ p.nome }}: ponto {% if p.ponto_operacional %}{{ p.ponto_operacional.codigo }}{% else %}ausente{% endif %} / ubicacao {% if p.ubicacao_padrao %}{{ p.ubicacao_padrao.codigo }}{% else %}ausente{% endif %}</li>
+          {% empty %}
+            <li class="text-muted">Sem pendencias</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
 </div>
 <div class="row mt-3">
   <div class="col-md-6">
@@ -77,6 +156,36 @@
             <li>{{ s.ponto_operacional.codigo }} - {{ s.produto.nome }}: {{ s.quantidade }}</li>
           {% empty %}
             <li class="text-muted">Sem pendencias</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Reservas ativas sem ubicacao valida</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          {% for r in reservas_sem_ubicacao %}
+            <li>{{ r.codigo_reserva }} - {{ r.produto.nome }} - {% if r.ponto_operacional %}{{ r.ponto_operacional.codigo }}{% else %}sem ponto{% endif %}</li>
+          {% empty %}
+            <li class="text-muted">Sem pendencias</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="row mt-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Saldo por ponto x soma das ubicacoes</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          {% for item in saldos_ponto_x_ubicacao %}
+            <li>{{ item.ponto_operacional.codigo }} - {{ item.produto.nome }}: ponto {{ item.saldo_ponto }} / ubicacoes {{ item.saldo_ubicacao }}</li>
+          {% empty %}
+            <li class="text-muted">Sem divergencias</li>
           {% endfor %}
         </ul>
       </div>

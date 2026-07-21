@@ -25,7 +25,35 @@ from .models import (
 )
 from django.contrib.auth.models import Group
 from .services.capabilities import aplicar_preset, listar_presets
+from .services.documentos import formatar_cnpj, normalizar_cnpj, somente_digitos, validar_cnpj_alfanumerico
 from .services.integracoes import listar_eventos_comunicacao
+
+
+def _somente_digitos(valor):
+    return somente_digitos(valor)
+
+
+def _formatar_cnpj(valor):
+    cnpj = normalizar_cnpj(valor)
+    if len(cnpj) != 14:
+        return valor
+    return formatar_cnpj(cnpj)
+
+
+def _formatar_cep(valor):
+    digitos = _somente_digitos(valor)[:8]
+    if len(digitos) != 8:
+        return valor
+    return f"{digitos[:5]}-{digitos[5:]}"
+
+
+def _formatar_telefone_br(valor):
+    digitos = _somente_digitos(valor)[:11]
+    if len(digitos) == 10:
+        return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
+    if len(digitos) < 10:
+        return digitos
+    return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
 
 
 class EmpresaForm(forms.ModelForm):
@@ -59,16 +87,30 @@ class EmpresaForm(forms.ModelForm):
     class Meta:
         model = Empresa
         fields = [
-            'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logo', 'logo_pdf',
+            'nome', 'nome_fantasia', 'razao_social', 'cnpj', 'inscricao_estadual', 'inscricao_municipal',
+            'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'estado',
+            'endereco', 'telefone', 'celular_whatsapp', 'email', 'logo', 'logo_pdf',
             'regime_tributario', 'anexo_simples', 'modo_tributario',
             'aliquota_comercio', 'aliquota_servico',
             'icms', 'ipi', 'pis', 'cofins',
         ]
         widgets = {
             'nome': forms.TextInput(attrs={'class': 'form-control'}),
+            'nome_fantasia': forms.TextInput(attrs={'class': 'form-control'}),
+            'razao_social': forms.TextInput(attrs={'class': 'form-control'}),
             'cnpj': forms.TextInput(attrs={'class': 'form-control'}),
-            'endereco': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'inscricao_estadual': forms.TextInput(attrs={'class': 'form-control'}),
+            'inscricao_municipal': forms.TextInput(attrs={'class': 'form-control'}),
+            'cep': forms.TextInput(attrs={'class': 'form-control'}),
+            'logradouro': forms.TextInput(attrs={'class': 'form-control'}),
+            'numero': forms.TextInput(attrs={'class': 'form-control'}),
+            'complemento': forms.TextInput(attrs={'class': 'form-control'}),
+            'bairro': forms.TextInput(attrs={'class': 'form-control'}),
+            'cidade': forms.TextInput(attrs={'class': 'form-control'}),
+            'estado': forms.Select(attrs={'class': 'form-control'}, choices=ConfiguracaoSistema.ESTADOS_BRASIL),
+            'endereco': forms.HiddenInput(),
             'telefone': forms.TextInput(attrs={'class': 'form-control'}),
+            'celular_whatsapp': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'logo': forms.ClearableFileInput(attrs={'class': 'form-control-file', 'accept': '.png,.jpg,.jpeg,.webp'}),
             'logo_pdf': forms.ClearableFileInput(attrs={'class': 'form-control-file', 'accept': '.png,.jpg,.jpeg,.webp'}),
@@ -85,12 +127,57 @@ class EmpresaForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["nome"].label = "Nome principal"
+        self.fields["nome"].help_text = "Nome usado na interface e como fallback quando nao houver logo."
+        self.fields["nome_fantasia"].label = "Nome fantasia"
+        self.fields["razao_social"].label = "Razao social"
+        self.fields["cnpj"].widget.attrs.update({"placeholder": "00.000.000/0000-00", "inputmode": "text", "autocapitalize": "characters"})
+        self.fields["telefone"].widget.attrs.update({"placeholder": "(00) 0000-0000", "inputmode": "tel"})
+        self.fields["celular_whatsapp"].label = "Celular / WhatsApp"
+        self.fields["celular_whatsapp"].widget.attrs.update({"placeholder": "(00) 00000-0000", "inputmode": "tel"})
+        self.fields["cep"].widget.attrs.update({"placeholder": "00000-000", "inputmode": "numeric"})
+        self.fields["logradouro"].widget.attrs.update({"placeholder": "Rua, avenida, etc"})
+        self.fields["numero"].widget.attrs.update({"placeholder": "Numero"})
+        self.fields["complemento"].widget.attrs.update({"placeholder": "Sala, bloco, referencia..."})
+        self.fields["bairro"].widget.attrs.update({"placeholder": "Bairro"})
+        self.fields["cidade"].widget.attrs.update({"placeholder": "Cidade"})
+        self.fields["estado"].choices = [("", "Selecione")] + list(ConfiguracaoSistema.ESTADOS_BRASIL)
         self.fields["logo"].label = "Logo do sistema"
         self.fields["logo"].help_text = "Aceita PNG, JPG/JPEG ou WEBP. Ao selecionar, o editor abre antes de salvar."
         self.fields["logo_pdf"].label = "Logo dos PDFs"
         self.fields["logo_pdf"].help_text = "Aceita PNG, JPG/JPEG ou WEBP. Ao selecionar, o editor abre antes de salvar."
         self.fields["remover_logo"].label = "Remover logo atual"
         self.fields["remover_logo_pdf"].label = "Remover logo atual"
+        if self.instance and self.instance.pk:
+            self.fields["nome_fantasia"].initial = self.instance.nome_fantasia or self.instance.nome
+
+    def clean_cnpj(self):
+        valor = (self.cleaned_data.get("cnpj") or "").strip()
+        cnpj = normalizar_cnpj(valor)
+        if cnpj and not validar_cnpj_alfanumerico(cnpj):
+            raise forms.ValidationError("Informe um CNPJ válido com 14 caracteres.")
+        return _formatar_cnpj(cnpj) if cnpj else ""
+
+    def clean_cep(self):
+        valor = (self.cleaned_data.get("cep") or "").strip()
+        digitos = _somente_digitos(valor)
+        if digitos and len(digitos) != 8:
+            raise forms.ValidationError("Informe um CEP com 8 digitos.")
+        return _formatar_cep(digitos) if digitos else ""
+
+    def clean_telefone(self):
+        valor = (self.cleaned_data.get("telefone") or "").strip()
+        digitos = _somente_digitos(valor)
+        if digitos and len(digitos) not in {10, 11}:
+            raise forms.ValidationError("Informe um telefone com DDD valido.")
+        return _formatar_telefone_br(digitos) if digitos else ""
+
+    def clean_celular_whatsapp(self):
+        valor = (self.cleaned_data.get("celular_whatsapp") or "").strip()
+        digitos = _somente_digitos(valor)
+        if digitos and len(digitos) not in {10, 11}:
+            raise forms.ValidationError("Informe um celular/WhatsApp com DDD valido.")
+        return _formatar_telefone_br(digitos) if digitos else ""
 
     @classmethod
     def _validar_arquivo_imagem(cls, arquivo, nome_campo):
@@ -210,6 +297,9 @@ class EmpresaForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         self.instance = instance
+        instance.nome_fantasia = (self.cleaned_data.get("nome_fantasia") or "").strip()
+        instance.nome = instance.nome_fantasia or (self.cleaned_data.get("nome") or "").strip()
+        instance.endereco = instance.montar_endereco_compacto()
         novo_logo = self.cleaned_data.get("logo")
         novo_logo_pdf = self.cleaned_data.get("logo_pdf")
         tem_upload_logo = bool(getattr(novo_logo, "content_type", None))
@@ -269,6 +359,7 @@ class UserForm(forms.ModelForm):
             'email',
             'password',
             'tipo_usuario',
+            'atua_como_tecnico',
             'tipo_pessoa',
             'documento_cpf_cnpj',
             'data_nascimento',
@@ -282,6 +373,7 @@ class UserForm(forms.ModelForm):
             'percentual_comissao_servico',
             'percentual_comissao_peca',
             'percentual_comissao_vendas',
+            'perm_venda_mostrador_trocar_vendedor',
             'acesso_ordens_extra',
             'acesso_estoque_extra',
             'acesso_caixa_operacional_extra',
@@ -386,6 +478,8 @@ class UserForm(forms.ModelForm):
             "acesso_caixa_operacional_extra",
             "acesso_caixa_financeiro_extra",
             "acesso_configuracoes_extra",
+            "atua_como_tecnico",
+            "perm_venda_mostrador_trocar_vendedor",
             "perm_os_editar_numero_serie",
             "perm_os_editar_observacoes_internas",
             "perm_os_editar_local_armazenamento",
@@ -427,6 +521,8 @@ class UserForm(forms.ModelForm):
         self.fields["acesso_caixa_operacional_extra"].label = "Caixa operacional"
         self.fields["acesso_caixa_financeiro_extra"].label = "Caixa financeiro"
         self.fields["acesso_configuracoes_extra"].label = "Configuracoes"
+        self.fields["atua_como_tecnico"].label = "Atua como técnico"
+        self.fields["perm_venda_mostrador_trocar_vendedor"].label = "Pode trocar vendedor na venda a mostrador"
 
         self.fields["perm_os_editar_numero_serie"].label = "Editar número de série"
         self.fields["perm_os_editar_observacoes_internas"].label = "Editar observacoes internas da OS"
@@ -483,34 +579,23 @@ class UserForm(forms.ModelForm):
 
     @classmethod
     def _validar_cnpj(cls, cnpj):
-        cnpj = cls._somente_digitos(cnpj)
-        if len(cnpj) != 14 or cnpj == cnpj[0] * 14:
-            return False
-        pesos_1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-        pesos_2 = [6] + pesos_1
-        soma = sum(int(cnpj[i]) * pesos_1[i] for i in range(12))
-        d1 = 11 - (soma % 11)
-        d1 = 0 if d1 >= 10 else d1
-        if d1 != int(cnpj[12]):
-            return False
-        soma = sum(int(cnpj[i]) * pesos_2[i] for i in range(13))
-        d2 = 11 - (soma % 11)
-        d2 = 0 if d2 >= 10 else d2
-        return d2 == int(cnpj[13])
+        return validar_cnpj_alfanumerico(cnpj)
 
     def clean_documento_cpf_cnpj(self):
         raw = (self.cleaned_data.get("documento_cpf_cnpj") or "").strip()
         if not raw:
             return None
-        digits = self._somente_digitos(raw)
         tipo_pessoa = self.cleaned_data.get("tipo_pessoa") or "fisica"
         if tipo_pessoa == "fisica":
+            digits = self._somente_digitos(raw)
             if not self._validar_cpf(digits):
                 raise forms.ValidationError("CPF invalido.")
+            return digits
         else:
-            if not self._validar_cnpj(digits):
+            cnpj = normalizar_cnpj(raw)
+            if not self._validar_cnpj(cnpj):
                 raise forms.ValidationError("CNPJ invalido.")
-        return digits
+            return cnpj
 
     def clean_numero_vendedor(self):
         valor = (self.cleaned_data.get('numero_vendedor') or '').strip()
@@ -543,6 +628,9 @@ class UserForm(forms.ModelForm):
         preset = self.cleaned_data.get("preset_perfil")
         if preset:
             aplicar_preset(user, preset)
+        user.atua_como_tecnico = bool(self.cleaned_data.get("atua_como_tecnico"))
+        if getattr(user, "tipo_usuario", "") == "tecnico":
+            user.atua_como_tecnico = True
         password = self.cleaned_data.get('password')
         if password:
             user.set_password(password)
@@ -555,12 +643,11 @@ class UserForm(forms.ModelForm):
 class ConfiguracaoOrdemServicoForm(forms.ModelForm):
     class Meta:
         model = ConfiguracaoOrdemServico
-        fields = ["prefixo_os", "inicio_id_ordem", "gerar_numero_automatico", "rodape_relatorio"]
+        fields = ["prefixo_os", "inicio_id_ordem", "gerar_numero_automatico"]
         widgets = {
             "prefixo_os": forms.TextInput(attrs={"class": "form-control"}),
             "inicio_id_ordem": forms.NumberInput(attrs={"class": "form-control"}),
             "gerar_numero_automatico": forms.CheckboxInput(attrs={"class": "form-check-input"}),
-            "rodape_relatorio": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
 
 
@@ -568,6 +655,11 @@ class ConfiguracaoOrdemServicoForm(forms.ModelForm):
 class ConfiguracaoSistemaForm(forms.ModelForm):
     MAX_CARACTERES_TERMOS_OS = 1800
     MAX_CARACTERES_CONDICOES_ORCAMENTO = 500
+    rodape_relatorio = forms.CharField(
+        label="Rodape dos relatorios",
+        required=False,
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+    )
 
     class Meta:
         model = ConfiguracaoSistema
@@ -588,15 +680,23 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'estoque_pre_reserva_limpeza_horas',
             'estoque_reposicao_origem_codigo',
             'estoque_reposicao_destino_codigo',
+            'estoque_venda_mostrador_codigos',
+            'estoque_metodo_custo',
             'inventario_ciclico_dias',
             'inventario_ultima_execucao',
             'backup_retencao_dias',
             'lgpd_mascarar_documento',
             'usar_confirmacao_assinatura_digital',
+            'enviar_whatsapp_abertura_os',
+            'mensagem_abertura_whatsapp',
             'mensagem_orcamento_email',
             'mensagem_orcamento_whatsapp',
             'mensagem_pronto_email',
             'mensagem_pronto_whatsapp',
+            'comissao_criterio_os',
+            'comissao_aplicar_pecas',
+            'comissao_bonus_retirada_ativo',
+            'comissao_bonus_produto_ativo',
             'condicoes_orcamento',
             'dias_bonus_retirada_1',
             'valor_bonus_1',
@@ -633,14 +733,18 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'estoque_pre_reserva_limpeza_horas': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 240}),
             'estoque_reposicao_origem_codigo': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 10}),
             'estoque_reposicao_destino_codigo': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 10}),
+            'estoque_venda_mostrador_codigos': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 80, 'placeholder': 'Ex.: PO2,PO3'}),
+            'estoque_metodo_custo': forms.Select(attrs={'class': 'form-control'}),
             'inventario_ciclico_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 365}),
             'inventario_ultima_execucao': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'backup_retencao_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 365}),
             'api_cep_provedor': forms.Select(attrs={'class': 'form-control'}),
+            'mensagem_abertura_whatsapp': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'mensagem_orcamento_email': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'mensagem_orcamento_whatsapp': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'mensagem_pronto_email': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'mensagem_pronto_whatsapp': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'comissao_criterio_os': forms.Select(attrs={'class': 'form-control'}),
             'condicoes_orcamento': forms.Textarea(
                 attrs={
                     'class': 'form-control',
@@ -695,11 +799,20 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com numero da OS na linha de recorte."
         self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressao, relatorio e orcamento)."
         self.fields["layout_documentos_cor"].help_text = "Escolha se os PDFs saem em colorido ou escala de cinza (preto e branco)."
+        self.fields["rodape_relatorio"].help_text = "Texto padrao exibido no final do relatorio tecnico."
+        self.fields["enviar_whatsapp_abertura_os"].help_text = "Permite desligar somente a mensagem automática de abertura, sem afetar a assinatura digital."
+        self.fields["mensagem_abertura_whatsapp"].help_text = "Mensagem padrão enviada quando a OS é criada e o envio automático estiver ativo."
+        self.fields["comissao_criterio_os"].help_text = "Define quando a comissão técnica mensal entra na apuração: OS pronta/contactada ou apenas OS entregue."
+        self.fields["comissao_aplicar_pecas"].help_text = "Ative apenas se sua operação pagar comissão sobre peças aplicadas na OS."
+        self.fields["comissao_bonus_retirada_ativo"].help_text = "Mantém o bônus por retirada rápida disponível. Recomendado deixar desligado no modelo atual."
+        self.fields["comissao_bonus_produto_ativo"].help_text = "Liga ou desliga o bônus comercial por produto na venda a mostrador, sem apagar os valores cadastrados nos itens."
         self.fields["sla_dias_os_sem_movimentacao"].help_text = "Quantidade de dias sem evolução para sinalizar OS parada no painel."
         self.fields["estoque_reserva_os_validade_dias"].help_text = "Dias de validade para reservas automaticas criadas ao adicionar pecas na OS."
         self.fields["estoque_pre_reserva_limpeza_horas"].help_text = "Tempo maximo de uma pre-reserva de venda a mostrador antes do cancelamento automatico."
         self.fields["estoque_reposicao_origem_codigo"].help_text = "Codigo do ponto operacional de origem na reposicao inteligente."
         self.fields["estoque_reposicao_destino_codigo"].help_text = "Codigo do ponto operacional de destino na reposicao inteligente."
+        self.fields["estoque_venda_mostrador_codigos"].help_text = "Informe os codigos dos pontos que podem vender no balcao, separados por virgula."
+        self.fields["estoque_metodo_custo"].help_text = "Define como o custo das saidas sera calculado: PMP ou PEPS."
         self.fields["garantia_padrao_servico_dias"].help_text = "Usado quando a OS original não possui item com garantia definida."
         self.fields["garantia_padrao_peca_dias"].help_text = "Prazo base para retorno vinculado a peça sem garantia específica."
         self.fields["garantia_reincidencia_janela_dias"].help_text = "Janela para sugerir possível reincidência no ato da abertura."
@@ -731,6 +844,17 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
     def clean_estoque_reposicao_destino_codigo(self):
         valor = (self.cleaned_data.get("estoque_reposicao_destino_codigo") or "PO3").strip().upper()
         return valor
+
+    def clean_estoque_venda_mostrador_codigos(self):
+        bruto = (self.cleaned_data.get("estoque_venda_mostrador_codigos") or "").strip().upper()
+        itens = []
+        for parte in bruto.split(","):
+            codigo = (parte or "").strip()
+            if codigo and codigo not in itens:
+                itens.append(codigo)
+        if not itens:
+            raise forms.ValidationError("Informe pelo menos um ponto operacional para venda a mostrador.")
+        return ",".join(itens)
 
     def clean(self):
         cleaned = super().clean()
@@ -783,11 +907,17 @@ class FornecedorGarantiaForm(forms.ModelForm):
             "telefone",
             "endereco",
             "cep",
+            "municipio",
+            "uf",
             "email",
+            "email_cobranca",
+            "portal_garantia_url",
             "modalidade_pagamento",
             "prazo_pagamento_dias",
             "detalhes",
             "contrato",
+            "documentos_exigidos",
+            "procedimento_cobranca",
             "documento_anexo",
             "comprovante_pagamento_anexo",
             "ativo",
@@ -801,14 +931,42 @@ class FornecedorGarantiaForm(forms.ModelForm):
             "telefone": forms.TextInput(attrs={"class": "form-control", "placeholder": "(11) 99999-9999", "inputmode": "numeric"}),
             "endereco": forms.TextInput(attrs={"class": "form-control"}),
             "cep": forms.TextInput(attrs={"class": "form-control", "placeholder": "00000-000", "inputmode": "numeric"}),
+            "municipio": forms.TextInput(attrs={"class": "form-control"}),
+            "uf": forms.Select(attrs={"class": "form-control"}, choices=ConfiguracaoSistema.ESTADOS_BRASIL),
             "email": forms.EmailInput(attrs={"class": "form-control"}),
+            "email_cobranca": forms.EmailInput(attrs={"class": "form-control"}),
+            "portal_garantia_url": forms.URLInput(attrs={"class": "form-control", "placeholder": "https://portal.fabricante.com"}),
             "modalidade_pagamento": forms.Select(attrs={"class": "form-control"}),
             "prazo_pagamento_dias": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
             "detalhes": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
             "contrato": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "documentos_exigidos": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "procedimento_cobranca": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
             "documento_anexo": forms.ClearableFileInput(attrs={"class": "form-control-file"}),
             "comprovante_pagamento_anexo": forms.ClearableFileInput(attrs={"class": "form-control-file"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["endereco"].label = "Endereco / logradouro"
+        self.fields["endereco"].help_text = "Rua, avenida, numero base ou referencia principal."
+        self.fields["municipio"].label = "Municipio"
+        self.fields["municipio"].widget.attrs.update({"placeholder": "Cidade / municipio"})
+        self.fields["uf"].label = "UF"
+        self.fields["uf"].choices = [("", "Selecione")] + list(ConfiguracaoSistema.ESTADOS_BRASIL)
+        self.fields["uf"].help_text = "Estado principal de faturamento, coleta ou atendimento."
+        self.fields["cep"].help_text = "Informe o CEP principal deste fornecedor."
+        self.fields["telefone"].help_text = "Telefone principal com DDD."
+        self.fields["email_cobranca"].label = "Email de cobranca/faturamento"
+        self.fields["email_cobranca"].help_text = "Use quando a marca ou fornecedor separa o contato financeiro do contato geral."
+        self.fields["portal_garantia_url"].label = "Portal da marca / garantia"
+        self.fields["portal_garantia_url"].help_text = "Link direto para o portal, intranet ou pagina onde a garantia/faturamento e tratada."
+        self.fields["detalhes"].help_text = "Use para observacoes operacionais, canais de atendimento ou regras internas."
+        self.fields["contrato"].help_text = "Resumo contratual, SLA da marca ou combinados comerciais."
+        self.fields["documentos_exigidos"].label = "Documentos exigidos na cobranca"
+        self.fields["documentos_exigidos"].help_text = "Ex.: NF, laudo, ordem fechada, foto da etiqueta, comprovante, XML."
+        self.fields["procedimento_cobranca"].label = "Procedimento de cobranca/faturamento"
+        self.fields["procedimento_cobranca"].help_text = "Descreva como cobrar, enviar documentos, acompanhar prazo e tratar glosas."
 
     @staticmethod
     def _somente_digitos(value):
@@ -818,10 +976,10 @@ class FornecedorGarantiaForm(forms.ModelForm):
         raw = (self.cleaned_data.get("cnpj") or "").strip()
         if not raw:
             return ""
-        digits = self._somente_digitos(raw)
-        if len(digits) != 14:
-            raise forms.ValidationError("Informe um CNPJ valido com 14 digitos.")
-        return digits
+        cnpj = normalizar_cnpj(raw)
+        if not validar_cnpj_alfanumerico(cnpj):
+            raise forms.ValidationError("Informe um CNPJ válido com 14 caracteres.")
+        return formatar_cnpj(cnpj)
 
     def clean_telefone(self):
         raw = (self.cleaned_data.get("telefone") or "").strip()
@@ -841,11 +999,17 @@ class FornecedorGarantiaForm(forms.ModelForm):
             raise forms.ValidationError("Informe um CEP valido com 8 digitos.")
         return digits
 
+    def clean_municipio(self):
+        return " ".join(str(self.cleaned_data.get("municipio") or "").strip().split())
+
+    def clean_uf(self):
+        return (self.cleaned_data.get("uf") or "").strip().upper()
+
 
 class MarcaGarantiaForm(forms.ModelForm):
     fornecedor_igual_marca = forms.BooleanField(
         required=False,
-        label="Fornecedor igual a marca",
+        label="Criar fornecedor com o mesmo nome da marca",
     )
 
     class Meta:
@@ -856,6 +1020,26 @@ class MarcaGarantiaForm(forms.ModelForm):
             "fornecedor": forms.Select(attrs={"class": "form-control"}),
             "procedimentos": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["fornecedor"].required = False
+        self.fields["fornecedor"].help_text = (
+            "Opcional. Vincule quando a marca tambem depende de um fornecedor homologado ou quando o fabricante atende direto."
+        )
+        self.fields["fornecedor_igual_marca"].help_text = (
+            "Use quando a propria marca tambem funciona como fornecedora no dia a dia."
+        )
+        self.fields["parceira_garantia"].help_text = (
+            "Marque somente quando existir fluxo de garantia ativo com esta marca."
+        )
+        self.fields["procedimentos"].label = "Procedimento operacional da marca"
+        self.fields["procedimentos"].widget.attrs["placeholder"] = (
+            "Ex.: abrir chamado no portal, anexar NF, aguardar aprovacao, faturar mao de obra em 30 dias."
+        )
+        self.fields["procedimentos"].help_text = (
+            "Descreva como abrir garantia, aprovar servico, enviar comprovantes, faturar mao de obra e tratar excecoes."
+        )
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -974,37 +1158,104 @@ class TipoEquipamentoConfigForm(forms.ModelForm):
 
 class SetupInicialSistemaForm(forms.Form):
     nome_empresa = forms.CharField(
-        label="Nome da empresa",
+        label="Nome fantasia / nome da loja",
         max_length=200,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex: ABTech Service Center"}),
+    )
+    razao_social = forms.CharField(
+        label="Razao social",
+        required=False,
+        max_length=220,
         widget=forms.TextInput(attrs={"class": "form-control"}),
     )
     cnpj = forms.CharField(
-        label="CNPJ (opcional)",
+        label="CNPJ",
         required=False,
         max_length=18,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "00.000.000/0000-00", "inputmode": "text", "autocapitalize": "characters"}),
+    )
+    inscricao_estadual = forms.CharField(
+        label="Inscricao estadual",
+        required=False,
+        max_length=30,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    inscricao_municipal = forms.CharField(
+        label="Inscricao municipal",
+        required=False,
+        max_length=30,
         widget=forms.TextInput(attrs={"class": "form-control"}),
     )
     telefone = forms.CharField(
-        label="Telefone (opcional)",
+        label="Telefone",
         required=False,
         max_length=20,
-        widget=forms.TextInput(attrs={"class": "form-control"}),
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "(00) 0000-0000", "inputmode": "tel"}),
+    )
+    celular_whatsapp = forms.CharField(
+        label="Celular / WhatsApp",
+        required=False,
+        max_length=20,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "(00) 00000-0000", "inputmode": "tel"}),
     )
     email = forms.EmailField(
-        label="Email (opcional)",
+        label="Email",
         required=False,
         widget=forms.EmailInput(attrs={"class": "form-control"}),
     )
-    endereco = forms.CharField(
-        label="Endereco (opcional)",
+    cep = forms.CharField(
+        label="CEP",
         required=False,
-        widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+        max_length=9,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "00000-000", "inputmode": "numeric"}),
+    )
+    logradouro = forms.CharField(
+        label="Logradouro",
+        required=False,
+        max_length=180,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Rua, avenida, etc"}),
+    )
+    numero = forms.CharField(
+        label="Numero",
+        required=False,
+        max_length=20,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Numero"}),
+    )
+    complemento = forms.CharField(
+        label="Complemento",
+        required=False,
+        max_length=120,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Sala, bloco, referencia..."}),
+    )
+    bairro = forms.CharField(
+        label="Bairro",
+        required=False,
+        max_length=120,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    cidade = forms.CharField(
+        label="Cidade",
+        required=False,
+        max_length=120,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    estado = forms.ChoiceField(
+        label="Estado",
+        required=False,
+        choices=[("", "Selecione")] + list(ConfiguracaoSistema.ESTADOS_BRASIL),
+        widget=forms.Select(attrs={"class": "form-control"}),
     )
     prefixo_os = forms.CharField(
         label="Prefixo da OS",
         max_length=10,
         initial="OS",
         widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    inicio_id_ordem = forms.IntegerField(
+        label="Numero inicial da OS",
+        min_value=1,
+        initial=1,
+        widget=forms.NumberInput(attrs={"class": "form-control"}),
     )
     tipo_empresa = forms.ChoiceField(
         label="Tipo de empresa",
@@ -1038,6 +1289,34 @@ class SetupInicialSistemaForm(forms.Form):
         if not valor:
             raise forms.ValidationError("Informe o prefixo da OS.")
         return valor.upper()
+
+    def clean_cnpj(self):
+        valor = (self.cleaned_data.get("cnpj") or "").strip()
+        cnpj = normalizar_cnpj(valor)
+        if cnpj and not validar_cnpj_alfanumerico(cnpj):
+            raise forms.ValidationError("Informe um CNPJ válido com 14 caracteres.")
+        return _formatar_cnpj(cnpj) if cnpj else ""
+
+    def clean_cep(self):
+        valor = (self.cleaned_data.get("cep") or "").strip()
+        digitos = _somente_digitos(valor)
+        if digitos and len(digitos) != 8:
+            raise forms.ValidationError("Informe um CEP com 8 digitos.")
+        return _formatar_cep(digitos) if digitos else ""
+
+    def clean_telefone(self):
+        valor = (self.cleaned_data.get("telefone") or "").strip()
+        digitos = _somente_digitos(valor)
+        if digitos and len(digitos) not in {10, 11}:
+            raise forms.ValidationError("Informe um telefone com DDD valido.")
+        return _formatar_telefone_br(digitos) if digitos else ""
+
+    def clean_celular_whatsapp(self):
+        valor = (self.cleaned_data.get("celular_whatsapp") or "").strip()
+        digitos = _somente_digitos(valor)
+        if digitos and len(digitos) not in {10, 11}:
+            raise forms.ValidationError("Informe um celular/WhatsApp com DDD valido.")
+        return _formatar_telefone_br(digitos) if digitos else ""
 
     def clean(self):
         cleaned = super().clean()

@@ -68,3 +68,5 @@ backups/
 db.sqlite3.bkp*
 pgdata_codex/
 .codex_encoding_scan*.txt
+.run/
+media_before_restore_*.zip

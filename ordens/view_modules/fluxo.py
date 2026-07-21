@@ -10,6 +10,7 @@ from configuracoes.permissions import ORDER_ROLES, RoleRequiredMixin, require_se
 
 from ..models import LinhaTrabalho, OrdemServico
 from ..services.os_policy_service import OSAccessPolicyService
+from ..services.tecnicos import usuarios_tecnicos_qs
 from ..utils import registrar_auditoria
 from .common import log_os, recalcular_comissoes_itens_antecipado
 from .fluxo_core import (
@@ -172,10 +173,14 @@ def atualizar_observacoes(request, os_id):
 @role_required(ORDER_ROLES)
 def atualizar_tecnico(request, os_id):
     if request.method != "POST":
-        return JsonResponse({"success": False, "message": "Método inválido."}, status=400)
+        return JsonResponse({"success": False, "message": "Metodo invalido."}, status=400)
 
     try:
-        data = json.loads(request.body)
+        try:
+            data = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"success": False, "message": "Dados invalidos."}, status=400)
+
         tecnico_id = data.get("tecnico_id")
         ordem = OrdemServico.objects.get(id=os_id)
         try:
@@ -183,27 +188,27 @@ def atualizar_tecnico(request, os_id):
             require_sensitive_permission(
                 request.user,
                 "perm_os_alterar_tecnico",
-                message="Você não tem permissão para alterar o técnico responsável desta OS.",
+                message="Voce nao tem permissao para alterar o tecnico responsavel desta OS.",
             )
         except ValueError as exc:
             return JsonResponse({"success": False, "message": str(exc)}, status=400)
         except PermissionDenied as exc:
-            return JsonResponse({"success": False, "message": str(exc) or "Permissão insuficiente."}, status=403)
+            return JsonResponse({"success": False, "message": str(exc) or "Permissao insuficiente."}, status=403)
 
         if tecnico_id:
             tecnico = usuarios_tecnicos_qs(empresa=ordem.empresa).get(id=tecnico_id)
             ordem.tecnico_responsavel = tecnico
-            ordem.save()
+            ordem.save(update_fields=["tecnico_responsavel"])
             log_os(
                 ordem,
                 "edicao_critica",
-                f"Técnico responsável alterado para {tecnico.username}.",
+                f"Tecnico responsavel alterado para {tecnico.username}.",
                 usuario=request.user,
                 dados_extras={"tecnico_id": tecnico.id},
             )
-            LinhaTrabalho.objects.create(
+            linha = LinhaTrabalho.objects.create(
                 ordem=ordem,
-                descricao=f"Técnico responsável alterado para {tecnico.username}",
+                descricao=f"Tecnico responsavel alterado para {tecnico.username}",
                 status=ordem.status,
                 usuario=request.user,
                 tipo_evento="manual",
@@ -215,22 +220,56 @@ def atualizar_tecnico(request, os_id):
                 ordem=ordem,
                 extra={"tecnico_id": tecnico.id, "tecnico_username": tecnico.username},
             )
-            return JsonResponse({"success": True, "message": "Técnico atualizado com sucesso!"})
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": "Tecnico atualizado com sucesso!",
+                    "tecnico_nome": tecnico.get_full_name() or tecnico.username,
+                    "linha": {
+                        "status": linha.get_status_display(),
+                        "tipo_evento": linha.get_tipo_evento_display(),
+                        "descricao": linha.descricao,
+                        "usuario": linha.usuario.username if linha.usuario else "",
+                        "data": localtime(linha.criado_em).strftime("%d/%m/%Y %H:%M"),
+                    },
+                }
+            )
 
         ordem.tecnico_responsavel = None
-        ordem.save()
+        ordem.save(update_fields=["tecnico_responsavel"])
         log_os(
             ordem,
             "edicao_critica",
-            "Técnico responsável removido.",
+            "Tecnico responsavel removido.",
             usuario=request.user,
             dados_extras={},
         )
+        linha = LinhaTrabalho.objects.create(
+            ordem=ordem,
+            descricao="Tecnico responsavel removido.",
+            status=ordem.status,
+            usuario=request.user,
+            tipo_evento="manual",
+        )
         registrar_auditoria(logger, request, "tecnico_os_removido", ordem=ordem)
-        return JsonResponse({"success": True, "message": "Técnico removido."})
+        return JsonResponse(
+            {
+                "success": True,
+                "message": "Tecnico removido.",
+                "tecnico_nome": "",
+                "linha": {
+                    "status": linha.get_status_display(),
+                    "tipo_evento": linha.get_tipo_evento_display(),
+                    "descricao": linha.descricao,
+                    "usuario": linha.usuario.username if linha.usuario else "",
+                    "data": localtime(linha.criado_em).strftime("%d/%m/%Y %H:%M"),
+                },
+            }
+        )
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Tecnico nao encontrado ou sem perfil tecnico."}, status=404)
     except OrdemServico.DoesNotExist:
-        return JsonResponse({"success": False, "message": "OS não encontrada."}, status=404)
-
+        return JsonResponse({"success": False, "message": "OS nao encontrada."}, status=404)
 
 @role_required(ORDER_ROLES)
 def atualizar_numero_serie(request, os_id):

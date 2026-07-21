@@ -49,6 +49,10 @@ class Pagamento(models.Model):
     caixa = models.ForeignKey("Caixa", on_delete=models.CASCADE, related_name="pagamentos", null=True, blank=True)
     ordem_servico = models.ForeignKey("ordens.OrdemServico", on_delete=models.SET_NULL, null=True, blank=True)
     stock_item = models.ForeignKey("estoque.Produto", on_delete=models.SET_NULL, null=True, blank=True)
+    cliente_nome = models.CharField(max_length=120, blank=True)
+    cliente_documento = models.CharField(max_length=30, blank=True)
+    cliente_telefone = models.CharField(max_length=30, blank=True)
+    formas_pagamento_compostas = models.JSONField(default=list, blank=True)
     valor = models.DecimalField(max_digits=10, decimal_places=2)
     desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     desconto_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -76,6 +80,28 @@ class Pagamento(models.Model):
     @property
     def valor_liquidado(self):
         return (self.valor or Decimal("0.00")) + (self.desconto or Decimal("0.00"))
+
+    @property
+    def pagamento_misto(self):
+        return len(self.formas_pagamento_compostas or []) > 1
+
+    @property
+    def composicao_pagamento_legivel(self):
+        composicao = self.formas_pagamento_compostas or []
+        linhas = []
+        for item in composicao:
+            nome = (item or {}).get("forma_nome") or "-"
+            valor = Decimal(str((item or {}).get("valor") or "0"))
+            referencia = (item or {}).get("referencia") or ""
+            trecho = f"{nome}: R$ {valor:.2f}"
+            if referencia:
+                trecho = f"{trecho} ({referencia})"
+            linhas.append(trecho)
+        if linhas:
+            return linhas
+        if self.forma_pagamento:
+            return [f"{self.forma_pagamento.nome}: R$ {Decimal(self.valor or Decimal('0.00')):.2f}"]
+        return []
 
     def __str__(self):
         origem = (
@@ -134,6 +160,12 @@ class CategoriaFinanceira(models.Model):
 
     class Meta:
         ordering = ["nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["nome", "tipo"],
+                name="caixa_categoria_financeira_nome_tipo_unico",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.nome} ({self.get_tipo_display()})"
@@ -162,11 +194,36 @@ class ContaReceber(models.Model):
     ordem_servico = models.ForeignKey("ordens.OrdemServico", on_delete=models.SET_NULL, null=True, blank=True)
     ponto_operacional = models.ForeignKey("estoque.PontoOperacional", on_delete=models.SET_NULL, null=True, blank=True)
     categoria = models.ForeignKey(CategoriaFinanceira, on_delete=models.SET_NULL, null=True, blank=True)
+    fornecedor_garantia = models.ForeignKey(
+        "configuracoes.FornecedorGarantia",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contas_receber_garantia",
+    )
+    marca_garantia = models.ForeignKey(
+        "configuracoes.MarcaGarantia",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contas_receber_garantia",
+    )
+    regra_garantia = models.ForeignKey(
+        "configuracoes.RegraGarantiaMarca",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contas_receber_garantia",
+    )
     descricao = models.CharField(max_length=200)
     tipo_origem = models.CharField(max_length=24, choices=TIPO_ORIGEM, default="avulso", db_index=True)
     cliente_nome = models.CharField(max_length=120, blank=True)
     valor_original = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     valor_aberto = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valor_aprovado_garantia = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    data_base_cobranca = models.DateField(null=True, blank=True)
+    prazo_pagamento_dias = models.PositiveIntegerField(default=0)
+    referencia_cobranca = models.CharField(max_length=80, blank=True)
     vencimento = models.DateField()
     status = models.CharField(max_length=12, choices=STATUS, default="aberta")
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -177,6 +234,28 @@ class ContaReceber(models.Model):
 
     def __str__(self):
         return f"{self.descricao} - {self.get_status_display()} - {self.valor_aberto}"
+
+    @property
+    def eh_garantia_fabricante(self):
+        return self.tipo_origem == "garantia_fabricante"
+
+    @property
+    def dias_para_vencimento(self):
+        if not self.vencimento:
+            return None
+        return (self.vencimento - timezone.localdate()).days
+
+    @property
+    def valor_recebido_total(self):
+        return max(Decimal("0.00"), (self.valor_original or Decimal("0.00")) - (self.valor_aberto or Decimal("0.00")))
+
+    @property
+    def possui_divergencia_garantia(self):
+        if not self.eh_garantia_fabricante:
+            return False
+        valor_aprovado = Decimal(self.valor_aprovado_garantia or Decimal("0.00"))
+        valor_original = Decimal(self.valor_original or Decimal("0.00"))
+        return valor_aprovado > Decimal("0.00") and valor_aprovado != valor_original
 
     def atualizar_status_automatico(self):
         if self.status == "cancelada":
@@ -529,7 +608,7 @@ class FaixaPremioMeta(models.Model):
 
     def __str__(self):
         teto = self.meta_maxima if self.meta_maxima is not None else "sem teto"
-        return f"{self.regra.nome}: {self.meta_minima} at? {teto} => {self.premio_valor}"
+        return f"{self.regra.nome}: {self.meta_minima} ate {teto} => {self.premio_valor}"
 
 
 class PremioColaboradorCompetencia(models.Model):
@@ -679,11 +758,23 @@ class AuditoriaGarantia(models.Model):
     ]
 
     ordem_servico = models.OneToOneField("ordens.OrdemServico", on_delete=models.CASCADE, related_name="auditoria_garantia")
+    conta_receber = models.OneToOneField(
+        "ContaReceber",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="auditoria_garantia_vinculada",
+    )
     fornecedor = models.ForeignKey("configuracoes.FornecedorGarantia", on_delete=models.SET_NULL, null=True, blank=True)
     marca = models.ForeignKey("configuracoes.MarcaGarantia", on_delete=models.SET_NULL, null=True, blank=True)
     regra_garantia = models.ForeignKey("configuracoes.RegraGarantiaMarca", on_delete=models.SET_NULL, null=True, blank=True)
     valor_previsto_fabricante = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valor_aprovado_fabricante = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valor_recebido_fabricante = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     comissao_prevista_tecnica = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    data_base_cobranca = models.DateField(null=True, blank=True)
+    prazo_pagamento_dias = models.PositiveIntegerField(default=0)
+    vencimento_previsto = models.DateField(null=True, blank=True)
     status_faturamento = models.CharField(max_length=20, choices=STATUS_FATURAMENTO, default="pendente")
     referencia_faturamento = models.CharField(max_length=80, blank=True)
     observacoes = models.TextField(blank=True)
@@ -695,6 +786,31 @@ class AuditoriaGarantia(models.Model):
 
     def __str__(self):
         return f"Auditoria garantia {self.ordem_servico.numero_os} - {self.get_status_faturamento_display()}"
+
+    @property
+    def valor_em_aberto(self):
+        alvo = self.conta_receber
+        if alvo:
+            return alvo.valor_aberto or Decimal("0.00")
+        base = self.valor_aprovado_fabricante or self.valor_previsto_fabricante or Decimal("0.00")
+        return max(Decimal("0.00"), Decimal(base) - Decimal(self.valor_recebido_fabricante or Decimal("0.00")))
+
+    @property
+    def dias_para_vencimento(self):
+        if not self.vencimento_previsto:
+            return None
+        return (self.vencimento_previsto - timezone.localdate()).days
+
+    @property
+    def possui_divergencia(self):
+        valor_previsto = Decimal(self.valor_previsto_fabricante or Decimal("0.00"))
+        valor_aprovado = Decimal(self.valor_aprovado_fabricante or Decimal("0.00"))
+        valor_recebido = Decimal(self.valor_recebido_fabricante or Decimal("0.00"))
+        if valor_aprovado > Decimal("0.00") and valor_aprovado != valor_previsto:
+            return True
+        if valor_recebido > Decimal("0.00") and valor_aprovado > Decimal("0.00") and valor_recebido != valor_aprovado:
+            return True
+        return False
 
 
 class ContaPagar(models.Model):

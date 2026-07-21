@@ -45,6 +45,19 @@ class FluxoOrcamentoService:
                 ordem.status = "orcamentado"
                 ordem.save(update_fields=["status"])
                 status_ordem_atual = ordem.status
+            if itens:
+                itens_descritos = ", ".join(item.nome for item in itens[:3])
+                if len(itens) > 3:
+                    itens_descritos = f"{itens_descritos} e mais {len(itens) - 3}"
+                LinhaTrabalho.objects.create(
+                    ordem=ordem,
+                    status=ordem.status,
+                    descricao=(
+                        f"{len(itens)} item(ns) do orcamento aprovados pelo cliente: {itens_descritos}."
+                    ),
+                    usuario=usuario,
+                    tipo_evento="manual",
+                )
             if not orcamento.itens.filter(status="pendente").exists():
                 orcamento.status = "aprovado"
                 orcamento.save(update_fields=["status"])

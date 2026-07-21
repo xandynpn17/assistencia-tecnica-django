@@ -40,6 +40,43 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
   }
+  .mov-flow-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .mov-flow-btn {
+    border: 1px solid #dce6ef;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 14px;
+    text-align: left;
+    transition: .18s ease;
+    cursor: pointer;
+  }
+  .mov-flow-btn.is-active {
+    border-color: #2b7fff;
+    box-shadow: 0 0 0 3px rgba(43, 127, 255, 0.12);
+    background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
+  }
+  .mov-flow-btn strong {
+    display: block;
+    color: #183247;
+    margin-bottom: 4px;
+  }
+  .mov-flow-btn span {
+    color: #607286;
+    font-size: .84rem;
+  }
+  .mov-context {
+    border: 1px solid #dce6ef;
+    border-radius: 12px;
+    background: #f8fbff;
+    color: #24415d;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+  }
   .mov-field-full {
     grid-column: 1 / -1;
   }
@@ -109,7 +146,8 @@
   }
   @media (max-width: 991.98px) {
     .mov-shell,
-    .mov-grid {
+    .mov-grid,
+    .mov-flow-grid {
       grid-template-columns: 1fr;
     }
   }
@@ -136,6 +174,33 @@
 
       <div class="mov-alert">
         Escolha primeiro o artigo e depois o tipo de movimentacao. O formulario ajusta origem e destino conforme o fluxo escolhido.
+      </div>
+
+      <div class="mov-flow-grid">
+        <button type="button" class="mov-flow-btn" data-flow="entrada" data-tipo="entrada">
+          <strong>Receber entrada</strong>
+          <span>Chegada de mercadoria ao estoque com custo.</span>
+        </button>
+        <button type="button" class="mov-flow-btn" data-flow="transferencia" data-tipo="transferencia">
+          <strong>Transferir item</strong>
+          <span>Mover entre pontos e ubicacoes com rastreabilidade.</span>
+        </button>
+        <button type="button" class="mov-flow-btn" data-flow="ajuste" data-tipo="ajuste">
+          <strong>Corrigir saldo</strong>
+          <span>Ajuste manual com motivo obrigatorio.</span>
+        </button>
+        <button type="button" class="mov-flow-btn" data-flow="avaria" data-tipo="avaria">
+          <strong>Registrar avaria</strong>
+          <span>Perda, dano ou item fora de condicao de venda.</span>
+        </button>
+        <button type="button" class="mov-flow-btn" data-flow="inventario" data-tipo="inventario">
+          <strong>Ajuste de inventario</strong>
+          <span>Acerto identificado durante conferencia fisica.</span>
+        </button>
+      </div>
+
+      <div class="mov-context" id="mov-contexto">
+        Selecione uma intencao operacional acima para o sistema preparar os campos principais.
       </div>
 
       <form method="post" novalidate>
@@ -181,6 +246,14 @@
           </div>
 
           <div>
+            <label class="mov-label" for="{{ form.origem_ubicacao.id_for_label }}">Ubicacao de origem</label>
+            {{ form.origem_ubicacao }}
+            {% if form.origem_ubicacao.errors %}
+            <div class="text-danger small mt-1">{{ form.origem_ubicacao.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div>
             <label class="mov-label" for="{{ form.destino.id_for_label }}">Destino</label>
             {{ form.destino }}
             {% if form.destino.errors %}
@@ -189,12 +262,21 @@
           </div>
 
           <div>
-            <label class="mov-label" for="{{ form.destino_ubicacao.id_for_label }}">Ubicacao de destino</label>
+            <label class="mov-label" for="{{ form.destino_ubicacao_ref.id_for_label }}">Ubicacao de destino</label>
+            {{ form.destino_ubicacao_ref }}
+            {% if form.destino_ubicacao_ref.errors %}
+            <div class="text-danger small mt-1">{{ form.destino_ubicacao_ref.errors|join:", " }}</div>
+            {% endif %}
+            <div class="mov-help">Selecione a posicao fisica vinculada ao ponto de destino.</div>
+          </div>
+
+          <div>
+            <label class="mov-label" for="{{ form.destino_ubicacao.id_for_label }}">Complemento da ubicacao</label>
             {{ form.destino_ubicacao }}
             {% if form.destino_ubicacao.errors %}
             <div class="text-danger small mt-1">{{ form.destino_ubicacao.errors|join:", " }}</div>
             {% endif %}
-            <div class="mov-help">Preencha quando a movimentacao exigir enderecamento interno.</div>
+            <div class="mov-help">Opcional. Use apenas quando precisar detalhar ainda mais o endereco.</div>
           </div>
 
           <div>
@@ -274,43 +356,106 @@ document.addEventListener("DOMContentLoaded", function () {
   const filtro = document.getElementById("filtroProduto");
   const select = document.getElementById("id_produto");
   const tipo = document.getElementById("id_tipo");
+  const fluxoBotoes = Array.from(document.querySelectorAll("[data-flow]"));
   const origem = document.getElementById("id_origem");
   const destino = document.getElementById("id_destino");
+  const origemUbicacao = document.getElementById("id_origem_ubicacao");
+  const destinoUbicacao = document.getElementById("id_destino_ubicacao_ref");
   const custo = document.getElementById("id_valor_unitario_custo");
+  const contexto = document.getElementById("mov-contexto");
 
-  if (!filtro || !select) return;
+  const fluxoContexto = {
+    entrada: "Fluxo de entrada: informa o destino fisico e, se quiser, o custo unitario da entrada para atualizar o custo do item.",
+    transferencia: "Fluxo de transferencia: exige origem e destino diferentes, com ubicacoes coerentes em cada ponta.",
+    ajuste: "Fluxo de correcao: use para acertar saldo quando houver divergencia operacional. Observacao obrigatoria.",
+    avaria: "Fluxo de avaria: registra perda ou dano no estoque. Informe a causa na observacao.",
+    inventario: "Fluxo de inventario: use para ajuste identificado em contagem fisica. Observacao obrigatoria.",
+  };
 
-  const options = Array.from(select.options).map(function (option) {
-    return { value: option.value, text: option.text };
-  });
+  if (filtro && select) {
+    const options = Array.from(select.options).map(function (option) {
+      return { value: option.value, text: option.text };
+    });
 
-  filtro.addEventListener("input", function () {
-    const q = filtro.value.toLowerCase().trim();
-    const atual = select.value;
-    select.innerHTML = "";
-    options.forEach(function (option) {
-      if (!q || option.text.toLowerCase().includes(q)) {
-        const el = document.createElement("option");
-        el.value = option.value;
-        el.textContent = option.text;
-        select.appendChild(el);
+    filtro.addEventListener("input", function () {
+      const q = filtro.value.toLowerCase().trim();
+      const atual = select.value;
+      select.innerHTML = "";
+      options.forEach(function (option) {
+        if (!q || option.text.toLowerCase().includes(q)) {
+          const el = document.createElement("option");
+          el.value = option.value;
+          el.textContent = option.text;
+          select.appendChild(el);
+        }
+      });
+      if (Array.from(select.options).some(function (option) { return option.value === atual; })) {
+        select.value = atual;
       }
     });
-    if (Array.from(select.options).some(function (option) { return option.value === atual; })) {
-      select.value = atual;
+  }
+
+  function filtrarUbicacoes(selectPonto, selectUbicacao) {
+    if (!selectPonto || !selectUbicacao) return;
+    const textoPonto = selectPonto.options[selectPonto.selectedIndex]?.textContent || "";
+    const codigoPonto = textoPonto.split(" - ")[0].trim();
+    let atualValida = false;
+    Array.from(selectUbicacao.options).forEach(function (option) {
+      if (!option.value) {
+        option.hidden = false;
+        option.disabled = false;
+        return;
+      }
+      const codigo = (option.textContent || "").split(" - ")[0].trim();
+      const visivel = !!codigoPonto && codigo === codigoPonto;
+      option.hidden = !visivel;
+      option.disabled = !visivel;
+      if (visivel && option.selected) {
+        atualValida = true;
+      }
+    });
+    if (!atualValida) {
+      selectUbicacao.value = "";
     }
-  });
+  }
 
   function ajustarCamposPorTipo() {
     if (!tipo || !origem || !destino) return;
     const tipoAtual = tipo.value;
     const entrada = tipoAtual === "entrada";
+    const ajusteLocal = ["ajuste", "avaria", "inventario"].includes(tipoAtual);
+    const transferencia = tipoAtual === "transferencia";
 
     origem.disabled = entrada;
+    if (origemUbicacao) {
+      origemUbicacao.disabled = entrada;
+    }
     if (entrada) {
       origem.value = "";
+      if (origemUbicacao) {
+        origemUbicacao.value = "";
+      }
     }
     destino.disabled = false;
+    if (ajusteLocal) {
+      destino.disabled = true;
+      destino.value = "";
+      if (destinoUbicacao) {
+        destinoUbicacao.value = "";
+        destinoUbicacao.disabled = true;
+      }
+    } else {
+      if (destinoUbicacao) {
+        destinoUbicacao.disabled = false;
+      }
+    }
+
+    if (transferencia) {
+      origem.disabled = false;
+      if (origemUbicacao) {
+        origemUbicacao.disabled = false;
+      }
+    }
 
     if (custo) {
       custo.disabled = !entrada;
@@ -318,8 +463,64 @@ document.addEventListener("DOMContentLoaded", function () {
         custo.value = "";
       }
     }
+
+    filtrarUbicacoes(origem, origemUbicacao);
+    filtrarUbicacoes(destino, destinoUbicacao);
+    fluxoBotoes.forEach(function (btn) {
+      btn.classList.toggle("is-active", btn.dataset.tipo === tipoAtual);
+    });
+    if (contexto) {
+      contexto.textContent = fluxoContexto[tipoAtual] || "Revise produto, quantidade e pontos antes de salvar.";
+    }
   }
 
+  function codigoPontoDoProdutoSelecionado() {
+    const texto = select?.options[select.selectedIndex]?.textContent || "";
+    const partes = texto.split("|");
+    const trechoPonto = partes.length >= 4 ? partes[3] : "";
+    return trechoPonto.split("/")[0].trim();
+  }
+
+  function selecionarPontoPorCodigo(selectPonto, codigo) {
+    if (!selectPonto || !codigo) return false;
+    const option = Array.from(selectPonto.options).find(function (item) {
+      return (item.textContent || "").split(" - ")[0].trim() === codigo;
+    });
+    if (!option) return false;
+    selectPonto.value = option.value;
+    return true;
+  }
+
+  function aplicarFluxo(fluxo) {
+    if (!tipo) return;
+    tipo.value = fluxo;
+    const codigoProduto = codigoPontoDoProdutoSelecionado();
+    if (fluxo === "entrada") {
+      selecionarPontoPorCodigo(destino, codigoProduto);
+    } else if (fluxo === "transferencia") {
+      selecionarPontoPorCodigo(origem, codigoProduto);
+    } else if (["ajuste", "avaria", "inventario"].includes(fluxo)) {
+      selecionarPontoPorCodigo(origem, codigoProduto);
+    }
+    ajustarCamposPorTipo();
+  }
+
+  origem?.addEventListener("change", function () {
+    filtrarUbicacoes(origem, origemUbicacao);
+  });
+  destino?.addEventListener("change", function () {
+    filtrarUbicacoes(destino, destinoUbicacao);
+  });
+  select?.addEventListener("change", function () {
+    if (tipo?.value) {
+      aplicarFluxo(tipo.value);
+    }
+  });
+  fluxoBotoes.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      aplicarFluxo(btn.dataset.tipo);
+    });
+  });
   tipo.addEventListener("change", ajustarCamposPorTipo);
   ajustarCamposPorTipo();
 });

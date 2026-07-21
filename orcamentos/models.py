@@ -1,5 +1,6 @@
 # orcamentos/models.py
 from django.db import models
+from django.db.models import Q
 from clientes.models import Cliente
 from ordens.models import OrdemServico
 from decimal import Decimal
@@ -100,7 +101,7 @@ class ItemOrcamento(models.Model):
         null=True,
         blank=True,
         related_name="itens_orcamento_responsavel",
-        limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
+        limit_choices_to=Q(is_active=True) & (Q(tipo_usuario="tecnico") | Q(atua_como_tecnico=True)),
     )
     comissionavel = models.BooleanField(default=True)
 

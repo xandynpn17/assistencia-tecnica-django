@@ -1,4 +1,10 @@
-﻿from . import fluxo_support as _support
+﻿from decimal import Decimal, InvalidOperation
+from . import fluxo_support as _support
+from .common import (
+    registrar_pendente_cliente_envio_orcamento,
+    registrar_pronto_contactado,
+    registrar_recusado_contactado,
+)
 from ..services.anexos import EXTENSOES_IMAGEM, MAX_FOTOS_POR_OS, preparar_arquivo_anexo
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -8,6 +14,19 @@ from ..services import FechamentoOSService, ResumoOperacionalService
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
+
+
+def _aplicar_evento_operacional_modelo(ordem, modelo, usuario, canal):
+    if canal not in {"email", "whatsapp"}:
+        return
+
+    evento_chave = (getattr(modelo, "evento_chave", "") or "").strip()
+    if evento_chave == "orcamento.pronto":
+        registrar_pendente_cliente_envio_orcamento(ordem, usuario, canal)
+    elif evento_chave == "equipamento.pronto":
+        registrar_pronto_contactado(ordem, usuario, canal)
+    elif evento_chave == "equipamento.recusado":
+        registrar_recusado_contactado(ordem, usuario, canal)
 
 class DetalhesOrdemView(RoleRequiredMixin, DetailView):
     allowed_roles = ORDER_ROLES
@@ -480,7 +499,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
             try:
                 valor = Decimal(valor_raw) if valor_raw else None
-            except Exception:
+            except (InvalidOperation, TypeError, ValueError):
                 messages.error(request, "Valor do talão inválido.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
             talao, created = OrdemTalao.objects.get_or_create(
@@ -599,6 +618,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                     usuario=request.user,
                     dados_extras={"canal": canal, "modelo_id": modelo.id, "notificacao_id": notif.id},
                 )
+                _aplicar_evento_operacional_modelo(self.object, modelo, request.user, canal)
                 if resultado.get("url"):
                     messages.success(request, "O WhatsApp foi aberto em nova aba, mantendo a sessão no sistema.")
                     wa = quote(resultado.get("url", ""), safe="")
@@ -916,6 +936,9 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
         messages.warning(request, "A ação enviada não foi reconhecida.")
         return redirect(f"{self.object.get_absolute_url()}?tab={request.GET.get('tab', 'detalhes')}")
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-﻿{% load static %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="{% static 'adminlte/dist/css/adminlte.min.css' %}">
     <link rel="stylesheet" href="{% static 'css/app_ui.css' %}">
     <style>
-      /* Fallback visual: mantÃ©m login usÃ¡vel mesmo sem app_ui.css carregado */
+      /* Fallback visual: mantém login usável mesmo sem app_ui.css carregado */
       body.ui-login-body {
         min-height: 100vh;
         margin: 0;
@@ -87,6 +87,14 @@
 
                     <button type="submit" class="btn btn-primary btn-block">Entrar</button>
                 </form>
+
+                {% if local_recovery_enabled %}
+                <div class="text-center mt-3">
+                    <a href="{% url 'configuracoes:restore_banco_publico' %}" class="small text-muted">
+                        Recuperação local: restaurar backup sem login
+                    </a>
+                </div>
+                {% endif %}
             </div>
         </section>
     </main>

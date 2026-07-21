@@ -1,15 +1,17 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 
 {% block title %}Tipos de Equipamento{% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="card-header">
-    <h5 class="mb-0">Tipos de Equipamento</h5>
-  </div>
-  <div class="card-body">
-    <div class="row">
-      <div class="col-md-5">
+{% include 'configuracoes/partials/_catalogo_atendimento_tabs.html' %}
+<div class="row">
+  <div class="col-lg-4 mb-3">
+    <div class="card card-modern h-100">
+      <div class="card-modern-header">
+        <i class="fas fa-plus-circle"></i> {% if edit_item_id %}Editar tipo{% else %}Novo tipo de equipamento{% endif %}
+      </div>
+      <div class="card-modern-body">
+        <p class="text-muted mb-3">Use esta tela para manter a lista operacional de equipamentos usada na abertura da OS e no atendimento diário.</p>
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="item_id" value="{{ edit_item_id|default:'' }}">
@@ -37,21 +39,36 @@
           {% endif %}
         </form>
       </div>
-      <div class="col-md-7">
+    </div>
+  </div>
+
+  <div class="col-lg-8 mb-3">
+    <div class="card card-modern h-100">
+      <div class="card-modern-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-list"></i> Tipos cadastrados</span>
+        <small class="text-white-50">{{ itens|length }} registros</small>
+      </div>
+      <div class="card-modern-body p-0">
         <div class="table-responsive">
-          <table class="table table-sm table-bordered">
+          <table class="table table-sm table-bordered mb-0">
             <thead>
               <tr>
                 <th>Nome</th>
-                <th>Ativo</th>
-                <th>Ações</th>
+                <th>Status</th>
+                <th style="width: 220px;">Ações</th>
               </tr>
             </thead>
             <tbody>
               {% for item in itens %}
               <tr>
                 <td>{{ item.nome }}</td>
-                <td>{{ item.ativo|yesno:"Sim,Não" }}</td>
+                <td>
+                  {% if item.ativo %}
+                  <span class="badge badge-success">Ativo</span>
+                  {% else %}
+                  <span class="badge badge-secondary">Inativo</span>
+                  {% endif %}
+                </td>
                 <td class="text-nowrap">
                   <a class="btn btn-sm btn-outline-primary" href="?edit={{ item.id }}">Editar</a>
                   <form method="post" class="d-inline">
@@ -71,7 +88,7 @@
                 </td>
               </tr>
               {% empty %}
-              <tr><td colspan="3" class="text-center text-muted">Sem tipos cadastrados.</td></tr>
+              <tr><td colspan="3" class="text-center text-muted py-4">Sem tipos cadastrados.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -81,4 +98,3 @@
   </div>
 </div>
 {% endblock %}
-

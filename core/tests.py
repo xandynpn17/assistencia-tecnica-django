@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from caixa.models import CategoriaFinanceira, ContaPagar, ContaReceber, Pagamento, PagamentoContaPagar
 from clientes.models import Cliente
+from configuracoes.models import Empresa
 from ordens.models import OrdemServico
 from orcamentos.models import Orcamento
 
@@ -54,30 +55,40 @@ class EncodingIntegrityTests(TestCase):
 class DashboardTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
+        self.empresa = Empresa.objects.create(
+            nome="Empresa Dashboard",
+            regime_tributario="simples",
+            modo_tributario="basico",
+        )
         self.atendente = user_model.objects.create_user(
             username="dashboard_atendente",
             password="senha-forte-123",
             tipo_usuario="atendente",
+            empresa=self.empresa,
         )
         self.gerente = user_model.objects.create_user(
             username="dashboard_gerente",
             password="senha-forte-123",
             tipo_usuario="gerente",
+            empresa=self.empresa,
         )
         self.superuser = user_model.objects.create_superuser(
             username="dashboard_root",
             password="senha-forte-123",
             email="root@teste.com",
+            empresa=self.empresa,
         )
         self.cliente = Cliente.objects.create(
             nome="Cliente Dashboard",
             documento="52998224725",
             telefone="11999990000",
             estado="SP",
+            empresa=self.empresa,
         )
 
     def _criar_ordem(self, *, status="diagnosticar", fechada=False):
         return OrdemServico.objects.create(
+            empresa=self.empresa,
             cliente=self.cliente,
             tipo_equipamento="celular",
             marca_equipamento="Marca",
@@ -214,8 +225,18 @@ class DashboardTests(TestCase):
         self._criar_ordem(status="pendente_cliente", fechada=False)
         self._criar_ordem(status="pendente_pecas", fechada=False)
         ordem_reaberta = self._criar_ordem(status="concluida", fechada=False)
-        Orcamento.objects.create(cliente=self.cliente, ordem_servico=ordem_autorizada, status="aprovado")
-        Orcamento.objects.create(cliente=self.cliente, ordem_servico=ordem_recusada, status="recusado")
+        Orcamento.objects.create(
+            empresa=self.empresa,
+            cliente=self.cliente,
+            ordem_servico=ordem_autorizada,
+            status="aprovado",
+        )
+        Orcamento.objects.create(
+            empresa=self.empresa,
+            cliente=self.cliente,
+            ordem_servico=ordem_recusada,
+            status="recusado",
+        )
 
         response = self.client.get(reverse("core:dashboard_indicadores"))
 
@@ -238,8 +259,10 @@ class DashboardTests(TestCase):
             documento="39053344705",
             telefone="11999990001",
             estado="SP",
+            empresa=self.empresa,
         )
         ordem_1 = OrdemServico.objects.create(
+            empresa=self.empresa,
             cliente=cliente_mes,
             tipo_equipamento="celular",
             marca_equipamento="Marca",
@@ -250,6 +273,7 @@ class DashboardTests(TestCase):
             fechada=True,
         )
         ordem_2 = OrdemServico.objects.create(
+            empresa=self.empresa,
             cliente=self.cliente,
             tipo_equipamento="notebook",
             marca_equipamento="Marca",
@@ -322,6 +346,7 @@ class DashboardTests(TestCase):
         )
         conta_pagar = PagamentoContaPagar.objects.create(
             conta=ContaPagar.objects.create(
+                empresa=self.empresa,
                 fornecedor="Meta Ads",
                 descricao="Campanha do mes",
                 categoria=categoria_marketing,

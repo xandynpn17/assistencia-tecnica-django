@@ -1,4 +1,4 @@
-import re
+﻿import re
 from datetime import timedelta
 
 from django.db.models import Count, F, Prefetch, Q, Value
@@ -28,6 +28,8 @@ QUICK_FILTER_LABELS = {
     "criticas": "Pendencias criticas",
     "paradas_15": "Paradas ha 15+ dias",
 }
+
+STATUS_ABERTAS_SENTINEL = "abertas"
 
 
 def _serie_normalizada(valor):
@@ -171,9 +173,12 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
     paginate_by = 25
 
     def _tem_filtros_aplicados(self):
+        status = (self.request.GET.get("status") or "").strip()
         return bool(
-            (self.request.GET.get("status") or "").strip()
+            status
             or (self.request.GET.get("quick") or "").strip()
+            or (self.request.GET.get("q") or "").strip()
+            or (self.request.GET.get("local_armazenamento") or "").strip()
             or self.request.GET.get("carregar") == "1"
         )
 
@@ -193,6 +198,9 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
         q = (self.request.GET.get("q") or "").strip()
         if q:
             queryset = _aplicar_busca_ordens(queryset, q)
+        local_armazenamento = (self.request.GET.get("local_armazenamento") or "").strip()
+        if local_armazenamento:
+            queryset = queryset.filter(local_armazenamento__icontains=local_armazenamento)
         quick_filter = (self.request.GET.get("quick") or "").strip()
         if quick_filter:
             queryset = _aplicar_filtro_rapido_ordens(queryset, quick_filter, self.request.user)
@@ -206,7 +214,7 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
         status = (self.request.GET.get("status") or "").strip()
         if status == "concluida":
             return queryset.filter(fechada=True)
-        if status:
+        if status and status != STATUS_ABERTAS_SENTINEL:
             return queryset.filter(fechada=False, status=status)
         return queryset.filter(fechada=False)
 
@@ -215,13 +223,19 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
         q = (self.request.GET.get("q") or "").strip()
         filtros_aplicados = self._tem_filtros_aplicados()
         status_filtro = self.request.GET.get("status", "")
+        local_armazenamento = (self.request.GET.get("local_armazenamento") or "").strip()
         quick_filter = (self.request.GET.get("quick") or "").strip()
         context["menu_app"] = "ordens"
         context["menu_sub"] = "lista_ordens"
         context["q"] = q
+        context["local_armazenamento"] = local_armazenamento
         context["filtros_aplicados"] = filtros_aplicados
         context["status_filtro"] = status_filtro
-        context["status_filtro_label"] = dict(self.model.STATUS_CHOICES).get(status_filtro, "")
+        context["status_filtro_label"] = (
+            "Ordens abertas"
+            if status_filtro == STATUS_ABERTAS_SENTINEL
+            else dict(self.model.STATUS_CHOICES).get(status_filtro, "")
+        )
         context["quick_filter"] = quick_filter
         context["quick_filter_label"] = QUICK_FILTER_LABELS.get(quick_filter, "")
         context["carregar_lista"] = self.request.GET.get("carregar") == "1"
@@ -239,10 +253,10 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
             total_base = abertas_queryset.count() + concluidas_total
             status_cards.append(
                 {
-                    "codigo": "",
-                    "rotulo": "Todos",
-                    "total": total_base,
-                    "ativo": not status_filtro,
+                    "codigo": STATUS_ABERTAS_SENTINEL,
+                    "rotulo": "Abertas",
+                    "total": abertas_queryset.count(),
+                    "ativo": status_filtro in {"", STATUS_ABERTAS_SENTINEL},
                 }
             )
             for codigo, rotulo in self.model.STATUS_CHOICES:
@@ -259,3 +273,4 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
 
 
 __all__ = ["OrdemServicoListView", "buscar_ordens"]
+

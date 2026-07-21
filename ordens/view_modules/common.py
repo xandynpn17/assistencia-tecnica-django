@@ -1,11 +1,12 @@
 import re
+from smtplib import SMTPException
 from datetime import timedelta
 from decimal import Decimal
 from urllib.parse import quote
 
 from django.conf import settings
 from django.core.mail import send_mail
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
 from configuracoes.models import ConfiguracaoSistema
@@ -79,7 +80,7 @@ def _link_absoluto(request, view_name, **kwargs):
         return ""
     try:
         return request.build_absolute_uri(reverse(view_name, kwargs=kwargs))
-    except Exception:
+    except (AttributeError, NoReverseMatch):
         return ""
 
 
@@ -161,7 +162,7 @@ def enviar_notificacao(notif):
                 resposta="enviado",
             )
             return {"enviada": True, "url": ""}
-        except Exception as exc:
+        except (OSError, SMTPException, ValueError) as exc:
             notif.status = "erro"
             notif.erro = str(exc)[:255]
             notif.save(update_fields=["status", "erro"])
@@ -268,6 +269,7 @@ def contexto_variaveis_mensagem(ordem, request=None):
         "dias_parado": str(dias_parado),
         "data_limite": (timezone.localdate() + timedelta(days=7)).strftime("%d/%m/%Y"),
         "motivo_nao_reparo": ordem.relatorio_tecnico or "",
+        "tipo_reparacao": ordem.get_tipo_reparacao_display() or "",
         "codigo_portal": ordem.codigo_portal or "",
         "condicoes": (config.condicoes_orcamento or "").strip(),
         "status_os": ordem.status_listagem_label,
@@ -320,6 +322,18 @@ def registrar_pronto_contactado(ordem, usuario, canal):
     )
 
 
+def registrar_recusado_contactado(ordem, usuario, canal):
+    canal_txt = "email" if canal == "email" else "WhatsApp"
+    status_linha = ordem.status if ordem.status in {"recusado", "devolucao"} else "devolucao"
+    LinhaTrabalho.objects.create(
+        ordem=ordem,
+        status=status_linha,
+        descricao=f"Cliente avisado por {canal_txt} sobre recusa/devolucao sem reparo.",
+        usuario=usuario,
+        tipo_evento="manual",
+    )
+
+
 def log_os(ordem, tipo_evento, descricao, usuario=None, dados_extras=None):
     LogOSService.registrar(
         ordem=ordem,
@@ -333,7 +347,7 @@ def log_os(ordem, tipo_evento, descricao, usuario=None, dados_extras=None):
 def recalcular_comissoes_itens_antecipado(ordem):
     try:
         from caixa.services.comissoes import processar_evento_servico_finalizado
-    except Exception:
+    except ImportError:
         return 0
     return processar_evento_servico_finalizado(ordem, evento="SERVICO_FINALIZADO")
 
@@ -354,6 +368,7 @@ __all__ = [
     "registrar_notificacao",
     "registrar_pendente_cliente_envio_orcamento",
     "registrar_pronto_contactado",
+    "registrar_recusado_contactado",
     "render_template_mensagem",
     "request_ip",
 ]

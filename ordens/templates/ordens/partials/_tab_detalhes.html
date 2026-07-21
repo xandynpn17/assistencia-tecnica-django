@@ -54,6 +54,7 @@
                         <!-- Dados do equipamento -->
                         <div class="mb-2 small">
                             <p class="mb-1 text-break"><strong>Tipo:</strong> {{ ordem.get_tipo_equipamento_display }}</p>
+                            <p class="mb-1 text-break"><strong>Tipo da OS:</strong> {{ ordem.tipo_reparo|default:"-" }}</p>
                             <p class="mb-1 text-break"><strong>Marca:</strong> {{ ordem.marca_equipamento }}</p>
                             <p class="mb-1 text-break"><strong>Modelo:</strong> {{ ordem.modelo_equipamento }}</p>
                             <p class="mb-1 text-break">

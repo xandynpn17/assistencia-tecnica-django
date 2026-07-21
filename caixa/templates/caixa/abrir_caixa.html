@@ -1,5 +1,83 @@
 {% extends 'core/base.html' %}
 
+{% block extra_css %}
+<style>
+  .caixa-start-shell {
+    display: grid;
+    gap: 1rem;
+  }
+  .caixa-start-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .9rem;
+  }
+  .caixa-start-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 1rem;
+    box-shadow: 0 14px 24px rgba(30, 51, 74, 0.06);
+  }
+  .caixa-start-label {
+    font-size: .74rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #738290;
+    margin-bottom: .35rem;
+  }
+  .caixa-start-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #223749;
+  }
+  .caixa-start-note {
+    margin-top: .35rem;
+    color: #607080;
+    font-size: .84rem;
+  }
+  .caixa-open-guide {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .caixa-open-guide-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: #fff;
+    padding: 14px 16px;
+  }
+  .caixa-open-guide-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: #1f6feb;
+    color: #fff;
+    font-size: .82rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .caixa-open-guide-card strong {
+    display: block;
+    color: #223749;
+    margin-bottom: 4px;
+  }
+  .caixa-open-guide-card p {
+    margin: 0;
+    color: #607080;
+    font-size: .84rem;
+  }
+  @media (max-width: 991.98px) {
+    .caixa-start-strip,
+    .caixa-open-guide {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-3">
     {% include 'caixa/_subnav_caixa.html' %}
@@ -7,9 +85,9 @@
     <div class="d-flex justify-content-between align-items-start flex-wrap mb-3" style="gap: 12px;">
         <div>
             <h3 class="mb-1">Abrir caixa</h3>
-            <div class="text-muted small">Inicie o caixa do dia com saldo inicial conferido e pronto para pagamentos e saídas.</div>
+            <div class="text-muted small">Inicie o caixa do dia com saldo inicial conferido e pronto para pagamentos e sa&iacute;das.</div>
         </div>
-        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar a Operação</a>
+        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar &agrave; opera&ccedil;&atilde;o</a>
     </div>
 
     {% if mensagem %}
@@ -18,42 +96,28 @@
         </div>
     {% endif %}
 
-    <div class="row mb-3">
-        <div class="col-md-3">
-            <div class="small-box {% if caixa and caixa.aberto %}bg-success{% else %}bg-secondary{% endif %}">
-                <div class="inner">
-                    <h4>{% if caixa and caixa.aberto %}Aberto{% elif caixa_hoje %}Registrado{% else %}Disponível{% endif %}</h4>
-                    <p>Status do caixa de hoje</p>
-                </div>
-                <div class="icon"><i class="fas fa-cash-register"></i></div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="small-box bg-info">
-                <div class="inner">
-                    <h4>{% now "d/m/Y" %}</h4>
-                    <p>Data operacional</p>
-                </div>
-                <div class="icon"><i class="fas fa-calendar-day"></i></div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="small-box bg-warning">
-                <div class="inner">
-                    <h4>R$ {{ saldo_sugerido_abertura|floatformat:2 }}</h4>
-                    <p>Sugestáo de saldo inicial</p>
-                </div>
-                <div class="icon"><i class="fas fa-lightbulb"></i></div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="small-box bg-dark">
-                <div class="inner">
-                    <h4>{% if ultimo_caixa %}{{ ultimo_caixa.data|date:"d/m" }}{% else %}-{% endif %}</h4>
-                    <p>Último caixa fechado</p>
-                </div>
-                <div class="icon"><i class="fas fa-history"></i></div>
-            </div>
+    <div class="caixa-start-shell mb-3">
+        <div class="caixa-start-strip">
+            <article class="caixa-start-card">
+                <div class="caixa-start-label">Status de hoje</div>
+                <div class="caixa-start-value">{% if caixa and caixa.aberto %}Aberto{% elif caixa_hoje %}Registrado{% else %}Dispon&iacute;vel{% endif %}</div>
+                <div class="caixa-start-note">Situa&ccedil;&atilde;o operacional do caixa no dia atual.</div>
+            </article>
+            <article class="caixa-start-card">
+                <div class="caixa-start-label">Data operacional</div>
+                <div class="caixa-start-value">{% now "d/m/Y" %}</div>
+                <div class="caixa-start-note">Abertura &uacute;nica por dia para manter a confer&ecirc;ncia simples.</div>
+            </article>
+            <article class="caixa-start-card">
+                <div class="caixa-start-label">Sugest&atilde;o de abertura</div>
+                <div class="caixa-start-value">R$ {{ saldo_sugerido_abertura|floatformat:2 }}</div>
+                <div class="caixa-start-note">Baseada no &uacute;ltimo fechamento ou saldo contado mais recente.</div>
+            </article>
+            <article class="caixa-start-card">
+                <div class="caixa-start-label">&Uacute;ltimo caixa fechado</div>
+                <div class="caixa-start-value">{% if ultimo_caixa %}{{ ultimo_caixa.data|date:"d/m" }}{% else %}-{% endif %}</div>
+                <div class="caixa-start-note">Use como refer&ecirc;ncia para continuidade da opera&ccedil;&atilde;o.</div>
+            </article>
         </div>
     </div>
 
@@ -64,7 +128,7 @@
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
                         <strong>Caixa do dia</strong>
                         <span class="badge {% if caixa and caixa.aberto %}badge-success{% else %}badge-secondary{% endif %}">
-                            {% if caixa and caixa.aberto %}Em operação{% else %}Sem nova abertura{% endif %}
+                            {% if caixa and caixa.aberto %}Em opera&ccedil;&atilde;o{% else %}Sem nova abertura{% endif %}
                         </span>
                     </div>
                     <div class="card-body">
@@ -83,22 +147,22 @@
                             </div>
                             <div class="col-md-4 mb-3">
                                 <div class="border rounded p-3 h-100">
-                                    <div class="text-muted small mb-1">Situação</div>
-                                    <div class="font-weight-bold">{% if caixa.aberto %}Caixa aberto{% else %}Caixa já encerrado{% endif %}</div>
+                                    <div class="text-muted small mb-1">Situa&ccedil;&atilde;o</div>
+                                    <div class="font-weight-bold">{% if caixa.aberto %}Caixa aberto{% else %}Caixa j&aacute; encerrado{% endif %}</div>
                                 </div>
                             </div>
                         </div>
                         <div class="alert alert-light mb-0">
-                            A regra atual mantém apenas um caixa por dia. Para continuar a operação, siga para a próxima etapa abaixo.
+                            A regra atual mant&eacute;m apenas um caixa por dia. Para continuar a opera&ccedil;&atilde;o, siga para a pr&oacute;xima etapa abaixo.
                         </div>
                     </div>
                     <div class="card-footer bg-white d-flex flex-wrap" style="gap: 8px;">
                         {% if caixa.aberto %}
                             <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary">Ir para pagamentos</a>
-                            <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-outline-warning">Registrar saída</a>
+                            <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-outline-warning">Registrar sa&iacute;da</a>
                             <a href="{% url 'caixa:fechar_caixa' %}" class="btn btn-outline-danger">Fechar caixa</a>
                         {% else %}
-                            <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-primary">Voltar para Operação</a>
+                            <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-primary">Voltar para opera&ccedil;&atilde;o</a>
                             <a href="{% url 'caixa:dashboard_financeiro' %}" class="btn btn-outline-dark">Ver Financeiro</a>
                         {% endif %}
                     </div>
@@ -106,11 +170,11 @@
             </div>
             <div class="col-lg-5">
                 <div class="card shadow-sm border-0 h-100">
-                    <div class="card-header bg-white"><strong>Último fechamento</strong></div>
+                    <div class="card-header bg-white"><strong>&Uacute;ltimo fechamento</strong></div>
                     <div class="card-body">
                         {% if ultimo_caixa %}
                             <div class="mb-3">
-                                <div class="text-muted small">Resumo do Último caixa encerrado</div>
+                                <div class="text-muted small">Resumo do &uacute;ltimo caixa encerrado</div>
                                 <div class="font-weight-bold">{{ ultimo_caixa.data|date:"d/m/Y" }}</div>
                             </div>
                             <div class="row">
@@ -128,7 +192,7 @@
                                 </div>
                                 <div class="col-6">
                                     <div class="border rounded p-3 h-100">
-                                        <div class="text-muted small mb-1">Diferença</div>
+                                        <div class="text-muted small mb-1">Diferen&ccedil;a</div>
                                         <div class="font-weight-bold">R$ {{ ultimo_caixa.diferenca_fechamento|floatformat:2 }}</div>
                                     </div>
                                 </div>
@@ -140,7 +204,7 @@
                                 </div>
                             </div>
                         {% else %}
-                            <div class="alert alert-light mb-0">Ainda não existe um fechamento anterior para usar como referência.</div>
+                            <div class="alert alert-light mb-0">Ainda n&atilde;o existe um fechamento anterior para usar como refer&ecirc;ncia.</div>
                         {% endif %}
                     </div>
                 </div>
@@ -162,7 +226,7 @@
                                 <div class="form-control bg-light">{% now "d/m/Y" %}</div>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label class="small text-muted mb-1 d-block">Sugestáo de abertura</label>
+                                <label class="small text-muted mb-1 d-block">Sugest&atilde;o de abertura</label>
                                 <div class="input-group">
                                     <div class="form-control bg-light">R$ {{ saldo_sugerido_abertura|floatformat:2 }}</div>
                                     <div class="input-group-append">
@@ -189,8 +253,26 @@
                             <small class="text-muted">Informe apenas o valor realmente separado para iniciar o caixa.</small>
                         </div>
 
+                        <div class="caixa-open-guide mb-3">
+                            <div class="caixa-open-guide-card">
+                                <span class="caixa-open-guide-step">1</span>
+                                <strong>Conferir numer&aacute;rio</strong>
+                                <p>Conte o valor real dispon&iacute;vel no balc&atilde;o antes de confirmar a abertura.</p>
+                            </div>
+                            <div class="caixa-open-guide-card">
+                                <span class="caixa-open-guide-step">2</span>
+                                <strong>Usar o saldo real</strong>
+                                <p>A sugest&atilde;o ajuda, mas o registro deve refletir o caixa efetivamente separado.</p>
+                            </div>
+                            <div class="caixa-open-guide-card">
+                                <span class="caixa-open-guide-step">3</span>
+                                <strong>Seguir para a opera&ccedil;&atilde;o</strong>
+                                <p>Depois da abertura, o pr&oacute;ximo passo natural &eacute; pagamentos, sa&iacute;das e confer&ecirc;ncia do turno.</p>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
-                            <label class="d-block mb-2"><strong>Valores rápidos</strong></label>
+                            <label class="d-block mb-2"><strong>Valores r&aacute;pidos</strong></label>
                             <div class="btn-group btn-group-sm flex-wrap" role="group">
                                 <button type="button" class="btn btn-outline-secondary js-saldo-rapido" data-value="50.00">50,00</button>
                                 <button type="button" class="btn btn-outline-secondary js-saldo-rapido" data-value="100.00">100,00</button>
@@ -201,7 +283,7 @@
                         </div>
 
                         <div class="alert alert-light mb-0">
-                            Depois de abrir, o próximo passo é registrar pagamentos e saídas do dia. O fecho só deve acontecer no encerramento do expediente.
+                            Depois de abrir, o pr&oacute;ximo passo &eacute; registrar pagamentos e sa&iacute;das do dia. O fecho s&oacute; deve acontecer no encerramento do expediente.
                         </div>
                     </div>
                     <div class="card-footer d-flex justify-content-between bg-white">
@@ -220,21 +302,21 @@
                         <div class="mb-3">
                             <div class="text-muted small mb-1">Fluxo recomendado</div>
                             <ol class="pl-3 mb-0">
-                                <li>Conferir o numerário inicial.</li>
+                                <li>Conferir o numer&aacute;rio inicial.</li>
                                 <li>Registrar o saldo real de abertura.</li>
-                                <li>Seguir para pagamentos e saídas do dia.</li>
+                                <li>Seguir para pagamentos e sa&iacute;das do dia.</li>
                             </ol>
                         </div>
                         {% if ultimo_caixa %}
                             <div class="border rounded p-3">
-                                <div class="text-muted small mb-1">Último fechamento</div>
+                                <div class="text-muted small mb-1">&Uacute;ltimo fechamento</div>
                                 <div class="font-weight-bold mb-2">{{ ultimo_caixa.data|date:"d/m/Y" }}</div>
                                 <div class="small">Apurado: <strong>R$ {{ ultimo_caixa.saldo_final|floatformat:2 }}</strong></div>
                                 <div class="small">Contado: <strong>R$ {{ ultimo_caixa.valor_contado_fisico|floatformat:2 }}</strong></div>
-                                <div class="small">Diferença: <strong>R$ {{ ultimo_caixa.diferenca_fechamento|floatformat:2 }}</strong></div>
+                                <div class="small">Diferen&ccedil;a: <strong>R$ {{ ultimo_caixa.diferenca_fechamento|floatformat:2 }}</strong></div>
                             </div>
                         {% else %}
-                            <div class="alert alert-light mb-0">Sem histórico anterior. Esta abertura servirá como base do primeiro fecho.</div>
+                            <div class="alert alert-light mb-0">Sem hist&oacute;rico anterior. Esta abertura servir&aacute; como base do primeiro fecho.</div>
                         {% endif %}
                     </div>
                 </div>

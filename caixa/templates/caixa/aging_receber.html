@@ -51,6 +51,37 @@
     {% endfor %}
   </div>
 
+  {% if marcas_garantia_vencidas %}
+  <div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+      <strong>Marcas de garantia mais atrasadas</strong>
+      <a href="{% url 'caixa:contas_receber' %}?tipo_origem=garantia_fabricante&prioridade=garantia_vencida" class="btn btn-sm btn-outline-danger">Abrir fila</a>
+    </div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Marca</th>
+            <th>Fornecedor</th>
+            <th>Qtde.</th>
+            <th class="text-right">Em atraso</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in marcas_garantia_vencidas %}
+          <tr>
+            <td>{{ item.nome }}</td>
+            <td>{{ item.fornecedor }}</td>
+            <td>{{ item.quantidade }}</td>
+            <td class="text-right">R$ {{ item.total|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="row">
     {% for row in bucket_rows %}
     <div class="col-lg-6">

@@ -3,4 +3,7 @@ from .movimentacoes import *
 from .pdv import *
 from .reservas import *
 from .inventario import *
+from .inventario_operacional import *
 from .auditoria import *
+from .entradas import *
+from .pdv_operacao import *

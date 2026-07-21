@@ -72,6 +72,10 @@ SENSITIVE_PERMISSION_MESSAGES = {
 SENSITIVE_PERMISSION_DEFAULT_ROLES = {
     "perm_os_concluir": ORDER_ROLES,
     "perm_os_reabrir": ORDER_ROLES,
+    "perm_orcamento_editar": ORDER_ROLES,
+    "perm_orcamento_aprovar_item": ORDER_ROLES,
+    "perm_orcamento_recusar_item": ORDER_ROLES,
+    "perm_orcamento_migrar_item": ORDER_ROLES,
     "perm_estoque_configurar_estrutura": STOCK_CONFIG_ROLES,
     "perm_estoque_configurar_rateio": STOCK_CONFIG_ROLES,
 }
@@ -109,10 +113,18 @@ def has_sensitive_permission(user, permission_name):
     return bool(getattr(user, permission_name, False))
 
 
+def can_override_vendedor_operacao(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if is_management_user(user):
+        return True
+    return bool(getattr(user, "perm_venda_mostrador_trocar_vendedor", False))
+
+
 def require_sensitive_permission(user, permission_name, message=None):
     if has_sensitive_permission(user, permission_name):
         return True
-    raise PermissionDenied(message or SENSITIVE_PERMISSION_MESSAGES.get(permission_name) or "Permissao insuficiente.")
+    raise PermissionDenied(message or SENSITIVE_PERMISSION_MESSAGES.get(permission_name) or "Permissão insuficiente.")
 
 
 def role_required(allowed_roles, login_url="core:login"):
@@ -137,4 +149,3 @@ class RoleRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
 
     def test_func(self):
         return has_role(self.request.user, self.allowed_roles)
-

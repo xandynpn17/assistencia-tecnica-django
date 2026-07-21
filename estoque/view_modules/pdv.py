@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -7,15 +7,26 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.safestring import mark_safe
+from reportlab.graphics import renderSVG
+from reportlab.graphics.barcode import createBarcodeDrawing
 
 from configuracoes.models import ConfiguracaoSistema
-from configuracoes.permissions import CAIXA_OPERATIONAL_ROLES, ORDER_ROLES, STOCK_MANAGE_ROLES, has_role, role_required
+from configuracoes.permissions import (
+    CAIXA_OPERATIONAL_ROLES,
+    ORDER_ROLES,
+    STOCK_MANAGE_ROLES,
+    can_override_vendedor_operacao,
+    has_role,
+    role_required,
+)
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
 from ..models import PontoOperacional, Produto, ReservaEstoque, VendaRapidaEstoque
 from ..services import (
     criar_item_cesto_venda_rapida,
     finalizar_cesto_venda_rapida,
+    listar_cestos_abertos_venda_rapida,
     listar_guias_recentes_venda_rapida,
     remover_item_cesto_venda_rapida,
     resumir_cesto_venda_rapida,
@@ -24,14 +35,43 @@ from ..services import (
 from .helpers import _normalizar_saldos_produto, _registrar_evento_estoque, expirar_reservas_vencidas, limpar_pre_reservas_antigas
 
 
+def _listar_vendedores_operacao(empresa):
+    user_model = get_user_model()
+    base_qs = (
+        user_model.objects.filter(is_active=True)
+        .exclude(numero_vendedor__isnull=True)
+        .exclude(numero_vendedor="")
+    )
+    vendedores_qs = base_qs
+    if empresa:
+        vendedores_qs = base_qs.filter(empresa=empresa)
+        if not vendedores_qs.exists():
+            vendedores_qs = base_qs
+    return vendedores_qs.order_by("username")
+
+
+def _barcode_svg_guia(guia_codigo):
+    if not guia_codigo:
+        return ""
+    drawing = createBarcodeDrawing(
+        "Code128",
+        value=str(guia_codigo),
+        barHeight=32,
+        barWidth=0.9,
+        humanReadable=True,
+    )
+    svg = renderSVG.drawToString(drawing)
+    if isinstance(svg, bytes):
+        svg = svg.decode("utf-8")
+    return mark_safe(svg)
+
+
 @role_required(ORDER_ROLES)
 def consulta_artigos(request):
     empresa = obter_empresa_ativa(request, strict=False)
-    user_model = get_user_model()
-    tecnicos_qs = user_model.objects.filter(is_active=True, empresa=empresa).exclude(numero_vendedor__isnull=True).exclude(numero_vendedor="").order_by("username")
-    if not tecnicos_qs.exists():
-        tecnicos_qs = user_model.objects.filter(is_active=True, tipo_usuario="tecnico", empresa=empresa).order_by("username")
-    tecnicos = tecnicos_qs.values("id", "username", "numero_vendedor")
+    config = ConfiguracaoSistema.get_configuracao()
+    vendedores_qs = _listar_vendedores_operacao(empresa)
+    vendedores = vendedores_qs.values("id", "username", "numero_vendedor")
     return render(
         request,
         "estoque/consulta_artigos.html",
@@ -39,8 +79,10 @@ def consulta_artigos(request):
             "menu_app": "estoque",
             "menu_sub": "consulta_artigos",
             "numero_vendedor_padrao": (getattr(request.user, "numero_vendedor", "") or ""),
-            "tecnicos_disponiveis": list(tecnicos),
+            "pode_trocar_vendedor_operacao": can_override_vendedor_operacao(request.user) or not bool(getattr(request.user, "numero_vendedor", "")),
+            "vendedores_disponiveis": list(vendedores),
             "pode_venda_mostrador": has_role(request.user, STOCK_MANAGE_ROLES),
+            "pontos_venda_mostrador": config.pontos_venda_mostrador_lista(),
         },
     )
 
@@ -100,7 +142,7 @@ def api_resumo_artigo(request, produto_id):
     expirar_reservas_vencidas(empresa=empresa)
     produto = get_object_or_404(
         filtrar_queryset_empresa(
-            Produto.objects.select_related("ponto_operacional"),
+            Produto.objects.select_related("ponto_operacional", "ubicacao_padrao"),
             empresa,
         ).only(
             "id",
@@ -109,13 +151,16 @@ def api_resumo_artigo(request, produto_id):
             "sku",
             "descricao",
             "observacao_interna",
-            "localizacao",
             "garantia_peca_dias",
             "modelos_compativeis",
             "preco_final",
             "quantidade",
             "estoque_minimo",
             "ponto_operacional_id",
+            "ponto_operacional__codigo",
+            "ubicacao_padrao_id",
+            "ubicacao_padrao__codigo",
+            "ubicacao_padrao__descricao",
             "ativo",
         ),
         id=produto_id,
@@ -164,12 +209,38 @@ def api_resumo_artigo(request, produto_id):
         for m in produto.movimentacoes.select_related("origem", "destino")
         .only("tipo", "quantidade", "origem__codigo", "destino__codigo", "criado_em", "observacao")[:20]
     ]
-    return JsonResponse({"id": produto.id, "nome": produto.nome, "ean": produto.ean or "", "sku": produto.sku or "", "descricao": produto.descricao or "", "observacao_interna": produto.observacao_interna or "", "localizacao": produto.localizacao or "", "garantia_peca_dias": produto.garantia_peca_dias or 0, "modelos_compativeis": produto.modelos_compativeis or "", "preco": float(produto.preco_final), "quantidade_total": produto.quantidade, "estoque_minimo": produto.estoque_minimo, "abaixo_minimo": produto.quantidade <= int(produto.estoque_minimo or 0), "ponto_padrao_id": produto.ponto_operacional_id, "estoque_pontos": estoque_pontos, "reservas": reservas_recentes, "movimentacoes": movimentacoes_recentes})
+    return JsonResponse({
+        "id": produto.id,
+        "nome": produto.nome,
+        "ean": produto.ean or "",
+        "sku": produto.sku or "",
+        "descricao": produto.descricao or "",
+        "observacao_interna": produto.observacao_interna or "",
+        "garantia_peca_dias": produto.garantia_peca_dias or 0,
+        "modelos_compativeis": produto.modelos_compativeis or "",
+        "preco": float(produto.preco_final),
+        "quantidade_total": produto.quantidade,
+        "estoque_minimo": produto.estoque_minimo,
+        "abaixo_minimo": produto.quantidade <= int(produto.estoque_minimo or 0),
+        "ponto_padrao_id": produto.ponto_operacional_id,
+        "ponto_padrao_codigo": produto.ponto_operacional.codigo if produto.ponto_operacional_id and produto.ponto_operacional else "",
+        "ubicacao_padrao_id": getattr(produto, "ubicacao_padrao_id", None),
+        "ubicacao_padrao_codigo": produto.ubicacao_padrao.codigo if getattr(produto, "ubicacao_padrao_id", None) and produto.ubicacao_padrao else "",
+        "ubicacao_padrao_label": (
+            f"{produto.ubicacao_padrao.codigo}"
+            + (f" ({produto.ubicacao_padrao.descricao})" if produto.ubicacao_padrao and produto.ubicacao_padrao.descricao else "")
+            if getattr(produto, "ubicacao_padrao_id", None) and produto.ubicacao_padrao
+            else ""
+        ),
+        "estoque_pontos": estoque_pontos,
+        "reservas": reservas_recentes,
+        "movimentacoes": movimentacoes_recentes,
+    })
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_venda_rapida(request):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     produto_id = request.POST.get("produto_id")
@@ -180,6 +251,13 @@ def api_venda_rapida(request):
         quantidade = int(request.POST.get("quantidade") or "1")
     except ValueError:
         return JsonResponse({"ok": False, "erro": "Quantidade invalida."}, status=400)
+    vendedor_padrao = (getattr(request.user, "numero_vendedor", "") or "").strip()
+    pode_trocar_vendedor = can_override_vendedor_operacao(request.user) or not vendedor_padrao
+    if vendedor_padrao and not pode_trocar_vendedor and funcionario_numero != vendedor_padrao:
+        return JsonResponse(
+            {"ok": False, "erro": "Este operador deve usar o proprio numero de vendedor nesta operacao."},
+            status=403,
+        )
     produto = get_object_or_404(
         filtrar_queryset_empresa(Produto.objects.ativos().nao_servicos().filter(permite_os=True), empresa),
         id=produto_id,
@@ -206,13 +284,24 @@ def api_venda_rapida(request):
         produto_id=produto.id,
         ponto_id=ponto.id,
         quantidade=quantidade,
+        vendedor_numero=funcionario_numero,
     )
+    if vendedor_padrao and funcionario_numero != vendedor_padrao and pode_trocar_vendedor:
+        _registrar_evento_estoque(
+            "venda_pre_reserva_troca_vendedor",
+            usuario=request.user,
+            venda_id=venda.id,
+            produto_id=produto.id,
+            ponto_id=ponto.id,
+            vendedor_original=vendedor_padrao,
+            vendedor_informado=funcionario_numero,
+        )
     return JsonResponse({"ok": True, "venda_id": venda.id, "cesto_codigo": resultado["cesto_codigo"], "valor_total": float(venda.valor_total), "total_cesto": float(resultado["total_cesto"])})
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_cesto_resumo(request, cesto_codigo):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     qs_cesto = VendaRapidaEstoque.objects.filter(cesto_codigo=cesto_codigo)
     if not qs_cesto.filter(produto__empresa=empresa).exists() or qs_cesto.exclude(produto__empresa=empresa).exists():
         return JsonResponse({"ok": False, "erro": "Cesto nao encontrado."}, status=404)
@@ -221,7 +310,7 @@ def api_cesto_resumo(request, cesto_codigo):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_cesto_finalizar(request):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     cesto_codigo = (request.POST.get("cesto_codigo") or "").strip()
@@ -240,7 +329,7 @@ def api_cesto_finalizar(request):
 
 @role_required(ORDER_ROLES)
 def api_guia_status(request, guia_codigo):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     qs_guia = VendaRapidaEstoque.objects.filter(guia_pagamento=guia_codigo)
     if not qs_guia.filter(produto__empresa=empresa).exists() or qs_guia.exclude(produto__empresa=empresa).exists():
         return JsonResponse({"ok": False, "erro": "Guia nao encontrada."}, status=404)
@@ -256,7 +345,7 @@ def api_guia_status(request, guia_codigo):
 
 @role_required(ORDER_ROLES)
 def api_guias_recentes(request):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     limit = request.GET.get("limit") or 10
     resumos = [
         resumo
@@ -270,8 +359,24 @@ def api_guias_recentes(request):
 
 
 @role_required(STOCK_MANAGE_ROLES)
+def api_cestos_abertos(request):
+    empresa = obter_empresa_ativa(request, strict=True)
+    limit = request.GET.get("limit") or 10
+    resumos = []
+    for resumo in listar_cestos_abertos_venda_rapida(limit=limit):
+        codigo = resumo.get("cesto_codigo")
+        if not codigo:
+            continue
+        qs = VendaRapidaEstoque.objects.filter(cesto_codigo=codigo, status="pre_reserva")
+        if not qs.filter(produto__empresa=empresa).exists() or qs.exclude(produto__empresa=empresa).exists():
+            continue
+        resumos.append(resumo)
+    return JsonResponse({"ok": True, "cestos": resumos})
+
+
+@role_required(STOCK_MANAGE_ROLES)
 def api_cesto_item_remover(request, venda_id):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     venda = get_object_or_404(VendaRapidaEstoque.objects.filter(produto__empresa=empresa), id=venda_id)
@@ -287,7 +392,7 @@ def api_cesto_item_remover(request, venda_id):
 
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def guia_pagamento(request, guia_codigo):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     vendas_qs = (
         VendaRapidaEstoque.objects.select_related("produto", "ponto_operacional", "usuario", "pagamento")
         .filter(guia_pagamento=guia_codigo, produto__empresa=empresa)
@@ -299,10 +404,11 @@ def guia_pagamento(request, guia_codigo):
     resumo_guia = resumir_guia_venda_rapida(guia_codigo)
     vendas = list(vendas_qs)
     numeros = [v.funcionario_numero for v in vendas if v.funcionario_numero]
-    tecnicos_map = {u.numero_vendedor: u.username for u in get_user_model().objects.filter(numero_vendedor__in=numeros, is_active=True)}
+    vendedores_map = {u.numero_vendedor: u.username for u in get_user_model().objects.filter(numero_vendedor__in=numeros, is_active=True)}
     for venda in vendas:
-        venda.tecnico_nome = tecnicos_map.get(venda.funcionario_numero, "-")
+        venda.vendedor_nome = vendedores_map.get(venda.funcionario_numero, "-")
     total = Decimal(str(resumo_guia["valor_total"]))
+    pagamento_guia = next((v.pagamento for v in vendas if getattr(v, "pagamento_id", None)), None)
     return render(
         request,
         "estoque/guia_pagamento.html",
@@ -311,6 +417,8 @@ def guia_pagamento(request, guia_codigo):
             "vendas": vendas,
             "total": total,
             "resumo_guia": resumo_guia,
+            "pagamento_guia": pagamento_guia,
+            "guia_barcode_svg": _barcode_svg_guia(guia_codigo),
             "menu_app": "estoque",
             "menu_sub": "consulta_artigos",
         },
@@ -351,8 +459,8 @@ __all__ = [
     "api_cesto_finalizar",
     "api_guia_status",
     "api_guias_recentes",
+    "api_cestos_abertos",
     "api_cesto_item_remover",
     "guia_pagamento",
     "limpar_pre_reservas_antigas_web",
 ]
-

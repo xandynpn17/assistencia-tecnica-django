@@ -129,6 +129,87 @@ def _quebrar_tokens_longos(valor, tamanho_bloco=18):
     return re.sub(r"[A-Za-z0-9@._:/\\\-]{19,}", _split_token, texto)
 
 
+def _encurtar_canvas_texto(canv, valor, largura_max, fonte_nome, fonte_tamanho):
+    texto = str(valor or "")
+    if canv.stringWidth(texto, fonte_nome, fonte_tamanho) <= largura_max:
+        return texto
+    sufixo = "..."
+    largura_sufixo = canv.stringWidth(sufixo, fonte_nome, fonte_tamanho)
+    if largura_sufixo >= largura_max:
+        return sufixo
+    base = texto
+    while base and canv.stringWidth(base, fonte_nome, fonte_tamanho) > (largura_max - largura_sufixo):
+        base = base[:-1]
+    return (base.rstrip() + sufixo) if base else sufixo
+
+
+def _draw_footer_paginado(
+    canv,
+    *,
+    left,
+    right,
+    baseline_y,
+    width_total,
+    label,
+    total_pages,
+    font_name,
+    font_size,
+    text_color,
+    line_color=None,
+):
+    canv.saveState()
+    if line_color is not None:
+        line_y = baseline_y + (0.35 * cm)
+        canv.setStrokeColor(line_color)
+        canv.line(left, line_y, width_total - right, line_y)
+    canv.setFont(font_name, font_size)
+    canv.setFillColor(text_color)
+    canv.drawString(left, baseline_y, label)
+    canv.drawRightString(width_total - right, baseline_y, f"Pagina {canv.getPageNumber()} de {total_pages}")
+    canv.restoreState()
+
+
+def _draw_etiquetas_corte(
+    canv,
+    *,
+    width_total,
+    y_corte,
+    altura_etiqueta,
+    texto_os,
+    texto_cliente,
+    fonts,
+    tema_docs,
+):
+    largura_etiqueta = 3.0 * cm
+    area_util = width_total
+    quantidade = max(1, int(area_util // largura_etiqueta))
+    if quantidade == 1:
+        espaco_etiqueta = 0
+        largura_etiqueta = area_util
+    else:
+        espaco_etiqueta = (area_util - (quantidade * largura_etiqueta)) / (quantidade - 1)
+        while espaco_etiqueta < 0 and quantidade > 1:
+            quantidade -= 1
+            espaco_etiqueta = (area_util - (quantidade * largura_etiqueta)) / (quantidade - 1) if quantidade > 1 else 0
+
+    texto_os_final = _encurtar_canvas_texto(canv, texto_os, largura_etiqueta - (0.16 * cm), fonts["bold"], 6.9)
+    texto_cliente_final = _encurtar_canvas_texto(canv, texto_cliente, largura_etiqueta - (0.16 * cm), fonts["regular"], 5.2)
+    y_etiqueta = y_corte - (altura_etiqueta / 2.0)
+
+    for idx in range(quantidade):
+        x = idx * (largura_etiqueta + espaco_etiqueta)
+        canv.setFillColor(colors.white)
+        canv.setStrokeColor(tema_docs["section_line"])
+        canv.setLineWidth(0.9)
+        canv.roundRect(x, y_etiqueta, largura_etiqueta, altura_etiqueta, 1.8, stroke=1, fill=1)
+        canv.setFillColor(tema_docs["meta_color"])
+        canv.setFont(fonts["bold"], 6.9)
+        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.51 * cm, texto_os_final)
+        canv.setFont(fonts["regular"], 5.2)
+        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.20 * cm, texto_cliente_final)
+        canv.setLineWidth(1)
+
+
 def _resolve_upload_path(upload):
     if not upload:
         return None
@@ -328,18 +409,19 @@ def imprimir_ordem_servico(request, pk):
     )
 
     def _draw_footer(canv, total_pages):
-        canv.saveState()
-        canv.setStrokeColor(tema_docs["section_line"])
-        canv.line(doc.leftMargin, doc.bottomMargin - 0.25 * cm, A4[0] - doc.rightMargin, doc.bottomMargin - 0.25 * cm)
-        canv.setFont(fonts["regular"], 8)
-        canv.setFillColor(tema_docs["meta_color"])
-        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"OS {ordem.numero_os}")
-        canv.drawRightString(
-            A4[0] - doc.rightMargin,
-            doc.bottomMargin - 0.6 * cm,
-            f"Pagina {canv.getPageNumber()} de {total_pages}",
+        _draw_footer_paginado(
+            canv,
+            left=doc.leftMargin,
+            right=doc.rightMargin,
+            baseline_y=doc.bottomMargin - 0.6 * cm,
+            width_total=A4[0],
+            label=f"OS {ordem.numero_os}",
+            total_pages=total_pages,
+            font_name=fonts["regular"],
+            font_size=8,
+            text_color=tema_docs["meta_color"],
+            line_color=tema_docs["section_line"],
         )
-        canv.restoreState()
 
     def _header_block():
         def _status_badge(texto):
@@ -729,48 +811,16 @@ def imprimir_ordem_servico_impressao(request, pk):
             else:
                 cliente_curto = "Cliente"
 
-            texto_os = f"OS-{ordem.numero_os}"
-            largura_etiqueta = 3.0 * cm
-            altura_etiqueta = altura_etiqueta_corte
-            area_util = width
-            quantidade = max(1, int(area_util // largura_etiqueta))
-            if quantidade == 1:
-                espaco_etiqueta = 0
-                largura_etiqueta = area_util
-            else:
-                espaco_etiqueta = (area_util - (quantidade * largura_etiqueta)) / (quantidade - 1)
-                while espaco_etiqueta < 0 and quantidade > 1:
-                    quantidade -= 1
-                    espaco_etiqueta = (area_util - (quantidade * largura_etiqueta)) / (quantidade - 1) if quantidade > 1 else 0
-            x_inicial = 0
-            y_etiqueta = y - (altura_etiqueta / 2.0)
-
-            def _encurtar(valor, largura_max, fonte_nome, fonte_tamanho):
-                if canv.stringWidth(valor, fonte_nome, fonte_tamanho) <= largura_max:
-                    return valor
-                sufixo = "..."
-                largura_sufixo = canv.stringWidth(sufixo, fonte_nome, fonte_tamanho)
-                if largura_sufixo >= largura_max:
-                    return sufixo
-                base = valor
-                while base and canv.stringWidth(base, fonte_nome, fonte_tamanho) > (largura_max - largura_sufixo):
-                    base = base[:-1]
-                return (base.rstrip() + sufixo) if base else sufixo
-
-            texto_os_final = _encurtar(texto_os, largura_etiqueta - (0.16 * cm), fonts["bold"], 6.9)
-            texto_cliente_final = _encurtar(cliente_curto, largura_etiqueta - (0.16 * cm), fonts["regular"], 5.2)
-            for idx in range(quantidade):
-                x = x_inicial + idx * (largura_etiqueta + espaco_etiqueta)
-                canv.setFillColor(colors.white)
-                canv.setStrokeColor(tema_docs["section_line"])
-                canv.setLineWidth(0.9)
-                canv.roundRect(x, y_etiqueta, largura_etiqueta, altura_etiqueta, 1.8, stroke=1, fill=1)
-                canv.setFillColor(tema_docs["meta_color"])
-                canv.setFont(fonts["bold"], 6.9)
-                canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.51 * cm, texto_os_final)
-                canv.setFont(fonts["regular"], 5.2)
-                canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.20 * cm, texto_cliente_final)
-                canv.setLineWidth(1)
+            _draw_etiquetas_corte(
+                canv,
+                width_total=width,
+                y_corte=y,
+                altura_etiqueta=altura_etiqueta_corte,
+                texto_os=f"OS-{ordem.numero_os}",
+                texto_cliente=cliente_curto,
+                fonts=fonts,
+                tema_docs=tema_docs,
+            )
         elif not layout_cfg.get("exibir_etiqueta_corte", True) and is_frente:
             canv.setFont(fonts["regular"], 7)
             canv.setFillColor(tema_docs["meta_color"])
@@ -778,16 +828,18 @@ def imprimir_ordem_servico_impressao(request, pk):
         canv.restoreState()
 
     def _draw_footer(canv, total_pages):
-        canv.saveState()
-        canv.setFont(fonts["regular"], 7.4)
-        canv.setFillColor(tema_docs["meta_color"])
-        canv.drawString(margin, margin - 0.46 * cm, f"OS {ordem.numero_os}")
-        canv.drawRightString(
-            width - margin,
-            margin - 0.46 * cm,
-            f"Pagina {canv.getPageNumber()} de {total_pages}",
+        _draw_footer_paginado(
+            canv,
+            left=margin,
+            right=margin,
+            baseline_y=margin - 0.46 * cm,
+            width_total=width,
+            label=f"OS {ordem.numero_os}",
+            total_pages=total_pages,
+            font_name=fonts["regular"],
+            font_size=7.4,
+            text_color=tema_docs["meta_color"],
         )
-        canv.restoreState()
 
     frame_top = Frame(
         margin,
@@ -1405,18 +1457,19 @@ def imprimir_relatorio_tecnico(request, pk):
     )
 
     def _draw_footer(canv, total_pages):
-        canv.saveState()
-        canv.setStrokeColor(tema_docs["section_line"])
-        canv.line(doc.leftMargin, doc.bottomMargin - 0.25 * cm, A4[0] - doc.rightMargin, doc.bottomMargin - 0.25 * cm)
-        canv.setFont(fonts["regular"], 8)
-        canv.setFillColor(tema_docs["meta_color"])
-        canv.drawString(doc.leftMargin, doc.bottomMargin - 0.6 * cm, f"Relatório Técnico - OS {ordem.numero_os}")
-        canv.drawRightString(
-            A4[0] - doc.rightMargin,
-            doc.bottomMargin - 0.6 * cm,
-            f"Pagina {canv.getPageNumber()} de {total_pages}",
+        _draw_footer_paginado(
+            canv,
+            left=doc.leftMargin,
+            right=doc.rightMargin,
+            baseline_y=doc.bottomMargin - 0.6 * cm,
+            width_total=A4[0],
+            label=f"Relatório Técnico - OS {ordem.numero_os}",
+            total_pages=total_pages,
+            font_name=fonts["regular"],
+            font_size=8,
+            text_color=tema_docs["meta_color"],
+            line_color=tema_docs["section_line"],
         )
-        canv.restoreState()
 
     def _title_bar(texto):
         table = Table([[Paragraph(texto, styles["RtSection"])]], colWidths=[usable_w])

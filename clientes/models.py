@@ -9,10 +9,11 @@ from .services import (
     normalizar_documentos_cliente,
     validar_documento_cliente,
 )
+from configuracoes.services.documentos import formatar_cnpj, normalizar_cnpj, validar_cnpj_alfanumerico
 
 # Validador para CPF/CNPJ (aceita 11 ou 14 dígitos) - NOVO
 documento_validator = RegexValidator(
-    regex=r'^\d{11}$|^\d{14}$',
+    regex=r'^\d{11}$|^[A-Z0-9]{14}$',
     message="O documento deve conter 11 dígitos (CPF) ou 14 dígitos (CNPJ)."
 )
 
@@ -23,7 +24,7 @@ cpf_validator = RegexValidator(
 )
 
 cnpj_validator = RegexValidator(
-    regex=r'^\d{14}$',
+    regex=r'^[A-Z0-9]{14}$',
     message="O CNPJ deve conter exatamente 14 dígitos numéricos."
 )
 
@@ -198,25 +199,8 @@ class Cliente(models.Model):
 
     @staticmethod
     def validar_cnpj(cnpj):
-        """Valida dígitos verificadores do CNPJ"""
-        cnpj = ''.join(filter(str.isdigit, cnpj))
-
-        if len(cnpj) != 14:
-            return False
-
-        # Peso para primeiro dígito
-        peso1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-        soma = sum(int(cnpj[i]) * peso1[i] for i in range(12))
-        resto = soma % 11
-        dig1 = '0' if resto < 2 else str(11 - resto)
-
-        # Peso para segundo dígito
-        peso2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-        soma = sum(int(cnpj[i]) * peso2[i] for i in range(13))
-        resto = soma % 11
-        dig2 = '0' if resto < 2 else str(11 - resto)
-
-        return cnpj[-2:] == dig1 + dig2
+        """Valida dígitos verificadores do CNPJ numérico ou alfanumérico."""
+        return validar_cnpj_alfanumerico(cnpj)
 
     def get_documento_formatado(self):
         """Retorna o documento formatado conforme o tipo"""
@@ -227,26 +211,28 @@ class Cliente(models.Model):
                 if len(doc_limpo) == 11:
                     return f"{doc_limpo[:3]}.{doc_limpo[3:6]}.{doc_limpo[6:9]}-{doc_limpo[9:]}"
             elif self.cnpj:
-                doc_limpo = ''.join(filter(str.isdigit, self.cnpj))
+                doc_limpo = normalizar_cnpj(self.cnpj)
                 if len(doc_limpo) == 14:
-                    return f"{doc_limpo[:2]}.{doc_limpo[2:5]}.{doc_limpo[5:8]}/{doc_limpo[8:12]}-{doc_limpo[12:]}"
+                    return formatar_cnpj(doc_limpo)
             return None
 
         doc_limpo = ''.join(filter(str.isdigit, self.documento))
+        if len(doc_limpo) != 11:
+            doc_limpo = normalizar_cnpj(self.documento)
 
         if len(doc_limpo) == 11:
             return f"{doc_limpo[:3]}.{doc_limpo[3:6]}.{doc_limpo[6:9]}-{doc_limpo[9:]}"
         elif len(doc_limpo) == 14:
-            return f"{doc_limpo[:2]}.{doc_limpo[2:5]}.{doc_limpo[5:8]}/{doc_limpo[8:12]}-{doc_limpo[12:]}"
+            return formatar_cnpj(doc_limpo)
 
         return self.documento
 
     @property
     def tipo_cliente_exibicao(self):
-        documento = re.sub(r"\D", "", self.documento or self.cpf or self.cnpj or "")
-        if len(documento) == 14:
+        documento = self.documento or self.cpf or self.cnpj or ""
+        if len(normalizar_cnpj(documento)) == 14:
             return "Pessoa Jurídica"
-        if len(documento) == 11:
+        if len(re.sub(r"\D", "", documento)) == 11:
             return "Pessoa Física"
         return self.get_tipo_cliente_display()
 

@@ -10,11 +10,25 @@ from .models import GuiaExpedicaoItem, GuiaExpedicaoParceiro, LinhaTrabalho, Not
 
 
 class OrdemServicoForm(forms.ModelForm):
+    OUTROS_TIPO_EQUIPAMENTO = "__outros__"
+
     tipo_equipamento = forms.ChoiceField(
         required=True,
         label="Tipo de equipamento",
         choices=[],
         widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    tipo_equipamento_manual = forms.CharField(
+        required=False,
+        label="Tipo de equipamento (Outros)",
+        max_length=40,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "Ex: depilador, nobreak, smartwatch...",
+                "maxlength": "40",
+            }
+        ),
     )
     marca_catalogo = forms.ChoiceField(
         required=False,
@@ -54,7 +68,16 @@ class OrdemServicoForm(forms.ModelForm):
         else:
             # Fallback de seguranca para bases ainda sem dados configurados.
             opcoes_tipo = list(OrdemServico.TIPO_EQUIPAMENTO_CHOICES)
-        self.fields["tipo_equipamento"].choices = [("", "---------"), *opcoes_tipo]
+        self._tipos_map = {str(codigo): nome for codigo, nome in opcoes_tipo}
+        self.fields["tipo_equipamento"].choices = [
+            ("", "---------"),
+            *opcoes_tipo,
+            (self.OUTROS_TIPO_EQUIPAMENTO, "Outros (digitar manualmente)"),
+        ]
+        tipo_atual = (getattr(self.instance, "tipo_equipamento", "") or "").strip()
+        if tipo_atual and tipo_atual not in self._tipos_map:
+            self.initial["tipo_equipamento"] = self.OUTROS_TIPO_EQUIPAMENTO
+            self.initial["tipo_equipamento_manual"] = tipo_atual
 
         marcas = list(MarcaGarantia.objects.filter(ativo=True).order_by("nome"))
         self._marcas_map = {str(m.id): m for m in marcas}
@@ -90,7 +113,17 @@ class OrdemServicoForm(forms.ModelForm):
         cleaned_data = super().clean()
         marca_catalogo = (cleaned_data.get("marca_catalogo") or "").strip()
         marca_manual = (cleaned_data.get("marca_manual") or "").strip()
+        tipo_equipamento = (cleaned_data.get("tipo_equipamento") or "").strip()
+        tipo_equipamento_manual = (cleaned_data.get("tipo_equipamento_manual") or "").strip()
         tipo_reparo = cleaned_data.get("tipo_reparo")
+
+        if tipo_equipamento == self.OUTROS_TIPO_EQUIPAMENTO:
+            if not tipo_equipamento_manual:
+                self.add_error("tipo_equipamento_manual", "Informe o tipo do equipamento ao selecionar Outros.")
+            else:
+                cleaned_data["tipo_equipamento"] = tipo_equipamento_manual[:40]
+        elif tipo_equipamento:
+            cleaned_data["tipo_equipamento_manual"] = ""
 
         if marca_catalogo == "__outros__":
             if marca_manual:
@@ -139,6 +172,7 @@ class OrdemServicoForm(forms.ModelForm):
         model = OrdemServico
         fields = [
             "tipo_equipamento",
+            "tipo_equipamento_manual",
             "marca_catalogo",
             "marca_equipamento",
             "modelo_equipamento",

@@ -1,4 +1,11 @@
 from .busca import OrdemServicoListView, buscar_ordens
+from .conciliacao import (
+    conciliacao_ordem_atualizar_item,
+    conciliacao_ordem_detalhe,
+    conciliacao_ordem_finalizar,
+    conciliacao_ordem_marcar_todos,
+    conciliacoes_ordens,
+)
 from .expedicao import expedir_parceiro, guia_expedicao_pdf, guias_expedicao, recepcionar_parceiro
 from .fila import fila_bancada_tecnicos
 from .fluxo import (
@@ -46,6 +53,11 @@ __all__ = [
     "atualizar_observacoes",
     "atualizar_tecnico",
     "buscar_ordens",
+    "conciliacao_ordem_atualizar_item",
+    "conciliacao_ordem_detalhe",
+    "conciliacao_ordem_finalizar",
+    "conciliacao_ordem_marcar_todos",
+    "conciliacoes_ordens",
     "confirmar_manual_resumo",
     "confirmar_ordem_token_publico",
     "dashboard_pedidos_compra",

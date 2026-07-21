@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -30,6 +30,7 @@ from caixa.services.comissoes import (
 from caixa.services.pagamentos import (
     calcular_desconto_pagamento,
     excluir_pagamento_com_justificativa,
+    montar_composicao_pagamento,
     processar_pagamento_pos_transacional,
     validar_valor_pagamento_origem,
 )
@@ -373,6 +374,16 @@ def _dashboard_caixa_context(request, menu_sub):
     a_receber_total = contas_abertas.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     vencidas_total = contas_abertas.filter(vencimento__lt=timezone.localdate()).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     a_receber_garantia = contas_abertas.filter(tipo_origem="garantia_fabricante").aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    a_receber_garantia_vencida = contas_abertas.filter(
+        tipo_origem="garantia_fabricante",
+        vencimento__lt=timezone.localdate(),
+    ).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    a_receber_garantia_divergente = (
+        contas_abertas.filter(tipo_origem="garantia_fabricante", valor_aprovado_garantia__gt=0)
+        .exclude(valor_aprovado_garantia=F("valor_original"))
+        .aggregate(total=Sum("valor_aberto"))["total"]
+        or Decimal("0.00")
+    )
     a_receber_cliente = max(Decimal("0.00"), a_receber_total - a_receber_garantia)
     contas_prontas_sem_recebimento = contas_abertas.filter(
         tipo_origem="cliente_os",
@@ -382,6 +393,12 @@ def _dashboard_caixa_context(request, menu_sub):
     prontas_sem_recebimento_qtd = contas_prontas_sem_recebimento.count()
     receita_garantia = pagamentos.filter(Q(forma_pagamento__codigo="garantia_fabricante") | Q(metodo="garantia_fabricante")).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     receita_cliente = pagamentos.exclude(Q(forma_pagamento__codigo="garantia_fabricante") | Q(metodo="garantia_fabricante")).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    marcas_garantia_atrasadas = list(
+        contas_abertas.filter(tipo_origem="garantia_fabricante", vencimento__lt=timezone.localdate())
+        .values("marca_garantia__nome", "fornecedor_garantia__nome")
+        .annotate(total=Sum("valor_aberto"), quantidade=Count("id"))
+        .order_by("-total", "-quantidade", "marca_garantia__nome")[:5]
+    )
 
     formas_pagamento_resumo = [
         {
@@ -627,6 +644,8 @@ def _dashboard_caixa_context(request, menu_sub):
         "a_receber_total": a_receber_total,
         "a_receber_cliente": a_receber_cliente,
         "a_receber_garantia": a_receber_garantia,
+        "a_receber_garantia_vencida": a_receber_garantia_vencida,
+        "a_receber_garantia_divergente": a_receber_garantia_divergente,
         "prontas_sem_recebimento_total": prontas_sem_recebimento_total,
         "prontas_sem_recebimento_qtd": prontas_sem_recebimento_qtd,
         "receita_cliente": receita_cliente,
@@ -648,6 +667,7 @@ def _dashboard_caixa_context(request, menu_sub):
         "comparativo_centros_custo": comparativo_centros_custo,
         "comparativo_categorias_saida": comparativo_categorias_saida,
         "formas_pagamento_resumo": formas_pagamento_resumo,
+        "marcas_garantia_atrasadas": marcas_garantia_atrasadas,
         "centros_custo_resumo": centros_custo_resumo,
         "categorias_saida_resumo": categorias_saida_resumo,
         "despesas_marketing_periodo": despesas_marketing_periodo,
@@ -743,6 +763,7 @@ def registrar_pagamento(request):
     valor_query = request.GET.get("valor")
     pagamento_sucesso = None
     guia_total = Decimal("0.00")
+    guia_resumo = None
 
     def _total_liquidado_pagamentos(qs):
         return sum(
@@ -788,6 +809,38 @@ def registrar_pagamento(request):
             messages.error(request, "Guia nao encontrada ou ja finalizada.")
             return _redirect_pos_operacao(request, "caixa:registrar_pagamento")
         guia_total = sum((item.valor_total for item in vendas_guia), Decimal("0.00"))
+        vendedores = []
+        pontos = []
+        operadores = []
+        quantidade_total_guia = 0
+        criado_em_guia = None
+        for item_guia in vendas_guia:
+            quantidade_total_guia += int(item_guia.quantidade or 0)
+            vendedor = (item_guia.funcionario_numero or "").strip()
+            if vendedor and vendedor not in vendedores:
+                vendedores.append(vendedor)
+            ponto_codigo = getattr(getattr(item_guia, "ponto_operacional", None), "codigo", "")
+            if ponto_codigo and ponto_codigo not in pontos:
+                pontos.append(ponto_codigo)
+            operador_nome = getattr(getattr(item_guia, "usuario", None), "username", "")
+            if operador_nome and operador_nome not in operadores:
+                operadores.append(operador_nome)
+            if item_guia.criado_em and (not criado_em_guia or item_guia.criado_em < criado_em_guia):
+                criado_em_guia = item_guia.criado_em
+
+        guia_resumo = {
+            "codigo": guia_codigo,
+            "itens_total": len(vendas_guia),
+            "quantidade_total": quantidade_total_guia,
+            "valor_total": guia_total,
+            "status_label": "Pendente de recebimento",
+            "origem_label": "Venda a mostrador",
+            "vendedores_label": ", ".join(vendedores) if vendedores else "-",
+            "operadores_label": ", ".join(operadores) if operadores else "-",
+            "pontos_label": ", ".join(pontos) if pontos else "-",
+            "criado_em": criado_em_guia,
+            "itens_preview": vendas_guia[:5],
+        }
 
     garantia_sugerida = _valor_garantia_sugerido(ordem)
     ordem_total_os = Decimal("0.00")
@@ -827,6 +880,7 @@ def registrar_pagamento(request):
         config_sistema = ConfiguracaoSistema.get_configuracao()
         troco_sugerido = None
         valor_recebido = None
+        composicao_preview = []
         mensagem_antifraude = ""
         if form.is_bound:
             try:
@@ -845,10 +899,28 @@ def registrar_pagamento(request):
                 desconto_percentual_form = Decimal(str(form.data.get("desconto_percentual") or "0"))
             except (InvalidOperation, TypeError, ValueError):
                 desconto_percentual_form = Decimal("0.00")
+            try:
+                valor_secundario_form = Decimal(str(form.data.get("valor_secundario") or "0"))
+            except (InvalidOperation, TypeError, ValueError):
+                valor_secundario_form = Decimal("0.00")
             if desconto_percentual_form > Decimal("0.00"):
                 desconto_form = min((valor_form * desconto_percentual_form) / Decimal("100.00"), valor_form)
             desconto_form = min(max(desconto_form, Decimal("0.00")), valor_form)
             valor_final_form = valor_form - desconto_form
+            forma_principal = form.fields["forma_pagamento"].queryset.filter(id=form.data.get("forma_pagamento")).first()
+            forma_secundaria = form.fields["forma_pagamento"].queryset.filter(id=form.data.get("forma_pagamento_secundaria")).first()
+            if forma_principal:
+                try:
+                    composicao_preview = montar_composicao_pagamento(
+                        forma_principal=forma_principal,
+                        referencia_principal=form.data.get("referencia"),
+                        valor_total_liquido=valor_final_form,
+                        forma_secundaria=forma_secundaria,
+                        valor_secundario=valor_secundario_form,
+                        referencia_secundaria=form.data.get("referencia_secundaria"),
+                    )
+                except ValueError:
+                    composicao_preview = []
             if valor_form > Decimal("0.00"):
                 percentual_desconto_form = (desconto_form / valor_form) * Decimal("100.00")
                 limiar = Decimal(str(config_sistema.antifraude_desconto_critico_percentual or 0))
@@ -858,8 +930,12 @@ def registrar_pagamento(request):
                         f"Sera exigida confirmacao extra e justificativa minima de "
                         f"{int(config_sistema.antifraude_motivo_minimo_caracteres or 12)} caracteres."
                     )
-            if valor_recebido is not None and valor_recebido >= valor_final_form:
-                troco_sugerido = valor_recebido - valor_final_form
+            valor_dinheiro = Decimal("0.00")
+            for item_comp in composicao_preview:
+                if (item_comp or {}).get("forma_codigo") == "dinheiro":
+                    valor_dinheiro += Decimal(str((item_comp or {}).get("valor") or "0"))
+            if valor_recebido is not None and valor_dinheiro > Decimal("0.00") and valor_recebido >= valor_dinheiro:
+                troco_sugerido = valor_recebido - valor_dinheiro
         emitir_fiscal_url = ""
         if pagamento_sucesso:
             try:
@@ -887,6 +963,7 @@ def registrar_pagamento(request):
             "vendas_guia": vendas_guia,
             "guia_codigo": guia_codigo,
             "guia_total": guia_total,
+            "guia_resumo": guia_resumo,
             "garantia_sugerida": garantia_sugerida,
             "caixa": caixa,
             "numero_os_busca": numero_os_busca,
@@ -904,6 +981,7 @@ def registrar_pagamento(request):
             "pode_aplicar_desconto_caixa": has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"),
             "troco_sugerido": troco_sugerido,
             "valor_recebido": valor_recebido,
+            "composicao_preview": composicao_preview,
             "valor_base_pagamento": ordem_valor_aberto if ordem else (guia_total if vendas_guia else (venda.valor_total if venda else None)),
             "antifraude_config": config_sistema,
             "mensagem_antifraude": mensagem_antifraude,
@@ -932,6 +1010,37 @@ def registrar_pagamento(request):
                 desconto_valor=desconto_valor,
                 desconto_percentual=desconto_percentual,
             )
+            forma_secundaria = form.cleaned_data.get("forma_pagamento_secundaria")
+            valor_secundario = form.cleaned_data.get("valor_secundario") or Decimal("0.00")
+            referencia_secundaria = form.cleaned_data.get("referencia_secundaria") or ""
+            try:
+                composicao_pagamento = montar_composicao_pagamento(
+                    forma_principal=pagamento_preview.forma_pagamento,
+                    referencia_principal=pagamento_preview.referencia,
+                    valor_total_liquido=valor_liquido_pagamento,
+                    forma_secundaria=forma_secundaria,
+                    valor_secundario=valor_secundario,
+                    referencia_secundaria=referencia_secundaria,
+                )
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+                return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
+            valor_dinheiro = sum(
+                (
+                    Decimal(str(item_comp.get("valor") or "0"))
+                    for item_comp in composicao_pagamento
+                    if item_comp.get("forma_codigo") == "dinheiro"
+                ),
+                Decimal("0.00"),
+            )
+            valor_recebido_dinheiro = form.cleaned_data.get("valor_recebido")
+            if valor_dinheiro > Decimal("0.00"):
+                if valor_recebido_dinheiro is None:
+                    form.add_error("valor_recebido", "Informe o valor recebido em dinheiro para calcular o troco.")
+                    return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
+                if valor_recebido_dinheiro < valor_dinheiro:
+                    form.add_error("valor_recebido", "O valor recebido em dinheiro nao pode ser menor que a parcela em dinheiro.")
+                    return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             if desconto_aplicado > Decimal("0.00"):
                 try:
                     require_sensitive_permission(
@@ -1021,6 +1130,11 @@ def registrar_pagamento(request):
                         form.add_error("forma_pagamento", erro_regra)
                         form.add_error("metodo", erro_regra)
                         return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
+                    if Decimal(regra_garantia.valor_mao_obra or Decimal("0.00")) <= Decimal("0.00"):
+                        erro_regra = "Pagamento em garantia bloqueado: a regra vigente da marca precisa ter valor de mao de obra maior que zero."
+                        form.add_error("forma_pagamento", erro_regra)
+                        form.add_error("metodo", erro_regra)
+                        return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             try:
                 pagamento = processar_pagamento_pos_transacional(
                     form=form,
@@ -1032,6 +1146,7 @@ def registrar_pagamento(request):
                     guia_codigo=guia_codigo,
                     desconto_aplicado=desconto_aplicado,
                     desconto_percentual=desconto_percentual,
+                    composicao_pagamento=composicao_pagamento,
                     chave_idempotencia=chave_idempotencia,
                     usuario=request.user,
                     vincular_talao_cb=_vincular_talao_itens_ordem,
@@ -1071,6 +1186,19 @@ def registrar_pagamento(request):
                     },
                 )
                 form.add_error(None, str(exc))
+                return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
+            except ValidationError as exc:
+                logger.warning(
+                    "caixa_pagamento_validacao_modelo",
+                    extra={
+                        "modulo": "caixa",
+                        "acao": "registrar_pagamento",
+                        "usuario_id": getattr(request.user, "id", None),
+                        "ordem_id": getattr(ordem, "id", None),
+                        "erro": str(exc),
+                    },
+                )
+                form.add_error(None, "; ".join(exc.messages) if getattr(exc, "messages", None) else str(exc))
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
 
             if pagamento.desconto > Decimal("0.00"):

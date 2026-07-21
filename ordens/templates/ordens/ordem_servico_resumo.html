@@ -130,6 +130,10 @@
                 <div class="resume-value">{{ ordem.status_listagem_label }}</div>
               </div>
               <div class="col-md-6 mb-2">
+                <div class="resume-label">Tipo da OS</div>
+                <div class="resume-value">{{ ordem.tipo_reparo|default:"-" }}</div>
+              </div>
+              <div class="col-md-6 mb-2">
                 <div class="resume-label">Atendente</div>
                 <div class="resume-value">{{ ordem.atendente_abertura|default:"-" }}</div>
               </div>

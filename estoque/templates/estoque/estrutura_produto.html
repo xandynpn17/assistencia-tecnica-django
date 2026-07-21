@@ -1,15 +1,253 @@
 {% extends "core/base.html" %}
 
+{% block extra_css %}
+{{ block.super }}
+<style>
+  .estrutura-hero {
+    border: 1px solid #dbe6ef;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f3f8fc 100%);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .estrutura-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .estrutura-kpi {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: #fff;
+    padding: 12px;
+  }
+  .estrutura-kpi-label {
+    font-size: .74rem;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 4px;
+  }
+  .estrutura-kpi-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .estrutura-recompra {
+    border: 1px solid #d9e2ec;
+    border-radius: 14px;
+    background: #fff;
+    padding: 14px;
+    height: 100%;
+  }
+  .estrutura-recompra h5 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #183247;
+    margin-bottom: 8px;
+  }
+  .estrutura-recompra p {
+    margin-bottom: 10px;
+    color: #4d6278;
+  }
+  .estrutura-resumo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .estrutura-mini-box {
+    border: 1px dashed #cfe0ec;
+    border-radius: 12px;
+    background: #f8fbff;
+    padding: 10px;
+  }
+  .estrutura-mini-box-label {
+    font-size: .74rem;
+    text-transform: uppercase;
+    color: #6b7c8f;
+    margin-bottom: 3px;
+  }
+  .estrutura-mini-box-value {
+    font-weight: 700;
+    color: #10263d;
+  }
+  @media (max-width: 991.98px) {
+    .estrutura-kpis,
+    .estrutura-resumo-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
+<div class="estrutura-hero">
+  <div class="d-flex flex-wrap justify-content-between align-items-start" style="gap:12px;">
+    <div>
+      <div class="text-muted small">Estrutura operacional do produto</div>
+      <h3 class="mb-1">{{ produto.nome }}</h3>
+      <div class="text-muted">
+        {% if produto.sku %}SKU {{ produto.sku }}{% endif %}
+        {% if produto.ean %}{% if produto.sku %} • {% endif %}EAN {{ produto.ean }}{% endif %}
+        {% if produto.tipo_item %} • {{ produto.get_tipo_item_display }}{% endif %}
+      </div>
+    </div>
+    <div class="d-flex flex-wrap" style="gap:8px;">
+      <a href="{% url 'estoque:editar_produto' produto.id %}" class="btn btn-outline-primary btn-sm">Editar ficha</a>
+      <a href="{% url 'estoque:lista_produtos' %}?carregar=1&q={{ produto.nome|urlencode }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+    </div>
+  </div>
+
+  <div class="estrutura-kpis mt-3">
+    <div class="estrutura-kpi">
+      <div class="estrutura-kpi-label">Fornecedores ativos</div>
+      <div class="estrutura-kpi-value">{{ fornecedores_contexto.fornecedores_ativos }}</div>
+    </div>
+    <div class="estrutura-kpi">
+      <div class="estrutura-kpi-label">Preferencial atual</div>
+      <div class="estrutura-kpi-value">{% if fornecedores_contexto.preferencial %}{{ fornecedores_contexto.preferencial.fornecedor_nome }}{% else %}-{% endif %}</div>
+    </div>
+    <div class="estrutura-kpi">
+      <div class="estrutura-kpi-label">Melhor custo cadastrado</div>
+      <div class="estrutura-kpi-value">{% if fornecedores_contexto.menor_custo %}R$ {{ fornecedores_contexto.menor_custo.custo_referencia|floatformat:2 }}{% else %}-{% endif %}</div>
+    </div>
+    <div class="estrutura-kpi">
+      <div class="estrutura-kpi-label">Ultima compra recebida</div>
+      <div class="estrutura-kpi-value">{% if fornecedores_contexto.ultimo_custo_entrada > 0 %}R$ {{ fornecedores_contexto.ultimo_custo_entrada|floatformat:2 }}{% else %}-{% endif %}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-lg-7 mb-3 mb-lg-0">
+    <div class="estrutura-recompra">
+      <h5>{{ recompra_contexto.titulo }}</h5>
+      <p>{{ recompra_contexto.mensagem }}</p>
+      <div class="estrutura-resumo-grid">
+        <div class="estrutura-mini-box">
+          <div class="estrutura-mini-box-label">Fornecedor sugerido</div>
+          <div class="estrutura-mini-box-value">
+            {% if recompra_contexto.fornecedor_recomendado %}
+              {{ recompra_contexto.fornecedor_recomendado.fornecedor_nome }}
+            {% else %}
+              Sem fornecedor
+            {% endif %}
+          </div>
+        </div>
+        <div class="estrutura-mini-box">
+          <div class="estrutura-mini-box-label">Economia potencial / un.</div>
+          <div class="estrutura-mini-box-value">
+            {% if recompra_contexto.economia_unitaria > 0 %}
+              R$ {{ recompra_contexto.economia_unitaria|floatformat:2 }}
+            {% else %}
+              -
+            {% endif %}
+          </div>
+        </div>
+        <div class="estrutura-mini-box">
+          <div class="estrutura-mini-box-label">Vs ultima compra</div>
+          <div class="estrutura-mini-box-value">
+            {% if recompra_contexto.variacao_ultima_compra is not None %}
+              {% if recompra_contexto.variacao_ultima_compra > 0 %}
+                + R$ {{ recompra_contexto.variacao_ultima_compra|floatformat:2 }}
+              {% elif recompra_contexto.variacao_ultima_compra < 0 %}
+                - R$ {{ recompra_contexto.variacao_ultima_compra|floatformat:2|cut:"-" }}
+              {% else %}
+                Igual
+              {% endif %}
+            {% else %}
+              Sem base
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="d-flex flex-wrap mt-3" style="gap:8px;">
+        <a href="{{ recompra_contexto.link_entrada }}" class="btn btn-primary btn-sm">
+          Abrir entrada pre-preenchida
+        </a>
+        <a href="{% url 'estoque:reposicao_estoque' %}?q={{ produto.nome|urlencode }}" class="btn btn-outline-secondary btn-sm">
+          Ver reposicao deste item
+        </a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="estrutura-recompra">
+      <h5>Como usar esta area</h5>
+      <p class="mb-2">A estrutura do produto agora serve para governar preco por tabela, equivalencias, kit e recompra.</p>
+      <ul class="mb-0 text-muted" style="padding-left:18px;">
+        <li>Atualize fornecedores sempre que mudar custo ou prazo.</li>
+        <li>Use a entrada pre-preenchida para evitar retrabalho na recompra.</li>
+        <li>Mantenha equivalentes e kit so quando forem de uso real da operacao.</li>
+      </ul>
+      <div class="alert alert-info mt-3 mb-0">
+        <strong>Fornecedor da ficha x fornecedores desta estrutura:</strong>
+        na ficha principal voce define quem costuma vender este item para a loja. Nesta area voce compara varios fornecedores, custo, prazo e preferencia para orientar recompra sem confusao.
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if produto.controla_lote or produto.controla_serie %}
 <div class="card mb-3">
   <div class="card-header d-flex justify-content-between align-items-center">
-    <h3 class="card-title mb-0">Estrutura do produto: {{ produto.nome }}</h3>
-    <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+    <strong>Rastreabilidade do estoque</strong>
+    <div>
+      {% if produto.controla_lote %}<span class="badge badge-info">Controle por lote</span>{% endif %}
+      {% if produto.controla_serie %}<span class="badge badge-primary">Controle por serie</span>{% endif %}
+    </div>
   </div>
   <div class="card-body">
     <div class="row">
+      {% if produto.controla_lote %}
+      <div class="col-lg-6 mb-3 mb-lg-0">
+        <h6>Lotes com saldo</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>Lote</th><th>Validade</th><th>Posicao</th><th>Saldo</th></tr></thead>
+            <tbody>
+              {% for lote in lotes_ativos %}
+              <tr>
+                <td>{{ lote.codigo }}</td>
+                <td>{{ lote.validade|date:"d/m/Y"|default:"-" }}</td>
+                <td>{{ lote.ponto_operacional.codigo }} / {{ lote.ubicacao.codigo }}</td>
+                <td>{{ lote.quantidade_disponivel }}</td>
+              </tr>
+              {% empty %}<tr><td colspan="4" class="text-center text-muted">Nenhum lote recebido com saldo.</td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+      {% if produto.controla_serie %}
+      <div class="col-lg-6">
+        <h6>Series disponiveis</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>Serie</th><th>Posicao</th><th>Entrada</th></tr></thead>
+            <tbody>
+              {% for serie in series_disponiveis %}
+              <tr>
+                <td>{{ serie.numero }}</td>
+                <td>{{ serie.ponto_operacional.codigo|default:"-" }} / {{ serie.ubicacao.codigo|default:"-" }}</td>
+                <td>{% if serie.entrada_item_id %}{{ serie.entrada_item.entrada.numero }}{% else %}-{% endif %}</td>
+              </tr>
+              {% empty %}<tr><td colspan="3" class="text-center text-muted">Nenhuma serie disponivel.</td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row">
       <div class="col-lg-4">
-        <h6>Preços por tabela</h6>
+        <h6>Precos por tabela</h6>
         <form method="post" class="mb-3">
           {% csrf_token %}
           <input type="hidden" name="acao" value="adicionar_preco_tabela">
@@ -18,7 +256,7 @@
           <button type="submit" class="btn btn-primary btn-sm">Adicionar/Atualizar</button>
         </form>
         <table class="table table-sm table-bordered">
-          <thead><tr><th>Tabela</th><th>Preço</th><th></th></tr></thead>
+          <thead><tr><th>Tabela</th><th>Preco</th><th></th></tr></thead>
           <tbody>
           {% for item in precos_tabela %}
             <tr>
@@ -73,7 +311,7 @@
       </div>
 
       <div class="col-lg-4">
-        <h6>Composição de kit</h6>
+        <h6>Composicao de kit</h6>
         <form method="post" class="mb-3">
           {% csrf_token %}
           <input type="hidden" name="acao" value="adicionar_kit_item">
@@ -104,12 +342,91 @@
         </table>
       </div>
     </div>
+
+    <div class="row mt-3">
+      <div class="col-lg-12">
+        <h6>Fornecedores relacionados</h6>
+        <form method="post" class="mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="acao" value="adicionar_fornecedor">
+          <div class="row">
+            <div class="col-md-3">{{ fornecedor_form.fornecedor_config.label_tag }}{{ fornecedor_form.fornecedor_config }}</div>
+            <div class="col-md-2">{{ fornecedor_form.fornecedor_manual.label_tag }}{{ fornecedor_form.fornecedor_manual }}</div>
+            <div class="col-md-2">{{ fornecedor_form.codigo_fornecedor.label_tag }}{{ fornecedor_form.codigo_fornecedor }}</div>
+            <div class="col-md-2">{{ fornecedor_form.custo_referencia.label_tag }}{{ fornecedor_form.custo_referencia }}</div>
+            <div class="col-md-1">{{ fornecedor_form.prazo_medio_dias.label_tag }}{{ fornecedor_form.prazo_medio_dias }}</div>
+            <div class="col-md-2">{{ fornecedor_form.observacao.label_tag }}{{ fornecedor_form.observacao }}</div>
+          </div>
+          <div class="row mt-2">
+            <div class="col-md-2 form-check mt-4">{{ fornecedor_form.preferencial }} {{ fornecedor_form.preferencial.label_tag }}</div>
+            <div class="col-md-2 form-check mt-4">{{ fornecedor_form.ativo }} {{ fornecedor_form.ativo.label_tag }}</div>
+            <div class="col-md-8 d-flex align-items-end">
+              <button type="submit" class="btn btn-primary btn-sm">Adicionar fornecedor</button>
+            </div>
+          </div>
+        </form>
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>Fornecedor</th><th>Codigo</th><th>Custo ref.</th><th>Vs ultima compra</th><th>Vs melhor custo</th><th>Prazo</th><th>Status</th><th>Leitura</th><th>Obs.</th><th></th></tr></thead>
+          <tbody>
+          {% for linha in fornecedores_contexto.linhas %}
+            <tr>
+              <td>
+                {{ linha.fornecedor_nome }}
+                {% if linha.eh_preferencial %}<span class="badge badge-primary ml-1">Preferencial</span>{% endif %}
+                {% if linha.eh_melhor_preco %}<span class="badge badge-success ml-1">Melhor custo</span>{% endif %}
+              </td>
+              <td>{{ linha.item.codigo_fornecedor|default:"-" }}</td>
+              <td>R$ {{ linha.custo_referencia|floatformat:2 }}</td>
+              <td>
+                {% if linha.delta_ultimo is not None %}
+                  {% if linha.delta_ultimo > 0 %}
+                    <span class="text-danger">+ R$ {{ linha.delta_ultimo|floatformat:2 }}</span>
+                  {% elif linha.delta_ultimo < 0 %}
+                    <span class="text-success">- R$ {{ linha.delta_ultimo|floatformat:2|cut:"-" }}</span>
+                  {% else %}
+                    <span class="text-muted">Igual</span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted">Sem base</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if linha.delta_menor is not None %}
+                  {% if linha.delta_menor > 0 %}
+                    <span class="text-warning">+ R$ {{ linha.delta_menor|floatformat:2 }}</span>
+                  {% else %}
+                    <span class="text-success">Base</span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted">Sem base</span>
+                {% endif %}
+              </td>
+              <td>{% if linha.item.prazo_medio_dias %}{{ linha.item.prazo_medio_dias }} dias{% else %}-{% endif %}</td>
+              <td>{% if linha.item.ativo %}Ativo{% else %}<span class="text-muted">Inativo</span>{% endif %}</td>
+              <td>{{ linha.acao_recompra }}</td>
+              <td>{{ linha.item.observacao|default:"-" }}</td>
+              <td class="text-center">
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="acao" value="excluir_fornecedor">
+                  <input type="hidden" name="item_id" value="{{ linha.item.id }}">
+                  <button class="btn btn-outline-danger btn-sm" type="submit">x</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="10" class="text-center text-muted">Sem fornecedores relacionados.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
 <div class="card">
   <div class="card-header">
-    <h3 class="card-title mb-0">Histórico recente do produto</h3>
+    <h3 class="card-title mb-0">Historico recente do produto</h3>
   </div>
   <div class="card-body">
     <div class="table-responsive">
@@ -117,9 +434,9 @@
         <thead>
           <tr>
             <th>Data</th>
-            <th>Ação</th>
-            <th>Usuário</th>
-            <th>Observação</th>
+            <th>Acao</th>
+            <th>Usuario</th>
+            <th>Observacao</th>
           </tr>
         </thead>
         <tbody>
@@ -131,7 +448,7 @@
             <td>{{ item.observacao|default:"-" }}</td>
           </tr>
         {% empty %}
-          <tr><td colspan="4" class="text-center text-muted">Sem histórico registrado.</td></tr>
+          <tr><td colspan="4" class="text-center text-muted">Sem historico registrado.</td></tr>
         {% endfor %}
         </tbody>
       </table>

@@ -1,8 +1,8 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-br">
 <head>
     <meta charset="utf-8">
-    <title>Talão {{ pagamento.numero_talao }}</title>
+    <title>Talao {{ pagamento.numero_talao }}</title>
     <style>
         :root {
             --receipt-width: 80mm;
@@ -121,6 +121,7 @@
         .block .value {
             text-align: left;
             font-weight: 600;
+            word-break: break-word;
         }
         .total {
             font-size: 14px;
@@ -165,13 +166,13 @@
 
         <div class="rule"></div>
 
-        <div class="center title">Comprovante de Pagamento</div>
-        <div class="center subtitle">Cupom não fiscal</div>
+        <div class="center title">Comprovante de pagamento</div>
+        <div class="center subtitle">Cupom nao fiscal</div>
 
         <div class="rule"></div>
 
         <div class="row">
-            <div class="label">Número do Talão</div>
+            <div class="label">Numero do talao</div>
             <div class="value">{{ pagamento.numero_talao }}</div>
         </div>
         <div class="row">
@@ -179,13 +180,43 @@
             <div class="value">{{ pagamento.data|date:"d/m/Y H:i" }}</div>
         </div>
         <div class="row">
-            <div class="label">OS</div>
-            <div class="value">{% if pagamento.ordem_servico %}{{ pagamento.ordem_servico.numero_os }}{% else %}-{% endif %}</div>
+            <div class="label">Origem</div>
+            <div class="value">{% if pagamento.ordem_servico %}OS {{ pagamento.ordem_servico.numero_os }}{% else %}Venda a mostrador{% endif %}</div>
         </div>
         <div class="row">
-            <div class="label">Forma Pagamento</div>
+            <div class="label">Forma pagamento</div>
             <div class="value">{{ pagamento.metodo_display }}</div>
         </div>
+        {% if pagamento.pagamento_misto %}
+        <div class="block">
+            <div class="label">Composicao</div>
+            <div class="value">
+                {% for linha in pagamento.composicao_pagamento_legivel %}
+                    {{ linha }}{% if not forloop.last %}<br>{% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if pagamento.cliente_nome or pagamento.cliente_documento or pagamento.cliente_telefone %}
+        <div class="rule"></div>
+        <div class="block">
+            <div class="label">Comprador</div>
+            <div class="value">{{ pagamento.cliente_nome|default:"-" }}</div>
+        </div>
+        {% if pagamento.cliente_documento %}
+        <div class="row">
+            <div class="label">CPF/CNPJ</div>
+            <div class="value">{{ pagamento.cliente_documento }}</div>
+        </div>
+        {% endif %}
+        {% if pagamento.cliente_telefone %}
+        <div class="row">
+            <div class="label">Telefone</div>
+            <div class="value">{{ pagamento.cliente_telefone }}</div>
+        </div>
+        {% endif %}
+        {% endif %}
 
         <div class="rule"></div>
 
@@ -200,11 +231,11 @@
         </div>
         {% endif %}
         <div class="row">
-            <div class="label">Valor Pago</div>
+            <div class="label">Valor pago</div>
             <div class="value total">R$ {{ pagamento.valor|floatformat:2 }}</div>
         </div>
         <div class="row">
-            <div class="label">Referência</div>
+            <div class="label">Referencia</div>
             <div class="value">{{ pagamento.referencia|default:"-" }}</div>
         </div>
 

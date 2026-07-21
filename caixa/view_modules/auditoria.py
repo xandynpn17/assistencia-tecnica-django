@@ -4,11 +4,11 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.db.models import Count, Prefetch, Q, Sum
+from django.db.models import Count, F, Prefetch, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from configuracoes.models import FornecedorGarantia
+from configuracoes.models import FornecedorGarantia, MarcaGarantia
 from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, require_sensitive_permission, role_required
 from ordens.models import LinhaTrabalho, OrdemServico
 
@@ -719,22 +719,65 @@ def garantias_fabricante(request):
             return redirect("caixa:garantias_fabricante")
 
         auditoria = get_object_or_404(AuditoriaGarantia, id=request.POST.get("auditoria_id"))
+        valor_recebido_anterior = Decimal(auditoria.valor_recebido_fabricante or Decimal("0.00"))
         novo_status = (request.POST.get("status_faturamento") or "").strip()
         if novo_status in {"pendente", "enviado", "pago"}:
             auditoria.status_faturamento = novo_status
+        valor_aprovado_raw = (request.POST.get("valor_aprovado_fabricante") or "").strip()
+        valor_recebido_raw = (request.POST.get("valor_recebido_fabricante") or "").strip()
+        if valor_aprovado_raw:
+            try:
+                auditoria.valor_aprovado_fabricante = Decimal(valor_aprovado_raw)
+            except Exception:
+                messages.warning(request, "Valor aprovado invalido. Mantido o valor anterior.")
+        if valor_recebido_raw:
+            try:
+                auditoria.valor_recebido_fabricante = Decimal(valor_recebido_raw)
+            except Exception:
+                messages.warning(request, "Valor recebido invalido. Mantido o valor anterior.")
+        elif auditoria.status_faturamento == "pago" and Decimal(auditoria.valor_recebido_fabricante or Decimal("0.00")) <= Decimal("0.00"):
+            auditoria.valor_recebido_fabricante = Decimal(
+                auditoria.valor_aprovado_fabricante or auditoria.valor_previsto_fabricante or Decimal("0.00")
+            )
         auditoria.referencia_faturamento = (request.POST.get("referencia_faturamento") or "").strip()
         auditoria.observacoes = (request.POST.get("observacoes") or "").strip()
-        auditoria.save(update_fields=["status_faturamento", "referencia_faturamento", "observacoes", "atualizado_em"])
-        conta = _garantir_conta_garantia(auditoria.ordem_servico)
-        if conta and auditoria.status_faturamento == "pago" and conta.status in {"aberta", "parcial", "vencida"}:
-            valor_baixa = conta.valor_aberto
-            conta.valor_aberto = Decimal("0.00")
+        auditoria.save(
+            update_fields=[
+                "status_faturamento",
+                "valor_aprovado_fabricante",
+                "valor_recebido_fabricante",
+                "referencia_faturamento",
+                "observacoes",
+                "atualizado_em",
+            ]
+        )
+        conta = _garantir_conta_garantia(
+            auditoria.ordem_servico,
+            {
+                "fornecedor": auditoria.fornecedor,
+                "marca": auditoria.marca,
+                "regra": auditoria.regra_garantia,
+                "valor_previsto_fabricante": auditoria.valor_previsto_fabricante,
+                "valor_aprovado_fabricante": auditoria.valor_aprovado_fabricante or auditoria.valor_previsto_fabricante,
+                "referencia_faturamento": auditoria.referencia_faturamento,
+            },
+        )
+        if conta:
+            conta.valor_aberto = max(
+                Decimal("0.00"),
+                Decimal(conta.valor_aprovado_garantia or Decimal("0.00"))
+                - Decimal(auditoria.valor_recebido_fabricante or Decimal("0.00")),
+            )
             conta.atualizar_status_automatico()
             conta.save(update_fields=["valor_aberto", "status", "atualizado_em"])
-            if valor_baixa > 0:
+            if auditoria.conta_receber_id != conta.id:
+                auditoria.conta_receber = conta
+                auditoria.save(update_fields=["conta_receber", "atualizado_em"])
+            delta_recebido = Decimal(auditoria.valor_recebido_fabricante or Decimal("0.00")) - valor_recebido_anterior
+            if delta_recebido > Decimal("0.00"):
                 RecebimentoConta.objects.create(
                     conta=conta,
-                    valor=valor_baixa,
+                    valor=delta_recebido,
                     referencia=auditoria.referencia_faturamento or "BAIXA-GARANTIA",
                     observacao=f"Baixa manual via faturamento de garantia OS {auditoria.ordem_servico.numero_os}",
                     usuario=request.user,
@@ -744,13 +787,31 @@ def garantias_fabricante(request):
 
     status_filtro = (request.GET.get("status") or "").strip()
     fornecedor_id = (request.GET.get("fornecedor") or "").strip()
-    garantias = AuditoriaGarantia.objects.select_related("ordem_servico", "fornecedor", "marca").all()
+    marca_id = (request.GET.get("marca") or "").strip()
+    prioridade = (request.GET.get("prioridade") or "").strip()
+    garantias = (
+        AuditoriaGarantia.objects.select_related("ordem_servico", "fornecedor", "marca", "conta_receber")
+        .all()
+        .order_by("conta_receber__vencimento", "-criado_em", "-id")
+    )
     if status_filtro:
         garantias = garantias.filter(status_faturamento=status_filtro)
     if fornecedor_id.isdigit():
         garantias = garantias.filter(fornecedor_id=int(fornecedor_id))
+    if marca_id.isdigit():
+        garantias = garantias.filter(marca_id=int(marca_id))
 
     hoje_local = timezone.localdate()
+    if prioridade == "vencidas":
+        garantias = garantias.filter(conta_receber__status="vencida")
+    elif prioridade == "receber_hoje":
+        garantias = garantias.filter(conta_receber__vencimento=hoje_local, conta_receber__status__in=["aberta", "parcial", "vencida"])
+    elif prioridade == "divergentes":
+        garantias = garantias.filter(
+            Q(valor_aprovado_fabricante__gt=0, valor_aprovado_fabricante__lt=F("valor_previsto_fabricante"))
+            | Q(valor_recebido_fabricante__gt=0, valor_recebido_fabricante__lt=F("valor_aprovado_fabricante"))
+        )
+
     try:
         competencia_mes = int(request.GET.get("mes") or hoje_local.month)
     except (TypeError, ValueError):
@@ -768,17 +829,40 @@ def garantias_fabricante(request):
 
     resumo_marca_fornecedor = list(
         garantias_mes.values("fornecedor__nome", "marca__nome")
-        .annotate(total_valor_pago=Sum("valor_previsto_fabricante"), total_mao_tecnico=Sum("comissao_prevista_tecnica"))
+        .annotate(
+            total_previsto=Sum("valor_previsto_fabricante"),
+            total_aprovado=Sum("valor_aprovado_fabricante"),
+            total_recebido=Sum("valor_recebido_fabricante"),
+            total_mao_tecnico=Sum("comissao_prevista_tecnica"),
+        )
         .order_by("fornecedor__nome", "marca__nome")
     )
     for row in resumo_marca_fornecedor:
-        total_pago = row["total_valor_pago"] or Decimal("0.00")
+        total_previsto = row["total_previsto"] or Decimal("0.00")
+        total_aprovado = row["total_aprovado"] or Decimal("0.00")
+        total_recebido = row["total_recebido"] or Decimal("0.00")
         total_tecnico = row["total_mao_tecnico"] or Decimal("0.00")
-        row["margem"] = total_pago - total_tecnico
+        base_margem = total_recebido or total_aprovado or total_previsto
+        row["margem"] = base_margem - total_tecnico
 
     if request.GET.get("export") == "csv":
-        linhas = [[row.get("fornecedor__nome") or "-", row.get("marca__nome") or "-", _fmt_decimal(row.get("total_valor_pago")), _fmt_decimal(row.get("total_mao_tecnico")), _fmt_decimal(row.get("margem"))] for row in resumo_marca_fornecedor]
-        return _exportar_csv(f"garantias_{competencia_ano}_{competencia_mes:02d}.csv", ["Fornecedor", "Marca", "Valor Pago", "Mao de Obra Tecnico", "Margem"], linhas)
+        linhas = [
+            [
+                row.get("fornecedor__nome") or "-",
+                row.get("marca__nome") or "-",
+                _fmt_decimal(row.get("total_previsto")),
+                _fmt_decimal(row.get("total_aprovado")),
+                _fmt_decimal(row.get("total_recebido")),
+                _fmt_decimal(row.get("total_mao_tecnico")),
+                _fmt_decimal(row.get("margem")),
+            ]
+            for row in resumo_marca_fornecedor
+        ]
+        return _exportar_csv(
+            f"garantias_{competencia_ano}_{competencia_mes:02d}.csv",
+            ["Fornecedor", "Marca", "Valor Previsto", "Valor Aprovado", "Valor Recebido", "Mao de Obra Tecnico", "Margem"],
+            linhas,
+        )
 
     resumo = {
         "pendente": garantias.filter(status_faturamento="pendente").aggregate(total=Sum("valor_previsto_fabricante"))["total"] or Decimal("0.00"),
@@ -787,6 +871,12 @@ def garantias_fabricante(request):
     }
     contas_garantia_abertas = ContaReceber.objects.filter(tipo_origem="garantia_fabricante", status__in=["aberta", "parcial", "vencida"])
     resumo["contas_abertas"] = contas_garantia_abertas.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    resumo["vencidas"] = contas_garantia_abertas.filter(vencimento__lt=hoje_local).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    resumo["receber_hoje"] = contas_garantia_abertas.filter(vencimento=hoje_local).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    resumo["divergencias"] = garantias.filter(
+        Q(valor_aprovado_fabricante__gt=0, valor_aprovado_fabricante__lt=F("valor_previsto_fabricante"))
+        | Q(valor_recebido_fabricante__gt=0, valor_recebido_fabricante__lt=F("valor_aprovado_fabricante"))
+    ).aggregate(total=Sum("valor_aprovado_fabricante"))["total"] or Decimal("0.00")
 
     return render(
         request,
@@ -794,8 +884,11 @@ def garantias_fabricante(request):
         {
             "garantias": garantias[:300],
             "fornecedores": FornecedorGarantia.objects.filter(ativo=True).order_by("nome"),
+            "marcas": MarcaGarantia.objects.filter(ativo=True).order_by("nome"),
             "status_filtro": status_filtro,
             "fornecedor_filtro": fornecedor_id,
+            "marca_filtro": marca_id,
+            "prioridade_filtro": prioridade,
             "resumo": resumo,
             "resumo_marca_fornecedor": resumo_marca_fornecedor,
             "competencia_mes": competencia_mes,

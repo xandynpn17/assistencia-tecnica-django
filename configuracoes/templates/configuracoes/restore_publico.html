@@ -1,0 +1,231 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recuperação Local | ABGest</title>
+  <link rel="stylesheet" href="{% static 'adminlte/plugins/bootstrap/css/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'adminlte/plugins/fontawesome-free/css/all.min.css' %}">
+  <style>
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 34%),
+        linear-gradient(180deg, #edf3f9 0%, #f7f9fc 100%);
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #16324b;
+    }
+    .shell {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 16px;
+    }
+    .card-recovery {
+      width: 100%;
+      max-width: 1120px;
+      border: 1px solid #d7e1eb;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 22px 50px rgba(20, 49, 76, 0.12);
+      background: #fff;
+    }
+    .hero {
+      background: linear-gradient(135deg, #20384f 0%, #284a68 100%);
+      color: #fff;
+      padding: 26px 28px;
+    }
+    .hero p {
+      margin: 8px 0 0;
+      color: rgba(255,255,255,.82);
+      max-width: 720px;
+    }
+    .shell-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr);
+      gap: 18px;
+    }
+    .soft-panel {
+      border: 1px solid #dbe6f0;
+      border-radius: 16px;
+      background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+      padding: 18px;
+      height: 100%;
+    }
+    .section-kicker {
+      font-size: .76rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #6b7d91;
+      margin-bottom: 6px;
+    }
+    .metric {
+      border: 1px solid #dbe6f0;
+      border-radius: 14px;
+      background: #fff;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .metric-label {
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: #71869d;
+      margin-bottom: 6px;
+    }
+    .metric-value {
+      font-weight: 700;
+      color: #17324d;
+    }
+    .command-box {
+      border-radius: 14px;
+      background: #14273a;
+      color: #e8f2fb;
+      padding: 14px 16px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: .9rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .list-tight {
+      padding-left: 18px;
+      margin-bottom: 0;
+    }
+    .list-tight li + li {
+      margin-top: 6px;
+    }
+    @media (max-width: 991.98px) {
+      .shell-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="card card-recovery">
+      <div class="hero">
+        <h1 class="h3 mb-0"><i class="fas fa-life-ring mr-2"></i> Recuperação local</h1>
+        <p>Use este modo apenas quando o acesso normal ao sistema estiver indisponível. Ele foi pensado como contingência controlada para o ambiente local, antes do login.</p>
+      </div>
+      <div class="card-body p-4">
+        {% if messages %}
+          {% for message in messages %}
+          <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+
+        <div class="alert alert-warning">
+          <strong>Atenção:</strong> esta operação substitui os dados atuais. Origem detectada: <code>{{ ip_origem }}</code>.
+        </div>
+
+        <div class="shell-grid">
+          <div class="soft-panel">
+            <div class="section-kicker">Restore emergencial</div>
+            <h2 class="h5 mb-3">Restaurar backup oficial sem login</h2>
+
+            {% if backups %}
+            <form method="post">
+              {% csrf_token %}
+              <div class="form-group">
+                <label for="arquivo">Backup oficial disponível</label>
+                <select id="arquivo" name="arquivo" class="form-control" required>
+                  <option value="">Selecione...</option>
+                  {% for item in backups %}
+                  <option value="{{ item.path }}">
+                    {{ item.name }} | {{ item.engine|default:engine_label }} | {{ item.size_label }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <small class="form-text text-muted">
+                  São aceitos apenas backups presentes em <code>{{ backup_dir }}</code>.
+                </small>
+              </div>
+
+              <div class="form-group">
+                <label for="recovery_key">Chave de recuperação local</label>
+                <input id="recovery_key" type="password" name="recovery_key" class="form-control" autocomplete="off" required>
+                <small class="form-text text-muted">A chave é definida na variável local <code>DJANGO_LOCAL_RECOVERY_KEY</code>.</small>
+              </div>
+
+              <div class="form-group form-check">
+                <input id="restore_media" type="checkbox" name="restore_media" class="form-check-input">
+                <label for="restore_media" class="form-check-label">Restaurar também logos, assinaturas, anexos e demais arquivos enviados</label>
+              </div>
+
+              <div class="form-group form-check">
+                <input id="repair_single_tenant" type="checkbox" name="repair_single_tenant" class="form-check-input" checked>
+                <label for="repair_single_tenant" class="form-check-label">Reparar escopo de empresa única após o restore</label>
+              </div>
+
+              <div class="form-group form-check">
+                <input id="ciente_restore" type="checkbox" name="ciente_restore" value="1" class="form-check-input" required>
+                <label for="ciente_restore" class="form-check-label">Entendo que esta operação substitui os dados atuais</label>
+              </div>
+
+              <div class="form-group">
+                <label for="confirmar">Confirmação</label>
+                <input id="confirmar" type="text" name="confirmar" class="form-control" placeholder="Digite RESTAURAR" required>
+              </div>
+
+              <div class="d-flex flex-wrap" style="gap:8px;">
+                <button type="submit" class="btn btn-danger">
+                  <i class="fas fa-exclamation-triangle mr-1"></i> Restaurar backup
+                </button>
+                <a href="{% url 'core:login' %}" class="btn btn-outline-secondary">Voltar ao login</a>
+              </div>
+            </form>
+            {% else %}
+            <div class="alert alert-info mb-3">
+              <strong>Nenhum backup encontrado.</strong> Coloque primeiro um backup válido dentro da pasta oficial <code>{{ backup_dir }}</code>.
+            </div>
+            <a href="{% url 'core:login' %}" class="btn btn-outline-secondary">Voltar ao login</a>
+            {% endif %}
+          </div>
+
+          <div class="soft-panel">
+            <div class="section-kicker">Orientação</div>
+            <h2 class="h5 mb-3">Como agir com segurança</h2>
+
+            <div class="metric">
+              <div class="metric-label">Quando usar</div>
+              <ul class="list-tight">
+                <li>Falha de login após problema de base.</li>
+                <li>Dados críticos corrompidos após ajuste incorreto.</li>
+                <li>Recuperação rápida do ambiente local sem depender do painel administrativo.</li>
+              </ul>
+            </div>
+
+            <div class="metric">
+              <div class="metric-label">Antes de confirmar</div>
+              <ul class="list-tight">
+                <li>Garanta que os outros usuários saíram do sistema.</li>
+                <li>Confira se escolheu o backup correto e mais recente.</li>
+                <li>Marque restauração de arquivos enviados quando quiser recuperar logos, anexos e assinaturas.</li>
+              </ul>
+            </div>
+
+            <div class="metric">
+              <div class="metric-label">Fallback por terminal</div>
+              <div class="metric-value mb-2">Se a aplicação não abrir, use o restore local no PowerShell.</div>
+              <div class="command-box">powershell.exe -ExecutionPolicy Bypass -File .\manage_local.ps1 restore_db "backups\backup_AAAAMMDD_HHMMSS" --force --restore-media --repair-single-tenant</div>
+            </div>
+
+            <div class="metric mb-0">
+              <div class="metric-label">Depois de restaurar</div>
+              <ul class="list-tight">
+                <li>Validar login e dashboard.</li>
+                <li>Conferir clientes, OS e estoque principais.</li>
+                <li>Executar <code>check_tenant_data --strict</code> se o backup veio de outro PC.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

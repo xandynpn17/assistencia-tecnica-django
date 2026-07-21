@@ -4,10 +4,11 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+from configuracoes.models import FornecedorGarantia, MarcaGarantia
 from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, has_sensitive_permission, require_sensitive_permission, role_required
 
 from ..forms import (
@@ -58,6 +59,8 @@ def contas_receber(request):
     busca = (request.GET.get("q") or "").strip()
     tipo_origem = (request.GET.get("tipo_origem") or "").strip()
     categoria_id = (request.GET.get("categoria") or "").strip()
+    fornecedor_id = (request.GET.get("fornecedor") or "").strip()
+    marca_id = (request.GET.get("marca") or "").strip()
     prioridade = (request.GET.get("prioridade") or "").strip()
     aging_filtro = (request.GET.get("aging") or "").strip()
     preset_vencimento = (request.GET.get("preset_vencimento") or "").strip()
@@ -96,7 +99,14 @@ def contas_receber(request):
         vencimento_inicio_raw = vencimento_inicio.isoformat()
         vencimento_fim_raw = vencimento_fim.isoformat()
 
-    queryset = ContaReceber.objects.select_related("ordem_servico", "ponto_operacional", "categoria").all()
+    queryset = ContaReceber.objects.select_related(
+        "ordem_servico",
+        "ponto_operacional",
+        "categoria",
+        "fornecedor_garantia",
+        "marca_garantia",
+        "regra_garantia",
+    ).all()
     pendentes_qs = queryset.filter(status__in=["aberta", "parcial", "vencida"])
     receber_hoje_qtd = pendentes_qs.filter(vencimento=hoje).count()
     receber_vencidas_qtd = pendentes_qs.filter(vencimento__lt=hoje).count()
@@ -110,6 +120,21 @@ def contas_receber(request):
     )
     receber_garantia_qtd = pendentes_qs.filter(tipo_origem="garantia_fabricante").count()
     receber_garantia_total = pendentes_qs.filter(tipo_origem="garantia_fabricante").aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    receber_garantia_vencida_qtd = pendentes_qs.filter(tipo_origem="garantia_fabricante", vencimento__lt=hoje).count()
+    receber_garantia_vencida_total = (
+        pendentes_qs.filter(tipo_origem="garantia_fabricante", vencimento__lt=hoje).aggregate(total=Sum("valor_aberto"))["total"]
+        or Decimal("0.00")
+    )
+    receber_garantia_divergente_qtd = pendentes_qs.filter(
+        tipo_origem="garantia_fabricante",
+        valor_aprovado_garantia__gt=0,
+    ).exclude(valor_aprovado_garantia=F("valor_original")).count()
+    receber_garantia_divergente_total = (
+        pendentes_qs.filter(tipo_origem="garantia_fabricante", valor_aprovado_garantia__gt=0)
+        .exclude(valor_aprovado_garantia=F("valor_original"))
+        .aggregate(total=Sum("valor_aberto"))["total"]
+        or Decimal("0.00")
+    )
     receber_criticas_qs = pendentes_qs.filter(
         Q(vencimento__lt=hoje)
         | Q(tipo_origem="cliente_os", ordem_servico__status__in=["pronto_contactado", "pronto_contactar"])
@@ -122,6 +147,10 @@ def contas_receber(request):
         queryset = queryset.filter(tipo_origem=tipo_origem)
     if categoria_id.isdigit():
         queryset = queryset.filter(categoria_id=int(categoria_id))
+    if fornecedor_id.isdigit():
+        queryset = queryset.filter(fornecedor_garantia_id=int(fornecedor_id))
+    if marca_id.isdigit():
+        queryset = queryset.filter(marca_garantia_id=int(marca_id))
     if busca:
         queryset = queryset.filter(
             Q(cliente_nome__icontains=busca)
@@ -151,6 +180,17 @@ def contas_receber(request):
             Q(vencimento__lt=hoje)
             | Q(tipo_origem="cliente_os", ordem_servico__status__in=["pronto_contactado", "pronto_contactar"])
         )
+    elif prioridade == "garantia_vencida":
+        queryset = queryset.filter(
+            tipo_origem="garantia_fabricante",
+            status__in=["aberta", "parcial", "vencida"],
+            vencimento__lt=hoje,
+        )
+    elif prioridade == "garantia_divergente":
+        queryset = queryset.filter(
+            tipo_origem="garantia_fabricante",
+            valor_aprovado_garantia__gt=0,
+        ).exclude(valor_aprovado_garantia=F("valor_original"))
     if aging_filtro in {"a_vencer", "vencidas_1_30", "vencidas_31_60", "vencidas_61_90", "vencidas_90_plus"}:
         queryset = queryset.filter(status__in=["aberta", "parcial", "vencida"])
         if aging_filtro == "a_vencer":
@@ -190,13 +230,30 @@ def contas_receber(request):
                     conta.cliente_nome or "-",
                     getattr(conta.categoria, "nome", "") or "-",
                     conta.get_tipo_origem_display(),
+                    getattr(conta.fornecedor_garantia, "nome", "") or "-",
+                    getattr(conta.marca_garantia, "nome", "") or "-",
                     conta.vencimento.strftime("%d/%m/%Y") if conta.vencimento else "-",
                     conta.get_status_display(),
                     _fmt_decimal(conta.valor_original),
+                    _fmt_decimal(conta.valor_aprovado_garantia),
                     _fmt_decimal(conta.valor_aberto),
                 ]
             )
-        cabecalhos = ["ID", "OS", "Descricao", "Cliente", "Categoria", "Origem", "Vencimento", "Status", "Valor original", "Valor aberto"]
+        cabecalhos = [
+            "ID",
+            "OS",
+            "Descricao",
+            "Cliente",
+            "Categoria",
+            "Origem",
+            "Fornecedor garantia",
+            "Marca garantia",
+            "Vencimento",
+            "Status",
+            "Valor original",
+            "Valor aprovado",
+            "Valor aberto",
+        ]
         nome_arquivo = f"contas_receber_{timezone.localdate():%Y%m%d}.{'csv' if exportar == 'csv' else 'pdf'}"
         if exportar == "csv":
             return _exportar_csv(nome_arquivo, cabecalhos, linhas)
@@ -211,6 +268,8 @@ def contas_receber(request):
         "status": status,
         "tipo_origem": tipo_origem,
         "categoria": categoria_id,
+        "fornecedor": fornecedor_id,
+        "marca": marca_id,
         "prioridade": prioridade,
         "aging": aging_filtro,
         "preset_vencimento": preset_vencimento,
@@ -233,9 +292,13 @@ def contas_receber(request):
             "status_filtro": status,
             "tipo_origem_filtro": tipo_origem,
             "categoria_filtro": categoria_id,
+            "fornecedor_filtro": fornecedor_id,
+            "marca_filtro": marca_id,
             "prioridade_filtro": prioridade,
             "aging_filtro": aging_filtro,
             "categorias_financeiras": CategoriaFinanceira.objects.filter(ativa=True).order_by("nome"),
+            "fornecedores_garantia": FornecedorGarantia.objects.filter(ativo=True).order_by("nome"),
+            "marcas_garantia": MarcaGarantia.objects.filter(ativo=True).order_by("nome"),
             "preset_vencimento": preset_vencimento,
             "prontas_filtro": prontas_filtro,
             "vencimento_inicio": vencimento_inicio.isoformat() if vencimento_inicio else vencimento_inicio_raw,
@@ -258,6 +321,10 @@ def contas_receber(request):
             "receber_criticas_total": receber_criticas_total,
             "receber_garantia_qtd": receber_garantia_qtd,
             "receber_garantia_total": receber_garantia_total,
+            "receber_garantia_vencida_qtd": receber_garantia_vencida_qtd,
+            "receber_garantia_vencida_total": receber_garantia_vencida_total,
+            "receber_garantia_divergente_qtd": receber_garantia_divergente_qtd,
+            "receber_garantia_divergente_total": receber_garantia_divergente_total,
             "hoje": hoje,
             "limite_curto_prazo": hoje + timedelta(days=7),
             "querystring_paginacao": querystring_paginacao,
@@ -310,6 +377,12 @@ def editar_conta_receber(request, conta_id):
     if conta.status == "cancelada":
         messages.warning(request, "Contas canceladas nao podem ser editadas.")
         return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
+    if conta.tipo_origem == "garantia_fabricante":
+        messages.info(
+            request,
+            "Contas de garantia devem ser ajustadas pela tela de garantias do fabricante para manter marca, regra e cobranca sincronizadas.",
+        )
+        return redirect("caixa:garantias_fabricante")
 
     edicao_restrita = conta.recebimentos.exists()
     if request.method == "POST":
@@ -354,11 +427,22 @@ def editar_conta_receber(request, conta_id):
 @role_required(CAIXA_FINANCIAL_ROLES)
 def detalhe_conta_receber(request, conta_id):
     _garantir_formas_pagamento_padrao()
-    conta = get_object_or_404(ContaReceber.objects.select_related("ordem_servico", "categoria"), id=conta_id)
+    conta = get_object_or_404(
+        ContaReceber.objects.select_related(
+            "ordem_servico",
+            "categoria",
+            "fornecedor_garantia",
+            "marca_garantia",
+            "regra_garantia",
+            "auditoria_garantia_vinculada",
+        ),
+        id=conta_id,
+    )
     recebimentos = conta.recebimentos.select_related("usuario", "pagamento")
     valor_quitado = max(Decimal("0.00"), (conta.valor_original or Decimal("0.00")) - (conta.valor_aberto or Decimal("0.00")))
     hoje = timezone.localdate()
     dias_atraso = max(0, (hoje - conta.vencimento).days) if conta.vencimento else 0
+    auditoria_garantia = getattr(conta, "auditoria_garantia_vinculada", None)
 
     if request.method == "POST":
         action = (request.POST.get("action") or "baixar").strip()
@@ -447,6 +531,7 @@ def detalhe_conta_receber(request, conta_id):
             "recebimentos": recebimentos,
             "valor_quitado": valor_quitado,
             "dias_atraso": dias_atraso,
+            "auditoria_garantia": auditoria_garantia,
             "pode_baixar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_baixar_conta_receber"),
             "pode_cancelar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_cancelar_conta_receber"),
             "pode_editar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_editar_conta_receber"),
@@ -462,7 +547,12 @@ def aging_receber(request):
     _atualizar_status_contas_abertas()
     hoje = timezone.localdate()
     contas = (
-        ContaReceber.objects.select_related("ordem_servico", "categoria")
+        ContaReceber.objects.select_related(
+            "ordem_servico",
+            "categoria",
+            "fornecedor_garantia",
+            "marca_garantia",
+        )
         .filter(status__in=["aberta", "parcial", "vencida"])
         .order_by("vencimento", "-id")
     )
@@ -505,6 +595,26 @@ def aging_receber(request):
         row["contas"] = row["contas"][:8]
         bucket_rows_lista.append(row)
 
+    marcas_garantia_map = {}
+    for conta in contas.filter(tipo_origem="garantia_fabricante", vencimento__lt=hoje):
+        nome = getattr(conta.marca_garantia, "nome", None) or "Sem marca"
+        item = marcas_garantia_map.setdefault(
+            nome,
+            {
+                "nome": nome,
+                "fornecedor": getattr(conta.fornecedor_garantia, "nome", None) or "-",
+                "total": Decimal("0.00"),
+                "quantidade": 0,
+            },
+        )
+        item["total"] += conta.valor_aberto or Decimal("0.00")
+        item["quantidade"] += 1
+    marcas_garantia_vencidas = sorted(
+        marcas_garantia_map.values(),
+        key=lambda row: (row["total"], row["quantidade"], row["nome"]),
+        reverse=True,
+    )[:8]
+
     return render(
         request,
         "caixa/aging_receber.html",
@@ -512,6 +622,7 @@ def aging_receber(request):
             "buckets": buckets,
             "bucket_rows": bucket_rows_lista,
             "total_aberto": total_aberto,
+            "marcas_garantia_vencidas": marcas_garantia_vencidas,
             "menu_app": "caixa",
             "menu_sub": "aging_receber",
         },

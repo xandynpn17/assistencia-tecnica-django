@@ -5,10 +5,15 @@
 - `plano_desenvolvimento_sistema.md`: roadmap tecnico e status das fases.
 - `plano_desenvolvimento_estoque.md`: roadmap tecnico especifico do modulo de estoque.
 - `plano_desenvolvimento_caixa.md`: diagnostico e roadmap tecnico especifico do modulo de caixa.
+- `plano_desenvolvimento_comissoes.md`: politica operacional, roadmap e homologacao da apuracao de comissoes.
+- `plano_desenvolvimento_venda_mostrador.md`: roadmap operacional e tecnico especifico do fluxo de venda a mostrador/PDV.
 - `plano_desenvolvimento_configuracoes.md`: diagnostico e roadmap tecnico da app configuracoes com foco em integracoes e preparacao SaaS.
 - `plano_desenvolvimento_visual.md`: roadmap de padronizacao visual, UX operacional e documentos/PDFs.
 - `plano_fechamento_fase_inicial_v1.md`: plano final de hardening, tenant, observabilidade, refino tecnico, fila tecnica, metricas e antifraude.
 - `plano_fase_a_pre_uso_local.md`: plano de refinamento e homologacao antes do uso real local em rede.
+- `plano_fechamento_go_live_local.md`: plano final e curto para fechar bugs, homologar, validar backup/restore e liberar o uso local.
+- `pendencias_reais_go_live_local.md`: consolidacao do que ainda falta de verdade antes do uso real local.
+- `relatorio_fechamento_go_live_local_2026-06-22.md`: evidencia tecnica da execucao automatizada do fechamento de go-live local.
 - `entrega_1_fluxo_permissoes.md`: diagnostico inicial de fluxo e permissoes.
 - `permissoes_por_perfil.md`: visao funcional de acessos por perfil.
 - `revisao_arquitetura.md`: fotografia arquitetural atual do sistema.

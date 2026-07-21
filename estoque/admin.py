@@ -2,6 +2,8 @@ from django.contrib import admin
 from .models import (
     CategoriaProduto,
     ConfiguracaoRateioCustoFixo,
+    EstoqueLote,
+    EstoqueSerie,
     MovimentacaoEstoque,
     PontoOperacional,
     Produto,
@@ -49,6 +51,20 @@ class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
     list_display = ["produto", "tipo", "quantidade", "origem", "destino", "valor_unitario_custo", "criado_em"]
     list_filter = ["tipo", "origem", "destino"]
     search_fields = ["produto__nome", "observacao", "destino_ubicacao"]
+
+
+@admin.register(EstoqueLote)
+class EstoqueLoteAdmin(admin.ModelAdmin):
+    list_display = ["produto", "codigo", "validade", "ponto_operacional", "ubicacao", "quantidade_disponivel"]
+    list_filter = ["ponto_operacional", "validade"]
+    search_fields = ["produto__nome", "produto__sku", "produto__ean", "codigo"]
+
+
+@admin.register(EstoqueSerie)
+class EstoqueSerieAdmin(admin.ModelAdmin):
+    list_display = ["produto", "numero", "status", "ponto_operacional", "ubicacao", "atualizado_em"]
+    list_filter = ["status", "ponto_operacional"]
+    search_fields = ["produto__nome", "produto__sku", "produto__ean", "numero"]
 
 
 @admin.register(CategoriaProduto)

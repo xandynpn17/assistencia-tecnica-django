@@ -27,6 +27,11 @@
             {% endif %}
         </div>
         <div class="card-modern-body">
+            {% if request.GET.confirmar_fechamento == '1' %}
+            <div class="alert alert-warning py-2">
+                Existe saldo financeiro pendente nesta OS. Se o fechamento for mesmo necessario, repita a acao para confirmar.
+            </div>
+            {% endif %}
             <div class="os-tab-toolbar mb-2">
                 {% if pode_receber_no_caixa %}
                 <a class="btn btn-sm {% if destacar_ir_para_caixa %}btn-primary{% else %}btn-outline-primary{% endif %}"
@@ -34,7 +39,7 @@
                     Ir para o Caixa
                 </a>
                 {% elif ordem.status == 'pronto_contactado' and not ordem.fechada %}
-                <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn btn-sm {% if destacar_fechar_e_caixa %}btn-success{% else %}btn-outline-success{% endif %}">
+                <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1{% if request.GET.confirmar_fechamento == '1' %}&confirmar_financeiro=1{% endif %}" class="btn btn-sm {% if destacar_fechar_e_caixa %}btn-success{% else %}btn-outline-success{% endif %}">
                     Fechar e ir ao Caixa
                 </a>
                 {% elif liberada_para_entrega %}

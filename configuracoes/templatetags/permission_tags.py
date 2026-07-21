@@ -1,6 +1,7 @@
 from django import template
 
 from configuracoes.permissions import (
+    CAIXA_OPERATIONAL_ROLES,
     CAIXA_FINANCIAL_ROLES,
     has_role,
     has_sensitive_permission,
@@ -12,6 +13,7 @@ register = template.Library()
 
 
 ROLE_ALIASES = {
+    "caixa_operational": CAIXA_OPERATIONAL_ROLES,
     "caixa_financial": CAIXA_FINANCIAL_ROLES,
 }
 

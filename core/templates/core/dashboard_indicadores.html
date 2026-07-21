@@ -239,6 +239,38 @@
     </div>
 
     <div class="card-modern section-space">
+        <div class="card-modern-header">OS Fechadas com Saldo Pendente</div>
+        <div class="card-modern-body">
+            {% if ordens_fechadas_com_saldo %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>OS</th>
+                            <th>Cliente</th>
+                            <th>Vencimento</th>
+                            <th class="text-right">Saldo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for conta in ordens_fechadas_com_saldo %}
+                        <tr>
+                            <td><a href="{% url 'ordens:detalhes_ordem' conta.ordem_servico.id %}">{{ conta.ordem_servico.numero_os }}</a></td>
+                            <td>{{ conta.ordem_servico.cliente.nome|default:conta.cliente_nome|default:"-" }}</td>
+                            <td>{{ conta.vencimento|date:"d/m/Y" }}</td>
+                            <td class="text-right">R$ {{ conta.valor_aberto|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-muted small">Nenhuma OS fechada com saldo pendente no momento.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card-modern section-space">
         <div class="card-modern-header">Origem dos Novos Clientes</div>
         <div class="card-modern-body">
             <div class="row">

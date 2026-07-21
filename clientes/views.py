@@ -1,11 +1,12 @@
-from django.shortcuts import render, get_object_or_404, redirect
-from django.db.models import Q, Sum
-from django.http import JsonResponse
+﻿from django.shortcuts import render, get_object_or_404, redirect
+from django.db.models import DecimalField, ExpressionWrapper, F, Prefetch, Q, Sum
+from django.http import JsonResponse, HttpResponseNotFound
 import logging
 from decimal import Decimal
 from ordens.models import OrdemServico, LinhaTrabalho
 from caixa.models import Pagamento
 from configuracoes.permissions import has_role, role_required, STAFF_ROLES
+from configuracoes.services.documentos import normalizar_cnpj
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
 from .models import Cliente
@@ -23,6 +24,22 @@ def _request_ip(request):
 
 
 @role_required(STAFF_ROLES)
+def rota_cliente_invalida(request, rota_invalida):
+    """Evita que URLs digitadas como /clientes/Nome virem listagens amplas."""
+    logger.warning(
+        "rota_cliente_invalida",
+        extra={
+            "rota": rota_invalida,
+            "usuario": getattr(request.user, "username", ""),
+            "ip": _request_ip(request),
+        },
+    )
+    return HttpResponseNotFound(
+        "Cliente não encontrado. Use a busca de clientes ou abra o cadastro pelo ID interno."
+    )
+
+
+@role_required(STAFF_ROLES)
 def lista_clientes(request):
     """Tela principal: apenas busca, não lista todos."""
     query = request.GET.get("query", "").strip()
@@ -31,14 +48,15 @@ def lista_clientes(request):
 
     if query:
         query_digits = "".join(filter(str.isdigit, query))
+        query_doc = normalizar_cnpj(query)
         clientes = filtrar_queryset_empresa(Cliente.objects.all(), empresa).filter(
             Q(nome__icontains=query)
             | Q(telefone__icontains=query)
             | Q(telefone__icontains=query_digits)
             | Q(email__icontains=query)
-            | Q(documento__icontains=query_digits or query)
+            | Q(documento__icontains=query_doc or query_digits or query)
             | Q(cpf__icontains=query_digits or query)
-            | Q(cnpj__icontains=query_digits or query)
+            | Q(cnpj__icontains=query_doc or query_digits or query)
             | Q(numero_cliente__icontains=query)
         ).order_by("nome")[:20]
 
@@ -62,11 +80,12 @@ def buscar_cliente(request):
 
     if query:
         query_limpa = "".join(filter(str.isdigit, query))
+        query_doc = normalizar_cnpj(query)
 
         cliente = filtrar_queryset_empresa(Cliente.objects.all(), empresa).filter(
-            Q(documento__icontains=query_limpa)
+            Q(documento__icontains=query_doc or query_limpa)
             | Q(cpf__icontains=query_limpa)
-            | Q(cnpj__icontains=query_limpa)
+            | Q(cnpj__icontains=query_doc or query_limpa)
             | Q(telefone__icontains=query)
             | Q(telefone__icontains=query_limpa)
             | Q(email__icontains=query)
@@ -97,18 +116,25 @@ def detalhes_cliente(request, pk):
     empresa = obter_empresa_ativa(request, strict=False)
     cliente = get_object_or_404(filtrar_queryset_empresa(Cliente.objects.all(), empresa), pk=pk)
 
+    total_item_expr = ExpressionWrapper(
+        F("servicos_pecas__quantidade") * F("servicos_pecas__valor_unitario"),
+        output_field=DecimalField(max_digits=14, decimal_places=2),
+    )
+    linhas_retirada = LinhaTrabalho.objects.filter(
+        status__in=["pronto_contactado", "concluida"]
+    ).order_by("criado_em")
     ordens = list(
         OrdemServico.objects.filter(cliente=cliente)
-        .prefetch_related("servicos_pecas")
+        .annotate(total_os_calculado=Sum(total_item_expr))
+        .prefetch_related(
+            Prefetch("linhas_trabalho", queryset=linhas_retirada, to_attr="linhas_retirada"),
+        )
         .order_by("-data_abertura")
     )
     ordens_ativas_lista = [ordem for ordem in ordens if not ordem.fechada]
     ordens_concluidas_lista = [ordem for ordem in ordens if ordem.fechada]
 
-    try:
-        orcamentos = filtrar_queryset_empresa(Orcamento.objects.filter(cliente=cliente), empresa).order_by("-data_criacao")
-    except Exception:
-        orcamentos = []
+    orcamentos = filtrar_queryset_empresa(Orcamento.objects.filter(cliente=cliente), empresa).order_by("-data_criacao")
 
     total_ordens = len(ordens)
     ordens_ativas = len(ordens_ativas_lista)
@@ -129,7 +155,7 @@ def detalhes_cliente(request, pk):
     total_os = Decimal("0.00")
     for ordem in ordens:
         ordem.total_pago = totais_por_ordem.get(ordem.id, 0)
-        ordem.total_os = sum((item.total() for item in ordem.servicos_pecas.all()), Decimal("0.00"))
+        ordem.total_os = Decimal(ordem.total_os_calculado or Decimal("0.00"))
         ordem.saldo_aberto = max(Decimal("0.00"), ordem.total_os - Decimal(ordem.total_pago or 0))
         total_em_aberto += ordem.saldo_aberto
         total_os += ordem.total_os
@@ -144,23 +170,19 @@ def detalhes_cliente(request, pk):
 
     tempos_segundos = []
     for ordem in ordens_concluidas_lista:
-        linha_pronto = (
-            LinhaTrabalho.objects.filter(ordem=ordem, status="pronto_contactado")
-            .order_by("criado_em")
-            .first()
-        )
+        linhas = list(getattr(ordem, "linhas_retirada", []))
+        linha_pronto = next((linha for linha in linhas if linha.status == "pronto_contactado"), None)
         if not linha_pronto:
             continue
         referencia_fim = ordem.data_conclusao
         if not referencia_fim:
-            linha_concluida = (
-                LinhaTrabalho.objects.filter(
-                    ordem=ordem,
-                    status="concluida",
-                    criado_em__gte=linha_pronto.criado_em,
-                )
-                .order_by("criado_em")
-                .first()
+            linha_concluida = next(
+                (
+                    linha
+                    for linha in linhas
+                    if linha.status == "concluida" and linha.criado_em >= linha_pronto.criado_em
+                ),
+                None,
             )
             referencia_fim = linha_concluida.criado_em if linha_concluida else None
         if not referencia_fim or referencia_fim <= linha_pronto.criado_em:
@@ -265,11 +287,12 @@ def unificar_clientes(request):
     candidatos = Cliente.objects.none()
     if query:
         query_digits = "".join(filter(str.isdigit, query))
+        query_doc = normalizar_cnpj(query)
         candidatos = filtrar_queryset_empresa(Cliente.objects.all(), empresa).filter(
             Q(nome__icontains=query)
-            | Q(documento__icontains=query_digits or query)
+            | Q(documento__icontains=query_doc or query_digits or query)
             | Q(cpf__icontains=query_digits or query)
-            | Q(cnpj__icontains=query_digits or query)
+            | Q(cnpj__icontains=query_doc or query_digits or query)
             | Q(telefone__icontains=query)
             | Q(email__icontains=query)
             | Q(numero_cliente__icontains=query)
@@ -354,3 +377,4 @@ def unificar_clientes(request):
             "can_unificar": has_role(request.user, {"adm", "gerente"}),
         },
     )
+

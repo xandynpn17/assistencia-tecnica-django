@@ -1,0 +1,111 @@
+﻿{% extends "core/base.html" %}
+
+{% block title %}{{ conciliacao.numero }}{% endblock %}
+
+{% block content %}
+<style>
+.conc-resumo { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.conc-card { border:1px solid #d9e2ec; border-radius:12px; background:#fff; padding:12px; }
+.conc-label { font-size:11px; text-transform:uppercase; color:#64748b; margin-bottom:4px; }
+.conc-value { font-size:1.1rem; font-weight:700; color:#183247; }
+.conc-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.conc-inline-form { min-width: 280px; }
+@media (max-width: 991.98px){ .conc-resumo { grid-template-columns:1fr 1fr; } }
+</style>
+<div class="ui-module-header mb-3">
+    <div>
+        <h1 class="ui-module-title">{{ conciliacao.numero }}</h1>
+        <p class="ui-module-subtitle">Auditoria operacional de ordens abertas{% if conciliacao.filtro_local_armazenamento %} filtrada por {{ conciliacao.filtro_local_armazenamento }}{% endif %}.</p>
+    </div>
+    <div class="ui-module-actions conc-actions">
+        <a href="{% url 'ordens:conciliacoes_ordens' %}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+        {% if conciliacao.status != 'fechado' %}
+        <form method="post" action="{% url 'ordens:conciliacao_ordem_marcar_todos' conciliacao.id %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm">Marcar pendentes como confere</button></form>
+        <form method="post" action="{% url 'ordens:conciliacao_ordem_finalizar' conciliacao.id %}">{% csrf_token %}<button class="btn btn-success btn-sm">Finalizar conciliação</button></form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="conc-resumo">
+    <div class="conc-card"><div class="conc-label">Total</div><div class="conc-value">{{ resumo.total }}</div></div>
+    <div class="conc-card"><div class="conc-label">Pendentes</div><div class="conc-value">{{ resumo.pendentes }}</div></div>
+    <div class="conc-card"><div class="conc-label">Confere</div><div class="conc-value">{{ resumo.conferidos }}</div></div>
+    <div class="conc-card"><div class="conc-label">Divergências</div><div class="conc-value">{{ resumo.divergencias }}</div></div>
+    <div class="conc-card"><div class="conc-label">Valor parado divergente</div><div class="conc-value">R$ {{ resumo.valor_parado_divergente|floatformat:2 }}</div></div>
+</div>
+
+<div class="card-modern mb-3">
+    <div class="card-modern-body">
+        <form method="get" class="form-row align-items-end">
+            <div class="col-md-4 mb-2"><label>Buscar OS/cliente</label><input type="text" name="q" value="{{ q }}" class="form-control"></div>
+            <div class="col-md-3 mb-2"><label>Situação</label><select name="situacao" class="form-control"><option value="">Todas</option><option value="pendente" {% if situacao_filtro == 'pendente' %}selected{% endif %}>Pendente</option><option value="conferido" {% if situacao_filtro == 'conferido' %}selected{% endif %}>Confere</option><option value="divergencia" {% if situacao_filtro == 'divergencia' %}selected{% endif %}>Divergência</option></select></div>
+            <div class="col-md-3 mb-2"><label>Local</label><input type="text" name="local" value="{{ local_filtro }}" class="form-control"></div>
+            <div class="col-md-2 mb-2"><button class="btn btn-primary btn-block">Filtrar</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="card-modern">
+    <div class="card-modern-header">Itens da conciliação</div>
+    <div class="card-modern-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>OS</th>
+                        <th>Equipamento</th>
+                        <th>Entrada</th>
+                        <th>Dias</th>
+                        <th>Valor parado</th>
+                        <th>Local</th>
+                        <th>Status</th>
+                        <th>Conferência</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in itens %}
+                    <tr>
+                        <td><strong>{{ item.numero_os_snapshot }}</strong><br><small class="text-muted">{{ item.cliente_snapshot }}</small></td>
+                        <td>{{ item.tipo_equipamento_snapshot }}<br><small class="text-muted">{{ item.marca_snapshot }} {{ item.modelo_snapshot }}</small></td>
+                        <td>{{ item.data_entrada_snapshot|date:"d/m/Y H:i"|default:"-" }}</td>
+                        <td>{{ item.dias_em_aberto_snapshot }}</td>
+                        <td>R$ {{ item.valor_parado_snapshot|floatformat:2 }}</td>
+                        <td>{{ item.local_armazenamento_snapshot|default:"-" }}</td>
+                        <td>{{ item.status_snapshot }}</td>
+                        <td>
+                            <form method="post" action="{% url 'ordens:conciliacao_ordem_atualizar_item' item.id %}" class="conc-inline-form">
+                                {% csrf_token %}
+                                <div class="form-row">
+                                    <div class="col-12 mb-1">
+                                        <select name="situacao" class="form-control form-control-sm">
+                                            <option value="pendente" {% if item.situacao == 'pendente' %}selected{% endif %}>Pendente</option>
+                                            <option value="conferido" {% if item.situacao == 'conferido' %}selected{% endif %}>Confere</option>
+                                            <option value="divergencia" {% if item.situacao == 'divergencia' %}selected{% endif %}>Divergência</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 mb-1">
+                                        <select name="motivo_divergencia" class="form-control form-control-sm">
+                                            <option value="">Sem motivo</option>
+                                            <option value="nao_localizado" {% if item.motivo_divergencia == 'nao_localizado' %}selected{% endif %}>Não localizado</option>
+                                            <option value="local_divergente" {% if item.motivo_divergencia == 'local_divergente' %}selected{% endif %}>Local divergente</option>
+                                            <option value="status_divergente" {% if item.motivo_divergencia == 'status_divergente' %}selected{% endif %}>Status divergente</option>
+                                            <option value="equipamento_extra" {% if item.motivo_divergencia == 'equipamento_extra' %}selected{% endif %}>Equipamento extra</option>
+                                            <option value="dados_divergentes" {% if item.motivo_divergencia == 'dados_divergentes' %}selected{% endif %}>Dados divergentes</option>
+                                            <option value="outro" {% if item.motivo_divergencia == 'outro' %}selected{% endif %}>Outro</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 mb-1"><input type="text" name="observacao" value="{{ item.observacao }}" class="form-control form-control-sm" placeholder="Observação"></div>
+                                    <div class="col-12"><button class="btn btn-sm btn-primary btn-block">Salvar</button></div>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">Nenhum item encontrado para os filtros aplicados.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

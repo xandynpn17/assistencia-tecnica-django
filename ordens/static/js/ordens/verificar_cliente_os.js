@@ -9,7 +9,7 @@ window._isPageLoading = true;
 // ============================================
 const CONFIG = {
     DDD_PADRAO: '11',
-    DEBUG: true
+    DEBUG: window.ABTECH_DEBUG === true
 };
 
 // ============================================
@@ -20,6 +20,10 @@ const Utils = {
 
     apenasNumeros: function(str) {
         return str ? str.replace(/\D/g, '') : '';
+    },
+
+    normalizarDocumento: function(str) {
+        return str ? str.toUpperCase().replace(/[^0-9A-Z]/g, '') : '';
     },
 
     obterContainerMensagem: function() {
@@ -66,31 +70,33 @@ const Utils = {
 // ============================================
 const Formatadores = {
     documento: function(input) {
-        let valor = Utils.apenasNumeros(input.value);
-        const maxDigits = valor.length > 11 ? 14 : 11;
+        let valorDocumento = Utils.normalizarDocumento(input.value);
+        const soDigitos = Utils.apenasNumeros(input.value) === valorDocumento;
+        const ehCpf = soDigitos && valorDocumento.length <= 11;
+        const maxDigits = ehCpf ? 11 : 14;
 
-        if (valor.length > maxDigits) valor = valor.substring(0, maxDigits);
+        if (valorDocumento.length > maxDigits) valorDocumento = valorDocumento.substring(0, maxDigits);
 
-        if (maxDigits === 11) { // CPF
-            if (valor.length > 9) {
-                input.value = valor.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
-            } else if (valor.length > 6) {
-                input.value = valor.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
-            } else if (valor.length > 3) {
-                input.value = valor.replace(/(\d{3})(\d{0,3})/, '$1.$2');
+        if (ehCpf) {
+            if (valorDocumento.length > 9) {
+                input.value = valorDocumento.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+            } else if (valorDocumento.length > 6) {
+                input.value = valorDocumento.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+            } else if (valorDocumento.length > 3) {
+                input.value = valorDocumento.replace(/(\d{3})(\d{0,3})/, '$1.$2');
             }
-        } else { // CNPJ
-            if (valor.length > 12) {
-                input.value = valor.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
-            } else if (valor.length > 8) {
-                input.value = valor.replace(/(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
-            } else if (valor.length > 5) {
-                input.value = valor.replace(/(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
-            } else if (valor.length > 2) {
-                input.value = valor.replace(/(\d{2})(\d{0,3})/, '$1.$2');
+        } else {
+            if (valorDocumento.length > 12) {
+                input.value = valorDocumento.replace(/([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{3})([0-9A-Z]{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
+            } else if (valorDocumento.length > 8) {
+                input.value = valorDocumento.replace(/([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{3})([0-9A-Z]{0,4})/, '$1.$2.$3/$4');
+            } else if (valorDocumento.length > 5) {
+                input.value = valorDocumento.replace(/([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{0,3})/, '$1.$2.$3');
+            } else if (valorDocumento.length > 2) {
+                input.value = valorDocumento.replace(/([0-9A-Z]{2})([0-9A-Z]{0,3})/, '$1.$2');
             }
         }
-        input.dataset.valorLimpo = valor;
+        input.dataset.valorLimpo = valorDocumento;
     },
 
     telefone: function(input) {
@@ -426,17 +432,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ============================================
 // ============================================
-window.debugSistema = function() {
-    console.log('\n=== DEBUG SISTEMA ===');
-};
+if (window.ABTECH_DEBUG === true) {
+    window.debugSistema = function() {
+        console.log('\n=== DEBUG SISTEMA ===');
+    };
 
-window.testarCEP = function(cep = '01001000') {
+    window.testarCEP = function(cep = '01001000') {
     const input = document.getElementById('id_codigo_postal');
     if (input) {
         input.value = cep;
         buscarCEP();
     }
-};
+    };
+}
 
 
 

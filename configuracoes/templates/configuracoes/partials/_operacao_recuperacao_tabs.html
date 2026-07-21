@@ -1,0 +1,98 @@
+<style>
+  .ops-nav-card {
+    border: 1px solid #d7e2ec;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    box-shadow: 0 10px 28px rgba(21, 46, 74, 0.08);
+    margin-bottom: 22px;
+    overflow: hidden;
+  }
+
+  .ops-nav-head {
+    padding: 18px 22px 10px;
+  }
+
+  .ops-nav-head h2 {
+    margin: 0 0 6px;
+    font-size: 1.45rem;
+    color: #17324d;
+  }
+
+  .ops-nav-head p {
+    margin: 0;
+    color: #6b7d91;
+  }
+
+  .ops-nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 0 22px 20px;
+  }
+
+  .ops-nav-link {
+    min-width: 180px;
+    flex: 1 1 180px;
+    border-radius: 14px;
+    border: 1px solid #d7e2ec;
+    padding: 14px 16px;
+    text-decoration: none !important;
+    color: #1c3550;
+    background: #fff;
+    transition: .18s ease;
+  }
+
+  .ops-nav-link:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(30, 60, 94, 0.08);
+    border-color: #b9cce0;
+  }
+
+  .ops-nav-link.active {
+    border-color: #2d7ff9;
+    background: linear-gradient(135deg, #eef5ff 0%, #f8fbff 100%);
+    box-shadow: inset 0 0 0 1px rgba(45, 127, 249, 0.12);
+  }
+
+  .ops-nav-link strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 1rem;
+  }
+
+  .ops-nav-link span {
+    display: block;
+    font-size: .88rem;
+    color: #6d7f92;
+    line-height: 1.35;
+  }
+</style>
+
+<div class="ops-nav-card">
+  <div class="ops-nav-head">
+    <h2>{{ operacao_title }}</h2>
+    <p>{{ operacao_subtitle }}</p>
+  </div>
+  <div class="ops-nav-links">
+    <a class="ops-nav-link {% if operacao_tab == 'painel' %}active{% endif %}" href="{% url 'configuracoes:painel' %}">
+      <strong><i class="fas fa-th-large mr-1"></i> Painel</strong>
+      <span>Resumo da saúde operacional, setup e atalhos principais.</span>
+    </a>
+    <a class="ops-nav-link {% if operacao_tab == 'backup' %}active{% endif %}" href="{% url 'configuracoes:backup_banco' %}">
+      <strong><i class="fas fa-download mr-1"></i> Backup</strong>
+      <span>Gerar cópias oficiais, rever histórico e baixar arquivos.</span>
+    </a>
+    <a class="ops-nav-link {% if operacao_tab == 'restore' %}active{% endif %}" href="{% url 'configuracoes:restore_banco' %}">
+      <strong><i class="fas fa-upload mr-1"></i> Restore</strong>
+      <span>Restaurar base e media com orientações para ambiente local.</span>
+    </a>
+    <a class="ops-nav-link {% if operacao_tab == 'auditoria' %}active{% endif %}" href="{% url 'configuracoes:auditoria_configuracoes' %}">
+      <strong><i class="fas fa-clipboard-list mr-1"></i> Auditoria</strong>
+      <span>Rastrear backups, restores, falhas e alterações sensíveis.</span>
+    </a>
+    <a class="ops-nav-link {% if operacao_tab == 'logs' %}active{% endif %}" href="{% url 'configuracoes:logs_integracoes' %}">
+      <strong><i class="fas fa-plug mr-1"></i> Integrações</strong>
+      <span>Consultar eventos de webhook, e-mail, WhatsApp e sistema.</span>
+    </a>
+  </div>
+</div>

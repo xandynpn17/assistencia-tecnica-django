@@ -72,6 +72,30 @@ class CategoriaProduto(models.Model):
         texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
         return texto.casefold()
 
+    @classmethod
+    def encontrar_por_nome(cls, valor, *, incluir_inativas=True):
+        canonico = cls.nome_canonico(valor)
+        if not canonico:
+            return None
+        queryset = cls.objects.all() if incluir_inativas else cls.objects.filter(ativo=True)
+        for categoria in queryset.only("id", "nome", "ativo").order_by("ordem", "nome"):
+            if cls.nome_canonico(categoria.nome) == canonico:
+                return categoria
+        return None
+
+    @classmethod
+    def obter_ou_criar_por_nome(cls, valor):
+        nome_limpo = " ".join(str(valor or "").strip().split())
+        if not nome_limpo:
+            raise ValidationError({"nome": "Informe o nome da categoria."})
+        categoria = cls.encontrar_por_nome(nome_limpo, incluir_inativas=True)
+        if categoria:
+            if not categoria.ativo:
+                categoria.ativo = True
+                categoria.save(update_fields=["ativo"])
+            return categoria, False
+        return cls.objects.create(nome=nome_limpo, ativo=True), True
+
     def clean(self):
         super().clean()
         self.nome = " ".join(str(self.nome or "").strip().split())
@@ -212,6 +236,8 @@ class Produto(models.Model):
     preco = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     quantidade = models.PositiveIntegerField(default=0)
     estoque_minimo = models.PositiveIntegerField(default=0)
+    controla_lote = models.BooleanField(default=False)
+    controla_serie = models.BooleanField(default=False)
     previsao_venda_mensal = models.PositiveIntegerField(default=0)
     incluir_rateio_custo_fixo = models.BooleanField(default=False)
     ativo = models.BooleanField(default=True)
@@ -223,6 +249,13 @@ class Produto(models.Model):
         null=True,
         blank=True,
         related_name="produtos",
+    )
+    ubicacao_padrao = models.ForeignKey(
+        "estoque.UbicacaoEstoque",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="produtos_padrao",
     )
     servicos_compativeis = models.ManyToManyField(
         "estoque.ServicoReferencia",
@@ -786,6 +819,44 @@ class ProdutoKitItem(models.Model):
         return f"{self.produto_kit.nome} -> {self.componente.nome} ({self.quantidade})"
 
 
+class ProdutoFornecedor(models.Model):
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="fornecedores_relacionados")
+    fornecedor_config = models.ForeignKey(
+        "configuracoes.FornecedorGarantia",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="produtos_relacionados_estoque",
+    )
+    fornecedor_manual = models.CharField(max_length=120, blank=True)
+    codigo_fornecedor = models.CharField(max_length=60, blank=True)
+    custo_referencia = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    prazo_medio_dias = models.PositiveIntegerField(null=True, blank=True)
+    preferencial = models.BooleanField(default=False)
+    ativo = models.BooleanField(default=True)
+    observacao = models.CharField(max_length=200, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-preferencial", "fornecedor_manual", "id"]
+
+    @property
+    def fornecedor_nome(self):
+        return (self.fornecedor_config.nome if self.fornecedor_config_id else self.fornecedor_manual) or "Sem fornecedor"
+
+    def clean(self):
+        if not self.fornecedor_config_id and not (self.fornecedor_manual or "").strip():
+            raise ValidationError({"fornecedor_manual": "Informe um fornecedor do catalogo ou manual."})
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.preferencial:
+            ProdutoFornecedor.objects.filter(produto=self.produto, preferencial=True).exclude(pk=self.pk).update(preferencial=False)
+
+    def __str__(self):
+        return f"{self.produto.nome} - {self.fornecedor_nome}"
+
+
 class MovimentacaoEstoque(models.Model):
     TIPO_CHOICES = [
         ("entrada", "Entrada de estoque"),
@@ -811,6 +882,20 @@ class MovimentacaoEstoque(models.Model):
     )
     destino = models.ForeignKey(
         "estoque.PontoOperacional",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentacoes_destino",
+    )
+    origem_ubicacao = models.ForeignKey(
+        "estoque.UbicacaoEstoque",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentacoes_origem",
+    )
+    destino_ubicacao_ref = models.ForeignKey(
+        "estoque.UbicacaoEstoque",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -848,6 +933,20 @@ class SaldoEstoquePonto(models.Model):
         return f"{self.produto.nome} @ {self.ponto_operacional.codigo}: {self.quantidade}"
 
 
+class SaldoEstoqueUbicacao(models.Model):
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="saldos_por_ubicacao")
+    ponto_operacional = models.ForeignKey(PontoOperacional, on_delete=models.CASCADE, related_name="saldos_ubicacao")
+    ubicacao = models.ForeignKey(UbicacaoEstoque, on_delete=models.CASCADE, related_name="saldos_produto")
+    quantidade = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = [("produto", "ubicacao")]
+        ordering = ["ponto_operacional__codigo", "ubicacao__codigo", "produto__nome"]
+
+    def __str__(self):
+        return f"{self.produto.nome} @ {self.ponto_operacional.codigo}/{self.ubicacao.codigo}: {self.quantidade}"
+
+
 class VendaRapidaEstoque(models.Model):
     STATUS_CHOICES = [
         ("pre_reserva", "Pre-reserva"),
@@ -881,6 +980,64 @@ class VendaRapidaEstoque(models.Model):
     def __str__(self):
         return f"{self.produto.nome} - {self.quantidade} - {self.get_status_display()}"
 
+    @property
+    def comprador_nome(self):
+        return getattr(self.pagamento, "cliente_nome", "") or ""
+
+    @property
+    def garantia_ate(self):
+        if self.status != "vendida" or not self.pagamento_id:
+            return None
+        dias = int(getattr(self.produto, "garantia_peca_dias", 0) or 0)
+        if dias <= 0:
+            return None
+        data_ref = (self.pagamento.data or self.concluido_em or self.criado_em)
+        if not data_ref:
+            return None
+        return (timezone.localtime(data_ref).date() + timedelta(days=dias))
+
+    @property
+    def em_garantia(self):
+        limite = self.garantia_ate
+        return bool(limite and limite >= timezone.localdate())
+
+
+class AtendimentoPosVendaBalcao(models.Model):
+    TIPO_CHOICES = [
+        ("garantia", "Garantia"),
+        ("devolucao", "Devolucao"),
+        ("troca", "Troca"),
+        ("orientacao", "Orientacao"),
+    ]
+    STATUS_CHOICES = [
+        ("aberto", "Aberto"),
+        ("concluido", "Concluido"),
+        ("cancelado", "Cancelado"),
+    ]
+
+    venda = models.ForeignKey(VendaRapidaEstoque, on_delete=models.PROTECT, related_name="atendimentos_pos_venda")
+    pagamento = models.ForeignKey("caixa.Pagamento", on_delete=models.SET_NULL, null=True, blank=True, related_name="atendimentos_pos_venda")
+    cliente_nome_snapshot = models.CharField(max_length=120, blank=True)
+    cliente_documento_snapshot = models.CharField(max_length=30, blank=True)
+    cliente_telefone_snapshot = models.CharField(max_length=30, blank=True)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="orientacao")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="aberto")
+    motivo = models.CharField(max_length=160, blank=True)
+    observacao = models.TextField(blank=True)
+    criado_por = models.ForeignKey("configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="atendimentos_pos_venda_criados")
+    criado_em = models.DateTimeField(auto_now_add=True)
+    concluido_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        indexes = [
+            models.Index(fields=["tipo", "status"], name="idx_posvenda_tipo_status"),
+            models.Index(fields=["criado_em"], name="idx_posvenda_criado"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.venda.produto.nome} - {self.get_status_display()}"
+
 
 class ReservaEstoque(models.Model):
     STATUS_CHOICES = [
@@ -894,6 +1051,13 @@ class ReservaEstoque(models.Model):
     produto = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name="reservas")
     ponto_operacional = models.ForeignKey(
         PontoOperacional,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reservas",
+    )
+    ubicacao = models.ForeignKey(
+        UbicacaoEstoque,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -948,14 +1112,62 @@ class ReservaEstoque(models.Model):
         super().save(*args, **kwargs)
 
 
+class EstoqueCamadaCusto(models.Model):
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="camadas_custo")
+    ponto_operacional = models.ForeignKey(PontoOperacional, on_delete=models.CASCADE, related_name="camadas_custo")
+    ubicacao = models.ForeignKey(UbicacaoEstoque, on_delete=models.SET_NULL, null=True, blank=True, related_name="camadas_custo")
+    movimento_entrada = models.ForeignKey(
+        "estoque.MovimentacaoEstoque",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="camadas_geradas",
+    )
+    quantidade_entrada = models.PositiveIntegerField(default=0)
+    quantidade_saldo = models.PositiveIntegerField(default=0)
+    custo_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["criado_em", "id"]
+        indexes = [
+            models.Index(fields=["produto", "criado_em"], name="idx_camada_prod_criada"),
+            models.Index(fields=["ponto_operacional", "criado_em"], name="idx_camada_ponto_criada"),
+        ]
+
+    def __str__(self):
+        return f"{self.produto.nome} camada {self.quantidade_saldo}/{self.quantidade_entrada} @ {self.custo_unitario}"
+
+
 class InventarioEstoque(models.Model):
     STATUS_CHOICES = [
         ("aberto", "Aberto"),
+        ("em_conferencia", "Em conferência"),
         ("fechado", "Fechado"),
         ("cancelado", "Cancelado"),
     ]
+    TIPO_ESCOPO_CHOICES = [
+        ("ponto", "Ponto operacional"),
+        ("ubicacao", "Ubicação"),
+    ]
 
+    numero = models.CharField(max_length=30, unique=True, blank=True, editable=False)
     ponto_operacional = models.ForeignKey(PontoOperacional, on_delete=models.PROTECT, related_name="inventarios")
+    ubicacao = models.ForeignKey(
+        UbicacaoEstoque,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="inventarios",
+    )
+    tipo_escopo = models.CharField(max_length=20, choices=TIPO_ESCOPO_CHOICES, default="ponto")
+    categoria = models.ForeignKey(
+        "estoque.CategoriaProduto",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventarios",
+    )
     empresa = models.ForeignKey(
         "configuracoes.Empresa",
         on_delete=models.SET_NULL,
@@ -963,6 +1175,9 @@ class InventarioEstoque(models.Model):
         blank=True,
         related_name="inventarios_estoque",
     )
+    modo_contagem_cega = models.BooleanField(default=False)
+    exige_dupla_conferencia = models.BooleanField(default=False)
+    exige_aprovacao_divergencia = models.BooleanField(default=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="aberto")
     observacao = models.CharField(max_length=200, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -973,24 +1188,406 @@ class InventarioEstoque(models.Model):
         ordering = ["-criado_em", "-id"]
 
     def __str__(self):
-        return f"Inventario #{self.id} - {self.ponto_operacional.codigo} ({self.status})"
+        sufixo = f" / {self.ubicacao.codigo}" if self.ubicacao_id else ""
+        return f"{self.numero or f'INV-{self.id:06d}'} - {self.ponto_operacional.codigo}{sufixo} ({self.status})"
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            data_ref = timezone.localdate().strftime("%Y%m%d")
+            prefixo = f"INV-{data_ref}-"
+            ultimo = (
+                InventarioEstoque.objects.filter(numero__startswith=prefixo)
+                .order_by("-numero")
+                .values_list("numero", flat=True)
+                .first()
+            )
+            sequencia = 1
+            if ultimo:
+                try:
+                    sequencia = int(str(ultimo).split("-")[-1]) + 1
+                except (TypeError, ValueError):
+                    sequencia = InventarioEstoque.objects.filter(numero__startswith=prefixo).count() + 1
+            self.numero = f"{prefixo}{sequencia:03d}"
+        super().save(*args, **kwargs)
 
 
 class ItemInventarioEstoque(models.Model):
+    SITUACAO_CHOICES = [
+        ("pendente", "Pendente"),
+        ("conferido", "Confere"),
+        ("divergencia", "Divergência"),
+    ]
+    MOTIVO_CHOICES = [
+        ("", "Sem motivo"),
+        ("falta", "Falta"),
+        ("sobra", "Sobra"),
+        ("local_errado", "Item em local errado"),
+        ("sem_etiqueta", "Sem etiqueta"),
+        ("outro", "Outro"),
+    ]
+
     inventario = models.ForeignKey(InventarioEstoque, on_delete=models.CASCADE, related_name="itens")
     produto = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name="itens_inventario")
+    ubicacao = models.ForeignKey(
+        UbicacaoEstoque,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="itens_inventario",
+    )
     quantidade_sistema = models.IntegerField(default=0)
     quantidade_contada = models.IntegerField(default=0)
     ajuste = models.IntegerField(default=0)
+    ean_snapshot = models.CharField(max_length=50, blank=True)
+    nome_snapshot = models.CharField(max_length=160, blank=True)
+    modelos_compativeis_snapshot = models.TextField(blank=True)
+    ponto_operacional_snapshot = models.CharField(max_length=30, blank=True)
+    ubicacao_snapshot = models.CharField(max_length=30, blank=True)
+    pmp_snapshot = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    pvp_snapshot = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    margem_snapshot = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    situacao = models.CharField(max_length=20, choices=SITUACAO_CHOICES, default="pendente")
+    motivo_divergencia = models.CharField(max_length=30, choices=MOTIVO_CHOICES, blank=True)
     observacao = models.CharField(max_length=160, blank=True)
+    conferido_em = models.DateTimeField(null=True, blank=True)
+    conferido_por = models.ForeignKey(
+        "configuracoes.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_inventario_conferidos",
+    )
+    quantidade_recontada = models.IntegerField(null=True, blank=True)
+    recontado_em = models.DateTimeField(null=True, blank=True)
+    recontado_por = models.ForeignKey(
+        "configuracoes.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_inventario_recontados",
+    )
+    divergencia_aprovada_em = models.DateTimeField(null=True, blank=True)
+    divergencia_aprovada_por = models.ForeignKey(
+        "configuracoes.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_inventario_aprovados",
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = [("inventario", "produto")]
+        unique_together = [("inventario", "produto", "ubicacao")]
         ordering = ["produto__nome"]
 
     def __str__(self):
         return f"{self.produto.nome} ({self.ajuste:+d})"
+
+
+class EntradaMercadoria(models.Model):
+    STATUS_CHOICES = [
+        ("rascunho", "Rascunho"),
+        ("recebida", "Recebida"),
+        ("cancelada", "Cancelada"),
+    ]
+
+    numero = models.CharField(max_length=30, unique=True, blank=True, editable=False)
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="entradas_mercadoria",
+    )
+    fornecedor_config = models.ForeignKey(
+        "configuracoes.FornecedorGarantia",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="entradas_mercadoria",
+    )
+    fornecedor_manual = models.CharField(max_length=120, blank=True)
+    documento_numero = models.CharField(max_length=40, blank=True)
+    serie_documento = models.CharField(max_length=20, blank=True)
+    data_emissao = models.DateField(default=timezone.localdate)
+    data_entrada = models.DateField(default=timezone.localdate)
+    ponto_operacional = models.ForeignKey(
+        PontoOperacional,
+        on_delete=models.PROTECT,
+        related_name="entradas_mercadoria",
+    )
+    ubicacao = models.ForeignKey(
+        UbicacaoEstoque,
+        on_delete=models.PROTECT,
+        related_name="entradas_mercadoria",
+    )
+    frete_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    seguro_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    outras_despesas_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    desconto_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    observacao = models.CharField(max_length=220, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="rascunho")
+    usuario = models.ForeignKey("configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    recebido_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        indexes = [
+            models.Index(fields=["status", "-criado_em"], name="idx_entmerc_status_criado"),
+            models.Index(fields=["empresa", "-criado_em"], name="idx_entmerc_empresa_criado"),
+            models.Index(fields=["ponto_operacional", "status"], name="idx_entmerc_ponto_status"),
+        ]
+
+    def __str__(self):
+        return f"{self.numero or f'ENT-{self.id:06d}'} - {self.fornecedor_nome}"
+
+    @property
+    def fornecedor_nome(self):
+        return (self.fornecedor_config.nome if self.fornecedor_config_id else self.fornecedor_manual) or "Sem fornecedor"
+
+    @property
+    def total_despesas_rateio(self):
+        return (self.frete_total or 0) + (self.seguro_total or 0) + (self.outras_despesas_total or 0) - (self.desconto_total or 0)
+
+    @property
+    def possui_rateio_manual_itens(self):
+        return any(
+            (
+                Decimal(str(item.frete_rateado_unitario or 0)) > 0
+                or Decimal(str(item.outras_despesas_rateadas_unitario or 0)) > 0
+                or Decimal(str(item.desconto_unitario or 0)) > 0
+            )
+            for item in self.itens.all()
+        )
+
+    @property
+    def usar_rateio_automatico(self):
+        return Decimal(str(self.total_despesas_rateio or 0)) != Decimal("0.00") and not self.possui_rateio_manual_itens
+
+    def rateio_automatico_totais_por_item(self):
+        itens = list(self.itens.all())
+        if not itens or not self.usar_rateio_automatico:
+            return {item.id: Decimal("0.00") for item in itens if item.id}
+
+        total_rateio = Decimal(str(self.total_despesas_rateio or 0)).quantize(Decimal("0.01"))
+        pesos = []
+        for item in itens:
+            peso = Decimal(str(item.custo_unitario or 0)) * Decimal(int(item.quantidade or 0))
+            if peso <= 0:
+                peso = Decimal(int(item.quantidade or 0))
+            pesos.append(peso)
+
+        soma_pesos = sum(pesos, Decimal("0.00"))
+        if soma_pesos <= 0:
+            return {item.id: Decimal("0.00") for item in itens if item.id}
+
+        rateios = {}
+        acumulado = Decimal("0.00")
+        ultimo_item_id = None
+        for idx, item in enumerate(itens):
+            ultimo_item_id = item.id
+            if idx == len(itens) - 1:
+                valor_item = total_rateio - acumulado
+            else:
+                valor_item = ((total_rateio * pesos[idx]) / soma_pesos).quantize(Decimal("0.01"))
+                acumulado += valor_item
+            rateios[item.id] = valor_item
+        if ultimo_item_id is not None and ultimo_item_id not in rateios:
+            rateios[ultimo_item_id] = total_rateio - acumulado
+        return rateios
+
+    @property
+    def quantidade_total_itens(self):
+        return sum(int(item.quantidade or 0) for item in self.itens.all())
+
+    @property
+    def subtotal_produtos(self):
+        return sum((item.subtotal_base_item for item in self.itens.all()), Decimal("0.00"))
+
+    @property
+    def total_geral(self):
+        if self.usar_rateio_automatico:
+            return self.subtotal_produtos + Decimal(str(self.total_despesas_rateio or 0))
+        return sum((item.subtotal_item for item in self.itens.all()), Decimal("0.00"))
+
+    def clean(self):
+        if self.ubicacao_id and self.ponto_operacional_id and self.ubicacao.ponto_operacional_id != self.ponto_operacional_id:
+            raise ValidationError({"ubicacao": "A ubicacao informada nao pertence ao ponto operacional."})
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            data_ref = timezone.localdate().strftime("%Y%m%d")
+            prefixo = f"ENT-{data_ref}-"
+            ultimo = (
+                EntradaMercadoria.objects.filter(numero__startswith=prefixo)
+                .order_by("-numero")
+                .values_list("numero", flat=True)
+                .first()
+            )
+            sequencia = 1
+            if ultimo:
+                try:
+                    sequencia = int(str(ultimo).split("-")[-1]) + 1
+                except (TypeError, ValueError):
+                    sequencia = EntradaMercadoria.objects.filter(numero__startswith=prefixo).count() + 1
+            self.numero = f"{prefixo}{sequencia:03d}"
+        super().save(*args, **kwargs)
+
+
+class ItemEntradaMercadoria(models.Model):
+    entrada = models.ForeignKey(EntradaMercadoria, on_delete=models.CASCADE, related_name="itens")
+    produto = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name="itens_entrada_mercadoria")
+    quantidade = models.PositiveIntegerField(default=1)
+    custo_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    impostos_entrada_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    frete_rateado_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    outras_despesas_rateadas_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    desconto_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    lote_codigo = models.CharField(max_length=60, blank=True)
+    lote_validade = models.DateField(null=True, blank=True)
+    numeros_serie = models.TextField(blank=True)
+    observacao = models.CharField(max_length=160, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.produto.nome} x {self.quantidade}"
+
+    @property
+    def custo_base_unitario(self):
+        valor = (
+            Decimal(str(self.custo_unitario or 0))
+            + Decimal(str(self.impostos_entrada_unitario or 0))
+            + Decimal(str(self.frete_rateado_unitario or 0))
+            + Decimal(str(self.outras_despesas_rateadas_unitario or 0))
+            - Decimal(str(self.desconto_unitario or 0))
+        )
+        return valor if valor > 0 else Decimal("0.00")
+
+    @property
+    def subtotal_base_item(self):
+        return self.custo_base_unitario * Decimal(int(self.quantidade or 0))
+
+    @property
+    def rateio_automatico_total(self):
+        if not self.entrada_id or not self.id:
+            return Decimal("0.00")
+        return self.entrada.rateio_automatico_totais_por_item().get(self.id, Decimal("0.00"))
+
+    @property
+    def rateio_automatico_unitario(self):
+        quantidade = int(self.quantidade or 0)
+        if quantidade <= 0:
+            return Decimal("0.00")
+        return (self.rateio_automatico_total / Decimal(quantidade)).quantize(Decimal("0.01"))
+
+    @property
+    def custo_entrada_unitario(self):
+        valor = self.custo_base_unitario + Decimal(str(self.rateio_automatico_unitario or 0))
+        return valor if valor > 0 else Decimal("0.00")
+
+    @property
+    def subtotal_item(self):
+        return self.custo_entrada_unitario * Decimal(int(self.quantidade or 0))
+
+    @property
+    def numeros_serie_lista(self):
+        texto = str(self.numeros_serie or "").replace(";", "\n").replace(",", "\n")
+        return [linha.strip() for linha in texto.splitlines() if linha.strip()]
+
+
+class EstoqueLote(models.Model):
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="lotes_estoque")
+    codigo = models.CharField(max_length=60)
+    validade = models.DateField(null=True, blank=True)
+    ponto_operacional = models.ForeignKey(PontoOperacional, on_delete=models.PROTECT, related_name="lotes_estoque")
+    ubicacao = models.ForeignKey(UbicacaoEstoque, on_delete=models.PROTECT, related_name="lotes_estoque")
+    quantidade_disponivel = models.PositiveIntegerField(default=0)
+    entrada_item = models.ForeignKey(
+        ItemEntradaMercadoria,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lotes_gerados",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["validade", "criado_em", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["produto", "codigo", "ponto_operacional", "ubicacao"],
+                name="uniq_lote_prod_ponto_ubic",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["produto", "quantidade_disponivel"], name="idx_lote_prod_saldo"),
+            models.Index(fields=["validade"], name="idx_lote_validade"),
+        ]
+
+    def __str__(self):
+        return f"{self.produto.nome} - lote {self.codigo} ({self.quantidade_disponivel})"
+
+
+class EstoqueSerie(models.Model):
+    STATUS_DISPONIVEL = "disponivel"
+    STATUS_BAIXADA = "baixada"
+    STATUS_AVARIA = "avaria"
+    STATUS_CHOICES = [
+        (STATUS_DISPONIVEL, "Disponivel"),
+        (STATUS_BAIXADA, "Baixada"),
+        (STATUS_AVARIA, "Avaria"),
+    ]
+
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="series_estoque")
+    numero = models.CharField(max_length=100)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DISPONIVEL)
+    ponto_operacional = models.ForeignKey(
+        PontoOperacional,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="series_estoque",
+    )
+    ubicacao = models.ForeignKey(
+        UbicacaoEstoque,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="series_estoque",
+    )
+    entrada_item = models.ForeignKey(
+        ItemEntradaMercadoria,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="series_geradas",
+    )
+    movimento_saida = models.ForeignKey(
+        MovimentacaoEstoque,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="series_baixadas",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["produto__nome", "numero"]
+        constraints = [
+            models.UniqueConstraint(fields=["produto", "numero"], name="uniq_serie_prod_numero")
+        ]
+        indexes = [
+            models.Index(fields=["produto", "status"], name="idx_serie_prod_status"),
+            models.Index(fields=["numero"], name="idx_serie_numero"),
+        ]
+
+    def __str__(self):
+        return f"{self.produto.nome} - serie {self.numero}"
 
 
 

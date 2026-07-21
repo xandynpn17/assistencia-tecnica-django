@@ -9,6 +9,83 @@
     grid-template-columns: minmax(0, 1.8fr) minmax(320px, 1fr);
     gap: 14px;
   }
+  .pdv-flow-board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .pdv-flow-step {
+    border: 1px solid #d9e2ec;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
+    padding: 12px;
+    min-height: 106px;
+    transition: .18s ease;
+  }
+  .pdv-flow-step.is-active {
+    border-color: #77a7d8;
+    background: linear-gradient(180deg, #f5faff 0%, #eaf3fb 100%);
+    box-shadow: 0 12px 28px rgba(36, 55, 70, 0.08);
+  }
+  .pdv-flow-step.is-done {
+    border-color: #cfe8d8;
+    background: linear-gradient(180deg, #f8fcf9 0%, #eef8f1 100%);
+  }
+  .pdv-flow-step-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .pdv-flow-step-index {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .pdv-flow-step-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #183247;
+    line-height: 1.2;
+  }
+  .pdv-flow-step-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #edf2f7;
+    color: #526373;
+    font-size: 14px;
+  }
+  .pdv-flow-step.is-active .pdv-flow-step-icon {
+    background: #dceaf8;
+    color: #225d93;
+  }
+  .pdv-flow-step.is-done .pdv-flow-step-icon {
+    background: #d9efe0;
+    color: #1f7a45;
+  }
+  .pdv-flow-step-copy {
+    font-size: 12px;
+    color: #526373;
+    line-height: 1.45;
+  }
+  .pdv-flow-step-hint {
+    display: inline-flex;
+    margin-top: 8px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #f3f6f9;
+    color: #516170;
+    font-size: 11px;
+    font-weight: 700;
+  }
   .pdv-sticky { position: sticky; top: 82px; }
   .pdv-card { border-radius: 12px; }
   .pdv-title { font-weight: 700; }
@@ -63,6 +140,57 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     margin-bottom: 12px;
+  }
+  .pdv-vendedor-quick {
+    border: 1px solid #d9e2ec;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .pdv-vendedor-quick-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .pdv-vendedor-quick-title {
+    font-size: .95rem;
+    font-weight: 800;
+    color: #183247;
+    margin-bottom: 2px;
+  }
+  .pdv-vendedor-quick-copy {
+    font-size: 12px;
+    color: #5b6b79;
+    margin: 0;
+  }
+  .pdv-vendedor-quick-grid {
+    display: grid;
+    grid-template-columns: minmax(120px, .7fr) minmax(0, 1.3fr);
+    gap: 10px;
+    align-items: end;
+  }
+  .pdv-vendedor-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid #d9e2ec;
+    background: #f8fafc;
+    color: #516170;
+  }
+  .pdv-vendedor-badge.is-locked {
+    background: #eef8f1;
+    border-color: #cfe8d8;
+    color: #1f7a45;
+  }
+  .pdv-vendedor-quick .form-text {
+    font-size: 12px;
   }
   .pdv-summary-card {
     border: 1px solid #d9e2ec;
@@ -139,6 +267,63 @@
     padding: 14px;
     margin-top: 12px;
   }
+  .pdv-next-step {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #f8fbfd 0%, #eef4f8 100%);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .pdv-next-step-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .pdv-next-step-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #183247;
+    margin-bottom: 4px;
+  }
+  .pdv-next-step-copy {
+    font-size: 12px;
+    color: #526373;
+    margin-bottom: 0;
+  }
+  .pdv-live-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .pdv-live-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px 12px;
+    min-height: 78px;
+  }
+  .pdv-live-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .pdv-live-value {
+    font-size: .96rem;
+    font-weight: 700;
+    color: #183247;
+    line-height: 1.25;
+  }
+  .pdv-live-note {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+    line-height: 1.35;
+  }
   .pdv-guides-table th,
   .pdv-guides-table td {
     vertical-align: middle;
@@ -211,6 +396,44 @@
   .pdv-cesto-status.is-active .pdv-cesto-status-dot {
     background: #27ae60;
     box-shadow: 0 0 0 4px rgba(39, 174, 96, 0.12);
+  }
+  .pdv-open-carts {
+    margin-top: 1rem;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 16px;
+    background: #f8fbff;
+    padding: 0.85rem 0.95rem;
+  }
+  .pdv-open-carts-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+  }
+  .pdv-open-carts-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1f3552;
+  }
+  .pdv-open-carts-copy {
+    margin: 0.15rem 0 0;
+    font-size: 0.78rem;
+    color: #667085;
+  }
+  .pdv-open-carts .table {
+    margin-bottom: 0;
+  }
+  .pdv-open-carts .table td,
+  .pdv-open-carts .table th {
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .pdv-open-cart-empty {
+    font-size: 0.84rem;
+    color: #667085;
+    padding: 0.25rem 0.1rem 0;
   }
   .artigo-modal .modal-content { border-radius: 12px; }
   .artigo-modal .modal-header {
@@ -313,12 +536,16 @@
   }
 
   @media (max-width: 991.98px) {
-    .pdv-grid { grid-template-columns: 1fr; }
+    .pdv-grid,
+    .pdv-flow-board { grid-template-columns: 1fr; }
     .pdv-sticky { position: static; }
     .cesto-table-wrap { max-height: 40vh; }
+    .pdv-open-carts-head { align-items: flex-start; flex-direction: column; }
     .pdv-summary-strip,
+    .pdv-vendedor-quick-grid,
     .artigo-kpi-grid,
     .artigo-detail-band,
+    .pdv-live-strip,
     .pdv-after-actions,
     .pdv-retomar-row { grid-template-columns: 1fr; }
   }
@@ -329,26 +556,75 @@
 <div class="ui-module-header">
   <div>
     <h1 class="ui-module-title">Venda a Mostrador</h1>
-    <p class="ui-module-subtitle">Consulta de artigos, montagem de cesto e geração de guia em fluxo único.</p>
+    <p class="ui-module-subtitle">Busca de artigos, montagem de cesto, geracao de guia e recebimento em fluxo unico de balcao.</p>
   </div>
   <div class="ui-module-actions">
+    <a href="{% url 'estoque:painel_venda_mostrador' %}" class="btn btn-outline-primary btn-sm">Painel PDV</a>
+    <a href="{% url 'estoque:pos_venda_balcao' %}" class="btn btn-outline-secondary btn-sm">Pos-venda</a>
     <span class="pdv-ready mb-0">
       <span class="pdv-ready-dot"></span>
-      <span>Operação ativa</span>
+      <span>Operacao ativa</span>
     </span>
   </div>
 </div>
 {% endblock %}
 
 {% block content %}
+<div class="pdv-flow-board mb-3">
+  <div class="pdv-flow-step is-active" id="pdvFlowBusca">
+    <div class="pdv-flow-step-head">
+      <div>
+        <div class="pdv-flow-step-index">Etapa 1</div>
+        <div class="pdv-flow-step-title">Buscar artigo</div>
+      </div>
+      <span class="pdv-flow-step-icon"><i class="fas fa-search"></i></span>
+    </div>
+    <div class="pdv-flow-step-copy">Localize o item por nome, EAN, SKU ou codigo interno e confirme a disponibilidade no ponto correto.</div>
+    <span class="pdv-flow-step-hint" id="pdvFlowBuscaHint">Aguardando leitura</span>
+  </div>
+  <div class="pdv-flow-step" id="pdvFlowCesto">
+    <div class="pdv-flow-step-head">
+      <div>
+        <div class="pdv-flow-step-index">Etapa 2</div>
+        <div class="pdv-flow-step-title">Montar cesto</div>
+      </div>
+      <span class="pdv-flow-step-icon"><i class="fas fa-shopping-basket"></i></span>
+    </div>
+    <div class="pdv-flow-step-copy">Adicione os itens no ponto certo, confira vendedor, quantidade e deixe o cesto pronto para ser retomado ou fechado.</div>
+    <span class="pdv-flow-step-hint" id="pdvFlowCestoHint">Sem itens no cesto</span>
+  </div>
+  <div class="pdv-flow-step" id="pdvFlowGuia">
+    <div class="pdv-flow-step-head">
+      <div>
+        <div class="pdv-flow-step-index">Etapa 3</div>
+        <div class="pdv-flow-step-title">Gerar guia</div>
+      </div>
+      <span class="pdv-flow-step-icon"><i class="fas fa-file-invoice"></i></span>
+    </div>
+    <div class="pdv-flow-step-copy">Feche o cesto quando a venda estiver correta. A guia consolida os itens e prepara o envio ao caixa.</div>
+    <span class="pdv-flow-step-hint" id="pdvFlowGuiaHint">Cesto ainda nao finalizado</span>
+  </div>
+  <div class="pdv-flow-step" id="pdvFlowCaixa">
+    <div class="pdv-flow-step-head">
+      <div>
+        <div class="pdv-flow-step-index">Etapa 4</div>
+        <div class="pdv-flow-step-title">Receber no caixa</div>
+      </div>
+      <span class="pdv-flow-step-icon"><i class="fas fa-cash-register"></i></span>
+    </div>
+    <div class="pdv-flow-step-copy">Abra a guia no caixa para concluir o recebimento, registrar a baixa do estoque e a comissao do vendedor.</div>
+    <span class="pdv-flow-step-hint" id="pdvFlowCaixaHint">Guia ainda nao enviada ao caixa</span>
+  </div>
+</div>
+
 <div class="pdv-grid">
   <div>
     <div class="card pdv-card">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <div>
-            <div class="pdv-title">Consulta de Artigos</div>
-            <small class="text-muted">Digite ao menos 2 caracteres e clique em <strong>Buscar</strong>. Match exato por EAN/SKU pode seguir direto no modo POS.</small>
+            <div class="pdv-title">1. Buscar artigo</div>
+            <small class="text-muted">Digite ao menos 2 caracteres e clique em <strong>Buscar</strong>. Se houver um unico match exato por EAN, SKU ou ID, o sistema pode seguir mais rapido.</small>
           </div>
           <div class="text-right">
             <div id="pdvReadyBadge" class="pdv-ready mb-1">
@@ -386,8 +662,8 @@
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <div>
-            <div class="pdv-title">Cesto Atual</div>
-            <small class="text-muted">Painel de fechamento e guia de pagamento.</small>
+            <div class="pdv-title">2. Montar e fechar cesto</div>
+            <small class="text-muted">Resumo operacional do cesto, retomada rapida e envio para guia.</small>
           </div>
           <div class="text-right">
             <div id="pdvCestoStatus" class="pdv-cesto-status mb-1">
@@ -396,6 +672,82 @@
             </div>
             <div class="cesto-total">R$ <span id="cestoTotal">0.00</span></div>
           </div>
+        </div>
+
+        <div class="pdv-next-step" id="pdvNextStep">
+          <div class="pdv-next-step-label">Proximo passo</div>
+          <div class="pdv-next-step-title" id="pdvNextStepTitle">Busque um artigo para iniciar a venda</div>
+          <p class="pdv-next-step-copy" id="pdvNextStepCopy">Assim que o item for encontrado, confirme o ponto e adicione ao cesto.</p>
+        </div>
+
+        <div class="pdv-live-strip">
+          <div class="pdv-live-card">
+            <div class="pdv-live-label">Artigo em foco</div>
+            <div class="pdv-live-value" id="pdvProdutoFoco">Nenhum artigo selecionado</div>
+            <div class="pdv-live-note" id="pdvProdutoFocoNota">Escolha um resultado da busca para abrir o resumo operacional.</div>
+          </div>
+          <div class="pdv-live-card">
+            <div class="pdv-live-label">Vendedor ativo</div>
+            <div class="pdv-live-value" id="pdvVendedorFoco">A definir</div>
+            <div class="pdv-live-note" id="pdvVendedorFocoNota">A venda vai usar o vendedor padrao da operacao ou o escolhido no modal.</div>
+          </div>
+          <div class="pdv-live-card">
+            <div class="pdv-live-label">Guia atual</div>
+            <div class="pdv-live-value" id="pdvGuiaFoco">Nenhuma guia gerada</div>
+            <div class="pdv-live-note" id="pdvGuiaFocoNota">A guia aparece aqui assim que o cesto for finalizado.</div>
+          </div>
+          <div class="pdv-live-card">
+            <div class="pdv-live-label">Estado do caixa</div>
+            <div class="pdv-live-value" id="pdvCaixaFoco">Sem envio ao caixa</div>
+            <div class="pdv-live-note" id="pdvCaixaFocoNota">Quando houver guia, o proximo passo sera abrir o recebimento.</div>
+          </div>
+        </div>
+
+        <div class="pdv-vendedor-quick">
+          <div class="pdv-vendedor-quick-head">
+            <div>
+              <div class="pdv-vendedor-quick-title">Vendedor da operacao</div>
+              <p class="pdv-vendedor-quick-copy">Defina o vendedor uma vez e siga lendo os artigos. O modal vai herdar este mesmo vendedor.</p>
+            </div>
+            <span class="pdv-vendedor-badge {% if not pode_trocar_vendedor_operacao and numero_vendedor_padrao %}is-locked{% endif %}" id="pdvVendedorModoBadge">
+              {% if not pode_trocar_vendedor_operacao and numero_vendedor_padrao %}
+                Fixo por operador
+              {% else %}
+                Edicao rapida
+              {% endif %}
+            </span>
+          </div>
+          <div class="pdv-vendedor-quick-grid">
+            <div class="form-group mb-0">
+              <label for="pdvVendedorNumero" class="mb-1">Numero</label>
+              <input
+                type="text"
+                class="form-control"
+                id="pdvVendedorNumero"
+                inputmode="numeric"
+                maxlength="10"
+                placeholder="Ex.: 12"
+                {% if not pode_trocar_vendedor_operacao and numero_vendedor_padrao %}disabled{% endif %}>
+            </div>
+            <div class="form-group mb-0">
+              <label for="pdvVendedorSelect" class="mb-1">Selecionar vendedor</label>
+              <select class="form-control" id="pdvVendedorSelect" {% if not pode_trocar_vendedor_operacao and numero_vendedor_padrao %}disabled{% endif %}>
+                <option value="">{% if vendedores_disponiveis %}Selecione um vendedor{% else %}Nenhum vendedor disponivel{% endif %}</option>
+                {% for vendedor in vendedores_disponiveis %}
+                <option value="{{ vendedor.numero_vendedor|default:'' }}" {% if vendedor.numero_vendedor == numero_vendedor_padrao %}selected{% endif %}>
+                  {{ vendedor.username }}{% if vendedor.numero_vendedor %} - Vendedor {{ vendedor.numero_vendedor }}{% else %} - sem numero de vendedor{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <small class="form-text text-muted d-block mt-2" id="pdvVendedorPainelHint">
+            {% if vendedores_disponiveis %}
+              Digite o numero do vendedor para agilizar ou selecione na lista. Esta definicao sera reaproveitada nos proximos itens do cesto.
+            {% else %}
+              Cadastre pelo menos um usuario com numero de vendedor para usar a venda a mostrador.
+            {% endif %}
+          </small>
         </div>
 
         <div class="pdv-summary-strip">
@@ -419,6 +771,37 @@
           <button class="btn btn-outline-dark pdv-btn-secondary" type="button" id="novoCestoBtn">Novo cesto</button>
         </div>
 
+        <div class="pdv-open-carts">
+          <div class="pdv-open-carts-head">
+            <div>
+              <h3 class="pdv-open-carts-title">Cestos em aberto</h3>
+              <p class="pdv-open-carts-copy">Retome rapidamente vendas pausadas ou transferidas entre atendentes.</p>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" type="button" id="recarregarCestosBtn">Atualizar</button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover" id="cestosAbertosTable">
+              <thead>
+                <tr>
+                  <th>Cesto</th>
+                  <th>Itens</th>
+                  <th>Total</th>
+                  <th>Vendedor</th>
+                  <th>Operador</th>
+                  <th>Criado</th>
+                  <th>Atualizado</th>
+                  <th>Parado</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="9" class="text-muted text-center">Carregando cestos em aberto...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="cestosAbertosEmpty" class="pdv-open-cart-empty d-none">Nenhum cesto em aberto neste momento.</div>
+        </div>
+
         <div class="table-responsive cesto-table-wrap">
           <table class="table table-sm table-striped mb-2" id="cestoTable">
             <thead>
@@ -428,13 +811,13 @@
           </table>
         </div>
         <div class="pdv-action-panel">
-          <div class="pdv-action-title">Fechamento rapido</div>
+          <div class="pdv-action-title">3. Revisar e gerar guia</div>
           <div class="pdv-action-stack">
             <button class="btn btn-primary pdv-btn-main" type="button" id="finalizarCestoBtn">Finalizar venda e gerar guia</button>
             <div id="cestoFeedback" class="small"></div>
           </div>
           <div id="pdvAfterFinalizar" class="pdv-after-finalizar">
-            <div><strong>Guia gerada com sucesso.</strong> Escolha a proxima acao.</div>
+            <div><strong>4. Receber no caixa.</strong> A guia foi gerada com sucesso. Escolha a proxima acao para concluir a venda.</div>
             <div class="pdv-after-actions">
               <a href="#" class="btn btn-success pdv-btn-secondary" id="pdvIrCaixaBtn">Ir para caixa</a>
               <a href="#" class="btn btn-outline-primary pdv-btn-secondary" id="pdvImprimirGuiaBtn" target="_blank" rel="noopener">Imprimir guia</a>
@@ -452,11 +835,11 @@
       <div class="modal-header">
         <div>
           <h5 class="modal-title artigo-modal-title" id="modalNome"></h5>
-          <div class="artigo-modal-subtitle">Resumo do artigo, disponibilidade e a&ccedil;&otilde;es operacionais.</div>
+          <div class="artigo-modal-subtitle">Resumo do artigo, disponibilidade e acoes operacionais.</div>
           <div class="artigo-chip-row">
             <span class="artigo-chip"><i class="fas fa-barcode"></i> EAN <strong id="modalEan"></strong></span>
             <span class="artigo-chip"><i class="fas fa-tag"></i> SKU <strong id="modalSku"></strong></span>
-            <span class="artigo-chip"><i class="fas fa-map-marker-alt"></i> Local <strong id="modalLocalizacao"></strong></span>
+            <span class="artigo-chip"><i class="fas fa-map-marker-alt"></i> Posicao padrao <strong id="modalLocalizacao"></strong></span>
           </div>
         </div>
         <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
@@ -499,7 +882,7 @@
 
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h6 class="mb-0">Disponibilidade por ponto</h6>
-          <small class="text-muted">PO2/PO3 com estoque podem ser adicionados ao cesto.</small>
+          <small class="text-muted">Os pontos habilitados para venda aparecem como prontos para adicionar. Configurados: {{ pontos_venda_mostrador|join:", " }}.</small>
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-hover artigo-stock-table" id="estoquePontosTable">
@@ -598,15 +981,35 @@
           <input type="text" class="form-control" id="addPontoNome" readonly>
         </div>
         <div class="form-group">
-          <label>Tecnico</label>
-          <select class="form-control" id="addTecnicoSelect">
-            <option value="">Selecione um tecnico</option>
-            {% for tecnico in tecnicos_disponiveis %}
-            <option value="{{ tecnico.numero_vendedor|default:'' }}" {% if tecnico.numero_vendedor == numero_vendedor_padrao %}selected{% endif %}>
-              {{ tecnico.username }}{% if tecnico.numero_vendedor %} - Vendedor {{ tecnico.numero_vendedor }}{% else %} - sem numero de vendedor{% endif %}
+          <label>Vendedor responsavel</label>
+          <div class="row">
+            <div class="col-md-5 mb-2 mb-md-0">
+              <input
+                type="text"
+                class="form-control"
+                id="addVendedorNumero"
+                inputmode="numeric"
+                maxlength="10"
+                placeholder="Numero do vendedor">
+            </div>
+            <div class="col-md-7">
+          <select class="form-control" id="addVendedorSelect">
+            <option value="">{% if vendedores_disponiveis %}Selecione um vendedor{% else %}Nenhum vendedor disponivel{% endif %}</option>
+            {% for vendedor in vendedores_disponiveis %}
+            <option value="{{ vendedor.numero_vendedor|default:'' }}" {% if vendedor.numero_vendedor == numero_vendedor_padrao %}selected{% endif %}>
+              {{ vendedor.username }}{% if vendedor.numero_vendedor %} - Vendedor {{ vendedor.numero_vendedor }}{% else %} - sem numero de vendedor{% endif %}
             </option>
             {% endfor %}
           </select>
+            </div>
+          </div>
+          <small class="text-muted d-block mt-1" id="addVendedorHint">
+            {% if vendedores_disponiveis %}
+              Informe o numero do vendedor para agilizar ou selecione na lista. Quando houver vendedor padrao no usuario atual, ele ja sera sugerido automaticamente.
+            {% else %}
+              Cadastre pelo menos um usuario com numero de vendedor para usar a venda a mostrador.
+            {% endif %}
+          </small>
         </div>
         <div class="form-group">
           <label>Quantidade</label>
@@ -624,6 +1027,7 @@
 
 {% block extra_js %}
 {{ block.super }}
+{{ pontos_venda_mostrador|json_script:"pontos-venda-mostrador-data" }}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   const buscarBtn = document.getElementById("artigoBuscaBtn");
@@ -634,14 +1038,21 @@ document.addEventListener("DOMContentLoaded", function () {
   const pageInfo = document.getElementById("artigoPaginaInfo");
   const cestoCodigoInput = document.getElementById("cestoCodigoInput");
   const guiasTableBody = document.querySelector("#pdvGuiasTable tbody");
+  const cestosAbertosTableBody = document.querySelector("#cestosAbertosTable tbody");
+  const cestosAbertosEmpty = document.getElementById("cestosAbertosEmpty");
   const modal = $("#artigoResumoModal");
   const vendedorModal = $("#vendedorModal");
   const vendedorPadrao = "{{ numero_vendedor_padrao|default:''|escapejs }}";
+  const podeTrocarVendedorOperacao = {{ pode_trocar_vendedor_operacao|yesno:"true,false" }};
   const podeVendaMostrador = {{ pode_venda_mostrador|yesno:"true,false" }};
+  const pontosVendaMostrador = JSON.parse(document.getElementById("pontos-venda-mostrador-data").textContent || "[]");
+  const pdvVendedorNumeroInput = document.getElementById("pdvVendedorNumero");
+  const pdvVendedorSelect = document.getElementById("pdvVendedorSelect");
   let paginaAtual = 1;
   let hasPrev = false;
   let hasNext = false;
   let cestoCodigoAtual = "";
+  let guiaAtual = "";
   let resultadosAtuais = [];
   let resultadoSelecionado = -1;
 
@@ -649,6 +1060,97 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!buscarInput) { return; }
     buscarInput.focus();
     if (select) { buscarInput.select(); }
+  }
+
+  function normalizarNumeroVendedor(valor) {
+    return String(valor || "").replace(/\D+/g, "").slice(0, 10);
+  }
+
+  function encontrarOpcaoVendedor(numero) {
+    const numeroNormalizado = normalizarNumeroVendedor(numero);
+    const fontes = [pdvVendedorSelect, document.getElementById("addVendedorSelect")].filter(Boolean);
+    for (const select of fontes) {
+      const encontrado = Array.from(select.options || []).find((opt) => normalizarNumeroVendedor(opt.value) === numeroNormalizado);
+      if (encontrado) {
+        return { select, option: encontrado };
+      }
+    }
+    return null;
+  }
+
+  function syncVendedorWidgets({ numero = "", origem = "painel" } = {}) {
+    const numeroNormalizado = normalizarNumeroVendedor(numero);
+    const vendedorNumeroInput = document.getElementById("addVendedorNumero");
+    const vendedorSelect = document.getElementById("addVendedorSelect");
+    const match = encontrarOpcaoVendedor(numeroNormalizado);
+    const numeroFinal = match ? normalizarNumeroVendedor(match.option.value) : numeroNormalizado;
+
+    if (pdvVendedorNumeroInput && origem !== "painel_numero") {
+      pdvVendedorNumeroInput.value = numeroFinal;
+    }
+    if (vendedorNumeroInput && origem !== "modal_numero") {
+      vendedorNumeroInput.value = numeroFinal;
+    }
+    if (pdvVendedorSelect && origem !== "painel_select") {
+      pdvVendedorSelect.value = match && match.select === pdvVendedorSelect ? numeroFinal : (match ? numeroFinal : "");
+    }
+    if (vendedorSelect && origem !== "modal_select") {
+      vendedorSelect.value = match && match.select === vendedorSelect ? numeroFinal : (match ? numeroFinal : "");
+    }
+    atualizarEstadoVendedorPainel();
+  }
+
+  function obterVendedorAtualNumero() {
+    const painelNumero = normalizarNumeroVendedor(pdvVendedorNumeroInput?.value);
+    if (painelNumero) { return painelNumero; }
+    const painelSelect = normalizarNumeroVendedor(pdvVendedorSelect?.value);
+    if (painelSelect) { return painelSelect; }
+    const vendedorNumeroInput = document.getElementById("addVendedorNumero");
+    const vendedorSelect = document.getElementById("addVendedorSelect");
+    const modalNumero = normalizarNumeroVendedor(vendedorNumeroInput?.value);
+    if (modalNumero) { return modalNumero; }
+    const modalSelect = normalizarNumeroVendedor(vendedorSelect?.value);
+    if (modalSelect) { return modalSelect; }
+    return normalizarNumeroVendedor(obterVendedorAuto());
+  }
+
+  function atualizarEstadoVendedorPainel() {
+    const hint = document.getElementById("pdvVendedorPainelHint");
+    const badge = document.getElementById("pdvVendedorModoBadge");
+    const numeroAtual = obterVendedorAtualNumero();
+    const match = encontrarOpcaoVendedor(numeroAtual);
+    let label = "A definir";
+    if (match) {
+      label = match.option.textContent.trim();
+    } else if (numeroAtual) {
+      label = `Vendedor ${numeroAtual}`;
+    }
+    const nota = !numeroAtual
+      ? "Defina o vendedor da operacao antes de adicionar itens ao cesto."
+      : match
+        ? "Vendedor confirmado para esta operacao. Os proximos itens vao herdar essa identificacao."
+        : "Numero informado manualmente. O backend vai validar esse vendedor ao adicionar no cesto.";
+
+    if (hint) {
+      hint.textContent = !podeTrocarVendedorOperacao && vendedorPadrao
+        ? "Este operador trabalha com vendedor fixo para proteger comissao e auditoria."
+        : nota;
+    }
+    if (badge) {
+      badge.textContent = !podeTrocarVendedorOperacao && vendedorPadrao
+        ? "Fixo por operador"
+        : numeroAtual ? "Vendedor definido" : "Edicao rapida";
+    }
+    const focoLabel = document.getElementById("pdvVendedorFoco");
+    const focoNota = document.getElementById("pdvVendedorFocoNota");
+    if (focoLabel) {
+      focoLabel.textContent = label;
+    }
+    if (focoNota) {
+      focoNota.textContent = !podeTrocarVendedorOperacao && vendedorPadrao
+        ? "A venda usa o vendedor fixo deste operador."
+        : nota;
+    }
   }
 
   function prepararProximaLeitura() {
@@ -670,6 +1172,22 @@ document.addEventListener("DOMContentLoaded", function () {
     if (nextBtn) {
       nextBtn.disabled = true;
     }
+    setEstadoFluxo({
+      busca: "active",
+      cesto: cestoCodigoAtual ? "active" : "idle",
+      guia: guiaAtual ? "done" : "idle",
+      caixa: guiaAtual ? "active" : "idle",
+      buscaHint: "Pronto para nova leitura",
+      cestoHint: cestoCodigoAtual ? "Cesto em andamento" : "Sem itens no cesto",
+      guiaHint: guiaAtual ? `Guia ${guiaAtual} gerada` : "Cesto ainda nao finalizado",
+      caixaHint: guiaAtual ? "Pode seguir para o caixa" : "Guia ainda nao enviada ao caixa",
+    });
+    setProximoPasso(
+      cestoCodigoAtual ? "Continue a montar o cesto ou finalize quando estiver correto" : "Busque outro artigo para continuar a venda",
+      guiaAtual
+        ? "A venda ja tem guia gerada. Use os botoes de caixa ou impressao quando precisar concluir."
+        : "Assim que o item for encontrado, confirme ponto, vendedor e quantidade."
+    );
     focarBusca();
   }
 
@@ -699,10 +1217,10 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function obterVendedorAuto() {
-    const tecnicoSelect = document.getElementById("addTecnicoSelect");
-    if (vendedorPadrao) { return vendedorPadrao; }
-    if (!tecnicoSelect) { return ""; }
-    const opcoesValidas = Array.from(tecnicoSelect.options || []).filter(opt => (opt.value || "").trim());
+    const vendedorSelect = pdvVendedorSelect || document.getElementById("addVendedorSelect");
+    if (vendedorPadrao) { return normalizarNumeroVendedor(vendedorPadrao); }
+    if (!vendedorSelect) { return ""; }
+    const opcoesValidas = Array.from(vendedorSelect.options || []).filter(opt => normalizarNumeroVendedor(opt.value));
     return opcoesValidas.length === 1 ? opcoesValidas[0].value : "";
   }
 
@@ -752,6 +1270,73 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+  function setEstadoFluxo({ busca = "active", cesto = "idle", guia = "idle", caixa = "idle", buscaHint = "", cestoHint = "", guiaHint = "", caixaHint = "" } = {}) {
+    const estados = {
+      busca: { el: document.getElementById("pdvFlowBusca"), hint: document.getElementById("pdvFlowBuscaHint"), value: busca, text: buscaHint },
+      cesto: { el: document.getElementById("pdvFlowCesto"), hint: document.getElementById("pdvFlowCestoHint"), value: cesto, text: cestoHint },
+      guia: { el: document.getElementById("pdvFlowGuia"), hint: document.getElementById("pdvFlowGuiaHint"), value: guia, text: guiaHint },
+      caixa: { el: document.getElementById("pdvFlowCaixa"), hint: document.getElementById("pdvFlowCaixaHint"), value: caixa, text: caixaHint },
+    };
+    Object.values(estados).forEach((item) => {
+      if (!item.el) { return; }
+      item.el.classList.remove("is-active", "is-done");
+      if (item.value === "active") {
+        item.el.classList.add("is-active");
+      } else if (item.value === "done") {
+        item.el.classList.add("is-done");
+      }
+      if (item.hint && item.text) {
+        item.hint.textContent = item.text;
+      }
+    });
+  }
+
+  function setProximoPasso(titulo, copy) {
+    const title = document.getElementById("pdvNextStepTitle");
+    const text = document.getElementById("pdvNextStepCopy");
+    if (title) { title.textContent = titulo; }
+    if (text) { text.textContent = copy; }
+  }
+
+  function setPainelOperacao({
+    produto = "Nenhum artigo selecionado",
+    produtoNota = "Escolha um resultado da busca para abrir o resumo operacional.",
+    vendedor = "A definir",
+    vendedorNota = "A venda vai usar o vendedor padrao da operacao ou o escolhido no modal.",
+    guia = "Nenhuma guia gerada",
+    guiaNota = "A guia aparece aqui assim que o cesto for finalizado.",
+    caixa = "Sem envio ao caixa",
+    caixaNota = "Quando houver guia, o proximo passo sera abrir o recebimento.",
+  } = {}) {
+    const mapa = {
+      pdvProdutoFoco: produto,
+      pdvProdutoFocoNota: produtoNota,
+      pdvVendedorFoco: vendedor,
+      pdvVendedorFocoNota: vendedorNota,
+      pdvGuiaFoco: guia,
+      pdvGuiaFocoNota: guiaNota,
+      pdvCaixaFoco: caixa,
+      pdvCaixaFocoNota: caixaNota,
+    };
+    Object.entries(mapa).forEach(([id, valor]) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.textContent = valor;
+      }
+    });
+  }
+
+  function obterLabelVendedorAtual() {
+    const numeroAtual = obterVendedorAtualNumero();
+    const match = encontrarOpcaoVendedor(numeroAtual);
+    if (!pdvVendedorSelect && !document.getElementById("addVendedorSelect")) {
+      return vendedorPadrao ? `Vendedor ${vendedorPadrao}` : "A definir";
+    }
+    if (match) { return match.option.textContent.trim(); }
+    if (numeroAtual) { return `Vendedor ${numeroAtual}`; }
+    return "A definir";
+  }
+
   function setCestoCodigo(codigo) {
     cestoCodigoAtual = (codigo || "").trim();
     document.getElementById("cestoCodigo").textContent = cestoCodigoAtual || "-";
@@ -763,6 +1348,20 @@ document.addEventListener("DOMContentLoaded", function () {
     const data = new Date(valorIso);
     if (Number.isNaN(data.getTime())) { return "-"; }
     return data.toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function formatarDuracaoMinutos(totalMinutos) {
+    const minutos = Number(totalMinutos || 0);
+    if (!Number.isFinite(minutos) || minutos <= 0) { return "agora"; }
+    if (minutos < 60) { return `${minutos} min`; }
+    const horas = Math.floor(minutos / 60);
+    const resto = minutos % 60;
+    if (horas < 24) {
+      return resto ? `${horas}h ${resto}min` : `${horas}h`;
+    }
+    const dias = Math.floor(horas / 24);
+    const horasRestantes = horas % 24;
+    return horasRestantes ? `${dias}d ${horasRestantes}h` : `${dias}d`;
   }
 
   function renderGuiasRecentes(guias) {
@@ -810,6 +1409,54 @@ document.addEventListener("DOMContentLoaded", function () {
       .catch(() => {});
   }
 
+  function renderCestosAbertos(cestos) {
+    if (!cestosAbertosTableBody) { return; }
+    cestosAbertosTableBody.innerHTML = "";
+    const lista = (cestos || []).filter((cesto) => (cesto.cesto_codigo || "") !== cestoCodigoAtual);
+    if (!lista.length) {
+      cestosAbertosTableBody.innerHTML = '<tr><td colspan="9" class="text-muted text-center">Nenhum outro cesto em aberto.</td></tr>';
+      cestosAbertosEmpty?.classList.remove("d-none");
+      return;
+    }
+    cestosAbertosEmpty?.classList.add("d-none");
+    lista.forEach((cesto) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(cesto.cesto_codigo || "-")}</strong></td>
+        <td class="text-right">${Number(cesto.itens_total || 0)}</td>
+        <td class="text-right">R$ ${Number(cesto.valor_total || 0).toFixed(2)}</td>
+        <td>${escapeHtml(cesto.vendedor_label || "-")}</td>
+        <td>${escapeHtml(cesto.operador || "-")}</td>
+        <td>${escapeHtml(formatarDataHoraIso(cesto.criado_em))}</td>
+        <td>${escapeHtml(formatarDataHoraIso(cesto.atualizado_em))}</td>
+        <td>${escapeHtml(formatarDuracaoMinutos(cesto.tempo_parado_minutos))}</td>
+        <td><button type="button" class="btn btn-sm btn-outline-primary js-retomar-cesto-aberto" data-codigo="${escapeHtml(cesto.cesto_codigo || "")}">Retomar</button></td>
+      `;
+      tr.addEventListener("dblclick", () => {
+        const codigo = (cesto.cesto_codigo || "").trim();
+        if (!codigo) { return; }
+        cestoCodigoInput.value = codigo;
+        retomarCesto();
+      });
+      cestosAbertosTableBody.appendChild(tr);
+    });
+  }
+
+  function carregarCestosAbertos() {
+    return fetch(`{% url 'estoque:api_cestos_abertos' %}?limit=12`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) {
+          renderCestosAbertos(data.cestos || []);
+        }
+      })
+      .catch(() => {
+        if (cestosAbertosTableBody) {
+          cestosAbertosTableBody.innerHTML = '<tr><td colspan="9" class="text-danger text-center">Nao foi possivel carregar os cestos em aberto.</td></tr>';
+        }
+      });
+  }
+
   function renderResultados(items) {
     resultadosAtuais = items || [];
     resultadoSelecionado = resultadosAtuais.length ? 0 : -1;
@@ -842,7 +1489,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function pontoPodeVender(codigo) {
     const c = String(codigo || "").toUpperCase();
-    return c === "PO3" || c === "PO2";
+    return Array.isArray(pontosVendaMostrador) && pontosVendaMostrador.includes(c);
   }
 
   function abrirModalAdicionar(ponto) {
@@ -852,13 +1499,45 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     document.getElementById("addPontoId").value = String(ponto.id);
     document.getElementById("addPontoNome").value = `${ponto.codigo} - ${ponto.nome} (disp: ${ponto.disponivel})`;
-    const tecnicoSelect = document.getElementById("addTecnicoSelect");
-    if (vendedorPadrao) { tecnicoSelect.value = vendedorPadrao; }
+    const vendedorSelect = document.getElementById("addVendedorSelect");
+    const vendedorNumeroInput = document.getElementById("addVendedorNumero");
+    if (vendedorSelect) {
+      vendedorSelect.disabled = !podeTrocarVendedorOperacao && !!vendedorPadrao;
+    }
+    if (vendedorNumeroInput) {
+      vendedorNumeroInput.disabled = !podeTrocarVendedorOperacao && !!vendedorPadrao;
+    }
+    const vendedorAtual = obterVendedorAtualNumero() || obterVendedorAuto();
+    syncVendedorWidgets({ numero: vendedorAtual, origem: "painel" });
+    const vendedorHint = document.getElementById("addVendedorHint");
+    if (vendedorHint) {
+      if (vendedorAtual && !podeTrocarVendedorOperacao && vendedorPadrao) {
+        vendedorHint.textContent = "O vendedor padrao deste operador sera mantido automaticamente para proteger a comissao e a auditoria.";
+      } else if (vendedorAtual) {
+        vendedorHint.textContent = "O vendedor ativo da operacao foi reaproveitado. Pode manter, trocar na lista ou digitar outro numero valido.";
+      } else {
+        vendedorHint.textContent = "Informe o numero do vendedor ou selecione o responsavel por esta venda antes de adicionar ao cesto.";
+      }
+    }
+    setPainelOperacao({
+      produto: document.getElementById("modalNome")?.textContent || "Artigo em analise",
+      produtoNota: `${ponto.codigo} - ${ponto.nome} com ${ponto.disponivel} disponivel(eis) para venda.`,
+      vendedor: obterLabelVendedorAtual(),
+      vendedorNota: vendedorHint?.textContent || "Confirme o vendedor antes de adicionar ao cesto.",
+      guia: guiaAtual ? guiaAtual : "Nenhuma guia gerada",
+      guiaNota: guiaAtual ? "Existe uma guia aberta nesta operacao." : "A guia sera criada quando o cesto for finalizado.",
+      caixa: guiaAtual ? "Guia pendente de recebimento" : "Sem envio ao caixa",
+      caixaNota: guiaAtual ? "A venda ja pode seguir para o caixa." : "O caixa so sera acionado depois da guia.",
+    });
     document.getElementById("addQuantidade").value = "1";
     vendedorModal.modal("show");
     setTimeout(() => {
-      document.getElementById("addQuantidade")?.focus();
-      document.getElementById("addQuantidade")?.select();
+      if (vendedorNumeroInput && podeTrocarVendedorOperacao && !vendedorNumeroInput.value) {
+        vendedorNumeroInput.focus();
+      } else {
+        document.getElementById("addQuantidade")?.focus();
+        document.getElementById("addQuantidade")?.select();
+      }
     }, 120);
   }
 
@@ -886,6 +1565,40 @@ document.addEventListener("DOMContentLoaded", function () {
       statusBadge.classList.toggle("is-active", ativo);
       statusText.textContent = ativo ? "Cesto ativo" : "Aguardando itens";
     }
+    const itensAtivos = (data.itens || []).length;
+    const primeiroItem = itensAtivos ? data.itens[0] : null;
+    setEstadoFluxo({
+      busca: itensAtivos ? "done" : "active",
+      cesto: itensAtivos ? "active" : "idle",
+      guia: guiaAtual ? "done" : "idle",
+      caixa: guiaAtual ? "active" : "idle",
+      buscaHint: itensAtivos ? "Artigo lido e adicionado" : "Aguardando leitura",
+      cestoHint: itensAtivos ? `${itensAtivos} item(ns) no cesto` : "Sem itens no cesto",
+      guiaHint: guiaAtual ? `Guia ${guiaAtual} gerada` : "Cesto ainda nao finalizado",
+      caixaHint: guiaAtual ? "Pode seguir para o caixa" : "Guia ainda nao enviada ao caixa",
+    });
+    setProximoPasso(
+      itensAtivos
+        ? "Revise o cesto e gere a guia quando a venda estiver pronta"
+        : guiaAtual
+          ? "A guia ja foi gerada. Siga para o caixa ou imprima o comprovante"
+          : "Busque um artigo para iniciar a venda",
+      itensAtivos
+        ? "Confira quantidades, ponto e vendedor. Depois finalize a venda para criar a guia."
+        : guiaAtual
+        ? "A baixa final acontece no recebimento do caixa. Retome um cesto antigo ou inicie um novo quando precisar."
+          : "Use a busca para localizar o item e abra o resumo operacional antes de adicionar ao cesto."
+    );
+    setPainelOperacao({
+      produto: primeiroItem ? primeiroItem.produto : "Nenhum artigo selecionado",
+      produtoNota: primeiroItem ? `Ultimo cesto ativo em ${primeiroItem.ponto}.` : "Escolha um resultado da busca para abrir o resumo operacional.",
+      vendedor: primeiroItem ? primeiroItem.vendedor : obterLabelVendedorAtual(),
+      vendedorNota: primeiroItem ? "Vendedor aplicado ao cesto atual." : "A venda vai usar o vendedor padrao da operacao ou o escolhido no modal.",
+      guia: guiaAtual ? guiaAtual : "Nenhuma guia gerada",
+      guiaNota: guiaAtual ? "Guia ja consolidada para esta operacao." : "A guia aparece aqui assim que o cesto for finalizado.",
+      caixa: guiaAtual ? "Guia pendente de recebimento" : "Sem envio ao caixa",
+      caixaNota: guiaAtual ? "Use o botao de caixa para concluir o recebimento." : "Quando houver guia, o proximo passo sera abrir o recebimento.",
+    });
     const btnFinalizar = document.getElementById("finalizarCestoBtn");
     if (btnFinalizar) {
       btnFinalizar.disabled = !podeVendaMostrador || !(data.itens || []).length;
@@ -910,6 +1623,16 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function preencherResumoModal(data) {
+    setPainelOperacao({
+      produto: data.nome,
+      produtoNota: `${data.quantidade_total} unidade(s) no saldo total | local padrao ${data.ponto_padrao_codigo || "-"} / ${data.ubicacao_padrao_label || data.ubicacao_padrao_codigo || "-"}.`,
+      vendedor: obterLabelVendedorAtual(),
+      vendedorNota: "Confirme o vendedor no modal de adicao ao cesto.",
+      guia: guiaAtual ? guiaAtual : "Nenhuma guia gerada",
+      guiaNota: guiaAtual ? "Existe uma guia ativa relacionada a esta operacao." : "A guia sera criada quando o cesto for finalizado.",
+      caixa: guiaAtual ? "Guia pendente de recebimento" : "Sem envio ao caixa",
+      caixaNota: guiaAtual ? "A venda ja pode seguir para o caixa." : "O caixa so sera acionado depois da guia.",
+    });
     document.getElementById("modalProdutoId").value = data.id;
     document.getElementById("modalNome").textContent = data.nome;
     document.getElementById("modalEan").textContent = data.ean || "-";
@@ -917,7 +1640,9 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("modalQtdTotal").textContent = data.quantidade_total;
     document.getElementById("modalQtdReservada").textContent = String((data.estoque_pontos || []).reduce((total, p) => total + Number(p.reservado || 0), 0));
     document.getElementById("modalGarantia").textContent = data.garantia_peca_dias || 0;
-    document.getElementById("modalLocalizacao").textContent = data.localizacao || "-";
+    const pontoPadrao = data.ponto_padrao_codigo || "-";
+    const ubicacaoPadrao = data.ubicacao_padrao_label || data.ubicacao_padrao_codigo || "-";
+    document.getElementById("modalLocalizacao").textContent = `${pontoPadrao} / ${ubicacaoPadrao}`;
     document.getElementById("modalDescricao").textContent = data.descricao || "Sem descricao cadastrada.";
     document.getElementById("modalModelos").textContent = data.modelos_compativeis || "Sem modelos cadastrados.";
     document.getElementById("modalPreco").textContent = Number(data.preco).toFixed(2);
@@ -1027,9 +1752,9 @@ document.addEventListener("DOMContentLoaded", function () {
       setFeedback("erro", "Este perfil nao possui permissao para venda a mostrador.");
       return;
     }
-    const vendedorNumero = document.getElementById("addTecnicoSelect").value;
+    const vendedorNumero = obterVendedorAtualNumero();
     if (!vendedorNumero) {
-      setFeedback("erro", "Selecione um colaborador com numero de vendedor cadastrado.");
+      setFeedback("erro", "Informe um numero de vendedor valido ou selecione um vendedor cadastrado.");
       return;
     }
 
@@ -1049,11 +1774,23 @@ document.addEventListener("DOMContentLoaded", function () {
       .then(data => {
         if (data.ok) {
           setCestoCodigo(data.cesto_codigo);
+          guiaAtual = "";
           setFeedback("ok", `Item adicionado ao cesto ${cestoCodigoAtual}.`);
           setFinalizacaoLinks("", "");
+          setPainelOperacao({
+            produto: document.getElementById("modalNome")?.textContent || "Artigo adicionado",
+            produtoNota: `${document.getElementById("addPontoNome")?.value || "Ponto confirmado"} | quantidade ${document.getElementById("addQuantidade")?.value || "1"}.`,
+            vendedor: obterLabelVendedorAtual(),
+            vendedorNota: "Vendedor aplicado ao item que acabou de entrar no cesto.",
+            guia: "Nenhuma guia gerada",
+            guiaNota: "Continue a montagem ou finalize a venda quando estiver correta.",
+            caixa: "Sem envio ao caixa",
+            caixaNota: "O caixa so sera acionado depois da guia.",
+          });
           vendedorModal.modal("hide");
           modal.modal("hide");
           carregarCesto();
+          carregarCestosAbertos();
           prepararProximaLeitura();
           setTimeout(() => focarBusca(), 120);
         } else {
@@ -1067,6 +1804,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function adicionarRapidoAoCesto(produtoId, ponto, vendedorNumero) {
+    syncVendedorWidgets({ numero: vendedorNumero, origem: "painel" });
     const payload = new URLSearchParams();
     payload.append("produto_id", produtoId);
     payload.append("ponto_id", ponto.id);
@@ -1083,9 +1821,21 @@ document.addEventListener("DOMContentLoaded", function () {
       .then(data => {
         if (data.ok) {
           setCestoCodigo(data.cesto_codigo);
+          guiaAtual = "";
           setFeedback("ok", `Item adicionado automaticamente ao cesto ${cestoCodigoAtual}.`);
           setFinalizacaoLinks("", "");
+          setPainelOperacao({
+            produto: resultadosAtuais[0]?.nome || "Artigo adicionado",
+            produtoNota: `${ponto.codigo} - ${ponto.nome} com adicao rapida automatica.`,
+            vendedor: obterLabelVendedorAtual(),
+            vendedorNota: "Vendedor aplicado automaticamente nesta leitura rapida.",
+            guia: "Nenhuma guia gerada",
+            guiaNota: "Continue a montagem ou finalize a venda quando estiver correta.",
+            caixa: "Sem envio ao caixa",
+            caixaNota: "O caixa so sera acionado depois da guia.",
+          });
           carregarCesto();
+          carregarCestosAbertos();
           prepararProximaLeitura();
         } else {
           setFeedback("erro", data.erro || "Erro ao adicionar item.");
@@ -1137,11 +1887,37 @@ document.addEventListener("DOMContentLoaded", function () {
       .then(r => r.json())
       .then(data => {
         if (data.ok) {
+          guiaAtual = data.guia || "";
           setFeedback("ok", `Guia ${data.guia} gerada. Total R$ ${Number(data.total).toFixed(2)}.`);
           setFinalizacaoLinks(data.redirect_caixa, data.imprimir_url);
           setCestoCodigo("");
           carregarCesto();
+          carregarCestosAbertos();
           carregarGuiasRecentes();
+          setEstadoFluxo({
+            busca: "done",
+            cesto: "done",
+            guia: "done",
+            caixa: "active",
+            buscaHint: "Itens localizados",
+            cestoHint: "Cesto concluido",
+            guiaHint: `Guia ${guiaAtual} pronta`,
+            caixaHint: "Recebimento pendente no caixa",
+          });
+          setProximoPasso(
+            "Abra a guia no caixa para concluir o recebimento",
+            "A venda ja foi consolidada em guia. O proximo passo e receber, imprimir ou acompanhar a quitacao."
+          );
+          setPainelOperacao({
+            produto: "Venda consolidada em guia",
+            produtoNota: `${Number(data.itens || 0)} item(ns) enviados para a guia ${data.guia}.`,
+            vendedor: document.getElementById("pdvVendedorFoco")?.textContent || obterLabelVendedorAtual(),
+            vendedorNota: "O vendedor permanece rastreado na guia e no pagamento.",
+            guia: data.guia || "Guia gerada",
+            guiaNota: "A guia ja esta pronta para impressao ou envio ao caixa.",
+            caixa: "Aguardando recebimento",
+            caixaNota: "Use os atalhos abaixo para abrir o caixa ou imprimir a guia.",
+          });
           focarBusca(true);
         } else {
           setFeedback("erro", data.erro || "Erro ao finalizar cesto.");
@@ -1163,6 +1939,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (data.ok) {
           renderCesto(data);
           setFeedback("ok", "Item removido do cesto.");
+          carregarCestosAbertos();
           carregarGuiasRecentes();
         } else {
           setFeedback("erro", data.erro || "Nao foi possivel remover o item.");
@@ -1179,19 +1956,35 @@ document.addEventListener("DOMContentLoaded", function () {
     setFinalizacaoLinks("", "");
     setCestoCodigo(codigo);
     carregarCesto().then(data => {
+      carregarCestosAbertos();
       if (!data.itens || !data.itens.length) {
         setFeedback("info", "Cesto carregado sem itens em pre-reserva.");
       } else {
         setFeedback("ok", `Cesto ${codigo} retomado com ${data.itens.length} item(ns).`);
+      }
+      if (!guiaAtual) {
+        setPainelOperacao({
+          produto: data.itens?.[0]?.produto || "Cesto retomado",
+          produtoNota: data.itens?.length ? `Cesto ${codigo} retomado para continuidade da venda.` : `Cesto ${codigo} retomado sem itens ativos.`,
+          vendedor: data.itens?.[0]?.vendedor || obterLabelVendedorAtual(),
+          vendedorNota: data.itens?.length ? "Vendedor herdado do cesto retomado." : "Confirme o vendedor antes de voltar a vender.",
+          guia: "Nenhuma guia gerada",
+          guiaNota: "Retome a venda e finalize quando estiver correta.",
+          caixa: "Sem envio ao caixa",
+          caixaNota: "O caixa so sera acionado depois da guia.",
+        });
       }
     });
   }
 
   function novoCesto() {
     setCestoCodigo("");
+    guiaAtual = "";
     setFinalizacaoLinks("", "");
     carregarCesto();
+    carregarCestosAbertos();
     setFeedback("info", "Novo cesto iniciado.");
+    setPainelOperacao();
     focarBusca(true);
   }
 
@@ -1252,6 +2045,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.getElementById("retomarCestoBtn")?.addEventListener("click", retomarCesto);
   document.getElementById("novoCestoBtn")?.addEventListener("click", novoCesto);
   document.getElementById("recarregarGuiasBtn")?.addEventListener("click", carregarGuiasRecentes);
+  document.getElementById("recarregarCestosBtn")?.addEventListener("click", carregarCestosAbertos);
   cestoCodigoInput?.addEventListener("keypress", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -1264,16 +2058,38 @@ document.addEventListener("DOMContentLoaded", function () {
       adicionarCesto();
     }
   });
-  document.getElementById("addTecnicoSelect")?.addEventListener("keydown", (e) => {
+  pdvVendedorNumeroInput?.addEventListener("input", (e) => {
+    const numero = normalizarNumeroVendedor(e.currentTarget.value);
+    e.currentTarget.value = numero;
+    syncVendedorWidgets({ numero, origem: "painel_numero" });
+  });
+  pdvVendedorSelect?.addEventListener("change", (e) => {
+    syncVendedorWidgets({ numero: e.currentTarget.value, origem: "painel_select" });
+  });
+  document.getElementById("addVendedorNumero")?.addEventListener("input", (e) => {
+    const numero = normalizarNumeroVendedor(e.currentTarget.value);
+    e.currentTarget.value = numero;
+    syncVendedorWidgets({ numero, origem: "modal_numero" });
+  });
+  document.getElementById("addVendedorSelect")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       adicionarCesto();
     }
   });
+  document.getElementById("addVendedorSelect")?.addEventListener("change", (e) => {
+    syncVendedorWidgets({ numero: e.currentTarget.value, origem: "modal_select" });
+  });
   document.querySelector("#cestoTable tbody")?.addEventListener("click", (e) => {
     const btn = e.target.closest(".js-remover-cesto-item");
     if (!btn) { return; }
     removerItemCesto(btn.dataset.id);
+  });
+  cestosAbertosTableBody?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".js-retomar-cesto-aberto");
+    if (!btn) { return; }
+    cestoCodigoInput.value = btn.dataset.codigo || "";
+    retomarCesto();
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "F2") {
@@ -1304,7 +2120,24 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("retomarCestoBtn").disabled = true;
     document.getElementById("novoCestoBtn").disabled = true;
   }
+  setEstadoFluxo({
+    busca: "active",
+    cesto: "idle",
+    guia: "idle",
+    caixa: "idle",
+    buscaHint: "Aguardando leitura",
+    cestoHint: "Sem itens no cesto",
+    guiaHint: "Cesto ainda nao finalizado",
+    caixaHint: "Guia ainda nao enviada ao caixa",
+  });
+  setProximoPasso(
+    "Busque um artigo para iniciar a venda",
+    "Assim que o item for encontrado, confirme o ponto, o vendedor e a quantidade antes de montar o cesto."
+  );
+  setPainelOperacao();
+  syncVendedorWidgets({ numero: obterVendedorAtualNumero() || obterVendedorAuto(), origem: "painel" });
   carregarCesto();
+  carregarCestosAbertos();
   carregarGuiasRecentes();
   focarBusca();
 });

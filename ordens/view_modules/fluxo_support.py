@@ -1,4 +1,4 @@
-import json
+﻿import json
 import logging
 import os
 import re
@@ -59,14 +59,32 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 def _mensagem_confirmacao_inicial(ordem, request):
+    config = ConfiguracaoSistema.get_configuracao()
     link_pdf = request.build_absolute_uri(reverse("ordens:imprimir_ordem_servico", kwargs={"pk": ordem.pk}))
     link_assinatura = request.build_absolute_uri(reverse("confirmar_os_publico", kwargs={"token": ordem.token_confirmacao}))
     nome = ordem.cliente.nome or "Cliente"
+    equipamento = " ".join(
+        item
+        for item in [
+            ordem.tipo_equipamento or "",
+            ordem.marca_equipamento or "",
+            ordem.modelo_equipamento or "",
+        ]
+        if item
+    ).strip() or "Equipamento nao informado"
+    template = config.mensagem_abertura_whatsapp or (
+        "Ola {cliente_nome}, sua OS {numero_os} foi registrada com sucesso.\n\n"
+        "Equipamento: {equipamento_resumo}\n"
+        "PDF da ordem: {link_ordem_pdf}\n"
+        "Confirmacao/assinatura digital: {link_confirmacao}\n\n"
+        "Se nao conseguir assinar pelo link, podemos imprimir para assinatura presencial."
+    )
     return (
-        f"Olá {nome}, sua OS {ordem.numero_os} foi registrada com sucesso.\n\n"
-        f"PDF da ordem: {link_pdf}\n"
-        f"Confirmação/assinatura digital: {link_assinatura}\n\n"
-        "Se não conseguir assinar pelo link, podemos imprimir para assinatura presencial."
+        template.replace("{cliente_nome}", nome)
+        .replace("{numero_os}", ordem.numero_os or "")
+        .replace("{equipamento_resumo}", equipamento)
+        .replace("{link_ordem_pdf}", link_pdf)
+        .replace("{link_confirmacao}", link_assinatura)
     )
 
 

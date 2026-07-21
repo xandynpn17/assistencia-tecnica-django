@@ -1,4 +1,4 @@
-{% extends 'core/base.html' %}
+﻿{% extends 'core/base.html' %}
 {% block title %}Lista de Ordens de Serviço{% endblock %}
 
 {% block extra_css %}
@@ -29,8 +29,6 @@
     .results-panel .h4 { font-size: 1.35rem; margin-bottom: 0; line-height: 1; }
     .filters-panel label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 4px; font-weight: 700; }
     .filters-panel .form-control { height: 36px; font-size: .92rem; }
-    .filters-panel .form-check { min-height: 36px; display: flex; align-items: center; margin-bottom: 0; }
-    .filters-panel .form-check-label { font-size: .9rem; }
     .filters-panel .btn { height: 36px; }
     .list-row-main { display: flex; flex-direction: column; gap: 2px; }
     .list-row-main a { font-size: .94rem; line-height: 1.2; }
@@ -90,7 +88,7 @@
                         <div class="filters-intro">
                             <div class="filters-title">Busca e filtros</div>
                             <div class="d-flex align-items-center" style="gap: 8px;">
-                            <div class="filters-help mb-0">Selecione o status para carregar a lista. Ordens fechadas aparecem em concluídas.</div>
+                                <div class="filters-help mb-0">Selecione o status e, se quiser, refine por local de armazenamento. Ordens fechadas aparecem em concluídas.</div>
                                 <button type="button" class="help-trigger" data-toggle="modal" data-target="#modalGuiaBuscaOrdens" aria-label="Como buscar" title="Como buscar">
                                     <i class="fas fa-info-circle"></i>
                                 </button>
@@ -104,19 +102,23 @@
                     </div>
 
                     <form method="get" class="form-row align-items-end mt-2">
-                        <div class="col-lg-6 col-md-8 mb-2 mb-lg-0">
+                        <div class="col-lg-4 col-md-6 mb-2 mb-lg-0">
                             <label>Status</label>
                             <select class="form-control" name="status">
-                                <option value="">Ordens abertas</option>
+                                <option value="abertas" {% if status_filtro == 'abertas' or not status_filtro %}selected{% endif %}>Ordens abertas</option>
                                 {% for key, label in view.model.STATUS_CHOICES %}
                                 <option value="{{ key }}" {% if status_filtro == key %}selected{% endif %}>{{ label }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-lg-3 col-md-2 mb-2 mb-lg-0">
+                        <div class="col-lg-4 col-md-6 mb-2 mb-lg-0">
+                            <label>Local de armazenamento</label>
+                            <input type="text" class="form-control" name="local_armazenamento" value="{{ local_armazenamento }}" placeholder="Ex.: prateleira A, bancada 2">
+                        </div>
+                        <div class="col-lg-2 col-md-6 mb-2 mb-lg-0">
                             <button type="submit" class="btn btn-primary btn-block">Aplicar filtros</button>
                         </div>
-                        <div class="col-lg-3 col-md-2 mb-2 mb-lg-0">
+                        <div class="col-lg-2 col-md-6 mb-2 mb-lg-0">
                             <a href="{% url 'ordens:lista_ordens' %}" class="btn btn-outline-secondary btn-block">Limpar</a>
                         </div>
                     </form>
@@ -127,10 +129,13 @@
                     </div>
                     {% endif %}
 
-                    {% if status_filtro %}
+                    {% if status_filtro or local_armazenamento %}
                     <div class="mt-2">
                         {% if status_filtro %}
                         <span class="summary-chip">Status<strong>{{ status_filtro_label }}</strong></span>
+                        {% endif %}
+                        {% if local_armazenamento %}
+                        <span class="summary-chip">Local<strong>{{ local_armazenamento }}</strong></span>
                         {% endif %}
                     </div>
                     {% endif %}
@@ -141,7 +146,7 @@
                         <div class="status-strip">
                             {% for item in status_cards %}
                             <a
-                                href="?carregar=1{% if item.codigo %}&status={{ item.codigo }}{% endif %}"
+                                href="?carregar=1{% if item.codigo %}&status={{ item.codigo }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if quick_filter %}&quick={{ quick_filter|urlencode }}{% endif %}{% if local_armazenamento %}&local_armazenamento={{ local_armazenamento|urlencode }}{% endif %}"
                                 class="status-chip-link"
                             >
                                 <span class="status-chip{% if item.ativo %} active{% endif %}">
@@ -172,6 +177,7 @@
                             <th class="pl-4">OS / Cliente</th>
                             <th>Equipamento</th>
                             <th>Marca / Modelo</th>
+                            <th>Local</th>
                             <th>Status</th>
                             <th>Criada em</th>
                         </tr>
@@ -195,12 +201,15 @@
                                 <div class="font-weight-600">{{ os.marca_equipamento }}</div>
                                 <div class="small text-muted">{{ os.modelo_equipamento }}</div>
                             </td>
+                            <td data-label="Local">
+                                <div class="font-weight-600">{{ os.local_armazenamento|default:"-" }}</div>
+                            </td>
                             <td data-label="Status"><span class="status-pill {{ os.status_listagem_codigo }}">{{ os.status_listagem_label }}</span></td>
                             <td data-label="Criada em">{{ os.data_abertura|date:"d/m/Y H:i" }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="empty-state">
+                            <td colspan="6" class="empty-state">
                                 Nenhuma ordem encontrada com os filtros informados.
                             </td>
                         </tr>
@@ -218,7 +227,7 @@
                             <ul class="pagination pagination-sm mb-0">
                                 {% if page_obj.has_previous %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?carregar=1{% if status_filtro %}&status={{ status_filtro }}{% endif %}&page={{ page_obj.previous_page_number }}">Anterior</a>
+                                    <a class="page-link" href="?carregar=1{% if status_filtro %}&status={{ status_filtro }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if quick_filter %}&quick={{ quick_filter|urlencode }}{% endif %}{% if local_armazenamento %}&local_armazenamento={{ local_armazenamento|urlencode }}{% endif %}&page={{ page_obj.previous_page_number }}">Anterior</a>
                                 </li>
                                 {% endif %}
                                 <li class="page-item disabled">
@@ -226,7 +235,7 @@
                                 </li>
                                 {% if page_obj.has_next %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?carregar=1{% if status_filtro %}&status={{ status_filtro }}{% endif %}&page={{ page_obj.next_page_number }}">Próxima</a>
+                                    <a class="page-link" href="?carregar=1{% if status_filtro %}&status={{ status_filtro }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if quick_filter %}&quick={{ quick_filter|urlencode }}{% endif %}{% if local_armazenamento %}&local_armazenamento={{ local_armazenamento|urlencode }}{% endif %}&page={{ page_obj.next_page_number }}">Próxima</a>
                                 </li>
                                 {% endif %}
                             </ul>

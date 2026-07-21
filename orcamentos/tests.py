@@ -65,9 +65,7 @@ class ItemOrcamentoTecnicoTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, f"{self.ordem.get_absolute_url()}?tab=orcamentos")
 
-    def test_adicionar_item_exige_permissao_editar_orcamento(self):
-        self.atendente.perm_orcamento_editar = False
-        self.atendente.save(update_fields=["perm_orcamento_editar"])
+    def test_adicionar_item_perfil_operacional_pode_editar_orcamento(self):
         response = self.client.post(
             reverse("orcamentos:adicionar_item", args=[self.orcamento.id]),
             {
@@ -79,10 +77,9 @@ class ItemOrcamentoTecnicoTests(TestCase):
                 "tipo_item": "servico",
                 "origem": "manual",
             },
-            follow=True,
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(ItemOrcamento.objects.filter(orcamento=self.orcamento, nome="Troca de Tela").exists())
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(ItemOrcamento.objects.filter(orcamento=self.orcamento, nome="Troca de Tela").exists())
 
     def test_adicionar_item_com_tecnico_responsavel(self):
         response = self.client.post(
@@ -103,9 +100,7 @@ class ItemOrcamentoTecnicoTests(TestCase):
         self.assertEqual(item.tecnico_responsavel_id, self.tecnico.id)
         self.assertEqual(item.tipo_item, "servico")
 
-    def test_editar_item_exige_permissao_editar_orcamento(self):
-        self.atendente.perm_orcamento_editar = False
-        self.atendente.save(update_fields=["perm_orcamento_editar"])
+    def test_editar_item_perfil_operacional_pode_editar_orcamento(self):
         item = ItemOrcamento.objects.create(
             orcamento=self.orcamento,
             nome="Bateria",
@@ -124,11 +119,10 @@ class ItemOrcamentoTecnicoTests(TestCase):
                 "tipo_item": "peca",
                 "origem": "manual",
             },
-            follow=True,
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
         item.refresh_from_db()
-        self.assertEqual(item.nome, "Bateria")
+        self.assertEqual(item.nome, "Bateria Premium")
 
     def test_editar_item_atualiza_tecnico_responsavel(self):
         item = ItemOrcamento.objects.create(
@@ -247,9 +241,7 @@ class ItemOrcamentoTecnicoTests(TestCase):
         self.assertIsNotNone(servico)
         self.assertEqual(servico.tecnico_responsavel_id, self.tecnico.id)
 
-    def test_migrar_para_servicos_exige_permissao_granular(self):
-        self.atendente.perm_orcamento_migrar_item = False
-        self.atendente.save(update_fields=["perm_orcamento_migrar_item"])
+    def test_migrar_para_servicos_perfil_operacional_consegue_migrar(self):
         item = ItemOrcamento.objects.create(
             orcamento=self.orcamento,
             nome="Servico tecnico",
@@ -264,10 +256,9 @@ class ItemOrcamentoTecnicoTests(TestCase):
         response = self.client.post(
             reverse("orcamentos:migrar_para_servicos", args=[self.orcamento.id]),
             {"itens_selecionados": [str(item.id)]},
-            follow=True,
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(self.ordem.servicos_pecas.filter(item_orcamento=item).exists())
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(self.ordem.servicos_pecas.filter(item_orcamento=item).exists())
 
     def test_migrar_para_servicos_ignora_item_nao_aprovado(self):
         item = ItemOrcamento.objects.create(
@@ -328,9 +319,7 @@ class ItemOrcamentoTecnicoTests(TestCase):
         self.ordem.refresh_from_db()
         self.assertEqual(self.ordem.status, "pronto_contactado")
 
-    def test_aprovar_itens_exige_permissao_granular(self):
-        self.atendente.perm_orcamento_aprovar_item = False
-        self.atendente.save(update_fields=["perm_orcamento_aprovar_item"])
+    def test_aprovar_itens_perfil_operacional_consegue_aprovar(self):
         item = ItemOrcamento.objects.create(
             orcamento=self.orcamento,
             nome="Item pendente",
@@ -344,15 +333,12 @@ class ItemOrcamentoTecnicoTests(TestCase):
         response = self.client.post(
             reverse("orcamentos:aceitar_orcamento", args=[self.orcamento.id]),
             {"itens_selecionados": [str(item.id)]},
-            follow=True,
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
         item.refresh_from_db()
-        self.assertEqual(item.status, "pendente")
+        self.assertEqual(item.status, "aprovado")
 
-    def test_recusar_itens_exige_permissao_granular(self):
-        self.atendente.perm_orcamento_recusar_item = False
-        self.atendente.save(update_fields=["perm_orcamento_recusar_item"])
+    def test_recusar_itens_perfil_operacional_consegue_recusar(self):
         item = ItemOrcamento.objects.create(
             orcamento=self.orcamento,
             nome="Item pendente",
@@ -366,11 +352,10 @@ class ItemOrcamentoTecnicoTests(TestCase):
         response = self.client.post(
             reverse("orcamentos:recusar_orcamento", args=[self.orcamento.id]),
             {"itens_selecionados": [str(item.id)]},
-            follow=True,
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
         item.refresh_from_db()
-        self.assertEqual(item.status, "pendente")
+        self.assertEqual(item.status, "recusado")
 
     def test_aceitar_itens_muda_status_para_autorizado_quando_nao_final(self):
         self.ordem.status = "bancada"
@@ -427,6 +412,11 @@ class ItemOrcamentoTecnicoTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.ordem.refresh_from_db()
         self.assertEqual(self.ordem.status, "orcamentado")
+        self.assertTrue(
+            self.ordem.linhas_trabalho.filter(
+                descricao__icontains="item(ns) do orcamento aprovados pelo cliente"
+            ).exists()
+        )
 
     def test_orcamento_aplica_desconto_percentual_no_total(self):
         ItemOrcamento.objects.create(

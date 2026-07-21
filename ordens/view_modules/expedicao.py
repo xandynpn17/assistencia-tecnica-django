@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -16,7 +16,6 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
-from configuracoes.models import Empresa
 from configuracoes.permissions import ORDER_ROLES, role_required
 from configuracoes.services.tenant_guard import obter_empresa_ativa
 
@@ -221,7 +220,7 @@ def guia_expedicao_pdf(request, guia_id):
     expedida_em = timezone.localtime(guia.expedida_em)
     usuario = getattr(guia.expedida_por, "get_full_name", lambda: "")() or getattr(guia.expedida_por, "username", "-")
 
-    empresa = empresa_ativa or Empresa.objects.order_by("id").first()
+    empresa = empresa_ativa
     logo_path = None
     if empresa:
         logo_field = empresa.logo_pdf or empresa.logo
@@ -233,7 +232,7 @@ def guia_expedicao_pdf(request, guia_id):
         try:
             logo = ImageReader(logo_path)
             pdf.drawImage(logo, margem, height - margem - 14 * mm, width=30 * mm, height=12 * mm, preserveAspectRatio=True, mask="auto")
-        except Exception:
+        except (OSError, ValueError):
             pass
 
     pdf.setFont("Helvetica-Bold", 15)
@@ -314,3 +313,4 @@ def guia_expedicao_pdf(request, guia_id):
 
     pdf.save()
     return response
+

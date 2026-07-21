@@ -44,7 +44,7 @@
       <h1 class="mb-1">Financeiro do caixa - {{ data_inicio_ref|date:"d/m/Y" }}</h1>
     {% else %}
       <h1 class="mb-1">Financeiro do caixa por período</h1>
-      <div class="text-muted small">{{ data_inicio_ref|date:"d/m/Y" }} at? {{ data_fim_ref|date:"d/m/Y" }}</div>
+      <div class="text-muted small">{{ data_inicio_ref|date:"d/m/Y" }} até {{ data_fim_ref|date:"d/m/Y" }}</div>
     {% endif %}
   </div>
   <form method="get" class="card p-2 mb-0" style="min-width: 360px;">
@@ -118,13 +118,13 @@
 </div>
 
 <div class="alert alert-light py-2">
-  Comparativo com período anterior ({{ periodo_anterior_inicio|date:"d/m/Y" }} at? {{ periodo_anterior_fim|date:"d/m/Y" }}).
+  Comparativo com período anterior ({{ periodo_anterior_inicio|date:"d/m/Y" }} até {{ periodo_anterior_fim|date:"d/m/Y" }}).
 </div>
 
 <div class="row mb-3">
   <div class="col-md-3"><div class="small-box bg-primary"><div class="inner"><h4>R$ {{ resultado_operacional|floatformat:2 }}</h4><p>Resultado operacional</p><small>Var: R$ {{ comparativos.resultado.variacao|floatformat:2 }} ({{ comparativos.resultado.percentual|floatformat:2 }}%)</small></div></div></div>
   <div class="col-md-3"><div class="small-box bg-secondary"><div class="inner"><h4>R$ {{ a_receber_total|floatformat:2 }}</h4><p>Contas a receber</p></div></div></div>
-  <div class="col-md-3"><div class="small-box bg-dark"><div class="inner"><h4>R$ {{ vencidas_total|floatformat:2 }}</h4><p>Recebiveis vencidos</p></div></div></div>
+  <div class="col-md-3"><div class="small-box bg-dark"><div class="inner"><h4>R$ {{ vencidas_total|floatformat:2 }}</h4><p>Recebíveis vencidos</p></div></div></div>
   <div class="col-md-3">
     <div class="small-box bg-warning">
       <div class="inner">
@@ -136,6 +136,12 @@
       </a>
     </div>
   </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-md-4"><div class="small-box bg-light"><div class="inner"><h4>R$ {{ a_receber_garantia|floatformat:2 }}</h4><p>Garantias em aberto</p></div></div></div>
+  <div class="col-md-4"><div class="small-box bg-light"><div class="inner"><h4>R$ {{ a_receber_garantia_vencida|floatformat:2 }}</h4><p>Garantias vencidas</p></div></div></div>
+  <div class="col-md-4"><div class="small-box bg-light"><div class="inner"><h4>R$ {{ a_receber_garantia_divergente|floatformat:2 }}</h4><p>Garantias com divergência</p></div></div></div>
 </div>
 
 <div class="row mb-3">
@@ -155,7 +161,7 @@
 <div class="row mb-3">
   <div class="col-md-4"><div class="small-box bg-light"><div class="inner"><h4>R$ {{ custos_fixos_previsto_mes|floatformat:2 }}</h4><p>Custos fixos previstos ({{ competencia_custos_fixos|date:"m/Y" }})</p></div></div></div>
   <div class="col-md-4"><div class="small-box bg-light"><div class="inner"><h4>R$ {{ custos_fixos_pago_mes|floatformat:2 }}</h4><p>Custos fixos pagos ({{ competencia_custos_fixos|date:"m/Y" }})</p></div></div></div>
-  <div class="col-md-4"><div class="small-box {% if custos_fixos_diferenca_mes > 0 %}bg-warning{% else %}bg-success{% endif %}"><div class="inner"><h4>R$ {{ custos_fixos_diferenca_mes|floatformat:2 }}</h4><p>Diferenca custos fixos ({{ competencia_custos_fixos|date:"m/Y" }})</p></div></div></div>
+  <div class="col-md-4"><div class="small-box {% if custos_fixos_diferenca_mes > 0 %}bg-warning{% else %}bg-success{% endif %}"><div class="inner"><h4>R$ {{ custos_fixos_diferenca_mes|floatformat:2 }}</h4><p>Diferença custos fixos ({{ competencia_custos_fixos|date:"m/Y" }})</p></div></div></div>
 </div>
 
 <div class="row mb-3">
@@ -190,7 +196,7 @@
   </div>
   <div class="col-lg-6">
     <div class="card h-100">
-      <div class="card-header"><h3 class="card-title">Pressóo sobre o caixa</h3></div>
+      <div class="card-header"><h3 class="card-title">Pressão sobre o caixa</h3></div>
       <div class="card-body p-0">
         <table class="table table-sm mb-0">
           <tbody>
@@ -205,6 +211,41 @@
     </div>
   </div>
 </div>
+
+{% if marcas_garantia_atrasadas %}
+<div class="row mb-3">
+  <div class="col-lg-12">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">Marcas de garantia em atraso</h3>
+        <a href="{% url 'caixa:contas_receber' %}?tipo_origem=garantia_fabricante&prioridade=garantia_vencida" class="btn btn-sm btn-outline-danger">Abrir fila</a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Marca</th>
+              <th>Fornecedor</th>
+              <th>Qtde.</th>
+              <th class="text-right">Total em atraso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in marcas_garantia_atrasadas %}
+            <tr>
+              <td>{{ row.marca_garantia__nome|default:"Sem marca" }}</td>
+              <td>{{ row.fornecedor_garantia__nome|default:"-" }}</td>
+              <td>{{ row.quantidade }}</td>
+              <td class="text-right">R$ {{ row.total|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <div class="row mb-3">
   <div class="col-lg-6">
@@ -229,7 +270,7 @@
   </div>
   <div class="col-lg-6">
     <div class="card h-100">
-      <div class="card-header"><h3 class="card-title">Saidas por centro de custo</h3></div>
+      <div class="card-header"><h3 class="card-title">Saídas por centro de custo</h3></div>
       <div class="card-body">
         <div class="mini-chart-list">
           {% for row in centros_custo_resumo %}
@@ -252,7 +293,7 @@
 <div class="row mb-3">
   <div class="col-lg-6">
     <div class="card h-100">
-      <div class="card-header"><h3 class="card-title">Saidas por categoria</h3></div>
+      <div class="card-header"><h3 class="card-title">Saídas por categoria</h3></div>
       <div class="card-body">
         <div class="mini-chart-list">
           {% for row in categorias_saida_resumo %}
@@ -353,12 +394,12 @@
   <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
     <h3 class="card-title mb-0">Caixas no período</h3>
     <small class="text-muted">
-      Abertos: {{ qtd_caixas_abertos }} | Fechados: {{ qtd_caixas_fechados }} | Soma diferencas: R$ {{ diferenca_fechamento_total|floatformat:2 }}
+      Abertos: {{ qtd_caixas_abertos }} | Fechados: {{ qtd_caixas_fechados }} | Soma diferenças: R$ {{ diferenca_fechamento_total|floatformat:2 }}
     </small>
   </div>
   <div class="card-body p-0 table-responsive">
     <table class="table table-hover table-sm mb-0">
-      <thead><tr><th>Data</th><th>Status</th><th class="text-right">Saldo inicial</th><th class="text-right">Saldo final</th><th class="text-right">Diferenca</th><th></th></tr></thead>
+      <thead><tr><th>Data</th><th>Status</th><th class="text-right">Saldo inicial</th><th class="text-right">Saldo final</th><th class="text-right">Diferença</th><th></th></tr></thead>
       <tbody>
         {% for item in caixas_periodo %}
         <tr>
@@ -408,20 +449,20 @@
   </div>
   <div class="col-lg-6">
     <div class="card h-100">
-      <div class="card-header"><h3 class="card-title">Lancamentos recentes</h3></div>
+      <div class="card-header"><h3 class="card-title">Lançamentos recentes</h3></div>
       <div class="card-body table-responsive p-0">
         <table class="table table-hover table-sm mb-0">
-          <thead><tr><th>Descricao</th><th>Tipo</th><th class="text-right">Valor</th><th>Data</th></tr></thead>
+          <thead><tr><th>Descrição</th><th>Tipo</th><th class="text-right">Valor</th><th>Data</th></tr></thead>
           <tbody>
             {% for l in lancamentos_recentes %}
             <tr>
               <td>{{ l.descricao|default:"-" }}</td>
-              <td>{% if l.tipo == 'entrada' %}<span class="badge badge-success">Entrada</span>{% else %}<span class="badge badge-danger">Saida</span>{% endif %}</td>
+              <td>{% if l.tipo == 'entrada' %}<span class="badge badge-success">Entrada</span>{% else %}<span class="badge badge-danger">Saída</span>{% endif %}</td>
               <td class="text-right">R$ {{ l.valor|floatformat:2 }}</td>
               <td>{{ l.data|date:"d/m/Y H:i" }}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="text-center">Nenhum lancamento.</td></tr>
+            <tr><td colspan="4" class="text-center">Nenhum lançamento.</td></tr>
             {% endfor %}
           </tbody>
         </table>

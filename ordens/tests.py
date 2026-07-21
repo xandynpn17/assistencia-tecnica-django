@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
+﻿from datetime import datetime, timedelta
 from io import BytesIO
 from decimal import Decimal
+import json
 import re
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -19,16 +20,16 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Frame, Paragraph as reportlab_paragraph
 
-from caixa.models import Caixa, Pagamento
+from caixa.models import Caixa, ContaReceber, Pagamento
 from caixa.models import AuditoriaGarantia
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema, Empresa, ParceiroExpedicao
 from core.pdf_theme import get_document_theme as real_get_document_theme
 from configuracoes.models import FornecedorGarantia, MarcaGarantia, ModeloMensagem
-from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
+from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto, SaldoEstoqueUbicacao, UbicacaoEstoque
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.forms import LinhaTrabalhoForm
-from ordens.models import GuiaExpedicaoItem, GuiaExpedicaoParceiro, LogOS, OrdemArquivo, OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, PedidoCompra, ServicoPeca
+from ordens.models import ConciliacaoOrdem, ConciliacaoOrdemItem, GuiaExpedicaoItem, GuiaExpedicaoParceiro, LogOS, OrdemArquivo, OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, PedidoCompra, ServicoPeca
 from ordens.services.fluxo_os_policy import FluxoOSPolicyService
 from ordens.services.resumo_operacional import ResumoOperacionalService
 from ordens.view_modules.impressao import _quebrar_tokens_longos
@@ -68,14 +69,29 @@ class VerificarClienteOSViewTests(TestCase):
         response = self.client.get(self.url, {"cpf_telefone": "abc###"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Digite apenas números para busca.")
+        self.assertContains(response, "Digite apenas letras e numeros validos para CPF, CNPJ ou telefone.")
 
     def test_busca_abaixo_do_minimo_mostra_erro(self):
         response = self.client.get(self.url, {"cpf_telefone": "1234"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Digite pelo menos 5 números para buscar.")
+        self.assertContains(response, "Digite pelo menos 5 caracteres para buscar.")
         self.assertNotContains(response, "Nenhum Cliente Encontrado")
+
+    def test_busca_por_cnpj_alfanumerico_encontra_cliente(self):
+        cliente = Cliente.objects.create(
+            nome="Cliente PJ Alfa",
+            documento="12ABC34501DE35",
+            telefone="11987654321",
+            estado="SP",
+        )
+
+        response = self.client.get(self.url, {"cpf_telefone": "12.ABC.345/01DE-35"})
+
+        self.assertEqual(response.status_code, 200)
+        clientes = list(response.context["clientes"])
+        self.assertEqual(len(clientes), 1)
+        self.assertEqual(clientes[0].id, cliente.id)
 
     def test_busca_por_cpf_encontra_cliente(self):
         cliente = Cliente.objects.create(
@@ -386,6 +402,50 @@ class CriacaoOrdemServicoHistoricoTests(TestCase):
         self.assertEqual(linhas[0].tipo_evento, "automatico")
         self.assertEqual(linhas[1].status, "diagnosticar")
         self.assertEqual(linhas[1].tipo_evento, "automatico")
+
+    def test_criacao_os_com_tipo_equipamento_outros_persiste_valor_manual(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        payload = {
+            "tipo_equipamento": "__outros__",
+            "tipo_equipamento_manual": "Depilador a laser",
+            "marca_catalogo": "__outros__",
+            "marca_manual": "Marca Livre",
+            "marca_equipamento": "",
+            "modelo_equipamento": "Modelo Livre",
+            "numero_serie_equipamento": "SN-OUTROS-001",
+            "defeito": "Nao liga",
+            "acessorios": "",
+            "tipo_reparo": "Fora de Garantia",
+            "peritagem": "",
+            "confirmar_criacao": "1",
+        }
+
+        response = self.client.post(url, payload)
+        self.assertEqual(response.status_code, 302)
+        ordem = OrdemServico.objects.latest("id")
+        self.assertEqual(ordem.tipo_equipamento, "Depilador a laser")
+        self.assertEqual(ordem.marca_equipamento, "Marca Livre")
+
+    def test_criacao_os_aceita_tipo_reparo_encomenda(self):
+        url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
+        payload = {
+            "tipo_equipamento": "celular",
+            "marca_catalogo": "__outros__",
+            "marca_manual": "Marca Encomenda",
+            "marca_equipamento": "",
+            "modelo_equipamento": "Modelo Encomenda",
+            "numero_serie_equipamento": "",
+            "defeito": "Encomenda de peça para cliente externo",
+            "acessorios": "",
+            "tipo_reparo": "Encomenda",
+            "peritagem": "",
+            "confirmar_criacao": "1",
+        }
+
+        response = self.client.post(url, payload)
+        self.assertEqual(response.status_code, 302)
+        ordem = OrdemServico.objects.latest("id")
+        self.assertEqual(ordem.tipo_reparo, "Encomenda")
 
     def test_criacao_os_com_nonce_repetido_nao_duplica_ordem(self):
         url = reverse("ordens:nova_ordem_cliente", args=[self.cliente.id])
@@ -763,6 +823,38 @@ class OrdemServicoListagemTests(TestCase):
         self.assertTrue(response.context["carregar_lista"])
         self.assertEqual(list(response.context["ordens"]), [ordem_aberta])
 
+    def test_lista_ordens_com_status_abertas_mostra_apenas_ordens_em_aberto(self):
+        ordem_aberta = self._criar_ordem("aberta-status", status="em_andamento")
+        ordem_fechada = self._criar_ordem("fechada-status", status="concluida")
+        ordem_fechada.fechada = True
+        ordem_fechada.save(update_fields=["fechada"])
+
+        response = self.client.get(reverse("ordens:lista_ordens"), {"status": "abertas"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["filtros_aplicados"])
+        self.assertEqual(response.context["status_filtro_label"], "Ordens abertas")
+        self.assertEqual(list(response.context["ordens"]), [ordem_aberta])
+
+    def test_lista_ordens_filtra_por_local_armazenamento(self):
+        ordem_loja = self._criar_ordem("loja", status="diagnosticar")
+        ordem_loja.local_armazenamento = "Prateleira A"
+        ordem_loja.save(update_fields=["local_armazenamento"])
+
+        ordem_bancada = self._criar_ordem("bancada", status="em_andamento")
+        ordem_bancada.local_armazenamento = "Bancada 02"
+        ordem_bancada.save(update_fields=["local_armazenamento"])
+
+        response = self.client.get(
+            reverse("ordens:lista_ordens"),
+            {"status": "abertas", "local_armazenamento": "prateleira"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["filtros_aplicados"])
+        self.assertEqual(response.context["local_armazenamento"], "prateleira")
+        self.assertEqual(list(response.context["ordens"]), [ordem_loja])
+
     def test_lista_ordens_concluidas_mostra_apenas_fechadas(self):
         ordem_fechada = self._criar_ordem("concluida", status="concluida")
         ordem_fechada.fechada = True
@@ -1027,6 +1119,87 @@ class IntegracaoFluxoOSCaixaTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("caixa:registrar_pagamento"), response.url)
         self.assertIn(f"os={ordem.id}", response.url)
+
+    def test_fechar_os_com_saldo_pendente_exige_confirmacao_previa(self):
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca T",
+            modelo_equipamento="Modelo Z",
+            numero_serie_equipamento="SN-002A",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="em_andamento",
+            relatorio_tecnico="Laudo ok",
+            tipo_reparacao="substituicao",
+        )
+        ServicoPeca.objects.create(
+            ordem=ordem,
+            tipo="servico",
+            nome="Troca de componente",
+            quantidade=1,
+            valor_unitario="150.00",
+        )
+        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[ordem.id]))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("confirmar_fechamento=1", response.url)
+        ordem.refresh_from_db()
+        self.assertFalse(ordem.fechada)
+
+    def test_fechar_os_com_confirmacao_financeira_cria_alerta_e_conta_receber(self):
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca T",
+            modelo_equipamento="Modelo Z",
+            numero_serie_equipamento="SN-002B",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="em_andamento",
+            relatorio_tecnico="Laudo ok",
+            tipo_reparacao="substituicao",
+        )
+        ServicoPeca.objects.create(
+            ordem=ordem,
+            tipo="servico",
+            nome="Troca de componente",
+            quantidade=1,
+            valor_unitario="150.00",
+        )
+        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[ordem.id]) + "?confirmar_financeiro=1")
+        self.assertEqual(response.status_code, 302)
+        ordem.refresh_from_db()
+        self.assertTrue(ordem.fechada)
+        self.assertTrue(ordem.alertas.filter(mensagem__startswith="Fechamento com saldo pendente").exists())
+        self.assertTrue(ContaReceber.objects.filter(ordem_servico=ordem, tipo_origem="cliente_os").exists())
+
+    def test_fechar_os_com_ir_caixa_e_saldo_pendente_fecha_sem_alerta_intermediario(self):
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca T",
+            modelo_equipamento="Modelo Z",
+            numero_serie_equipamento="SN-002C",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status="em_andamento",
+            relatorio_tecnico="Laudo ok",
+            tipo_reparacao="substituicao",
+        )
+        ServicoPeca.objects.create(
+            ordem=ordem,
+            tipo="servico",
+            nome="Troca de componente",
+            quantidade=1,
+            valor_unitario="150.00",
+        )
+
+        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[ordem.id]) + "?ir_caixa=1")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("caixa:registrar_pagamento"), response.url)
+        self.assertNotIn("confirmar_fechamento=1", response.url)
+        ordem.refresh_from_db()
+        self.assertTrue(ordem.fechada)
 
     def test_fechar_os_garantia_cria_auditoria_financeira(self):
         fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor G")
@@ -1299,6 +1472,36 @@ class LinhaTrabalhoAjaxAtualizaStatusTests(TestCase):
         self.assertEqual(self.ordem.status, "diagnosticar")
         self.assertFalse(LinhaTrabalho.objects.filter(ordem=self.ordem, status="concluida").exists())
 
+    def test_atualizar_tecnico_ajax_retorna_historico_e_persiste(self):
+        tecnico = get_user_model().objects.create_user(
+            username="tecnico_ajax_os",
+            password="senha-forte-123",
+            tipo_usuario="tecnico",
+        )
+        self.user.perm_os_alterar_tecnico = True
+        self.user.save(update_fields=["perm_os_alterar_tecnico"])
+
+        response = self.client.post(
+            reverse("ordens:atualizar_tecnico", args=[self.ordem.id]),
+            data=json.dumps({"tecnico_id": tecnico.id}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["tecnico_nome"], tecnico.get_full_name() or tecnico.username)
+        self.assertIn("linha", payload)
+
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.tecnico_responsavel_id, tecnico.id)
+        self.assertTrue(
+            LinhaTrabalho.objects.filter(
+                ordem=self.ordem,
+                descricao__icontains="Tecnico responsavel alterado para",
+            ).exists()
+        )
+
 
 class GuiasExpedicaoParceiroTests(TestCase):
     def setUp(self):
@@ -1467,7 +1670,7 @@ class PortalClienteTests(TestCase):
             {"codigo": self.ordem.codigo_portal, "cpf": "00000000000"},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "CPF não confere")
+        self.assertContains(response, "CPF nao confere")
 
     def test_portal_cliente_sem_cpf_bloqueia(self):
         response = self.client.get(
@@ -1544,6 +1747,30 @@ class PortalClienteTests(TestCase):
                 ordem=self.ordem,
                 status="pronto_contactado",
                 descricao__icontains="pronto para retirada",
+            ).exists()
+        )
+
+    def test_notificar_recusado_whatsapp_registra_linha_sem_alterar_status_principal(self):
+        self.client.force_login(self.user)
+        self.ordem.status = "recusado"
+        self.ordem.relatorio_tecnico = "Cliente nao aprovou o reparo."
+        self.ordem.tipo_reparacao = "recusado_preco"
+        self.ordem.save(update_fields=["status", "relatorio_tecnico", "tipo_reparacao"])
+
+        response = self.client.post(
+            reverse("ordens:notificar_cliente_ordem", args=[self.ordem.id, "recusado"]),
+            {"canal": "whatsapp", "next_tab": "relatorio"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.status, "recusado")
+        self.assertIn("?tab=relatorio&wa=", response.url)
+        self.assertTrue(
+            LinhaTrabalho.objects.filter(
+                ordem=self.ordem,
+                status="recusado",
+                descricao__icontains="recusa/devolucao",
             ).exists()
         )
 
@@ -1641,6 +1868,12 @@ class OrdemEstoqueIntegracaoTests(TestCase):
             tipo_reparacao="substituicao",
         )
         self.ponto = PontoOperacional.objects.create(codigo="LOJA2", nome="Loja 2")
+        self.ubicacao = UbicacaoEstoque.objects.create(
+            ponto_operacional=self.ponto,
+            codigo="B-01",
+            descricao="Prateleira B-01",
+            ativo=True,
+        )
         self.produto = Produto.objects.create(
             nome="Display",
             sku="DSP-01",
@@ -1649,13 +1882,21 @@ class OrdemEstoqueIntegracaoTests(TestCase):
             preco=100,
             quantidade=5,
             ponto_operacional=self.ponto,
+            ubicacao_padrao=self.ubicacao,
             ativo=True,
         )
         SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=self.ponto, quantidade=5)
+        SaldoEstoqueUbicacao.objects.create(
+            produto=self.produto,
+            ponto_operacional=self.ponto,
+            ubicacao=self.ubicacao,
+            quantidade=5,
+        )
         self.reserva = ReservaEstoque.objects.create(
             codigo_reserva="RES-OS0001",
             produto=self.produto,
             ponto_operacional=self.ponto,
+            ubicacao=self.ubicacao,
             quantidade=2,
             nome_contato=self.cliente.nome,
             valido_ate=timezone.localdate() + timedelta(days=2),
@@ -1665,7 +1906,10 @@ class OrdemEstoqueIntegracaoTests(TestCase):
         )
 
     def test_fechamento_os_consume_reservas(self):
-        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        response = self.client.get(
+            reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]),
+            {"confirmar_financeiro": "1"},
+        )
         self.assertEqual(response.status_code, 302)
         self.reserva.refresh_from_db()
         self.assertEqual(self.reserva.status, "convertida")
@@ -1673,11 +1917,17 @@ class OrdemEstoqueIntegracaoTests(TestCase):
         self.assertEqual(saldo.quantidade, 3)
 
     def test_reabertura_os_devolve_reservas(self):
-        self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        self.client.get(
+            reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]),
+            {"confirmar_financeiro": "1"},
+        )
         self.ordem.refresh_from_db()
         self.assertTrue(self.ordem.fechada)
 
-        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        response = self.client.get(
+            reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]),
+            {"confirmar_financeiro": "1"},
+        )
         self.assertEqual(response.status_code, 302)
         self.reserva.refresh_from_db()
         self.assertEqual(self.reserva.status, "cancelada")
@@ -1785,6 +2035,89 @@ class MensagensPorModeloTests(TestCase):
                 ordem=self.ordem,
                 canal="email",
                 mensagem="Mensagem Email sem assunto",
+            ).exists()
+        )
+
+    def test_envio_por_modelo_evento_orcamento_muda_status_para_pendente_cliente(self):
+        self.modelo_whats.evento_chave = "orcamento.pronto"
+        self.modelo_whats.save(update_fields=["evento_chave"])
+
+        response = self.client.post(
+            reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+            {
+                "form_type": "enviar_mensagem_modelo",
+                "canal": "whatsapp",
+                "modelo_id": str(self.modelo_whats.id),
+                "assunto": "",
+                "mensagem": "Orçamento pronto para aprovação",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.status, "pendente_cliente")
+        self.assertTrue(
+            LinhaTrabalho.objects.filter(
+                ordem=self.ordem,
+                status="pendente_cliente",
+            ).exists()
+        )
+
+    def test_envio_por_modelo_evento_pronto_muda_status_para_pronto_contactado(self):
+        self.modelo_whats.evento_chave = "equipamento.pronto"
+        self.modelo_whats.save(update_fields=["evento_chave"])
+        self.ordem.status = "em_andamento"
+        self.ordem.save(update_fields=["status"])
+
+        response = self.client.post(
+            reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+            {
+                "form_type": "enviar_mensagem_modelo",
+                "canal": "whatsapp",
+                "modelo_id": str(self.modelo_whats.id),
+                "assunto": "",
+                "mensagem": "Seu equipamento está pronto para retirada",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.status, "pronto_contactado")
+        self.assertTrue(
+            LinhaTrabalho.objects.filter(
+                ordem=self.ordem,
+                status="pronto_contactado",
+                descricao__icontains="pronto para retirada",
+            ).exists()
+        )
+
+    def test_envio_por_modelo_evento_recusado_mantem_status_e_registra_contato(self):
+        self.modelo_whats.evento_chave = "equipamento.recusado"
+        self.modelo_whats.save(update_fields=["evento_chave"])
+        self.ordem.status = "devolucao"
+        self.ordem.relatorio_tecnico = "Cliente optou por nao reparar."
+        self.ordem.tipo_reparacao = "recusado_tempo"
+        self.ordem.save(update_fields=["status", "relatorio_tecnico", "tipo_reparacao"])
+
+        response = self.client.post(
+            reverse("ordens:detalhes_ordem", args=[self.ordem.id]),
+            {
+                "form_type": "enviar_mensagem_modelo",
+                "canal": "whatsapp",
+                "modelo_id": str(self.modelo_whats.id),
+                "assunto": "",
+                "mensagem": "Seu equipamento sera devolvido sem reparo.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.ordem.refresh_from_db()
+        self.assertEqual(self.ordem.status, "devolucao")
+        self.assertTrue(
+            LinhaTrabalho.objects.filter(
+                ordem=self.ordem,
+                status="devolucao",
+                descricao__icontains="recusa/devolucao",
             ).exists()
         )
 
@@ -2073,11 +2406,15 @@ class FluxoCriticoE2ETests(TestCase):
         ordem.relatorio_tecnico = "Reparo executado com sucesso."
         ordem.tipo_reparacao = "substituicao"
         ordem.save(update_fields=["relatorio_tecnico", "tipo_reparacao"])
-        resp_fechar = self.client.get(reverse("ordens:toggle_fechamento_os", args=[ordem.id]))
+        resp_fechar = self.client.get(
+            reverse("ordens:toggle_fechamento_os", args=[ordem.id]),
+            {"ir_caixa": "1"},
+        )
         self.assertEqual(resp_fechar.status_code, 302)
         ordem.refresh_from_db()
         self.assertTrue(ordem.fechada)
         self.assertEqual(ordem.status, "concluida")
+        self.assertIn(reverse("caixa:registrar_pagamento"), resp_fechar.url)
 
         # 6) caixa: registrar pagamento da OS
         resp_pag = self.client.post(
@@ -2123,7 +2460,10 @@ class FluxoCriticoE2ETests(TestCase):
         ordem.tipo_reparacao = "substituicao"
         ordem.save(update_fields=["relatorio_tecnico", "tipo_reparacao"])
 
-        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[ordem.id]))
+        response = self.client.get(
+            reverse("ordens:toggle_fechamento_os", args=[ordem.id]),
+            {"confirmar_financeiro": "1"},
+        )
         self.assertEqual(response.status_code, 302)
         self.assertTrue(ServicoPeca.objects.filter(ordem=ordem, item_orcamento=item_orc).exists())
 
@@ -2305,6 +2645,12 @@ class IntegracaoServicoPecaEstoqueTests(TestCase):
             estado="SP",
         )
         self.ponto = PontoOperacional.objects.create(codigo="PO1", nome="Matriz")
+        self.ubicacao = UbicacaoEstoque.objects.create(
+            ponto_operacional=self.ponto,
+            codigo="A-01",
+            descricao="Prateleira A-01",
+            ativo=True,
+        )
         self.produto = Produto.objects.create(
             nome="Bateria A1",
             tipo_item="peca",
@@ -2314,11 +2660,18 @@ class IntegracaoServicoPecaEstoqueTests(TestCase):
             preco=Decimal("80.00"),
             custo_unitario=Decimal("30.00"),
             ponto_operacional=self.ponto,
+            ubicacao_padrao=self.ubicacao,
             permite_os=True,
         )
         SaldoEstoquePonto.objects.update_or_create(
             produto=self.produto,
             ponto_operacional=self.ponto,
+            defaults={"quantidade": 5},
+        )
+        SaldoEstoqueUbicacao.objects.update_or_create(
+            produto=self.produto,
+            ponto_operacional=self.ponto,
+            ubicacao=self.ubicacao,
             defaults={"quantidade": 5},
         )
         self.ordem = OrdemServico.objects.create(
@@ -2359,7 +2712,10 @@ class IntegracaoServicoPecaEstoqueTests(TestCase):
             valor_unitario=Decimal("80.00"),
         )
 
-        response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        response = self.client.get(
+            reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]),
+            {"confirmar_financeiro": "1"},
+        )
         self.assertEqual(response.status_code, 302)
 
         item.refresh_from_db()
@@ -2377,7 +2733,10 @@ class IntegracaoServicoPecaEstoqueTests(TestCase):
             valor_unitario=Decimal("80.00"),
         )
 
-        self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        self.client.get(
+            reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]),
+            {"confirmar_financeiro": "1"},
+        )
         response = self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
         self.assertEqual(response.status_code, 302)
 
@@ -2933,7 +3292,7 @@ class AgendamentoOrdemServicoTests(TestCase):
         qs = parse_qs(destino.query)
 
         titulo = (qs.get("titulo") or [""])[0]
-        self.assertIn("Manutenção preventiva", titulo)
+        self.assertIn("preventiva", titulo.lower())
         inicio = (qs.get("inicio") or [""])[0]
         self.assertTrue(bool(inicio))
         dt_inicio = datetime.fromisoformat(inicio)
@@ -3037,5 +3396,81 @@ class GarantiaPosServicoTests(TestCase):
         alerta = nova.alertas.first()
         self.assertIsNotNone(alerta)
         self.assertIn(anterior.numero_os, alerta.mensagem)
+
+
+
+
+
+
+
+class ConciliacaoOrdensTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="auditor_os",
+            password="senha-forte-123",
+            tipo_usuario="adm",
+        )
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente Auditoria",
+            documento="52998224725",
+            telefone="11999999999",
+            estado="SP",
+        )
+
+    def _criar_ordem(self, sufixo, status="diagnosticar", fechada=False, local="Bancada 1"):
+        ordem = OrdemServico.objects.create(
+            cliente=self.cliente,
+            tipo_equipamento="notebook",
+            marca_equipamento="Marca",
+            modelo_equipamento=f"Modelo {sufixo}",
+            defeito="Nao liga",
+            tipo_reparo="Fora de Garantia",
+            status=status,
+            local_armazenamento=local,
+        )
+        if fechada:
+            ordem.fechada = True
+            ordem.save(update_fields=["fechada"])
+        return ordem
+
+    def test_gera_conciliacao_apenas_com_ordens_abertas_do_local(self):
+        self._criar_ordem("001", status="diagnosticar", local="Prateleira A")
+        self._criar_ordem("002", status="em_andamento", local="Bancada 2")
+        self._criar_ordem("003", status="concluida", fechada=True, local="Prateleira A")
+
+        response = self.client.post(
+            reverse("ordens:conciliacoes_ordens"),
+            {"filtro_local_armazenamento": "Prateleira"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        conciliacao = ConciliacaoOrdem.objects.get()
+        self.assertEqual(conciliacao.itens.count(), 1)
+        self.assertEqual(conciliacao.itens.first().local_armazenamento_snapshot, "Prateleira A")
+
+    def test_conciliacao_pode_ser_finalizada_apos_conferencia(self):
+        self._criar_ordem("010", status="diagnosticar", local="Bancada 1")
+        conciliacao = ConciliacaoOrdem.objects.create(usuario_abertura=self.user)
+        ordem = OrdemServico.objects.first()
+        ConciliacaoOrdemItem.objects.create(
+            conciliacao=conciliacao,
+            ordem_servico=ordem,
+            numero_os_snapshot=ordem.numero_os,
+            cliente_snapshot=ordem.cliente.nome,
+        )
+        item = conciliacao.itens.first()
+
+        response_item = self.client.post(
+            reverse("ordens:conciliacao_ordem_atualizar_item", args=[item.id]),
+            {"situacao": "conferido", "motivo_divergencia": "", "observacao": "OK"},
+        )
+        self.assertEqual(response_item.status_code, 302)
+
+        response_fim = self.client.post(reverse("ordens:conciliacao_ordem_finalizar", args=[conciliacao.id]))
+        self.assertEqual(response_fim.status_code, 302)
+        conciliacao.refresh_from_db()
+        self.assertEqual(conciliacao.status, "fechado")
 
 

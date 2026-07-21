@@ -3,21 +3,62 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 
 from caixa.models import Comissao, RegraComissaoTecnico
-from configuracoes.models import ConfiguracaoSistema
+from configuracoes.models import ConfiguracaoSistema, MarcaGarantia, RegraGarantiaMarca
 from estoque.models import Produto, VendaRapidaEstoque
 from orcamentos.models import ItemOrcamento
 
 
-FINALIZACAO_STATUSES = {"pronto_contactar", "pronto_contactado", "concluida"}
-COMISSAO_SERVICO_STATUSES = FINALIZACAO_STATUSES.union({"autorizado"})
+FINALIZACAO_STATUSES = {"pronto_contactado", "concluida"}
 TIPOS_COM_FONTE = {"SERVICO", "PECA", "BONUS_PRODUTO", "COMISSAO_VENDAS"}
+TIPOS_REPARACAO_COMISSIONAVEIS = {"substituicao", "reparacao_sem_pecas"}
 
 
 def _texto_preenchido(value) -> bool:
     return bool((value or "").strip())
+
+
+def _config_comissao():
+    return ConfiguracaoSistema.get_configuracao()
+
+
+def obter_criterio_comissao_os(config=None) -> str:
+    config = config or _config_comissao()
+    criterio = (
+        getattr(config, "comissao_criterio_os", ConfiguracaoSistema.COMISSAO_CRITERIO_OS_PRONTO)
+        or ConfiguracaoSistema.COMISSAO_CRITERIO_OS_PRONTO
+    )
+    if criterio not in {
+        ConfiguracaoSistema.COMISSAO_CRITERIO_OS_PRONTO,
+        ConfiguracaoSistema.COMISSAO_CRITERIO_OS_ENTREGUE,
+    }:
+        return ConfiguracaoSistema.COMISSAO_CRITERIO_OS_PRONTO
+    return criterio
+
+
+def usar_comissao_pecas(config=None) -> bool:
+    config = config or _config_comissao()
+    return bool(getattr(config, "comissao_aplicar_pecas", False))
+
+
+def usar_bonus_retirada(config=None) -> bool:
+    config = config or _config_comissao()
+    return bool(getattr(config, "comissao_bonus_retirada_ativo", False))
+
+
+def usar_bonus_produto(config=None) -> bool:
+    config = config or _config_comissao()
+    return bool(getattr(config, "comissao_bonus_produto_ativo", True))
+
+
+def status_apuracao_comissao_os(config=None):
+    criterio = obter_criterio_comissao_os(config=config)
+    if criterio == ConfiguracaoSistema.COMISSAO_CRITERIO_OS_ENTREGUE:
+        return {"concluida"}
+    return {"pronto_contactado", "concluida"}
 
 
 def _normalizar_tipo_item(item: ItemOrcamento) -> str:
@@ -31,8 +72,26 @@ def _ordem_qualifica_finalizacao(ordem) -> bool:
     return ordem.status in FINALIZACAO_STATUSES and _texto_preenchido(ordem.relatorio_tecnico)
 
 
-def _ordem_qualifica_comissao_servico(ordem) -> bool:
-    return ordem.status in COMISSAO_SERVICO_STATUSES and _texto_preenchido(ordem.relatorio_tecnico)
+def _tipo_reparacao_comissionavel(ordem) -> bool:
+    return (getattr(ordem, "tipo_reparacao", "") or "").strip().lower() in TIPOS_REPARACAO_COMISSIONAVEIS
+
+
+def _ordem_tem_item_aprovado(ordem) -> bool:
+    return ItemOrcamento.objects.filter(
+        orcamento__ordem_servico=ordem,
+        status="aprovado",
+    ).exists()
+
+
+def ordem_qualifica_comissao_servico(ordem, config=None) -> bool:
+    config = config or _config_comissao()
+    statuses_validos = status_apuracao_comissao_os(config=config)
+    return (
+        _texto_preenchido(ordem.relatorio_tecnico)
+        and _tipo_reparacao_comissionavel(ordem)
+        and _ordem_tem_item_aprovado(ordem)
+        and (ordem.status in statuses_validos or (obter_criterio_comissao_os(config=config) == ConfiguracaoSistema.COMISSAO_CRITERIO_OS_ENTREGUE and bool(ordem.fechada)))
+    )
 
 
 def _servico_comissionavel_em_ordem(ordem, fonte) -> bool:
@@ -46,7 +105,7 @@ def _percentual_servico_tecnico(tecnico) -> Decimal:
     valor = getattr(tecnico, "percentual_comissao_servico", None)
     try:
         percentual_usuario = Decimal(str(valor or 0))
-    except Exception:
+    except (TypeError, ValueError, ArithmeticError):
         percentual_usuario = Decimal("0")
     if percentual_usuario > 0:
         return percentual_usuario
@@ -56,7 +115,7 @@ def _percentual_servico_tecnico(tecnico) -> Decimal:
         return percentual_usuario
     try:
         return Decimal(str(regra.percentual_servico or 0))
-    except Exception:
+    except (TypeError, ValueError, ArithmeticError):
         return Decimal("0")
 
 
@@ -64,7 +123,7 @@ def _percentual_peca_tecnico(tecnico) -> Decimal:
     valor = getattr(tecnico, "percentual_comissao_peca", None)
     try:
         percentual_usuario = Decimal(str(valor or 0))
-    except Exception:
+    except (TypeError, ValueError, ArithmeticError):
         percentual_usuario = Decimal("0")
     if percentual_usuario > 0:
         return percentual_usuario
@@ -74,7 +133,7 @@ def _percentual_peca_tecnico(tecnico) -> Decimal:
         return percentual_usuario
     try:
         return Decimal(str(regra.percentual_peca or 0))
-    except Exception:
+    except (TypeError, ValueError, ArithmeticError):
         return Decimal("0")
 
 
@@ -82,14 +141,14 @@ def _percentual_vendas_colaborador(colaborador) -> Decimal:
     valor = getattr(colaborador, "percentual_comissao_vendas", None)
     try:
         return max(Decimal(str(valor or 0)), Decimal("0"))
-    except Exception:
+    except (TypeError, ValueError, ArithmeticError):
         return Decimal("0")
 
 
 def _regra_comissao_ativa(tecnico):
     try:
         regra = tecnico.regra_comissao
-    except Exception:
+    except ObjectDoesNotExist:
         regra = None
     if regra and regra.ativo:
         return regra
@@ -284,12 +343,85 @@ def _base_comissao_fonte(fonte) -> Decimal:
     return Decimal(fonte.get("base_bruta") or fonte.get("base") or 0)
 
 
+def _regra_garantia_vigente(ordem):
+    if not ordem or ordem.tipo_reparo != "Garantia":
+        return None
+    marca = getattr(ordem, "marca_garantia", None)
+    if not marca and (ordem.marca_equipamento or "").strip():
+        marca = MarcaGarantia.objects.filter(
+            nome__iexact=(ordem.marca_equipamento or "").strip(),
+            ativo=True,
+            parceira_garantia=True,
+        ).first()
+    if not marca:
+        return None
+    data_ref = ordem.data_abertura.date() if getattr(ordem, "data_abertura", None) else timezone.localdate()
+    return RegraGarantiaMarca.buscar_regra_vigente(marca, ordem.tipo_equipamento, data_ref=data_ref)
+
+
+def _mapa_comissao_fixa_garantia(ordem, fontes):
+    regra_garantia = _regra_garantia_vigente(ordem)
+    if not regra_garantia:
+        return {}
+    total_tecnico = Decimal(str(getattr(regra_garantia, "valor_mao_obra_tecnico", 0) or 0))
+    if total_tecnico <= 0:
+        return {}
+
+    elegiveis = []
+    base_total = Decimal("0.00")
+    for fonte in fontes:
+        if (fonte.get("tipo_item") or "").strip().lower() != "servico":
+            continue
+        tecnico = fonte.get("tecnico")
+        if not tecnico:
+            continue
+        regra = _regra_comissao_ativa(tecnico)
+        if not (regra and regra.comissionar_garantia):
+            continue
+        base_fonte = _base_comissao_fonte(fonte)
+        if base_fonte <= 0:
+            continue
+        elegiveis.append((fonte, base_fonte))
+        base_total += base_fonte
+
+    if not elegiveis or base_total <= 0:
+        return {}
+
+    distribuicao = {}
+    acumulado = Decimal("0.00")
+    ultimo_ref = None
+    for indice, (fonte, base_fonte) in enumerate(elegiveis, start=1):
+        ultimo_ref = fonte["chave_ref"]
+        if indice == len(elegiveis):
+            valor_fixo = total_tecnico - acumulado
+        else:
+            valor_fixo = (total_tecnico * base_fonte / base_total).quantize(Decimal("0.01"))
+            acumulado += valor_fixo
+        distribuicao[fonte["chave_ref"]] = max(valor_fixo, Decimal("0.00"))
+    if ultimo_ref and distribuicao.get(ultimo_ref, Decimal("0.00")) < 0:
+        distribuicao[ultimo_ref] = Decimal("0.00")
+    return distribuicao
+
+
+def _garantia_permita_comissao_para_tecnico(ordem, tecnico) -> bool:
+    if not ordem or ordem.tipo_reparo != "Garantia":
+        return True
+    regra = _regra_comissao_ativa(tecnico)
+    if not regra:
+        return True
+    return bool(regra.comissionar_garantia)
+
+
 def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO", tipos=None) -> int:
-    if not _ordem_qualifica_comissao_servico(ordem):
+    config = _config_comissao()
+    if not ordem_qualifica_comissao_servico(ordem, config=config):
         return 0
 
     tipos_habilitados = _normalizar_tipos_filtro(tipos)
+    if not usar_comissao_pecas(config=config):
+        tipos_habilitados.discard("peca")
     fontes = _fontes_comissionaveis(ordem)
+    comissao_fixa_garantia = _mapa_comissao_fixa_garantia(ordem, fontes)
 
     total_criadas = 0
     for fonte in fontes:
@@ -311,9 +443,27 @@ def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO
         if tipo_item == "servico":
             if not _servico_comissionavel_em_ordem(ordem, fonte):
                 continue
+            if not _garantia_permita_comissao_para_tecnico(ordem, tecnico):
+                continue
+            valor_fixo_garantia = comissao_fixa_garantia.get(chave_ref)
             percentual = _percentual_servico_tecnico(tecnico)
-            if percentual > 0:
+            valor_comissao = Decimal("0.00")
+            valor_base_comissao = base
+            dados_extras = {"tipo_item": tipo_item, "origem_comissao": "os"}
+            if valor_fixo_garantia is not None:
+                valor_comissao = valor_fixo_garantia
+                valor_base_comissao = valor_fixo_garantia
+                percentual = Decimal("100.00")
+                dados_extras.update(
+                    {
+                        "modo_calculo": "garantia_regra_tecnica_fixa",
+                        "base_original_item": str(base),
+                    }
+                )
+            elif percentual > 0:
                 valor_comissao = (base * percentual) / Decimal("100")
+
+            if valor_comissao > 0:
                 chave = f"{evento}:SERVICO:{chave_ref}"
                 created = _criar_comissao_idempotente(
                     chave_unica=chave,
@@ -323,12 +473,12 @@ def processar_evento_servico_finalizado(ordem, evento: str = "SERVICO_FINALIZADO
                         "item_orcamento": item_orcamento,
                         "tipo": "SERVICO",
                         "descricao": f"Comissao de servico - item {nome_ref}",
-                        "valor_base": base,
+                        "valor_base": valor_base_comissao,
                         "percentual": percentual,
                         "valor_comissao": valor_comissao,
                         "evento_gerador": evento,
                         "status": "GERADA",
-                        "dados_extras": {"tipo_item": tipo_item, "origem_comissao": "os"},
+                        "dados_extras": dados_extras,
                     },
                 )
                 total_criadas += int(created)
@@ -370,7 +520,7 @@ def recalcular_comissoes_servico_finalizado(ordens=None, evento: str = "SERVICO_
     if ordens is None:
         from ordens.models import OrdemServico
 
-        ordens = OrdemServico.objects.filter(status__in=COMISSAO_SERVICO_STATUSES).order_by("id")
+        ordens = OrdemServico.objects.filter(status__in=status_apuracao_comissao_os()).order_by("id")
 
     total_criadas = 0
     ordens_processadas = 0
@@ -406,6 +556,9 @@ def _faixas_bonus_retirada(config: ConfiguracaoSistema):
 
 
 def processar_evento_retirada_cliente(ordem, evento: str = "RETIRADA_CLIENTE", data_retirada=None) -> int:
+    config = _config_comissao()
+    if not usar_bonus_retirada(config=config):
+        return 0
     if not _ordem_qualifica_finalizacao(ordem):
         return 0
 
@@ -423,7 +576,6 @@ def processar_evento_retirada_cliente(ordem, evento: str = "RETIRADA_CLIENTE", d
         data_retirada = data_retirada.date()
     dias = max(0, (data_retirada - data_pronto).days)
 
-    config = ConfiguracaoSistema.get_configuracao()
     for limite_dias, valor_bonus in _faixas_bonus_retirada(config):
         if dias <= limite_dias:
             chave = f"{evento}:BONUS_RETIRADA:os:{ordem.id}:tecnico:{tecnico.id}:faixa:{limite_dias}"
@@ -450,12 +602,14 @@ def processar_evento_venda_mostrador(venda: VendaRapidaEstoque, evento: str = "V
     if not venda or venda.status != "vendida":
         return 0
 
+    config = _config_comissao()
     colaborador = _colaborador_por_numero_vendedor(venda.funcionario_numero)
     if not colaborador:
         return 0
 
     produto = venda.produto
     base = Decimal(str(venda.valor_total or 0))
+    quantidade = max(int(getattr(venda, "quantidade", 1) or 1), 1)
     if base <= 0:
         return 0
 
@@ -481,13 +635,15 @@ def processar_evento_venda_mostrador(venda: VendaRapidaEstoque, evento: str = "V
                     "venda_rapida_id": venda.id,
                     "funcionario_numero": venda.funcionario_numero,
                     "ponto_operacional_id": venda.ponto_operacional_id,
+                    "quantidade": quantidade,
                 },
             },
         )
         total_criadas += int(created)
 
     bonus_venda = Decimal(str(getattr(produto, "bonus_venda", 0) or 0))
-    if bonus_venda > 0:
+    bonus_total = bonus_venda * Decimal(str(quantidade))
+    if usar_bonus_produto(config=config) and bonus_total > 0:
         chave_bonus = f"{evento}:BONUS_PRODUTO:venda:{venda.id}"
         created = _criar_comissao_idempotente(
             chave_unica=chave_bonus,
@@ -498,7 +654,7 @@ def processar_evento_venda_mostrador(venda: VendaRapidaEstoque, evento: str = "V
                 "descricao": f"Bonus por venda mostrador - {produto.nome}",
                 "valor_base": base,
                 "percentual": Decimal("0"),
-                "valor_comissao": bonus_venda,
+                "valor_comissao": bonus_total,
                 "evento_gerador": evento,
                 "status": "GERADA",
                 "dados_extras": {
@@ -506,6 +662,8 @@ def processar_evento_venda_mostrador(venda: VendaRapidaEstoque, evento: str = "V
                     "venda_rapida_id": venda.id,
                     "funcionario_numero": venda.funcionario_numero,
                     "ponto_operacional_id": venda.ponto_operacional_id,
+                    "bonus_por_unidade": str(bonus_venda),
+                    "quantidade": quantidade,
                 },
             },
         )

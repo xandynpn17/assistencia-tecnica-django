@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Prefetch, Q, Sum
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Prefetch, Q, Sum
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from datetime import timedelta
@@ -14,8 +14,9 @@ from caixa.models import ContaReceber, Pagamento, PagamentoContaPagar
 from clientes.models import Cliente, ORIGEM_CLIENTE_CHOICES
 from configuracoes.permissions import ORDER_ROLES, has_role
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
-from ordens.models import LinhaTrabalho, OrdemServico
+from ordens.models import LinhaTrabalho, OrdemServico, ServicoPeca
 from orcamentos.models import Orcamento
+from django.conf import settings
 
 
 def _dashboard_shared_context(request):
@@ -24,7 +25,7 @@ def _dashboard_shared_context(request):
     tipo_usuario = getattr(request.user, "tipo_usuario", "")
     is_managerial = request.user.is_superuser or tipo_usuario in {"adm", "gerente"}
     is_operational = (tipo_usuario in {"atendente", "tecnico"}) and not is_managerial
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
 
     clientes_qs = filtrar_queryset_empresa(Cliente.objects.all(), empresa)
     ordens_qs = filtrar_queryset_empresa(OrdemServico.objects.all(), empresa)
@@ -175,6 +176,11 @@ def _dashboard_managerial_context(*, empresa=None):
         contas_os_abertas = contas_os_abertas.filter(ordem_servico__empresa=empresa)
     ordens_concluidas_sem_pagamento = contas_os_abertas.filter(ordem_servico__fechada=True).count()
     valor_aberto_ordens = contas_os_abertas.aggregate(total=Sum("valor_aberto"))["total"] or 0
+    ordens_fechadas_com_saldo = list(
+        contas_os_abertas.filter(ordem_servico__fechada=True)
+        .select_related("ordem_servico", "ordem_servico__cliente")
+        .order_by("-valor_aberto", "vencimento")[:10]
+    )
     prontas_sem_recebimento_total = (
         contas_os_abertas.filter(ordem_servico__fechada=False, ordem_servico__status="pronto_contactado")
         .aggregate(total=Sum("valor_aberto"))["total"]
@@ -209,7 +215,15 @@ def _dashboard_managerial_context(*, empresa=None):
     ticket_medio_os_mes = 0
     total_concluidas_mes = ordens_concluidas_mes_qs.count()
     if total_concluidas_mes:
-        total_receita_mes = sum((ordem.receita_total_financeira() for ordem in ordens_concluidas_mes_qs), 0)
+        total_item_expr = ExpressionWrapper(
+            F("quantidade") * F("valor_unitario"),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+        total_receita_mes = (
+            ServicoPeca.objects.filter(ordem__in=ordens_concluidas_mes_qs)
+            .aggregate(total=Sum(total_item_expr))["total"]
+            or Decimal("0.00")
+        )
         ticket_medio_os_mes = round(total_receita_mes / total_concluidas_mes, 2)
     pendencias_sla = calcular_pendencias_sla(empresa=empresa)
     total_pendencias_sla = len(pendencias_sla)
@@ -249,6 +263,7 @@ def _dashboard_managerial_context(*, empresa=None):
             "pendencias_sla_parceiro": pendencias_parceiro,
         },
         "origens_clientes_mes": origens_clientes_mes,
+        "ordens_fechadas_com_saldo": ordens_fechadas_com_saldo,
     }
 
 
@@ -287,6 +302,10 @@ def login_view(request):
     if request.user.is_authenticated:
         return redirect("core:dashboard")
 
+    context = {
+        "local_recovery_enabled": bool(getattr(settings, "LOCAL_RECOVERY_KEY", "")),
+    }
+
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
@@ -295,8 +314,8 @@ def login_view(request):
             login(request, user)
             return redirect("core:dashboard")
         messages.error(request, "Usuario ou senha invalidos.", extra_tags="login")
-        return render(request, "core/login.html")
-    return render(request, "core/login.html")
+        return render(request, "core/login.html", context)
+    return render(request, "core/login.html", context)
 
 
 @login_required(login_url="core:login")
@@ -322,4 +341,5 @@ def painel(request):
         "tipo_usuario": request.user.get_tipo_display(),
     }
     return render(request, "configuracoes/painel.html", context)
+
 

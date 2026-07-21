@@ -1,15 +1,78 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 {% block title %}Configuração da Ordem de Serviço{% endblock %}
 
 {% block content %}
+{% include 'configuracoes/partials/_central_operacional_tabs.html' %}
 <div class="card card-modern">
   <div class="card-modern-header">
     <i class="fas fa-tools"></i> Configuração da Ordem de Serviço
   </div>
   <div class="card-modern-body">
+    <div class="row mb-4">
+      <div class="col-lg-4 mb-3">
+        <div class="border rounded h-100 p-3 bg-light">
+          <div class="text-uppercase text-muted small font-weight-bold mb-2">Numeração</div>
+          <div class="h5 mb-2">Prefixo e sequência</div>
+          <p class="text-muted mb-0">Defina como a OS nasce no sistema para manter padrão entre balcão, bancada e documentos.</p>
+        </div>
+      </div>
+      <div class="col-lg-4 mb-3">
+        <div class="border rounded h-100 p-3 bg-light">
+          <div class="text-uppercase text-muted small font-weight-bold mb-2">Automação</div>
+          <div class="h5 mb-2">Controle de geração</div>
+          <p class="text-muted mb-0">Escolha se o número é gerado automaticamente ou se a operação pode trabalhar com controle manual.</p>
+        </div>
+      </div>
+      <div class="col-lg-4 mb-3">
+        <div class="border rounded h-100 p-3 bg-light">
+          <div class="text-uppercase text-muted small font-weight-bold mb-2">Documentos</div>
+          <div class="h5 mb-2">PDFs e termos</div>
+          <p class="text-muted mb-0">Layouts, termos e rodapé técnico agora ficam concentrados no bloco de documentos da OS.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-light border d-flex flex-column flex-lg-row justify-content-between align-items-lg-center mb-4">
+      <div class="mb-2 mb-lg-0">
+        <strong>Importante:</strong> termos, layouts, pre-visualizacoes de PDF e rodape dos relatorios ficam em
+        <a href="{% url 'configuracoes:configuracao_sistema' %}">Sistema &gt; Documentos</a>.
+      </div>
+      <a href="{% url 'configuracoes:configuracao_sistema' %}#grupo-documentos" class="btn btn-outline-primary btn-sm">Abrir documentos</a>
+    </div>
+
     <form method="post">
       {% csrf_token %}
-      {{ form.as_p }}
+      <div class="row">
+        <div class="col-md-4">
+          <div class="form-group">
+            <label for="{{ form.prefixo_os.id_for_label }}">{{ form.prefixo_os.label }}</label>
+            {{ form.prefixo_os }}
+            {% if form.prefixo_os.help_text %}<small class="form-text text-muted">{{ form.prefixo_os.help_text }}</small>{% endif %}
+            {{ form.prefixo_os.errors }}
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-group">
+            <label for="{{ form.inicio_id_ordem.id_for_label }}">{{ form.inicio_id_ordem.label }}</label>
+            {{ form.inicio_id_ordem }}
+            {% if form.inicio_id_ordem.help_text %}<small class="form-text text-muted">{{ form.inicio_id_ordem.help_text }}</small>{% endif %}
+            {{ form.inicio_id_ordem.errors }}
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-group h-100 d-flex align-items-center">
+            <div class="form-check mt-4">
+              {{ form.gerar_numero_automatico }}
+              <label class="form-check-label" for="{{ form.gerar_numero_automatico.id_for_label }}">
+                {{ form.gerar_numero_automatico.label }}
+              </label>
+              {% if form.gerar_numero_automatico.help_text %}<small class="form-text text-muted">{{ form.gerar_numero_automatico.help_text }}</small>{% endif %}
+              {{ form.gerar_numero_automatico.errors }}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
       <a href="{% url 'configuracoes:painel' %}" class="btn btn-secondary">Cancelar</a>
     </form>

@@ -20,6 +20,7 @@ DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 LOCAL_NETWORK_MODE = os.getenv("DJANGO_LOCAL_NETWORK_MODE", "0") == "1"
+LOCAL_RECOVERY_KEY = os.getenv("DJANGO_LOCAL_RECOVERY_KEY", "").strip()
 
 
 # Application definition
@@ -121,7 +122,8 @@ elif DB_ENGINE == "sqlite":
     if not RUNNING_TESTS and not allow_sqlite_dev:
         raise ImproperlyConfigured(
             "SQLite bloqueado neste projeto para evitar uso acidental. "
-            "Inicie com PostgreSQL via 'powershell -ExecutionPolicy Bypass -File .\\run_local.ps1'. "
+            "Para subir o servidor use 'powershell -ExecutionPolicy Bypass -File .\\run_local.ps1'. "
+            "Para comandos administrativos use 'powershell -ExecutionPolicy Bypass -File .\\manage_local.ps1 check'. "
             "Se precisar usar SQLite de forma intencional, defina DJANGO_ALLOW_SQLITE_DEV=1."
         )
     DATABASES = {

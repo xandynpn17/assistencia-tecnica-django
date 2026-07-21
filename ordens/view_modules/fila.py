@@ -1,4 +1,4 @@
-from django.shortcuts import render
+﻿from django.shortcuts import render
 
 from configuracoes.permissions import ORDER_ROLES, role_required
 from configuracoes.services.tenant_guard import obter_empresa_ativa
@@ -9,7 +9,7 @@ from ordens.services.tecnicos import usuarios_tecnicos_qs
 
 @role_required(ORDER_ROLES)
 def fila_bancada_tecnicos(request):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     tecnico_id = (request.GET.get("tecnico_id") or "").strip()
     status = (request.GET.get("status") or "").strip()
     prioridade = (request.GET.get("prioridade") or "").strip()
@@ -40,3 +40,4 @@ def fila_bancada_tecnicos(request):
             "filtro_prioridade": prioridade,
         },
     )
+

@@ -1,32 +1,69 @@
 {% extends 'core/base.html' %}
 {% load widget_tweaks %}
 
+{% block extra_css %}
+<style>
+  .formas-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 1rem;
+  }
+  .formas-strip-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 14px 16px;
+    box-shadow: 0 14px 24px rgba(30, 51, 74, 0.06);
+  }
+  .formas-strip-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #70808f;
+    margin-bottom: 4px;
+  }
+  .formas-strip-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #223749;
+  }
+  .formas-strip-note {
+    margin-top: 4px;
+    color: #607080;
+    font-size: .82rem;
+  }
+  @media (max-width: 991.98px) {
+    .formas-strip {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-3">
   {% include 'caixa/_subnav_caixa.html' %}
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Formas de pagamento</h3>
+  <div class="d-flex justify-content-between align-items-center flex-wrap mb-3" style="gap:12px;">
+    <div>
+      <h3 class="mb-1">Formas de pagamento</h3>
+      <div class="text-muted small">Cadastre e revise meios de recebimento usados no balc&atilde;o, OS, garantias e financeiro.</div>
+    </div>
     <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar ao dashboard</a>
   </div>
 
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <div class="small-box bg-info">
-        <div class="inner">
-          <h4>{{ total_formas }}</h4>
-          <p>Total de formas cadastradas</p>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="small-box bg-success">
-        <div class="inner">
-          <h4>{{ total_formas_ativas }}</h4>
-          <p>Formas ativas</p>
-        </div>
-      </div>
-    </div>
+  <div class="formas-strip">
+    <article class="formas-strip-card">
+      <div class="formas-strip-label">Total de formas</div>
+      <div class="formas-strip-value">{{ total_formas }}</div>
+      <div class="formas-strip-note">Base completa cadastrada no sistema.</div>
+    </article>
+    <article class="formas-strip-card">
+      <div class="formas-strip-label">Formas ativas</div>
+      <div class="formas-strip-value">{{ total_formas_ativas }}</div>
+      <div class="formas-strip-note">Dispon&iacute;veis para opera&ccedil;&atilde;o, recebimento e fechamento.</div>
+    </article>
   </div>
 
   <div class="row">
@@ -50,11 +87,14 @@
     </div>
     <div class="col-md-8">
       <div class="card shadow-sm border-0">
-        <div class="card-header bg-white"><strong>Formas cadastradas</strong></div>
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <strong>Formas cadastradas</strong>
+          <small class="text-muted">Taxa, prazo e status em uma leitura s&oacute;.</small>
+        </div>
         <div class="card-body table-responsive p-0">
           <table class="table table-hover mb-0">
             <thead>
-              <tr><th>Nome</th><th>Código</th><th>Tipo</th><th class="text-right">Taxa %</th><th class="text-center">Dias</th><th>Status</th></tr>
+              <tr><th>Nome</th><th>C&oacute;digo</th><th>Tipo</th><th class="text-right">Taxa %</th><th class="text-center">Dias</th><th>Status</th></tr>
             </thead>
             <tbody>
             {% for f in formas %}

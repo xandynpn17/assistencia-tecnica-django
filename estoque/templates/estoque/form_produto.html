@@ -1,4 +1,4 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 
 {% block title %}Estoque - {{ modo_edicao|yesno:"Editar Produto,Novo Produto" }}{% endblock %}
 
@@ -48,6 +48,9 @@
     .alerta-minimo {
         display: none;
     }
+    .campo-manual-categoria {
+        display: none;
+    }
     .campo-compacto label {
         margin-bottom: 0.2rem;
         font-size: 0.86rem;
@@ -79,7 +82,7 @@
     }
     .produto-header-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 10px;
         margin-bottom: 14px;
     }
@@ -112,6 +115,157 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 10px;
     }
+    .produto-flow-card {
+        border: 1px solid #d9e2ec;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        padding: 14px;
+        height: 100%;
+    }
+    .produto-flow-card h4 {
+        font-size: .96rem;
+        font-weight: 700;
+        color: #183247;
+        margin-bottom: 8px;
+    }
+    .produto-flow-card ul {
+        margin: 0;
+        padding-left: 18px;
+        color: #526375;
+        font-size: .88rem;
+    }
+    .produto-inline-status {
+        border: 1px dashed #c9d7e5;
+        border-radius: 12px;
+        background: #f8fbff;
+        padding: 10px 12px;
+        color: #23415c;
+        font-size: .88rem;
+    }
+    .produto-inline-status strong {
+        color: #10263d;
+    }
+    .produto-reading-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+    }
+    .produto-reading-card {
+        border: 1px solid #d9e2ec;
+        border-radius: 12px;
+        background: #fbfdff;
+        padding: 12px;
+    }
+    .produto-reading-card h5 {
+        font-size: .88rem;
+        font-weight: 700;
+        color: #183247;
+        margin-bottom: 6px;
+    }
+    .produto-reading-card p {
+        margin: 0;
+        color: #526375;
+        font-size: .84rem;
+        line-height: 1.45;
+    }
+    .produto-entry-estimate {
+        border: 1px solid #dce6ef;
+        border-radius: 12px;
+        background: #f8fbff;
+        padding: 12px;
+    }
+    .produto-entry-estimate-label {
+        font-size: .75rem;
+        text-transform: uppercase;
+        color: #6b7c8f;
+        margin-bottom: 4px;
+    }
+    .produto-entry-estimate-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .pricing-card {
+        border: 1px solid #d9e2ec;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        padding: 12px;
+        min-height: 102px;
+    }
+    .pricing-card--highlight {
+        border-color: #c6d7e8;
+        background: linear-gradient(180deg, #fafdff 0%, #eef6ff 100%);
+    }
+    .pricing-label {
+        font-size: .74rem;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 5px;
+    }
+    .pricing-value {
+        font-size: 1.02rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 4px;
+    }
+    .pricing-note {
+        font-size: .82rem;
+        color: #526375;
+        line-height: 1.35;
+    }
+    .pricing-subsection {
+        border: 1px solid #e6edf5;
+        border-radius: 10px;
+        background: #fbfdff;
+        padding: 12px;
+        margin-top: 10px;
+    }
+    .pricing-subsection-title {
+        font-size: .9rem;
+        font-weight: 700;
+        color: #183247;
+        margin-bottom: 8px;
+    }
+    .modo-resumo-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+    }
+    .modo-resumo-card {
+        border: 1px solid #d9e2ec;
+        border-radius: 12px;
+        background: #fbfdff;
+        padding: 12px;
+        transition: .18s ease;
+    }
+    .modo-resumo-card.is-active {
+        border-color: #183247;
+        box-shadow: 0 10px 20px rgba(24, 50, 71, 0.08);
+        background: linear-gradient(180deg, #ffffff 0%, #f1f7fc 100%);
+    }
+    .modo-resumo-card h4 {
+        font-size: .94rem;
+        font-weight: 700;
+        color: #183247;
+        margin-bottom: 6px;
+    }
+    .modo-resumo-card p,
+    .modo-resumo-card ul {
+        margin: 0;
+        color: #526375;
+        font-size: .86rem;
+    }
+    .modo-resumo-card ul {
+        padding-left: 18px;
+        margin-top: 6px;
+    }
     @media (max-width: 991.98px) {
         .simulador-grid {
             grid-template-columns: 1fr;
@@ -119,6 +273,15 @@
     }
     @media (max-width: 991.98px) {
         .produto-header-grid {
+            grid-template-columns: 1fr;
+        }
+        .pricing-grid {
+            grid-template-columns: 1fr;
+        }
+        .modo-resumo-grid {
+            grid-template-columns: 1fr;
+        }
+        .produto-reading-grid {
             grid-template-columns: 1fr;
         }
     }
@@ -141,6 +304,17 @@
             Produto duplicado de <strong>{{ produto_origem.nome }}</strong>. Ajuste os dados e salve como novo item.
         </div>
         {% endif %}
+
+        <div class="produto-inline-status mb-3">
+            <strong>Atalhos deste cadastro:</strong>
+            <a href="{% url 'estoque:categorias_produto' %}" class="ml-1">Categorias</a>
+            <span class="mx-2 text-muted">|</span>
+            <a href="{% url 'estoque:pontos_operacionais' %}">Pontos operacionais</a>
+            <span class="mx-2 text-muted">|</span>
+            <a href="{% url 'estoque:entradas_mercadoria' %}">Entradas</a>
+            <span class="mx-2 text-muted">|</span>
+            <a href="{% url 'estoque:tabelas_preco' %}">Tabelas de preco</a>
+        </div>
 
         <form method="post" enctype="multipart/form-data" id="form-produto">
             {% csrf_token %}
@@ -174,6 +348,29 @@
                 <small class="text-muted">
                     No modo rapido voce ve so os campos essenciais. No avancado, inclui custos detalhados, tributos e campos complementares.
                 </small>
+                <div class="modo-resumo-grid">
+                    <div class="modo-resumo-card" id="resumo-modo-rapido">
+                        <h4>Modo rapido</h4>
+                        <p>Ideal para cadastrar sem travar a operacao do balcao.</p>
+                        <ul>
+                            <li>Nome, tipo, categoria e origem.</li>
+                            <li>Ponto, ubicacao e estoque inicial.</li>
+                            <li>Custo, margem e preco final.</li>
+                        </ul>
+                    </div>
+                    <div class="modo-resumo-card" id="resumo-modo-avancado-card">
+                        <h4>Modo avancado</h4>
+                        <p>Abre a analise fina quando voce precisa governar margem e canal.</p>
+                        <ul>
+                            <li>Tributos e taxa de recebimento.</li>
+                            <li>Rateio fixo e simulador por canal.</li>
+                            <li>Observacoes e ajustes complementares.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="produto-inline-status mt-2" id="produto-modo-status">
+                    <strong>Modo rapido ativo:</strong> foque em tipo do item, categoria, estrutura fisica, custo base, margem e preco final. O restante pode ser refinado depois.
+                </div>
             </div>
 
             <div class="produto-header-grid">
@@ -191,11 +388,37 @@
                 </div>
             </div>
 
+            <div class="row mb-3">
+                <div class="col-lg-8 mb-3 mb-lg-0">
+                    <div class="produto-flow-card">
+                        <h4>Fluxo recomendado para cadastrar sem erro</h4>
+                        <ul>
+                            <li>Defina primeiro se o item e fisico ou servico.</li>
+                            <li>Escolha a categoria do catalogo para reaproveitar margem padrao.</li>
+                            <li>Se for item fisico, informe ponto, ubicacao e estoque inicial.</li>
+                            <li>Marca identifica o fabricante; fornecedor identifica de quem voce compra.</li>
+                            <li>Se houver varios fornecedores, complete isso depois na estrutura do produto.</li>
+                            <li>So depois ajuste preco e margem final de venda.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="produto-flow-card">
+                        <h4>Atalhos uteis</h4>
+                        <div class="d-flex flex-wrap" style="gap:8px;">
+                            <a href="{% url 'estoque:categorias_produto' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-sm btn-outline-primary">Categorias</a>
+                            <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-sm btn-outline-secondary">Movimentacoes</a>
+                            <a href="{% url 'estoque:indicadores_estoque' %}" class="btn btn-sm btn-outline-secondary">Indicadores</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="produto-tabbar" role="tablist" aria-label="Etapas do produto">
                 <button type="button" class="produto-tab-btn is-active" data-produto-tab-btn="essencial">Essencial</button>
                 <button type="button" class="produto-tab-btn" data-produto-tab-btn="estoque">Estoque e venda</button>
                 <button type="button" class="produto-tab-btn" data-produto-tab-btn="precos">Preco e rateio</button>
-                <button type="button" class="produto-tab-btn" data-produto-tab-btn="observacoes">Observacoes</button>
+                <button type="button" class="produto-tab-btn" data-produto-tab-btn="observacoes" data-tab-avancada="1">Observacoes</button>
             </div>
 
             <div class="produto-tab-pane is-active" data-produto-tab="essencial">
@@ -204,9 +427,22 @@
                     <div class="row campo-compacto">
                         <div class="col-md-4">{{ form.nome.label_tag }}{{ form.nome }}</div>
                         <div class="col-md-2">{{ form.tipo_item.label_tag }}{{ form.tipo_item }}</div>
-                        <div class="col-md-2">{{ form.modo_preco.label_tag }}{{ form.modo_preco }}</div>
+                        <div class="col-md-2">
+                            {{ form.modo_preco.label_tag }}{{ form.modo_preco }}
+                            {% if form.modo_preco.help_text %}<small class="text-muted d-block">{{ form.modo_preco.help_text }}</small>{% endif %}
+                        </div>
                         <div class="col-md-2">{{ form.data_entrada.label_tag }}{{ form.data_entrada }}</div>
-                        <div class="col-md-2">{{ form.ponto_operacional.label_tag }}{{ form.ponto_operacional }}</div>
+                        <div class="col-md-2">
+                            {{ form.ponto_operacional.label_tag }}{{ form.ponto_operacional }}
+                            <small class="text-muted d-block">Ex.: loja, bancada, estoque central.</small>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <div class="produto-inline-status" id="produto-requisitos-operacionais">
+                                Defina o tipo do item para o sistema mostrar os requisitos operacionais desta ficha.
+                            </div>
+                        </div>
                     </div>
                     <div class="row mt-2 campo-compacto">
                         <div class="col-md-3">{{ form.sku.label_tag }}{{ form.sku }}</div>
@@ -225,27 +461,118 @@
                 </div>
 
                 <div class="secao">
-                    <div class="secao-titulo">Classificacao e origem</div>
+                    <div class="secao-titulo">Catalogo base e compatibilidade</div>
                     <div class="alert alert-light border py-2 mb-2 small">
-                        Priorize os campos de <strong>catalogo</strong> (categoria/fornecedor). Use os campos manuais apenas quando o cadastro ainda nao existir.
+                        Escolha primeiro a <strong>categoria do catalogo</strong>. Se ela ainda nao existir, use o atalho para cadastrar ou digite manualmente que o sistema cria a categoria ao salvar.
+                        <br>Use <strong>marca</strong> para identificar o fabricante e <strong>fornecedor</strong> apenas para a compra principal deste item.
                     </div>
                     <div class="row campo-compacto">
-                        <div class="col-md-3">{{ form.categoria_config.label_tag }}{{ form.categoria_config }}</div>
-                        <div class="col-md-3 modo-avancado">{{ form.categoria.label_tag }}{{ form.categoria }}</div>
-                        <div class="col-md-3">{{ form.marca.label_tag }}{{ form.marca }}</div>
-                        <div class="col-md-3">{{ form.fornecedor_config.label_tag }}{{ form.fornecedor_config }}</div>
+                        <div class="col-md-4">
+                            {{ form.categoria_config.label_tag }}
+                            {{ form.categoria_config }}
+                            {% if form.categoria_config.help_text %}
+                            <small class="text-muted d-block">{{ form.categoria_config.help_text }}</small>
+                            {% endif %}
+                            <small class="text-muted d-block" id="categoria-catalogo-feedback">Selecione uma categoria para reaproveitar margem padrao e manter o catalogo consistente.</small>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <div class="w-100">
+                                <a href="{% url 'estoque:categorias_produto' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline-primary btn-sm mr-2">
+                                    <i class="fas fa-tags mr-1"></i> Nova categoria
+                                </a>
+                                <button type="button" class="btn btn-outline-success btn-sm mr-2" id="btn-toggle-categoria-rapida">
+                                    <i class="fas fa-plus mr-1"></i> Criar aqui
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-toggle-categoria-manual">
+                                    <i class="fas fa-pen mr-1"></i> Nao encontrei
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="produto-inline-status">
+                                <strong>Ordem recomendada:</strong> escolha a categoria, depois a marca do fabricante e, por fim, o fornecedor principal de compra.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-2 campo-compacto campo-manual-categoria" id="bloco-categoria-manual">
+                        <div class="col-md-4">
+                            {{ form.categoria.label_tag }}
+                            {{ form.categoria }}
+                            <small class="text-muted d-block">Ao salvar, a categoria manual sera adicionada ao catalogo para reaproveitamento.</small>
+                        </div>
+                    </div>
+                    <div class="row mt-2 campo-compacto">
+                        <div class="col-md-4">{{ form.marca.label_tag }}{{ form.marca }}{% if form.marca.help_text %}<small class="text-muted d-block">{{ form.marca.help_text }}</small>{% endif %}</div>
+                        <div class="col-md-4">{{ form.fornecedor_config.label_tag }}{{ form.fornecedor_config }}{% if form.fornecedor_config.help_text %}<small class="text-muted d-block">{{ form.fornecedor_config.help_text }}</small>{% endif %}</div>
+                        <div class="col-md-4">
+                            {{ form.modelos_compativeis.label_tag }}{{ form.modelos_compativeis }}
+                            {% if form.modelos_compativeis.help_text %}<small class="text-muted d-block">{{ form.modelos_compativeis.help_text }}</small>{% endif %}
+                        </div>
+                    </div>
+                    <div class="row mt-2 campo-compacto">
+                        <div class="col-md-8">
+                            {{ form.servicos_compativeis.label_tag }}{{ form.servicos_compativeis }}
+                            {% if form.servicos_compativeis.help_text %}<small class="text-muted d-block">{{ form.servicos_compativeis.help_text }}</small>{% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <div class="produto-inline-status">
+                                <strong>Resumo deste bloco:</strong> categoria classifica, marca identifica o fabricante, fornecedor aponta a compra principal e modelos compativeis ajudam na busca.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="produto-reading-grid">
+                        <div class="produto-reading-card">
+                            <h5>Categoria</h5>
+                            <p>Organiza o catalogo, ajuda na margem padrao e deixa reposicao, filtro e importacao mais consistentes.</p>
+                        </div>
+                        <div class="produto-reading-card">
+                            <h5>Marca e fabricante</h5>
+                            <p>Serve para identificar compatibilidade tecnica, garantia e consultas futuras. Nem sempre e o mesmo que o fornecedor de compra.</p>
+                        </div>
+                        <div class="produto-reading-card">
+                            <h5>Fornecedor e modelos</h5>
+                            <p>Fornecedor orienta recompra. Modelos compativeis aceleram busca por aparelho, peca similar e triagem tecnica.</p>
+                        </div>
+                    </div>
+                    <div class="row mt-2 campo-compacto" id="bloco-categoria-rapida" style="display:none;">
+                        <div class="col-md-4">
+                            <label for="id_categoria_rapida_nome">Nova categoria</label>
+                            <input type="text" id="id_categoria_rapida_nome" class="form-control" placeholder="Ex.: Cabos, Fontes, Carcacas">
+                            <small class="text-muted d-block">Cria no catalogo e ja seleciona no produto.</small>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="id_categoria_rapida_margem">Margem padrao (%)</label>
+                            <input type="number" id="id_categoria_rapida_margem" class="form-control" min="0" step="0.01" value="0">
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <div class="w-100 d-flex flex-wrap" style="gap:8px;">
+                                <button type="button" class="btn btn-success btn-sm" id="btn-salvar-categoria-rapida">
+                                    <i class="fas fa-save mr-1"></i> Salvar categoria
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-cancelar-categoria-rapida">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <small class="text-muted d-block" id="categoria-rapida-feedback"></small>
+                        </div>
                     </div>
                     <div class="row mt-2 campo-compacto modo-avancado">
-                        <div class="col-md-4">{{ form.fornecedor_manual.label_tag }}{{ form.fornecedor_manual }}</div>
-                        <div class="col-md-4">{{ form.modelos_compativeis.label_tag }}{{ form.modelos_compativeis }}</div>
-                        <div class="col-md-4">{{ form.servicos_compativeis.label_tag }}{{ form.servicos_compativeis }}</div>
+                        <div class="col-md-6">{{ form.fornecedor_manual.label_tag }}{{ form.fornecedor_manual }}</div>
+                        <div class="col-md-6">
+                            <label class="d-block">Uso recomendado</label>
+                            <div class="produto-inline-status">
+                                Use fornecedor manual so em excecao. Para multiplos fornecedores, complete depois na estrutura do produto para manter custo, prazo e preferencia organizados.
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="produto-tab-pane" data-produto-tab="estoque">
                 <div class="secao" id="secao-estoque">
-                    <div class="secao-titulo">Estoque</div>
+                    <div class="secao-titulo">Estrutura fisica, estoque e rastreabilidade</div>
                     {% if not modo_edicao %}
                     <div class="alert alert-info py-2 mb-2">
                         Defina aqui o <strong>estoque inicial</strong> para entrada automatica no historico de movimentacoes.
@@ -259,12 +586,69 @@
                         <div class="col-md-2">{{ form.estoque_minimo.label_tag }}{{ form.estoque_minimo }}</div>
                         <div class="col-md-2" id="campo-estoque-inicial">{{ form.estoque_inicial.label_tag }}{{ form.estoque_inicial }}</div>
                         <div class="col-md-2" id="campo-custo-entrada">{{ form.custo_entrada_inicial.label_tag }}{{ form.custo_entrada_inicial }}</div>
-                        <div class="col-md-2">{{ form.localizacao.label_tag }}{{ form.localizacao }}</div>
-                        <div class="col-md-2">{{ form.garantia_peca_dias.label_tag }}{{ form.garantia_peca_dias }}</div>
+                        <div class="col-md-3">
+                            {{ form.ubicacao_padrao_texto.label_tag }}{{ form.ubicacao_padrao_texto }}
+                            {% if form.ubicacao_padrao_texto.help_text %}<small class="text-muted d-block">{{ form.ubicacao_padrao_texto.help_text }}</small>{% endif %}
+                        </div>
+                        <div class="col-md-1 d-none">{{ form.ubicacao_padrao }}</div>
+                        <div class="col-md-3">{{ form.garantia_peca_dias.label_tag }}{{ form.garantia_peca_dias }}</div>
                     </div>
                     <div class="row mt-2">
                         <div class="col-12 text-muted small">
                             {{ form.estoque_inicial.help_text }}{% if form.custo_entrada_inicial.help_text %} {{ form.custo_entrada_inicial.help_text }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <div class="produto-inline-status">
+                                <strong>Como o sistema usa esta estrutura:</strong> o ponto operacional define onde o item fica por padrao e a ubicacao define a posicao fisica dentro desse ponto. Isso afeta reserva, venda, transferencia e inventario.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6">
+                            <div class="produto-inline-status mb-2" id="produto-ubicacao-status">
+                                Digite a posicao fisica. Se ela ja existir neste ponto, o sistema reaproveita; se nao existir, cria automaticamente ao salvar.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="produto-inline-status mb-2">
+                                Use <strong>modelos compativeis</strong> para melhorar busca tecnica, reposicao e futuras conferencias do estoque.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="produto-inline-status h-100">
+                                <div class="form-check mb-2">
+                                    {{ form.controla_lote }}
+                                    <label class="form-check-label ml-1" for="{{ form.controla_lote.id_for_label }}"><strong>{{ form.controla_lote.label }}</strong></label>
+                                </div>
+                                <small class="text-muted">{{ form.controla_lote.help_text }}</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mt-2 mt-md-0">
+                            <div class="produto-inline-status h-100">
+                                <div class="form-check mb-2">
+                                    {{ form.controla_serie }}
+                                    <label class="form-check-label ml-1" for="{{ form.controla_serie.id_for_label }}"><strong>{{ form.controla_serie.label }}</strong></label>
+                                </div>
+                                <small class="text-muted">{{ form.controla_serie.help_text }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-4">
+                            <div class="produto-entry-estimate">
+                                <div class="produto-entry-estimate-label">Valor estimado da entrada inicial</div>
+                                <div class="produto-entry-estimate-value" id="produto-entrada-estimada">R$ 0,00</div>
+                                <small class="text-muted d-block mt-1">Baseado em estoque inicial x custo da entrada.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="produto-inline-status" id="produto-estrutura-fisica-status">
+                                O sistema confirma aqui se a estrutura fisica minima foi preenchida para o item.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -283,73 +667,222 @@
             <div class="produto-tab-pane" data-produto-tab="precos">
                 <div class="secao">
                     <div class="secao-titulo">Custos e precificacao</div>
+                    <div class="produto-inline-status mb-3">
+                        <strong>Leitura rapida deste bloco:</strong> campos em <strong>R$</strong> representam custo monetario por unidade. Campos em <strong>%</strong> representam margem, taxa ou tributo de venda. Use <strong>Simples</strong> para balcao e <strong>Avancado</strong> quando precisar proteger margem apos taxas e tributos.
+                    </div>
+                    <div class="pricing-grid mb-3">
+                        <div class="pricing-card pricing-card--highlight">
+                            <div class="pricing-label">Metodo de custo</div>
+                            <div class="pricing-value">{{ precificacao_context.metodo_custo_display }}</div>
+                            <div class="pricing-note">
+                                Base usada pelo estoque para valorizar entrada e saida.
+                                {% if precificacao_context.metodo_custo == "pmp" %}
+                                No PMP, o sistema usa custo medio ponderado.
+                                {% elif precificacao_context.metodo_custo == "peps" %}
+                                No PEPS, o sistema baixa primeiro as camadas mais antigas.
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="pricing-card">
+                            <div class="pricing-label">Ultimo custo de entrada</div>
+                            <div class="pricing-value">
+                                {% if precificacao_context.tem_historico_compra %}R$ {{ precificacao_context.ultimo_custo_entrada|floatformat:2 }}{% else %}-{% endif %}
+                            </div>
+                            <div class="pricing-note">
+                                {% if precificacao_context.tem_historico_compra %}
+                                {{ precificacao_context.ultima_compra_fornecedor }}{% if precificacao_context.ultima_compra_data %} em {{ precificacao_context.ultima_compra_data|date:"d/m/Y" }}{% endif %}
+                                {% else %}
+                                Sem historico de compra recebida para este item.
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="pricing-card">
+                            <div class="pricing-label">Documento da ultima compra</div>
+                            <div class="pricing-value">{% if precificacao_context.tem_historico_compra %}{{ precificacao_context.ultima_compra_documento }}{% else %}-{% endif %}</div>
+                            <div class="pricing-note">Ajuda a auditar origem do custo e negociar recompra.</div>
+                        </div>
+                        <div class="pricing-card">
+                            <div class="pricing-label">Leitura desta aba</div>
+                            <div class="pricing-value">Compra x Venda</div>
+                            <div class="pricing-note">Separar custo de compra, custo variavel da venda e preco alvo reduz erro operacional.</div>
+                        </div>
+                    </div>
+
                     <div class="alert alert-light border py-2 mb-2 small">
-                        Campos com <strong>(R$)</strong> sao valores monetarios. Campos com <strong>(%)</strong> sao percentuais.
+                        Campos com <strong>(R$)</strong> sao valores monetarios. Campos com <strong>(%)</strong> sao percentuais. Nesta aba, <strong>tributos</strong> se referem a venda, nao ao imposto recuperavel da entrada.
                     </div>
-                    <div class="row campo-compacto">
-                        <div class="col-md-2">{{ form.custo_unitario.label_tag }}{{ form.custo_unitario }}</div>
-                        <div class="col-md-2">{{ form.custo_frete.label_tag }}{{ form.custo_frete }}</div>
-                        <div class="col-md-2">{{ form.custo_impostos.label_tag }}{{ form.custo_impostos }}</div>
-                        <div class="col-md-2">{{ form.custo_comissao.label_tag }}{{ form.custo_comissao }}</div>
-                        <div class="col-md-2">{{ form.custo_marketplace.label_tag }}{{ form.custo_marketplace }}</div>
-                        <div class="col-md-2">{{ form.custo_cac.label_tag }}{{ form.custo_cac }}</div>
+                    <div class="alert alert-light border py-2 mb-3 small">
+                        <strong>Modo simples:</strong> ideal para varejo rapido e cadastro inicial. <strong>Modo avancado:</strong> use quando quiser preservar margem liquida apos cartao, tributos e canais.
                     </div>
+                    <div class="produto-inline-status mb-3">
+                        <strong>Regra pratica desta aba:</strong> custo de compra entra no estoque. Custos de venda, como comissao, marketplace, CAC, cartao e tributos de saida, servem para proteger a margem e o preco final, mas nao devem distorcer a leitura do custo real da mercadoria.
+                    </div>
+                    <div class="produto-reading-grid mb-3">
+                        <div class="produto-reading-card">
+                            <h5>Entra no estoque</h5>
+                            <p>Custo de compra, frete de aquisicao e entrada formal alimentam a valorizacao do item no PMP ou no PEPS.</p>
+                        </div>
+                        <div class="produto-reading-card">
+                            <h5>Protege a venda</h5>
+                            <p>Comissao, marketplace, CAC, taxa de cartao e tributos de saida ajudam a montar um preco mais seguro comercialmente.</p>
+                        </div>
+                        <div class="produto-reading-card">
+                            <h5>Quando usar avancado</h5>
+                            <p>Use no avancado quando o canal de venda cobra taxas relevantes ou quando a margem precisa sobreviver a cartao, marketplace e tributacao.</p>
+                        </div>
+                    </div>
+
+                    <div class="pricing-subsection">
+                        <div class="pricing-subsection-title">1. Custo de compra</div>
+                        <div class="row campo-compacto">
+                            <div class="col-md-3">
+                                {{ form.custo_unitario.label_tag }}{{ form.custo_unitario }}
+                                {% if form.custo_unitario.help_text %}<small class="text-muted d-block">{{ form.custo_unitario.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                {{ form.custo_frete.label_tag }}{{ form.custo_frete }}
+                                {% if form.custo_frete.help_text %}<small class="text-muted d-block">{{ form.custo_frete.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-3 modo-avancado">
+                                {{ form.custo_medio.label_tag }}{{ form.custo_medio }}
+                            </div>
+                            <div class="col-md-3 text-muted small">
+                                Ultima compra
+                                <div><strong>{% if precificacao_context.tem_historico_compra %}{{ precificacao_context.ultima_compra_quantidade }} un. / {{ precificacao_context.ultima_compra_documento }}{% else %}Sem historico{% endif %}</strong></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pricing-subsection">
+                        <div class="pricing-subsection-title">2. Custos variaveis da venda</div>
+                        <div class="row campo-compacto">
+                            <div class="col-md-3">
+                                {{ form.custo_impostos.label_tag }}{{ form.custo_impostos }}
+                                {% if form.custo_impostos.help_text %}<small class="text-muted d-block">{{ form.custo_impostos.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                {{ form.custo_comissao.label_tag }}{{ form.custo_comissao }}
+                                {% if form.custo_comissao.help_text %}<small class="text-muted d-block">{{ form.custo_comissao.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                {{ form.custo_marketplace.label_tag }}{{ form.custo_marketplace }}
+                                {% if form.custo_marketplace.help_text %}<small class="text-muted d-block">{{ form.custo_marketplace.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                {{ form.custo_cac.label_tag }}{{ form.custo_cac }}
+                                {% if form.custo_cac.help_text %}<small class="text-muted d-block">{{ form.custo_cac.help_text }}</small>{% endif %}
+                            </div>
+                        </div>
+                        <div class="row mt-2 campo-compacto">
+                            <div class="col-md-3">
+                                {{ form.custo_operacional.label_tag }}{{ form.custo_operacional }}
+                                {% if form.custo_operacional.help_text %}<small class="text-muted d-block">{{ form.custo_operacional.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                {{ form.previsao_venda_mensal.label_tag }}{{ form.previsao_venda_mensal }}
+                                {% if form.previsao_venda_mensal.help_text %}<small class="text-muted d-block">{{ form.previsao_venda_mensal.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-3 form-check mt-4">{{ form.incluir_rateio_custo_fixo }} {{ form.incluir_rateio_custo_fixo.label_tag }}</div>
+                            <div class="col-md-3">
+                                <label for="id_custo_rateio_fixo_ui">Rateio fixo unitario</label>
+                                <input
+                                    id="id_custo_rateio_fixo_ui"
+                                    class="form-control"
+                                    readonly
+                                    data-total-fixos="{{ rateio_context.total_fixos|floatformat:2 }}"
+                                    data-total-base-rateio="{{ rateio_context.total_base_rateio|floatformat:2 }}"
+                                    data-criterio-rateio="{{ rateio_context.criterio_rateio }}"
+                                >
+                            </div>
+                        </div>
+                        <div class="row mt-1">
+                            <div class="col-md-8">
+                                <small class="text-muted" id="hint-custo-operacional">
+                                    Se informar custos detalhados, o custo adicional manual deixa de ser a referencia principal.
+                                </small>
+                            </div>
+                            <div class="col-md-4 text-muted small">
+                                Competencia {{ rateio_context.competencia|date:"m/Y" }} • Criterio {{ rateio_context.criterio_rateio_display }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pricing-subsection modo-avancado" id="bloco-tributos">
+                        <div class="pricing-subsection-title">3. Tributos da venda (%)</div>
+                        <div class="row campo-compacto">
+                            <div class="col-md-2 form-check mt-4">{{ form.usar_aliquota_manual }} {{ form.usar_aliquota_manual.label_tag }}</div>
+                            <div class="col-md-2">
+                                {{ form.aliquota_manual.label_tag }}{{ form.aliquota_manual }}
+                                {% if form.aliquota_manual.help_text %}<small class="text-muted d-block">{{ form.aliquota_manual.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-2">{{ form.icms.label_tag }}{{ form.icms }}</div>
+                            <div class="col-md-2">{{ form.ipi.label_tag }}{{ form.ipi }}</div>
+                            <div class="col-md-2">{{ form.pis.label_tag }}{{ form.pis }}</div>
+                            <div class="col-md-2">{{ form.cofins.label_tag }}{{ form.cofins }}</div>
+                        </div>
+                    </div>
+
+                    <div class="pricing-subsection">
+                        <div class="pricing-subsection-title">4. Formacao de preco</div>
+                        <div class="alert alert-info border mb-3 small">
+                            <strong>Mapa rapido desta aba:</strong>
+                            <span class="d-block mt-1"><strong>Custos de compra em R$:</strong> custo de compra, frete e custo adicional manual.</span>
+                            <span class="d-block"><strong>Custos variaveis de venda em R$:</strong> impostos variaveis da venda, comissao fixa, marketplace e CAC.</span>
+                            <span class="d-block"><strong>Politica em %:</strong> margem alvo, margem minima, taxa de cartao e tributos da venda no modo avancado.</span>
+                            <span class="d-block mt-1">O metodo <strong>{{ precificacao_context.metodo_custo_display }}</strong> vem da configuracao geral do estoque e orienta custo/baixa. Nesta tela voce define a politica comercial de venda.</span>
+                        </div>
+                        <div class="alert alert-light border py-2 mb-3 small">
+                            <strong>Presets operacionais:</strong> use os atalhos abaixo para montar uma base rapida e depois refine so o que for necessario.
+                            <div class="mt-2 d-flex flex-wrap" style="gap:8px;">
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-price-preset="balcao">Balcao tecnico</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-price-preset="atacado">Reposicao / atacado</button>
+                                <button type="button" class="btn btn-sm btn-outline-dark" data-price-preset="marketplace">Marketplace</button>
+                                <button type="button" class="btn btn-sm btn-outline-success" data-price-preset="servico">Servico simples</button>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-lg-6 mb-2 mb-lg-0">
+                                <div class="produto-flow-card h-100">
+                                    <h4>Modo simples</h4>
+                                    <p class="mb-1">Usa o <strong>custo total</strong> e aplica a <strong>margem desejada</strong> diretamente.</p>
+                                    <small class="text-muted">Formula base: custo total x (1 + margem).</small>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="produto-flow-card h-100">
+                                    <h4>Modo avancado</h4>
+                                    <p class="mb-1">Calcula o preco sugerido preservando margem apos <strong>taxas</strong> e <strong>tributos</strong>.</p>
+                                    <small class="text-muted">Melhor para venda com cartao, marketplace e composicao tributaria.</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row campo-compacto">
+                            <div class="col-md-2">
+                                {{ form.margem_lucro.label_tag }}{{ form.margem_lucro }}
+                                {% if form.margem_lucro.help_text %}<small class="text-muted d-block">{{ form.margem_lucro.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-2">
+                                {{ form.margem_minima.label_tag }}{{ form.margem_minima }}
+                                {% if form.margem_minima.help_text %}<small class="text-muted d-block">{{ form.margem_minima.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-2">
+                                {{ form.taxa_cartao.label_tag }}{{ form.taxa_cartao }}
+                                {% if form.taxa_cartao.help_text %}<small class="text-muted d-block">{{ form.taxa_cartao.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                <label for="id_preco_sugerido_ui">Preco sugerido</label>
+                                <input id="id_preco_sugerido_ui" class="form-control" readonly>
+                                <div class="hint-unidade">R$</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="id_preco_minimo_ui">Preco minimo</label>
+                                <input id="id_preco_minimo_ui" class="form-control" readonly>
+                                <div class="hint-unidade">R$</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="row mt-2 campo-compacto">
-                        <div class="col-md-2">{{ form.custo_operacional.label_tag }}{{ form.custo_operacional }}</div>
-                        <div class="col-md-2">{{ form.previsao_venda_mensal.label_tag }}{{ form.previsao_venda_mensal }}</div>
-                        <div class="col-md-2 form-check mt-4">{{ form.incluir_rateio_custo_fixo }} {{ form.incluir_rateio_custo_fixo.label_tag }}</div>
-                        <div class="col-md-2">
-                            <label for="id_custo_rateio_fixo_ui">Rateio fixo unitario</label>
-                            <input
-                                id="id_custo_rateio_fixo_ui"
-                                class="form-control"
-                                readonly
-                                data-total-fixos="{{ rateio_context.total_fixos|floatformat:2 }}"
-                                data-total-base-rateio="{{ rateio_context.total_base_rateio|floatformat:2 }}"
-                                data-criterio-rateio="{{ rateio_context.criterio_rateio }}"
-                            >
-                        </div>
-                        <div class="col-md-2 modo-avancado">{{ form.custo_medio.label_tag }}{{ form.custo_medio }}</div>
-                        <div class="col-md-2">{{ form.margem_lucro.label_tag }}{{ form.margem_lucro }}</div>
-                    </div>
-                    <div class="row mt-1">
-                        <div class="col-md-6">
-                            <small class="text-muted" id="hint-custo-operacional">
-                                Se informar custos detalhados, o custo operacional e recalculado automaticamente.
-                            </small>
-                        </div>
-                    </div>
-                    <div class="row mt-2 campo-compacto">
-                        <div class="col-md-2 text-muted small">
-                            Competencia do rateio
-                            <div><strong>{{ rateio_context.competencia|date:"m/Y" }}</strong></div>
-                        </div>
-                        <div class="col-md-2 text-muted small">
-                            Criterio atual
-                            <div><strong>{{ rateio_context.criterio_rateio_display }}</strong></div>
-                        </div>
-                        <div class="col-md-2">{{ form.margem_minima.label_tag }}{{ form.margem_minima }}</div>
-                        <div class="col-md-2">{{ form.taxa_cartao.label_tag }}{{ form.taxa_cartao }}</div>
-                        <div class="col-md-2 form-check mt-4">{{ form.usar_aliquota_manual }} {{ form.usar_aliquota_manual.label_tag }}</div>
-                    </div>
-                    <div class="row mt-2 campo-compacto modo-avancado" id="bloco-tributos">
-                        <div class="col-md-2">{{ form.aliquota_manual.label_tag }}{{ form.aliquota_manual }}</div>
-                        <div class="col-md-2">{{ form.icms.label_tag }}{{ form.icms }}</div>
-                        <div class="col-md-2">{{ form.ipi.label_tag }}{{ form.ipi }}</div>
-                        <div class="col-md-2">{{ form.pis.label_tag }}{{ form.pis }}</div>
-                        <div class="col-md-2">{{ form.cofins.label_tag }}{{ form.cofins }}</div>
-                    </div>
-                    <div class="row mt-2 campo-compacto">
-                        <div class="col-md-3">
-                            <label for="id_preco_sugerido_ui">Preco sugerido</label>
-                            <input id="id_preco_sugerido_ui" class="form-control" readonly>
-                            <div class="hint-unidade">R$</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="id_preco_minimo_ui">Preco minimo</label>
-                            <input id="id_preco_minimo_ui" class="form-control" readonly>
-                            <div class="hint-unidade">R$</div>
-                        </div>
                         <div class="col-md-3">
                             {{ form.preco_final.label_tag }}{{ form.preco_final }}
                             <div class="mt-1 d-flex flex-wrap" style="gap:6px;">
@@ -372,7 +905,7 @@
                     </div>
                     <div class="row mt-1">
                         <div class="col-12 text-muted small">
-                            Base de custo: custo unitario + custos operacionais detalhados (frete, impostos, comissao, marketplace, CAC e, se marcado, rateio do custo fixo mensal).
+                            Base de custo: custo de compra + custos variaveis/comerciais. O campo <strong>impostos/custos de venda</strong> e monetario; os percentuais tributarios avancados aparecem no bloco acima.
                         </div>
                     </div>
                     <div class="alert alert-warning mt-2 alerta-minimo" id="alerta-minimo">
@@ -381,10 +914,30 @@
                     <div class="row mt-2">
                         <div class="col-md-3">
                             <div class="kpi-box">
+                                <div class="kpi-label">Custo de compra</div>
+                                <div class="kpi-value" id="kpi-custo-compra">R$ 0,00</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="kpi-box">
+                                <div class="kpi-label">Custo variavel venda</div>
+                                <div class="kpi-value" id="kpi-custo-venda">R$ 0,00</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="kpi-box">
                                 <div class="kpi-label">Custo total</div>
                                 <div class="kpi-value" id="kpi-custo">R$ 0,00</div>
                             </div>
                         </div>
+                        <div class="col-md-3">
+                            <div class="kpi-box">
+                                <div class="kpi-label">Preco sugerido</div>
+                                <div class="kpi-value" id="kpi-preco-sugerido">R$ 0,00</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
                         <div class="col-md-3">
                             <div class="kpi-box">
                                 <div class="kpi-label">Lucro estimado</div>
@@ -403,7 +956,42 @@
                                 <div class="kpi-value" id="kpi-lucro-cartao">R$ 0,00</div>
                             </div>
                         </div>
+                        <div class="col-md-3">
+                            <div class="kpi-box">
+                                <div class="kpi-label">Metodo em uso</div>
+                                <div class="kpi-value" style="font-size:.95rem;">{{ precificacao_context.metodo_custo_display }}</div>
+                            </div>
+                        </div>
                     </div>
+                    {% if precificacao_context.compras_recentes %}
+                    <div class="secao mt-3 mb-0">
+                        <div class="secao-titulo mb-2">Compras recentes deste item</div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Documento</th>
+                                        <th>Fornecedor</th>
+                                        <th>Qtd</th>
+                                        <th>Custo unit.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for compra in precificacao_context.compras_recentes %}
+                                    <tr>
+                                        <td>{{ compra.data|date:"d/m/Y" }}</td>
+                                        <td>{{ compra.documento }}</td>
+                                        <td>{{ compra.fornecedor }}</td>
+                                        <td>{{ compra.quantidade }}</td>
+                                        <td>R$ {{ compra.custo_unitario|floatformat:2 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="secao mt-3 mb-0">
                         <div class="secao-titulo mb-2">Simulador por forma de pagamento</div>
                         <div class="row campo-compacto">
@@ -415,25 +1003,46 @@
                                 <label for="id_taxa_dinheiro_ui">Taxa dinheiro (%)</label>
                                 <input id="id_taxa_dinheiro_ui" class="form-control" type="number" step="0.01" min="0" value="0.00">
                             </div>
-                            <div class="col-md-8 text-muted small mt-4">
-                                Compare margem e lucro por meio de recebimento sem alterar o cadastro base do produto.
+                            <div class="col-md-2">
+                                <label for="id_taxa_marketplace_ui">Taxa marketplace (%)</label>
+                                <input id="id_taxa_marketplace_ui" class="form-control" type="number" step="0.01" min="0" max="100" value="0.00">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="id_desconto_simulado_ui">Desconto simulado (%)</label>
+                                <input id="id_desconto_simulado_ui" class="form-control" type="number" step="0.01" min="0" max="100" value="0.00">
+                            </div>
+                            <div class="col-md-4 text-muted small mt-4">
+                                Compare canal e desconto sem alterar o preco salvo.
                             </div>
                         </div>
                         <div class="simulador-grid mt-2">
                             <div class="kpi-box">
                                 <div class="kpi-label">Dinheiro</div>
+                                <div class="kpi-value-sm" id="sim-recebido-dinheiro">Recebe R$ 0,00</div>
                                 <div class="kpi-value" id="sim-lucro-dinheiro">R$ 0,00</div>
                                 <div class="kpi-value-sm" id="sim-margem-dinheiro">Margem 0,00%</div>
+                                <div class="kpi-value-sm" id="sim-minimo-dinheiro">Minimo R$ 0,00</div>
                             </div>
                             <div class="kpi-box">
                                 <div class="kpi-label">PIX</div>
+                                <div class="kpi-value-sm" id="sim-recebido-pix">Recebe R$ 0,00</div>
                                 <div class="kpi-value" id="sim-lucro-pix">R$ 0,00</div>
                                 <div class="kpi-value-sm" id="sim-margem-pix">Margem 0,00%</div>
+                                <div class="kpi-value-sm" id="sim-minimo-pix">Minimo R$ 0,00</div>
                             </div>
                             <div class="kpi-box">
                                 <div class="kpi-label">Cartao</div>
+                                <div class="kpi-value-sm" id="sim-recebido-cartao">Recebe R$ 0,00</div>
                                 <div class="kpi-value" id="sim-lucro-cartao">R$ 0,00</div>
                                 <div class="kpi-value-sm" id="sim-margem-cartao">Margem 0,00%</div>
+                                <div class="kpi-value-sm" id="sim-minimo-cartao">Minimo R$ 0,00</div>
+                            </div>
+                            <div class="kpi-box">
+                                <div class="kpi-label">Marketplace</div>
+                                <div class="kpi-value-sm" id="sim-recebido-marketplace">Recebe R$ 0,00</div>
+                                <div class="kpi-value" id="sim-lucro-marketplace">R$ 0,00</div>
+                                <div class="kpi-value-sm" id="sim-margem-marketplace">Margem 0,00%</div>
+                                <div class="kpi-value-sm" id="sim-minimo-marketplace">Minimo R$ 0,00</div>
                             </div>
                         </div>
                     </div>
@@ -456,6 +1065,9 @@
                 <button type="submit" class="btn btn-primary">
                     <i class="fas fa-save"></i> Salvar
                 </button>
+                <button type="submit" name="_save_and_structure" value="1" class="btn btn-outline-info">
+                    Salvar e estruturar
+                </button>
                 <button type="submit" name="_save_and_new" value="1" class="btn btn-outline-primary">
                     Salvar e criar outro
                 </button>
@@ -464,6 +1076,7 @@
         </form>
     </div>
 </div>
+{{ categorias_catalogo|json_script:"categorias-catalogo-data" }}
 {% endblock %}
 
 {% block extra_js %}
@@ -497,6 +1110,94 @@ function definirModoAvancado(ativo) {
     document.getElementById("btn-modo-rapido").classList.toggle("btn-outline-secondary", ativo);
     document.getElementById("btn-modo-avancado").classList.toggle("btn-secondary", ativo);
     document.getElementById("btn-modo-avancado").classList.toggle("btn-outline-secondary", !ativo);
+    document.getElementById("resumo-modo-rapido")?.classList.toggle("is-active", !ativo);
+    document.getElementById("resumo-modo-avancado-card")?.classList.toggle("is-active", !!ativo);
+    document.querySelectorAll("[data-tab-avancada='1']").forEach((el) => {
+        el.style.display = ativo ? "" : "none";
+    });
+    if (!ativo && document.querySelector("[data-produto-tab='observacoes']")?.classList.contains("is-active")) {
+        selecionarAbaProduto("essencial");
+    }
+    atualizarResumoModoCadastro(ativo);
+}
+
+function atualizarResumoModoCadastro(ativo) {
+    const alvo = document.getElementById("produto-modo-status");
+    if (!alvo) return;
+    if (ativo) {
+        alvo.innerHTML = "<strong>Modo avancado ativo:</strong> alem do basico, revise tributos da venda, simulacao por canal, rateio fixo e observacoes internas antes de salvar.";
+        return;
+    }
+    alvo.innerHTML = "<strong>Modo rapido ativo:</strong> foque em tipo do item, categoria, estrutura fisica, custo base, margem e preco final. O restante pode ser refinado depois.";
+}
+
+function atualizarCategoriaManual() {
+    const bloco = document.getElementById("bloco-categoria-manual");
+    const campoCatalogo = document.getElementById("id_categoria_config");
+    const campoManual = document.getElementById("id_categoria");
+    const botao = document.getElementById("btn-toggle-categoria-manual");
+    if (!bloco || !campoManual) return;
+    const deveMostrar = !!campoManual.dataset.forcarAberto || (!!campoManual.value && !(campoCatalogo?.value));
+    bloco.style.display = deveMostrar ? "" : "none";
+    if (botao) {
+        botao.classList.toggle("btn-secondary", deveMostrar);
+        botao.classList.toggle("btn-outline-secondary", !deveMostrar);
+    }
+}
+
+function atualizarCategoriaRapida() {
+    const bloco = document.getElementById("bloco-categoria-rapida");
+    const campo = document.getElementById("id_categoria_rapida_nome");
+    const botao = document.getElementById("btn-toggle-categoria-rapida");
+    if (!bloco || !campo) return;
+    const deveMostrar = !!campo.dataset.forcarAberto;
+    bloco.style.display = deveMostrar ? "" : "none";
+    if (botao) {
+        botao.classList.toggle("btn-success", deveMostrar);
+        botao.classList.toggle("btn-outline-success", !deveMostrar);
+    }
+}
+
+function categoriasCatalogo() {
+    const script = document.getElementById("categorias-catalogo-data");
+    if (!script) return [];
+    try {
+        return JSON.parse(script.textContent || "[]");
+    } catch (error) {
+        return [];
+    }
+}
+
+function atualizarCategoriaCatalogoInfo() {
+    const campoSelect = document.getElementById("id_categoria_config");
+    const campoMargemProduto = document.getElementById("id_margem_lucro");
+    const feedback = document.getElementById("categoria-catalogo-feedback");
+    if (!campoSelect || !feedback) return;
+
+    const categoriaId = String(campoSelect.value || "");
+    if (!categoriaId) {
+        feedback.textContent = "Selecione uma categoria para reaproveitar margem padrao e manter o catalogo consistente.";
+        feedback.className = "text-muted d-block";
+        return;
+    }
+
+    const categoria = categoriasCatalogo().find((item) => String(item.id) === categoriaId);
+    if (!categoria) {
+        feedback.textContent = "Categoria selecionada no catalogo.";
+        feedback.className = "text-muted d-block";
+        return;
+    }
+
+    const margemCategoria = parseFloat(categoria.margem_padrao || 0);
+    const margemAtual = parseFloat((campoMargemProduto?.value || "0").replace(",", "."));
+    if (campoMargemProduto && (!Number.isFinite(margemAtual) || margemAtual <= 0) && Number.isFinite(margemCategoria) && margemCategoria > 0) {
+        campoMargemProduto.value = margemCategoria.toFixed(2);
+    }
+
+    feedback.textContent = margemCategoria > 0
+        ? `Categoria "${categoria.nome}" com margem padrao de ${margemCategoria.toFixed(2).replace(".", ",")}%.`
+        : `Categoria "${categoria.nome}" selecionada.`;
+    feedback.className = "text-success d-block";
 }
 
 function selecionarAbaProduto(aba) {
@@ -508,11 +1209,69 @@ function selecionarAbaProduto(aba) {
     });
 }
 
+function atualizarResumoOperacional() {
+    const tipo = document.getElementById("id_tipo_item")?.value || "produto";
+    const ponto = document.getElementById("id_ponto_operacional");
+    const ubicacao = document.getElementById("id_ubicacao_padrao");
+    const ubicacaoTextoCampo = document.getElementById("id_ubicacao_padrao_texto");
+    const resumo = document.getElementById("produto-requisitos-operacionais");
+    const estrutura = document.getElementById("produto-estrutura-fisica-status");
+    const statusUbicacao = document.getElementById("produto-ubicacao-status");
+    if (!resumo || !estrutura) return;
+
+    const isServico = tipo === "servico";
+    const pontoLabel = ponto?.options[ponto.selectedIndex]?.textContent?.trim() || "Nao definido";
+    const ubicacaoSelecionada = ubicacao?.options[ubicacao.selectedIndex]?.textContent?.trim() || "";
+    const ubicacaoTexto = (ubicacaoTextoCampo?.value || "").trim();
+    const ubicacaoLabel = ubicacaoSelecionada || ubicacaoTexto || "Nao definida";
+
+    if (isServico) {
+        resumo.innerHTML = "<strong>Servico:</strong> nao exige ponto, ubicacao ou estoque inicial. O foco passa a ser descricao, precificacao e compatibilidade com atendimentos.";
+        estrutura.innerHTML = "<strong>Estrutura fisica:</strong> dispensada para servicos. Nenhuma reserva ou saldo fisico sera criado.";
+        if (statusUbicacao) {
+            statusUbicacao.innerHTML = "<strong>Ubicacao:</strong> servicos nao exigem posicao fisica.";
+        }
+        return;
+    }
+
+    const temPonto = !!(ponto && ponto.value);
+    const temUbicacaoCatalogada = !!(ubicacao && ubicacao.value);
+    const temUbicacaoTexto = !!ubicacaoTexto;
+    resumo.innerHTML = `<strong>Item fisico:</strong> para salvar com estrutura completa, confirme categoria, ponto operacional e ubicacao padrao. Ponto atual: <strong>${pontoLabel}</strong>.`;
+    estrutura.innerHTML = temPonto && (temUbicacaoCatalogada || temUbicacaoTexto)
+        ? `<strong>Estrutura fisica pronta:</strong> item vinculado a <strong>${pontoLabel}</strong> / <strong>${ubicacaoLabel}</strong>.`
+        : "<strong>Estrutura fisica pendente:</strong> escolha ponto operacional e ubicacao padrao para evitar erro no cadastro e nas reservas.";
+    if (statusUbicacao) {
+        if (!temPonto) {
+            statusUbicacao.innerHTML = "<strong>Ubicacao:</strong> escolha primeiro o ponto operacional para validar a posicao fisica.";
+        } else if (temUbicacaoCatalogada) {
+            statusUbicacao.innerHTML = `<strong>Ubicacao reconhecida:</strong> o sistema ja encontrou <strong>${ubicacaoLabel}</strong> dentro de <strong>${pontoLabel}</strong>.`;
+        } else if (temUbicacaoTexto) {
+            statusUbicacao.innerHTML = `<strong>Nova ubicacao:</strong> <strong>${ubicacaoTexto}</strong> sera criada automaticamente em <strong>${pontoLabel}</strong> ao salvar.`;
+        } else {
+            statusUbicacao.innerHTML = "<strong>Ubicacao:</strong> digite a posicao fisica para o item, mesmo que ela ainda nao exista no cadastro.";
+        }
+    }
+}
+
+function atualizarResumoEntradaInicial() {
+    const campoEstoque = document.getElementById("id_estoque_inicial");
+    const campoCusto = document.getElementById("id_custo_entrada_inicial");
+    const alvo = document.getElementById("produto-entrada-estimada");
+    if (!campoEstoque || !campoCusto || !alvo) return;
+
+    const quantidade = parseFloat((campoEstoque.value || "0").replace(",", "."));
+    const custo = parseFloat((campoCusto.value || "0").replace(",", "."));
+    const total = (Number.isFinite(quantidade) ? quantidade : 0) * (Number.isFinite(custo) ? custo : 0);
+    alvo.textContent = moeda(total || 0);
+}
+
 function atualizarVisibilidadeTipoItem() {
     const tipo = document.getElementById("id_tipo_item")?.value || "produto";
     const isServico = tipo === "servico";
     const secaoEstoque = document.getElementById("secao-estoque");
     const secaoComissao = document.getElementById("secao-comissao");
+    const campoUbicacao = document.getElementById("id_ubicacao_padrao");
     if (secaoEstoque) secaoEstoque.style.display = isServico ? "none" : "";
     if (secaoComissao) secaoComissao.style.display = isServico ? "none" : "";
     if (isServico) {
@@ -526,7 +1285,83 @@ function atualizarVisibilidadeTipoItem() {
         if (estoqueMinimo) estoqueMinimo.value = "0";
         if (previsaoMensal) previsaoMensal.value = "0";
         if (incluirRateio) incluirRateio.checked = false;
+        if (campoUbicacao) campoUbicacao.value = "";
     }
+    if (campoUbicacao) {
+        campoUbicacao.disabled = isServico;
+    }
+    atualizarResumoOperacional();
+}
+
+function atualizarUbicacoesPorPonto() {
+    const campoPonto = document.getElementById("id_ponto_operacional");
+    const campoUbicacao = document.getElementById("id_ubicacao_padrao");
+    const tipo = document.getElementById("id_tipo_item")?.value || "produto";
+    if (!campoPonto || !campoUbicacao) return;
+
+    const pontoLabel = campoPonto.options[campoPonto.selectedIndex]?.textContent || "";
+    const pontoCodigo = pontoLabel.split(" - ")[0].trim();
+    const isServico = tipo === "servico";
+    let opcaoAtualValida = false;
+
+    Array.from(campoUbicacao.options).forEach((option) => {
+        if (!option.value) {
+            option.hidden = false;
+            option.disabled = false;
+            return;
+        }
+        const optionCodigo = (option.textContent || "").split(" - ")[0].trim();
+        const visivel = !!pontoCodigo && optionCodigo === pontoCodigo && !isServico;
+        option.hidden = !visivel;
+        option.disabled = !visivel;
+        if (visivel && option.selected) {
+            opcaoAtualValida = true;
+        }
+    });
+
+    if (!opcaoAtualValida) {
+        campoUbicacao.value = "";
+    }
+    sincronizarUbicacaoDigitada();
+    atualizarResumoOperacional();
+}
+
+function normalizarTextoComparacao(valor) {
+    return (valor || "")
+        .toString()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase();
+}
+
+function sincronizarUbicacaoDigitada() {
+    const campoUbicacao = document.getElementById("id_ubicacao_padrao");
+    const campoTexto = document.getElementById("id_ubicacao_padrao_texto");
+    if (!campoUbicacao || !campoTexto) return;
+
+    const texto = normalizarTextoComparacao(campoTexto.value);
+    if (!texto) {
+        campoUbicacao.value = "";
+        atualizarResumoOperacional();
+        return;
+    }
+
+    let match = "";
+    Array.from(campoUbicacao.options).forEach((option) => {
+        if (!option.value || option.hidden || option.disabled) {
+            return;
+        }
+        const optionTexto = normalizarTextoComparacao(option.textContent || "");
+        const partes = (option.textContent || "").split(" - ").map((item) => normalizarTextoComparacao(item));
+        const codigo = partes[1] || "";
+        if (texto === codigo || texto === optionTexto) {
+            match = option.value;
+        }
+    });
+
+    campoUbicacao.value = match;
+    atualizarResumoOperacional();
 }
 
 function atualizarCamposTributarios() {
@@ -621,6 +1456,8 @@ function recalcularPreco() {
 
     const custosDetalhados = frete + impostos + comissao + marketplace + cac + rateioFixo;
     const custoOperacionalFinal = custosDetalhados > 0 ? custosDetalhados : custoOperacional;
+    const custoCompra = custoUnitario + frete;
+    const custoVendaVariavel = impostos + comissao + marketplace + cac + rateioFixo;
     const custoTotal = custoUnitario + custoOperacionalFinal;
     const campoCustoOper = document.getElementById("id_custo_operacional");
     const hintCustoOper = document.getElementById("hint-custo-operacional");
@@ -678,25 +1515,38 @@ function recalcularPreco() {
     }
 
     document.getElementById("kpi-custo").textContent = moeda(custoTotal);
+    document.getElementById("kpi-custo-compra").textContent = moeda(custoCompra);
+    document.getElementById("kpi-custo-venda").textContent = moeda(custoVendaVariavel);
+    document.getElementById("kpi-preco-sugerido").textContent = moeda(precoSugerido);
     document.getElementById("kpi-lucro").textContent = moeda(lucro);
     document.getElementById("kpi-margem").textContent = percentual(margemReal);
     document.getElementById("kpi-lucro-cartao").textContent = moeda(lucroCartao);
 
     const taxaDinheiro = numero("id_taxa_dinheiro_ui");
     const taxaPix = numero("id_taxa_pix_ui");
+    const taxaMarketplace = numero("id_taxa_marketplace_ui");
+    const descontoSimulado = Math.min(Math.max(numero("id_desconto_simulado_ui"), 0), 100);
+    const precoSimulado = precoUsado * (1 - (descontoSimulado / 100));
     const taxas = [
-        { taxa: taxaDinheiro, lucroId: "sim-lucro-dinheiro", margemId: "sim-margem-dinheiro" },
-        { taxa: taxaPix, lucroId: "sim-lucro-pix", margemId: "sim-margem-pix" },
-        { taxa: taxaCartao, lucroId: "sim-lucro-cartao", margemId: "sim-margem-cartao" },
+        { taxa: taxaDinheiro, lucroId: "sim-lucro-dinheiro", margemId: "sim-margem-dinheiro", recebidoId: "sim-recebido-dinheiro", minimoId: "sim-minimo-dinheiro" },
+        { taxa: taxaPix, lucroId: "sim-lucro-pix", margemId: "sim-margem-pix", recebidoId: "sim-recebido-pix", minimoId: "sim-minimo-pix" },
+        { taxa: taxaCartao, lucroId: "sim-lucro-cartao", margemId: "sim-margem-cartao", recebidoId: "sim-recebido-cartao", minimoId: "sim-minimo-cartao" },
+        { taxa: taxaMarketplace, lucroId: "sim-lucro-marketplace", margemId: "sim-margem-marketplace", recebidoId: "sim-recebido-marketplace", minimoId: "sim-minimo-marketplace" },
     ];
     taxas.forEach((item) => {
-        const recebido = precoUsado * (1 - (item.taxa / 100));
+        const recebido = precoSimulado * (1 - (item.taxa / 100));
         const lucroCanal = recebido - custoTotal;
         const margemCanal = recebido > 0 ? (lucroCanal / recebido) * 100 : 0;
+        const fatorCanal = 1 - (item.taxa / 100);
+        const precoMinimoCanal = fatorCanal <= 0 ? 0 : precoMinimo / fatorCanal;
         const elLucro = document.getElementById(item.lucroId);
         const elMargem = document.getElementById(item.margemId);
+        const elRecebido = document.getElementById(item.recebidoId);
+        const elMinimo = document.getElementById(item.minimoId);
         if (elLucro) elLucro.textContent = moeda(lucroCanal);
         if (elMargem) elMargem.textContent = `Margem ${percentual(margemCanal)}`;
+        if (elRecebido) elRecebido.textContent = `Recebe ${moeda(recebido)}`;
+        if (elMinimo) elMinimo.textContent = `Minimo ${moeda(precoMinimoCanal)}`;
     });
 }
 
@@ -717,6 +1567,174 @@ function configurarGeracaoEAN() {
                 }
             });
     });
+}
+
+function configurarCategoriaRapida() {
+    const csrf = document.querySelector("input[name=csrfmiddlewaretoken]")?.value || "";
+    const campoNome = document.getElementById("id_categoria_rapida_nome");
+    const campoMargem = document.getElementById("id_categoria_rapida_margem");
+    const campoSelect = document.getElementById("id_categoria_config");
+    const campoManual = document.getElementById("id_categoria");
+    const feedback = document.getElementById("categoria-rapida-feedback");
+    const btnSalvar = document.getElementById("btn-salvar-categoria-rapida");
+    const btnCancelar = document.getElementById("btn-cancelar-categoria-rapida");
+    const btnToggle = document.getElementById("btn-toggle-categoria-rapida");
+    const campoMargemProduto = document.getElementById("id_margem_lucro");
+
+    if (!campoNome || !campoSelect || !btnSalvar || !btnToggle) return;
+
+    btnToggle.addEventListener("click", () => {
+        if (campoNome.dataset.forcarAberto) {
+            delete campoNome.dataset.forcarAberto;
+        } else {
+            campoNome.dataset.forcarAberto = "1";
+        }
+        atualizarCategoriaRapida();
+        if (campoNome.dataset.forcarAberto) {
+            campoNome.focus();
+        }
+    });
+
+    btnCancelar?.addEventListener("click", () => {
+        campoNome.value = "";
+        if (campoMargem) campoMargem.value = "0";
+        if (feedback) {
+            feedback.textContent = "";
+            feedback.className = "text-muted d-block";
+        }
+        delete campoNome.dataset.forcarAberto;
+        atualizarCategoriaRapida();
+    });
+
+    btnSalvar.addEventListener("click", async () => {
+        const nome = (campoNome.value || "").trim();
+        const margem = (campoMargem?.value || "0").trim();
+        if (!nome) {
+            if (feedback) {
+                feedback.textContent = "Informe o nome da categoria.";
+                feedback.className = "text-danger d-block";
+            }
+            campoNome.focus();
+            return;
+        }
+
+        btnSalvar.disabled = true;
+        if (feedback) {
+            feedback.textContent = "Salvando categoria...";
+            feedback.className = "text-muted d-block";
+        }
+
+        try {
+            const body = new URLSearchParams();
+            body.append("nome", nome);
+            body.append("margem_padrao", margem || "0");
+
+            const response = await fetch("{% url 'estoque:api_categoria_produto_criar' %}", {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": csrf,
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                },
+                body: body.toString(),
+            });
+            const data = await response.json();
+            if (!response.ok || !data?.ok || !data?.categoria) {
+                throw new Error(data?.erro || "Nao foi possivel criar a categoria.");
+            }
+
+            let option = Array.from(campoSelect.options).find((item) => String(item.value) === String(data.categoria.id));
+            if (!option) {
+                option = new Option(data.categoria.nome, data.categoria.id, true, true);
+                campoSelect.add(option);
+            } else {
+                option.text = data.categoria.nome;
+                option.selected = true;
+            }
+
+            if (campoManual) {
+                campoManual.value = "";
+                delete campoManual.dataset.forcarAberto;
+                atualizarCategoriaManual();
+            }
+
+            campoSelect.value = String(data.categoria.id);
+            if (campoMargemProduto) {
+                const margemAtual = parseFloat((campoMargemProduto.value || "0").replace(",", "."));
+                const margemCategoria = parseFloat(data.categoria.margem_padrao || 0);
+                if ((!Number.isFinite(margemAtual) || margemAtual <= 0) && Number.isFinite(margemCategoria) && margemCategoria > 0) {
+                    campoMargemProduto.value = margemCategoria.toFixed(2);
+                }
+            }
+
+            campoNome.value = "";
+            if (campoMargem) campoMargem.value = "0";
+            delete campoNome.dataset.forcarAberto;
+            atualizarCategoriaRapida();
+            recalcularPreco();
+            atualizarCategoriaCatalogoInfo();
+
+            if (feedback) {
+                feedback.textContent = data.mensagem || "Categoria pronta para uso.";
+                feedback.className = "text-success d-block";
+            }
+        } catch (error) {
+            if (feedback) {
+                feedback.textContent = error.message || "Erro ao salvar categoria.";
+                feedback.className = "text-danger d-block";
+            }
+        } finally {
+            btnSalvar.disabled = false;
+        }
+    });
+}
+
+function aplicarPresetPrecificacao(preset) {
+    const setValue = (id, value) => {
+        const campo = document.getElementById(id);
+        if (!campo) return;
+        campo.value = typeof value === "number" ? value.toFixed(2) : value;
+    };
+    const setChecked = (id, checked) => {
+        const campo = document.getElementById(id);
+        if (!campo) return;
+        campo.checked = !!checked;
+    };
+
+    if (preset === "balcao") {
+        setValue("id_modo_preco", "simples");
+        setValue("id_margem_lucro", 35);
+        setValue("id_margem_minima", 18);
+        setValue("id_taxa_cartao", 3.5);
+        setValue("id_custo_marketplace", 0);
+        setValue("id_custo_cac", 0);
+        setChecked("id_incluir_rateio_custo_fixo", false);
+    } else if (preset === "atacado") {
+        setValue("id_modo_preco", "simples");
+        setValue("id_margem_lucro", 18);
+        setValue("id_margem_minima", 10);
+        setValue("id_taxa_cartao", 0);
+        setValue("id_custo_marketplace", 0);
+        setValue("id_custo_cac", 0);
+        setChecked("id_incluir_rateio_custo_fixo", false);
+    } else if (preset === "marketplace") {
+        setValue("id_modo_preco", "avancado");
+        setValue("id_margem_lucro", 28);
+        setValue("id_margem_minima", 14);
+        setValue("id_taxa_cartao", 3.99);
+        setValue("id_custo_marketplace", 8);
+        setValue("id_custo_cac", 2);
+        setChecked("id_incluir_rateio_custo_fixo", true);
+    } else if (preset === "servico") {
+        setValue("id_modo_preco", "simples");
+        setValue("id_margem_lucro", 60);
+        setValue("id_margem_minima", 35);
+        setValue("id_taxa_cartao", 3.5);
+        setValue("id_custo_marketplace", 0);
+        setValue("id_custo_cac", 0);
+        setChecked("id_incluir_rateio_custo_fixo", false);
+    }
+    atualizarCamposTributarios();
+    recalcularPreco();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -746,7 +1764,7 @@ document.addEventListener("DOMContentLoaded", () => {
         el.addEventListener("input", recalcularPreco);
         el.addEventListener("change", recalcularPreco);
     });
-    ["id_taxa_pix_ui", "id_taxa_dinheiro_ui", "id_permitir_preco_abaixo_minimo"].forEach((id) => {
+    ["id_taxa_pix_ui", "id_taxa_dinheiro_ui", "id_taxa_marketplace_ui", "id_desconto_simulado_ui", "id_permitir_preco_abaixo_minimo"].forEach((id) => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener("input", recalcularPreco);
@@ -755,7 +1773,41 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("btn-modo-rapido")?.addEventListener("click", () => definirModoAvancado(false));
     document.getElementById("btn-modo-avancado")?.addEventListener("click", () => definirModoAvancado(true));
-    document.getElementById("id_tipo_item")?.addEventListener("change", atualizarVisibilidadeTipoItem);
+    document.getElementById("btn-toggle-categoria-manual")?.addEventListener("click", () => {
+        const campo = document.getElementById("id_categoria");
+        if (!campo) return;
+        if (campo.dataset.forcarAberto) {
+            delete campo.dataset.forcarAberto;
+        } else {
+            campo.dataset.forcarAberto = "1";
+        }
+        atualizarCategoriaManual();
+        if (campo.dataset.forcarAberto) {
+            campo.focus();
+        }
+    });
+    document.getElementById("id_categoria_config")?.addEventListener("change", () => {
+        const campo = document.getElementById("id_categoria");
+        if (!campo) return;
+        if (document.getElementById("id_categoria_config")?.value) {
+            campo.value = "";
+            delete campo.dataset.forcarAberto;
+        }
+        atualizarCategoriaManual();
+        atualizarCategoriaCatalogoInfo();
+        recalcularPreco();
+    });
+    document.getElementById("id_categoria")?.addEventListener("input", atualizarCategoriaManual);
+    document.getElementById("id_tipo_item")?.addEventListener("change", () => {
+        atualizarVisibilidadeTipoItem();
+        atualizarUbicacoesPorPonto();
+    });
+    document.getElementById("id_ponto_operacional")?.addEventListener("change", atualizarUbicacoesPorPonto);
+    document.getElementById("id_ubicacao_padrao")?.addEventListener("change", atualizarResumoOperacional);
+    document.getElementById("id_ubicacao_padrao_texto")?.addEventListener("input", sincronizarUbicacaoDigitada);
+    document.getElementById("id_ubicacao_padrao_texto")?.addEventListener("change", sincronizarUbicacaoDigitada);
+    document.getElementById("id_estoque_inicial")?.addEventListener("input", atualizarResumoEntradaInicial);
+    document.getElementById("id_custo_entrada_inicial")?.addEventListener("input", atualizarResumoEntradaInicial);
     document.getElementById("id_incluir_rateio_custo_fixo")?.addEventListener("change", recalcularPreco);
     document.getElementById("id_usar_aliquota_manual")?.addEventListener("change", () => {
         atualizarCamposTributarios();
@@ -799,12 +1851,22 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll("[data-produto-tab-btn]").forEach((btn) => {
         btn.addEventListener("click", () => selecionarAbaProduto(btn.dataset.produtoTabBtn));
     });
+    document.querySelectorAll("[data-price-preset]").forEach((btn) => {
+        btn.addEventListener("click", () => aplicarPresetPrecificacao(btn.dataset.pricePreset));
+    });
 
     configurarGeracaoEAN();
+    configurarCategoriaRapida();
     definirModoAvancado({% if modo_edicao %}true{% else %}false{% endif %});
-    selecionarAbaProduto("{% if modo_edicao %}essencial{% else %}estoque{% endif %}");
+    selecionarAbaProduto("essencial");
     atualizarVisibilidadeTipoItem();
+    atualizarUbicacoesPorPonto();
     atualizarCamposTributarios();
+    atualizarCategoriaManual();
+    atualizarCategoriaRapida();
+    atualizarCategoriaCatalogoInfo();
+    atualizarResumoOperacional();
+    atualizarResumoEntradaInicial();
     recalcularPreco();
 });
 </script>

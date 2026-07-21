@@ -57,7 +57,7 @@
         <div class="card-body">
           <div class="row">
             <div class="col-md-8">
-              <p class="mb-2"><strong>Descrição:</strong> {{ conta.descricao }}</p>
+              <p class="mb-2"><strong>Descricao:</strong> {{ conta.descricao }}</p>
               <p class="mb-2"><strong>Cliente:</strong> {{ conta.cliente_nome|default:"-" }}</p>
               <p class="mb-2"><strong>Categoria:</strong> {{ conta.categoria.nome|default:"-" }}</p>
               <p class="mb-2"><strong>Vencimento:</strong> {{ conta.vencimento|date:"d/m/Y" }}</p>
@@ -77,14 +77,69 @@
               {% else %}
               <span class="badge badge-info p-2">{{ conta.get_status_display }}</span>
               {% endif %}
+              {% if conta.eh_garantia_fabricante and conta.possui_divergencia_garantia %}
+              <div class="small text-warning mt-2">Conta com divergencia entre valor original e aprovado.</div>
+              {% endif %}
             </div>
           </div>
         </div>
       </div>
 
+      {% if conta.eh_garantia_fabricante %}
+      <div class="card mb-3">
+        <div class="card-header bg-white"><strong>Carteira de garantia</strong></div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <p class="mb-2"><strong>Fornecedor:</strong> {{ conta.fornecedor_garantia.nome|default:"-" }}</p>
+              <p class="mb-2"><strong>Marca:</strong> {{ conta.marca_garantia.nome|default:"-" }}</p>
+              <p class="mb-2"><strong>Regra:</strong> {{ conta.regra_garantia|default:"-" }}</p>
+              <p class="mb-2"><strong>Referencia:</strong> {{ conta.referencia_cobranca|default:"-" }}</p>
+              <p class="mb-2"><strong>Email financeiro:</strong> {{ conta.fornecedor_garantia.email_cobranca|default:conta.fornecedor_garantia.email|default:"-" }}</p>
+            </div>
+            <div class="col-md-6">
+              <p class="mb-2"><strong>Valor previsto/original:</strong> R$ {{ conta.valor_original|floatformat:2 }}</p>
+              <p class="mb-2"><strong>Valor aprovado:</strong> R$ {{ conta.valor_aprovado_garantia|floatformat:2 }}</p>
+              <p class="mb-2"><strong>Base de cobranca:</strong> {{ conta.data_base_cobranca|date:"d/m/Y"|default:"-" }}</p>
+              <p class="mb-0"><strong>Prazo:</strong> {{ conta.prazo_pagamento_dias|default:0 }} dia(s)</p>
+            </div>
+          </div>
+          {% if conta.fornecedor_garantia %}
+          <hr>
+          <div class="row">
+            <div class="col-md-6">
+              <p class="mb-2"><strong>Documentos exigidos:</strong></p>
+              <div class="small text-muted">{{ conta.fornecedor_garantia.documentos_exigidos|default:"Nenhum documento cadastrado."|linebreaksbr }}</div>
+            </div>
+            <div class="col-md-6">
+              <p class="mb-2"><strong>Procedimento de cobranca:</strong></p>
+              <div class="small text-muted">{{ conta.fornecedor_garantia.procedimento_cobranca|default:"Nenhum procedimento cadastrado."|linebreaksbr }}</div>
+              {% if conta.fornecedor_garantia.portal_garantia_url %}
+              <div class="small mt-2"><a href="{{ conta.fornecedor_garantia.portal_garantia_url }}" target="_blank" rel="noopener">Abrir portal da marca</a></div>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+          {% if auditoria_garantia %}
+          <hr>
+          <div class="row">
+            <div class="col-md-6">
+              <p class="mb-2"><strong>Status faturamento:</strong> {{ auditoria_garantia.get_status_faturamento_display }}</p>
+              <p class="mb-2"><strong>Valor recebido:</strong> R$ {{ auditoria_garantia.valor_recebido_fabricante|floatformat:2 }}</p>
+            </div>
+            <div class="col-md-6">
+              <p class="mb-2"><strong>Vencimento previsto:</strong> {{ auditoria_garantia.vencimento_previsto|date:"d/m/Y"|default:"-" }}</p>
+              <p class="mb-0"><strong>Observacoes:</strong> {{ auditoria_garantia.observacoes|default:"-" }}</p>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
       <div class="card" id="form-baixa">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-          <strong>Histórico de recebimentos</strong>
+          <strong>Historico de recebimentos</strong>
           <small class="text-muted">{{ recebimentos|length }} registro(s)</small>
         </div>
         <div class="card-body table-responsive p-0">
@@ -95,8 +150,8 @@
                 <th class="text-right">Valor</th>
                 <th class="text-right">Desconto</th>
                 <th class="text-right">Juros</th>
-                <th>Referência</th>
-                <th>Usuário</th>
+                <th>Referencia</th>
+                <th>Usuario</th>
               </tr>
             </thead>
             <tbody>
@@ -125,14 +180,14 @@
           <div class="alert alert-info py-2">
             <small>
               Regra da baixa: <strong>valor principal</strong> reduz a conta,
-              <strong>desconto</strong> complementa a quitação e
+              <strong>desconto</strong> complementa a quitacao e
               <strong>juros</strong> aumenta apenas o valor recebido em caixa.
             </small>
           </div>
 
           {% if conta.status == "paga" or conta.status == "cancelada" %}
           <div class="alert alert-warning mb-0">
-            Esta conta está com status <strong>{{ conta.get_status_display }}</strong> e não permite nova baixa.
+            Esta conta esta com status <strong>{{ conta.get_status_display }}</strong> e nao permite nova baixa.
           </div>
           {% elif not pode_baixar_conta_receber %}
           <div class="alert alert-warning mb-0">

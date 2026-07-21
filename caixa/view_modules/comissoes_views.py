@@ -27,7 +27,7 @@ def comissoes_pendencias(request):
     data_inicio, data_fim = _periodo_competencia(competencia_ref)
     criterio_filtro = (request.GET.get("criterio") or "servicos_finalizados").strip().lower()
 
-    status_validos = ["autorizado", "pronto_contactar", "pronto_contactado", "concluida"]
+    status_validos = sorted(status_apuracao_comissao_os())
     ordens_base = (
         OrdemServico.objects.select_related("tecnico_responsavel", "cliente")
         .prefetch_related(
@@ -147,7 +147,7 @@ def comissoes_tecnicos(request):
 
     def _ordens_por_intervalo(data_inicio, data_fim):
         ordens_qs = OrdemServico.objects.filter(
-            status__in=["autorizado", "pronto_contactar", "pronto_contactado", "concluida"]
+            status__in=status_apuracao_comissao_os()
         ).select_related("tecnico_responsavel")
         if data_inicio:
             ordens_qs = ordens_qs.filter(
@@ -177,7 +177,7 @@ def comissoes_tecnicos(request):
 
         if action == "recalcular":
             ordens_qs = OrdemServico.objects.filter(
-                status__in=["autorizado", "pronto_contactar", "pronto_contactado", "concluida"]
+                status__in=status_apuracao_comissao_os()
             ).select_related("tecnico_responsavel")
             ordens_processadas, total_novo = _recalcular_comissoes_motor_novo(ordens_qs)
             messages.success(
@@ -611,7 +611,7 @@ def meu_desempenho(request):
     else:
         comissoes_qs = comissoes_qs.filter(
             Q(evento_gerador="VENDA_MOSTRADOR")
-            | Q(ordem_servico__status__in=["autorizado", "pronto_contactar", "pronto_contactado", "concluida"])
+            | Q(ordem_servico__status__in=status_apuracao_comissao_os())
         )
     if tecnico_filtro and tecnico_filtro.isdigit():
         comissoes_qs = comissoes_qs.filter(tecnico_id=int(tecnico_filtro))
@@ -717,7 +717,7 @@ def meu_desempenho(request):
         {
             "chave": "bonus",
             "titulo": "Bonus",
-            "descricao": "Bonus de produto, retirada e outros incentivos vinculados ao atendimento.",
+            "descricao": "Bonus de produto e outros incentivos comerciais vinculados ao atendimento.",
             "linhas": linhas_realizadas_por_tipo["bonus"],
             "total": resumo_por_tipo_real["bonus"],
         },
@@ -786,7 +786,7 @@ def meu_desempenho(request):
             )
         else:
             ordens_base = (
-                OrdemServico.objects.filter(status__in=["autorizado", "pronto_contactar", "pronto_contactado", "concluida"])
+                OrdemServico.objects.filter(status__in=status_apuracao_comissao_os())
                 .annotate(data_pagamento_referencia=Max("pagamento__data"))
                 .order_by("-id")
             )

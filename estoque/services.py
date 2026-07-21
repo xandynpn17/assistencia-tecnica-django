@@ -13,14 +13,21 @@ from django.utils import timezone
 from configuracoes.models import ConfiguracaoSistema
 
 from .models import (
+    EntradaMercadoria,
+    EstoqueCamadaCusto,
+    EstoqueSerie,
     InventarioEstoque,
+    ItemEntradaMercadoria,
     ItemInventarioEstoque,
     MovimentacaoEstoque,
     Produto,
     ReservaEstoque,
     SaldoEstoquePonto,
+    SaldoEstoqueUbicacao,
+    UbicacaoEstoque,
     VendaRapidaEstoque,
 )
+from .services_rastreabilidade import atualizar_rastreabilidade_movimento
 
 RESERVA_AUTO_OS_PREFIX = "AUTO_OS_ITEM:"
 
@@ -29,6 +36,21 @@ def normalizar_saldos_produto(produto):
     if not produto or not produto.ponto_operacional or not produto.quantidade:
         return
     if produto.saldos_por_ponto.exists():
+        if produto.ubicacao_padrao_id and not produto.saldos_por_ubicacao.filter(ubicacao_id=produto.ubicacao_padrao_id).exists():
+            saldo_ponto = (
+                produto.saldos_por_ponto.filter(ponto_operacional_id=produto.ponto_operacional_id)
+                .values_list("quantidade", flat=True)
+                .first()
+            )
+            try:
+                SaldoEstoqueUbicacao.objects.create(
+                    produto=produto,
+                    ponto_operacional=produto.ponto_operacional,
+                    ubicacao=produto.ubicacao_padrao,
+                    quantidade=int(saldo_ponto or 0),
+                )
+            except IntegrityError:
+                pass
         return
     try:
         SaldoEstoquePonto.objects.create(
@@ -38,20 +60,37 @@ def normalizar_saldos_produto(produto):
         )
     except IntegrityError:
         pass
+    if produto.ubicacao_padrao_id:
+        try:
+            SaldoEstoqueUbicacao.objects.create(
+                produto=produto,
+                ponto_operacional=produto.ponto_operacional,
+                ubicacao=produto.ubicacao_padrao,
+                quantidade=produto.quantidade,
+            )
+        except IntegrityError:
+            pass
 
 
-def saldo_disponivel(produto, ponto_operacional):
+def saldo_disponivel(produto, ponto_operacional, ubicacao=None):
     saldo, _ = SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=ponto_operacional)
-    reservado = (
-        ReservaEstoque.objects.filter(
-            produto=produto,
-            ponto_operacional=ponto_operacional,
-            status="ativa",
-            valido_ate__gte=timezone.localdate(),
-        ).aggregate(total=Sum("quantidade"))["total"]
-        or 0
+    reservado_qs = ReservaEstoque.objects.filter(
+        produto=produto,
+        ponto_operacional=ponto_operacional,
+        status="ativa",
+        valido_ate__gte=timezone.localdate(),
     )
-    return int(saldo.quantidade) - int(reservado)
+    if ubicacao:
+        _garantir_saldo_ubicacao_legado(produto, ponto_operacional, ubicacao)
+        reservado_qs = reservado_qs.filter(ubicacao=ubicacao)
+        saldo_ubic = (
+            SaldoEstoqueUbicacao.objects.filter(produto=produto, ubicacao=ubicacao).values_list("quantidade", flat=True).first()
+        )
+        base = int(saldo_ubic or 0)
+    else:
+        base = int(saldo.quantidade or 0)
+    reservado = reservado_qs.aggregate(total=Sum("quantidade"))["total"] or 0
+    return base - int(reservado)
 
 
 def recalcular_total_produto(produto):
@@ -64,6 +103,220 @@ def recalcular_total_produto(produto):
         )
         produto.quantidade = max(0, int(total))
         produto.save(update_fields=["quantidade"])
+
+
+def _validar_ubicacao_no_ponto(ubicacao, ponto_operacional, *, campo="Ubicacao"):
+    if not ubicacao:
+        return
+    if not ponto_operacional:
+        raise ValueError(f"{campo} informada sem ponto operacional.")
+    if ubicacao.ponto_operacional_id != ponto_operacional.id:
+        raise ValueError(f"{campo} nao pertence ao ponto operacional informado.")
+
+
+def _garantir_saldo_ubicacao_legado(produto, ponto_operacional, ubicacao):
+    if not produto or not ponto_operacional or not ubicacao:
+        return
+    if SaldoEstoqueUbicacao.objects.filter(produto=produto, ponto_operacional=ponto_operacional).exists():
+        return
+    saldo_ponto = (
+        SaldoEstoquePonto.objects.filter(produto=produto, ponto_operacional=ponto_operacional)
+        .values_list("quantidade", flat=True)
+        .first()
+    )
+    quantidade = int(saldo_ponto or 0)
+    if quantidade <= 0:
+        return
+    try:
+        SaldoEstoqueUbicacao.objects.create(
+            produto=produto,
+            ponto_operacional=ponto_operacional,
+            ubicacao=ubicacao,
+            quantidade=quantidade,
+        )
+    except IntegrityError:
+        pass
+
+
+def obter_ubicacao_preferencial(produto, ponto_operacional):
+    if not ponto_operacional:
+        return None
+    if getattr(produto, "ubicacao_padrao_id", None) and produto.ubicacao_padrao.ponto_operacional_id == ponto_operacional.id:
+        return produto.ubicacao_padrao
+    ubicacao = (
+        UbicacaoEstoque.objects.filter(ponto_operacional=ponto_operacional, ativo=True)
+        .order_by("codigo")
+        .first()
+    )
+    if ubicacao:
+        return ubicacao
+    ubicacao, _ = UbicacaoEstoque.objects.get_or_create(
+        ponto_operacional=ponto_operacional,
+        codigo="PADRAO",
+        defaults={
+            "descricao": "Ubicacao operacional padrao",
+            "ativo": True,
+        },
+    )
+    if not ubicacao.ativo:
+        ubicacao.ativo = True
+        ubicacao.save(update_fields=["ativo"])
+    return ubicacao
+
+
+def ajustar_saldo_ubicacao(produto, ponto_operacional, ubicacao, delta, allow_negative=False):
+    if not ubicacao:
+        raise ValueError("Informe a ubicacao para ajustar o saldo fisico.")
+    _validar_ubicacao_no_ponto(ubicacao, ponto_operacional)
+    _garantir_saldo_ubicacao_legado(produto, ponto_operacional, ubicacao)
+
+    with transaction.atomic():
+        saldo = (
+            SaldoEstoqueUbicacao.objects.select_for_update()
+            .filter(produto=produto, ubicacao=ubicacao)
+            .first()
+        )
+        if not saldo:
+            try:
+                SaldoEstoqueUbicacao.objects.create(
+                    produto=produto,
+                    ponto_operacional=ponto_operacional,
+                    ubicacao=ubicacao,
+                    quantidade=0,
+                )
+            except IntegrityError:
+                pass
+            saldo = (
+                SaldoEstoqueUbicacao.objects.select_for_update()
+                .filter(produto=produto, ubicacao=ubicacao)
+                .get()
+            )
+
+        novo_valor = int(saldo.quantidade) + int(delta)
+        if (not allow_negative) and novo_valor < 0:
+            raise ValueError("Saldo ficaria negativo para esta ubicacao.")
+        saldo.ponto_operacional = ponto_operacional
+        saldo.quantidade = novo_valor
+        saldo.save(update_fields=["ponto_operacional", "quantidade"])
+        return saldo
+
+
+def _metodo_custo_ativo():
+    config = ConfiguracaoSistema.get_configuracao()
+    return getattr(config, "estoque_metodo_custo", ConfiguracaoSistema.ESTOQUE_METODO_CUSTO_PMP)
+
+
+def _criar_camada_custo(*, produto, ponto_operacional, ubicacao, quantidade, custo_unitario, movimento_entrada=None):
+    qtd = max(int(quantidade or 0), 0)
+    if qtd <= 0:
+        return None
+    return EstoqueCamadaCusto.objects.create(
+        produto=produto,
+        ponto_operacional=ponto_operacional,
+        ubicacao=ubicacao,
+        movimento_entrada=movimento_entrada,
+        quantidade_entrada=qtd,
+        quantidade_saldo=qtd,
+        custo_unitario=Decimal(str(custo_unitario or 0)),
+    )
+
+
+def _garantir_camadas_legadas(*, produto, ponto_operacional, ubicacao):
+    if not ponto_operacional or not ubicacao:
+        return
+    _garantir_saldo_ubicacao_legado(produto, ponto_operacional, ubicacao)
+    if EstoqueCamadaCusto.objects.filter(
+        produto=produto,
+        ponto_operacional=ponto_operacional,
+        ubicacao=ubicacao,
+        quantidade_saldo__gt=0,
+    ).exists():
+        return
+    saldo_ubic = (
+        SaldoEstoqueUbicacao.objects.filter(
+            produto=produto,
+            ponto_operacional=ponto_operacional,
+            ubicacao=ubicacao,
+        ).values_list("quantidade", flat=True).first()
+    )
+    quantidade_saldo = int(saldo_ubic or 0)
+    if quantidade_saldo <= 0:
+        return
+    _criar_camada_custo(
+        produto=produto,
+        ponto_operacional=ponto_operacional,
+        ubicacao=ubicacao,
+        quantidade=quantidade_saldo,
+        custo_unitario=Decimal(str(produto.custo_medio or produto.custo_unitario or 0)),
+        movimento_entrada=None,
+    )
+
+
+def _consumir_camadas_custo(*, produto, ponto_operacional, ubicacao, quantidade, allow_negative=False):
+    qtd = int(quantidade or 0)
+    if qtd <= 0:
+        return Decimal("0.00"), []
+    _validar_ubicacao_no_ponto(ubicacao, ponto_operacional, campo="Ubicacao de origem")
+    _garantir_camadas_legadas(produto=produto, ponto_operacional=ponto_operacional, ubicacao=ubicacao)
+    metodo = _metodo_custo_ativo()
+    camadas_qs = EstoqueCamadaCusto.objects.select_for_update().filter(
+        produto=produto,
+        ponto_operacional=ponto_operacional,
+        quantidade_saldo__gt=0,
+    )
+    if ubicacao:
+        camadas_qs = camadas_qs.filter(ubicacao=ubicacao)
+    ordem = ["criado_em", "id"] if metodo == ConfiguracaoSistema.ESTOQUE_METODO_CUSTO_PEPS else ["criado_em", "id"]
+    camadas = list(camadas_qs.order_by(*ordem))
+
+    restante = qtd
+    custo_total = Decimal("0.00")
+    consumos = []
+
+    if metodo == ConfiguracaoSistema.ESTOQUE_METODO_CUSTO_PMP:
+        custo_unitario = Decimal(str(produto.custo_medio or produto.custo_unitario or 0))
+        custo_total = custo_unitario * Decimal(qtd)
+        for camada in camadas:
+            if restante <= 0:
+                break
+            usar = min(restante, int(camada.quantidade_saldo or 0))
+            if usar <= 0:
+                continue
+            camada.quantidade_saldo = int(camada.quantidade_saldo or 0) - usar
+            camada.save(update_fields=["quantidade_saldo"])
+            consumos.append({"camada_id": camada.id, "quantidade": usar, "custo_unitario": Decimal(str(camada.custo_unitario or 0))})
+            restante -= usar
+    else:
+        for camada in camadas:
+            if restante <= 0:
+                break
+            usar = min(restante, int(camada.quantidade_saldo or 0))
+            if usar <= 0:
+                continue
+            camada.quantidade_saldo = int(camada.quantidade_saldo or 0) - usar
+            camada.save(update_fields=["quantidade_saldo"])
+            custo_unitario = Decimal(str(camada.custo_unitario or 0))
+            custo_total += custo_unitario * Decimal(usar)
+            consumos.append({"camada_id": camada.id, "quantidade": usar, "custo_unitario": custo_unitario})
+            restante -= usar
+
+    if restante > 0:
+        if not allow_negative:
+            raise ValueError("Camadas de custo insuficientes para a saida informada.")
+        custo_fallback = Decimal(str(produto.custo_medio or produto.custo_unitario or 0))
+        custo_total += custo_fallback * Decimal(restante)
+        consumos.append(
+            {
+                "camada_id": None,
+                "quantidade": restante,
+                "custo_unitario": custo_fallback,
+                "saldo_negativo": True,
+            }
+        )
+        restante = 0
+
+    custo_unitario_saida = (custo_total / Decimal(qtd)) if qtd > 0 else Decimal("0.00")
+    return custo_unitario_saida, consumos
 
 
 def diagnosticar_inconsistencias_estoque(apenas_ativos=True):
@@ -409,6 +662,88 @@ def listar_guias_recentes_venda_rapida(*, limit=10):
     return resumos
 
 
+def listar_cestos_abertos_venda_rapida(*, limit=10):
+    try:
+        limit = int(limit or 10)
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
+
+    codigos = []
+    vistos = set()
+    for codigo in (
+        VendaRapidaEstoque.objects.filter(status="pre_reserva")
+        .exclude(cesto_codigo="")
+        .order_by("-id")
+        .values_list("cesto_codigo", flat=True)
+    ):
+        if codigo in vistos:
+            continue
+        vistos.add(codigo)
+        codigos.append(codigo)
+        if len(codigos) >= limit:
+            break
+
+    if not codigos:
+        return []
+
+    itens = list(
+        VendaRapidaEstoque.objects.select_related("usuario")
+        .filter(cesto_codigo__in=codigos, status="pre_reserva")
+        .order_by("-id")
+    )
+    por_cesto = {codigo: [] for codigo in codigos}
+    for item in itens:
+        if item.cesto_codigo in por_cesto:
+            por_cesto[item.cesto_codigo].append(item)
+
+    resumos = []
+    for codigo in codigos:
+        itens_cesto = por_cesto.get(codigo) or []
+        if not itens_cesto:
+            continue
+        total_valor = Decimal("0.00")
+        total_quantidade = 0
+        vendedores = []
+        criado_em = None
+        ultimo_evento = None
+        operador = ""
+        for item in itens_cesto:
+            total_valor += Decimal(item.valor_total or Decimal("0.00"))
+            total_quantidade += int(item.quantidade or 0)
+            if item.funcionario_numero and item.funcionario_numero not in vendedores:
+                vendedores.append(item.funcionario_numero)
+            evento_ref = item.criado_em
+            if evento_ref and (not ultimo_evento or evento_ref > ultimo_evento):
+                ultimo_evento = evento_ref
+            if item.criado_em and (not criado_em or item.criado_em < criado_em):
+                criado_em = item.criado_em
+            if not operador and item.usuario_id and getattr(item.usuario, "username", ""):
+                operador = item.usuario.username
+
+        tempo_parado_minutos = 0
+        if ultimo_evento:
+            tempo_parado_minutos = max(
+                0,
+                int((timezone.now() - ultimo_evento).total_seconds() // 60),
+            )
+
+        resumos.append(
+            {
+                "cesto_codigo": codigo,
+                "itens_total": len(itens_cesto),
+                "quantidade_total": total_quantidade,
+                "valor_total": float(total_valor),
+                "vendedor_label": vendedores[0] if len(vendedores) == 1 else ("Multiplos" if vendedores else "-"),
+                "operador": operador or "-",
+                "criado_em": criado_em.isoformat() if criado_em else None,
+                "atualizado_em": ultimo_evento.isoformat() if ultimo_evento else None,
+                "tempo_parado_minutos": tempo_parado_minutos,
+            }
+        )
+    return resumos
+
+
 @transaction.atomic
 def registrar_movimentacao_estoque(
     *,
@@ -418,9 +753,12 @@ def registrar_movimentacao_estoque(
     usuario=None,
     origem=None,
     destino=None,
+    origem_ubicacao=None,
+    destino_ubicacao_ref=None,
     destino_ubicacao="",
     observacao="",
     valor_unitario_custo=None,
+    rastreio_item_entrada=None,
 ):
     normalizar_saldos_produto(produto)
     try:
@@ -431,6 +769,12 @@ def registrar_movimentacao_estoque(
     observacao = (observacao or "").strip()
     destino_ubicacao = (destino_ubicacao or "").strip()
     config = ConfiguracaoSistema.get_configuracao()
+    if origem_ubicacao:
+        _validar_ubicacao_no_ponto(origem_ubicacao, origem, campo="Ubicacao de origem")
+    if destino_ubicacao_ref:
+        _validar_ubicacao_no_ponto(destino_ubicacao_ref, destino, campo="Ubicacao de destino")
+
+    custo_movimento = Decimal(str(valor_unitario_custo or 0)) if valor_unitario_custo is not None else None
 
     if tipo == "transferencia":
         if not origem or not destino:
@@ -439,21 +783,34 @@ def registrar_movimentacao_estoque(
             raise ValueError("Origem e destino devem ser diferentes.")
         if quantidade_int <= 0:
             raise ValueError("Transferencia exige quantidade positiva.")
+        if not origem_ubicacao or not destino_ubicacao_ref:
+            raise ValueError("Transferencia exige ubicacao de origem e de destino.")
         origem_saldo, _ = SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=origem)
         SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=destino)
         if int(origem_saldo.quantidade or 0) < quantidade_int:
             raise ValueError("Saldo insuficiente na origem.")
+        custo_movimento, consumos = _consumir_camadas_custo(
+            produto=produto,
+            ponto_operacional=origem,
+            ubicacao=origem_ubicacao,
+            quantidade=quantidade_int,
+        )
         ajustar_saldo(produto, origem, -quantidade_int)
         ajustar_saldo(produto, destino, quantidade_int)
+        ajustar_saldo_ubicacao(produto, origem, origem_ubicacao, -quantidade_int)
+        ajustar_saldo_ubicacao(produto, destino, destino_ubicacao_ref, quantidade_int)
         quantidade_gravada = quantidade_int
     elif tipo == "entrada":
         if not destino:
             raise ValueError("Entrada de estoque exige ponto de destino.")
+        if not destino_ubicacao_ref:
+            raise ValueError("Entrada de estoque exige ubicacao de destino.")
         quantidade_gravada = abs(quantidade_int)
         if quantidade_gravada <= 0:
             raise ValueError("Entrada exige quantidade positiva.")
         quantidade_anterior = max(int(produto.quantidade or 0), 0)
         ajustar_saldo(produto, destino, quantidade_gravada)
+        ajustar_saldo_ubicacao(produto, destino, destino_ubicacao_ref, quantidade_gravada)
         custo_entrada = valor_unitario_custo if valor_unitario_custo is not None else produto.custo_unitario
         custo_anterior = Decimal(str(produto.custo_medio or produto.custo_unitario or 0))
         custo_entrada_dec = Decimal(str(custo_entrada or 0))
@@ -466,10 +823,14 @@ def registrar_movimentacao_estoque(
             produto.custo_medio = custo_medio
             produto.custo_unitario = custo_medio
             produto.save(update_fields=["custo_medio", "custo_unitario"])
+        custo_movimento = custo_entrada_dec
     elif tipo in {"ajuste", "avaria", "inventario"}:
         ponto = origem or destino
+        ubicacao = origem_ubicacao or destino_ubicacao_ref
         if not ponto:
             raise ValueError("Informe o ponto operacional para esta movimentacao.")
+        if not ubicacao:
+            raise ValueError("Informe a ubicacao da movimentacao.")
         if not observacao:
             raise ValueError("Informe observacao para ajuste/avaria/inventario.")
         if quantidade_int == 0:
@@ -480,40 +841,129 @@ def registrar_movimentacao_estoque(
             quantidade_int,
             allow_negative=bool(config.estoque_permitir_negativo) if tipo == "inventario" else False,
         )
+        ajustar_saldo_ubicacao(
+            produto,
+            ponto,
+            ubicacao,
+            quantidade_int,
+            allow_negative=bool(config.estoque_permitir_negativo) if tipo == "inventario" else False,
+        )
         quantidade_gravada = quantidade_int
+        if quantidade_int < 0:
+            custo_movimento, _ = _consumir_camadas_custo(
+                produto=produto,
+                ponto_operacional=ponto,
+                ubicacao=ubicacao,
+                quantidade=abs(quantidade_int),
+                allow_negative=bool(config.estoque_permitir_negativo) if tipo == "inventario" else False,
+            )
+        else:
+            custo_movimento = Decimal(str(produto.custo_medio or produto.custo_unitario or 0))
     elif tipo in {"venda", "consumo_os", "reserva"}:
         if not origem:
             raise ValueError("Informe o ponto de origem para esta movimentacao.")
+        if not origem_ubicacao:
+            raise ValueError("Informe a ubicacao de origem para esta saida.")
         quantidade_gravada = -abs(quantidade_int)
         if quantidade_gravada == 0:
             raise ValueError("Saida exige quantidade positiva.")
+        custo_movimento, _ = _consumir_camadas_custo(
+            produto=produto,
+            ponto_operacional=origem,
+            ubicacao=origem_ubicacao,
+            quantidade=abs(quantidade_int),
+            allow_negative=bool(config.estoque_permitir_negativo),
+        )
         ajustar_saldo(
             produto,
             origem,
             quantidade_gravada,
             allow_negative=bool(config.estoque_permitir_negativo),
         )
+        ajustar_saldo_ubicacao(
+            produto,
+            origem,
+            origem_ubicacao,
+            quantidade_gravada,
+            allow_negative=bool(config.estoque_permitir_negativo),
+        )
     elif tipo == "devolucao_reserva":
         if not destino:
             raise ValueError("Informe o ponto de destino para a devolucao.")
+        if not destino_ubicacao_ref:
+            raise ValueError("Informe a ubicacao de destino para a devolucao.")
         quantidade_gravada = abs(quantidade_int)
         if quantidade_gravada <= 0:
             raise ValueError("Devolucao exige quantidade positiva.")
         ajustar_saldo(produto, destino, quantidade_gravada)
+        ajustar_saldo_ubicacao(produto, destino, destino_ubicacao_ref, quantidade_gravada)
+        custo_movimento = Decimal(str(produto.custo_medio or produto.custo_unitario or 0))
     else:
         raise ValueError("Tipo de movimentacao nao suportado.")
 
-    return MovimentacaoEstoque.objects.create(
+    movimento = MovimentacaoEstoque.objects.create(
         produto=produto,
         tipo=tipo,
         quantidade=quantidade_gravada,
         origem=origem,
         destino=destino,
-        destino_ubicacao=destino_ubicacao,
-        valor_unitario_custo=valor_unitario_custo,
+        origem_ubicacao=origem_ubicacao,
+        destino_ubicacao_ref=destino_ubicacao_ref,
+        destino_ubicacao=(
+            destino_ubicacao
+            or (
+                (
+                    f"{destino_ubicacao_ref.codigo}"
+                    + (f" - {destino_ubicacao_ref.descricao}" if destino_ubicacao_ref and destino_ubicacao_ref.descricao else "")
+                )[:80]
+                if destino_ubicacao_ref
+                else ""
+            )
+        ),
+        valor_unitario_custo=custo_movimento if custo_movimento is not None else valor_unitario_custo,
         observacao=observacao,
         usuario=usuario,
     )
+    atualizar_rastreabilidade_movimento(
+        produto=produto,
+        tipo=tipo,
+        quantidade=quantidade_gravada,
+        movimento=movimento,
+        origem=origem,
+        destino=destino,
+        origem_ubicacao=origem_ubicacao,
+        destino_ubicacao_ref=destino_ubicacao_ref,
+        item_entrada=rastreio_item_entrada,
+    )
+    if tipo == "entrada":
+        _criar_camada_custo(
+            produto=produto,
+            ponto_operacional=destino,
+            ubicacao=destino_ubicacao_ref,
+            quantidade=quantidade_gravada,
+            custo_unitario=custo_movimento or Decimal("0.00"),
+            movimento_entrada=movimento,
+        )
+    elif tipo in {"transferencia", "devolucao_reserva"}:
+        _criar_camada_custo(
+            produto=produto,
+            ponto_operacional=destino,
+            ubicacao=destino_ubicacao_ref,
+            quantidade=quantidade_gravada,
+            custo_unitario=custo_movimento or Decimal(str(produto.custo_medio or produto.custo_unitario or 0)),
+            movimento_entrada=movimento,
+        )
+    elif tipo in {"ajuste", "inventario"} and quantidade_gravada > 0:
+        _criar_camada_custo(
+            produto=produto,
+            ponto_operacional=destino or origem,
+            ubicacao=destino_ubicacao_ref or origem_ubicacao,
+            quantidade=quantidade_gravada,
+            custo_unitario=custo_movimento or Decimal(str(produto.custo_medio or produto.custo_unitario or 0)),
+            movimento_entrada=movimento,
+        )
+
+    return movimento
 
 
 @transaction.atomic
@@ -521,6 +971,7 @@ def criar_reserva_estoque(
     *,
     produto,
     ponto_operacional,
+    ubicacao=None,
     quantidade,
     nome_contato,
     telefone_contato="",
@@ -541,6 +992,11 @@ def criar_reserva_estoque(
         raise ValueError("Quantidade invalida.")
     if not nome_contato:
         raise ValueError("Informe nome para reserva.")
+    if not ubicacao:
+        ubicacao = getattr(produto, "ubicacao_padrao", None)
+    if not ubicacao:
+        raise ValueError("Informe a ubicacao da reserva.")
+    _validar_ubicacao_no_ponto(ubicacao, ponto_operacional, campo="Ubicacao da reserva")
     if not valido_ate:
         raise ValueError("Data de validade invalida. Use YYYY-MM-DD.")
     if valido_ate < timezone.localdate():
@@ -549,32 +1005,10 @@ def criar_reserva_estoque(
     expirar_reservas_vencidas(usuario=usuario, empresa=getattr(produto, "empresa", None))
     normalizar_saldos_produto(produto)
 
-    saldo = (
-        SaldoEstoquePonto.objects.select_for_update()
-        .filter(produto=produto, ponto_operacional=ponto_operacional)
-        .first()
-    )
-    if not saldo:
-        saldo = SaldoEstoquePonto.objects.create(
-            produto=produto,
-            ponto_operacional=ponto_operacional,
-            quantidade=0,
-        )
-
-    reservado = (
-        ReservaEstoque.objects.select_for_update()
-        .filter(
-            produto=produto,
-            ponto_operacional=ponto_operacional,
-            status="ativa",
-            valido_ate__gte=timezone.localdate(),
-        )
-        .aggregate(total=Sum("quantidade"))["total"]
-        or 0
-    )
-    disponivel = int(saldo.quantidade) - int(reservado)
+    SaldoEstoquePonto.objects.get_or_create(produto=produto, ponto_operacional=ponto_operacional)
+    disponivel = saldo_disponivel(produto, ponto_operacional, ubicacao=ubicacao)
     if disponivel < quantidade_int:
-        raise ValueError("Sem saldo disponivel para reservar neste ponto.")
+        raise ValueError("Sem saldo disponivel para reservar nesta ubicacao.")
 
     marcador_auto = ""
     if item_os_id:
@@ -585,6 +1019,7 @@ def criar_reserva_estoque(
         codigo_reserva=_codigo_reserva_interno(),
         produto=produto,
         ponto_operacional=ponto_operacional,
+        ubicacao=ubicacao,
         quantidade=quantidade_int,
         nome_contato=nome_contato,
         telefone_contato=telefone_contato,
@@ -616,13 +1051,15 @@ def criar_item_cesto_venda_rapida(
         raise ValueError("Quantidade deve ser maior que zero.")
     if not funcionario_numero.isdigit() or len(funcionario_numero) < 2:
         raise ValueError("Numero de vendedor invalido. Use ao menos 2 digitos.")
-    if (ponto_operacional.codigo or "").upper() not in {"PO3", "PO2"}:
-        raise ValueError("Venda permitida apenas para pontos PO3 (Loja) e PO2 (Armazem).")
+    config = ConfiguracaoSistema.get_configuracao()
+    codigos_venda_mostrador = set(config.pontos_venda_mostrador_lista())
+    if (ponto_operacional.codigo or "").upper() not in codigos_venda_mostrador:
+        codigos_label = ", ".join(sorted(codigos_venda_mostrador)) or "-"
+        raise ValueError(f"Venda permitida apenas para os pontos configurados: {codigos_label}.")
     if not get_user_model().objects.filter(is_active=True, numero_vendedor=funcionario_numero).exists():
         raise ValueError("Numero de vendedor nao encontrado para usuario ativo.")
 
     normalizar_saldos_produto(produto)
-    config = ConfiguracaoSistema.get_configuracao()
     cesto_codigo = (cesto_codigo or "").strip()
 
     if cesto_codigo:
@@ -729,6 +1166,7 @@ def converter_reserva(reserva, usuario=None, motivo="Conversao de reserva"):
         tipo="consumo_os" if reserva.ordem_servico_id else "reserva",
         quantidade=reserva.quantidade,
         origem=reserva.ponto_operacional,
+        origem_ubicacao=reserva.ubicacao or obter_ubicacao_preferencial(reserva.produto, reserva.ponto_operacional),
         observacao=f"{motivo} ({reserva.codigo_reserva})",
         usuario=usuario,
     )
@@ -751,6 +1189,7 @@ def cancelar_reserva(reserva, usuario=None, motivo="Cancelada manualmente"):
             tipo="devolucao_reserva",
             quantidade=reserva.quantidade,
             destino=reserva.ponto_operacional,
+            destino_ubicacao_ref=reserva.ubicacao or obter_ubicacao_preferencial(reserva.produto, reserva.ponto_operacional),
             observacao=f"Devolucao por cancelamento ({reserva.codigo_reserva})",
             usuario=usuario,
         )
@@ -834,13 +1273,17 @@ def consumir_itens_estoque_ordem(ordem, usuario=None):
             continue
         produto = item.produto_estoque
         ponto = item.ponto_operacional_reserva or getattr(produto, "ponto_operacional", None)
+        ubicacao = obter_ubicacao_preferencial(produto, ponto) if produto and ponto else None
         if not produto or not ponto:
             raise ValueError(f"O item '{item.nome}' nao possui ponto operacional para baixa de estoque.")
+        if not ubicacao:
+            raise ValueError(f"O item '{item.nome}' nao possui ubicacao valida para baixa de estoque.")
         registrar_movimentacao_estoque(
             produto=produto,
             tipo="consumo_os",
             quantidade=item.quantidade,
             origem=ponto,
+            origem_ubicacao=ubicacao,
             observacao=f"Consumo automatico na OS {ordem.numero_os} - item {item.id}",
             usuario=usuario,
         )
@@ -875,13 +1318,17 @@ def devolver_itens_estoque_ordem(ordem, usuario=None):
     for item in itens:
         produto = item.produto_estoque
         ponto = item.ponto_operacional_reserva or getattr(produto, "ponto_operacional", None)
+        ubicacao = obter_ubicacao_preferencial(produto, ponto) if produto and ponto else None
         if not produto or not ponto:
+            continue
+        if not ubicacao:
             continue
         registrar_movimentacao_estoque(
             produto=produto,
             tipo="devolucao_reserva",
             quantidade=item.quantidade,
             destino=ponto,
+            destino_ubicacao_ref=ubicacao,
             observacao=f"Devolucao automatica por reabertura da OS {ordem.numero_os} - item {item.id}",
             usuario=usuario,
         )
@@ -893,11 +1340,11 @@ def devolver_itens_estoque_ordem(ordem, usuario=None):
 
 @transaction.atomic
 def finalizar_inventario_estoque(inventario, *, usuario=None):
-    if inventario.status != "aberto":
+    if inventario.status not in {"aberto", "em_conferencia"}:
         raise ValueError("Inventario ja finalizado.")
 
     inventario = InventarioEstoque.objects.select_for_update().get(id=inventario.id)
-    if inventario.status != "aberto":
+    if inventario.status not in {"aberto", "em_conferencia"}:
         raise ValueError("Inventario ja finalizado.")
 
     itens = list(
@@ -913,12 +1360,19 @@ def finalizar_inventario_estoque(inventario, *, usuario=None):
     for item in itens:
         if item.ajuste == 0:
             continue
+        ubicacao = item.ubicacao or inventario.ubicacao or obter_ubicacao_preferencial(item.produto, inventario.ponto_operacional)
+        if not ubicacao:
+            raise ValueError(
+                f"O produto '{item.produto.nome}' nao possui ubicacao ativa no ponto {inventario.ponto_operacional.codigo}."
+            )
         registrar_movimentacao_estoque(
             produto=item.produto,
             tipo="inventario",
             quantidade=item.ajuste,
             origem=inventario.ponto_operacional if item.ajuste < 0 else None,
             destino=inventario.ponto_operacional if item.ajuste > 0 else None,
+            origem_ubicacao=ubicacao if item.ajuste < 0 else None,
+            destino_ubicacao_ref=ubicacao if item.ajuste > 0 else None,
             observacao=(
                 f"Ajuste inventario #{inventario.id} "
                 f"(sistema={item.quantidade_sistema}, contado={item.quantidade_contada}). "
@@ -937,3 +1391,52 @@ def finalizar_inventario_estoque(inventario, *, usuario=None):
         "itens_ajustados": itens_ajustados,
         "unidades_ajustadas": unidades_ajustadas,
     }
+
+
+@transaction.atomic
+def receber_entrada_mercadoria(entrada, *, usuario=None):
+    entrada = EntradaMercadoria.objects.select_for_update().get(pk=entrada.pk)
+    if entrada.status != "rascunho":
+        raise ValueError("Somente entradas em rascunho podem ser recebidas.")
+    itens = list(entrada.itens.select_related("produto"))
+    if not itens:
+        raise ValueError("Adicione pelo menos um item antes de receber a entrada.")
+
+    movimentos = []
+    for item in itens:
+        lote_codigo = " ".join(str(item.lote_codigo or "").strip().split())
+        series = [numero.upper() for numero in item.numeros_serie_lista]
+        if item.produto.controla_lote and not lote_codigo:
+            raise ValueError(f"O produto '{item.produto.nome}' exige lote antes do recebimento.")
+        if item.produto.controla_serie:
+            if len(series) != int(item.quantidade or 0):
+                raise ValueError(
+                    f"O produto '{item.produto.nome}' exige {item.quantidade} numero(s) de serie, um por unidade."
+                )
+            if len(set(series)) != len(series):
+                raise ValueError(f"O produto '{item.produto.nome}' possui series repetidas na entrada.")
+            if EstoqueSerie.objects.filter(produto=item.produto, numero__in=series).exists():
+                raise ValueError(f"O produto '{item.produto.nome}' possui serie ja registrada no estoque.")
+
+        movimento = registrar_movimentacao_estoque(
+            produto=item.produto,
+            tipo="entrada",
+            quantidade=item.quantidade,
+            usuario=usuario,
+            destino=entrada.ponto_operacional,
+            destino_ubicacao_ref=entrada.ubicacao,
+            observacao=(
+                f"Entrada {entrada.numero}"
+                + (f" doc. {entrada.documento_numero}" if entrada.documento_numero else "")
+                + (f" - {entrada.fornecedor_nome}" if entrada.fornecedor_nome else "")
+            ),
+            valor_unitario_custo=item.custo_entrada_unitario,
+            rastreio_item_entrada=item,
+        )
+        movimentos.append(movimento)
+
+    entrada.status = "recebida"
+    entrada.recebido_em = timezone.now()
+    entrada.usuario = usuario or entrada.usuario
+    entrada.save(update_fields=["status", "recebido_em", "usuario"])
+    return {"entrada": entrada, "movimentos": movimentos, "itens": len(itens)}

@@ -1,13 +1,74 @@
 {% extends 'core/base.html' %}
 {% load permission_tags %}
 
+{% block extra_css %}
+<style>
+  .taloes-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 1rem;
+  }
+  .taloes-strip-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 14px 16px;
+    box-shadow: 0 14px 24px rgba(30, 51, 74, 0.06);
+  }
+  .taloes-strip-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #70808f;
+    margin-bottom: 4px;
+  }
+  .taloes-strip-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #223749;
+  }
+  .taloes-strip-note {
+    margin-top: 4px;
+    color: #607080;
+    font-size: .82rem;
+  }
+  @media (max-width: 991.98px) {
+    .taloes-strip {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-3">
     {% include 'caixa/_subnav_caixa.html' %}
 
-    <div class="content-header d-flex justify-content-between align-items-center mb-3">
-        <h3 class="mb-0">Consulta de taloes</h3>
+    <div class="d-flex justify-content-between align-items-center flex-wrap mb-3" style="gap:12px;">
+        <div>
+            <h3 class="mb-1">Consulta de tal&otilde;es</h3>
+            <div class="text-muted small">Pesquise comprovantes por tal&atilde;o, OS ou refer&ecirc;ncia para reimpress&atilde;o e confer&ecirc;ncia r&aacute;pida.</div>
+        </div>
         <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary btn-sm">Novo pagamento</a>
+    </div>
+
+    <div class="taloes-strip">
+        <article class="taloes-strip-card">
+            <div class="taloes-strip-label">Busca principal</div>
+            <div class="taloes-strip-value">Tal&atilde;o, OS ou refer&ecirc;ncia</div>
+            <div class="taloes-strip-note">Use um dos identificadores para chegar direto ao comprovante.</div>
+        </article>
+        <article class="taloes-strip-card">
+            <div class="taloes-strip-label">A&ccedil;&atilde;o mais comum</div>
+            <div class="taloes-strip-value">2&ordf; via</div>
+            <div class="taloes-strip-note">Reimpress&atilde;o imediata do comprovante quando o cliente solicitar.</div>
+        </article>
+        <article class="taloes-strip-card">
+            <div class="taloes-strip-label">Exporta&ccedil;&atilde;o</div>
+            <div class="taloes-strip-value">CSV ou PDF</div>
+            <div class="taloes-strip-note">Lista pronta para confer&ecirc;ncia, arquivo ou fechamento.</div>
+        </article>
     </div>
 
     <div class="card mb-3">
@@ -15,7 +76,7 @@
             <form method="get" class="form-row align-items-end">
                 <div class="col-md-8">
                     <label for="id_q"><strong>Buscar</strong></label>
-                    <input id="id_q" type="text" name="q" class="form-control" value="{{ q }}" placeholder="Numero do talao, OS ou referencia">
+                    <input id="id_q" type="text" name="q" class="form-control" value="{{ q }}" placeholder="N&uacute;mero do tal&atilde;o, OS ou refer&ecirc;ncia">
                 </div>
                 <div class="col-md-4 d-flex" style="gap:8px;">
                     <button type="submit" class="btn btn-outline-primary btn-block">Buscar</button>
@@ -31,13 +92,13 @@
             <table class="table table-hover text-nowrap mb-0">
                 <thead>
                     <tr>
-                        <th>Talao</th>
+                        <th>Tal&atilde;o</th>
                         <th>OS</th>
                         <th class="text-right">Valor</th>
                         <th>Forma</th>
-                        <th>Referencia</th>
+                        <th>Refer&ecirc;ncia</th>
                         <th>Data</th>
-                        <th class="text-right">Acao</th>
+                        <th class="text-right">A&ccedil;&atilde;o</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -50,7 +111,7 @@
                         <td>{{ p.referencia|default:"-" }}</td>
                         <td>{{ p.data|date:"d/m/Y H:i" }}</td>
                         <td class="text-right">
-                            <a href="{% url 'caixa:imprimir_talao' p.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">2a via</a>
+                            <a href="{% url 'caixa:imprimir_talao' p.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">2&ordf; via</a>
                             {% if user|has_perm_sensivel:'perm_caixa_excluir_pagamento' %}
                             <a href="{% url 'caixa:excluir_pagamento' p.id %}" class="btn btn-sm btn-outline-danger">Excluir</a>
                             {% endif %}
@@ -58,7 +119,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center text-muted py-4">Nenhum talao encontrado.</td>
+                        <td colspan="7" class="text-center text-muted py-4">Nenhum tal&atilde;o encontrado.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -67,7 +128,7 @@
 
         {% if pagamentos_page and pagamentos_page.paginator.num_pages > 1 %}
         <div class="card-footer d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
-            <small class="text-muted">Pagina {{ pagamentos_page.number }} de {{ pagamentos_page.paginator.num_pages }}</small>
+            <small class="text-muted">P&aacute;gina {{ pagamentos_page.number }} de {{ pagamentos_page.paginator.num_pages }}</small>
             <ul class="pagination pagination-sm mb-0">
                 {% if pagamentos_page.has_previous %}
                 <li class="page-item"><a class="page-link" href="?{{ querystring_paginacao }}&page={{ pagamentos_page.previous_page_number }}">Anterior</a></li>
@@ -76,9 +137,9 @@
                 {% endif %}
 
                 {% if pagamentos_page.has_next %}
-                <li class="page-item"><a class="page-link" href="?{{ querystring_paginacao }}&page={{ pagamentos_page.next_page_number }}">Proxima</a></li>
+                <li class="page-item"><a class="page-link" href="?{{ querystring_paginacao }}&page={{ pagamentos_page.next_page_number }}">Pr&oacute;xima</a></li>
                 {% else %}
-                <li class="page-item disabled"><span class="page-link">Proxima</span></li>
+                <li class="page-item disabled"><span class="page-link">Pr&oacute;xima</span></li>
                 {% endif %}
             </ul>
         </div>

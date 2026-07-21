@@ -1,8 +1,8 @@
-from datetime import timedelta
+﻿from datetime import timedelta
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -18,7 +18,7 @@ from configuracoes.permissions import (
 )
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
-from ..models import PontoOperacional, Produto, ReservaEstoque
+from ..models import PontoOperacional, Produto, ReservaEstoque, UbicacaoEstoque
 from ..services import criar_reserva_estoque
 from .helpers import (
     _registrar_evento_estoque,
@@ -33,7 +33,7 @@ from .helpers import (
 
 @role_required(ORDER_ROLES)
 def api_criar_reserva(request):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     config = ConfiguracaoSistema.get_configuracao()
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
@@ -44,6 +44,7 @@ def api_criar_reserva(request):
     ponto = get_object_or_404(PontoOperacional, id=request.POST.get("ponto_id"), ativo=True)
     nome = (request.POST.get("nome") or "").strip()
     telefone = (request.POST.get("telefone") or "").strip()
+    ubicacao_id = (request.POST.get("ubicacao_id") or "").strip()
     try:
         quantidade = int(request.POST.get("quantidade") or "1")
     except ValueError:
@@ -63,10 +64,25 @@ def api_criar_reserva(request):
     if valido_ate < timezone.localdate():
         return JsonResponse({"ok": False, "erro": "Data de validade da reserva nao pode ser passada."}, status=400)
 
+    ubicacao = None
+    if ubicacao_id.isdigit():
+        ubicacao = (
+            UbicacaoEstoque.objects.filter(id=int(ubicacao_id), ativo=True)
+            .select_related("ponto_operacional")
+            .first()
+        )
+        if not ubicacao:
+            return JsonResponse({"ok": False, "erro": "Ubicacao informada nao foi encontrada."}, status=400)
+        if ubicacao.ponto_operacional_id != ponto.id:
+            return JsonResponse({"ok": False, "erro": "A ubicacao nao pertence ao ponto informado."}, status=400)
+    elif getattr(produto, "ubicacao_padrao_id", None):
+        ubicacao = produto.ubicacao_padrao
+
     try:
         reserva = criar_reserva_estoque(
             produto=produto,
             ponto_operacional=ponto,
+            ubicacao=ubicacao,
             quantidade=quantidade,
             nome_contato=nome,
             telefone_contato=telefone,
@@ -88,7 +104,7 @@ def api_criar_reserva(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_expirar_reservas(request):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
     total = expirar_reservas_vencidas(usuario=request.user, empresa=empresa)
@@ -98,7 +114,7 @@ def api_expirar_reservas(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_converter_reserva(request, codigo_reserva):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     require_sensitive_permission(request.user, "perm_estoque_converter_reserva")
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
@@ -113,7 +129,7 @@ def api_converter_reserva(request, codigo_reserva):
 
 @role_required(STOCK_MANAGE_ROLES)
 def api_cancelar_reserva(request, codigo_reserva):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     require_sensitive_permission(request.user, "perm_estoque_cancelar_reserva")
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo invalido."}, status=405)
@@ -131,13 +147,20 @@ def api_cancelar_reserva(request, codigo_reserva):
 def reservas_clientes(request):
     from ordens.models import LinhaTrabalho
 
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
     quick = (request.GET.get("quick") or "").strip()
+    ponto_id = (request.GET.get("ponto") or "").strip()
     page_number = request.GET.get("page")
     reservas = (
-        ReservaEstoque.objects.select_related("produto", "ponto_operacional", "ordem_servico", "ordem_servico__tecnico_responsavel")
+        ReservaEstoque.objects.select_related(
+            "produto",
+            "ponto_operacional",
+            "ubicacao",
+            "ordem_servico",
+            "ordem_servico__tecnico_responsavel",
+        )
         .filter(produto__empresa=empresa)
         .prefetch_related(
             Prefetch(
@@ -150,6 +173,8 @@ def reservas_clientes(request):
         reservas = reservas.filter(Q(codigo_reserva__icontains=q) | Q(nome_contato__icontains=q) | Q(telefone_contato__icontains=q) | Q(produto__nome__icontains=q))
     if status:
         reservas = reservas.filter(status=status)
+    if ponto_id.isdigit():
+        reservas = reservas.filter(ponto_operacional_id=int(ponto_id))
     hoje = timezone.localdate()
     resumo_qs = reservas
     resumo = {
@@ -158,17 +183,30 @@ def reservas_clientes(request):
         "vencidas": resumo_qs.filter(status="ativa", valido_ate__lt=hoje).count(),
         "sem_os": resumo_qs.filter(ordem_servico__isnull=True).count(),
         "com_os": resumo_qs.filter(ordem_servico__isnull=False).count(),
+        "expiram_curto": resumo_qs.filter(status="ativa", valido_ate__lte=hoje + timedelta(days=2), valido_ate__gte=hoje).count(),
+        "sem_estrutura": resumo_qs.filter(Q(ponto_operacional__isnull=True) | Q(ubicacao__isnull=True)).count(),
     }
     if quick == "ativas":
         reservas = reservas.filter(status="ativa")
     elif quick == "vencidas":
         reservas = reservas.filter(status="ativa", valido_ate__lt=hoje)
+    elif quick == "expiram":
+        reservas = reservas.filter(status="ativa", valido_ate__lte=hoje + timedelta(days=2), valido_ate__gte=hoje)
     elif quick == "sem_os":
         reservas = reservas.filter(ordem_servico__isnull=True)
     elif quick == "com_os":
         reservas = reservas.filter(ordem_servico__isnull=False)
+    elif quick == "sem_estrutura":
+        reservas = reservas.filter(Q(ponto_operacional__isnull=True) | Q(ubicacao__isnull=True))
+    reservas_por_ponto = list(
+        resumo_qs.filter(status="ativa")
+        .values("ponto_operacional__codigo")
+        .annotate(total=Count("id"))
+        .order_by("-total", "ponto_operacional__codigo")[:8]
+    )
     reservas = reservas.order_by("-criado_em", "-id")
     reservas_page = Paginator(reservas, 40).get_page(page_number)
+    pontos_operacionais = list(PontoOperacional.objects.filter(ativo=True).order_by("codigo"))
     return render(
         request,
         "estoque/reservas_clientes.html",
@@ -178,9 +216,14 @@ def reservas_clientes(request):
             "q": q,
             "status_filtro": status,
             "quick": quick,
+            "ponto_filtro": ponto_id,
             "resumo": resumo,
+            "reservas_por_ponto": reservas_por_ponto,
+            "pontos_operacionais": pontos_operacionais,
             "status_choices": ReservaEstoque.STATUS_CHOICES,
             "can_manage": has_role(request.user, STOCK_MANAGE_ROLES),
+            "hoje": hoje,
+            "limite_proximo": hoje + timedelta(days=2),
             "menu_app": "estoque",
             "menu_sub": "reservas_clientes",
         },
@@ -189,7 +232,7 @@ def reservas_clientes(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def associar_reserva_ordem(request, codigo_reserva):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     if request.method != "POST":
         return redirect("estoque:reservas_clientes")
     reserva = get_object_or_404(ReservaEstoque.objects.filter(produto__empresa=empresa), codigo_reserva=codigo_reserva)
@@ -210,7 +253,7 @@ def associar_reserva_ordem(request, codigo_reserva):
 
 @role_required(STOCK_MANAGE_ROLES)
 def expirar_reservas_web(request):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     if request.method == "POST":
         total = expirar_reservas_vencidas(usuario=request.user, empresa=empresa)
         messages.success(request, f"Reservas expiradas: {total}.")
@@ -219,7 +262,7 @@ def expirar_reservas_web(request):
 
 @role_required(STOCK_MANAGE_ROLES)
 def converter_reserva_web(request, codigo_reserva):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     require_sensitive_permission(request.user, "perm_estoque_converter_reserva")
     if request.method == "POST":
         reserva = get_object_or_404(ReservaEstoque.objects.filter(produto__empresa=empresa), codigo_reserva=codigo_reserva)
@@ -233,7 +276,7 @@ def converter_reserva_web(request, codigo_reserva):
 
 @role_required(STOCK_MANAGE_ROLES)
 def cancelar_reserva_web(request, codigo_reserva):
-    empresa = obter_empresa_ativa(request, strict=False)
+    empresa = obter_empresa_ativa(request, strict=True)
     require_sensitive_permission(request.user, "perm_estoque_cancelar_reserva")
     if request.method == "POST":
         reserva = get_object_or_404(ReservaEstoque.objects.filter(produto__empresa=empresa), codigo_reserva=codigo_reserva)
@@ -266,6 +309,7 @@ __all__ = [
     "integrar_reservas_no_fechamento",
     "integrar_reservas_na_reabertura",
 ]
+
 
 
 

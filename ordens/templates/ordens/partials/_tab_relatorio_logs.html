@@ -1,4 +1,4 @@
-<div class="tab-pane fade {% if active_tab == 'relatorio' %}show active{% endif %}" id="relatorio">
+﻿<div class="tab-pane fade {% if active_tab == 'relatorio' %}show active{% endif %}" id="relatorio">
     <div class="card-modern">
         <div class="card-modern-header">
             <i class="fas fa-file-alt mr-2"></i>Relatório Técnico
@@ -29,6 +29,33 @@
                 <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-save mr-2"></i> Salvar Relatório
                 </button>
             </form>
+
+            {% if ordem.status == "recusado" or ordem.status == "devolucao" or ordem.tipo_reparacao == "recusado_preco" or ordem.tipo_reparacao == "recusado_tempo" or ordem.tipo_reparacao == "nada" %}
+            <div class="alert alert-warning mt-3 mb-0 d-flex flex-column flex-md-row align-items-md-center justify-content-between">
+                <div class="mb-2 mb-md-0">
+                    <strong>Contato de devolução/recusa</strong><br>
+                    Use os atalhos abaixo para avisar o cliente sem alterar o status principal da OS.
+                </div>
+                <div class="d-flex flex-wrap">
+                    <form method="post" action="{% url 'ordens:notificar_cliente_ordem' ordem.id 'recusado' %}" class="mr-2 mb-2 mb-md-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="canal" value="whatsapp">
+                        <input type="hidden" name="next_tab" value="relatorio">
+                        <button type="submit" class="btn btn-outline-success btn-sm">
+                            <i class="fab fa-whatsapp mr-1"></i> Avisar por WhatsApp
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'ordens:notificar_cliente_ordem' ordem.id 'recusado' %}" class="mb-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="canal" value="email">
+                        <input type="hidden" name="next_tab" value="relatorio">
+                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-envelope mr-1"></i> Avisar por e-mail
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -69,3 +96,4 @@
     </div>
 </div>
 {% endif %}
+

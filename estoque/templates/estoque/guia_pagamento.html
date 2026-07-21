@@ -4,9 +4,32 @@
 
 {% block extra_css %}
 <style>
+  .guia-top-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .guia-top-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #f8fbfd 0%, #eef4f8 100%);
+    padding: 12px;
+  }
+  .guia-top-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .guia-top-value {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #183247;
+  }
   .guia-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
   }
   .guia-btn {
@@ -43,7 +66,25 @@
     padding: 6px 10px;
     border-radius: 999px;
   }
+  .guia-barcode-panel {
+    border: 1px dashed #d9e2ec;
+    border-radius: 12px;
+    background: #fff;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  .guia-barcode-panel svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .guia-barcode-copy {
+    margin-top: 8px;
+    font-size: .85rem;
+    color: #627487;
+  }
   @media (max-width: 991.98px) {
+    .guia-top-strip,
     .guia-actions,
     .guia-summary {
       grid-template-columns: 1fr;
@@ -55,7 +96,10 @@
 {% block content %}
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
-    <h5 class="mb-0">Guia de Pagamento {{ guia_codigo }}</h5>
+    <div>
+      <h5 class="mb-0">Etapa 3: Guia de Pagamento {{ guia_codigo }}</h5>
+      <small class="text-muted">Revise os itens da venda e siga para o caixa quando o recebimento ainda estiver pendente.</small>
+    </div>
     <div class="guia-actions">
       <button type="button" class="btn btn-outline-secondary guia-btn" onclick="window.print()">Imprimir guia</button>
       {% if resumo_guia.pode_ir_caixa %}
@@ -63,9 +107,26 @@
       {% else %}
       <button type="button" class="btn btn-light guia-btn" disabled>Guia sem pendencia</button>
       {% endif %}
+      <a href="{% url 'estoque:painel_venda_mostrador' %}" class="btn btn-outline-primary guia-btn">Painel PDV</a>
+      <a href="{% url 'estoque:pos_venda_balcao' %}?q={{ guia_codigo }}" class="btn btn-outline-dark guia-btn">Pos-venda</a>
     </div>
   </div>
   <div class="card-body">
+    <div class="guia-top-strip">
+      <div class="guia-top-card">
+        <div class="guia-top-label">Etapa atual</div>
+        <div class="guia-top-value">Guia consolidada</div>
+      </div>
+      <div class="guia-top-card">
+        <div class="guia-top-label">Proximo passo</div>
+        <div class="guia-top-value">{% if resumo_guia.pode_ir_caixa %}Seguir para o caixa{% else %}Guia ja quitada{% endif %}</div>
+      </div>
+      <div class="guia-top-card">
+        <div class="guia-top-label">Origem</div>
+        <div class="guia-top-value">Venda a mostrador</div>
+      </div>
+    </div>
+
     <div class="guia-summary">
       <div class="guia-summary-card">
         <div class="guia-summary-label">Guia</div>
@@ -106,6 +167,37 @@
       </div>
     </div>
 
+    <div class="guia-barcode-panel">
+      <div class="guia-summary-label">Código de barras da guia</div>
+      <div class="mt-2">{{ guia_barcode_svg|safe }}</div>
+      <div class="guia-barcode-copy">Use este código para localizar e receber rapidamente a guia <strong>{{ guia_codigo }}</strong> no caixa.</div>
+    </div>
+
+    {% if pagamento_guia %}
+    <div class="alert alert-light border mb-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+          <strong>Recebimento vinculado:</strong> talao {{ pagamento_guia.numero_talao|default:"-" }}<br>
+          <span class="text-muted">Forma principal: {{ pagamento_guia.metodo_display }} | Valor pago: R$ {{ pagamento_guia.valor|floatformat:2 }}</span>
+        </div>
+        {% if pagamento_guia.cliente_nome %}
+        <div class="text-md-right">
+          <strong>Comprador:</strong> {{ pagamento_guia.cliente_nome }}<br>
+          <span class="text-muted">{{ pagamento_guia.cliente_documento|default:"Sem documento" }} | {{ pagamento_guia.cliente_telefone|default:"Sem telefone" }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% if pagamento_guia.pagamento_misto %}
+      <div class="mt-2">
+        <strong>Composicao:</strong>
+        {% for linha in pagamento_guia.composicao_pagamento_legivel %}
+          <div class="text-muted">{{ linha }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <div class="table-responsive">
       <table class="table table-sm table-striped">
         <thead>
@@ -113,8 +205,8 @@
             <th>Produto</th>
             <th>Ponto</th>
             <th>Qtd</th>
-            <th>Tecnico</th>
             <th>Vendedor</th>
+            <th>Numero vendedor</th>
             <th>Valor Unit.</th>
             <th>Total</th>
             <th>Status</th>
@@ -126,7 +218,7 @@
             <td>{{ venda.produto.nome }}</td>
             <td>{{ venda.ponto_operacional.codigo }}</td>
             <td>{{ venda.quantidade }}</td>
-            <td>{{ venda.tecnico_nome }}</td>
+            <td>{{ venda.vendedor_nome }}</td>
             <td>{{ venda.funcionario_numero }}</td>
             <td>R$ {{ venda.valor_unitario }}</td>
             <td>R$ {{ venda.valor_total }}</td>

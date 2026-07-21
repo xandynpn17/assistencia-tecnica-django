@@ -25,23 +25,33 @@ from .common import (
     registrar_notificacao,
     registrar_pendente_cliente_envio_orcamento,
     registrar_pronto_contactado,
+    registrar_recusado_contactado,
     render_template_mensagem,
     request_ip,
 )
 
 
 def _mensagem_confirmacao_inicial(ordem, request):
+    config = ConfiguracaoSistema.get_configuracao()
     link_pdf = request.build_absolute_uri(reverse("ordens:imprimir_ordem_servico", kwargs={"pk": ordem.pk}))
     link_assinatura = request.build_absolute_uri(
         reverse("confirmar_os_publico", kwargs={"token": ordem.token_confirmacao})
     )
-    nome = ordem.cliente.nome or "Cliente"
-    return (
-        f"Ola {nome}, sua OS {ordem.numero_os} foi registrada com sucesso.\n\n"
-        f"PDF da ordem: {link_pdf}\n"
-        f"Confirmacao/assinatura digital: {link_assinatura}\n\n"
-        "Se nao conseguir assinar pelo link, podemos imprimir para assinatura presencial."
+    contexto = contexto_variaveis_mensagem(ordem, request=request)
+    contexto.update(
+        {
+            "link_ordem_pdf": link_pdf,
+            "link_confirmacao": link_assinatura,
+        }
     )
+    template = config.mensagem_abertura_whatsapp or (
+        "Olá, {cliente_nome}. Sua OS {numero_os} foi registrada com sucesso.\n\n"
+        "Equipamento: {equipamento_resumo}\n"
+        "PDF da ordem: {link_ordem_pdf}\n"
+        "Confirmação/assinatura digital: {link_confirmacao}\n\n"
+        "Se não conseguir assinar pelo link, podemos imprimir para assinatura presencial."
+    )
+    return render_template_mensagem(template, contexto)
 
 
 def _mensagem_padrao_notificacao(ordem, tipo, canal="sistema", request=None):
@@ -65,8 +75,27 @@ def _mensagem_padrao_notificacao(ordem, tipo, canal="sistema", request=None):
             template = config.mensagem_pronto_whatsapp or DEFAULT_MENSAGEM_PRONTO_WHATSAPP
             if template == LEGACY_MENSAGEM_PRONTO_WHATSAPP:
                 template = DEFAULT_MENSAGEM_PRONTO_WHATSAPP
+    elif tipo == "recusado":
+        if canal == "email":
+            template = (
+                "Olá {cliente_nome},\n\n"
+                "Finalizamos a avaliação da OS {numero_os} sem reparo executado.\n"
+                "Status atual: {status_os}\n"
+                "Tipo de reparação: {tipo_reparacao}\n"
+                "Código de acompanhamento: {codigo_portal}.\n\n"
+                "Se desejar, responda este e-mail para alinharmos a devolução ou os próximos passos."
+            )
+        else:
+            template = (
+                "Olá, {cliente_nome}.\n"
+                "A OS {numero_os} foi finalizada sem reparo executado.\n"
+                "Status: {status_os}\n"
+                "Tipo de reparação: {tipo_reparacao}\n"
+                "Código de acompanhamento: {codigo_portal}.\n"
+                "Se quiser, responda esta mensagem para alinharmos a devolução."
+            )
     else:
-        template = "Atualizacao da OS {numero_os}. Codigo de acompanhamento: {codigo_portal}."
+        template = "Atualização da OS {numero_os}. Código de acompanhamento: {codigo_portal}."
     return render_template_mensagem(template, base)
 
 
@@ -80,11 +109,13 @@ def notificar_cliente_ordem(request, pk, tipo):
     assunto = (request.POST.get("assunto") or "").strip()
     if canal == "email" and not assunto:
         if tipo == "orcamento":
-            assunto = f"Orçamento da OS {ordem.numero_os}"
+            assunto = f"Orcamento da OS {ordem.numero_os}"
         elif tipo == "pronto":
             assunto = f"Equipamento pronto - OS {ordem.numero_os}"
+        elif tipo == "recusado":
+            assunto = f"Atualizacao da OS {ordem.numero_os} sem reparo"
         else:
-            assunto = f"Atualização da OS {ordem.numero_os}"
+            assunto = f"Atualizacao da OS {ordem.numero_os}"
     mensagem = request.POST.get("mensagem") or _mensagem_padrao_notificacao(ordem, tipo, canal=canal, request=request)
     mensagem = render_template_mensagem(mensagem, contexto_variaveis_mensagem(ordem, request=request))
     notif = registrar_notificacao(
@@ -100,7 +131,7 @@ def notificar_cliente_ordem(request, pk, tipo):
         log_os(
             ordem,
             "confirmacao" if tipo in {"orcamento", "pronto"} else "edicao_critica",
-            f"Notificacao enviada ao cliente via {canal}.",
+            f"Notifica??o enviada ao cliente via {canal}.",
             usuario=request.user,
             dados_extras={"tipo": tipo, "canal": canal, "notificacao_id": notif.id},
         )
@@ -108,12 +139,14 @@ def notificar_cliente_ordem(request, pk, tipo):
             registrar_pendente_cliente_envio_orcamento(ordem, request.user, canal)
         if tipo == "pronto" and canal in {"email", "whatsapp"}:
             registrar_pronto_contactado(ordem, request.user, canal)
+        if tipo == "recusado" and canal in {"email", "whatsapp"}:
+            registrar_recusado_contactado(ordem, request.user, canal)
         if resultado.get("url"):
             messages.success(request, "O WhatsApp foi aberto em nova aba, mantendo a sessao no sistema.")
             wa = quote(resultado.get("url", ""), safe="")
             wa_app = quote(resultado.get("app_url", ""), safe="")
             return redirect(f"{ordem.get_absolute_url()}?tab={next_tab}&wa={wa}&wa_app={wa_app}")
-        messages.success(request, "Notificacao enviada com sucesso.")
+        messages.success(request, "Notifica??o enviada com sucesso.")
     else:
         messages.error(request, f"Falha ao enviar notificacao: {notif.erro or 'erro desconhecido'}")
     return redirect(f"{ordem.get_absolute_url()}?tab={next_tab}")
@@ -272,3 +305,6 @@ __all__ = [
     "portal_cliente",
     "reenviar_confirmacao_whatsapp",
 ]
+
+
+

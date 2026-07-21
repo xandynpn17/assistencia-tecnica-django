@@ -1,4 +1,4 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 
 {% block title %}Marcas e Fornecedores{% endblock %}
 
@@ -12,25 +12,67 @@
 {% endblock %}
 
 {% block content %}
+{% include 'configuracoes/partials/_catalogo_atendimento_tabs.html' %}
 <div class="card-modern">
-  <div class="card-modern-header">Cadastro e Consulta de Marcas / Fornecedores</div>
+  <div class="card-modern-header">Central de marcas, fornecedores e parceiros</div>
   <div class="card-modern-body">
+    <div class="alert alert-light border mb-4">
+      <strong>Use esta central para:</strong> cadastrar fornecedores, manter marcas com regras de garantia, consultar procedimentos por marca e organizar parceiros externos de expedicao.
+    </div>
+    <div class="row mb-3">
+      <div class="col-md-6 col-xl-3 mb-3">
+        <div class="border rounded p-3 h-100 bg-light">
+          <small class="text-uppercase text-muted d-block mb-2">Fornecedores</small>
+          <div class="h4 mb-1">{{ resumo_catalogo.fornecedores_total }}</div>
+          <div class="small text-muted">{{ resumo_catalogo.fornecedores_ativos }} ativos</div>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3 mb-3">
+        <div class="border rounded p-3 h-100 bg-light">
+          <small class="text-uppercase text-muted d-block mb-2">Marcas</small>
+          <div class="h4 mb-1">{{ resumo_catalogo.marcas_total }}</div>
+          <div class="small text-muted">{{ resumo_catalogo.marcas_com_regras }} com regras ativas</div>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3 mb-3">
+        <div class="border rounded p-3 h-100 bg-light">
+          <small class="text-uppercase text-muted d-block mb-2">Parceiros externos</small>
+          <div class="h4 mb-1">{{ resumo_catalogo.parceiros_total }}</div>
+          <div class="small text-muted">{{ resumo_catalogo.parceiros_ativos }} ativos</div>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3 mb-3">
+        <div class="border rounded p-3 h-100 bg-light">
+          <small class="text-uppercase text-muted d-block mb-2">Regras de garantia</small>
+          <div class="h4 mb-1">{{ resumo_catalogo.regras_total }}</div>
+          <div class="small text-muted">{{ resumo_catalogo.regras_ativas }} ativas</div>
+        </div>
+      </div>
+    </div>
+    <div class="alert alert-info mb-4">
+      <strong>Fluxo recomendado:</strong> cadastre primeiro o fornecedor, depois a marca e por fim as regras de garantia e mao de obra. Parceiros externos ficam separados para expedicoes.
+    </div>
     <ul class="nav nav-tabs tabs-clean mb-3" id="tabs-cad" role="tablist">
-      <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tab-fornecedor-cad">Cadastrar Fornecedor</a></li>
-      <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fornecedor-cons">Consultar Fornecedores</a></li>
-      <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-marca-cad">Cadastrar Marca</a></li>
-      <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-marca-cons">Consultar Marcas/Regras</a></li>
-      <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-parceiro-cad">Cadastrar Parceiro</a></li>
-      <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-parceiro-cons">Consultar Parceiros</a></li>
+      <li class="nav-item"><a class="nav-link {% if aba_ativa == 'fornecedor-cad' %}active{% endif %}" data-toggle="tab" href="#tab-fornecedor-cad">Cadastrar Fornecedor</a></li>
+      <li class="nav-item"><a class="nav-link {% if aba_ativa == 'fornecedor-cons' %}active{% endif %}" data-toggle="tab" href="#tab-fornecedor-cons">Consultar Fornecedores</a></li>
+      <li class="nav-item"><a class="nav-link {% if aba_ativa == 'marca-cad' %}active{% endif %}" data-toggle="tab" href="#tab-marca-cad">Cadastrar Marca</a></li>
+      <li class="nav-item"><a class="nav-link {% if aba_ativa == 'marca-cons' %}active{% endif %}" data-toggle="tab" href="#tab-marca-cons">Consultar Marcas/Regras</a></li>
+      <li class="nav-item"><a class="nav-link {% if aba_ativa == 'parceiro-cad' %}active{% endif %}" data-toggle="tab" href="#tab-parceiro-cad">Cadastrar Parceiro</a></li>
+      <li class="nav-item"><a class="nav-link {% if aba_ativa == 'parceiro-cons' %}active{% endif %}" data-toggle="tab" href="#tab-parceiro-cons">Consultar Parceiros</a></li>
     </ul>
 
     <div class="tab-content">
-      <div class="tab-pane fade show active" id="tab-fornecedor-cad">
+      <div class="tab-pane fade {% if aba_ativa == 'fornecedor-cad' %}show active{% endif %}" id="tab-fornecedor-cad">
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <input type="hidden" name="form_type" value="{% if edit_fornecedor_id %}fornecedor_edit{% else %}fornecedor{% endif %}">
           {% if edit_fornecedor_id %}
           <input type="hidden" name="fornecedor_id" value="{{ edit_fornecedor_id }}">
+          {% endif %}
+          {% if fornecedor_form.errors %}
+          <div class="alert alert-danger">
+            Revise os campos do fornecedor antes de salvar.
+          </div>
           {% endif %}
           <div class="row">
             <div class="col-md-4">{{ fornecedor_form.nome.label_tag }}{{ fornecedor_form.nome }}</div>
@@ -39,15 +81,35 @@
             <div class="col-md-4">{{ fornecedor_form.inscricao_estadual.label_tag }}{{ fornecedor_form.inscricao_estadual }}</div>
             <div class="col-md-4">{{ fornecedor_form.contato.label_tag }}{{ fornecedor_form.contato }}</div>
             <div class="col-md-4">{{ fornecedor_form.telefone.label_tag }}{{ fornecedor_form.telefone }}</div>
-            <div class="col-md-8">{{ fornecedor_form.endereco.label_tag }}{{ fornecedor_form.endereco }}</div>
-            <div class="col-md-4">{{ fornecedor_form.cep.label_tag }}{{ fornecedor_form.cep }}</div>
+            <div class="col-md-5">
+              {{ fornecedor_form.endereco.label_tag }}{{ fornecedor_form.endereco }}
+              {% if fornecedor_form.endereco.help_text %}<small class="text-muted d-block">{{ fornecedor_form.endereco.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-3">
+              {{ fornecedor_form.municipio.label_tag }}{{ fornecedor_form.municipio }}
+            </div>
+            <div class="col-md-2">
+              {{ fornecedor_form.uf.label_tag }}{{ fornecedor_form.uf }}
+              {% if fornecedor_form.uf.help_text %}<small class="text-muted d-block">{{ fornecedor_form.uf.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-2">
+              {{ fornecedor_form.cep.label_tag }}{{ fornecedor_form.cep }}
+              {% if fornecedor_form.cep.help_text %}<small class="text-muted d-block">{{ fornecedor_form.cep.help_text }}</small>{% endif %}
+            </div>
             <div class="col-md-4">{{ fornecedor_form.email.label_tag }}{{ fornecedor_form.email }}</div>
+            <div class="col-md-4">{{ fornecedor_form.email_cobranca.label_tag }}{{ fornecedor_form.email_cobranca }}</div>
+            <div class="col-md-4">
+              {{ fornecedor_form.portal_garantia_url.label_tag }}{{ fornecedor_form.portal_garantia_url }}
+              {% if fornecedor_form.portal_garantia_url.help_text %}<small class="text-muted d-block">{{ fornecedor_form.portal_garantia_url.help_text }}</small>{% endif %}
+            </div>
             <div class="col-md-4">{{ fornecedor_form.modalidade_pagamento.label_tag }}{{ fornecedor_form.modalidade_pagamento }}</div>
             <div class="col-md-4">{{ fornecedor_form.prazo_pagamento_dias.label_tag }}{{ fornecedor_form.prazo_pagamento_dias }}</div>
             <div class="col-md-6">{{ fornecedor_form.documento_anexo.label_tag }}{{ fornecedor_form.documento_anexo }}</div>
             <div class="col-md-6">{{ fornecedor_form.comprovante_pagamento_anexo.label_tag }}{{ fornecedor_form.comprovante_pagamento_anexo }}</div>
             <div class="col-md-6">{{ fornecedor_form.detalhes.label_tag }}{{ fornecedor_form.detalhes }}</div>
             <div class="col-md-6">{{ fornecedor_form.contrato.label_tag }}{{ fornecedor_form.contrato }}</div>
+            <div class="col-md-6">{{ fornecedor_form.documentos_exigidos.label_tag }}{{ fornecedor_form.documentos_exigidos }}</div>
+            <div class="col-md-6">{{ fornecedor_form.procedimento_cobranca.label_tag }}{{ fornecedor_form.procedimento_cobranca }}</div>
             <div class="col-md-2 mt-2">{{ fornecedor_form.ativo.label_tag }}<br>{{ fornecedor_form.ativo }}</div>
           </div>
           <button class="btn btn-primary mt-3" type="submit">{% if edit_fornecedor_id %}Atualizar fornecedor{% else %}Salvar fornecedor{% endif %}</button>
@@ -57,14 +119,14 @@
         </form>
       </div>
 
-      <div class="tab-pane fade" id="tab-fornecedor-cons">
+      <div class="tab-pane fade {% if aba_ativa == 'fornecedor-cons' %}show active{% endif %}" id="tab-fornecedor-cons">
         <form method="get" class="form-inline mb-2">
           <input class="form-control mr-2" type="text" name="qf" value="{{ busca_fornecedor }}" placeholder="Buscar fornecedor">
           <button class="btn btn-outline-primary" type="submit">Buscar</button>
         </form>
         <div class="table-responsive">
           <table class="table table-sm table-bordered">
-            <thead><tr><th>Nome</th><th>CNPJ</th><th>IE</th><th>Contato</th><th>Telefone</th><th>Endereço</th><th>Modalidade</th><th>Prazo</th><th>Documento</th><th>Comprovante</th><th>Ativo</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Nome</th><th>CNPJ</th><th>IE</th><th>Contato</th><th>Telefone</th><th>Municipio/UF</th><th>Endereco</th><th>Financeiro</th><th>Modalidade</th><th>Prazo</th><th>Documento</th><th>Comprovante</th><th>Ativo</th><th>Acoes</th></tr></thead>
             <tbody>
               {% for f in fornecedores %}
               <tr>
@@ -73,11 +135,18 @@
                 <td>{{ f.inscricao_estadual|default:"-" }}</td>
                 <td>{{ f.contato|default:"-" }}</td>
                 <td>{{ f.telefone|default:"-" }}</td>
+                <td>{% if f.municipio or f.uf %}{{ f.municipio|default:"-" }}{% if f.uf %} / {{ f.uf }}{% endif %}{% else %}-{% endif %}</td>
                 <td>
-                  {% if f.endereco or f.cep %}
-                  {{ f.endereco|default:"-" }}{% if f.cep %} - CEP {{ f.cep }}{% endif %}
+                  {% if f.endereco_resumido %}
+                  {{ f.endereco_resumido }}
                   {% else %}
                   -
+                  {% endif %}
+                </td>
+                <td>
+                  <div>{{ f.email_cobranca|default:f.email|default:"-" }}</div>
+                  {% if f.portal_garantia_url %}
+                  <small><a href="{{ f.portal_garantia_url }}" target="_blank" rel="noopener">Abrir portal</a></small>
                   {% endif %}
                 </td>
                 <td>{{ f.get_modalidade_pagamento_display }}</td>
@@ -95,8 +164,24 @@
                   </form>
                 </td>
               </tr>
+              {% if f.documentos_exigidos or f.procedimento_cobranca %}
+              <tr class="table-light">
+                <td colspan="14">
+                  <div class="row small">
+                    <div class="col-md-5">
+                      <strong>Documentos exigidos:</strong>
+                      <div class="text-muted mt-1">{{ f.documentos_exigidos|default:"Nenhum documento exigido cadastrado."|linebreaksbr }}</div>
+                    </div>
+                    <div class="col-md-7">
+                      <strong>Procedimento de cobranca:</strong>
+                      <div class="text-muted mt-1">{{ f.procedimento_cobranca|default:"Nenhum procedimento de cobranca cadastrado."|linebreaksbr }}</div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              {% endif %}
               {% empty %}
-              <tr><td colspan="12" class="text-center text-muted">Sem fornecedores.</td></tr>
+              <tr><td colspan="14" class="text-center text-muted">Sem fornecedores.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -116,7 +201,10 @@
         {% endif %}
       </div>
 
-      <div class="tab-pane fade" id="tab-marca-cad">
+      <div class="tab-pane fade {% if aba_ativa == 'marca-cad' %}show active{% endif %}" id="tab-marca-cad">
+        <div class="alert alert-light border mb-3">
+          <strong>Como decidir:</strong> se a marca apenas identifica o equipamento, deixe o fornecedor em branco. Se ela tambem fornece pecas ou atende garantia, vincule um fornecedor existente ou marque a opcao para criar um fornecedor com o mesmo nome.
+        </div>
         <div class="row mb-3">
           <div class="col-md-12">
             <form method="post">
@@ -127,8 +215,20 @@
               {% endif %}
               <div class="row">
                 <div class="col-md-4">{{ marca_form.nome.label_tag }}{{ marca_form.nome }}</div>
-                <div class="col-md-4">{{ marca_form.fornecedor.label_tag }}{{ marca_form.fornecedor }}</div>
-                <div class="col-md-8">{{ marca_form.procedimentos.label_tag }}{{ marca_form.procedimentos }}</div>
+                <div class="col-md-4">
+                  {{ marca_form.fornecedor.label_tag }}{{ marca_form.fornecedor }}
+                  {% if marca_form.fornecedor.help_text %}<small class="text-muted d-block">{{ marca_form.fornecedor.help_text }}</small>{% endif %}
+                </div>
+                <div class="col-md-8">
+                  {{ marca_form.procedimentos.label_tag }}{{ marca_form.procedimentos }}
+                  {% if marca_form.procedimentos.help_text %}<small class="text-muted d-block">{{ marca_form.procedimentos.help_text }}</small>{% endif %}
+                </div>
+                <div class="col-md-4 mt-2">
+                  <div class="form-check">
+                    {{ marca_form.fornecedor_igual_marca }} {{ marca_form.fornecedor_igual_marca.label_tag }}
+                  </div>
+                  {% if marca_form.fornecedor_igual_marca.help_text %}<small class="text-muted d-block">{{ marca_form.fornecedor_igual_marca.help_text }}</small>{% endif %}
+                </div>
                 <div class="col-md-2">{{ marca_form.parceira_garantia.label_tag }}<br>{{ marca_form.parceira_garantia }}</div>
                 <div class="col-md-2">{{ marca_form.ativo.label_tag }}<br>{{ marca_form.ativo }}</div>
               </div>
@@ -142,6 +242,9 @@
 
         {% if edit_marca_id and marca_em_edicao %}
         <hr>
+        <div class="alert alert-light border mb-3">
+          <strong>Leitura desta tabela:</strong> "Valor pago" e o que a marca paga para sua empresa. "Repasse tecnico" e a base interna que pode ser usada no calculo da mao de obra/comissao do tecnico.
+        </div>
         <h6 class="mb-3">Itens de mao de obra da marca: {{ marca_em_edicao.nome }}</h6>
         <form method="post" class="mb-3">
           {% csrf_token %}
@@ -214,21 +317,81 @@
         {% endif %}
       </div>
 
-      <div class="tab-pane fade" id="tab-marca-cons">
+      <div class="tab-pane fade {% if aba_ativa == 'marca-cons' %}show active{% endif %}" id="tab-marca-cons">
+        <div class="alert alert-light border mb-3">
+          <strong>Consulta operacional:</strong> use esta aba para conferir rapidamente quem atende a garantia, como a marca trabalha e quais regras de mao de obra estao vigentes por tipo de equipamento.
+        </div>
         <form method="get" class="form-inline mb-2">
           <input class="form-control mr-2" type="text" name="qm" value="{{ busca_marca }}" placeholder="Buscar marca">
           <button class="btn btn-outline-primary" type="submit">Buscar</button>
         </form>
         <div class="table-responsive mb-3">
           <table class="table table-sm table-bordered">
-            <thead><tr><th>Marca</th><th>Fornecedor</th><th>Parceira Garantia</th><th>Procedimentos</th><th>Ativa</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Marca</th><th>Relacao operacional</th><th>Garantia</th><th>Consulta de procedimento</th><th>Ativa</th><th>Acoes</th></tr></thead>
             <tbody>
               {% for m in marcas %}
               <tr>
-                <td>{{ m.nome }}</td>
-                <td>{{ m.fornecedor.nome|default:"-" }}</td>
-                <td>{{ m.parceira_garantia|yesno:"Sim,Não" }}</td>
-                <td>{{ m.procedimentos|default:"-"|truncatechars:120 }}</td>
+                <td>
+                  <div class="font-weight-bold">{{ m.nome }}</div>
+                  <small class="text-muted">
+                    {% if m.fornecedor %}
+                      Fornecedor vinculado
+                    {% else %}
+                      Marca independente
+                    {% endif %}
+                  </small>
+                </td>
+                <td>
+                  {% if m.fornecedor %}
+                    <span class="badge badge-primary">{{ m.fornecedor.nome }}</span>
+                  {% else %}
+                    <span class="badge badge-light">Sem fornecedor vinculado</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if m.parceira_garantia %}
+                    <span class="badge badge-success">Garantia ativa</span>
+                  {% else %}
+                    <span class="badge badge-secondary">Sem garantia contratada</span>
+                  {% endif %}
+                </td>
+                <td style="min-width: 340px;">
+                  <details>
+                    <summary class="text-primary" style="cursor:pointer;">Ver procedimento da marca</summary>
+                    <div class="small mt-2">
+                      <div><strong>Marca:</strong> {{ m.nome }}</div>
+                      <div><strong>Fornecedor:</strong> {% if m.fornecedor %}{{ m.fornecedor.nome }}{% else %}Sem fornecedor vinculado{% endif %}</div>
+                      <div><strong>Fluxo de garantia:</strong> {% if m.parceira_garantia %}Garantia ativa / homologada{% else %}Sem garantia contratada{% endif %}</div>
+                      {% if m.fornecedor %}
+                      <div><strong>Pagamento:</strong> {{ m.fornecedor.get_modalidade_pagamento_display }} / {{ m.fornecedor.prazo_pagamento_dias }} dias</div>
+                      <div><strong>Municipio / UF:</strong> {% if m.fornecedor.municipio or m.fornecedor.uf %}{{ m.fornecedor.municipio|default:"-" }}{% if m.fornecedor.uf %} / {{ m.fornecedor.uf }}{% endif %}{% else %}-{% endif %}</div>
+                      <div><strong>Contato base:</strong> {{ m.fornecedor.contato|default:m.fornecedor.telefone|default:"Nao informado" }}</div>
+                      <div><strong>Email financeiro:</strong> {{ m.fornecedor.email_cobranca|default:m.fornecedor.email|default:"Nao informado" }}</div>
+                      <div><strong>Documentos exigidos:</strong> {{ m.fornecedor.documentos_exigidos|default:"Nao informado" }}</div>
+                      <div><strong>Procedimento de cobranca:</strong> {{ m.fornecedor.procedimento_cobranca|default:"Nao informado" }}</div>
+                      {% if m.fornecedor.portal_garantia_url %}
+                      <div><strong>Portal:</strong> <a href="{{ m.fornecedor.portal_garantia_url }}" target="_blank" rel="noopener">{{ m.fornecedor.portal_garantia_url }}</a></div>
+                      {% endif %}
+                      {% endif %}
+                    </div>
+                    <div class="small mt-2">
+                      <strong>Procedimento operacional</strong>
+                      <div class="text-muted mt-1">{{ m.procedimentos|default:"Nenhum procedimento cadastrado."|linebreaksbr }}</div>
+                    </div>
+                    <div class="small mt-2">
+                      <strong>Regras vigentes de mao de obra</strong>
+                      <ul class="mb-0 mt-1 pl-3">
+                        {% for r in m.regras_garantia.all %}
+                          {% if r.ativo %}
+                          <li>{{ r.tipo_produto_label }}: marca paga R$ {{ r.valor_mao_obra|floatformat:2 }} / repasse tecnico R$ {{ r.valor_mao_obra_tecnico|floatformat:2 }} / {{ r.get_modalidade_pagamento_display }} / {{ r.prazo_pagamento_dias }} dias</li>
+                          {% endif %}
+                        {% empty %}
+                          <li>Sem regras cadastradas.</li>
+                        {% endfor %}
+                      </ul>
+                    </div>
+                  </details>
+                </td>
                 <td>{{ m.ativo|yesno:"Sim,Não" }}</td>
                 <td class="text-nowrap">
                   <a class="btn btn-sm btn-outline-primary" href="?edit_marca={{ m.id }}#tab-marca-cad">Editar</a>
@@ -246,6 +409,9 @@
             </tbody>
           </table>
         </div>
+        <div class="small text-muted mb-3">
+          Resumo: {{ resumo_catalogo.marcas_com_fornecedor }} marca(s) com fornecedor vinculado e {{ resumo_catalogo.marcas_sem_fornecedor }} independente(s).
+        </div>
         {% if marcas.has_other_pages %}
         <nav>
           <ul class="pagination pagination-sm">
@@ -262,7 +428,7 @@
 
         <div class="table-responsive">
           <table class="table table-sm table-bordered">
-            <thead><tr><th>Marca</th><th>Equipamento</th><th>Valor pago</th><th>Mão de obra técnico</th><th>Modalidade</th><th>Prazo</th><th>Vigência</th></tr></thead>
+            <thead><tr><th>Marca</th><th>Equipamento</th><th>Valor pago</th><th>Mao de obra tecnico</th><th>Modalidade</th><th>Prazo</th><th>Vigencia</th></tr></thead>
             <tbody>
               {% for r in regras %}
               <tr>
@@ -272,7 +438,7 @@
                 <td>R$ {{ r.valor_mao_obra_tecnico|floatformat:2 }}</td>
                 <td>{{ r.get_modalidade_pagamento_display }}</td>
                 <td>{{ r.prazo_pagamento_dias }} dias</td>
-                <td>{{ r.inicio_vigencia|date:"d/m/Y" }}{% if r.fim_vigencia %} até {{ r.fim_vigencia|date:"d/m/Y" }}{% else %} (sem fim){% endif %}</td>
+                <td>{{ r.inicio_vigencia|date:"d/m/Y" }}{% if r.fim_vigencia %} ate {{ r.fim_vigencia|date:"d/m/Y" }}{% else %} (sem fim){% endif %}</td>
               </tr>
               {% empty %}
               <tr><td colspan="7" class="text-center text-muted">Sem regras.</td></tr>
@@ -282,7 +448,7 @@
         </div>
       </div>
 
-      <div class="tab-pane fade" id="tab-parceiro-cad">
+      <div class="tab-pane fade {% if aba_ativa == 'parceiro-cad' %}show active{% endif %}" id="tab-parceiro-cad">
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="form_type" value="{% if edit_parceiro_id %}parceiro_edit{% else %}parceiro{% endif %}">
@@ -304,7 +470,7 @@
         </form>
       </div>
 
-      <div class="tab-pane fade" id="tab-parceiro-cons">
+      <div class="tab-pane fade {% if aba_ativa == 'parceiro-cons' %}show active{% endif %}" id="tab-parceiro-cons">
         <form method="get" class="form-inline mb-2">
           <input class="form-control mr-2" type="text" name="qp" value="{{ busca_parceiro }}" placeholder="Buscar parceiro">
           <button class="btn btn-outline-primary" type="submit">Buscar</button>
@@ -371,12 +537,16 @@ function maskDigits(value, max) {
   return max ? digits.slice(0, max) : digits;
 }
 
+function maskAlphaCnpj(value) {
+  return (value || "").toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 14);
+}
+
 function maskCnpj(value) {
-  let v = maskDigits(value, 14);
-  v = v.replace(/^(\d{2})(\d)/, "$1.$2");
-  v = v.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3");
-  v = v.replace(/\.(\d{3})(\d)/, ".$1/$2");
-  v = v.replace(/(\d{4})(\d)/, "$1-$2");
+  let v = maskAlphaCnpj(value);
+  v = v.replace(/^([0-9A-Z]{2})([0-9A-Z])/, "$1.$2");
+  v = v.replace(/^([0-9A-Z]{2})\.([0-9A-Z]{3})([0-9A-Z])/, "$1.$2.$3");
+  v = v.replace(/\.([0-9A-Z]{3})([0-9A-Z])/, ".$1/$2");
+  v = v.replace(/([0-9A-Z]{4})(\d)/, "$1-$2");
   return v;
 }
 
@@ -406,4 +576,6 @@ document.addEventListener("input", function (event) {
 });
 </script>
 {% endblock %}
+
+
 

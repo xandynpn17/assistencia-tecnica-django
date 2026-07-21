@@ -27,9 +27,21 @@ class Empresa(models.Model):
     ]
 
     nome = models.CharField(max_length=200)
+    nome_fantasia = models.CharField(max_length=200, blank=True)
+    razao_social = models.CharField(max_length=220, blank=True)
     cnpj = models.CharField(max_length=18, blank=True)
+    inscricao_estadual = models.CharField(max_length=30, blank=True)
+    inscricao_municipal = models.CharField(max_length=30, blank=True)
     endereco = models.TextField(blank=True)
+    cep = models.CharField(max_length=9, blank=True)
+    logradouro = models.CharField(max_length=180, blank=True)
+    numero = models.CharField(max_length=20, blank=True)
+    complemento = models.CharField(max_length=120, blank=True)
+    bairro = models.CharField(max_length=120, blank=True)
+    cidade = models.CharField(max_length=120, blank=True)
+    estado = models.CharField(max_length=2, blank=True)
     telefone = models.CharField(max_length=20, blank=True)
+    celular_whatsapp = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     logo = models.ImageField(upload_to="logos/", blank=True, null=True)
     logo_pdf = models.ImageField(upload_to="logos/pdf/", blank=True, null=True)
@@ -57,6 +69,21 @@ class Empresa(models.Model):
 
     def __str__(self):
         return self.nome
+
+    def montar_endereco_compacto(self):
+        primeira_linha = ", ".join(parte for parte in [self.logradouro, self.numero] if parte)
+        if self.complemento:
+            primeira_linha = ", ".join(parte for parte in [primeira_linha, self.complemento] if parte)
+        segunda_linha = " - ".join(
+            parte
+            for parte in [
+                ", ".join(parte for parte in [self.bairro, self.cidade] if parte),
+                self.estado,
+                self.cep,
+            ]
+            if parte
+        )
+        return "\n".join(parte for parte in [primeira_linha, segunda_linha] if parte).strip()
 
 
 class TipoEquipamentoConfig(models.Model):
@@ -150,9 +177,15 @@ class FornecedorGarantia(models.Model):
     telefone = models.CharField(max_length=30, blank=True)
     endereco = models.CharField(max_length=220, blank=True)
     cep = models.CharField(max_length=9, blank=True)
+    municipio = models.CharField(max_length=120, blank=True)
+    uf = models.CharField(max_length=2, blank=True)
     email = models.EmailField(blank=True)
+    email_cobranca = models.EmailField(blank=True)
     detalhes = models.TextField(blank=True)
     contrato = models.TextField(blank=True)
+    portal_garantia_url = models.URLField(blank=True)
+    documentos_exigidos = models.TextField(blank=True)
+    procedimento_cobranca = models.TextField(blank=True)
     modalidade_pagamento = models.CharField(
         max_length=40,
         choices=MODALIDADE_PAGAMENTO_CHOICES,
@@ -168,6 +201,14 @@ class FornecedorGarantia(models.Model):
 
     def __str__(self):
         return self.nome
+
+    @property
+    def endereco_resumido(self):
+        partes = [parte for parte in [self.endereco, self.municipio, self.uf] if parte]
+        resumo = " - ".join(partes)
+        if self.cep:
+            return f"{resumo} - CEP {self.cep}" if resumo else f"CEP {self.cep}"
+        return resumo
 
 
 class ParceiroExpedicao(models.Model):
@@ -341,6 +382,7 @@ class User(AbstractUser):
     percentual_comissao_servico = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     percentual_comissao_peca = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     percentual_comissao_vendas = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    atua_como_tecnico = models.BooleanField(default=False)
     acesso_ordens_extra = models.BooleanField(default=False)
     acesso_estoque_extra = models.BooleanField(default=False)
     acesso_caixa_operacional_extra = models.BooleanField(default=False)
@@ -379,6 +421,7 @@ class User(AbstractUser):
     perm_estoque_inventario_finalizar = models.BooleanField(default=False)
     perm_estoque_converter_reserva = models.BooleanField(default=False)
     perm_estoque_cancelar_reserva = models.BooleanField(default=False)
+    perm_venda_mostrador_trocar_vendedor = models.BooleanField(default=False)
     numero_vendedor = models.CharField(
         max_length=10,
         blank=True,
@@ -554,6 +597,15 @@ class ConfiguracaoOrdemServico(models.Model):
         verbose_name = "Configuração da Ordem de Serviço"
         verbose_name_plural = "Configuração da Ordem de Serviço"
 
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_configuracao(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
 
 class SequenciaOS(models.Model):
     ultimo = models.PositiveIntegerField(default=0)
@@ -575,6 +627,18 @@ class SequenciaOS(models.Model):
 # ============================
 
 class ConfiguracaoSistema(models.Model):
+    COMISSAO_CRITERIO_OS_PRONTO = "pronto_contactado"
+    COMISSAO_CRITERIO_OS_ENTREGUE = "entregue"
+    COMISSAO_CRITERIO_OS_CHOICES = [
+        (COMISSAO_CRITERIO_OS_PRONTO, "OS pronta/contactada"),
+        (COMISSAO_CRITERIO_OS_ENTREGUE, "OS entregue/concluida"),
+    ]
+    ESTOQUE_METODO_CUSTO_PMP = "pmp"
+    ESTOQUE_METODO_CUSTO_PEPS = "peps"
+    ESTOQUE_METODO_CUSTO_CHOICES = [
+        (ESTOQUE_METODO_CUSTO_PMP, "PMP (custo medio ponderado)"),
+        (ESTOQUE_METODO_CUSTO_PEPS, "PEPS"),
+    ]
     LAYOUT_OS_IMPRESSAO_CHOICES = [
         ("compacto", "Compacto"),
         ("padrao", "Padrão"),
@@ -716,6 +780,18 @@ class ConfiguracaoSistema(models.Model):
         verbose_name="Codigo do ponto de destino da reposicao",
         help_text="Normalmente a loja/balcao tecnico.",
     )
+    estoque_venda_mostrador_codigos = models.CharField(
+        max_length=80,
+        default="PO2,PO3",
+        verbose_name="Pontos habilitados para venda a mostrador",
+        help_text="Separe os codigos por virgula. Ex.: PO2,PO3",
+    )
+    estoque_metodo_custo = models.CharField(
+        max_length=10,
+        choices=ESTOQUE_METODO_CUSTO_CHOICES,
+        default=ESTOQUE_METODO_CUSTO_PMP,
+        verbose_name="Metodo de custo do estoque",
+    )
     inventario_ciclico_dias = models.PositiveIntegerField(
         default=30,
         verbose_name="Periodicidade do inventário cíclico (dias)",
@@ -737,6 +813,20 @@ class ConfiguracaoSistema(models.Model):
         default=True,
         verbose_name="Usar confirmação/assinatura digital na OS",
     )
+    enviar_whatsapp_abertura_os = models.BooleanField(
+        default=True,
+        verbose_name="Enviar WhatsApp automático na abertura da OS",
+    )
+    mensagem_abertura_whatsapp = models.TextField(
+        blank=True,
+        default=(
+            "Olá, {cliente_nome}. Sua OS {numero_os} foi registrada com sucesso.\n\n"
+            "Equipamento: {equipamento_resumo}\n"
+            "PDF da ordem: {link_ordem_pdf}\n"
+            "Confirmação/assinatura digital: {link_confirmacao}\n\n"
+            "Se não conseguir assinar pelo link, podemos imprimir para assinatura presencial."
+        ),
+    )
     mensagem_orcamento_email = models.TextField(
         blank=True,
         default="Olá {cliente_nome}, seu orçamento da OS {numero_os} está disponível. Valor: {valor_orcamento}. Condições: {condicoes}. Código: {codigo_portal}.",
@@ -752,6 +842,24 @@ class ConfiguracaoSistema(models.Model):
     mensagem_pronto_whatsapp = models.TextField(
         blank=True,
         default="Olá, {cliente_nome}. Seu equipamento da OS {numero_os} está pronto para retirada. Código: {codigo_portal}.",
+    )
+    comissao_criterio_os = models.CharField(
+        max_length=24,
+        choices=COMISSAO_CRITERIO_OS_CHOICES,
+        default=COMISSAO_CRITERIO_OS_PRONTO,
+        verbose_name="Critério da comissão técnica",
+    )
+    comissao_aplicar_pecas = models.BooleanField(
+        default=False,
+        verbose_name="Permitir comissão sobre peças na OS",
+    )
+    comissao_bonus_retirada_ativo = models.BooleanField(
+        default=False,
+        verbose_name="Usar bônus por retirada rápida",
+    )
+    comissao_bonus_produto_ativo = models.BooleanField(
+        default=True,
+        verbose_name="Usar bônus comercial por produto na venda mostrador",
     )
     condicoes_orcamento = models.TextField(
         blank=True,
@@ -860,6 +968,14 @@ class ConfiguracaoSistema(models.Model):
     def get_configuracao(cls):
         obj, created = cls.objects.get_or_create(pk=1)
         return obj
+
+    def pontos_venda_mostrador_lista(self):
+        codigos = []
+        for parte in (self.estoque_venda_mostrador_codigos or "").split(","):
+            codigo = (parte or "").strip().upper()
+            if codigo and codigo not in codigos:
+                codigos.append(codigo)
+        return codigos or ["PO2", "PO3"]
 
     def __str__(self):
         return f"Configurações do Sistema (ID: {self.pk})"
@@ -986,6 +1102,7 @@ class ConfiguracaoAuditoria(models.Model):
         ("ui", "Interface"),
         ("comando", "Comando"),
         ("api", "API"),
+        ("recuperacao_local", "Recuperação local"),
     ]
 
     usuario = models.ForeignKey(

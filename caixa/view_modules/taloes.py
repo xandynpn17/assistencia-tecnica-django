@@ -1,8 +1,7 @@
-from django.db.models import Q
+﻿from django.db.models import Q
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
-from configuracoes.models import Empresa
 from configuracoes.permissions import CAIXA_OPERATIONAL_ROLES, role_required
 from configuracoes.services.tenant_guard import obter_empresa_ativa
 
@@ -74,7 +73,6 @@ def imprimir_talao(request, pagamento_id):
     if empresa:
         pagamentos_qs = pagamentos_qs.filter(Q(ordem_servico__isnull=True) | Q(ordem_servico__empresa=empresa))
     pagamento = get_object_or_404(pagamentos_qs, id=pagamento_id)
-    empresa = empresa or Empresa.objects.order_by("id").first()
     return render(
         request,
         "caixa/talao_print.html",
@@ -86,3 +84,4 @@ def imprimir_talao(request, pagamento_id):
 
 
 __all__ = ["imprimir_talao", "taloes"]
+

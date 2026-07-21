@@ -578,7 +578,7 @@ def imprimir_orcamento(request, pk):
     if match_validade:
         try:
             dias_validade = max(1, int(match_validade.group(1)))
-        except Exception:
+        except (TypeError, ValueError):
             dias_validade = 7
     data_validade = (orcamento.data_criacao + timedelta(days=dias_validade)).strftime("%d/%m/%Y")
     response = HttpResponse(content_type='application/pdf')
@@ -605,21 +605,22 @@ def imprimir_orcamento(request, pk):
         fonts,
         {
             "OrcTitle": {"bold": True, "font_size": layout_docs["orc_title_pt"], "leading": layout_docs["orc_title_pt"] + 2, "text_color": tema_docs["title_color"]},
-            "OrcMeta": {"bold": False, "font_size": layout_docs["orc_meta_pt"], "leading": layout_docs["orc_meta_pt"] + 2, "text_color": tema_docs["meta_color"]},
-            "OrcLabel": {"bold": True, "font_size": layout_docs["orc_label_pt"], "leading": layout_docs["orc_label_pt"] + 2, "text_color": tema_docs["meta_color"]},
-            "OrcValue": {"bold": False, "font_size": layout_docs["orc_value_pt"], "leading": layout_docs["orc_value_pt"] + 3},
+            "OrcMeta": {"bold": False, "font_size": layout_docs["orc_meta_pt"], "leading": layout_docs["orc_meta_pt"] + 2, "text_color": tema_docs["meta_color"], "word_wrap": "CJK"},
+            "OrcLabel": {"bold": True, "font_size": layout_docs["orc_label_pt"], "leading": layout_docs["orc_label_pt"] + 2, "text_color": tema_docs["meta_color"], "word_wrap": "CJK"},
+            "OrcValue": {"bold": False, "font_size": layout_docs["orc_value_pt"], "leading": layout_docs["orc_value_pt"] + 3, "word_wrap": "CJK"},
             "OrcSection": {"bold": True, "font_size": layout_docs["orc_section_pt"], "leading": layout_docs["orc_section_pt"] + 2, "text_color": tema_docs["section_text"]},
             "OrcText": {
                 "bold": False,
                 "font_size": layout_docs["orc_text_pt"],
                 "leading": layout_docs["orc_text_pt"] + 3,
+                "word_wrap": "CJK",
                 "allow_widows": False,
                 "allow_orphans": False,
             },
             "OrcTotalLabel": {"bold": True, "font_size": layout_docs["orc_label_pt"], "leading": layout_docs["orc_label_pt"] + 2, "text_color": tema_docs["section_text"]},
             "OrcTotalValue": {"bold": True, "font_size": layout_docs["orc_value_pt"] + 1.3, "leading": layout_docs["orc_value_pt"] + 3, "text_color": tema_docs["title_color"], "alignment": 2},
             "OrcHeroLabel": {"bold": True, "font_size": layout_docs["orc_meta_pt"] - 0.1, "leading": layout_docs["orc_meta_pt"] + 1.5, "text_color": tema_docs["hero_text"]},
-            "OrcHeroValue": {"bold": True, "font_size": layout_docs["orc_value_pt"] + 0.8, "leading": layout_docs["orc_value_pt"] + 2.8, "text_color": tema_docs["hero_value"]},
+            "OrcHeroValue": {"bold": True, "font_size": layout_docs["orc_value_pt"] + 0.8, "leading": layout_docs["orc_value_pt"] + 2.8, "text_color": tema_docs["hero_value"], "word_wrap": "CJK"},
         },
     )
 
@@ -887,8 +888,14 @@ def imprimir_orcamento(request, pk):
     ]))
     bloco_aprovacao = Table(
         [
-            [f"Data da aprovação: ____/____/______  (Validade: {data_validade})", "Assinatura do Cliente: ______________________________"],
-            ["Nome legível do cliente: ______________________________", "Assinatura da Assistência: ______________________________"],
+            [
+                Paragraph(f"Data da aprovacao: ____/____/______  (Validade: {data_validade})", styles["OrcText"]),
+                Paragraph("Assinatura do Cliente: ______________________________", styles["OrcText"]),
+            ],
+            [
+                Paragraph("Nome legivel do cliente: ______________________________", styles["OrcText"]),
+                Paragraph("Assinatura da Assistencia: ______________________________", styles["OrcText"]),
+            ],
         ],
         colWidths=[usable_w / 2.0, usable_w / 2.0],
     )

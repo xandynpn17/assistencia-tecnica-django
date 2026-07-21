@@ -1,10 +1,14 @@
 from django.conf import settings
+from django.db import DatabaseError
 from django.shortcuts import redirect
 from django.urls import reverse
+import logging
 
 from configuracoes.permissions import is_management_user
 from configuracoes.services.setup_inicial import setup_inicial_concluido
 from configuracoes.services.tenant import resolve_tenant_context
+
+logger = logging.getLogger(__name__)
 
 
 class TenantContextMiddleware:
@@ -31,6 +35,7 @@ class SetupInicialMiddleware:
         caminho = request.path or ""
         caminhos_liberados = (
             reverse("configuracoes:setup_inicial"),
+            reverse("configuracoes:buscar_cep"),
             reverse("configuracoes:restore_banco"),
             reverse("core:login"),
             reverse("core:logout"),
@@ -44,7 +49,16 @@ class SetupInicialMiddleware:
 
         try:
             concluido = setup_inicial_concluido()
-        except Exception:
+        except DatabaseError as exc:
+            logger.warning(
+                "setup_inicial_verificacao_falhou",
+                extra={
+                    "modulo": "configuracoes",
+                    "acao": "setup_inicial_middleware",
+                    "usuario_id": getattr(request.user, "id", None),
+                    "erro": str(exc),
+                },
+            )
             concluido = True
 
         if concluido:

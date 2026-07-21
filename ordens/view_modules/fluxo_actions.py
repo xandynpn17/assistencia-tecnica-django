@@ -1,12 +1,38 @@
+﻿from decimal import Decimal
+
 from django.db.models import Prefetch
 from django.core.exceptions import PermissionDenied
 
 from . import fluxo_support as _support
+from caixa.models import Pagamento
+from orcamentos.models import ItemOrcamento
 from configuracoes.permissions import require_sensitive_permission
+from configuracoes.services.documentos import normalizar_cnpj
+from ..models import OrdemAlerta
 from ..services import FechamentoOSService
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
+
+
+def _total_pago_ordem(ordem):
+    pagamentos_qs = Pagamento.objects.filter(ordem_servico=ordem)
+    return sum(
+        ((pag.valor or Decimal("0.00")) + (pag.desconto or Decimal("0.00")) for pag in pagamentos_qs),
+        Decimal("0.00"),
+    )
+
+
+def _total_autorizado_para_fechamento(ordem):
+    total_servicos = sum((item.total() for item in ordem.servicos_pecas.all()), Decimal("0.00"))
+    itens_aprovados_pendentes = ItemOrcamento.objects.filter(
+        orcamento__ordem_servico=ordem,
+        status="aprovado",
+    ).exclude(
+        id__in=ordem.servicos_pecas.exclude(item_orcamento__isnull=True).values_list("item_orcamento_id", flat=True)
+    )
+    total_aprovado_nao_migrado = sum((item.total() for item in itens_aprovados_pendentes), Decimal("0.00"))
+    return total_servicos + total_aprovado_nao_migrado
 
 @role_required(ORDER_CREATION_ROLES)
 def verificar_cliente_os(request):
@@ -21,9 +47,10 @@ def verificar_cliente_os(request):
     config = ConfiguracaoSistema.get_configuracao()
     busca_minimo = config.busca_minimo_caracteres
 
-    # Limpar apenas numeros para busca
     cpf_digits = re.sub(r'\D', '', cpf_telefone)
-    caracteres_invalidos = re.sub(r'[0-9.\-\/()\s+]', '', cpf_telefone)
+    documento_normalizado = normalizar_cnpj(cpf_telefone)
+    contem_letras = bool(re.search(r"[A-Za-z]", cpf_telefone or ""))
+    caracteres_invalidos = re.sub(r'[0-9A-Za-z.\-\/()\s+]', '', cpf_telefone)
 
     def _formatar_numero_telefone(numero):
         if len(numero) == 8:
@@ -34,36 +61,40 @@ def verificar_cliente_os(request):
 
     # Validacao: minimo de caracteres para busca
     if cpf_telefone:
-        if caracteres_invalidos or not cpf_digits:
-            mensagem_erro = "Digite apenas números para busca."
-        elif len(cpf_digits) < busca_minimo:
-            mensagem_erro = f"Digite pelo menos {busca_minimo} números para buscar."
+        if caracteres_invalidos or not (documento_normalizado or cpf_digits):
+            mensagem_erro = "Digite apenas letras e numeros validos para CPF, CNPJ ou telefone."
+        elif contem_letras and len(documento_normalizado) < 14:
+            mensagem_erro = "Digite o CNPJ completo com 14 caracteres."
+        elif not contem_letras and len(cpf_digits) < busca_minimo:
+            mensagem_erro = f"Digite pelo menos {busca_minimo} caracteres para buscar."
 
     # Busca so se nao houver mensagem de erro
-    if cpf_digits and not mensagem_erro:
+    if (documento_normalizado or cpf_digits) and not mensagem_erro:
         # Busca exata primeiro (documento completo ou telefone)
         clientes_base = filtrar_queryset_empresa(Cliente.objects.all(), empresa)
         clientes = clientes_base.filter(
-            Q(documento=cpf_digits) |
+            Q(documento=documento_normalizado or cpf_digits) |
+            Q(cnpj=documento_normalizado or cpf_digits) |
             Q(telefone__contains=cpf_digits)
         ).order_by('nome')
 
         # Se nao encontrou, tenta busca parcial com limite
-        if not clientes and len(cpf_digits) >= busca_minimo:
+        if not clientes and ((contem_letras and len(documento_normalizado) >= 14) or len(cpf_digits) >= busca_minimo):
             clientes = clientes_base.filter(
-                Q(documento__contains=cpf_digits) |
+                Q(documento__contains=documento_normalizado or cpf_digits) |
+                Q(cnpj__contains=documento_normalizado or cpf_digits) |
                 Q(telefone__contains=cpf_digits)
             ).order_by('nome')[:10]
 
     # Botao "Cadastrar Novo Cliente" ou quando busca nao encontra cliente
-    if novo_cliente or (not clientes and cpf_digits and not mensagem_erro):
+    if novo_cliente or (not clientes and (documento_normalizado or cpf_digits) and not mensagem_erro):
         initial_data = {}
         ddd_choices = {str(dd[0]) for dd in ConfiguracaoSistema.DDD_BRASIL}
-        tamanho = len(cpf_digits)
+        tamanho = len(documento_normalizado or cpf_digits)
 
         # Detectar o que foi digitado
         if tamanho == 14:  # CNPJ
-            initial_data['documento'] = cpf_digits
+            initial_data['documento'] = documento_normalizado
 
         elif tamanho == 11:  # CPF
             initial_data['documento'] = cpf_digits
@@ -186,9 +217,14 @@ def dashboard_pedidos_compra(request):
     tecnico_id = (request.GET.get("tecnico") or "").strip()
     os_filtro = (request.GET.get("os") or "").strip()
     quick_filter = (request.GET.get("quick") or "").strip()
+    empresa = obter_empresa_ativa(request, strict=False)
 
     pedidos_base = (
-        PedidoCompra.objects.select_related("ordem", "ordem__cliente", "ordem__tecnico_responsavel", "criado_por")
+        filtrar_queryset_empresa(
+            PedidoCompra.objects.select_related("ordem", "ordem__cliente", "ordem__tecnico_responsavel", "criado_por"),
+            empresa,
+            campo="ordem__empresa",
+        )
         .prefetch_related(
             Prefetch(
                 "ordem__linhas_trabalho",
@@ -287,9 +323,9 @@ def dashboard_pedidos_compra(request):
         "q": buscar,
         "os_filtro": os_filtro,
         "tecnico_filtro": tecnico_id,
-        "tecnicos": usuarios_tecnicos_qs(empresa=obter_empresa_ativa(request, strict=False)),
+        "tecnicos": usuarios_tecnicos_qs(empresa=empresa),
         "tecnico_filtro_nome": (
-            usuarios_tecnicos_qs(empresa=obter_empresa_ativa(request, strict=False)).filter(id=int(tecnico_id)).values_list("username", flat=True).first()
+            usuarios_tecnicos_qs(empresa=empresa).filter(id=int(tecnico_id)).values_list("username", flat=True).first()
             if tecnico_id.isdigit()
             else ""
         ),
@@ -378,6 +414,8 @@ def toggle_fechamento_os(request, pk):
     ordem = get_object_or_404(OrdemServico, id=pk)
     try:
         fechando = not ordem.fechada
+        confirmar_financeiro = request.GET.get("confirmar_financeiro") == "1" or request.GET.get("ir_caixa") == "1"
+        saldo_faltante = Decimal("0.00")
         require_sensitive_permission(
             request.user,
             "perm_os_concluir" if fechando else "perm_os_reabrir",
@@ -387,8 +425,37 @@ def toggle_fechamento_os(request, pk):
                 else "Voce nao tem permissao para reabrir esta OS."
             ),
         )
+        if fechando:
+            total_autorizado = _total_autorizado_para_fechamento(ordem)
+            total_pago = _total_pago_ordem(ordem)
+            saldo_faltante = max(Decimal("0.00"), total_autorizado - total_pago)
+            if saldo_faltante > Decimal("0.00") and not confirmar_financeiro:
+                messages.warning(
+                    request,
+                    (
+                        f"Esta OS ainda possui saldo financeiro em aberto de R$ {saldo_faltante:.2f}. "
+                        "Revise o caixa ou confirme o fechamento mesmo assim."
+                    ),
+                )
+                return redirect(f"{ordem.get_absolute_url()}?tab=servicos&confirmar_fechamento=1")
+
         resultado = FechamentoOSService.alternar_fechamento(ordem, usuario=request.user)
         registrar_auditoria(logger, request, "fechamento_os_alterado", ordem=ordem, extra={"fechada": ordem.fechada})
+        if ordem.fechada and saldo_faltante > Decimal("0.00"):
+            mensagem_alerta = (
+                f"Fechamento com saldo pendente no caixa: R$ {saldo_faltante:.2f}. "
+                "Validar cobranca ou baixa financeira da OS."
+            )
+            alerta = ordem.alertas.filter(ativo=True, mensagem__startswith="Fechamento com saldo pendente").first()
+            if alerta:
+                alerta.mensagem = mensagem_alerta
+                alerta.save(update_fields=["mensagem"])
+            else:
+                OrdemAlerta.objects.create(
+                    ordem=ordem,
+                    mensagem=mensagem_alerta,
+                    criado_por=request.user,
+                )
 
         if ordem.fechada and request.GET.get("ir_caixa") == "1":
             messages.success(request, "Ordem fechada. Redirecionando para registro de pagamento no Caixa.")
@@ -472,3 +539,4 @@ def agendar_ordem(request, pk):
 # ===========================
 # Criar Ordem de Serviço
 # ===========================
+

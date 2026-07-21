@@ -1,95 +1,140 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 
 {% block title %}Logs de Integrações{% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <h5 class="mb-0"><i class="fas fa-plug mr-2"></i>Logs de Integrações</h5>
-    <a href="{% url 'configuracoes:painel' %}" class="btn btn-sm btn-outline-secondary">Voltar</a>
-  </div>
-  <div class="card-body">
-    <form method="get" class="mb-3">
-      <div class="form-row align-items-end">
-        <div class="col-md-2">
-          <label class="mb-1">Canal</label>
-          <select name="canal" class="form-control">
-            <option value="">Todos</option>
-            <option value="webhook" {% if canal == "webhook" %}selected{% endif %}>Webhook</option>
-            <option value="email" {% if canal == "email" %}selected{% endif %}>E-mail</option>
-            <option value="whatsapp" {% if canal == "whatsapp" %}selected{% endif %}>WhatsApp</option>
-            <option value="sistema" {% if canal == "sistema" %}selected{% endif %}>Sistema</option>
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="mb-1">Status</label>
-          <select name="status" class="form-control">
-            <option value="">Todos</option>
-            <option value="sucesso" {% if status_filtro == "sucesso" %}selected{% endif %}>Sucesso</option>
-            <option value="falha" {% if status_filtro == "falha" %}selected{% endif %}>Falha</option>
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="mb-1">Evento</label>
-          <input type="text" name="evento" value="{{ evento }}" class="form-control" placeholder="notificacao.orcamento, backup.executado...">
-        </div>
-        <div class="col-md-2">
-          <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-search mr-1"></i>Filtrar</button>
+{% include "configuracoes/partials/_operacao_recuperacao_tabs.html" %}
+
+<div class="row mb-4">
+  <div class="col-lg-4 mb-4">
+    <div class="card card-modern border-0 h-100">
+      <div class="card-modern-body">
+        <div class="section-kicker">Leitura operacional</div>
+        <h3 class="h5 mb-3">Quando olhar esta tela</h3>
+        <div class="usage-block">
+          <ul class="mb-0">
+            <li>Falha de envio de orçamento, aviso ou notificação.</li>
+            <li>Validação de eventos internos do sistema.</li>
+            <li>Conferência de webhook, e-mail ou WhatsApp.</li>
+            <li>Suporte técnico e troubleshooting local.</li>
+          </ul>
         </div>
       </div>
-    </form>
-
-    <div class="table-responsive">
-      <table class="table table-sm table-bordered">
-        <thead>
-          <tr>
-            <th>Data/Hora</th>
-            <th>Canal</th>
-            <th>Evento</th>
-            <th>Status</th>
-            <th>Destino</th>
-            <th>Resposta</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in logs %}
-          <tr>
-            <td>{{ item.criado_em|date:"d/m/Y H:i:s" }}</td>
-            <td>{{ item.get_canal_display }}</td>
-            <td>{{ item.evento }}</td>
-            <td>
-              {% if item.status == "sucesso" %}
-              <span class="badge badge-success">Sucesso</span>
-              {% else %}
-              <span class="badge badge-danger">Falha</span>
-              {% endif %}
-            </td>
-            <td>{{ item.destino|default:"-" }}</td>
-            <td>{{ item.resposta|default:"-" }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6" class="text-center text-muted">Sem eventos registrados.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
     </div>
-    {% if logs_page.has_other_pages %}
-    <nav aria-label="Paginação logs integrações">
-      <ul class="pagination pagination-sm">
-        {% if logs_page.has_previous %}
-        <li class="page-item">
-          <a class="page-link" href="?page={{ logs_page.previous_page_number }}&canal={{ canal }}&status={{ status_filtro }}&evento={{ evento }}">Anterior</a>
-        </li>
-        {% endif %}
-        <li class="page-item active"><span class="page-link">{{ logs_page.number }}</span></li>
-        {% if logs_page.has_next %}
-        <li class="page-item">
-          <a class="page-link" href="?page={{ logs_page.next_page_number }}&canal={{ canal }}&status={{ status_filtro }}&evento={{ evento }}">Próxima</a>
-        </li>
-        {% endif %}
-      </ul>
-    </nav>
-    {% endif %}
+  </div>
+
+  <div class="col-lg-8 mb-4">
+    <div class="card card-modern border-0 h-100">
+      <div class="card-modern-body">
+        <div class="section-kicker">Consulta rápida</div>
+        <h3 class="h5 mb-3">Filtrar eventos de integração</h3>
+        <form method="get">
+          <div class="form-row align-items-end">
+            <div class="col-md-3">
+              <label class="mb-1">Canal</label>
+              <select name="canal" class="form-control">
+                <option value="">Todos</option>
+                <option value="webhook" {% if canal == "webhook" %}selected{% endif %}>Webhook</option>
+                <option value="email" {% if canal == "email" %}selected{% endif %}>E-mail</option>
+                <option value="whatsapp" {% if canal == "whatsapp" %}selected{% endif %}>WhatsApp</option>
+                <option value="sistema" {% if canal == "sistema" %}selected{% endif %}>Sistema</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="mb-1">Status</label>
+              <select name="status" class="form-control">
+                <option value="">Todos</option>
+                <option value="sucesso" {% if status_filtro == "sucesso" %}selected{% endif %}>Sucesso</option>
+                <option value="falha" {% if status_filtro == "falha" %}selected{% endif %}>Falha</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="mb-1">Evento</label>
+              <input type="text" name="evento" value="{{ evento }}" class="form-control" placeholder="notificacao.orcamento, backup.executado...">
+            </div>
+            <div class="col-md-2">
+              <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-search mr-1"></i>Filtrar</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card card-modern border-0">
+      <div class="card-modern-body p-0">
+        <div class="table-section-head d-flex justify-content-between align-items-center">
+          <div>
+            <div class="section-kicker text-white-50 mb-1">Eventos registrados</div>
+            <h3 class="h5 mb-0 text-white">Logs de integrações</h3>
+          </div>
+          <a href="{% url 'configuracoes:painel' %}" class="btn btn-sm btn-outline-light">Voltar ao painel</a>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0 align-middle">
+            <thead>
+              <tr>
+                <th>Data/Hora</th>
+                <th>Canal</th>
+                <th>Evento</th>
+                <th>Status</th>
+                <th>Destino</th>
+                <th>Resposta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in logs %}
+              <tr>
+                <td>{{ item.criado_em|date:"d/m/Y H:i:s" }}</td>
+                <td>{{ item.get_canal_display }}</td>
+                <td>{{ item.evento }}</td>
+                <td>
+                  {% if item.status == "sucesso" %}
+                  <span class="badge badge-success">Sucesso</span>
+                  {% else %}
+                  <span class="badge badge-danger">Falha</span>
+                  {% endif %}
+                </td>
+                <td>{{ item.destino|default:"-" }}</td>
+                <td>{{ item.resposta|default:"-" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center text-muted">Sem eventos registrados.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if logs_page.has_other_pages %}
+        <nav aria-label="Paginação logs integrações" class="p-3">
+          <ul class="pagination pagination-sm mb-0">
+            {% if logs_page.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ logs_page.previous_page_number }}&canal={{ canal }}&status={{ status_filtro }}&evento={{ evento }}">Anterior</a></li>
+            {% endif %}
+            <li class="page-item active"><span class="page-link">{{ logs_page.number }}</span></li>
+            {% if logs_page.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ logs_page.next_page_number }}&canal={{ canal }}&status={{ status_filtro }}&evento={{ evento }}">Próxima</a></li>
+            {% endif %}
+          </ul>
+        </nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+.card-modern { border-radius: 16px; box-shadow: 0 10px 28px rgba(18, 42, 66, 0.08); }
+.card-modern-body { padding: 20px; }
+.section-kicker { font-size: .76rem; text-transform: uppercase; letter-spacing: .08em; color: #6b7d91; margin-bottom: 6px; }
+.usage-block { border: 1px solid #dbe4ec; border-radius: 14px; padding: 14px 16px; background: linear-gradient(180deg, #fff 0%, #f8fbff 100%); }
+.usage-block ul { padding-left: 18px; }
+.table-section-head { padding: 18px 20px; background: #20384f; }
+</style>
 {% endblock %}

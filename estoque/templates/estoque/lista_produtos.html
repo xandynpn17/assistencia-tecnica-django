@@ -1,15 +1,18 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 
 {% block title %}Estoque - Lista de Produtos{% endblock %}
 
 {% block header %}
 <div class="ui-module-header">
     <div>
-        <h1 class="ui-module-title">Lista de Produtos</h1>
-        <p class="ui-module-subtitle">Visão consolidada de estoque, perfil de item e ações rápidas de cadastro.</p>
+        <h1 class="ui-module-title">Lista operacional de produtos</h1>
+        <p class="ui-module-subtitle">Use filtros para carregar somente o recorte necessario e trabalhar com base grande sem pesar a operacao.</p>
     </div>
     <div class="ui-module-actions">
-        <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-info btn-sm"><i class="fas fa-exchange-alt mr-1"></i> Movimentações</a>
+        <a href="{% url 'estoque:categorias_produto' %}" class="btn btn-outline-primary btn-sm"><i class="fas fa-tags mr-1"></i> Categorias</a>
+        <a href="{% url 'estoque:reposicao_estoque' %}" class="btn btn-outline-warning btn-sm"><i class="fas fa-boxes mr-1"></i> Reposicao</a>
+        <a href="{% url 'estoque:entradas_mercadoria' %}" class="btn btn-outline-dark btn-sm"><i class="fas fa-truck-loading mr-1"></i> Entradas</a>
+        <a href="{% url 'estoque:movimentacoes' %}" class="btn btn-info btn-sm"><i class="fas fa-exchange-alt mr-1"></i> Movimentacoes</a>
         <a href="{% url 'estoque:criar_produto' %}" class="btn btn-success btn-sm"><i class="fas fa-plus mr-1"></i> Novo Produto</a>
     </div>
 </div>
@@ -25,7 +28,7 @@
     }
     .produto-summary {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 10px;
         margin-bottom: 14px;
     }
@@ -74,6 +77,14 @@
         font-size: 12px;
         color: #6b7280;
     }
+    .produto-alert-inline {
+        border: 1px solid #ffe2a8;
+        background: #fff8e8;
+        color: #7a5410;
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+    }
     @media (max-width: 991.98px) {
         .produto-toolbar,
         .produto-summary {
@@ -84,7 +95,7 @@
 
 <div class="card-modern">
     <div class="card-modern-header d-flex justify-content-between align-items-center">
-        Produtos cadastrados
+        Catalogo operacional
         <div>
             <a href="{% url 'estoque:tabelas_preco' %}" class="btn btn-outline-secondary btn-sm">Tabelas de preco</a>
             <a href="{% url 'estoque:importar_produtos' %}" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-import"></i> Importar</a>
@@ -108,13 +119,24 @@
                 <div class="produto-summary-label">Permite OS</div>
                 <div class="produto-summary-value">{{ resumo.permite_os }}</div>
             </div>
+            <div class="produto-summary-card">
+                <div class="produto-summary-label">Sem estrutura</div>
+                <div class="produto-summary-value">{{ resumo.sem_estrutura }}</div>
+            </div>
         </div>
 
+        {% if resumo.sem_estrutura %}
+        <div class="produto-alert-inline">
+            Existem <strong>{{ resumo.sem_estrutura }}</strong> itens físicos sem ponto operacional ou sem ubicação padrão. Vale corrigir isso antes do uso intensivo para evitar erro na separação, reserva e inventário.
+        </div>
+        {% endif %}
+
         <form method="get" class="mb-3">
+            <input type="hidden" name="carregar" value="1">
             <div class="produto-toolbar">
                 <div>
                     <label class="mb-1">Busca rapida</label>
-                    <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Nome, SKU, EAN, marca ou fornecedor">
+                    <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Nome, SKU, EAN, modelos compativeis, marca, fornecedor ou ubicacao">
                 </div>
                 <div>
                     <label class="mb-1">Tipo</label>
@@ -136,7 +158,7 @@
                 <div>
                     <label class="mb-1">Acao</label>
                     <div class="d-flex">
-                        <button type="submit" class="btn btn-sm btn-primary mr-2 flex-fill">Aplicar</button>
+                        <button type="submit" class="btn btn-sm btn-primary mr-2 flex-fill">Carregar lista</button>
                         <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-sm btn-outline-secondary flex-fill">Limpar</a>
                     </div>
                 </div>
@@ -144,11 +166,21 @@
         </form>
 
         <div class="produto-quick-filters">
-            <a href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=" class="btn btn-sm {% if not quick %}btn-primary{% else %}btn-outline-primary{% endif %}">Todos</a>
-            <a href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=baixo_estoque" class="btn btn-sm {% if quick == 'baixo_estoque' %}btn-warning{% else %}btn-outline-warning{% endif %}">Baixo estoque</a>
-            <a href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=sem_saldo" class="btn btn-sm {% if quick == 'sem_saldo' %}btn-danger{% else %}btn-outline-danger{% endif %}">Sem saldo</a>
-            <a href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=permite_os" class="btn btn-sm {% if quick == 'permite_os' %}btn-success{% else %}btn-outline-success{% endif %}">Permite OS</a>
+            <a href="?carregar=1&q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=" class="btn btn-sm {% if not quick %}btn-primary{% else %}btn-outline-primary{% endif %}">Todos</a>
+            <a href="?carregar=1&q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=baixo_estoque" class="btn btn-sm {% if quick == 'baixo_estoque' %}btn-warning{% else %}btn-outline-warning{% endif %}">Baixo estoque</a>
+            <a href="?carregar=1&q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=sem_saldo" class="btn btn-sm {% if quick == 'sem_saldo' %}btn-danger{% else %}btn-outline-danger{% endif %}">Sem saldo</a>
+            <a href="?carregar=1&q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=permite_os" class="btn btn-sm {% if quick == 'permite_os' %}btn-success{% else %}btn-outline-success{% endif %}">Permite OS</a>
+            <a href="?carregar=1&q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick=sem_estrutura" class="btn btn-sm {% if quick == 'sem_estrutura' %}btn-dark{% else %}btn-outline-dark{% endif %}">Sem estrutura</a>
         </div>
+
+        {% if not carregar %}
+        <div class="produto-alert-inline">
+            Use os filtros acima e clique em <strong>Carregar lista</strong>. Assim evitamos abrir todos os produtos de uma vez e a tela fica mais leve no uso diario.
+        </div>
+        <div class="produto-alert-inline" style="border-color:#d7e8fb;background:#f8fbff;color:#24415e;">
+            Fluxo recomendado: cadastre o item, confira a estrutura fisica, receba mercadoria pela entrada formal e use reposicao para montar as compras do dia a dia.
+        </div>
+        {% endif %}
 
         <div class="table-responsive p-0">
             <table class="table table-hover">
@@ -156,7 +188,7 @@
                 <tr>
                     <th>Produto</th>
                     <th>Preco</th>
-                    <th>Ponto</th>
+                    <th>Posicao padrao</th>
                     <th>Estoque</th>
                     <th>Perfil</th>
                     <th>Acoes</th>
@@ -171,19 +203,45 @@
                             <span>SKU: {{ produto.sku|default:"-" }}</span>
                             <span>EAN: {{ produto.ean|default:"-" }}</span>
                             <span>Marca: {% if produto.marca %}{{ produto.marca.nome }}{% else %}-{% endif %}</span>
+                            <span>Fornecedor: {{ produto.fornecedor_config.nome|default:produto.fornecedor_manual|default:"-" }}</span>
+                            {% if produto.modelos_compativeis %}
+                            <span>Modelos: {{ produto.modelos_compativeis|truncatechars:48 }}</span>
+                            {% endif %}
                         </div>
                     </td>
                     <td>R$ {{ produto.preco_final|floatformat:2 }}</td>
-                    <td>{% if produto.ponto_operacional %}{{ produto.ponto_operacional.codigo }} - {{ produto.ponto_operacional.nome }}{% else %}-{% endif %}</td>
+                    <td>
+                        {% if produto.ponto_operacional %}
+                            <div>{{ produto.ponto_operacional.codigo }} - {{ produto.ponto_operacional.nome }}</div>
+                            <small class="text-muted">
+                                {% if produto.ubicacao_padrao %}
+                                    {{ produto.ubicacao_padrao.codigo }}{% if produto.ubicacao_padrao.descricao %} ({{ produto.ubicacao_padrao.descricao }}){% endif %}
+                                {% elif produto.localizacao %}
+                                    {{ produto.localizacao }}
+                                {% else %}
+                                    Sem ubicacao
+                                {% endif %}
+                            </small>
+                        {% elif produto.localizacao %}
+                            <div>-</div>
+                            <small class="text-muted">{{ produto.localizacao }}</small>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
                     <td>
                         {% if produto.quantidade <= 0 %}
-                            <span class="badge badge-danger produto-stock">{{ produto.quantidade }}</span>
+                            <span class="badge badge-danger produto-stock">{{ produto.saldo_ponto|default:produto.quantidade }}</span>
                         {% elif produto.quantidade <= produto.estoque_minimo %}
-                            <span class="badge badge-warning produto-stock">{{ produto.quantidade }}</span>
+                            <span class="badge badge-warning produto-stock">{{ produto.saldo_ponto|default:produto.quantidade }}</span>
                         {% else %}
-                            <span class="produto-stock">{{ produto.quantidade }}</span>
+                            <span class="produto-stock">{{ produto.saldo_ponto|default:produto.quantidade }}</span>
                         {% endif %}
                         <span class="produto-stock-note">Minimo: {{ produto.estoque_minimo|default:"0" }}</span>
+                        <span class="produto-stock-note">Disponivel: {{ produto.saldo_disponivel|default:produto.quantidade }}</span>
+                        {% if produto.saldo_reservado %}
+                        <span class="produto-stock-note text-warning">Reservado: {{ produto.saldo_reservado }}</span>
+                        {% endif %}
                     </td>
                     <td>
                         <div class="produto-badges">
@@ -191,6 +249,9 @@
                                 <span class="badge badge-success">Permite OS</span>
                             {% endif %}
                             <span class="badge badge-light">{{ produto.get_tipo_item_display }}</span>
+                            {% if not produto.is_servico and not produto.ponto_operacional or not produto.is_servico and not produto.ubicacao_padrao %}
+                                <span class="badge badge-dark">Estrutura incompleta</span>
+                            {% endif %}
                             {% if produto.quantidade <= 0 %}
                                 <span class="badge badge-danger">Sem saldo</span>
                             {% elif produto.quantidade <= produto.estoque_minimo %}
@@ -206,7 +267,7 @@
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="6" class="text-center">Nenhum produto cadastrado.</td></tr>
+                <tr><td colspan="6" class="text-center">{% if carregar %}Nenhum produto encontrado para os filtros selecionados.{% else %}Lista ainda não carregada.{% endif %}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -219,12 +280,12 @@
             </small>
             <div class="btn-group">
                 {% if produtos_page.has_previous %}
-                <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick={{ quick }}&page={{ produtos_page.previous_page_number }}">Anterior</a>
+                <a class="btn btn-sm btn-outline-secondary" href="?carregar=1&q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick={{ quick }}&page={{ produtos_page.previous_page_number }}">Anterior</a>
                 {% else %}
                 <button class="btn btn-sm btn-outline-secondary" disabled>Anterior</button>
                 {% endif %}
                 {% if produtos_page.has_next %}
-                <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick={{ quick }}&page={{ produtos_page.next_page_number }}">Proxima</a>
+                <a class="btn btn-sm btn-outline-secondary" href="?carregar=1&q={{ q|urlencode }}&tipo={{ filtro }}&ponto={{ ponto_filtro }}&quick={{ quick }}&page={{ produtos_page.next_page_number }}">Proxima</a>
                 {% else %}
                 <button class="btn btn-sm btn-outline-secondary" disabled>Proxima</button>
                 {% endif %}
@@ -234,3 +295,4 @@
     </div>
 </div>
 {% endblock %}
+

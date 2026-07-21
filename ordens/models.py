@@ -75,6 +75,7 @@ class OrdemServico(models.Model):
         ('Garantia', 'Garantia'),
         ('Fora de Garantia', 'Fora de Garantia'),
         ('Garantia de serviço', 'Garantia de serviço'),
+        ('Encomenda', 'Encomenda'),
     ]
 
     CLASSIFICACAO_RETORNO_CHOICES = [
@@ -164,7 +165,7 @@ class OrdemServico(models.Model):
         null=True,
         blank=True,
         related_name="ordens_responsaveis",
-        limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
+        limit_choices_to=Q(is_active=True) & (Q(tipo_usuario="tecnico") | Q(atua_como_tecnico=True)),
         verbose_name="Técnico responsável"
     )
 
@@ -543,7 +544,7 @@ class ServicoPeca(models.Model):
         null=True,
         blank=True,
         related_name="servicos_pecas_responsavel",
-        limit_choices_to={"tipo_usuario": "tecnico", "is_active": True},
+        limit_choices_to=Q(is_active=True) & (Q(tipo_usuario="tecnico") | Q(atua_como_tecnico=True)),
     )
     comissionavel = models.BooleanField(default=True)
     numeros_taloes = models.CharField(max_length=255, blank=True, default="")
@@ -943,5 +944,144 @@ class GuiaExpedicaoItem(models.Model):
 
     def __str__(self):
         return f"{self.guia.numero_guia} - {self.ordem_servico.numero_os}"
+
+
+class ConciliacaoOrdem(models.Model):
+    STATUS_CHOICES = [
+        ("aberto", "Aberto"),
+        ("em_conferencia", "Em conferência"),
+        ("fechado", "Fechado"),
+        ("cancelado", "Cancelado"),
+    ]
+
+    numero = models.CharField(max_length=30, unique=True, blank=True, editable=False)
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="conciliacoes_ordens",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="aberto")
+    filtro_local_armazenamento = models.CharField(max_length=200, blank=True)
+    observacao = models.CharField(max_length=200, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    fechado_em = models.DateTimeField(null=True, blank=True)
+    usuario_abertura = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="conciliacoes_ordens_abertas",
+    )
+    usuario_fechamento = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="conciliacoes_ordens_fechadas",
+    )
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+
+    def __str__(self):
+        return self.numero or f"CO-{self.id:06d}"
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            data_ref = timezone.localdate().strftime("%Y%m%d")
+            prefixo = f"CO-{data_ref}-"
+            ultimo = (
+                ConciliacaoOrdem.objects.filter(numero__startswith=prefixo)
+                .order_by("-numero")
+                .values_list("numero", flat=True)
+                .first()
+            )
+            sequencia = 1
+            if ultimo:
+                try:
+                    sequencia = int(str(ultimo).split("-")[-1]) + 1
+                except (TypeError, ValueError):
+                    sequencia = ConciliacaoOrdem.objects.filter(numero__startswith=prefixo).count() + 1
+            self.numero = f"{prefixo}{sequencia:03d}"
+        super().save(*args, **kwargs)
+
+    @property
+    def total_itens(self):
+        return self.itens.count()
+
+    @property
+    def total_divergencias(self):
+        return self.itens.filter(situacao="divergencia").count()
+
+    @property
+    def total_conferidos(self):
+        return self.itens.filter(situacao="conferido").count()
+
+    @property
+    def total_pendentes(self):
+        return self.itens.filter(situacao="pendente").count()
+
+
+class ConciliacaoOrdemItem(models.Model):
+    SITUACAO_CHOICES = [
+        ("pendente", "Pendente"),
+        ("conferido", "Confere"),
+        ("divergencia", "Divergência"),
+    ]
+    MOTIVO_CHOICES = [
+        ("", "Sem motivo"),
+        ("nao_localizado", "Não localizado"),
+        ("local_divergente", "Local divergente"),
+        ("status_divergente", "Status divergente"),
+        ("equipamento_extra", "Equipamento extra"),
+        ("dados_divergentes", "Dados divergentes"),
+        ("outro", "Outro"),
+    ]
+
+    conciliacao = models.ForeignKey(ConciliacaoOrdem, on_delete=models.CASCADE, related_name="itens")
+    ordem_servico = models.ForeignKey(
+        OrdemServico,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_conciliacao",
+    )
+    numero_os_snapshot = models.CharField(max_length=20)
+    cliente_snapshot = models.CharField(max_length=160, blank=True)
+    tipo_equipamento_snapshot = models.CharField(max_length=80, blank=True)
+    modelo_snapshot = models.CharField(max_length=120, blank=True)
+    marca_snapshot = models.CharField(max_length=120, blank=True)
+    local_armazenamento_snapshot = models.CharField(max_length=200, blank=True)
+    status_snapshot = models.CharField(max_length=40, blank=True)
+    data_entrada_snapshot = models.DateTimeField(null=True, blank=True)
+    data_pronto_snapshot = models.DateTimeField(null=True, blank=True)
+    dias_em_aberto_snapshot = models.PositiveIntegerField(default=0)
+    valor_parado_snapshot = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    situacao = models.CharField(max_length=20, choices=SITUACAO_CHOICES, default="pendente")
+    motivo_divergencia = models.CharField(max_length=40, choices=MOTIVO_CHOICES, blank=True)
+    observacao = models.CharField(max_length=240, blank=True)
+    conferido_em = models.DateTimeField(null=True, blank=True)
+    conferido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_conciliacao_conferidos",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["local_armazenamento_snapshot", "numero_os_snapshot"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["conciliacao", "ordem_servico"],
+                name="uniq_conciliacao_ordem_item",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.conciliacao.numero} - {self.numero_os_snapshot}"
 
 

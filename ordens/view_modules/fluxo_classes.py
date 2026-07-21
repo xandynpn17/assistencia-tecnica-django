@@ -1,4 +1,4 @@
-from . import fluxo_support as _support
+﻿from . import fluxo_support as _support
 import uuid
 from datetime import timedelta
 from django.core.exceptions import PermissionDenied
@@ -125,6 +125,8 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
 
     def _montar_resumo_revisao(self, dados, form):
         tipo_equipamento = self._valor_choice(form, "tipo_equipamento", dados.get("tipo_equipamento"))
+        if dados.get("tipo_equipamento") == OrdemServicoForm.OUTROS_TIPO_EQUIPAMENTO:
+            tipo_equipamento = (dados.get("tipo_equipamento_manual") or "").strip() or tipo_equipamento
         tipo_reparo = self._valor_choice(form, "tipo_reparo", dados.get("tipo_reparo"))
         data_compra = dados.get("data_compra")
         data_compra_txt = data_compra.strftime("%d/%m/%Y") if data_compra else "-"
@@ -173,7 +175,7 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
     def form_valid(self, form):
         cliente_id = self.kwargs.get("cliente_id")
         empresa = obter_empresa_ativa(self.request, strict=False)
-        cliente = Cliente.objects.filter(id=cliente_id).first() if cliente_id else None
+        cliente = filtrar_queryset_empresa(Cliente.objects.filter(id=cliente_id), empresa).first() if cliente_id else None
         if cliente and empresa:
             if cliente.empresa_id and cliente.empresa_id != empresa.id:
                 raise PermissionDenied("Cliente pertence a outra empresa.")
@@ -183,10 +185,9 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
         if empresa:
             form.instance.empresa = empresa
         form.instance.cliente_id = cliente_id
-        if usuario_apto_tecnico(self.request.user):
-            form.instance.tecnico_responsavel = self.request.user
-        else:
-            form.instance.tecnico_responsavel = None
+        # A atribuicao do tecnico fica explicita no detalhe da OS para evitar
+        # auto-selecao indesejada quando quem abre a ordem tambem possui perfil tecnico.
+        form.instance.tecnico_responsavel = None
         form.instance.status = "diagnosticar"
 
         super().form_valid(form)
@@ -269,7 +270,7 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
             registrar_auditoria(logger, self.request, "os_criada", ordem=self.object)
             messages.success(self.request, f"OS criada com sucesso. Numero da ordem: {self.object.numero_os}.")
             return redirect("ordens:resumo_ordem", pk=self.object.pk)
-        if self.object.cliente.telefone:
+        if config_sistema.enviar_whatsapp_abertura_os and self.object.cliente.telefone:
             mensagem_confirmacao = _mensagem_confirmacao_inicial(self.object, self.request)
             notif = _registrar_notificacao(
                 self.object,
@@ -301,6 +302,8 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
                 messages.success(self.request, "OS criada e mensagem de confirmação do WhatsApp preparada.")
                 return redirect(f"{reverse('ordens:resumo_ordem', kwargs={'pk': self.object.pk})}?wa={wa}&wa_app={wa_app}")
             messages.warning(self.request, "OS criada, mas o envio automático do WhatsApp falhou. Utilize o reenvio no resumo.")
+        elif not config_sistema.enviar_whatsapp_abertura_os:
+            messages.info(self.request, "OS criada com o envio automático de WhatsApp desativado nas configurações.")
         else:
             messages.warning(self.request, "OS criada sem telefone do cliente. Envie a confirmação manualmente.")
         registrar_auditoria(logger, self.request, "os_criada", ordem=self.object)
@@ -473,3 +476,4 @@ class OrdemServicoUpdateView(RoleRequiredMixin, UpdateView):
 # ===========================
 # Detalhes da Ordem
 # ===========================
+

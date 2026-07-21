@@ -1,113 +1,132 @@
-﻿# Sistema de Gestao para Assistencia Tecnica
+# ABGest / ABTech Service Center
 
-Projeto Django para operacao de assistencia tecnica de eletronicos, com foco em fluxo rapido para:
+Sistema Django para assistencia tecnica, vendas, caixa, estoque e operacao local em rede.
 
-- clientes
-- ordens de servico
-- estoque
-- servicos e pecas
-- tecnicos
-- financeiro
+Este projeto esta preparado para uso:
 
-## Estrutura atual
+- local em um unico PC;
+- local em rede interna com 2 a 3 computadores;
+- PostgreSQL como banco principal;
+- backup e restore por interface e por terminal.
 
-O projeto ja possui estes apps:
+## Fluxo recomendado para uso real
 
-- `core`
-- `clientes`
-- `ordens`
-- `estoque`
-- `orcamentos`
-- `caixa`
-- `configuracoes`
+Para a fase atual do projeto, o caminho mais seguro e:
 
-Resumo do papel de cada um:
+1. usar PostgreSQL local no PC principal;
+2. subir o sistema pela rede interna com `run_local.ps1`;
+3. acessar pelos outros PCs via navegador;
+4. manter backup diario;
+5. testar restore antes de colocar em uso definitivo.
 
-- `clientes`: cadastro e historico do cliente
-- `ordens`: abertura, acompanhamento e conclusao da OS
-- `estoque`: pecas, produtos, servicos e movimentacoes
-- `orcamentos`: itens e aprovacao de orcamentos
-- `caixa`: pagamentos, contas e comissoes
-- `configuracoes`: usuarios, empresa e parametros do sistema
+## Requisitos
 
-## Prioridade atual
+- Windows 10/11
+- Python 3.12+
+- PostgreSQL 15+
+- PowerShell habilitado
 
-Consolidar o fluxo principal:
+## Primeira instalacao local
 
-1. cadastrar cliente
-2. criar OS
-3. informar equipamento e defeito
-4. adicionar servicos e pecas
-5. calcular totais
-6. aprovar e concluir
-
-## Observacao importante sobre servicos e tecnicos
-
-Na base atual:
-
-- servicos ficam em `estoque.Produto` com `tipo_item="servico"`
-- tecnicos usam o modelo `configuracoes.User` com perfil tecnico
-
-Isso evita duplicacao agora e permite continuar o desenvolvimento sem abrir apps novos neste momento.
-
-## Ambiente de desenvolvimento
-
-Abra o workspace do VS Code na pasta do projeto Django:
-
-- `C:\Users\Xandy\Documents\projetodjango\assistencia`
-
-Nao abra a pasta pai `projetodjango` para desenvolver este app, porque `manage.py`, `requirements.txt` e o `.venv` correto ficam dentro de `assistencia`.
-
-Passos sugeridos no VS Code para recriar o ambiente:
-
-1. instalar Python 3.13
-2. abrir a pasta `assistencia`
-3. recriar a `.venv` na raiz do projeto
-4. instalar dependencias de `requirements.txt`
-5. executar `check`, migracoes e servidor
-
-Comandos esperados:
+No diretorio do projeto:
 
 ```powershell
-cd C:\Users\Xandy\Documents\projetodjango\assistencia
-py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe manage.py check
-.\.venv\Scripts\python.exe manage.py migrate
-.\.venv\Scripts\python.exe manage.py runserver
+powershell -ExecutionPolicy Bypass -File .\prepare_novo_computador.ps1
 ```
+
+Esse script:
+
+- cria a `.venv`, se necessario;
+- instala dependencias;
+- gera `.env.local`;
+- aplica migracoes;
+- executa `collectstatic`;
+- roda validacoes basicas;
+- deixa pronto para subir o sistema.
+
+Se quiser habilitar recuperacao local antes do login:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\prepare_novo_computador.ps1 -RecoveryKey "SUA_CHAVE_LOCAL"
+```
+
+## Restaurar backup em um novo computador
+
+Se o novo PC ja vai entrar com uma base existente:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\prepare_novo_computador.ps1 `
+  -RecoveryKey "SUA_CHAVE_LOCAL" `
+  -RestoreBackup "backups\backup_AAAAMMDD_HHMMSS" `
+  -RestoreMedia
+```
+
+Para bases antigas, locais ou vindas de testes, o fluxo ja suporta reparo de empresa unica.
+
+## Subir o sistema
+
+Com o ambiente local pronto:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_local.ps1
+```
+
+No PyCharm, use a configuracao compartilhada `Run Local Server` para executar esse mesmo fluxo sem voltar ao `manage.py runserver` antigo.
+
+O `run_local.ps1` agora encerra automaticamente instancias antigas de `runserver` do mesmo projeto antes de subir uma nova, evitando ficar com 2, 3 ou 4 servidores concorrendo na porta `8000`.
+
+Ou usando um arquivo de ambiente especifico:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_local.ps1 -EnvPath .\.env.local
+```
+
+## Comandos operacionais principais
+
+### Validacoes
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\manage_local.ps1 check
+powershell -ExecutionPolicy Bypass -File .\manage_local.ps1 check_go_live
+powershell -ExecutionPolicy Bypass -File .\manage_local.ps1 check_postgres_ready --check-connection
+powershell -ExecutionPolicy Bypass -File .\manage_local.ps1 check_tenant_data --strict
+```
+
+### Backup
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\manage_local.ps1 backup_db --include-media
+```
+
+ou:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\backup_local_postgres.ps1
+```
+
+### Restore
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\manage_local.ps1 restore_db "backups\backup_AAAAMMDD_HHMMSS" --force --restore-media
+```
+
+## Recuperacao sem login
+
+Se o sistema abrir, mas o login ou alguma parte da interface estiver indisponivel, existe um modo de recuperacao local:
+
+- configurar `DJANGO_LOCAL_RECOVERY_KEY`;
+- abrir a tela de login;
+- usar o link de restauracao local sem login.
+
+Isso foi pensado justamente para cenarios de falha operacional no PC principal.
 
 ## Documentacao complementar
 
-Analise da arquitetura atual: `docs/revisao_arquitetura.md`
-Ownership tecnico dos modulos: `docs/ownership_modulos.md`
-Checklist de migracao PostgreSQL: `docs/checklist_migracao_postgresql.md`
+- [Instalacao em novo computador](C:\Users\Xandy\Documents\projetodjango\assistencia\docs\instalacao_local_novo_computador.md)
+- [Backup e restore local](C:\Users\Xandy\Documents\projetodjango\assistencia\docs\backup_restore_local.md)
+- [Checklist de go-live local](C:\Users\Xandy\Documents\projetodjango\assistencia\docs\checklist_go_live_local.md)
+- [Homologacao de rede local](C:\Users\Xandy\Documents\projetodjango\assistencia\docs\homologacao_rede_local.md)
 
-## Preparacao para PostgreSQL
+## Observacao importante
 
-Existe um arquivo exemplo de ambiente para a migracao:
-
-- `.env.postgres.example`
-
-E um pre-check rapido para validar configuracao:
-
-```powershell
-.\.venv\Scripts\python.exe manage.py check_postgres_ready
-.\.venv\Scripts\python.exe manage.py check_postgres_ready --check-connection
-```
-
-## Deploy no Render
-
-Este repositório já inclui `render.yaml` para deploy por Blueprint.
-
-Passos:
-
-1. No Render, clique em `New +` -> `Blueprint`.
-2. Selecione este repositório.
-3. Confirme os recursos `assistencia-web` e `assistencia-db`.
-4. Após o primeiro deploy, abra o Shell do serviço web e execute:
-
-```bash
-python manage.py createsuperuser
-```
+Para uso real, prefira sempre PostgreSQL. O SQLite deve ficar restrito a cenarios de desenvolvimento, testes rapidos ou recuperacao pontual.

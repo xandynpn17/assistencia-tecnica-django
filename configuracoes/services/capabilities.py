@@ -18,10 +18,15 @@ PRESETS: dict[str, PresetPermissao] = {
             "acesso_ordens_extra": True,
             "acesso_estoque_extra": True,
             "acesso_caixa_operacional_extra": True,
+            "perm_orcamento_editar": True,
+            "perm_orcamento_aprovar_item": True,
+            "perm_orcamento_recusar_item": True,
+            "perm_orcamento_migrar_item": True,
             "perm_os_alterar_tecnico": True,
             "perm_os_concluir": True,
             "perm_os_reabrir": True,
             "perm_estoque_cancelar_reserva": True,
+            "perm_venda_mostrador_trocar_vendedor": True,
         },
     ),
     "tecnico_campo": PresetPermissao(
@@ -48,6 +53,10 @@ PRESETS: dict[str, PresetPermissao] = {
             "perm_os_alterar_tecnico": True,
             "perm_os_concluir": True,
             "perm_os_reabrir": True,
+            "perm_orcamento_editar": True,
+            "perm_orcamento_aprovar_item": True,
+            "perm_orcamento_recusar_item": True,
+            "perm_orcamento_migrar_item": True,
             "perm_orcamento_excluir_item": True,
             "perm_caixa_ver_dre": True,
             "perm_caixa_gerir_comissoes": True,
@@ -55,6 +64,7 @@ PRESETS: dict[str, PresetPermissao] = {
             "perm_estoque_inventario_finalizar": True,
             "perm_estoque_converter_reserva": True,
             "perm_estoque_cancelar_reserva": True,
+            "perm_venda_mostrador_trocar_vendedor": True,
         },
     ),
 }
@@ -77,6 +87,7 @@ PERMISSION_LABELS = {
     "acesso_caixa_operacional_extra": "Acesso extra em Caixa operacional",
     "acesso_caixa_financeiro_extra": "Acesso extra em Caixa financeiro",
     "acesso_configuracoes_extra": "Acesso extra em Configurações",
+    "atua_como_tecnico": "Atua como técnico",
     "perm_os_editar_numero_serie": "Editar número de série",
     "perm_os_editar_observacoes_internas": "Editar observações internas da OS",
     "perm_os_editar_local_armazenamento": "Editar local de armazenamento",
@@ -110,6 +121,7 @@ PERMISSION_LABELS = {
     "perm_estoque_inventario_finalizar": "Finalizar inventário",
     "perm_estoque_converter_reserva": "Converter reserva",
     "perm_estoque_cancelar_reserva": "Cancelar reserva",
+    "perm_venda_mostrador_trocar_vendedor": "Trocar vendedor na venda a mostrador",
 }
 
 SENSITIVE_PERMISSION_GROUPS = {

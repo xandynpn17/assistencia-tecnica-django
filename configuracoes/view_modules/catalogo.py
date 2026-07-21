@@ -1,5 +1,6 @@
-from django.contrib import messages
+﻿from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -37,10 +38,12 @@ def marcas_fornecedores_impl(request):
     regra_form = RegraGarantiaMarcaForm()
     marca_em_edicao = None
     regra_em_edicao = None
+    aba_ativa = (request.GET.get("aba") or "").strip()
 
     if request.method == "POST":
         form_type = request.POST.get("form_type")
         if form_type == "fornecedor":
+            aba_ativa = "fornecedor-cad"
             fornecedor_form = FornecedorGarantiaForm(request.POST, request.FILES)
             if fornecedor_form.is_valid():
                 fornecedor = fornecedor_form.save()
@@ -48,6 +51,7 @@ def marcas_fornecedores_impl(request):
                 messages.success(request, "Fornecedor salvo com sucesso.")
                 return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "fornecedor_edit":
+            aba_ativa = "fornecedor-cad"
             fornecedor = get_object_or_404(FornecedorGarantia, id=request.POST.get("fornecedor_id"))
             fornecedor_form = FornecedorGarantiaForm(request.POST, request.FILES, instance=fornecedor)
             if fornecedor_form.is_valid():
@@ -56,15 +60,17 @@ def marcas_fornecedores_impl(request):
                 messages.success(request, "Fornecedor atualizado com sucesso.")
                 return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "fornecedor_delete":
+            aba_ativa = "fornecedor-cons"
             fornecedor = get_object_or_404(FornecedorGarantia, id=request.POST.get("fornecedor_id"))
             try:
                 _audit_catalogo(request, "fornecedor_excluido", f"fornecedor:{fornecedor.id}", antes={"nome": fornecedor.nome})
                 fornecedor.delete()
-                messages.success(request, "Fornecedor excluído com sucesso.")
+                messages.success(request, "Fornecedor excluido com sucesso.")
             except ProtectedError:
-                messages.error(request, "Fornecedor vinculado a marcas. Remova os vínculos antes de excluir.")
+                messages.error(request, "Fornecedor vinculado a marcas. Remova os vinculos antes de excluir.")
             return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "marca":
+            aba_ativa = "marca-cad"
             marca_form = MarcaGarantiaForm(request.POST)
             if marca_form.is_valid():
                 marca = marca_form.save()
@@ -72,6 +78,7 @@ def marcas_fornecedores_impl(request):
                 messages.success(request, "Marca de garantia salva com sucesso.")
                 return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
         elif form_type == "marca_edit":
+            aba_ativa = "marca-cad"
             marca = get_object_or_404(MarcaGarantia, id=request.POST.get("marca_id"))
             marca_form = MarcaGarantiaForm(request.POST, instance=marca)
             if marca_form.is_valid():
@@ -80,12 +87,14 @@ def marcas_fornecedores_impl(request):
                 messages.success(request, "Marca atualizada com sucesso.")
                 return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
         elif form_type == "marca_delete":
+            aba_ativa = "marca-cons"
             marca = get_object_or_404(MarcaGarantia, id=request.POST.get("marca_id"))
             _audit_catalogo(request, "marca_excluida", f"marca:{marca.id}", antes={"nome": marca.nome})
             marca.delete()
-            messages.success(request, "Marca excluída com sucesso.")
+            messages.success(request, "Marca excluida com sucesso.")
             return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "parceiro":
+            aba_ativa = "parceiro-cad"
             parceiro_form = ParceiroExpedicaoForm(request.POST)
             if parceiro_form.is_valid():
                 parceiro = parceiro_form.save()
@@ -93,6 +102,7 @@ def marcas_fornecedores_impl(request):
                 messages.success(request, "Parceiro salvo com sucesso.")
                 return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "parceiro_edit":
+            aba_ativa = "parceiro-cad"
             parceiro = get_object_or_404(ParceiroExpedicao, id=request.POST.get("parceiro_id"))
             parceiro_form = ParceiroExpedicaoForm(request.POST, instance=parceiro)
             if parceiro_form.is_valid():
@@ -101,12 +111,14 @@ def marcas_fornecedores_impl(request):
                 messages.success(request, "Parceiro atualizado com sucesso.")
                 return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "parceiro_delete":
+            aba_ativa = "parceiro-cons"
             parceiro = get_object_or_404(ParceiroExpedicao, id=request.POST.get("parceiro_id"))
             _audit_catalogo(request, "parceiro_excluido", f"parceiro:{parceiro.id}", antes={"nome": parceiro.nome})
             parceiro.delete()
-            messages.success(request, "Parceiro excluído com sucesso.")
+            messages.success(request, "Parceiro excluido com sucesso.")
             return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "regra_add":
+            aba_ativa = "marca-cad"
             marca_id_post = (request.POST.get("marca_id") or "").strip()
             marca = get_object_or_404(MarcaGarantia, id=marca_id_post)
             marca_form = MarcaGarantiaForm(instance=marca)
@@ -122,6 +134,7 @@ def marcas_fornecedores_impl(request):
                 messages.success(request, "Regra de garantia salva com sucesso.")
                 return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
         elif form_type == "regra_edit":
+            aba_ativa = "marca-cad"
             marca_id_post = (request.POST.get("marca_id") or "").strip()
             regra_id_post = (request.POST.get("regra_id") or "").strip()
             marca = get_object_or_404(MarcaGarantia, id=marca_id_post)
@@ -137,23 +150,26 @@ def marcas_fornecedores_impl(request):
                 regra.marca = marca
                 regra.save()
                 _audit_catalogo(request, "regra_garantia_editada", f"regra:{regra.id}", depois={"marca": marca.id})
-                messages.success(request, "Item de mão de obra atualizado com sucesso.")
+                messages.success(request, "Item de mao de obra atualizado com sucesso.")
                 return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
         elif form_type == "regra_delete":
+            aba_ativa = "marca-cad"
             marca_id_post = (request.POST.get("marca_id") or "").strip()
             regra_id_post = (request.POST.get("regra_id") or "").strip()
             marca = get_object_or_404(MarcaGarantia, id=marca_id_post)
             regra_obj = get_object_or_404(RegraGarantiaMarca, id=regra_id_post, marca=marca)
             _audit_catalogo(request, "regra_garantia_excluida", f"regra:{regra_obj.id}", antes={"marca": marca.id})
             regra_obj.delete()
-            messages.success(request, "Item de mão de obra removido com sucesso.")
+            messages.success(request, "Item de mao de obra removido com sucesso.")
             return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
     else:
         if edit_fornecedor_id.isdigit():
+            aba_ativa = aba_ativa or "fornecedor-cad"
             fornecedor_obj = FornecedorGarantia.objects.filter(id=int(edit_fornecedor_id)).first()
             fornecedor_form = FornecedorGarantiaForm(instance=fornecedor_obj)
 
         if edit_marca_id.isdigit():
+            aba_ativa = aba_ativa or "marca-cad"
             marca_em_edicao = MarcaGarantia.objects.filter(id=int(edit_marca_id)).first()
             if marca_em_edicao:
                 marca_form = MarcaGarantiaForm(instance=marca_em_edicao)
@@ -167,9 +183,20 @@ def marcas_fornecedores_impl(request):
                 else:
                     regra_form = RegraGarantiaMarcaForm(initial={"marca": marca_em_edicao.id})
         if edit_parceiro_id.isdigit():
+            aba_ativa = aba_ativa or "parceiro-cad"
             parceiro_obj = ParceiroExpedicao.objects.filter(id=int(edit_parceiro_id)).first()
             if parceiro_obj:
                 parceiro_form = ParceiroExpedicaoForm(instance=parceiro_obj)
+
+    if not aba_ativa:
+        if busca_fornecedor:
+            aba_ativa = "fornecedor-cons"
+        elif busca_marca:
+            aba_ativa = "marca-cons"
+        elif busca_parceiro:
+            aba_ativa = "parceiro-cons"
+        else:
+            aba_ativa = "fornecedor-cad"
 
     fornecedores_qs = (
         FornecedorGarantia.objects.filter(nome__icontains=busca_fornecedor)
@@ -177,9 +204,9 @@ def marcas_fornecedores_impl(request):
         else FornecedorGarantia.objects.all()
     )
     marcas_qs = (
-        MarcaGarantia.objects.select_related("fornecedor").filter(nome__icontains=busca_marca)
+        MarcaGarantia.objects.select_related("fornecedor").prefetch_related("regras_garantia").filter(nome__icontains=busca_marca)
         if busca_marca
-        else MarcaGarantia.objects.select_related("fornecedor").all()
+        else MarcaGarantia.objects.select_related("fornecedor").prefetch_related("regras_garantia").all()
     )
     parceiros_qs = (
         ParceiroExpedicao.objects.filter(nome__icontains=busca_parceiro)
@@ -192,6 +219,20 @@ def marcas_fornecedores_impl(request):
     regras_marca = RegraGarantiaMarca.objects.none()
     if marca_em_edicao:
         regras_marca = RegraGarantiaMarca.objects.filter(marca=marca_em_edicao).order_by("-inicio_vigencia", "tipo_produto")
+    resumo_catalogo = {
+        "fornecedores_total": FornecedorGarantia.objects.count(),
+        "fornecedores_ativos": FornecedorGarantia.objects.filter(ativo=True).count(),
+        "marcas_total": MarcaGarantia.objects.count(),
+        "marcas_com_fornecedor": MarcaGarantia.objects.filter(fornecedor__isnull=False).count(),
+        "marcas_sem_fornecedor": MarcaGarantia.objects.filter(fornecedor__isnull=True).count(),
+        "marcas_com_regras": MarcaGarantia.objects.annotate(
+            regras_ativas=Count("regras_garantia", filter=Q(regras_garantia__ativo=True))
+        ).filter(regras_ativas__gt=0).count(),
+        "parceiros_total": ParceiroExpedicao.objects.count(),
+        "parceiros_ativos": ParceiroExpedicao.objects.filter(ativo=True).count(),
+        "regras_total": RegraGarantiaMarca.objects.count(),
+        "regras_ativas": RegraGarantiaMarca.objects.filter(ativo=True).count(),
+    }
 
     return render(
         request,
@@ -214,7 +255,16 @@ def marcas_fornecedores_impl(request):
             "edit_parceiro_id": int(edit_parceiro_id) if edit_parceiro_id.isdigit() else None,
             "edit_regra_id": int(edit_regra_id) if edit_regra_id.isdigit() else None,
             "marca_em_edicao": marca_em_edicao,
+            "aba_ativa": aba_ativa,
+            "resumo_catalogo": resumo_catalogo,
+            "catalogo_tab": "marcas",
+            "catalogo_title": "Marcas, fornecedores e parceiros",
+            "catalogo_subtitle": (
+                "Cadastre a base de marcas atendidas, fornecedores de garantia e parceiros externos "
+                "numa unica area, com consulta e manutencao operacional."
+            ),
             "menu_app": "configuracoes",
             "menu_sub": "marcas_fornecedores",
         },
     )
+

@@ -4,6 +4,7 @@ from django.db import DatabaseError
 
 from .models import ConfiguracaoSistema
 from configuracoes.services.sla import calcular_pendencias_sla
+from configuracoes.services.setup_inicial import setup_inicial_concluido
 from configuracoes.services.tenant_guard import obter_empresa_ativa
 
 logger = logging.getLogger(__name__)
@@ -11,7 +12,20 @@ logger = logging.getLogger(__name__)
 
 def empresa_context(request):
     empresa = obter_empresa_ativa(request, strict=False)
-    config = ConfiguracaoSistema.get_configuracao()
+    try:
+        config = ConfiguracaoSistema.get_configuracao()
+    except DatabaseError as exc:
+        config = None
+        logger.warning(
+            "configuracao_contexto_falha",
+            extra={
+                "modulo": "configuracoes",
+                "acao": "empresa_context",
+                "usuario_id": getattr(getattr(request, "user", None), "id", None),
+                "empresa_id": getattr(empresa, "id", None),
+                "erro": str(exc),
+            },
+        )
     tenant_ctx = getattr(request, "tenant_context", None)
 
     sla_badges = {
@@ -47,8 +61,9 @@ def empresa_context(request):
     return {
         "empresa": empresa,
         "config_sistema": config,
-        "estados_brasil": ConfiguracaoSistema.ESTADOS_BRASIL,
-        "ddd_brasil": ConfiguracaoSistema.DDD_BRASIL,
+        "setup_inicial_concluido": setup_inicial_concluido(),
+        "estados_brasil": getattr(ConfiguracaoSistema, "ESTADOS_BRASIL", []),
+        "ddd_brasil": getattr(ConfiguracaoSistema, "DDD_BRASIL", []),
         "tenant_context": tenant_ctx,
         "sla_badges": sla_badges,
     }

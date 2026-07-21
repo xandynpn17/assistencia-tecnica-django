@@ -1,13 +1,16 @@
-﻿# Checklist de Go-Live Local (Empresa Unica)
+# Checklist de Go-Live Local (Empresa Unica)
 
 ## 1) Ambiente
 - Instalar Python 3.12+ e PostgreSQL 15+.
 - Configurar variaveis de ambiente de banco (`DJANGO_DB_*`).
 - Instalar dependencias: `pip install -r requirements.txt`.
+- Para um novo computador, prefira o script unico:
+  - `powershell.exe -ExecutionPolicy Bypass -File .\prepare_novo_computador.ps1`
 
 ## 2) Banco e aplicacao
 - Rodar migracoes: `manage.py migrate`.
 - Criar superusuario: `manage.py createsuperuser`.
+- Para comandos administrativos no PostgreSQL local, prefira: `powershell.exe -ExecutionPolicy Bypass -File .\manage_local.ps1 <comando>`.
 - Gerar ambiente local em rede: `powershell.exe -ExecutionPolicy Bypass -File .\setup_local_env.ps1 -Overwrite`.
 - Iniciar em modo local em rede: `powershell.exe -ExecutionPolicy Bypass -File .\run_local.ps1`.
 - Executar validacoes:
@@ -26,6 +29,7 @@
 - Configurar `ALLOWED_HOSTS` e `CSRF_TRUSTED_ORIGINS`.
 - Confirmar `DEBUG=False` no ambiente de producao.
 - Garantir `SECRET_KEY` forte e exclusiva.
+- Configurar `DJANGO_LOCAL_RECOVERY_KEY` para permitir restore sem login no PC principal.
 - Testar backup/restore:
   - SQLite: `manage.py backup_db --gzip --include-media`
   - PostgreSQL: `manage.py backup_db --include-media`
@@ -51,3 +55,4 @@
 - Definir rotina de backup diario e retencao.
 - Revisar painel de SLA diariamente.
 - Revisar logs de integracoes semanalmente.
+- Manter pelo menos um teste mensal de restauracao em outro computador ou base separada.

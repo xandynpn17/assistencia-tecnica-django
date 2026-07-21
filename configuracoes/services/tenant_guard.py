@@ -6,7 +6,7 @@ from django.db.models import QuerySet
 from configuracoes.models import Empresa, SetupInicialSistema
 
 
-def obter_empresa_ativa(request, *, strict: bool = False) -> Empresa | None:
+def obter_empresa_ativa(request, *, strict: bool = True) -> Empresa | None:
     empresa = getattr(request, "empresa_ativa", None)
     if empresa:
         return empresa
@@ -24,8 +24,7 @@ def obter_empresa_ativa(request, *, strict: bool = False) -> Empresa | None:
 
     if strict:
         raise PermissionDenied("Empresa ativa nao definida para esta sessao.")
-
-    return Empresa.objects.order_by("id").first()
+    return None
 
 
 def filtrar_queryset_empresa(queryset: QuerySet, empresa: Empresa | None, *, campo: str = "empresa") -> QuerySet:

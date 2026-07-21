@@ -1,29 +1,29 @@
-/**
- * SISTEMA DE CADASTRO DE CLIENTE - VERSÃO PROFISSIONAL COMPLETA
+﻿/**
+ * SISTEMA DE CADASTRO DE CLIENTE - VERSÃƒO PROFISSIONAL COMPLETA
  * @author Desenvolvedor
  * @version 3.0.0
  *
  * Funcionalidades:
- * ✅ CPF/CNPJ com formatação automática
- * ✅ Telefone com DDD e formatação
- * ✅ Busca de CEP com Tab, Enter e botão
- * ✅ Botão limpar funcionando
- * ✅ Limpeza ao recarregar página (F5)
- * ✅ Feedback visual com validações
- * ✅ Display do telefone com link WhatsApp
+ * âœ… CPF/CNPJ com formataÃ§Ã£o automÃ¡tica
+ * âœ… Telefone com DDD e formataÃ§Ã£o
+ * âœ… Busca de CEP com Tab, Enter e botÃ£o
+ * âœ… BotÃ£o limpar funcionando
+ * âœ… Limpeza ao recarregar pÃ¡gina (F5)
+ * âœ… Feedback visual com validaÃ§Ãµes
+ * âœ… Display do telefone com link WhatsApp
  */
 
 // ============================================
-// NAMESPACE ÚNICO - EVITA CONFLITOS
+// NAMESPACE ÃšNICO - EVITA CONFLITOS
 // ============================================
 const CadastroCliente = (function() {
     'use strict';
 
     // ============================================
-    // CONFIGURAÇÕES
+    // CONFIGURAÃ‡Ã•ES
     // ============================================
     const CONFIG = {
-        DEBUG: true,
+        DEBUG: window.ABTECH_DEBUG === true,
         TIMEOUTS: {
             INIT: 100,
             LIMPEZA: 150,
@@ -36,21 +36,25 @@ const CadastroCliente = (function() {
     };
 
     // ============================================
-    // UTILITÁRIOS
+    // UTILITÃRIOS
     // ============================================
     const Utils = {
         log: function(...args) {
             if (CONFIG.DEBUG) {
-                console.log('🏷️ [Cadastro]', ...args);
+                console.log('ðŸ·ï¸ [Cadastro]', ...args);
             }
         },
 
         error: function(...args) {
-            console.error('❌ [Erro]', ...args);
+            console.error('âŒ [Erro]', ...args);
         },
 
         apenasNumeros: function(str) {
             return str ? str.replace(/\D/g, '') : '';
+        },
+
+        normalizarDocumento: function(str) {
+            return str ? str.toUpperCase().replace(/[^0-9A-Z]/g, '') : '';
         },
 
         delay: function(ms) {
@@ -90,7 +94,7 @@ const CadastroCliente = (function() {
                 const primeiroCampo = document.getElementById('id_nome');
                 if (primeiroCampo) {
                     primeiroCampo.focus();
-                    Utils.log('✅ Foco no campo nome');
+                    Utils.log('âœ… Foco no campo nome');
                 }
             }, 100);
         },
@@ -112,40 +116,40 @@ const CadastroCliente = (function() {
         documento: function(input) {
             if (!input) return '';
 
-            let valor = Utils.apenasNumeros(input.value);
+            let valorDocumento = Utils.normalizarDocumento(input.value);
+            const soDigitos = Utils.apenasNumeros(input.value) === valorDocumento;
+            const ehCpf = soDigitos && valorDocumento.length <= 11;
+            const maxDigits = ehCpf ? 11 : 14;
 
-            // Determina se é CPF (11) ou CNPJ (14)
-            const maxDigits = valor.length > 11 ? 14 : 11;
-
-            if (valor.length > maxDigits) {
-                valor = valor.substring(0, maxDigits);
+            if (valorDocumento.length > maxDigits) {
+                valorDocumento = valorDocumento.substring(0, maxDigits);
             }
 
-            let formatado = valor;
+            let formatado = valorDocumento;
 
-            if (maxDigits === 11) { // CPF
-                if (valor.length > 9) {
-                    formatado = valor.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
-                } else if (valor.length > 6) {
-                    formatado = valor.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
-                } else if (valor.length > 3) {
-                    formatado = valor.replace(/(\d{3})(\d{0,3})/, '$1.$2');
+            if (ehCpf) {
+                if (valorDocumento.length > 9) {
+                    formatado = valorDocumento.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+                } else if (valorDocumento.length > 6) {
+                    formatado = valorDocumento.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+                } else if (valorDocumento.length > 3) {
+                    formatado = valorDocumento.replace(/(\d{3})(\d{0,3})/, '$1.$2');
                 }
-            } else { // CNPJ
-                if (valor.length > 12) {
-                    formatado = valor.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
-                } else if (valor.length > 8) {
-                    formatado = valor.replace(/(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
-                } else if (valor.length > 5) {
-                    formatado = valor.replace(/(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
-                } else if (valor.length > 2) {
-                    formatado = valor.replace(/(\d{2})(\d{0,3})/, '$1.$2');
+            } else {
+                if (valorDocumento.length > 12) {
+                    formatado = valorDocumento.replace(/([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{3})([0-9A-Z]{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
+                } else if (valorDocumento.length > 8) {
+                    formatado = valorDocumento.replace(/([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{3})([0-9A-Z]{0,4})/, '$1.$2.$3/$4');
+                } else if (valorDocumento.length > 5) {
+                    formatado = valorDocumento.replace(/([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{0,3})/, '$1.$2.$3');
+                } else if (valorDocumento.length > 2) {
+                    formatado = valorDocumento.replace(/([0-9A-Z]{2})([0-9A-Z]{0,3})/, '$1.$2');
                 }
             }
 
             input.value = formatado;
-            input.dataset.valorLimpo = valor;
-            return valor;
+            input.dataset.valorLimpo = valorDocumento;
+            return valorDocumento;
         },
 
         telefone: function(input) {
@@ -192,7 +196,7 @@ const CadastroCliente = (function() {
         validarCEPEmTempoReal: function(input) {
             const cepLimpo = Utils.apenasNumeros(input.value);
 
-            // Remover mensagens temporárias
+            // Remover mensagens temporÃ¡rias
             const tempFeedback = input.parentNode.querySelector('.cep-temp-feedback');
             if (tempFeedback) tempFeedback.remove();
 
@@ -210,10 +214,10 @@ const CadastroCliente = (function() {
                     feedback.className = 'invalid-feedback d-block cep-temp-feedback';
 
                     if (cepLimpo.length < 8) {
-                        feedback.textContent = `Faltam ${8 - cepLimpo.length} dígitos!`;
+                        feedback.textContent = `Faltam ${8 - cepLimpo.length} d?gitos!`;
                         feedback.style.color = '#ffc107';
                     } else {
-                        feedback.textContent = 'CEP deve ter no máximo 8 dígitos!';
+                        feedback.textContent = 'CEP deve ter no m?ximo 8 d?gitos!';
                     }
 
                     input.parentNode.appendChild(feedback);
@@ -223,13 +227,13 @@ const CadastroCliente = (function() {
     };
 
     // ============================================
-    // SERVIÇO DE CEP
+    // SERVIÃ‡O DE CEP
     // ============================================
     const CepService = {
         tabPressed: false,
 
         async buscar(cep) {
-            Utils.log('🔍 Buscando CEP:', cep);
+            Utils.log('ðŸ” Buscando CEP:', cep);
 
             try {
                 const response = await fetch(`/configuracoes/buscar-cep/?cep=${cep}`);
@@ -239,7 +243,7 @@ const CadastroCliente = (function() {
                 }
 
                 const data = await response.json();
-                Utils.log('📦 Resposta CEP:', data);
+                Utils.log('ðŸ“¦ Resposta CEP:', data);
 
                 return data;
             } catch (error) {
@@ -262,7 +266,7 @@ const CadastroCliente = (function() {
                     if (campo) {
                         campo.value = valor;
                         campo.classList.add('is-valid');
-                        Utils.log(`✅ ${id} preenchido:`, valor);
+                        Utils.log(`âœ… ${id} preenchido:`, valor);
                     }
                 }
             });
@@ -275,7 +279,7 @@ const CadastroCliente = (function() {
                         if (option.value === estadoUpper) {
                             estadoSelect.value = estadoUpper;
                             estadoSelect.classList.add('is-valid');
-                            Utils.log('✅ Estado selecionado:', estadoUpper);
+                            Utils.log('âœ… Estado selecionado:', estadoUpper);
                         }
                     });
                 }
@@ -297,7 +301,7 @@ const CadastroCliente = (function() {
                 estadoSelect.classList.remove('is-valid');
             }
 
-            Utils.log('🧹 Campos de endereço limpos');
+            Utils.log('ðŸ§¹ Campos de endereÃ§o limpos');
         }
     };
 
@@ -311,7 +315,7 @@ const CadastroCliente = (function() {
                 const input = document.getElementById('id_documento');
                 if (!input) return;
 
-                // Formatação ao digitar
+                // FormataÃ§Ã£o ao digitar
                 input.addEventListener('input', (e) => {
                     Formatadores.documento(e.target);
                 });
@@ -340,7 +344,7 @@ const CadastroCliente = (function() {
                     }
                 }
 
-                Utils.log('✅ Documento configurado');
+                Utils.log('âœ… Documento configurado');
             }
         },
 
@@ -353,14 +357,14 @@ const CadastroCliente = (function() {
 
                 if (!dddSelect || !telefoneInput) return;
 
-                // Criar campo oculto se não existir
+                // Criar campo oculto se nÃ£o existir
                 if (!telefoneCompletoInput) {
                     telefoneCompletoInput = document.createElement('input');
                     telefoneCompletoInput.type = 'hidden';
                     telefoneCompletoInput.name = 'telefone_completo';
                     telefoneCompletoInput.id = 'telefone_completo';
                     telefoneInput.parentNode.appendChild(telefoneCompletoInput);
-                    Utils.log('➕ Campo oculto telefone_completo criado');
+                    Utils.log('âž• Campo oculto telefone_completo criado');
                 }
 
                 const ddd = dddSelect.value || '';
@@ -369,7 +373,7 @@ const CadastroCliente = (function() {
                 if (ddd && numero && (numero.length === 8 || numero.length === 9)) {
                     const telefoneCompleto = ddd + numero;
                     telefoneCompletoInput.value = telefoneCompleto;
-                    Utils.log('📱 Telefone completo:', telefoneCompleto);
+                    Utils.log('ðŸ“± Telefone completo:', telefoneCompleto);
 
                     this.mostrarDisplay(ddd, numero);
 
@@ -408,7 +412,7 @@ const CadastroCliente = (function() {
                 whatsapp.innerHTML = `<a href="https://wa.me/${whatsappNumero}" target="_blank" class="text-success">wa.me/${whatsappNumero}</a>`;
 
                 display.style.display = 'block';
-                Utils.log('📞 Display telefone atualizado');
+                Utils.log('ðŸ“ž Display telefone atualizado');
             },
 
             ocultarDisplay() {
@@ -424,7 +428,7 @@ const CadastroCliente = (function() {
 
                 if (!telefoneInput || !dddSelect) return;
 
-                // Formatação ao digitar
+                // FormataÃ§Ã£o ao digitar
                 telefoneInput.addEventListener('input', (e) => {
                     Formatadores.telefone(e.target);
                     this.atualizarCompleto();
@@ -432,7 +436,7 @@ const CadastroCliente = (function() {
 
                 // DDD mudou
                 dddSelect.addEventListener('change', () => {
-                    Utils.log('🔄 DDD alterado:', dddSelect.value);
+                    Utils.log('ðŸ”„ DDD alterado:', dddSelect.value);
                     this.atualizarCompleto();
                 });
 
@@ -471,7 +475,7 @@ const CadastroCliente = (function() {
                     }
                 }
 
-                Utils.log('✅ Telefone configurado');
+                Utils.log('âœ… Telefone configurado');
             }
         },
 
@@ -480,23 +484,23 @@ const CadastroCliente = (function() {
             async buscar() {
                 const cepInput = document.getElementById('id_codigo_postal');
                 if (!cepInput) {
-                    Utils.error('Campo CEP não encontrado');
+                    Utils.error('Campo CEP nÃ£o encontrado');
                     return;
                 }
 
                 const cep = Utils.apenasNumeros(cepInput.value);
 
                 if (cep.length !== 8) {
-                    Handlers.cep.mostrarErro('CEP deve ter 8 dígitos!');
+                    Handlers.cep.mostrarErro('CEP deve ter 8 d?gitos!');
                     cepInput.focus();
                     cepInput.select();
                     return;
                 }
 
-                // Limpar validações anteriores
+                // Limpar validaÃ§Ãµes anteriores
                 cepInput.classList.remove('is-valid', 'is-invalid');
 
-                // Loading state no botão
+                // Loading state no botÃ£o
                 const btnCep = document.getElementById('btn-buscar-cep');
                 const originalHtml = btnCep?.innerHTML || '';
                 if (btnCep) {
@@ -508,7 +512,7 @@ const CadastroCliente = (function() {
                     const data = await CepService.buscar(cep);
 
                     if (data.erro || data.error) {
-                        Handlers.cep.mostrarErro('CEP não encontrado!');
+                        Handlers.cep.mostrarErro('CEP nÃ£o encontrado!');
                         CepService.limparCampos();
                     } else {
                         Handlers.cep.mostrarSucesso();
@@ -520,7 +524,7 @@ const CadastroCliente = (function() {
                         }, 100);
                     }
                 } catch (error) {
-                    Handlers.cep.mostrarErro('Erro na conexão. Tente novamente.');
+                    Handlers.cep.mostrarErro('Erro na conexÃ£o. Tente novamente.');
                     CepService.limparCampos();
                 } finally {
                     if (btnCep) {
@@ -558,17 +562,17 @@ const CadastroCliente = (function() {
             },
 
             configurarEventos() {
-                Utils.log('⚙️ Configurando eventos do CEP...');
+                Utils.log('âš™ï¸ Configurando eventos do CEP...');
 
                 const cepInput = document.getElementById('id_codigo_postal');
                 const btnCep = document.getElementById('btn-buscar-cep');
 
                 if (!cepInput) {
-                    Utils.error('Campo CEP não encontrado');
+                    Utils.error('Campo CEP nÃ£o encontrado');
                     return;
                 }
 
-                // Input com formatação e validação em tempo real
+                // Input com formataÃ§Ã£o e validaÃ§Ã£o em tempo real
                 cepInput.addEventListener('input', (e) => {
                     Formatadores.cep(e.target);
                     Formatadores.validarCEPEmTempoReal(e.target);
@@ -586,7 +590,7 @@ const CadastroCliente = (function() {
                     const cepLimpo = Utils.apenasNumeros(e.target.value);
 
                     if (cepLimpo.length > 0 && cepLimpo.length < 8) {
-                        Handlers.cep.mostrarErro(`CEP incompleto! Faltam ${8 - cepLimpo.length} dígitos.`);
+                        Handlers.cep.mostrarErro(`CEP incompleto! Faltam ${8 - cepLimpo.length} d?gitos.`);
                         return;
                     }
 
@@ -608,13 +612,13 @@ const CadastroCliente = (function() {
                     }
                 });
 
-                // Botão buscar
+                // BotÃ£o buscar
                 if (btnCep) {
                     btnCep.addEventListener('click', (e) => {
                         e.preventDefault();
                         this.buscar();
                     });
-                    Utils.log('✅ Botão CEP configurado');
+                    Utils.log('âœ… BotÃ£o CEP configurado');
                 }
 
                 // Atualizar texto de ajuda
@@ -631,24 +635,24 @@ const CadastroCliente = (function() {
                     Formatadores.validarCEPEmTempoReal(cepInput);
                 }
 
-                Utils.log('✅ Eventos CEP configurados');
+                Utils.log('âœ… Eventos CEP configurados');
             }
         },
 
-        // ========== BOTÃO LIMPAR ==========
+        // ========== BOTÃƒO LIMPAR ==========
         limpar: {
             executar() {
-                Utils.log('🧹 Iniciando limpeza completa...');
+                Utils.log('ðŸ§¹ Iniciando limpeza completa...');
 
                 const form = document.getElementById('clienteForm');
                 if (!form) {
-                    Utils.error('❌ Formulário não encontrado');
+                    Utils.error('âŒ FormulÃ¡rio nÃ£o encontrado');
                     return;
                 }
 
-                // 1. Reset do formulário
+                // 1. Reset do formulÃ¡rio
                 form.reset();
-                Utils.log('✅ Form.reset() executado');
+                Utils.log('âœ… Form.reset() executado');
 
                 // 2. Limpar campos manualmente
                 const campos = [
@@ -688,7 +692,7 @@ const CadastroCliente = (function() {
                 // 5. Limpar display do telefone
                 Handlers.telefone.ocultarDisplay();
 
-                // 6. Limpar validações visuais
+                // 6. Limpar validaÃ§Ãµes visuais
                 Utils.limparValidacoesVisuais();
 
                 // 7. Limpar feedback do CEP
@@ -696,26 +700,26 @@ const CadastroCliente = (function() {
                 if (cepError) cepError.remove();
 
                 // 8. Feedback visual
-                Utils.mostrarFeedback('✅ Formulário limpo com sucesso!');
+                Utils.mostrarFeedback('âœ… FormulÃ¡rio limpo com sucesso!');
 
                 // 9. Focar no primeiro campo
                 Utils.focarPrimeiroCampo();
 
-                Utils.log('🎉 Limpeza concluída!');
+                Utils.log('?? Limpeza conclu?da!');
             },
 
             configurar() {
-                Utils.log('🔧 Configurando botão limpar...');
+                Utils.log('ðŸ”§ Configurando botÃ£o limpar...');
 
                 const btnLimpar = document.getElementById('btn-limpar-formulario');
 
                 if (!btnLimpar) {
-                    Utils.error('❌ Botão limpar não encontrado!');
-                    Utils.log('Botões disponíveis:', document.querySelectorAll('button'));
+                    Utils.error('âŒ BotÃ£o limpar nÃ£o encontrado!');
+                    Utils.log('Bot?es dispon?veis:', document.querySelectorAll('button'));
                     return;
                 }
 
-                Utils.log('🎯 Botão limpar encontrado:', btnLimpar);
+                Utils.log('ðŸŽ¯ BotÃ£o limpar encontrado:', btnLimpar);
 
                 // Remover listeners antigos (clone seguro)
                 const novoBotao = btnLimpar.cloneNode(true);
@@ -726,38 +730,38 @@ const CadastroCliente = (function() {
                     e.preventDefault();
                     e.stopPropagation();
 
-                    if (confirm('Tem certeza que deseja limpar todos os campos do formulário?')) {
+                    if (confirm('Tem certeza que deseja limpar todos os campos do formulÃ¡rio?')) {
                         this.executar();
                     }
                 });
 
-                Utils.log('✅ Botão limpar configurado com sucesso!');
+                Utils.log('âœ… BotÃ£o limpar configurado com sucesso!');
             }
         },
 
         // ========== SUBMIT ==========
         submit: {
             preparar(e) {
-                Utils.log('📤 Preparando envio do formulário...');
+                Utils.log('ðŸ“¤ Preparando envio do formulÃ¡rio...');
 
-                // 1. Documento - remover formatação
+                // 1. Documento - remover formataÃ§Ã£o
                 const docInput = document.getElementById('id_documento');
                 if (docInput?.dataset.valorLimpo) {
                     docInput.value = docInput.dataset.valorLimpo;
-                    Utils.log('📄 Documento limpo:', docInput.value);
+                    Utils.log('ðŸ“„ Documento limpo:', docInput.value);
                 }
 
-                // 2. CEP - remover formatação
+                // 2. CEP - remover formataÃ§Ã£o
                 const cepInput = document.getElementById('id_codigo_postal');
                 if (cepInput) {
                     cepInput.value = Utils.apenasNumeros(cepInput.value);
-                    Utils.log('📍 CEP limpo:', cepInput.value);
+                    Utils.log('ðŸ“ CEP limpo:', cepInput.value);
                 }
 
                 // 3. Telefone - garantir campo oculto
                 Handlers.telefone.atualizarCompleto();
 
-                Utils.log('✅ Formulário pronto para envio');
+                Utils.log('âœ… FormulÃ¡rio pronto para envio');
                 return true;
             },
 
@@ -766,7 +770,7 @@ const CadastroCliente = (function() {
                 if (!form) return;
 
                 form.addEventListener('submit', (e) => this.preparar(e));
-                Utils.log('✅ Handler de submit configurado');
+                Utils.log('âœ… Handler de submit configurado');
             }
         },
 
@@ -783,12 +787,12 @@ const CadastroCliente = (function() {
                 const veioDaBusca = document.querySelector('input[name="cpf_telefone_busca"]')?.value;
 
                 if (!temDados && !temMensagens && !veioDaBusca) {
-                    Utils.log('🔄 Página recarregada - limpando formulário...');
+                    Utils.log('ðŸ”„ PÃ¡gina recarregada - limpando formulÃ¡rio...');
                     Handlers.limpar.executar();
                 } else if (veioDaBusca) {
-                    Utils.log('🔍 Veio da busca, mantendo dados');
+                    Utils.log('ðŸ” Veio da busca, mantendo dados');
                 } else {
-                    Utils.log('📋 Formulário já tem dados, mantendo');
+                    Utils.log('ðŸ“‹ FormulÃ¡rio jÃ¡ tem dados, mantendo');
                 }
             },
 
@@ -812,7 +816,7 @@ const CadastroCliente = (function() {
                     }
                 });
 
-                Utils.log('✅ Autocomplete prevenido');
+                Utils.log('âœ… Autocomplete prevenido');
             }
         },
 
@@ -825,7 +829,7 @@ const CadastroCliente = (function() {
                     setTimeout(() => campoBusca.focus(), CONFIG.TIMEOUTS.FOCUS);
                 }
 
-                // Primeiro campo do formulário
+                // Primeiro campo do formulÃ¡rio
                 const form = document.getElementById('clienteForm');
                 if (form) {
                     const primeiroCampo = form.querySelector('input:not([type="hidden"]):not([readonly]), select, textarea');
@@ -834,20 +838,20 @@ const CadastroCliente = (function() {
                     }
                 }
 
-                Utils.log('✅ Gerenciamento de foco configurado');
+                Utils.log('âœ… Gerenciamento de foco configurado');
             }
         }
     };
 
     // ============================================
-    // INICIALIZAÇÃO
+    // INICIALIZAÃ‡ÃƒO
     // ============================================
     function init() {
-        Utils.log('🚀 Inicializando sistema de cadastro...');
+        Utils.log('ðŸš€ Inicializando sistema de cadastro...');
 
-        // Verificar se é página de cadastro
+        // Verificar se Ã© pÃ¡gina de cadastro
         if (!document.getElementById('clienteForm') && !document.getElementById('campoBusca')) {
-            Utils.log('⚠️ Não é página de cadastro');
+            Utils.log('âš ï¸ NÃ£o Ã© pÃ¡gina de cadastro');
             return;
         }
 
@@ -860,9 +864,9 @@ const CadastroCliente = (function() {
     }
 
     function iniciarModulos() {
-        Utils.log('✅ Página de cadastro detectada');
+        Utils.log('âœ… PÃ¡gina de cadastro detectada');
 
-        // Configurar módulos com delays estratégicos
+        // Configurar mÃ³dulos com delays estratÃ©gicos
         const timers = [
             { delay: 50, handler: () => Handlers.documento.configurarEventos() },
             { delay: 80, handler: () => Handlers.telefone.configurarEventos() },
@@ -878,44 +882,44 @@ const CadastroCliente = (function() {
             setTimeout(timer.handler, timer.delay);
         });
 
-        Utils.log('✅ Todos os módulos inicializados');
+        Utils.log('âœ… Todos os mÃ³dulos inicializados');
     }
 
     // ============================================
-    // API PÚBLICA (para console)
+    // API PÃšBLICA (para console)
     // ============================================
     return {
         init,
 
         // Debug completo
         debug: function() {
-            console.log('\n=== 🔍 DEBUG COMPLETO DO SISTEMA ===\n');
+            console.log('\n=== ðŸ” DEBUG COMPLETO DO SISTEMA ===\n');
 
             const elementos = {
-                '📋 Formulário': document.getElementById('clienteForm'),
-                '🧹 Botão Limpar': document.getElementById('btn-limpar-formulario'),
-                '📍 Botão CEP': document.getElementById('btn-buscar-cep'),
-                '👤 Campo Nome': document.getElementById('id_nome'),
-                '🆔 Campo Documento': document.getElementById('id_documento'),
-                '📞 Campo Telefone': document.getElementById('id_telefone_numero'),
-                '📮 Campo CEP': document.getElementById('id_codigo_postal'),
-                '🔍 Campo Busca': document.getElementById('campoBusca')
+                'ðŸ“‹ FormulÃ¡rio': document.getElementById('clienteForm'),
+                'ðŸ§¹ BotÃ£o Limpar': document.getElementById('btn-limpar-formulario'),
+                'ðŸ“ BotÃ£o CEP': document.getElementById('btn-buscar-cep'),
+                'ðŸ‘¤ Campo Nome': document.getElementById('id_nome'),
+                'ðŸ†” Campo Documento': document.getElementById('id_documento'),
+                'ðŸ“ž Campo Telefone': document.getElementById('id_telefone_numero'),
+                'ðŸ“® Campo CEP': document.getElementById('id_codigo_postal'),
+                'ðŸ” Campo Busca': document.getElementById('campoBusca')
             };
 
-            console.log('📌 ELEMENTOS ENCONTRADOS:');
+            console.log('ðŸ“Œ ELEMENTOS ENCONTRADOS:');
             Object.entries(elementos).forEach(([nome, elem]) => {
-                console.log(`   ${nome}: ${elem ? '✅' : '❌'} ${elem ? `(valor: "${elem.value}")` : ''}`);
+                console.log(`   ${nome}: ${elem ? 'âœ…' : 'âŒ'} ${elem ? `(valor: "${elem.value}")` : ''}`);
             });
 
-            console.log('\n📌 FUNÇÕES DISPONÍVEIS:');
-            console.log('   📍 testarCEP() - Buscar CEP 01001000');
-            console.log('   🧹 limpar() - Limpar formulário');
-            console.log('   📞 verificarTelefone() - Ver estado do telefone');
-            console.log('   🔄 forcarLimpeza() - Forçar limpeza');
-            console.log('   🎯 testarBotao() - Disparar clique no botão limpar\n');
+            console.log('\nðŸ“Œ FUNÃ‡Ã•ES DISPONÃVEIS:');
+            console.log('   ðŸ“ testarCEP() - Buscar CEP 01001000');
+            console.log('   ðŸ§¹ limpar() - Limpar formulÃ¡rio');
+            console.log('   ðŸ“ž verificarTelefone() - Ver estado do telefone');
+            console.log('   ðŸ”„ forcarLimpeza() - ForÃ§ar limpeza');
+            console.log('   ðŸŽ¯ testarBotao() - Disparar clique no botÃ£o limpar\n');
         },
 
-        // Utilitários
+        // UtilitÃ¡rios
         limpar: () => Handlers.limpar.executar(),
         forcarLimpeza: () => Handlers.limpar.executar(),
 
@@ -931,26 +935,26 @@ const CadastroCliente = (function() {
         testarBotao: function() {
             const botao = document.getElementById('btn-limpar-formulario');
             if (botao) {
-                Utils.log('🎯 Disparando clique no botão...');
+                Utils.log('ðŸŽ¯ Disparando clique no botÃ£o...');
                 botao.click();
             }
         },
 
         verificarTelefone: function() {
-            console.log('\n📞 ESTADO DO TELEFONE:');
+            console.log('\nðŸ“ž ESTADO DO TELEFONE:');
             console.log('   DDD:', document.getElementById('id_ddd')?.value);
-            console.log('   Número:', document.getElementById('id_telefone_numero')?.value);
-            console.log('   Número limpo:', document.getElementById('id_telefone_numero')?.dataset.valorLimpo);
+            console.log('   NÃºmero:', document.getElementById('id_telefone_numero')?.value);
+            console.log('   NÃºmero limpo:', document.getElementById('id_telefone_numero')?.dataset.valorLimpo);
             console.log('   Telefone completo:', document.getElementById('telefone_completo')?.value);
             console.log('   Display:', document.getElementById('telefone-display')?.style.display);
         },
 
         verificarCEP: function() {
             const cepInput = document.getElementById('id_codigo_postal');
-            console.log('\n📍 ESTADO DO CEP:');
+            console.log('\nðŸ“ ESTADO DO CEP:');
             console.log('   Valor:', cepInput?.value);
             console.log('   Limpo:', Utils.apenasNumeros(cepInput?.value || ''));
-            console.log('   Válido:', Utils.apenasNumeros(cepInput?.value || '').length === 8 ? '✅' : '❌');
+            console.log('   VÃ¡lido:', Utils.apenasNumeros(cepInput?.value || '').length === 8 ? 'âœ…' : 'âŒ');
         }
     };
 
@@ -959,11 +963,11 @@ const CadastroCliente = (function() {
 // ============================================
 // INICIAR SISTEMA
 // ============================================
-// Expor global para console
 window.CadastroCliente = CadastroCliente;
-window.debugFormulario = () => CadastroCliente.debug();
-window.forcarLimpeza = () => CadastroCliente.limpar();
-window.testarCEP = (cep) => CadastroCliente.testarCEP(cep);
-window.verificarTelefone = () => CadastroCliente.verificarTelefone();
-
-console.log('✅ Sistema de cadastro profissional carregado!');
+if (window.ABTECH_DEBUG === true) {
+    window.debugFormulario = () => CadastroCliente.debug();
+    window.forcarLimpeza = () => CadastroCliente.limpar();
+    window.testarCEP = (cep) => CadastroCliente.testarCEP(cep);
+    window.verificarTelefone = () => CadastroCliente.verificarTelefone();
+    console.log('Sistema de cadastro profissional carregado em modo debug.');
+}

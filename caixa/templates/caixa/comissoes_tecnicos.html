@@ -14,6 +14,17 @@
         use <a href="{% url 'caixa:meu_desempenho' %}">Meu desempenho</a>.
       </small>
     </div>
+    <div class="border rounded px-3 py-2 mb-3 bg-light">
+      <div class="d-flex flex-wrap align-items-center" style="gap:8px;">
+        <strong class="mr-2">Fluxo:</strong>
+        <span class="badge badge-warning">Gerada</span>
+        <small class="text-muted mr-3">Calculada e aguardando conferencia.</small>
+        <span class="badge badge-info">Liberada</span>
+        <small class="text-muted mr-3">Validada para entrar no pagamento mensal.</small>
+        <span class="badge badge-success">Paga</span>
+        <small class="text-muted">Quitada com referencia e trilha de auditoria.</small>
+      </div>
+    </div>
     <form method="get" class="form-row">
       <div class="col-md-3">
         <label>Colaborador</label>
@@ -427,4 +438,5 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 {% endblock %}
+
 

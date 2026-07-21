@@ -183,10 +183,14 @@
           <span class="import-column-chip">categoria</span>
           <span class="import-column-chip">marca</span>
           <span class="import-column-chip">fornecedor</span>
+          <span class="import-column-chip">fornecedor_manual</span>
+          <span class="import-column-chip">modelos_compativeis</span>
           <span class="import-column-chip">custo_unitario</span>
           <span class="import-column-chip">preco_final</span>
           <span class="import-column-chip">estoque_minimo</span>
           <span class="import-column-chip">estoque_inicial</span>
+          <span class="import-column-chip">ponto_operacional (opcional)</span>
+          <span class="import-column-chip">ubicacao (opcional)</span>
         </div>
       </div>
 
@@ -201,6 +205,31 @@
           <div class="import-actions">
             <button type="submit" name="acao" value="validar" class="btn btn-outline-primary">Validar arquivo</button>
             <button type="submit" name="acao" value="importar" class="btn btn-primary">Importar lote</button>
+          </div>
+        </div>
+        <div class="row mt-3">
+          <div class="col-md-6">
+            <label for="id_ponto_operacional_padrao" class="font-weight-bold">Ponto operacional padrao</label>
+            <select name="ponto_operacional_padrao" id="id_ponto_operacional_padrao" class="form-control">
+              <option value="">Selecione</option>
+              {% for ponto in pontos_ativos %}
+              <option value="{{ ponto.id }}" {% if ponto.id == ponto_padrao_id %}selected{% endif %}>{{ ponto.codigo }} - {{ ponto.nome }}</option>
+              {% endfor %}
+            </select>
+            <small class="form-text text-muted">Usado para itens fisicos quando a coluna `ponto_operacional` nao vier preenchida no arquivo.</small>
+          </div>
+          <div class="col-md-6">
+            <label for="id_ubicacao_padrao_importacao_texto" class="font-weight-bold">Ubicacao padrao</label>
+            <input
+              type="text"
+              name="ubicacao_padrao_importacao_texto"
+              id="id_ubicacao_padrao_importacao_texto"
+              class="form-control"
+              value="{{ ubicacao_padrao_texto }}"
+              placeholder="Ex.: PRAT-01, BOX-A, GAVETA 3"
+            >
+            <input type="hidden" name="ubicacao_padrao_importacao" value="{{ ubicacao_padrao_id }}">
+            <small class="form-text text-muted">Se a linha nao trouxer `ubicacao`, o sistema usa este texto e cria/reaproveita a ubicao dentro do ponto informado.</small>
           </div>
         </div>
       </form>
@@ -252,6 +281,8 @@
                 <th>Nome</th>
                 <th>Tipo</th>
                 <th>EAN</th>
+                <th>Ponto</th>
+                <th>Ubicacao</th>
                 <th>Custo</th>
                 <th>Preco</th>
                 <th>Estoque inicial</th>
@@ -265,6 +296,8 @@
                 <td>{{ row.nome }}</td>
                 <td>{{ row.tipo_item }}</td>
                 <td>{{ row.ean|default:"-" }}</td>
+                <td>{% if row.ponto_resolvido %}{{ row.ponto_resolvido.codigo }}{% else %}-{% endif %}</td>
+                <td>{% if row.ubicacao_resolvida %}{{ row.ubicacao_resolvida.codigo }}{% else %}-{% endif %}</td>
                 <td>{{ row.custo_unitario }}</td>
                 <td>{{ row.preco_final }}</td>
                 <td>{{ row.estoque_inicial }}</td>
@@ -292,6 +325,7 @@
         <li>Padronize SKU e EAN para evitar duplicidade de cadastro.</li>
         <li>Defina corretamente `tipo_item` para separar peca, produto e servico.</li>
         <li>Use saldo inicial apenas quando realmente estiver carregando um produto novo.</li>
+        <li>Para item fisico, garanta sempre um ponto e uma ubicacao validos.</li>
       </ul>
     </div>
 
@@ -301,8 +335,44 @@
         <li>Preco final coerente com custo e margem.</li>
         <li>Fornecedor e marca com nomes consistentes.</li>
         <li>Colunas obrigatorias preenchidas nas linhas do lote.</li>
+        <li>Se nao vier ponto/ubicacao no arquivo, confira os padroes escolhidos antes de importar.</li>
       </ul>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const campoPonto = document.getElementById("id_ponto_operacional_padrao");
+  const campoUbicacao = document.getElementById("id_ubicacao_padrao_importacao");
+  if (!campoPonto || !campoUbicacao) return;
+
+  function filtrarUbicacoes() {
+    const pontoId = campoPonto.value || "";
+    let temSelecionadaValida = false;
+    Array.from(campoUbicacao.options).forEach((option) => {
+      if (!option.value) {
+        option.hidden = false;
+        option.disabled = false;
+        return;
+      }
+      const visivel = !pontoId || option.dataset.ponto === pontoId;
+      option.hidden = !visivel;
+      option.disabled = !visivel;
+      if (visivel && option.selected) {
+        temSelecionadaValida = true;
+      }
+    });
+    if (!temSelecionadaValida) {
+      const primeiraValida = Array.from(campoUbicacao.options).find((option) => option.value && !option.disabled);
+      campoUbicacao.value = primeiraValida ? primeiraValida.value : "";
+    }
+  }
+
+  campoPonto.addEventListener("change", filtrarUbicacoes);
+  filtrarUbicacoes();
+});
+</script>
 {% endblock %}

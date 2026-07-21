@@ -1,0 +1,175 @@
+﻿{% extends "core/base.html" %}
+
+{% block title %}Inventários de Estoque{% endblock %}
+
+{% block content %}
+<style>
+.inv-grid { display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; }
+.inv-cards { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+.inv-card { border:1px solid #d9e2ec; border-radius:12px; background:#fff; padding:14px; }
+.inv-label { font-size:11px; text-transform:uppercase; color:#64748b; margin-bottom:4px; }
+.inv-value { font-size:1.25rem; font-weight:700; color:#183247; }
+.inv-helper { border:1px solid #d7e4ef; border-radius:12px; background:linear-gradient(180deg, #f8fbff 0%, #eef5fb 100%); padding:12px 14px; margin-bottom:14px; }
+.inv-helper strong { color:#183247; display:block; margin-bottom:4px; }
+.inv-helper span { color:#5d7286; font-size:13px; }
+.inv-quick { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.inv-check { border:1px solid #d9e2ec; border-radius:10px; padding:10px 12px; margin-bottom:10px; background:#f8fbff; }
+.inv-check label { display:flex; gap:8px; align-items:flex-start; margin:0; font-weight:600; }
+.inv-check small { display:block; color:#64748b; font-weight:400; }
+@media (max-width: 991.98px){ .inv-grid, .inv-cards { grid-template-columns:1fr; } }
+</style>
+<div class="ui-module-header mb-3">
+    <div>
+        <h1 class="ui-module-title">Inventários de Estoque</h1>
+        <p class="ui-module-subtitle">Conte o físico em tela, compare com o sistema e finalize com rastreabilidade.</p>
+    </div>
+</div>
+
+<div class="inv-cards">
+    <div class="inv-card"><div class="inv-label">Abertos</div><div class="inv-value">{{ resumo.abertos }}</div></div>
+    <div class="inv-card"><div class="inv-label">Fechados</div><div class="inv-value">{{ resumo.fechados }}</div></div>
+    <div class="inv-card"><div class="inv-label">Total</div><div class="inv-value">{{ resumo.total }}</div></div>
+</div>
+
+<div class="inv-helper">
+    <strong>Como usar esta area</strong>
+    <span>Gere inventarios por ponto, ubicacao ou categoria para fazer contagens menores e mais seguras. Quando houver divergencia, trate primeiro a recontagem e a aprovacao antes do fechamento final.</span>
+</div>
+
+<div class="inv-grid">
+    <div class="card-modern">
+        <div class="card-modern-header">Inventários recentes</div>
+        <div class="card-modern-body p-0">
+            <div class="p-3 border-bottom">
+                <div class="inv-quick">
+                    <a href="?status=&ponto={{ ponto_filtro }}&categoria={{ categoria_filtro }}" class="btn btn-sm {% if not status_filtro %}btn-primary{% else %}btn-outline-primary{% endif %}">Todos</a>
+                    <a href="?status=aberto&ponto={{ ponto_filtro }}&categoria={{ categoria_filtro }}" class="btn btn-sm {% if status_filtro == 'aberto' %}btn-warning{% else %}btn-outline-warning{% endif %}">Abertos</a>
+                    <a href="?status=em_conferencia&ponto={{ ponto_filtro }}&categoria={{ categoria_filtro }}" class="btn btn-sm {% if status_filtro == 'em_conferencia' %}btn-info{% else %}btn-outline-info{% endif %}">Em conferencia</a>
+                    <a href="?status=fechado&ponto={{ ponto_filtro }}&categoria={{ categoria_filtro }}" class="btn btn-sm {% if status_filtro == 'fechado' %}btn-success{% else %}btn-outline-success{% endif %}">Fechados</a>
+                </div>
+                <form method="get" class="form-row align-items-end">
+                    <div class="col-md-4 mb-2">
+                        <label>Status</label>
+                        <select name="status" class="form-control form-control-sm">
+                            <option value="">Todos</option>
+                            <option value="aberto" {% if status_filtro == 'aberto' %}selected{% endif %}>Aberto</option>
+                            <option value="em_conferencia" {% if status_filtro == 'em_conferencia' %}selected{% endif %}>Em conferencia</option>
+                            <option value="fechado" {% if status_filtro == 'fechado' %}selected{% endif %}>Fechado</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label>Ponto</label>
+                        <select name="ponto" class="form-control form-control-sm">
+                            <option value="">Todos os pontos</option>
+                            {% for ponto in pontos %}<option value="{{ ponto.id }}" {% if ponto_filtro == ponto.id|stringformat:"s" %}selected{% endif %}>{{ ponto.codigo }} - {{ ponto.nome }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label>Categoria</label>
+                        <select name="categoria" class="form-control form-control-sm">
+                            <option value="">Todas as categorias</option>
+                            {% for item in categorias %}<option value="{{ item.id }}" {% if categoria_filtro == item.id|stringformat:"s" %}selected{% endif %}>{{ item.nome }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <button class="btn btn-sm btn-primary btn-block">Filtrar</button>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <a href="{% url 'estoque:inventarios_estoque' %}" class="btn btn-sm btn-outline-secondary btn-block">Limpar</a>
+                    </div>
+                </form>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>Número</th><th>Escopo</th><th>Status</th><th>Abertura</th><th></th></tr></thead>
+                    <tbody>
+                        {% for item in inventarios %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.numero }}</strong><br>
+                                <small class="text-muted">{{ item.total_itens|default:0 }} item(ns)</small>
+                                {% if item.modo_contagem_cega %}<br><small class="badge badge-info">Contagem cega</small>{% endif %}
+                            </td>
+                            <td>{{ item.ponto_operacional.codigo }}{% if item.ubicacao %} / {{ item.ubicacao.codigo }}{% endif %}{% if item.categoria %}<br><small class="text-muted">{{ item.categoria.nome }}</small>{% endif %}</td>
+                            <td>{{ item.get_status_display }}</td>
+                            <td>{{ item.criado_em|date:"d/m/Y H:i" }}</td>
+                            <td class="text-right"><a href="{% url 'estoque:inventario_estoque_detalhe' item.id %}" class="btn btn-sm btn-outline-primary">Abrir</a></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-4">Nenhum inventário gerado ainda.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if inventarios_page.has_other_pages %}
+            <div class="p-3 border-top">
+                <nav aria-label="Paginação inventários">
+                    <ul class="pagination pagination-sm mb-0 justify-content-end">
+                        {% if inventarios_page.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?status={{ status_filtro|urlencode }}&ponto={{ ponto_filtro|urlencode }}&categoria={{ categoria_filtro|urlencode }}&page={{ inventarios_page.previous_page_number }}">Anterior</a></li>
+                        {% endif %}
+                        <li class="page-item active"><span class="page-link">{{ inventarios_page.number }}</span></li>
+                        {% if inventarios_page.has_next %}
+                        <li class="page-item"><a class="page-link" href="?status={{ status_filtro|urlencode }}&ponto={{ ponto_filtro|urlencode }}&categoria={{ categoria_filtro|urlencode }}&page={{ inventarios_page.next_page_number }}">Proxima</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card-modern">
+        <div class="card-modern-header">Gerar novo inventário</div>
+        <div class="card-modern-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label>Ponto operacional</label>
+                    <select name="ponto_id" class="form-control" required>
+                        <option value="">Selecione</option>
+                        {% for ponto in pontos %}<option value="{{ ponto.id }}">{{ ponto.codigo }} - {{ ponto.nome }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Ubicação</label>
+                    <select name="ubicacao_id" class="form-control">
+                        <option value="">Todas do ponto</option>
+                        {% for item in ubicacoes %}<option value="{{ item.id }}">{{ item.ponto_operacional.codigo }} - {{ item.codigo }}{% if item.descricao %} ({{ item.descricao }}){% endif %}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <select name="categoria_id" class="form-control">
+                        <option value="">Todas</option>
+                        {% for item in categorias %}<option value="{{ item.id }}">{{ item.nome }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="inv-check">
+                    <label>
+                        <input type="checkbox" name="modo_contagem_cega" value="1">
+                        <span>Ativar contagem cega<small>Enquanto o inventário estiver aberto, a quantidade do sistema fica oculta para reduzir viés na conferência.</small></span>
+                    </label>
+                </div>
+                <div class="inv-check">
+                    <label>
+                        <input type="checkbox" name="exige_dupla_conferencia" value="1">
+                        <span>Exigir dupla conferência<small>Quando houver divergência, será necessário registrar uma recontagem antes do fechamento.</small></span>
+                    </label>
+                </div>
+                <div class="inv-check">
+                    <label>
+                        <input type="checkbox" name="dispensar_aprovacao_divergencia" value="1">
+                        <span>Dispensar aprovação manual de divergências<small>Se desmarcado, toda divergência precisa ser aprovada antes do fechamento.</small></span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Observação</label>
+                    <textarea name="observacao" class="form-control" rows="3" placeholder="Ex.: contagem semanal da loja"></textarea>
+                </div>
+                <button class="btn btn-primary btn-block">Gerar inventário</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

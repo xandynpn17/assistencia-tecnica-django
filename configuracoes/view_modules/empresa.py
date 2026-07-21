@@ -26,7 +26,19 @@ def empresa_edit_impl(request):
             return redirect("configuracoes:painel")
     else:
         form = EmpresaForm(instance=empresa)
-    return render(request, "configuracoes/empresa_form.html", {"form": form})
+    return render(
+        request,
+        "configuracoes/empresa_form.html",
+        {
+            "form": form,
+            "config_operacional_tab": "empresa",
+            "config_operacional_title": "Empresa e identidade",
+            "config_operacional_subtitle": (
+                "Concentre aqui a identidade visual, os contatos oficiais e a base tributária "
+                "que sustenta documentos, PDFs e rotinas comerciais da operação."
+            ),
+        },
+    )
 
 
 def lista_aliquotas_impl(request):

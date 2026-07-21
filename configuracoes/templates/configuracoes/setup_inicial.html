@@ -1,34 +1,285 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 {% block title %}Setup Inicial{% endblock %}
+
+{% block extra_css %}
+<style>
+  .setup-section-card {
+    border: 1px solid #dbe4f0;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+    padding: 1.25rem;
+    margin-bottom: 1.1rem;
+  }
+  .setup-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .setup-section-title i {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #eff6ff;
+    color: #2563eb;
+  }
+  .setup-inline-help {
+    font-size: 0.85rem;
+    color: #64748b;
+  }
+  .setup-line-card {
+    border: 1px solid #dbe4f0;
+    border-radius: 12px;
+    padding: 0.85rem 0.95rem;
+    height: 100%;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  }
+  .setup-line-card label {
+    margin: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+  .setup-line-card input[type="checkbox"] {
+    margin-top: 0.15rem;
+  }
+  .setup-line-title {
+    display: block;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 0.25rem;
+  }
+  .setup-line-desc {
+    display: block;
+    font-size: 0.88rem;
+    color: #475569;
+    line-height: 1.45;
+  }
+  .setup-line-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.75rem;
+    padding-left: 1.65rem;
+  }
+  .setup-line-tag {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: #e8f1ff;
+    color: #1d4ed8;
+    padding: 0.22rem 0.55rem;
+    font-size: 0.76rem;
+    font-weight: 600;
+  }
+  .setup-line-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .setup-line-info {
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 999px;
+    background: #e8f1ff;
+    color: #1d4ed8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: help;
+    flex: 0 0 auto;
+  }
+  .setup-line-info:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.18);
+  }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    function digits(value, limit) {
+      return (value || "").replace(/\D/g, "").slice(0, limit);
+    }
+
+    function alphaCnpj(value) {
+      return (value || "").toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 14);
+    }
+
+    function maskCnpj(value) {
+      const v = alphaCnpj(value);
+      return v
+        .replace(/^([0-9A-Z]{2})([0-9A-Z])/, "$1.$2")
+        .replace(/^([0-9A-Z]{2})\.([0-9A-Z]{3})([0-9A-Z])/, "$1.$2.$3")
+        .replace(/\.([0-9A-Z]{3})([0-9A-Z])/, ".$1/$2")
+        .replace(/([0-9A-Z]{4})(\d)/, "$1-$2");
+    }
+
+    function maskPhone(value) {
+      const v = digits(value, 11);
+      if (v.length <= 10) {
+        return v
+          .replace(/^(\d{2})(\d)/, "($1) $2")
+          .replace(/(\d{4})(\d)/, "$1-$2");
+      }
+      return v
+        .replace(/^(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{5})(\d)/, "$1-$2");
+    }
+
+    function maskCep(value) {
+      return digits(value, 8).replace(/^(\d{5})(\d)/, "$1-$2");
+    }
+
+    document.addEventListener("input", function (event) {
+      const el = event.target;
+      if (!el || !el.name) {
+        return;
+      }
+      if (el.name === "cnpj") {
+        el.value = maskCnpj(el.value);
+      }
+      if (el.name === "telefone" || el.name === "celular_whatsapp") {
+        el.value = maskPhone(el.value);
+      }
+      if (el.name === "cep") {
+        el.value = maskCep(el.value);
+      }
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+      if (window.jQuery && window.jQuery.fn && window.jQuery.fn.tooltip) {
+        window.jQuery('[data-toggle="tooltip"]').tooltip();
+      }
+
+      const cepInput = document.getElementById("id_cep");
+      const btnBuscarCep = document.getElementById("btn-buscar-cep-setup");
+      const feedback = document.getElementById("cep-setup-feedback");
+      const logradouroInput = document.getElementById("id_logradouro");
+      const bairroInput = document.getElementById("id_bairro");
+      const cidadeInput = document.getElementById("id_cidade");
+      const estadoInput = document.getElementById("id_estado");
+      const numeroInput = document.getElementById("id_numero");
+
+      if (!cepInput || !btnBuscarCep) {
+        return;
+      }
+
+      function setFeedback(message, tone) {
+        if (!feedback) {
+          return;
+        }
+        feedback.textContent = message;
+        feedback.classList.remove("text-muted", "text-danger", "text-success");
+        feedback.classList.add(tone || "text-muted");
+      }
+
+      function preencherEndereco(data) {
+        if (logradouroInput && !logradouroInput.value) {
+          logradouroInput.value = data.logradouro || "";
+        }
+        if (bairroInput && !bairroInput.value) {
+          bairroInput.value = data.bairro || "";
+        }
+        if (cidadeInput && !cidadeInput.value) {
+          cidadeInput.value = data.localidade || data.cidade || "";
+        }
+        if (estadoInput) {
+          estadoInput.value = data.uf || data.estado || estadoInput.value || "";
+        }
+        if (numeroInput && !numeroInput.value) {
+          numeroInput.focus();
+        }
+      }
+
+      async function buscarCep() {
+        const cep = (cepInput.value || "").replace(/\D/g, "");
+        if (cep.length !== 8) {
+          setFeedback("Informe um CEP valido com 8 digitos.", "text-danger");
+          cepInput.focus();
+          return;
+        }
+
+        btnBuscarCep.disabled = true;
+        setFeedback("Buscando CEP...", "text-muted");
+
+        try {
+          const response = await fetch(`/configuracoes/buscar-cep/?cep=${cep}`, {
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+          });
+          const contentType = response.headers.get("content-type") || "";
+          if (!contentType.includes("application/json")) {
+            const raw = await response.text();
+            throw new Error(raw.includes("<!DOCTYPE") ? "Nao foi possivel consultar o CEP agora." : raw);
+          }
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.erro || "Nao foi possivel consultar o CEP.");
+          }
+          preencherEndereco(data);
+          setFeedback("Endereco preenchido automaticamente. Confirme o numero.", "text-success");
+        } catch (error) {
+          setFeedback(error.message || "Falha ao consultar o CEP.", "text-danger");
+        } finally {
+          btnBuscarCep.disabled = false;
+        }
+      }
+
+      btnBuscarCep.addEventListener("click", buscarCep);
+      cepInput.addEventListener("blur", function () {
+        if ((cepInput.value || "").replace(/\D/g, "").length === 8) {
+          buscarCep();
+        }
+      });
+      cepInput.addEventListener("keypress", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          buscarCep();
+        }
+      });
+    });
+  })();
+</script>
+{% endblock %}
 
 {% block content %}
 <div class="card shadow-sm border-0">
   <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
     <h3 class="card-title mb-0">Setup inicial do sistema</h3>
     {% if setup_concluido %}
-    <span class="badge badge-success">Concluído</span>
+    <span class="badge badge-success">Concluido</span>
     {% else %}
     <span class="badge badge-warning">Pendente</span>
     {% endif %}
   </div>
   <div class="card-body">
     <p class="text-muted mb-4">
-      Configure a empresa, o prefixo da OS e as linhas de atuação para ativar automaticamente os tipos de equipamentos.
+      Configure a empresa, a numeracao da OS e as linhas de atuacao principais. Esta etapa define a base operacional e reduz retrabalho depois.
     </p>
 
     {% if not setup_concluido %}
     <div class="alert alert-light border mb-4">
       <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between">
-        <div class="mb-3 mb-lg-0">
-          <h5 class="mb-1"><i class="fas fa-history text-primary"></i> Já possui um backup?</h5>
+        <div class="mb-3 mb-lg-0 pr-lg-3">
+          <h5 class="mb-1"><i class="fas fa-history text-primary"></i> Ja possui um backup?</h5>
           <p class="mb-0 text-muted">
-            Para instalar em outro PC ou voltar de uma cópia anterior, restaure o backup antes de concluir o setup.
+            Se este computador vai receber uma base pronta, faca o restore antes de concluir o setup.
           </p>
-          <small class="text-muted">Pasta padrão: <code>{{ backup_dir }}</code></small>
+          <small class="text-muted">Pasta padrao: <code>{{ backup_dir }}</code></small>
         </div>
         <a href="{% url 'configuracoes:restore_banco' %}" class="btn btn-outline-primary">
           <i class="fas fa-upload"></i>
-          {% if backups_disponiveis %}Restaurar backup encontrado{% else %}Abrir restauração{% endif %}
+          {% if backups_disponiveis %}Restaurar backup encontrado{% else %}Abrir restauracao{% endif %}
         </a>
       </div>
     </div>
@@ -39,11 +290,11 @@
         <div class="col-md-4">
           <label class="font-weight-bold" for="filtro_tipo_empresa">Tipo de empresa</label>
           <select id="filtro_tipo_empresa" name="tipo_empresa" class="form-control">
-            <option value="assistencia_tecnica" {% if tipo_empresa_ativo == "assistencia_tecnica" %}selected{% endif %}>Assistência técnica</option>
-            <option value="oficina_mecanica" {% if tipo_empresa_ativo == "oficina_mecanica" %}selected{% endif %}>Oficina mecânica</option>
+            <option value="assistencia_tecnica" {% if tipo_empresa_ativo == "assistencia_tecnica" %}selected{% endif %}>Assistencia tecnica</option>
+            <option value="oficina_mecanica" {% if tipo_empresa_ativo == "oficina_mecanica" %}selected{% endif %}>Oficina mecanica</option>
           </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
           <button type="submit" class="btn btn-outline-primary btn-block">Atualizar linhas</button>
         </div>
       </div>
@@ -52,61 +303,178 @@
     <form method="post">
       {% csrf_token %}
 
-      <div class="form-row">
-        <div class="form-group col-md-6">
-          <label class="font-weight-bold">{{ form.nome_empresa.label }}</label>
-          {{ form.nome_empresa }}
-          {% if form.nome_empresa.errors %}<div class="text-danger small mt-1">{{ form.nome_empresa.errors|join:", " }}</div>{% endif %}
+      <div class="setup-section-card">
+        <div class="setup-section-title">
+          <i class="fas fa-building"></i>
+          <div>
+            <h5 class="mb-1">Dados da empresa</h5>
+            <div class="setup-inline-help">Esses dados servem para documentos, contatos e identidade da loja.</div>
+          </div>
         </div>
-        <div class="form-group col-md-3">
-          <label class="font-weight-bold">{{ form.cnpj.label }}</label>
-          {{ form.cnpj }}
-          {% if form.cnpj.errors %}<div class="text-danger small mt-1">{{ form.cnpj.errors|join:", " }}</div>{% endif %}
+        <div class="form-row">
+          <div class="form-group col-lg-4">
+            <label class="font-weight-bold">{{ form.nome_empresa.label }}</label>
+            {{ form.nome_empresa }}
+            {% if form.nome_empresa.errors %}<div class="text-danger small mt-1">{{ form.nome_empresa.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-lg-4">
+            <label class="font-weight-bold">{{ form.razao_social.label }}</label>
+            {{ form.razao_social }}
+            {% if form.razao_social.errors %}<div class="text-danger small mt-1">{{ form.razao_social.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-lg-4">
+            <label class="font-weight-bold">{{ form.cnpj.label }}</label>
+            {{ form.cnpj }}
+            {% if form.cnpj.errors %}<div class="text-danger small mt-1">{{ form.cnpj.errors|join:", " }}</div>{% endif %}
+          </div>
         </div>
-        <div class="form-group col-md-3">
-          <label class="font-weight-bold">{{ form.prefixo_os.label }}</label>
-          {{ form.prefixo_os }}
-          {% if form.prefixo_os.errors %}<div class="text-danger small mt-1">{{ form.prefixo_os.errors|join:", " }}</div>{% endif %}
+        <div class="form-row">
+          <div class="form-group col-md-3">
+            <label class="font-weight-bold">{{ form.inscricao_estadual.label }}</label>
+            {{ form.inscricao_estadual }}
+            {% if form.inscricao_estadual.errors %}<div class="text-danger small mt-1">{{ form.inscricao_estadual.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-3">
+            <label class="font-weight-bold">{{ form.inscricao_municipal.label }}</label>
+            {{ form.inscricao_municipal }}
+            {% if form.inscricao_municipal.errors %}<div class="text-danger small mt-1">{{ form.inscricao_municipal.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-3">
+            <label class="font-weight-bold">{{ form.telefone.label }}</label>
+            {{ form.telefone }}
+            {% if form.telefone.errors %}<div class="text-danger small mt-1">{{ form.telefone.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-3">
+            <label class="font-weight-bold">{{ form.celular_whatsapp.label }}</label>
+            {{ form.celular_whatsapp }}
+            {% if form.celular_whatsapp.errors %}<div class="text-danger small mt-1">{{ form.celular_whatsapp.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-md-4">
+            <label class="font-weight-bold">{{ form.email.label }}</label>
+            {{ form.email }}
+            {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-2">
+            <label class="font-weight-bold">{{ form.cep.label }}</label>
+            <div class="input-group">
+              {{ form.cep }}
+              <div class="input-group-append">
+                <button type="button" class="btn btn-outline-secondary" id="btn-buscar-cep-setup" title="Buscar CEP">
+                  <i class="fas fa-search"></i>
+                </button>
+              </div>
+            </div>
+            <small id="cep-setup-feedback" class="form-text text-muted">Digite o CEP para preencher endereco, cidade e estado.</small>
+            {% if form.cep.errors %}<div class="text-danger small mt-1">{{ form.cep.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-4">
+            <label class="font-weight-bold">{{ form.logradouro.label }}</label>
+            {{ form.logradouro }}
+            {% if form.logradouro.errors %}<div class="text-danger small mt-1">{{ form.logradouro.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-2">
+            <label class="font-weight-bold">{{ form.numero.label }}</label>
+            {{ form.numero }}
+            {% if form.numero.errors %}<div class="text-danger small mt-1">{{ form.numero.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-md-4">
+            <label class="font-weight-bold">{{ form.complemento.label }}</label>
+            {{ form.complemento }}
+            {% if form.complemento.errors %}<div class="text-danger small mt-1">{{ form.complemento.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-3">
+            <label class="font-weight-bold">{{ form.bairro.label }}</label>
+            {{ form.bairro }}
+            {% if form.bairro.errors %}<div class="text-danger small mt-1">{{ form.bairro.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-3">
+            <label class="font-weight-bold">{{ form.cidade.label }}</label>
+            {{ form.cidade }}
+            {% if form.cidade.errors %}<div class="text-danger small mt-1">{{ form.cidade.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-2">
+            <label class="font-weight-bold">{{ form.estado.label }}</label>
+            {{ form.estado }}
+            {% if form.estado.errors %}<div class="text-danger small mt-1">{{ form.estado.errors|join:", " }}</div>{% endif %}
+          </div>
         </div>
       </div>
 
-      <div class="form-row">
-        <div class="form-group col-md-4">
-          <label class="font-weight-bold">{{ form.telefone.label }}</label>
-          {{ form.telefone }}
-          {% if form.telefone.errors %}<div class="text-danger small mt-1">{{ form.telefone.errors|join:", " }}</div>{% endif %}
+      <div class="setup-section-card">
+        <div class="setup-section-title">
+          <i class="fas fa-hashtag"></i>
+          <div>
+            <h5 class="mb-1">Numeracao da ordem de servico</h5>
+            <div class="setup-inline-help">Defina agora o prefixo e o primeiro numero para evitar ajustes manuais depois.</div>
+          </div>
         </div>
-        <div class="form-group col-md-4">
-          <label class="font-weight-bold">{{ form.email.label }}</label>
-          {{ form.email }}
-          {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors|join:", " }}</div>{% endif %}
-        </div>
-        <div class="form-group col-md-4">
-          <label class="font-weight-bold">{{ form.tipo_empresa.label }}</label>
-          {{ form.tipo_empresa }}
-          {% if form.tipo_empresa.errors %}<div class="text-danger small mt-1">{{ form.tipo_empresa.errors|join:", " }}</div>{% endif %}
+        <div class="form-row">
+          <div class="form-group col-md-3">
+            <label class="font-weight-bold">{{ form.prefixo_os.label }}</label>
+            {{ form.prefixo_os }}
+            {% if form.prefixo_os.errors %}<div class="text-danger small mt-1">{{ form.prefixo_os.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-3">
+            <label class="font-weight-bold">{{ form.inicio_id_ordem.label }}</label>
+            {{ form.inicio_id_ordem }}
+            {% if form.inicio_id_ordem.errors %}<div class="text-danger small mt-1">{{ form.inicio_id_ordem.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group col-md-3">
+            <label class="font-weight-bold">{{ form.tipo_empresa.label }}</label>
+            {{ form.tipo_empresa }}
+            {% if form.tipo_empresa.errors %}<div class="text-danger small mt-1">{{ form.tipo_empresa.errors|join:", " }}</div>{% endif %}
+          </div>
         </div>
       </div>
 
-      <div class="form-group">
-        <label class="font-weight-bold">{{ form.endereco.label }}</label>
-        {{ form.endereco }}
-        {% if form.endereco.errors %}<div class="text-danger small mt-1">{{ form.endereco.errors|join:", " }}</div>{% endif %}
-      </div>
-
-      <div class="border rounded p-3 mt-3">
-        <h5 class="mb-3">Linhas de atuação disponíveis</h5>
+      <div class="setup-section-card">
+        <div class="setup-section-title">
+          <i class="fas fa-layer-group"></i>
+          <div>
+            <h5 class="mb-1">Linhas de atuacao</h5>
+            <div class="setup-inline-help">Ao concluir, os tipos de equipamento desta base sao ativados automaticamente.</div>
+          </div>
+        </div>
         {% if form.linhas_atuacao.errors %}
         <div class="alert alert-warning py-2">{{ form.linhas_atuacao.errors|join:", " }}</div>
         {% endif %}
-        {% if linhas_disponiveis %}
+        {% if linhas_cards %}
         <div class="row">
-          {% for checkbox in form.linhas_atuacao %}
-          <div class="col-md-6 col-lg-4 mb-2">
-            <label class="border rounded p-2 d-flex align-items-center mb-0">
-              {{ checkbox.tag }}
-              <span class="ml-2">{{ checkbox.choice_label }}</span>
-            </label>
+          {% for linha in linhas_cards %}
+          <div class="col-md-6 col-xl-4 mb-3">
+            <div class="setup-line-card">
+              <label for="linha_{{ linha.id }}">
+                <input
+                  type="checkbox"
+                  id="linha_{{ linha.id }}"
+                  name="linhas_atuacao"
+                  value="{{ linha.id }}"
+                  {% if linha.id|stringformat:"s" in linhas_selecionadas %}checked{% endif %}
+                >
+                <span>
+                  <span class="setup-line-head">
+                    <span class="setup-line-title">{{ linha.nome }}</span>
+                    {% if linha.tipos_exemplo %}
+                    <button
+                      type="button"
+                      class="setup-line-info"
+                      data-toggle="tooltip"
+                      data-placement="top"
+                      title="Tipos incluidos: {{ linha.tipos_exemplo|join:', ' }}"
+                      aria-label="Ver tipos incluidos"
+                    >
+                      i
+                    </button>
+                    {% endif %}
+                  </span>
+                  <span class="setup-line-desc">{{ linha.descricao }}</span>
+                </span>
+              </label>
+            </div>
           </div>
           {% endfor %}
         </div>
@@ -120,9 +488,13 @@
       {% endif %}
 
       <div class="d-flex justify-content-end mt-4">
-        <button type="submit" class="btn btn-success">Concluir setup inicial</button>
+        <button type="submit" class="btn btn-success">
+          <i class="fas fa-check-circle"></i> Concluir setup inicial
+        </button>
       </div>
     </form>
   </div>
 </div>
 {% endblock %}
+
+

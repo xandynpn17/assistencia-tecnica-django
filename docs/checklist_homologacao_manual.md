@@ -1,13 +1,13 @@
 # Checklist Manual de Homologacao
 
-Este roteiro valida o fluxo principal fim a fim (ordens, estoque, caixa e comissoes).
+Este roteiro valida o fluxo principal fim a fim com foco no uso real em loja: ordens, estoque, caixa, comissoes, backup e recuperacao.
 
 ## 1) Preparacao rapida
 
 ```powershell
-python manage.py check
-python manage.py migrate
-python manage.py gerar_base_teste --prefixo HMLMAR2026 --clientes 30 --produtos 24 --marcas 10 --tecnicos 8 --ordens 20 --limpar
+powershell -ExecutionPolicy Bypass -File .\manage_local.ps1 check
+powershell -ExecutionPolicy Bypass -File .\manage_local.ps1 migrate
+powershell -ExecutionPolicy Bypass -File .\manage_local.ps1 gerar_base_teste --prefixo HMLMAR2026 --clientes 30 --produtos 24 --marcas 10 --tecnicos 8 --ordens 20 --limpar
 ```
 
 Resultado esperado:
@@ -86,7 +86,35 @@ Resultado esperado:
 - consulta apenas apos busca
 - detalhes completos somente ao abrir o produto
 
-## 8) Agenda (opcional)
+## 8) Estoque (cadastro operacional de produto)
+
+1. Abrir cadastro de produto.
+2. Criar 1 peca simples com categoria, custo de entrada e estoque inicial.
+3. Criar 1 servico sem controle de estoque.
+4. Validar se o resumo operacional explica corretamente o tipo do item.
+5. Validar se a estimativa de entrada inicial aparece quando ha custo e quantidade.
+6. Confirmar que a categoria escolhida ajuda a orientar o cadastro.
+
+Resultado esperado:
+- o cadastro deixa claro quando o item e peca ou servico;
+- o operador entende se havera movimentacao de estoque;
+- a entrada inicial fica perceptivel antes de salvar;
+- categorias nao confundem o operador.
+
+## 9) Backup e restore
+
+1. Gerar um backup completo pela tela de Configuracoes > Backup.
+2. Validar se o item aparece na lista de backups recentes.
+3. Abrir a tela de restore administrativo e confirmar se o backup aparece para selecao.
+4. Validar a tela de recuperacao local sem login, se estiver habilitada.
+5. Conferir se o roteiro de terminal continua claro para contingencia.
+
+Resultado esperado:
+- backup gerado sem erro;
+- restore fica orientado e seguro;
+- existe plano B mesmo quando o login estiver indisponivel.
+
+## 10) Agenda (opcional)
 
 1. Criar agendamento vinculado a uma OS.
 2. Ajustar inicio/fim no mesmo dia.
@@ -95,4 +123,3 @@ Resultado esperado:
 Resultado esperado:
 - sem sobreposicao incorreta de evento entre dias
 - formulario preenche fim no mesmo dia por padrao
-

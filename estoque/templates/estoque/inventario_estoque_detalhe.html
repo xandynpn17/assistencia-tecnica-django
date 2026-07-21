@@ -1,0 +1,137 @@
+﻿{% extends "core/base.html" %}
+
+{% block title %}{{ inventario.numero }}{% endblock %}
+
+{% block content %}
+<style>
+.inv-resumo { display:grid; grid-template-columns: repeat(9, minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.inv-card { border:1px solid #d9e2ec; border-radius:12px; background:#fff; padding:12px; }
+.inv-label { font-size:11px; text-transform:uppercase; color:#64748b; margin-bottom:4px; }
+.inv-value { font-size:1.1rem; font-weight:700; color:#183247; }
+.inv-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.inv-inline-form { min-width: 280px; }
+.inv-flag { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:#eef6ff; color:#1d4ed8; font-size:12px; font-weight:600; }
+.inv-approval { margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.inv-helper { border:1px solid #d7e4ef; border-radius:12px; background:linear-gradient(180deg, #f8fbff 0%, #eef5fb 100%); padding:12px 14px; margin-bottom:14px; }
+@media (max-width: 991.98px){ .inv-resumo { grid-template-columns:1fr 1fr; } }
+</style>
+<div class="ui-module-header mb-3">
+    <div>
+        <h1 class="ui-module-title">{{ inventario.numero }}</h1>
+        <p class="ui-module-subtitle">{{ inventario.ponto_operacional.codigo }}{% if inventario.ubicacao %} / {{ inventario.ubicacao.codigo }}{% endif %}{% if inventario.categoria %} • {{ inventario.categoria.nome }}{% endif %}</p>
+        <div class="d-flex flex-wrap" style="gap:8px; margin-top:8px;">
+            {% if inventario.modo_contagem_cega %}<span class="inv-flag">Contagem cega ativa</span>{% endif %}
+            {% if inventario.exige_dupla_conferencia %}<span class="inv-flag">Dupla conferência ativa</span>{% endif %}
+            {% if inventario.exige_aprovacao_divergencia %}<span class="inv-flag">Aprovação de divergências obrigatória</span>{% endif %}
+        </div>
+    </div>
+    <div class="ui-module-actions inv-actions">
+        <a href="{% url 'estoque:inventarios_estoque' %}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+        {% if inventario.status != 'fechado' %}
+        <form method="post" action="{% url 'estoque:inventario_estoque_marcar_todos' inventario.id %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm">Marcar pendentes como confere</button></form>
+        <form method="post" action="{% url 'estoque:inventario_estoque_finalizar' inventario.id %}">{% csrf_token %}<button class="btn btn-success btn-sm">Finalizar inventário</button></form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="inv-resumo">
+    <div class="inv-card"><div class="inv-label">Total</div><div class="inv-value">{{ resumo.total }}</div></div>
+    <div class="inv-card"><div class="inv-label">Pendentes</div><div class="inv-value">{{ resumo.pendentes }}</div></div>
+    <div class="inv-card"><div class="inv-label">Confere</div><div class="inv-value">{{ resumo.conferidos }}</div></div>
+    <div class="inv-card"><div class="inv-label">Divergências</div><div class="inv-value">{{ resumo.divergencias }}</div></div>
+    <div class="inv-card"><div class="inv-label">Recontadas</div><div class="inv-value">{{ resumo.divergencias_recontadas }}</div></div>
+    <div class="inv-card"><div class="inv-label">Pend. recontagem</div><div class="inv-value">{{ resumo.divergencias_pendentes_recontagem }}</div></div>
+    <div class="inv-card"><div class="inv-label">Aprovadas</div><div class="inv-value">{{ resumo.divergencias_aprovadas }}</div></div>
+    <div class="inv-card"><div class="inv-label">Pend. aprovação</div><div class="inv-value">{{ resumo.divergencias_pendentes_aprovacao }}</div></div>
+    <div class="inv-card"><div class="inv-label">Impacto PMP</div><div class="inv-value">R$ {{ resumo.impacto_pmp|floatformat:2 }}</div></div>
+</div>
+
+<div class="inv-helper">
+    <strong>Leitura recomendada:</strong> conte primeiro os itens pendentes, depois trate divergencias com motivo e recontagem. Se a contagem estiver cega, o sistema so revela o saldo oficial apos o fechamento ou quando a politica permitir.
+</div>
+
+<div class="card-modern mb-3">
+    <div class="card-modern-body">
+        <form method="get" class="form-row align-items-end">
+            <div class="col-md-6 mb-2"><label>Buscar por EAN, nome ou compatibilidade</label><input type="text" name="q" value="{{ q }}" class="form-control"></div>
+            <div class="col-md-2 mb-2"><label>Situação</label><select name="situacao" class="form-control"><option value="">Todas</option><option value="pendente" {% if situacao_filtro == 'pendente' %}selected{% endif %}>Pendente</option><option value="conferido" {% if situacao_filtro == 'conferido' %}selected{% endif %}>Confere</option><option value="divergencia" {% if situacao_filtro == 'divergencia' %}selected{% endif %}>Divergência</option></select></div>
+            <div class="col-md-2 mb-2"><label>Aprovação</label><select name="aprovacao" class="form-control"><option value="">Todas</option><option value="pendente" {% if aprovacao_filtro == 'pendente' %}selected{% endif %}>Pendente</option><option value="aprovada" {% if aprovacao_filtro == 'aprovada' %}selected{% endif %}>Aprovada</option></select></div>
+            <div class="col-md-2 mb-2"><button class="btn btn-primary btn-block">Filtrar</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="card-modern">
+    <div class="card-modern-header">Itens do inventário</div>
+    <div class="card-modern-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Ponto / Ubicação</th>
+                        <th>Sistema</th>
+                        <th>Contado</th>
+                        <th>Diferença</th>
+                        <th>PMP</th>
+                        <th>PVP</th>
+                        <th>Margem</th>
+                        <th>Conferência</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in itens %}
+                    <tr>
+                        <td><strong>{{ item.nome_snapshot|default:item.produto.nome }}</strong><br><small class="text-muted">EAN: {{ item.ean_snapshot|default:'-' }}{% if item.modelos_compativeis_snapshot %} • Compat.: {{ item.modelos_compativeis_snapshot|truncatechars:60 }}{% endif %}</small></td>
+                        <td>{{ item.ponto_operacional_snapshot|default:inventario.ponto_operacional.codigo }} / {{ item.ubicacao_snapshot|default:'-' }}</td>
+                        <td>{% if mostrar_quantidade_sistema %}{{ item.quantidade_sistema }}{% else %}<span class="text-muted">Oculto</span>{% endif %}</td>
+                        <td>{{ item.quantidade_contada }}</td>
+                        <td>{% if item.ajuste > 0 %}+{% endif %}{{ item.ajuste }}</td>
+                        <td>R$ {{ item.pmp_snapshot|floatformat:2 }}</td>
+                        <td>R$ {{ item.pvp_snapshot|floatformat:2 }}</td>
+                        <td>{{ item.margem_snapshot|floatformat:2 }}%</td>
+                        <td>
+                            <form method="post" action="{% url 'estoque:inventario_estoque_atualizar_item' item.id %}" class="inv-inline-form">
+                                {% csrf_token %}
+                                <div class="form-row">
+                                    <div class="col-12 mb-1"><input type="number" min="0" name="quantidade_contada" value="{{ item.quantidade_contada }}" class="form-control form-control-sm"></div>
+                                    <div class="col-12 mb-1"><select name="motivo_divergencia" class="form-control form-control-sm"><option value="">Sem motivo</option><option value="falta" {% if item.motivo_divergencia == 'falta' %}selected{% endif %}>Falta</option><option value="sobra" {% if item.motivo_divergencia == 'sobra' %}selected{% endif %}>Sobra</option><option value="local_errado" {% if item.motivo_divergencia == 'local_errado' %}selected{% endif %}>Local errado</option><option value="sem_etiqueta" {% if item.motivo_divergencia == 'sem_etiqueta' %}selected{% endif %}>Sem etiqueta</option><option value="outro" {% if item.motivo_divergencia == 'outro' %}selected{% endif %}>Outro</option></select></div>
+                                    <div class="col-12 mb-1"><input type="text" name="observacao" value="{{ item.observacao }}" class="form-control form-control-sm" placeholder="Observação"></div>
+                                    <div class="col-12"><button class="btn btn-sm btn-primary btn-block">Salvar</button></div>
+                                </div>
+                            </form>
+                            {% if item.situacao == 'divergencia' %}
+                            <div class="inv-approval">
+                                {% if inventario.exige_dupla_conferencia %}
+                                    {% if item.recontado_em %}
+                                    <span class="badge badge-info">Recontada: {{ item.quantidade_recontada }}</span>
+                                    <small class="text-muted">{{ item.recontado_em|date:"d/m H:i" }}{% if item.recontado_por %} por {{ item.recontado_por.username }}{% endif %}</small>
+                                    {% elif inventario.status != 'fechado' %}
+                                    <form method="post" action="{% url 'estoque:inventario_estoque_recontar_item' item.id %}" class="d-flex flex-wrap" style="gap:6px; align-items:center;">
+                                        {% csrf_token %}
+                                        <input type="number" min="0" name="quantidade_recontada" class="form-control form-control-sm" style="width:100px;" placeholder="Recont.">
+                                        <button class="btn btn-sm btn-outline-info">Salvar recontagem</button>
+                                    </form>
+                                    {% endif %}
+                                {% endif %}
+                                {% if item.divergencia_aprovada_em %}
+                                <span class="badge badge-success">Aprovada</span>
+                                <small class="text-muted">{{ item.divergencia_aprovada_em|date:"d/m H:i" }}{% if item.divergencia_aprovada_por %} por {{ item.divergencia_aprovada_por.username }}{% endif %}</small>
+                                {% elif inventario.status != 'fechado' %}
+                                <form method="post" action="{% url 'estoque:inventario_estoque_aprovar_divergencia' item.id %}">{% csrf_token %}<button class="btn btn-sm btn-outline-success">Aprovar divergência</button></form>
+                                {% else %}
+                                <span class="badge badge-warning">Sem aprovação</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="text-center text-muted py-4">Nenhum item encontrado para os filtros aplicados.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

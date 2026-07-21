@@ -1,5 +1,7 @@
 import random
 
+from configuracoes.services.documentos import normalizar_cnpj
+
 
 def gerar_numero_cliente_disponivel(cliente_model):
     while True:
@@ -11,6 +13,8 @@ def gerar_numero_cliente_disponivel(cliente_model):
 def normalizar_documentos_cliente(cliente):
     if cliente.documento:
         doc_limpo = "".join(filter(str.isdigit, cliente.documento))
+        if len(doc_limpo) != 11:
+            doc_limpo = normalizar_cnpj(cliente.documento)
         cliente.documento = doc_limpo
         if len(doc_limpo) == 11:
             cliente.tipo_cliente = "pf"
@@ -31,7 +35,7 @@ def normalizar_documentos_cliente(cliente):
         return
 
     if cliente.cnpj:
-        cnpj_limpo = "".join(filter(str.isdigit, cliente.cnpj))
+        cnpj_limpo = normalizar_cnpj(cliente.cnpj)
         cliente.documento = cnpj_limpo
         cliente.tipo_cliente = "pj"
         cliente.cnpj = cnpj_limpo

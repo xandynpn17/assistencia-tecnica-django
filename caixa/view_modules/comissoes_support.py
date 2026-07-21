@@ -25,7 +25,14 @@ from ..models import (
     RegraPremioMeta,
 )
 from ..services.comissao_status import ComissaoStatusError, aplicar_acao_comissao
-from ..services.comissoes import _fontes_comissionaveis, processar_evento_servico_finalizado, recalcular_comissoes_servico_finalizado
+from ..services.comissoes import (
+    _fontes_comissionaveis,
+    obter_criterio_comissao_os,
+    ordem_qualifica_comissao_servico,
+    processar_evento_servico_finalizado,
+    recalcular_comissoes_servico_finalizado,
+    status_apuracao_comissao_os,
+)
 from .helpers import _base_comissao, _exportar_csv, _exportar_pdf_tabela, _fmt_decimal, _paginar_queryset, _parse_intervalo_datas, _querystring_sem_param
 
 
@@ -34,13 +41,7 @@ def _ordem_tem_pagamento(ordem):
 
 
 def _ordem_execucao_confirmada(ordem):
-    if ordem.status in {"pronto_contactado", "pronto_contactar", "concluida"}:
-        return True
-    relatorio = (ordem.relatorio_tecnico or "").strip()
-    if ordem.status == "autorizado" and relatorio:
-        return True
-    tipo_reparacao_ok = (ordem.tipo_reparacao or "").strip() in {"substituicao", "reparacao_sem_pecas"}
-    return bool(relatorio and tipo_reparacao_ok)
+    return ordem_qualifica_comissao_servico(ordem)
 
 
 def _ordem_qualifica_para_comissao(ordem, regra):
@@ -50,8 +51,9 @@ def _ordem_qualifica_para_comissao(ordem, regra):
     momento = getattr(regra, "momento_liberacao", "entregue_pago")
     exigir_pagamento = bool(getattr(regra, "exigir_pagamento_para_liberar", True))
 
-    if momento == "pronto_contactado":
-        status_ok = ordem.status in {"pronto_contactado", "pronto_contactar", "concluida"} or bool(ordem.fechada)
+    criterio_config = obter_criterio_comissao_os()
+    if momento == "pronto_contactado" and criterio_config != "entregue":
+        status_ok = ordem.status in status_apuracao_comissao_os() or bool(ordem.fechada)
     else:
         status_ok = ordem.status == "concluida" or bool(ordem.fechada)
 
@@ -121,6 +123,8 @@ def _gerar_comissao_item_orcamento(item, modo_pagamento="fechamento"):
         )
 
     if not _ordem_qualifica_para_comissao(ordem, regra):
+        return None
+    if ordem.tipo_reparo == "Garantia" and not regra.comissionar_garantia:
         return None
     if item.status != "aprovado":
         return None
@@ -250,7 +254,7 @@ def _filtrar_comissoes_por_criterio(qs, criterio):
     if criterio == "servicos_finalizados":
         return qs
     if criterio == "pronto_reparado":
-        return qs.filter(ordem_servico__status__in=["pronto_contactar", "pronto_contactado"])
+        return qs.filter(ordem_servico__status="pronto_contactado")
     if criterio == "retirado_pago":
         ordens_paghas_ids = (
             Pagamento.objects.exclude(ordem_servico_id__isnull=True)
@@ -269,7 +273,7 @@ def _ordem_atende_criterio_desempenho(ordem, criterio):
     if criterio == "servicos_finalizados":
         return _ordem_execucao_confirmada(ordem)
     if criterio == "pronto_reparado":
-        return ordem.status in {"pronto_contactar", "pronto_contactado"}
+        return ordem.status == "pronto_contactado"
     if criterio == "retirado_pago":
         return (ordem.status == "concluida" or bool(ordem.fechada)) and _ordem_tem_pagamento(ordem)
     return True

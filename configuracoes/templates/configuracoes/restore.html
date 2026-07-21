@@ -1,72 +1,136 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 {% block title %}Restaurar Backup{% endblock %}
 
 {% block content %}
-<div class="card card-modern">
-  <div class="card-modern-header">
-    <i class="fas fa-upload"></i> Restaurar Backup
+{% include "configuracoes/partials/_operacao_recuperacao_tabs.html" %}
+
+<div class="row mb-4">
+  <div class="col-lg-7 mb-4">
+    <div class="card card-modern border-0">
+      <div class="card-modern-body">
+        <div class="section-kicker">Recuperação administrativa</div>
+        <h3 class="h5 mb-3">Restaurar backup oficial</h3>
+
+        {% if setup_pendente %}
+        <div class="alert alert-info soft-alert">
+          <strong>Setup inicial pendente:</strong> se você já possui um backup válido, restaure-o agora antes de continuar a configuração.
+        </div>
+        {% endif %}
+
+        <div class="alert alert-warning soft-alert">
+          <strong>Atenção:</strong> o restore substitui os dados atuais. Em PostgreSQL, prefira executar com o servidor Django parado e com todos os usuários fora do sistema.
+        </div>
+
+        {% if local_recovery_enabled %}
+        <div class="alert alert-light border soft-alert">
+          <strong>Plano B antes do login:</strong> este ambiente também possui a tela pública de recuperação local, útil quando o acesso administrativo normal não estiver disponível.
+          <div class="mt-2">
+            <a href="{% url 'configuracoes:restore_banco_publico' %}" class="btn btn-sm btn-outline-danger">
+              <i class="fas fa-life-ring mr-1"></i> Abrir recuperação local
+            </a>
+          </div>
+        </div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+          <div class="form-group">
+            <label for="arquivo">Backup disponível</label>
+            <select id="arquivo" name="arquivo" class="form-control" required>
+              <option value="">Selecione...</option>
+              {% for item in backups %}
+              <option value="{{ item.path }}">{{ item.name }} | {{ item.engine|default:engine_label }} | {{ item.size_label }}</option>
+              {% endfor %}
+            </select>
+            <small class="form-text text-muted">São listados apenas backups da pasta oficial <code>{{ backup_dir }}</code>.</small>
+          </div>
+
+          <div class="form-group form-check soft-check">
+            <input id="restore_media" type="checkbox" name="restore_media" class="form-check-input">
+            <label for="restore_media" class="form-check-label">Restaurar também logos, assinaturas, anexos e demais arquivos enviados</label>
+          </div>
+
+          <div class="form-group form-check soft-check">
+            <input id="repair_single_tenant" type="checkbox" name="repair_single_tenant" class="form-check-input" checked>
+            <label for="repair_single_tenant" class="form-check-label">Reparar escopo de empresa única após o restore</label>
+            <small class="form-text text-muted">Recomendado para ambiente local e backups antigos, para evitar registros invisíveis após a restauração.</small>
+          </div>
+
+          <div class="form-group form-check soft-check">
+            <input id="ciente_restore" type="checkbox" name="ciente_restore" value="1" class="form-check-input" required>
+            <label for="ciente_restore" class="form-check-label">Entendo que o restore substitui os dados atuais</label>
+          </div>
+
+          <div class="form-group">
+            <label for="confirmar">Confirmação</label>
+            <input id="confirmar" type="text" name="confirmar" class="form-control" placeholder="Digite RESTAURAR" required>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-danger"><i class="fas fa-exclamation-triangle mr-1"></i> Executar restore</button>
+            <a href="{{ cancel_url }}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
-  <div class="card-modern-body">
-    {% if setup_pendente %}
-    <div class="alert alert-info">
-      <strong>Setup inicial pendente:</strong> se você já tem um backup válido, restaure-o agora para recuperar empresa,
-      usuários, configurações, ordens e arquivos antes de começar a usar.
+
+  <div class="col-lg-5 mb-4">
+    <div class="card card-modern border-0 h-100">
+      <div class="card-modern-body">
+        <div class="section-kicker">Checklist rápido</div>
+        <h3 class="h5 mb-3">Boas práticas antes de restaurar</h3>
+        <div class="usage-block mb-3">
+          <ul class="mb-0">
+            <li>Confirme se o backup é o mais recente que você deseja recuperar.</li>
+            <li>Faça restore fora do horário de atendimento.</li>
+            <li>Se o backup incluir arquivos enviados, marque a opção de restaurar media.</li>
+            <li>Após restaurar em outro computador, valide clientes, OS e estoque.</li>
+          </ul>
+        </div>
+
+        <div class="usage-block mb-3">
+          <strong class="d-block mb-2">Se o sistema não abrir</strong>
+          <div class="small text-muted mb-2">Existe um plano B por terminal para contingência local.</div>
+          <code>powershell.exe -ExecutionPolicy Bypass -File .\restore_emergencial_local.ps1 -RestoreMedia</code>
+        </div>
+
+        <div class="mini-metric border-left-info mb-3">
+          <div class="mini-label">Recovery local</div>
+          <div class="mini-value">{% if saude_operacional.recovery_local_habilitado %}Habilitado{% else %}Desligado{% endif %}</div>
+          <div class="mini-sub">
+            {% if saude_operacional.recovery_local_habilitado %}
+              Disponível para contingência sem login
+            {% else %}
+              Pode ser ativado por variável local
+            {% endif %}
+          </div>
+        </div>
+        <div class="mini-metric border-left-warning">
+          <div class="mini-label">Último restore</div>
+          <div class="mini-value">{% if saude_operacional.ultimo_restore %}{{ saude_operacional.ultimo_restore.criado_em|date:"d/m/Y H:i" }}{% else %}Sem histórico{% endif %}</div>
+          <div class="mini-sub">Use a auditoria para rastrear restores anteriores.</div>
+        </div>
+      </div>
     </div>
-    {% endif %}
-    <div class="alert alert-warning">
-      <strong>Atenção:</strong> restaure backups preferencialmente fora do horário de atendimento.
-      Em PostgreSQL, o ideal é parar o servidor Django antes de restaurar a base.
-    </div>
-    <p class="text-muted">
-      Selecione um backup da pasta <code>{{ backup_dir }}</code> e confirme digitando <strong>RESTAURAR</strong>.
-      Backups PostgreSQL aparecem como pastas <code>backup_...</code>.
-    </p>
-    <form method="post">
-      {% csrf_token %}
-      <div class="form-group">
-        <label for="arquivo">Arquivo de backup</label>
-        <select id="arquivo" name="arquivo" class="form-control" required>
-          <option value="">Selecione...</option>
-          {% for item in backups %}
-          <option value="{{ item }}">
-            {% if item.is_dir %}[pasta] {% endif %}{{ item.name }}
-          </option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group form-check">
-        <input id="restore_media" type="checkbox" name="restore_media" class="form-check-input">
-        <label for="restore_media" class="form-check-label">
-          Restaurar também arquivos enviados, logos, assinaturas e anexos (<code>media.zip</code>)
-        </label>
-        <small class="form-text text-muted">
-          Ao marcar, a pasta media atual será arquivada antes da restauração.
-        </small>
-      </div>
-      <div class="form-group form-check">
-        <input id="repair_single_tenant" type="checkbox" name="repair_single_tenant" class="form-check-input" checked>
-        <label for="repair_single_tenant" class="form-check-label">
-          Reparar dados antigos sem empresa ativa para uso local
-        </label>
-        <small class="form-text text-muted">
-          Recomendado para backups de testes ou versões antigas: evita que OS, clientes, produtos ou contas fiquem invisíveis após o restore.
-        </small>
-      </div>
-      <div class="form-group form-check">
-        <input id="ciente_restore" type="checkbox" name="ciente_restore" value="1" class="form-check-input" required>
-        <label for="ciente_restore" class="form-check-label">
-          Entendo que o restore substitui os dados atuais e deve ser feito com os usuários fora do sistema.
-        </label>
-      </div>
-      <div class="form-group">
-        <label for="confirmar">Confirmação</label>
-        <input id="confirmar" type="text" name="confirmar" class="form-control" placeholder="Digite RESTAURAR" required>
-      </div>
-      <button type="submit" class="btn btn-danger">
-        <i class="fas fa-exclamation-triangle"></i> Executar Restore
-      </button>
-      <a href="{% url 'configuracoes:painel' %}" class="btn btn-outline-secondary">Cancelar</a>
-    </form>
   </div>
 </div>
+{% endblock %}
+
+{% block styles %}
+<style>
+.card-modern { border-radius: 16px; box-shadow: 0 10px 28px rgba(18, 42, 66, 0.08); }
+.card-modern-body { padding: 20px; }
+.section-kicker { font-size: .76rem; text-transform: uppercase; letter-spacing: .08em; color: #6b7d91; margin-bottom: 6px; }
+.soft-alert { border-radius: 14px; }
+.soft-check { border: 1px solid #dbe4ec; border-radius: 14px; padding: 12px 14px 12px 34px; background: linear-gradient(180deg, #fff 0%, #f8fbff 100%); }
+.usage-block { border: 1px solid #dbe4ec; border-radius: 14px; padding: 14px 16px; background: linear-gradient(180deg, #fff 0%, #f8fbff 100%); }
+.usage-block ul { padding-left: 18px; }
+.mini-metric { border-radius: 14px; background: #fff; padding: 16px; box-shadow: inset 0 0 0 1px rgba(219, 228, 236, 0.9); }
+.mini-label { font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: #71869d; margin-bottom: 8px; }
+.mini-value { font-size: 1.05rem; font-weight: 700; color: #17324d; }
+.mini-sub { color: #6d7f92; font-size: .9rem; margin-top: 6px; }
+.border-left-warning { border-left: 4px solid #f0ad4e !important; }
+.border-left-info { border-left: 4px solid #17a2b8 !important; }
+</style>
 {% endblock %}

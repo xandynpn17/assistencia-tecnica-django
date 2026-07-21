@@ -2,20 +2,54 @@
 {% block title %}Editar Empresa{% endblock %}
 
 {% block content %}
+{% include 'configuracoes/partials/_central_operacional_tabs.html' %}
 <div class="card card-modern">
   <div class="card-modern-header">
     <i class="fas fa-building"></i> Editar Empresa
   </div>
   <div class="card-modern-body">
+    <div class="alert alert-light border mb-4">
+      <strong>O que ajustar aqui:</strong> nome da empresa, contato principal, logos do sistema/PDF e a base tributaria usada nas vendas e documentos.
+    </div>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
       <div class="row">
-        <div class="col-md-6">{{ form.nome.label_tag }} {{ form.nome }}</div>
-        <div class="col-md-3">{{ form.cnpj.label_tag }} {{ form.cnpj }}</div>
-        <div class="col-md-3">{{ form.telefone.label_tag }} {{ form.telefone }}</div>
+        <div class="col-md-4">{{ form.nome.label_tag }} {{ form.nome }}</div>
+        <div class="col-md-4">{{ form.nome_fantasia.label_tag }} {{ form.nome_fantasia }}</div>
+        <div class="col-md-4">{{ form.razao_social.label_tag }} {{ form.razao_social }}</div>
       </div>
       <div class="row mt-2">
-        <div class="col-md-4">{{ form.email.label_tag }} {{ form.email }}</div>
+        <div class="col-md-3">{{ form.cnpj.label_tag }} {{ form.cnpj }}</div>
+        <div class="col-md-3">{{ form.inscricao_estadual.label_tag }} {{ form.inscricao_estadual }}</div>
+        <div class="col-md-3">{{ form.inscricao_municipal.label_tag }} {{ form.inscricao_municipal }}</div>
+        <div class="col-md-3">{{ form.email.label_tag }} {{ form.email }}</div>
+      </div>
+      <div class="row mt-2">
+        <div class="col-md-3">{{ form.telefone.label_tag }} {{ form.telefone }}</div>
+        <div class="col-md-3">{{ form.celular_whatsapp.label_tag }} {{ form.celular_whatsapp }}</div>
+        <div class="col-md-2">
+          {{ form.cep.label_tag }}
+          <div class="input-group">
+            {{ form.cep }}
+            <div class="input-group-append">
+              <button type="button" class="btn btn-outline-secondary" id="btn-buscar-cep-empresa" title="Buscar CEP">
+                <i class="fas fa-search"></i>
+              </button>
+            </div>
+          </div>
+          <small id="cep-empresa-feedback" class="form-text text-muted">Preenche endereco, cidade e estado automaticamente.</small>
+        </div>
+        <div class="col-md-4">{{ form.logradouro.label_tag }} {{ form.logradouro }}</div>
+      </div>
+      <div class="row mt-2">
+        <div class="col-md-2">{{ form.numero.label_tag }} {{ form.numero }}</div>
+        <div class="col-md-4">{{ form.complemento.label_tag }} {{ form.complemento }}</div>
+        <div class="col-md-3">{{ form.bairro.label_tag }} {{ form.bairro }}</div>
+        <div class="col-md-2">{{ form.cidade.label_tag }} {{ form.cidade }}</div>
+        <div class="col-md-1">{{ form.estado.label_tag }} {{ form.estado }}</div>
+      </div>
+      {{ form.endereco }}
+      <div class="row mt-2">
         <div class="col-md-4">
           <div
             class="logo-card"
@@ -154,7 +188,7 @@
                   </div>
                 </div>
 
-                <div id="logo-pdf-novo-vazio" class="logo-empty-note">Se não enviar um logo, o PDF usa o nome da empresa.</div>
+                <div id="logo-pdf-novo-vazio" class="logo-empty-note">Se no enviar um logo, o PDF usa o nome da empresa.</div>
               </div>
             </div>
 
@@ -163,12 +197,8 @@
           </div>
         </div>
       </div>
-      <div class="row mt-2">
-        <div class="col-md-12">{{ form.endereco.label_tag }} {{ form.endereco }}</div>
-      </div>
-
       <hr>
-      <h5>Configuração Tributária</h5>
+      <h5>Configurao Tributria</h5>
       <div class="row">
         <div class="col-md-4">{{ form.regime_tributario.label_tag }} {{ form.regime_tributario }}</div>
         <div class="col-md-4">{{ form.anexo_simples.label_tag }} {{ form.anexo_simples }}</div>
@@ -214,7 +244,7 @@
           <div class="logo-modal-stage-shell">
             <div id="logo-editor-stage" class="logo-modal-stage">
               <div id="logo-crop-frame" class="logo-crop-frame">
-                <img id="logo-editor-image" class="logo-editor-image d-none" alt="Prévia do recorte do logo">
+                <img id="logo-editor-image" class="logo-editor-image d-none" alt="Prvia do recorte do logo">
                 <div id="logo-editor-placeholder" class="logo-editor-placeholder">
                   Selecione uma imagem para ajustar.
                 </div>
@@ -235,14 +265,14 @@
               </div>
             </div>
             <div class="logo-side-card">
-              <div class="logo-side-title">Como ficará</div>
+              <div class="logo-side-title">Como ficar</div>
               <div class="logo-final-preview">
-                <img id="logo-final-preview-image" class="logo-editor-image d-none" alt="Prévia final do logo">
+                <img id="logo-final-preview-image" class="logo-editor-image d-none" alt="Prvia final do logo">
                 <div id="logo-final-preview-placeholder" class="logo-editor-placeholder">
-                  A prévia final aparece aqui.
+                  A prvia final aparece aqui.
                 </div>
               </div>
-              <small class="form-text text-muted mb-0">O arquivo salvo ficará igual ao enquadramento mostrado nesta área.</small>
+              <small class="form-text text-muted mb-0">O arquivo salvo ficar igual ao enquadramento mostrado nesta rea.</small>
             </div>
           </div>
         </div>
@@ -1000,4 +1030,144 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 });
 </script>
+<script>
+document.addEventListener("input", function (event) {
+  const el = event.target;
+  if (!el || !el.name) {
+    return;
+  }
+
+  function digits(value, limit) {
+    return (value || "").replace(/\D/g, "").slice(0, limit);
+  }
+
+  function alphaCnpj(value) {
+    return (value || "").toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 14);
+  }
+
+  function maskCnpj(value) {
+    const v = alphaCnpj(value);
+    return v
+      .replace(/^([0-9A-Z]{2})([0-9A-Z])/, "$1.$2")
+      .replace(/^([0-9A-Z]{2})\.([0-9A-Z]{3})([0-9A-Z])/, "$1.$2.$3")
+      .replace(/\.([0-9A-Z]{3})([0-9A-Z])/, ".$1/$2")
+      .replace(/([0-9A-Z]{4})(\d)/, "$1-$2");
+  }
+
+  function maskPhone(value) {
+    const v = digits(value, 11);
+    if (v.length <= 10) {
+      return v
+        .replace(/^(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{4})(\d)/, "$1-$2");
+    }
+    return v
+      .replace(/^(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{5})(\d)/, "$1-$2");
+  }
+
+  function maskCep(value) {
+    return digits(value, 8).replace(/^(\d{5})(\d)/, "$1-$2");
+  }
+
+  if (el.name === "cnpj") {
+    el.value = maskCnpj(el.value);
+  }
+  if (el.name === "telefone" || el.name === "celular_whatsapp") {
+    el.value = maskPhone(el.value);
+  }
+  if (el.name === "cep") {
+    el.value = maskCep(el.value);
+  }
+});
+
+document.addEventListener("DOMContentLoaded", function () {
+  const cepInput = document.getElementById("id_cep");
+  const btnBuscarCep = document.getElementById("btn-buscar-cep-empresa");
+  const feedback = document.getElementById("cep-empresa-feedback");
+  const logradouroInput = document.getElementById("id_logradouro");
+  const bairroInput = document.getElementById("id_bairro");
+  const cidadeInput = document.getElementById("id_cidade");
+  const estadoInput = document.getElementById("id_estado");
+  const numeroInput = document.getElementById("id_numero");
+
+  if (!cepInput || !btnBuscarCep) {
+    return;
+  }
+
+  function setFeedback(message, tone) {
+    if (!feedback) {
+      return;
+    }
+    feedback.textContent = message;
+    feedback.classList.remove("text-muted", "text-danger", "text-success");
+    feedback.classList.add(tone || "text-muted");
+  }
+
+  function preencherEndereco(data) {
+    if (logradouroInput && !logradouroInput.value) {
+      logradouroInput.value = data.logradouro || "";
+    }
+    if (bairroInput && !bairroInput.value) {
+      bairroInput.value = data.bairro || "";
+    }
+    if (cidadeInput && !cidadeInput.value) {
+      cidadeInput.value = data.localidade || data.cidade || "";
+    }
+    if (estadoInput) {
+      estadoInput.value = data.uf || data.estado || estadoInput.value || "";
+    }
+    if (numeroInput && !numeroInput.value) {
+      numeroInput.focus();
+    }
+  }
+
+  async function buscarCep() {
+    const cep = (cepInput.value || "").replace(/\D/g, "");
+    if (cep.length !== 8) {
+      setFeedback("Informe um CEP válido com 8 dígitos.", "text-danger");
+      cepInput.focus();
+      return;
+    }
+
+    btnBuscarCep.disabled = true;
+    setFeedback("Buscando CEP...", "text-muted");
+
+    try {
+      const response = await fetch(`/configuracoes/buscar-cep/?cep=${cep}`, {
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      });
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const raw = await response.text();
+        throw new Error(raw.includes("<!DOCTYPE") ? "Não foi possível consultar o CEP agora." : raw);
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.erro || "Não foi possível consultar o CEP.");
+      }
+      preencherEndereco(data);
+      setFeedback("Endereço preenchido automaticamente. Confirme o número.", "text-success");
+    } catch (error) {
+      setFeedback(error.message || "Falha ao consultar o CEP.", "text-danger");
+    } finally {
+      btnBuscarCep.disabled = false;
+    }
+  }
+
+  btnBuscarCep.addEventListener("click", buscarCep);
+  cepInput.addEventListener("blur", function () {
+    if ((cepInput.value || "").replace(/\D/g, "").length === 8) {
+      buscarCep();
+    }
+  });
+  cepInput.addEventListener("keypress", function (event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      buscarCep();
+    }
+  });
+});
+</script>
 {% endblock %}
+

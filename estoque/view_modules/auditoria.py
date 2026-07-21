@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import render
+from django.utils import timezone
 
 from configuracoes.permissions import STOCK_VIEW_ROLES, role_required
 from configuracoes.services.tenant_guard import obter_empresa_ativa
@@ -27,9 +30,7 @@ def auditoria_estoque(request):
         "inventario",
     )
     if empresa:
-        eventos = eventos.filter(produto__empresa=empresa)
-    else:
-        eventos = eventos.none()
+        eventos = eventos.filter(Q(produto__empresa=empresa) | Q(produto__empresa__isnull=True))
 
     if q:
         eventos = eventos.filter(
@@ -50,13 +51,18 @@ def auditoria_estoque(request):
         eventos = eventos.filter(criado_em__date__lte=data_fim)
 
     eventos = eventos.order_by("-criado_em", "-id")
+    resumo = {
+        "total": eventos.count(),
+        "ultimos_7_dias": eventos.filter(criado_em__date__gte=timezone.localdate() - timedelta(days=6)).count(),
+        "com_reserva": eventos.filter(reserva__isnull=False).count(),
+        "com_inventario": eventos.filter(inventario__isnull=False).count(),
+    }
     eventos_page = Paginator(eventos, 50).get_page(page_number)
 
-    tipos_evento = (
-        EstoqueEvento.objects.filter(produto__empresa=empresa).order_by("evento")
-        .values_list("evento", flat=True)
-        .distinct()
-    )
+    tipos_evento_qs = EstoqueEvento.objects.all()
+    if empresa:
+        tipos_evento_qs = tipos_evento_qs.filter(Q(produto__empresa=empresa) | Q(produto__empresa__isnull=True))
+    tipos_evento = tipos_evento_qs.order_by("evento").values_list("evento", flat=True).distinct()
 
     return render(
         request,
@@ -70,6 +76,7 @@ def auditoria_estoque(request):
             "usuario_filtro": usuario,
             "data_inicio": data_inicio,
             "data_fim": data_fim,
+            "resumo": resumo,
             "menu_app": "estoque",
             "menu_sub": "auditoria_estoque",
         },

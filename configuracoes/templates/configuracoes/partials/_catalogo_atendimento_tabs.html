@@ -1,0 +1,136 @@
+﻿<div class="config-catalogo-shell mb-4">
+  <style>
+    .config-catalogo-shell .catalogo-intro {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1rem 1.1rem;
+      border: 1px solid #d9e5f7;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #f8fbff 0%, #f1f6fd 100%);
+      box-shadow: 0 12px 28px rgba(31, 65, 114, 0.08);
+    }
+    .config-catalogo-shell .catalogo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .35rem .7rem;
+      border-radius: 999px;
+      background: rgba(27, 90, 181, 0.12);
+      color: #1b5ab5;
+      font-size: .78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .config-catalogo-shell .catalogo-title {
+      margin: .7rem 0 .25rem;
+      font-size: 1.55rem;
+      font-weight: 800;
+      color: #183153;
+    }
+    .config-catalogo-shell .catalogo-subtitle {
+      margin: 0;
+      color: #627892;
+      max-width: 760px;
+      line-height: 1.55;
+    }
+    .config-catalogo-shell .catalogo-links {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .85rem;
+      margin-top: .95rem;
+    }
+    .config-catalogo-shell .catalogo-link {
+      display: flex;
+      align-items: flex-start;
+      gap: .8rem;
+      padding: .95rem 1rem;
+      border-radius: 16px;
+      border: 1px solid #d9e5f7;
+      background: #fff;
+      text-decoration: none !important;
+      color: #1d3557;
+      box-shadow: 0 10px 24px rgba(17, 24, 39, 0.05);
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .config-catalogo-shell .catalogo-link:hover {
+      transform: translateY(-1px);
+      border-color: #afc9f3;
+      box-shadow: 0 14px 28px rgba(17, 24, 39, 0.08);
+      color: #173863;
+    }
+    .config-catalogo-shell .catalogo-link.is-active {
+      border-color: #3b82f6;
+      background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%);
+      box-shadow: 0 16px 30px rgba(59, 130, 246, 0.12);
+    }
+    .config-catalogo-shell .catalogo-link-icon {
+      width: 2.65rem;
+      height: 2.65rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      background: #edf4ff;
+      color: #2563eb;
+      flex: 0 0 auto;
+    }
+    .config-catalogo-shell .catalogo-link.is-active .catalogo-link-icon {
+      background: #2563eb;
+      color: #fff;
+    }
+    .config-catalogo-shell .catalogo-link-title {
+      display: block;
+      margin-bottom: .2rem;
+      font-weight: 800;
+    }
+    .config-catalogo-shell .catalogo-link-text {
+      display: block;
+      color: #637995;
+      font-size: .92rem;
+      line-height: 1.45;
+    }
+    @media (max-width: 991.98px) {
+      .config-catalogo-shell .catalogo-intro {
+        flex-direction: column;
+      }
+      .config-catalogo-shell .catalogo-links {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+  <div class="catalogo-intro">
+    <div>
+      <span class="catalogo-badge"><i class="fas fa-books"></i> Catálogo e Atendimento</span>
+      <h1 class="catalogo-title">{{ catalogo_title|default:"Cadastros operacionais" }}</h1>
+      <p class="catalogo-subtitle">{{ catalogo_subtitle|default:"Reúna aqui os cadastros que sustentam o atendimento: marcas, fornecedores, parceiros, tipos de equipamento e biblioteca de mensagens da operação." }}</p>
+    </div>
+  </div>
+
+  <div class="catalogo-links">
+    <a href="{% url 'configuracoes:marcas_fornecedores' %}" class="catalogo-link{% if catalogo_tab == 'marcas' %} is-active{% endif %}">
+      <span class="catalogo-link-icon"><i class="fas fa-industry"></i></span>
+      <span>
+        <span class="catalogo-link-title">Marcas e parceiros</span>
+        <span class="catalogo-link-text">Marcas, fornecedores, parceiros externos e regras de garantia.</span>
+      </span>
+    </a>
+    <a href="{% url 'configuracoes:tipos_equipamento' %}" class="catalogo-link{% if catalogo_tab == 'tipos' %} is-active{% endif %}">
+      <span class="catalogo-link-icon"><i class="fas fa-laptop-house"></i></span>
+      <span>
+        <span class="catalogo-link-title">Tipos de equipamento</span>
+        <span class="catalogo-link-text">Padronize os equipamentos disponíveis para cadastro e triagem da OS.</span>
+      </span>
+    </a>
+    <a href="{% url 'configuracoes:modelos_mensagem' %}" class="catalogo-link{% if catalogo_tab == 'mensagens' %} is-active{% endif %}">
+      <span class="catalogo-link-icon"><i class="fas fa-comment-dots"></i></span>
+      <span>
+        <span class="catalogo-link-title">Modelos de mensagem</span>
+        <span class="catalogo-link-text">Biblioteca manual e operacional para atendimento por texto, e-mail e WhatsApp.</span>
+      </span>
+    </a>
+  </div>
+</div>

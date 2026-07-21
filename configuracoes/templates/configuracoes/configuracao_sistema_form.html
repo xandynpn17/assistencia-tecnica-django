@@ -1,17 +1,84 @@
 ﻿{% extends "core/base.html" %}
 {% block title %}Configura&ccedil;&otilde;es do Sistema{% endblock %}
 
+{% block extra_css %}
+<style>
+  .config-system-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+  .config-system-tab {
+    border: 1px solid #d7e3f4;
+    background: #fff;
+    color: #28476f;
+    border-radius: 999px;
+    padding: 0.7rem 1rem;
+    font-weight: 700;
+    line-height: 1.1;
+    box-shadow: 0 8px 20px rgba(17, 24, 39, 0.04);
+    transition: all 0.18s ease;
+  }
+  .config-system-tab small {
+    display: block;
+    margin-top: 0.15rem;
+    font-weight: 500;
+    color: #6b7f98;
+  }
+  .config-system-tab:hover {
+    border-color: #a6c1ea;
+    color: #173863;
+  }
+  .config-system-tab.is-active {
+    background: linear-gradient(135deg, #eff6ff 0%, #f7fbff 100%);
+    border-color: #3b82f6;
+    color: #1d4ed8;
+    box-shadow: 0 12px 24px rgba(59, 130, 246, 0.12);
+  }
+  .config-system-card-hidden {
+    display: none;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
+{% include 'configuracoes/partials/_central_operacional_tabs.html' %}
 <div class="card card-modern">
   <div class="card-modern-header">
     <i class="fas fa-cogs"></i> Configura&ccedil;&otilde;es do Sistema
   </div>
   <div class="card-modern-body">
+    <div class="alert alert-light border mb-4">
+      <strong>O que ajustamos aqui:</strong> comportamento padrão da operação, campos obrigatórios, SLA, integrações, estoque, garantia, antifraude e layout dos documentos.
+    </div>
+    <div class="config-system-nav" id="config-system-nav">
+      <button type="button" class="config-system-tab is-active" data-config-group="base">
+        Operação básica
+        <small>Localização, busca e API de CEP</small>
+      </button>
+      <button type="button" class="config-system-tab" data-config-group="os">
+        Fluxo da OS
+        <small>Campos obrigatórios, mensagens e atendimento</small>
+      </button>
+      <button type="button" class="config-system-tab" data-config-group="estoque">
+        Estoque e backup
+        <small>Reserva, inventário e retenção</small>
+      </button>
+      <button type="button" class="config-system-tab" data-config-group="regras">
+        Garantia e controle
+        <small>Bônus, antifraude e desempenho</small>
+      </button>
+      <button type="button" class="config-system-tab" data-config-group="documentos">
+        Documentos
+        <small>Layout, termos e pré-visualização</small>
+      </button>
+    </div>
     <form method="post">
       {% csrf_token %}
       
       <!-- Localizacao -->
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="base">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-map-marker-alt mr-2"></i> Localizacao Padrao</h5>
         </div>
@@ -50,7 +117,7 @@
       </div>
       
       <!-- Busca -->
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="base">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-search mr-2"></i> Configurações de busca</h5>
         </div>
@@ -69,7 +136,7 @@
       </div>
       
       <!-- Campos Cliente -->
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="os">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-user mr-2"></i> Campos Obrigatorios - Cliente</h5>
         </div>
@@ -90,7 +157,7 @@
       </div>
       
       <!-- Campos Ordem -->
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="os">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-tools mr-2"></i> Campos Obrigatorios - Ordem</h5>
         </div>
@@ -111,7 +178,7 @@
       </div>
       
       <!-- API CEP -->
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="base">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-map-marked-alt mr-2"></i> API CEP</h5>
         </div>
@@ -127,70 +194,155 @@
         </div>
       </div>
 
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="estoque">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-boxes mr-2"></i> Estoque, Inventario e Backup</h5>
+          <h5 class="mb-0"><i class="fas fa-boxes mr-2"></i> Estoque, Inventario e Continuidade</h5>
         </div>
         <div class="card-body">
-          <div class="row">
-            <div class="col-md-6">
-              <div class="form-check mb-3">
-                {{ form.estoque_permitir_negativo }}
-                <label class="form-check-label">{{ form.estoque_permitir_negativo.label }}</label>
+          <div class="alert alert-light border">
+            <strong>Organizacao rapida:</strong> primeiro definimos a politica do estoque, depois o inventario ciclico e por fim a protecao dos backups.
+            <div class="mt-2 d-flex flex-wrap gap-2">
+              <a href="{% url 'configuracoes:backup_banco' %}" class="btn btn-sm btn-outline-primary">Abrir backup</a>
+              <a href="{% url 'configuracoes:restore_banco' %}" class="btn btn-sm btn-outline-secondary">Abrir restauracao</a>
+            </div>
+          </div>
+
+          <div class="border rounded p-3 mb-3 bg-light">
+            <h6 class="font-weight-bold mb-3"><i class="fas fa-warehouse mr-2"></i> Politica operacional do estoque</h6>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-check mb-3">
+                  {{ form.estoque_permitir_negativo }}
+                  <label class="form-check-label">{{ form.estoque_permitir_negativo.label }}</label>
+                </div>
+                <div class="form-check mb-3">
+                  {{ form.estoque_pre_reserva_exige_saldo }}
+                  <label class="form-check-label">{{ form.estoque_pre_reserva_exige_saldo.label }}</label>
+                </div>
+                <div class="form-check mb-0">
+                  {{ form.lgpd_mascarar_documento }}
+                  <label class="form-check-label">{{ form.lgpd_mascarar_documento.label }}</label>
+                </div>
               </div>
-              <div class="form-check mb-3">
-                {{ form.estoque_pre_reserva_exige_saldo }}
-                <label class="form-check-label">{{ form.estoque_pre_reserva_exige_saldo.label }}</label>
-              </div>
-              <div class="form-check mb-3">
-                {{ form.lgpd_mascarar_documento }}
-                <label class="form-check-label">{{ form.lgpd_mascarar_documento.label }}</label>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label>{{ form.estoque_reserva_os_validade_dias.label }}</label>
+                  {{ form.estoque_reserva_os_validade_dias }}
+                  {% if form.estoque_reserva_os_validade_dias.help_text %}<small class="form-text text-muted">{{ form.estoque_reserva_os_validade_dias.help_text }}</small>{% endif %}
+                </div>
+                <div class="form-group">
+                  <label>{{ form.estoque_pre_reserva_limpeza_horas.label }}</label>
+                  {{ form.estoque_pre_reserva_limpeza_horas }}
+                  {% if form.estoque_pre_reserva_limpeza_horas.help_text %}<small class="form-text text-muted">{{ form.estoque_pre_reserva_limpeza_horas.help_text }}</small>{% endif %}
+                </div>
+                <div class="form-group mb-0">
+                  <label>{{ form.estoque_metodo_custo.label }}</label>
+                  {{ form.estoque_metodo_custo }}
+                  {% if form.estoque_metodo_custo.help_text %}<small class="form-text text-muted">{{ form.estoque_metodo_custo.help_text }}</small>{% endif %}
+                </div>
               </div>
             </div>
-            <div class="col-md-6">
-              <div class="form-group">
-                <label>{{ form.inventario_ciclico_dias.label }}</label>
-                {{ form.inventario_ciclico_dias }}
+            <div class="row mt-3">
+              <div class="col-md-6">
+                <div class="form-group mb-0">
+                  <label>{{ form.estoque_reposicao_origem_codigo.label }}</label>
+                  {{ form.estoque_reposicao_origem_codigo }}
+                  {% if form.estoque_reposicao_origem_codigo.help_text %}<small class="form-text text-muted">{{ form.estoque_reposicao_origem_codigo.help_text }}</small>{% endif %}
+                </div>
               </div>
-              <div class="form-group">
-                <label>{{ form.estoque_reserva_os_validade_dias.label }}</label>
-                {{ form.estoque_reserva_os_validade_dias }}
-                {% if form.estoque_reserva_os_validade_dias.help_text %}<small class="form-text text-muted">{{ form.estoque_reserva_os_validade_dias.help_text }}</small>{% endif %}
+              <div class="col-md-6">
+                <div class="form-group mb-0">
+                  <label>{{ form.estoque_reposicao_destino_codigo.label }}</label>
+                  {{ form.estoque_reposicao_destino_codigo }}
+                  {% if form.estoque_reposicao_destino_codigo.help_text %}<small class="form-text text-muted">{{ form.estoque_reposicao_destino_codigo.help_text }}</small>{% endif %}
+                </div>
               </div>
-              <div class="form-group">
-                <label>{{ form.estoque_pre_reserva_limpeza_horas.label }}</label>
-                {{ form.estoque_pre_reserva_limpeza_horas }}
-                {% if form.estoque_pre_reserva_limpeza_horas.help_text %}<small class="form-text text-muted">{{ form.estoque_pre_reserva_limpeza_horas.help_text }}</small>{% endif %}
+            </div>
+            <div class="row mt-3">
+              <div class="col-md-12">
+                <div class="form-group mb-0">
+                  <label>{{ form.estoque_venda_mostrador_codigos.label }}</label>
+                  {{ form.estoque_venda_mostrador_codigos }}
+                  {% if form.estoque_venda_mostrador_codigos.help_text %}<small class="form-text text-muted">{{ form.estoque_venda_mostrador_codigos.help_text }}</small>{% endif %}
+                </div>
               </div>
-              <div class="form-group">
-                <label>{{ form.estoque_reposicao_origem_codigo.label }}</label>
-                {{ form.estoque_reposicao_origem_codigo }}
-                {% if form.estoque_reposicao_origem_codigo.help_text %}<small class="form-text text-muted">{{ form.estoque_reposicao_origem_codigo.help_text }}</small>{% endif %}
+            </div>
+          </div>
+
+          <div class="border rounded p-3 mb-3">
+            <h6 class="font-weight-bold mb-3"><i class="fas fa-clipboard-check mr-2"></i> Inventario ciclico</h6>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label>{{ form.inventario_ciclico_dias.label }}</label>
+                  {{ form.inventario_ciclico_dias }}
+                </div>
               </div>
-              <div class="form-group">
-                <label>{{ form.estoque_reposicao_destino_codigo.label }}</label>
-                {{ form.estoque_reposicao_destino_codigo }}
-                {% if form.estoque_reposicao_destino_codigo.help_text %}<small class="form-text text-muted">{{ form.estoque_reposicao_destino_codigo.help_text }}</small>{% endif %}
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label>{{ form.inventario_ultima_execucao.label }}</label>
+                  {{ form.inventario_ultima_execucao }}
+                </div>
               </div>
-              <div class="form-group">
-                <label>{{ form.inventario_ultima_execucao.label }}</label>
-                {{ form.inventario_ultima_execucao }}
+            </div>
+            <small class="form-text text-muted">Use este bloco para definir a cadencia de conferencia fisica da loja e acompanhar a ultima execucao registrada.</small>
+          </div>
+
+          <div class="border rounded p-3 bg-light">
+            <h6 class="font-weight-bold mb-3"><i class="fas fa-shield-alt mr-2"></i> Backup e recuperacao</h6>
+            <div class="row">
+              <div class="col-md-4">
+                <div class="form-group mb-0">
+                  <label>{{ form.backup_retencao_dias.label }}</label>
+                  {{ form.backup_retencao_dias }}
+                </div>
               </div>
-              <div class="form-group">
-                <label>{{ form.backup_retencao_dias.label }}</label>
-                {{ form.backup_retencao_dias }}
+              <div class="col-md-8">
+                <div class="small text-muted pt-2">
+                  Defina por quantos dias os backups oficiais devem ser mantidos. A geracao e a restauracao continuam disponiveis nas telas operacionais para evitar erros durante o uso.
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="regras">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-stopwatch mr-2"></i> Bonus por Retirada Rapida</h5>
+          <h5 class="mb-0"><i class="fas fa-percent mr-2"></i> Política de comissões</h5>
         </div>
         <div class="card-body">
           <div class="row">
+            <div class="col-md-4 form-group">
+              <label>{{ form.comissao_criterio_os.label }}</label>
+              {{ form.comissao_criterio_os }}
+              {% if form.comissao_criterio_os.help_text %}<small class="form-text text-muted">{{ form.comissao_criterio_os.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-4 form-group">
+              <div class="form-check mt-4">
+                {{ form.comissao_aplicar_pecas }}
+                <label class="form-check-label" for="{{ form.comissao_aplicar_pecas.id_for_label }}">{{ form.comissao_aplicar_pecas.label }}</label>
+              </div>
+              {% if form.comissao_aplicar_pecas.help_text %}<small class="form-text text-muted">{{ form.comissao_aplicar_pecas.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-4 form-group">
+              <div class="form-check mt-4">
+                {{ form.comissao_bonus_retirada_ativo }}
+                <label class="form-check-label" for="{{ form.comissao_bonus_retirada_ativo.id_for_label }}">{{ form.comissao_bonus_retirada_ativo.label }}</label>
+              </div>
+              {% if form.comissao_bonus_retirada_ativo.help_text %}<small class="form-text text-muted">{{ form.comissao_bonus_retirada_ativo.help_text }}</small>{% endif %}
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-4 form-group">
+              <div class="form-check">
+                {{ form.comissao_bonus_produto_ativo }}
+                <label class="form-check-label" for="{{ form.comissao_bonus_produto_ativo.id_for_label }}">{{ form.comissao_bonus_produto_ativo.label }}</label>
+              </div>
+              {% if form.comissao_bonus_produto_ativo.help_text %}<small class="form-text text-muted">{{ form.comissao_bonus_produto_ativo.help_text }}</small>{% endif %}
+            </div>
+          </div>
+          <div class="row mt-2">
             <div class="col-md-2">
               <label>{{ form.dias_bonus_retirada_1.label }}</label>
               {{ form.dias_bonus_retirada_1 }}
@@ -216,11 +368,11 @@
               {{ form.valor_bonus_3 }}
             </div>
           </div>
-          <small class="text-muted">O sistema usa a primeira faixa de dias que enquadrar a retirada do cliente.</small>
+          <small class="text-muted">No modelo atual, a comissão principal usa OS pronta/contactada ou entregue. O bônus por retirada fica apenas como recurso opcional e secundário.</small>
         </div>
       </div>
 
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="regras">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-percentage mr-2"></i> Percentuais Padrao (Meu Desempenho)</h5>
         </div>
@@ -239,7 +391,7 @@
         </div>
       </div>
 
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="regras">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-shield-alt mr-2"></i> Garantia p&oacute;s-servi&ccedil;o</h5>
         </div>
@@ -265,7 +417,7 @@
         </div>
       </div>
 
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="regras">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-user-shield mr-2"></i> Antifraude no Caixa</h5>
         </div>
@@ -306,13 +458,27 @@
         </div>
       </div>
 
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="os">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens automáticas</h5>
         </div>
         <div class="card-body">
-          <p class="text-muted">Esses textos são usados pelo fluxo automático da OS, como envio de orçamento e aviso de pronto contactado. Variáveis disponíveis: <code>{cliente_nome}</code>, <code>{saudacao_cliente}</code>, <code>{numero_os}</code>, <code>{equipamento_resumo}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>, <code>{itens_orcamento}</code>, <code>{itens_orcamento_resumidos}</code>, <code>{quantidade_itens_orcamento}</code>, <code>{status_os}</code>, <code>{empresa_nome}</code>, <code>{telefone_loja}</code>, <code>{email_loja}</code>, <code>{link_orcamento_pdf}</code>, <code>{link_ordem_pdf}</code>.</p>
+          <p class="text-muted">Esses textos são usados pelo fluxo automático da OS, como abertura, envio de orçamento e aviso de pronto contactado. Variáveis disponíveis: <code>{cliente_nome}</code>, <code>{saudacao_cliente}</code>, <code>{numero_os}</code>, <code>{equipamento_resumo}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>, <code>{itens_orcamento}</code>, <code>{itens_orcamento_resumidos}</code>, <code>{quantidade_itens_orcamento}</code>, <code>{status_os}</code>, <code>{empresa_nome}</code>, <code>{telefone_loja}</code>, <code>{email_loja}</code>, <code>{link_orcamento_pdf}</code>, <code>{link_ordem_pdf}</code>, <code>{link_confirmacao}</code>.</p>
           <div class="row">
+            <div class="col-md-12 form-group">
+              <div class="form-check">
+                {{ form.enviar_whatsapp_abertura_os }}
+                <label class="form-check-label" for="{{ form.enviar_whatsapp_abertura_os.id_for_label }}">
+                  {{ form.enviar_whatsapp_abertura_os.label }}
+                </label>
+              </div>
+              {% if form.enviar_whatsapp_abertura_os.help_text %}<small class="form-text text-muted">{{ form.enviar_whatsapp_abertura_os.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-12 form-group">
+              <label>{{ form.mensagem_abertura_whatsapp.label|default:"Mensagem Abertura (WhatsApp)" }}</label>
+              {{ form.mensagem_abertura_whatsapp }}
+              {% if form.mensagem_abertura_whatsapp.help_text %}<small class="form-text text-muted">{{ form.mensagem_abertura_whatsapp.help_text }}</small>{% endif %}
+            </div>
             <div class="col-md-6 form-group">
               <label>{{ form.mensagem_orcamento_email.label|default:"Mensagem Orçamento (E-mail)" }}</label>
               {{ form.mensagem_orcamento_email }}
@@ -342,11 +508,17 @@
               {% if form.termos_ordem_servico.help_text %}<small class="form-text text-muted">{{ form.termos_ordem_servico.help_text }}</small>{% endif %}
               {{ form.termos_ordem_servico.errors }}
             </div>
+            <div class="col-md-12 form-group">
+              <label>{{ form.rodape_relatorio.label|default:"Rodapé dos relatórios" }}</label>
+              {{ form.rodape_relatorio }}
+              {% if form.rodape_relatorio.help_text %}<small class="form-text text-muted">{{ form.rodape_relatorio.help_text }}</small>{% endif %}
+              {{ form.rodape_relatorio.errors }}
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="os">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-print mr-2"></i> Layout de Impressao da OS</h5>
         </div>
@@ -404,10 +576,10 @@
         </div>
       </div>
 
-      <div class="card mb-3">
+      <div class="card mb-3" id="grupo-documentos" data-config-group="documentos">
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
           <h5 class="mb-0"><i class="fas fa-eye mr-2"></i> Pr&eacute;-visualiza&ccedil;&atilde;o dos Layouts</h5>
-          <small class="text-muted">A pr&eacute;via usa os documentos mais recentes cadastrados.</small>
+          <small class="text-muted">Se nao houver OS real, o sistema usa uma amostra de layout segura.</small>
         </div>
         <div class="card-body">
           <div class="row">
@@ -432,7 +604,7 @@
         </div>
       </div>
 
-      <div class="card mb-3">
+      <div class="card mb-3" data-config-group="documentos">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-columns mr-2"></i> Comparador de Presets</h5>
         </div>
@@ -491,6 +663,80 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+  (function () {
+    const nav = document.getElementById("config-system-nav");
+    if (!nav) {
+      return;
+    }
+
+    const cards = Array.from(document.querySelectorAll(".card-modern-body > form > .card.mb-3"));
+    const grupos = {
+      base: [
+        "Localizacao Padrao",
+        "Configurações de busca",
+        "API CEP"
+      ],
+      os: [
+        "Campos Obrigatorios - Cliente",
+        "Campos Obrigatorios - Ordem",
+        "Mensagens automáticas"
+      ],
+      estoque: [
+        "Estoque, Inventario e Backup"
+      ],
+      regras: [
+        "Bonus por Retirada Rapida",
+        "Percentuais Padrao (Meu Desempenho)",
+        "Garantia pós-serviço",
+        "Antifraude no Caixa"
+      ],
+      documentos: [
+        "Layout de Impressao da OS",
+        "Pré-visualização dos Layouts"
+      ]
+    };
+
+    function normalizar(texto) {
+      return (texto || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    const mapaTituloGrupo = {};
+    Object.entries(grupos).forEach(([grupo, titulos]) => {
+      titulos.forEach((titulo) => {
+        mapaTituloGrupo[normalizar(titulo)] = grupo;
+      });
+    });
+
+    cards.forEach((card) => {
+      if (card.dataset.configGroup) {
+        return;
+      }
+      const titulo = normalizar(card.querySelector(".card-header h5")?.textContent || "");
+      card.dataset.configGroup = mapaTituloGrupo[titulo] || "base";
+    });
+
+    const botoes = Array.from(nav.querySelectorAll("[data-config-group]"));
+    function ativarGrupo(grupo) {
+      botoes.forEach((botao) => botao.classList.toggle("is-active", botao.dataset.configGroup === grupo));
+      cards.forEach((card) => {
+        card.classList.toggle("config-system-card-hidden", card.dataset.configGroup !== grupo);
+      });
+    }
+
+    botoes.forEach((botao) => {
+      botao.addEventListener("click", function () {
+        ativarGrupo(botao.dataset.configGroup);
+      });
+    });
+
+    ativarGrupo("base");
+  })();
+</script>
 <script>
   (function () {
     const campos = [
@@ -609,6 +855,7 @@
   })();
 </script>
 {% endblock %}
+
 
 
 

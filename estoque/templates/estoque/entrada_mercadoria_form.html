@@ -1,0 +1,154 @@
+{% extends "core/base.html" %}
+
+{% block header %}
+<div class="ui-module-header">
+  <div>
+    <h1 class="ui-module-title">{% if modo_edicao %}Editar {{ entrada.numero }}{% else %}Nova Entrada de Mercadoria{% endif %}</h1>
+    <p class="ui-module-subtitle">Use este fluxo para receber produtos no estoque com fornecedor, documento e destino fisico corretos.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<form method="post">
+  {% csrf_token %}
+  <div class="card mb-3">
+    <div class="card-header">Cabecalho da entrada</div>
+    <div class="card-body">
+      {% if form.errors %}
+      <div class="alert alert-danger">Revise os dados do cabecalho.</div>
+      {% endif %}
+
+      {% if produto_inicial %}
+      <div class="alert alert-info py-2 mb-3">
+        Recompra iniciada a partir do produto <strong>{{ produto_inicial.nome }}</strong>. O fornecedor, o destino e o primeiro item ja vieram pre-preenchidos para agilizar a entrada.
+      </div>
+      {% endif %}
+
+      <div class="alert alert-light border py-2 mb-3 small">
+        <strong>Como pensar esta entrada:</strong> primeiro defina fornecedor, documento e destino fisico. Depois informe custos globais da compra. Se frete, seguro ou despesas nao forem distribuidos manualmente nos itens, o sistema faz rateio automatico.
+      </div>
+
+      <div class="alert alert-info py-2 mb-3 small">
+        <strong>Destino fisico:</strong> o <strong>ponto de entrada</strong> define em qual setor a mercadoria vai cair. A <strong>ubicacao de destino</strong> define a posicao exata dentro desse ponto. Essa combinacao alimenta saldo, inventario, reserva e busca posterior.
+      </div>
+
+      <div class="form-row">
+        <div class="form-group col-md-4">
+          {{ form.fornecedor_config.label_tag }}{{ form.fornecedor_config }}
+          {% if form.fornecedor_config.help_text %}<small class="text-muted d-block">{{ form.fornecedor_config.help_text }}</small>{% endif %}
+        </div>
+        <div class="form-group col-md-4">
+          {{ form.fornecedor_manual.label_tag }}{{ form.fornecedor_manual }}
+          {% if form.fornecedor_manual.help_text %}<small class="text-muted d-block">{{ form.fornecedor_manual.help_text }}</small>{% endif %}
+        </div>
+        <div class="form-group col-md-2">{{ form.documento_numero.label_tag }}{{ form.documento_numero }}</div>
+        <div class="form-group col-md-2">{{ form.serie_documento.label_tag }}{{ form.serie_documento }}</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group col-md-2">{{ form.data_emissao.label_tag }}{{ form.data_emissao }}</div>
+        <div class="form-group col-md-2">{{ form.data_entrada.label_tag }}{{ form.data_entrada }}</div>
+        <div class="form-group col-md-4">
+          {{ form.ponto_operacional.label_tag }}{{ form.ponto_operacional }}
+          {% if form.ponto_operacional.help_text %}<small class="text-muted d-block">{{ form.ponto_operacional.help_text }}</small>{% endif %}
+        </div>
+        <div class="form-group col-md-4">
+          {{ form.ubicacao.label_tag }}{{ form.ubicacao }}
+          {% if form.ubicacao.help_text %}<small class="text-muted d-block">{{ form.ubicacao.help_text }}</small>{% endif %}
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group col-md-2">
+          {{ form.frete_total.label_tag }}{{ form.frete_total }}
+          {% if form.frete_total.help_text %}<small class="text-muted d-block">{{ form.frete_total.help_text }}</small>{% endif %}
+        </div>
+        <div class="form-group col-md-2">
+          {{ form.seguro_total.label_tag }}{{ form.seguro_total }}
+          {% if form.seguro_total.help_text %}<small class="text-muted d-block">{{ form.seguro_total.help_text }}</small>{% endif %}
+        </div>
+        <div class="form-group col-md-2">
+          {{ form.outras_despesas_total.label_tag }}{{ form.outras_despesas_total }}
+          {% if form.outras_despesas_total.help_text %}<small class="text-muted d-block">{{ form.outras_despesas_total.help_text }}</small>{% endif %}
+        </div>
+        <div class="form-group col-md-2">
+          {{ form.desconto_total.label_tag }}{{ form.desconto_total }}
+          {% if form.desconto_total.help_text %}<small class="text-muted d-block">{{ form.desconto_total.help_text }}</small>{% endif %}
+        </div>
+        <div class="form-group col-md-4">
+          {{ form.observacao.label_tag }}{{ form.observacao }}
+          {% if form.observacao.help_text %}<small class="text-muted d-block">{{ form.observacao.help_text }}</small>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Itens da entrada</div>
+    <div class="card-body">
+      <div class="row mb-3">
+        <div class="col-md-6 mb-2">
+          <div class="border rounded p-3 bg-light h-100">
+            <div class="font-weight-bold mb-1">Quando usar imposto no item</div>
+            <div class="small text-muted">Preencha <strong>impostos que compoem custo</strong> apenas quando o valor realmente aumenta o custo final da mercadoria.</div>
+          </div>
+        </div>
+        <div class="col-md-6 mb-2">
+          <div class="border rounded p-3 bg-light h-100">
+            <div class="font-weight-bold mb-1">Quando nao usar</div>
+            <div class="small text-muted">Imposto recuperavel nao deve inflar o PMP nem o custo medio. Nesses casos, deixe zerado e trate fora do custo do item.</div>
+          </div>
+        </div>
+      </div>
+
+      {{ formset.management_form }}
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered">
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th>Qtd</th>
+              <th>Custo compra</th>
+              <th>Impostos que compoem custo</th>
+              <th>Frete rateado</th>
+              <th>Outras despesas</th>
+              <th>Desconto</th>
+              <th style="min-width:210px;">Lote e serie</th>
+              <th>Obs.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item_form in formset %}
+            <tr>
+              <td>{{ item_form.produto }}</td>
+              <td>{{ item_form.quantidade }}</td>
+              <td>{{ item_form.custo_unitario }}</td>
+              <td>{{ item_form.impostos_entrada_unitario }}</td>
+              <td>{{ item_form.frete_rateado_unitario }}</td>
+              <td>{{ item_form.outras_despesas_rateadas_unitario }}</td>
+              <td>{{ item_form.desconto_unitario }}</td>
+              <td>
+                <div class="mb-1">{{ item_form.lote_codigo }}</div>
+                <div class="mb-1">{{ item_form.lote_validade }}</div>
+                <div>{{ item_form.numeros_serie }}</div>
+                {% if item_form.numeros_serie.help_text %}<small class="text-muted d-block">{{ item_form.numeros_serie.help_text }}</small>{% endif %}
+              </td>
+              <td>{{ item_form.observacao }}</td>
+            </tr>
+            {% if item_form.errors %}
+            <tr><td colspan="9"><div class="text-danger small">{{ item_form.errors }}</div></td></tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="alert alert-light border mb-0">
+        <strong>Leitura operacional:</strong> se voce distribuir frete, imposto que compoe custo ou outras despesas direto no item, o sistema usa esse valor. Se deixar zerado, ele pode reaproveitar o rateio do cabecalho ao calcular o custo final de entrada.
+      </div>
+    </div>
+    <div class="card-footer">
+      <button type="submit" class="btn btn-primary">{% if modo_edicao %}Salvar alteracoes{% else %}Salvar entrada{% endif %}</button>
+      <a href="{% url 'estoque:entradas_mercadoria' %}" class="btn btn-secondary">Cancelar</a>
+    </div>
+  </div>
+</form>
+{% endblock %}

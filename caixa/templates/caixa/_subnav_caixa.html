@@ -1,73 +1,134 @@
 {% load permission_tags %}
-<div class="card mb-3 shadow-sm border-0">
-  <div class="card-body py-2 d-flex flex-wrap" style="gap: 8px;">
-    <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm {% if menu_sub == 'dashboard_caixa' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-      Operação
-    </a>
-    <a href="{% url 'caixa:dashboard_financeiro' %}" class="btn btn-sm {% if menu_sub == 'dashboard_financeiro' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-      Financeiro
-    </a>
-    <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-sm {% if menu_sub == 'registrar_pagamento' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-      Pagamentos
-    </a>
-    <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-sm {% if menu_sub == 'registrar_saida' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-      Saídas
-    </a>
+<style>
+  .caixa-subnav-card {
+    border: 0;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    box-shadow: 0 14px 24px rgba(30, 51, 74, 0.06);
+  }
+  .caixa-subnav-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .caixa-subnav-group {
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: #fff;
+    padding: 10px;
+  }
+  .caixa-subnav-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #6b7b88;
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  .caixa-subnav-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .caixa-subnav-actions .btn {
+    border-radius: 999px;
+  }
+  @media (max-width: 991.98px) {
+    .caixa-subnav-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
 
-    {% if user|has_role_alias:'caixa_financial' %}
-    <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm {% if menu_sub == 'contas_receber' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Contas a receber
-    </a>
-    <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm {% if menu_sub == 'contas_pagar' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Contas a pagar
-    </a>
-    <a href="{% url 'caixa:aging_receber' %}" class="btn btn-sm {% if menu_sub == 'aging_receber' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Aging receber
-    </a>
-    <a href="{% url 'caixa:aging_pagar' %}" class="btn btn-sm {% if menu_sub == 'aging_pagar' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Aging pagar
-    </a>
+<div class="card mb-3 caixa-subnav-card">
+  <div class="card-body py-3">
+    <div class="caixa-subnav-grid">
+      <section class="caixa-subnav-group">
+        <div class="caixa-subnav-label">Opera&ccedil;&atilde;o</div>
+        <div class="caixa-subnav-actions">
+          <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm {% if menu_sub == 'dashboard_caixa' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            Opera&ccedil;&atilde;o
+          </a>
+          <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-sm {% if menu_sub == 'registrar_pagamento' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            Pagamentos
+          </a>
+          <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-sm {% if menu_sub == 'registrar_saida' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+            Sa&iacute;das
+          </a>
+          <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-sm {% if menu_sub == 'abrir_caixa' %}btn-success{% else %}btn-outline-success{% endif %}">
+            Abrir caixa
+          </a>
+          <a href="{% url 'caixa:fechar_caixa' %}" class="btn btn-sm {% if menu_sub == 'fechar_caixa' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+            Fechar caixa
+          </a>
+        </div>
+      </section>
 
-    {% if user|has_perm_sensivel:'perm_caixa_gerir_comissoes' %}
-    <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-sm {% if menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_pendencias' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'meu_desempenho' %}btn-info{% else %}btn-outline-info{% endif %}">
-      Comissões
-    </a>
-    {% endif %}
-    <a href="{% url 'caixa:relatorios' %}" class="btn btn-sm {% if menu_sub == 'relatorios' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-      Relatórios
-    </a>
-    {% if user|has_perm_sensivel:'perm_caixa_ver_dre' %}
-    <a href="{% url 'caixa:dre' %}" class="btn btn-sm {% if menu_sub == 'dre' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-      DRE
-    </a>
-    {% endif %}
-    <a href="{% url 'caixa:fluxo_projetado' %}" class="btn btn-sm {% if menu_sub == 'fluxo_projetado' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-      Fluxo
-    </a>
-    <a href="{% url 'caixa:taloes' %}" class="btn btn-sm {% if menu_sub == 'taloes' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-      Talões
-    </a>
+      {% if user|has_role_alias:'caixa_financial' %}
+      <section class="caixa-subnav-group">
+        <div class="caixa-subnav-label">Financeiro</div>
+        <div class="caixa-subnav-actions">
+          <a href="{% url 'caixa:dashboard_financeiro' %}" class="btn btn-sm {% if menu_sub == 'dashboard_financeiro' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+            Financeiro
+          </a>
+          <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm {% if menu_sub == 'contas_receber' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Contas a receber
+          </a>
+          <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm {% if menu_sub == 'contas_pagar' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Contas a pagar
+          </a>
+          <a href="{% url 'caixa:aging_receber' %}" class="btn btn-sm {% if menu_sub == 'aging_receber' %}btn-outline-secondary{% else %}btn-outline-secondary{% endif %}">
+            Aging receber
+          </a>
+          <a href="{% url 'caixa:aging_pagar' %}" class="btn btn-sm {% if menu_sub == 'aging_pagar' %}btn-outline-secondary{% else %}btn-outline-secondary{% endif %}">
+            Aging pagar
+          </a>
+          <a href="{% url 'caixa:relatorios' %}" class="btn btn-sm {% if menu_sub == 'relatorios' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+            Relat&oacute;rios
+          </a>
+          {% if user|has_perm_sensivel:'perm_caixa_ver_dre' %}
+          <a href="{% url 'caixa:dre' %}" class="btn btn-sm {% if menu_sub == 'dre' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+            DRE
+          </a>
+          {% endif %}
+          <a href="{% url 'caixa:fluxo_projetado' %}" class="btn btn-sm {% if menu_sub == 'fluxo_projetado' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+            Fluxo
+          </a>
+        </div>
+      </section>
 
-    <a href="{% url 'caixa:formas_pagamento' %}" class="btn btn-sm {% if menu_sub == 'formas_pagamento' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Formas
-    </a>
-    <a href="{% url 'caixa:centros_custo' %}" class="btn btn-sm {% if menu_sub == 'centros_custo' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Centros
-    </a>
-    <a href="{% url 'caixa:custos_fixos' %}" class="btn btn-sm {% if menu_sub == 'custos_fixos' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Custos fixos
-    </a>
-    <a href="{% url 'caixa:categorias_financeiras' %}" class="btn btn-sm {% if menu_sub == 'categorias_financeiras' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Categorias
-    </a>
-    <a href="{% url 'caixa:garantias_fabricante' %}" class="btn btn-sm {% if menu_sub == 'garantias_fabricante' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Garantias
-    </a>
-    {% if user|has_perm_sensivel:'perm_caixa_gerir_comissoes' %}
-    <a href="{% url 'caixa:premios_meta' %}" class="btn btn-sm {% if menu_sub == 'premios_meta' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      Prêmios
-    </a>
-    {% endif %}
-    {% endif %}
+      <section class="caixa-subnav-group">
+        <div class="caixa-subnav-label">Apoio e cadastros</div>
+        <div class="caixa-subnav-actions">
+          <a href="{% url 'caixa:taloes' %}" class="btn btn-sm {% if menu_sub == 'taloes' %}btn-outline-dark{% else %}btn-outline-dark{% endif %}">
+            Tal&otilde;es
+          </a>
+          <a href="{% url 'caixa:formas_pagamento' %}" class="btn btn-sm {% if menu_sub == 'formas_pagamento' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Formas
+          </a>
+          <a href="{% url 'caixa:centros_custo' %}" class="btn btn-sm {% if menu_sub == 'centros_custo' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Centros
+          </a>
+          <a href="{% url 'caixa:custos_fixos' %}" class="btn btn-sm {% if menu_sub == 'custos_fixos' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Custos fixos
+          </a>
+          <a href="{% url 'caixa:categorias_financeiras' %}" class="btn btn-sm {% if menu_sub == 'categorias_financeiras' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Categorias
+          </a>
+          <a href="{% url 'caixa:garantias_fabricante' %}" class="btn btn-sm {% if menu_sub == 'garantias_fabricante' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Garantias
+          </a>
+          {% if user|has_perm_sensivel:'perm_caixa_gerir_comissoes' %}
+          <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-sm {% if menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_pendencias' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'meu_desempenho' %}btn-info{% else %}btn-outline-info{% endif %}">
+            Comiss&otilde;es
+          </a>
+          <a href="{% url 'caixa:premios_meta' %}" class="btn btn-sm {% if menu_sub == 'premios_meta' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Pr&ecirc;mios
+          </a>
+          {% endif %}
+        </div>
+      </section>
+      {% endif %}
+    </div>
   </div>
 </div>

@@ -1,0 +1,79 @@
+﻿{% extends "core/base.html" %}
+
+{% block title %}Conciliação de Ordens{% endblock %}
+
+{% block content %}
+<style>
+.conc-grid { display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; }
+.conc-cards { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+.conc-card { border:1px solid #d9e2ec; border-radius:12px; background:#fff; padding:14px; }
+.conc-label { font-size:11px; text-transform:uppercase; color:#64748b; margin-bottom:4px; }
+.conc-value { font-size:1.25rem; font-weight:700; color:#183247; }
+@media (max-width: 991.98px){ .conc-grid, .conc-cards { grid-template-columns:1fr; } }
+</style>
+<div class="ui-module-header mb-3">
+    <div>
+        <h1 class="ui-module-title">Conciliação de Ordens</h1>
+        <p class="ui-module-subtitle">Confira se as ordens abertas no sistema condizem com os equipamentos físicos em loja.</p>
+    </div>
+</div>
+
+<div class="conc-cards">
+    <div class="conc-card"><div class="conc-label">Abertas</div><div class="conc-value">{{ resumo.abertas }}</div></div>
+    <div class="conc-card"><div class="conc-label">Fechadas</div><div class="conc-value">{{ resumo.fechadas }}</div></div>
+    <div class="conc-card"><div class="conc-label">Total</div><div class="conc-value">{{ resumo.total }}</div></div>
+</div>
+
+<div class="conc-grid">
+    <div class="card-modern">
+        <div class="card-modern-header">Histórico recente</div>
+        <div class="card-modern-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Status</th>
+                            <th>Local filtrado</th>
+                            <th>Abertura</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in conciliacoes %}
+                        <tr>
+                            <td><strong>{{ item.numero }}</strong><br><small class="text-muted">{{ item.total_itens }} item(ns)</small></td>
+                            <td>{{ item.get_status_display }}</td>
+                            <td>{{ item.filtro_local_armazenamento|default:"-" }}</td>
+                            <td>{{ item.criado_em|date:"d/m/Y H:i" }}</td>
+                            <td class="text-right"><a href="{% url 'ordens:conciliacao_ordem_detalhe' item.id %}" class="btn btn-sm btn-outline-primary">Abrir</a></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-4">Nenhuma conciliação gerada ainda.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-modern">
+        <div class="card-modern-header">Gerar nova conciliação</div>
+        <div class="card-modern-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label>Filtro por local de armazenamento</label>
+                    <input type="text" name="filtro_local_armazenamento" class="form-control" placeholder="Ex.: bancada 2, prateleira A">
+                    <small class="text-muted">Se vazio, o sistema considera todas as OS abertas.</small>
+                </div>
+                <div class="form-group">
+                    <label>Observação</label>
+                    <textarea name="observacao" class="form-control" rows="3" placeholder="Ex.: conferência semanal da loja"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Gerar conciliação</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

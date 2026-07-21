@@ -324,10 +324,10 @@
                 <i class="fas fa-lock mr-1"></i> Reabrir
             </a>
             {% elif not ordem.fechada and pode_concluir_os %}
-            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1" class="btn {% if destacar_fechar_e_caixa %}btn-success{% else %}btn-outline-success{% endif %} btn-sm">
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1{% if request.GET.confirmar_fechamento == '1' %}&confirmar_financeiro=1{% endif %}" class="btn {% if destacar_fechar_e_caixa %}btn-success{% else %}btn-outline-success{% endif %} btn-sm">
                 <i class="fas fa-cash-register mr-1"></i> Fechar e ir ao Caixa
             </a>
-            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}" class="btn btn-danger btn-sm">
+            <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}{% if request.GET.confirmar_fechamento == '1' %}?confirmar_financeiro=1{% endif %}" class="btn btn-danger btn-sm">
                 <i class="fas fa-lock-open mr-1"></i> Fechar
             </a>
             {% endif %}
@@ -808,9 +808,6 @@
 <script>
     $(document).ready(function() {
         $('[data-toggle="tooltip"]').tooltip();
-        $('#modalAdicionarItem1, #modalAdicionarItem2').on('show.bs.modal', function (e) {
-            console.log('Modal abrir:', this.id);
-        });
     });
 </script>
 <script>

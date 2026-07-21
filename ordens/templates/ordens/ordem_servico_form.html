@@ -257,6 +257,11 @@
                                 <div class="col-lg-8">
                                     <div class="row form-grid align-items-end">
                                         <div class="col-md-6 form-group">{{ form.tipo_equipamento.label_tag }}{{ form.tipo_equipamento }}{{ form.tipo_equipamento.errors }}</div>
+                                        <div class="col-md-6 form-group" id="tipo-equipamento-manual-wrap" style="display:none;">
+                                            {{ form.tipo_equipamento_manual.label_tag }}
+                                            {{ form.tipo_equipamento_manual }}
+                                            {{ form.tipo_equipamento_manual.errors }}
+                                        </div>
                                         <div class="col-md-6 form-group">
                                             {{ form.marca_catalogo.label_tag }}
                                             {{ form.marca_catalogo }}
@@ -286,7 +291,6 @@
                     </div>
 
                     <div class="wizard-step" id="step-2">
-                        <div class="section-title">Dados de reparo e atendimento</div>
                         <div class="row step-two-layout">
                             <div class="col-lg-7">
                                 <div class="surface-soft step-two-card">
@@ -375,6 +379,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const ordemForm = document.getElementById("ordem-form");
+    const tipoEquipamentoSelect = document.getElementById("id_tipo_equipamento");
     const marcaSelect = document.getElementById("id_marca_catalogo");
     const manualWrap = document.getElementById("marca-manual-wrap");
     const manualInput = document.getElementById("id_marca_manual");
@@ -459,6 +464,12 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         if (marcaCatalogoVal === "__outros__" && !marcaManualVal) {
             manualInput && manualInput.focus();
+            return false;
+        }
+        const tipoEquipamentoVal = tipoEquipamentoSelect ? String(tipoEquipamentoSelect.value || "").trim() : "";
+        const tipoEquipamentoManual = document.getElementById("id_tipo_equipamento_manual");
+        if (tipoEquipamentoVal === "__outros__" && (!tipoEquipamentoManual || !String(tipoEquipamentoManual.value || "").trim())) {
+            tipoEquipamentoManual && tipoEquipamentoManual.focus();
             return false;
         }
         return true;
@@ -700,6 +711,20 @@ $(function () {
             minimumResultsForSearch: 0
         });
     }
+
+    const tipoManualWrap = document.getElementById("tipo-equipamento-manual-wrap");
+    const tipoManualInput = document.getElementById("id_tipo_equipamento_manual");
+    function toggleTipoManual() {
+        if (!tipoManualWrap || !$tipo.length) return;
+        const isOutros = $tipo.val() === "__outros__";
+        tipoManualWrap.style.display = isOutros ? "" : "none";
+        if (tipoManualInput) {
+            tipoManualInput.required = isOutros;
+            if (!isOutros) tipoManualInput.value = "";
+        }
+    }
+    $tipo.on("change", toggleTipoManual);
+    toggleTipoManual();
 });
 </script>
 {% endif %}

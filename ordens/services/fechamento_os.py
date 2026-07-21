@@ -1,8 +1,12 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import models, transaction
+from django.db.models import F, Sum
+from django.db.models.functions import Coalesce
+from django.utils import timezone
 
+from caixa.models import CategoriaFinanceira, ContaReceber, Pagamento
 from caixa.services.garantias import upsert_auditoria_garantia_ordem
 from estoque.services import (
     consumir_itens_estoque_ordem,
@@ -13,6 +17,76 @@ from estoque.services import (
 from orcamentos.services import FluxoOrcamentoService
 
 from ..models import LinhaTrabalho
+
+
+VALOR_MONETARIO = models.DecimalField(max_digits=14, decimal_places=2)
+
+
+def _total_servicos_pecas(ordem):
+    return ordem.servicos_pecas.aggregate(
+        total=Coalesce(
+            Sum(F("quantidade") * F("valor_unitario"), output_field=VALOR_MONETARIO),
+            Decimal("0.00"),
+            output_field=VALOR_MONETARIO,
+        )
+    )["total"]
+
+
+def _total_pagamentos_liquidados(ordem, ignorar_pagamento_id=None):
+    pagamentos = Pagamento.objects.filter(ordem_servico=ordem)
+    if ignorar_pagamento_id:
+        pagamentos = pagamentos.exclude(id=ignorar_pagamento_id)
+    return pagamentos.aggregate(
+        total=Coalesce(
+            Sum(F("valor") + F("desconto"), output_field=VALOR_MONETARIO),
+            Decimal("0.00"),
+            output_field=VALOR_MONETARIO,
+        )
+    )["total"]
+
+
+def garantir_conta_receber_os(ordem, ignorar_pagamento_id=None):
+    categoria, _ = CategoriaFinanceira.objects.get_or_create(
+        nome="Cliente OS",
+        tipo="receber",
+        defaults={"ativa": True},
+    )
+    if categoria.tipo != "receber" or not categoria.ativa:
+        categoria.tipo = "receber"
+        categoria.ativa = True
+        categoria.save(update_fields=["tipo", "ativa"])
+    total_os = _total_servicos_pecas(ordem)
+    total_pago = _total_pagamentos_liquidados(ordem, ignorar_pagamento_id=ignorar_pagamento_id)
+    valor_aberto = max(Decimal("0.00"), total_os - total_pago)
+
+    conta = (
+        ContaReceber.objects.filter(ordem_servico=ordem, tipo_origem="cliente_os")
+        .order_by("-id")
+        .first()
+    )
+    if not conta:
+        conta = ContaReceber.objects.create(
+            empresa=ordem.empresa,
+            ordem_servico=ordem,
+            categoria=categoria,
+            descricao=f"OS {ordem.numero_os}",
+            tipo_origem="cliente_os",
+            cliente_nome=getattr(ordem.cliente, "nome", "") or "",
+            valor_original=total_os,
+            valor_aberto=valor_aberto,
+            vencimento=timezone.localdate(),
+        )
+    else:
+        conta.empresa = ordem.empresa
+        conta.categoria = categoria
+        conta.descricao = f"OS {ordem.numero_os}"
+        conta.tipo_origem = "cliente_os"
+        conta.cliente_nome = getattr(ordem.cliente, "nome", "") or ""
+        conta.valor_original = total_os
+        conta.valor_aberto = valor_aberto
+    conta.atualizar_status_automatico()
+    conta.save()
+    return conta
 
 
 @dataclass
@@ -71,7 +145,8 @@ class FechamentoOSService:
                 upsert_auditoria_garantia_ordem(ordem)
                 atualizou_auditoria_garantia = True
 
-            total_os = sum((item.total() for item in ordem.servicos_pecas.all()), Decimal("0.00"))
+            total_os = _total_servicos_pecas(ordem)
+            garantir_conta_receber_os(ordem)
 
         return FechamentoOSResultado(
             ordem=ordem,
@@ -106,7 +181,8 @@ class FechamentoOSService:
                 incluir_manuais=True,
             )
             itens_estoque_processados = consumir_itens_estoque_ordem(ordem, usuario=usuario)
-            total_os = sum((item.total() for item in ordem.servicos_pecas.all()), Decimal("0.00"))
+            total_os = _total_servicos_pecas(ordem)
+            garantir_conta_receber_os(ordem)
 
         return FechamentoOSResultado(
             ordem=ordem,

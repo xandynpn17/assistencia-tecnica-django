@@ -1,79 +1,168 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 {% block title %}Auditoria de Configurações{% endblock %}
 
 {% block content %}
-<div class="card card-modern">
-  <div class="card-modern-header">
-    <i class="fas fa-shield-alt"></i> Auditoria de configurações
-  </div>
-  <div class="card-modern-body">
-    <form method="get" class="form-row mb-3">
-      <div class="col-md-4">
-        <label for="acao">Ação</label>
-        <input id="acao" name="acao" class="form-control" value="{{ acao }}" placeholder="Ex.: restore">
-      </div>
-      <div class="col-md-3">
-        <label for="origem">Origem</label>
-        <select id="origem" name="origem" class="form-control">
-          <option value="">Todas</option>
-          {% for codigo, nome in origens %}
-          <option value="{{ codigo }}" {% if origem == codigo %}selected{% endif %}>{{ nome }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-2 align-self-end">
-        <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
-      </div>
-    </form>
+{% include "configuracoes/partials/_operacao_recuperacao_tabs.html" %}
 
-    <div class="table-responsive">
-      <table class="table table-sm table-striped">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Usuário</th>
-            <th>Ação</th>
-            <th>Origem</th>
-            <th>Alvo</th>
-            <th>Detalhes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for evento in eventos %}
-          <tr>
-            <td>{{ evento.criado_em|date:"d/m/Y H:i:s" }}</td>
-            <td>{% if evento.usuario %}{{ evento.usuario.username }}{% else %}-{% endif %}</td>
-            <td>{{ evento.acao }}</td>
-            <td>{{ evento.get_origem_display }}</td>
-            <td>{{ evento.alvo|default:"-" }}</td>
-            <td>
-              {% if evento.depois_json %}
-              <small class="text-muted">{{ evento.depois_json|truncatechars:120 }}</small>
-              {% else %}
-              -
-              {% endif %}
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6" class="text-center text-muted">Nenhum evento encontrado.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+<div class="row mb-4">
+  <div class="col-lg-8 mb-4">
+    <div class="card card-modern border-0">
+      <div class="card-modern-body">
+        <div class="section-kicker">Rastreabilidade</div>
+        <h3 class="h5 mb-3">Resumo da auditoria operacional</h3>
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <div class="mini-metric border-left-success h-100">
+              <div class="mini-label">Backups concluídos</div>
+              <div class="mini-value">{{ auditoria_resumo.total_backups }}</div>
+            </div>
+          </div>
+          <div class="col-md-4 mb-3">
+            <div class="mini-metric border-left-warning h-100">
+              <div class="mini-label">Restores concluídos</div>
+              <div class="mini-value">{{ auditoria_resumo.total_restores }}</div>
+            </div>
+          </div>
+          <div class="col-md-4 mb-3">
+            <div class="mini-metric border-left-danger h-100">
+              <div class="mini-label">Falhas críticas</div>
+              <div class="mini-value">{{ auditoria_resumo.total_falhas }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="usage-block mt-2">
+          <strong class="d-block mb-2">Quando usar esta tela</strong>
+          <ul class="mb-0">
+            <li>Confirmar quem executou backup, restore ou ajustes sensíveis.</li>
+            <li>Investigar falhas de integração ou restore.</li>
+            <li>Validar histórico antes de suporte ou manutenção local.</li>
+          </ul>
+        </div>
+      </div>
     </div>
+  </div>
 
-    {% if eventos.has_other_pages %}
-    <nav>
-      <ul class="pagination pagination-sm">
-        {% if eventos.has_previous %}
-        <li class="page-item"><a class="page-link" href="?page={{ eventos.previous_page_number }}&acao={{ acao }}&origem={{ origem }}">Anterior</a></li>
-        {% endif %}
-        <li class="page-item disabled"><span class="page-link">Pagina {{ eventos.number }} de {{ eventos.paginator.num_pages }}</span></li>
-        {% if eventos.has_next %}
-        <li class="page-item"><a class="page-link" href="?page={{ eventos.next_page_number }}&acao={{ acao }}&origem={{ origem }}">Proxima</a></li>
-        {% endif %}
-      </ul>
-    </nav>
-    {% endif %}
+  <div class="col-lg-4 mb-4">
+    <div class="card card-modern border-0 h-100">
+      <div class="card-modern-body p-0">
+        <div class="table-section-head d-flex align-items-center">
+          <div>
+            <div class="section-kicker text-white-50 mb-1">Últimos eventos</div>
+            <h3 class="h5 mb-0 text-white">Operações recentes</h3>
+          </div>
+        </div>
+        <div class="list-group list-group-flush">
+          {% for evento in eventos_recentes %}
+          <div class="list-group-item audit-event-item">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <strong>{{ evento.acao }}</strong>
+              <span class="badge badge-{% if 'falha' in evento.acao %}danger{% elif 'restore' in evento.acao %}warning{% else %}success{% endif %}">{{ evento.get_origem_display|default:evento.origem }}</span>
+            </div>
+            <div class="small text-muted">{{ evento.criado_em|date:"d/m/Y H:i:s" }}{% if evento.usuario %} · {{ evento.usuario.username }}{% endif %}</div>
+            {% if evento.alvo %}<div class="small mt-1">Alvo: {{ evento.alvo }}</div>{% endif %}
+          </div>
+          {% empty %}
+          <div class="list-group-item text-muted">Nenhum evento recente.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
   </div>
 </div>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card card-modern border-0">
+      <div class="card-modern-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-end mb-3 gap-2">
+          <div>
+            <div class="section-kicker">Consulta detalhada</div>
+            <h3 class="h5 mb-0">Filtrar auditoria</h3>
+          </div>
+        </div>
+
+        <form method="get" class="form-row mb-4">
+          <div class="col-md-4">
+            <label for="acao">Ação</label>
+            <input id="acao" name="acao" class="form-control" value="{{ acao }}" placeholder="Ex.: restore">
+          </div>
+          <div class="col-md-3">
+            <label for="origem">Origem</label>
+            <select id="origem" name="origem" class="form-control">
+              <option value="">Todas</option>
+              {% for codigo, nome in origens %}
+              <option value="{{ codigo }}" {% if origem == codigo %}selected{% endif %}>{{ nome }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2 align-self-end">
+            <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+          </div>
+        </form>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Usuário</th>
+                <th>Ação</th>
+                <th>Origem</th>
+                <th>Alvo</th>
+                <th>Detalhes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for evento in eventos %}
+              <tr>
+                <td>{{ evento.criado_em|date:"d/m/Y H:i:s" }}</td>
+                <td>{% if evento.usuario %}{{ evento.usuario.username }}{% else %}-{% endif %}</td>
+                <td><span class="badge badge-{% if 'falha' in evento.acao %}danger{% elif 'restore' in evento.acao %}warning{% elif 'backup' in evento.acao %}success{% else %}secondary{% endif %}">{{ evento.acao }}</span></td>
+                <td>{{ evento.get_origem_display|default:evento.origem }}</td>
+                <td>{{ evento.alvo|default:"-" }}</td>
+                <td>{% if evento.depois_json %}<small class="text-muted">{{ evento.depois_json|truncatechars:120 }}</small>{% else %}-{% endif %}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center text-muted">Nenhum evento encontrado.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if eventos.has_other_pages %}
+        <nav>
+          <ul class="pagination pagination-sm mt-3">
+            {% if eventos.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ eventos.previous_page_number }}&acao={{ acao }}&origem={{ origem }}">Anterior</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Página {{ eventos.number }} de {{ eventos.paginator.num_pages }}</span></li>
+            {% if eventos.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ eventos.next_page_number }}&acao={{ acao }}&origem={{ origem }}">Próxima</a></li>
+            {% endif %}
+          </ul>
+        </nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+.card-modern { border-radius: 16px; box-shadow: 0 10px 28px rgba(18, 42, 66, 0.08); }
+.card-modern-body { padding: 20px; }
+.section-kicker { font-size: .76rem; text-transform: uppercase; letter-spacing: .08em; color: #6b7d91; margin-bottom: 6px; }
+.table-section-head { padding: 18px 20px; background: #20384f; }
+.usage-block { border: 1px solid #dbe4ec; border-radius: 14px; padding: 14px 16px; background: linear-gradient(180deg, #fff 0%, #f8fbff 100%); }
+.usage-block ul { padding-left: 18px; }
+.mini-metric { border-radius: 14px; background: #fff; padding: 16px; box-shadow: inset 0 0 0 1px rgba(219, 228, 236, 0.9); }
+.mini-label { font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: #71869d; margin-bottom: 8px; }
+.mini-value { font-size: 1.2rem; font-weight: 700; color: #17324d; }
+.audit-event-item { border-left: 3px solid #dde7f0; }
+.border-left-success { border-left: 4px solid #1fab5b !important; }
+.border-left-warning { border-left: 4px solid #f0ad4e !important; }
+.border-left-danger { border-left: 4px solid #dc3545 !important; }
+</style>
 {% endblock %}

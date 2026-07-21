@@ -393,17 +393,23 @@ class Command(BaseCommand):
         if quantidade > len(seeds):
             raise CommandError(f"Quantidade maxima de produtos para este seed: {len(seeds)}")
 
+        mapa_marcas_por_fornecedor = {
+            "Fornecedor Eletro Sul": "Marca ProLine",
+            "Distribuidora Tech Parts": "Marca UltraHeat",
+            "Componentes Brasil": "Marca Electra",
+        }
+        marca_padrao = next(iter(marcas.values()), None)
+        if marca_padrao is None:
+            raise CommandError("Nenhuma marca disponivel para criar produtos de teste.")
+
         criados = 0
         atualizados = 0
         for seed in seeds[:quantidade]:
             nome_final = f"{prefixo} - {seed.nome}"
             categoria_obj = categorias[seed.categoria]
             fornecedor_obj = fornecedores[seed.fornecedor]
-            marca_obj = marcas["Marca Electra"]
-            if seed.fornecedor == "Fornecedor Eletro Sul":
-                marca_obj = marcas["Marca ProLine"]
-            elif seed.fornecedor == "Distribuidora Tech Parts":
-                marca_obj = marcas["Marca UltraHeat"]
+            nome_marca = mapa_marcas_por_fornecedor.get(seed.fornecedor)
+            marca_obj = marcas.get(nome_marca, marca_padrao)
 
             defaults = {
                 "tipo_item": seed.tipo_item,

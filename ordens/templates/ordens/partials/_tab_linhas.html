@@ -56,6 +56,32 @@
 document.addEventListener("DOMContentLoaded", () => {
     const select = document.getElementById("tecnicoResponsavel");
     const feedback = document.getElementById("tecnico-feedback");
+    const linhasList = document.getElementById("linhasList");
+
+    function prependLinha(linha) {
+        if (!linha) return;
+        let list = linhasList;
+        const cardBody = document.querySelector("#linhas .card-modern-body");
+        if (!list && cardBody) {
+            const emptyState = cardBody.querySelector(".text-muted.text-center.py-3");
+            if (emptyState) emptyState.remove();
+            list = document.createElement("div");
+            list.className = "list-group mb-3";
+            list.id = "linhasList";
+            cardBody.prepend(list);
+        }
+        if (!list) return;
+
+        const item = document.createElement("div");
+        item.className = "list-group-item py-2";
+        item.innerHTML = `
+            <span class="linha-status badge badge-primary">${linha.status || ""}</span>
+            <span class="badge badge-light border ml-1">${linha.tipo_evento || ""}</span>
+            <small class="linha-data float-right">${linha.data || ""}${linha.usuario ? " - " + linha.usuario : ""}</small>
+            ${linha.descricao ? `<p class="linha-descricao mb-0 mt-1">${linha.descricao}</p>` : ""}
+        `;
+        list.prepend(item);
+    }
 
     if (select) {
         select.addEventListener("change", () => {
@@ -77,8 +103,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     feedback.className = "small text-danger";
                     return;
                 }
-                feedback.textContent = "";
-                feedback.className = "small";
+                feedback.textContent = (data && data.message) || "Tecnico atualizado.";
+                feedback.className = "small text-success";
+                prependLinha(data && data.linha);
             })
             .catch(() => {
                 feedback.textContent = "Erro ao salvar.";

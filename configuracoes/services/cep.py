@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 from dataclasses import dataclass
 from typing import Callable
 
@@ -24,7 +24,7 @@ def _consultar_viacep(cep: str, timeout: int) -> CepConsultaResultado:
     response = requests.get(f"https://viacep.com.br/ws/{cep}/json/", timeout=timeout)
     data = response.json()
     if "erro" in data:
-        return CepConsultaResultado(False, 404, {"erro": "CEP não encontrado"})
+        return CepConsultaResultado(False, 404, {"erro": "CEP nao encontrado"})
     return CepConsultaResultado(
         True,
         200,
@@ -42,7 +42,7 @@ def _consultar_brasilapi(cep: str, timeout: int) -> CepConsultaResultado:
     response = requests.get(f"https://brasilapi.com.br/api/cep/v1/{cep}", timeout=timeout)
     data = response.json()
     if "street" not in data:
-        return CepConsultaResultado(False, 404, {"erro": "CEP não encontrado"})
+        return CepConsultaResultado(False, 404, {"erro": "CEP nao encontrado"})
     return CepConsultaResultado(
         True,
         200,
@@ -60,7 +60,7 @@ def _consultar_awesomeapi(cep: str, timeout: int) -> CepConsultaResultado:
     response = requests.get(f"https://cep.awesomeapi.com.br/json/{cep}", timeout=timeout)
     data = response.json()
     if "address" not in data:
-        return CepConsultaResultado(False, 404, {"erro": "CEP não encontrado"})
+        return CepConsultaResultado(False, 404, {"erro": "CEP nao encontrado"})
     return CepConsultaResultado(
         True,
         200,
@@ -84,7 +84,7 @@ PROVIDERS: dict[str, Callable[[str, int], CepConsultaResultado]] = {
 def consultar_cep(*, cep: str, provedor_prioritario: str, timeout: int = 5, ttl_cache_segundos: int = 900) -> CepConsultaResultado:
     cep_limpo = _normalizar_cep(cep)
     if len(cep_limpo) != 8 or not cep_limpo.isdigit():
-        return CepConsultaResultado(False, 400, {"erro": "CEP inválido"})
+        return CepConsultaResultado(False, 400, {"erro": "CEP invalido"})
 
     cache_key = f"configuracoes:cep:{cep_limpo}"
     cached = cache.get(cache_key)
@@ -109,4 +109,5 @@ def consultar_cep(*, cep: str, provedor_prioritario: str, timeout: int = 5, ttl_
         except Exception:
             logger.exception("Erro inesperado no provedor %s para CEP %s", provedor, cep_limpo)
             continue
-    return CepConsultaResultado(False, 502, {"erro": "Não foi possível consultar o CEP agora. Tente novamente."})
+    return CepConsultaResultado(False, 502, {"erro": "Nao foi possivel consultar o CEP agora. Tente novamente."})
+

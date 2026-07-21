@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils.text import slugify
 
 from configuracoes.models import Empresa, SetupInicialSistema
+from configuracoes.services.documentos import normalizar_cnpj
 
 
 @dataclass(frozen=True)
@@ -30,9 +31,11 @@ def _resolve_empresa_by_key(key: str):
     if chave.isdigit():
         return Empresa.objects.filter(id=int(chave)).first()
 
-    only_digits = "".join(ch for ch in chave if ch.isdigit())
-    if len(only_digits) >= 8:
-        return Empresa.objects.filter(cnpj__icontains=only_digits).first()
+    normalized_doc = normalizar_cnpj(chave)
+    if len(normalized_doc) >= 8:
+        for empresa in Empresa.objects.exclude(cnpj="").only("id", "cnpj"):
+            if normalized_doc in normalizar_cnpj(empresa.cnpj):
+                return empresa
 
     slug = slugify(chave).replace("-", "")
     for empresa in Empresa.objects.all():
@@ -44,19 +47,16 @@ def _resolve_empresa_by_key(key: str):
 
 def resolve_tenant_context(request):
     enabled = getattr(settings, "TENANT_CONTEXT_ENABLED", True)
-    if not enabled:
-        empresa = Empresa.objects.order_by("id").first()
-        return TenantContext(empresa=empresa, source="disabled", tenant_key="")
-
-    candidates = [
-        ("query", (request.GET.get("tenant") or "").strip()),
-        ("header", (request.headers.get("X-Tenant") or "").strip()),
-        ("subdomain", _host_subdomain(request)),
-    ]
-    for source, key in candidates:
-        empresa = _resolve_empresa_by_key(key)
-        if empresa:
-            return TenantContext(empresa=empresa, source=source, tenant_key=key)
+    if enabled:
+        candidates = [
+            ("query", (request.GET.get("tenant") or "").strip()),
+            ("header", (request.headers.get("X-Tenant") or "").strip()),
+            ("subdomain", _host_subdomain(request)),
+        ]
+        for source, key in candidates:
+            empresa = _resolve_empresa_by_key(key)
+            if empresa:
+                return TenantContext(empresa=empresa, source=source, tenant_key=key)
 
     user = getattr(request, "user", None)
     if user and getattr(user, "is_authenticated", False) and getattr(user, "empresa_id", None):
@@ -69,5 +69,5 @@ def resolve_tenant_context(request):
     except Exception:
         pass
 
-    empresa = Empresa.objects.order_by("id").first()
-    return TenantContext(empresa=empresa, source="fallback", tenant_key=str(empresa.id) if empresa else "")
+    source = "disabled" if not enabled else "unresolved"
+    return TenantContext(empresa=None, source=source, tenant_key="")

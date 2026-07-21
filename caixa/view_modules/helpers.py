@@ -9,7 +9,7 @@ from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.utils import timezone
 
-from configuracoes.models import Empresa, MarcaGarantia, RegraGarantiaMarca
+from configuracoes.models import MarcaGarantia, RegraGarantiaMarca
 from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, has_role
 from ordens.models import OrdemServico
 
@@ -104,7 +104,7 @@ def _paginar_queryset(request, queryset, per_page=50, page_param="page"):
 def _fmt_decimal(valor):
     try:
         return f"{Decimal(valor or 0):.2f}"
-    except Exception:
+    except (TypeError, ValueError, ArithmeticError):
         return "0.00"
 
 
@@ -188,7 +188,7 @@ def _exportar_pdf_tabela(filename, titulo, cabecalhos, linhas):
         try:
             float(texto)
             return True
-        except Exception:
+        except (TypeError, ValueError, ArithmeticError):
             return False
 
     qtd_colunas = max(1, len(cabecalhos))
@@ -451,7 +451,7 @@ def _vincular_talao_itens_ordem(ordem, numero_talao, pagamento=None):
         return 0
     try:
         from ordens.models import OrdemTalao
-    except Exception:
+    except ImportError:
         OrdemTalao = None
     atualizados = 0
     for item in ordem.servicos_pecas.all():
@@ -461,7 +461,7 @@ def _vincular_talao_itens_ordem(ordem, numero_talao, pagamento=None):
     if OrdemTalao:
         nomes_itens = [i.nome for i in ordem.servicos_pecas.all()[:3]]
         resumo_itens = ", ".join(nomes_itens) if nomes_itens else "Servicos/Pecas da OS"
-        empresa = getattr(ordem, "empresa", None) or Empresa.objects.order_by("id").first()
+        empresa = getattr(ordem, "empresa", None)
         descricao_auto = f"Recibo referente a OS {ordem.numero_os}. Empresa: {empresa.nome if empresa else '-'}."
         talao, created = OrdemTalao.objects.get_or_create(
             ordem=ordem,
@@ -494,17 +494,9 @@ def _vincular_talao_itens_ordem(ordem, numero_talao, pagamento=None):
 
 
 def _garantir_conta_os(ordem, ignorar_pagamento_id=None):
-    categoria, _ = CategoriaFinanceira.objects.get_or_create(
-        nome="Cliente OS",
-        tipo="receber",
-        defaults={"ativa": True},
-    )
+    from ordens.services.fechamento_os import garantir_conta_receber_os
+
     total_os = sum((item.total() for item in ordem.servicos_pecas.all()), Decimal("0.00"))
-    pagamentos_qs = Pagamento.objects.filter(ordem_servico=ordem)
-    if ignorar_pagamento_id:
-        pagamentos_qs = pagamentos_qs.exclude(id=ignorar_pagamento_id)
-    total_pago = sum(((pag.valor or Decimal("0.00")) + (pag.desconto or Decimal("0.00")) for pag in pagamentos_qs), Decimal("0.00"))
-    valor_aberto = max(Decimal("0.00"), total_os - total_pago)
     if total_os <= Decimal("0.00"):
         contas_existentes = ContaReceber.objects.filter(
             ordem_servico=ordem,
@@ -516,35 +508,7 @@ def _garantir_conta_os(ordem, ignorar_pagamento_id=None):
             conta_existente.atualizar_status_automatico()
             conta_existente.save(update_fields=["valor_aberto", "status", "atualizado_em"])
         return None
-
-    conta = (
-        ContaReceber.objects.filter(
-            ordem_servico=ordem,
-            tipo_origem="cliente_os",
-            status__in=["aberta", "parcial", "vencida"],
-        )
-        .order_by("-id")
-        .first()
-    )
-    if not conta:
-        conta = ContaReceber.objects.create(
-            ordem_servico=ordem,
-            categoria=categoria,
-            descricao=f"OS {ordem.numero_os}",
-            tipo_origem="cliente_os",
-            cliente_nome=ordem.cliente.nome,
-            valor_original=total_os,
-            valor_aberto=valor_aberto,
-            vencimento=timezone.localdate(),
-        )
-    else:
-        conta.categoria = categoria
-        conta.valor_original = total_os
-        conta.valor_aberto = valor_aberto
-        conta.tipo_origem = "cliente_os"
-    conta.atualizar_status_automatico()
-    conta.save()
-    return conta
+    return garantir_conta_receber_os(ordem, ignorar_pagamento_id=ignorar_pagamento_id)
 
 
 def _dados_garantia_ordem(ordem):
@@ -607,27 +571,45 @@ def _garantir_conta_garantia(ordem, dados_garantia=None, ignorar_pagamento_id=No
     fornecedor = dados.get("fornecedor")
     marca = dados.get("marca")
     cliente_nome = fornecedor.nome if fornecedor else (marca.nome if marca else "Fabricante")
-    descricao = f"Garantia fabricante - OS {ordem.numero_os}"
+    descricao = f"Garantia fabricante - {cliente_nome} - OS {ordem.numero_os}"
+    valor_aprovado = Decimal(dados.get("valor_aprovado_fabricante") or valor_previsto)
+    referencia_cobranca = (dados.get("referencia_faturamento") or "").strip()
 
     conta = ContaReceber.objects.filter(ordem_servico=ordem, tipo_origem="garantia_fabricante").order_by("-id").first()
     if not conta:
         conta = ContaReceber.objects.create(
+            empresa=ordem.empresa,
             ordem_servico=ordem,
             categoria=categoria,
+            fornecedor_garantia=fornecedor,
+            marca_garantia=marca,
+            regra_garantia=regra,
             descricao=descricao,
             tipo_origem="garantia_fabricante",
             cliente_nome=cliente_nome,
             valor_original=valor_previsto,
             valor_aberto=valor_aberto,
+            valor_aprovado_garantia=valor_aprovado,
+            data_base_cobranca=data_base,
+            prazo_pagamento_dias=prazo if prazo > 0 else 30,
+            referencia_cobranca=referencia_cobranca,
             vencimento=vencimento,
         )
     else:
+        conta.empresa = ordem.empresa
         conta.categoria = categoria
+        conta.fornecedor_garantia = fornecedor
+        conta.marca_garantia = marca
+        conta.regra_garantia = regra
         conta.descricao = descricao
         conta.tipo_origem = "garantia_fabricante"
         conta.cliente_nome = cliente_nome
         conta.valor_original = valor_previsto
         conta.valor_aberto = valor_aberto
+        conta.valor_aprovado_garantia = valor_aprovado
+        conta.data_base_cobranca = data_base
+        conta.prazo_pagamento_dias = prazo if prazo > 0 else 30
+        conta.referencia_cobranca = referencia_cobranca
         conta.vencimento = vencimento
     conta.atualizar_status_automatico()
     conta.save()
@@ -702,17 +684,58 @@ def _upsert_auditoria_garantia_ordem(ordem):
     if regra_garantia and regra_garantia.valor_mao_obra_tecnico and regra_garantia.valor_mao_obra_tecnico > 0:
         comissao_prevista = regra_garantia.valor_mao_obra_tecnico
 
-    auditoria, _ = AuditoriaGarantia.objects.update_or_create(
+    data_base_cobranca = ordem.data_conclusao.date() if ordem.data_conclusao else timezone.localdate()
+    prazo_pagamento_dias = int(getattr(dados.get("regra"), "prazo_pagamento_dias", 0) or 0) or 30
+    vencimento_previsto = data_base_cobranca + timedelta(days=prazo_pagamento_dias)
+    auditoria, criada = AuditoriaGarantia.objects.get_or_create(
         ordem_servico=ordem,
         defaults={
             "fornecedor": dados["fornecedor"],
             "marca": dados["marca"],
             "regra_garantia": dados["regra"],
             "valor_previsto_fabricante": dados["valor_previsto_fabricante"],
+            "valor_aprovado_fabricante": dados["valor_previsto_fabricante"],
+            "valor_recebido_fabricante": Decimal("0.00"),
             "comissao_prevista_tecnica": comissao_prevista,
+            "data_base_cobranca": data_base_cobranca,
+            "prazo_pagamento_dias": prazo_pagamento_dias,
+            "vencimento_previsto": vencimento_previsto,
         },
     )
-    _garantir_conta_garantia(ordem, dados)
+    if not criada:
+        auditoria.fornecedor = dados["fornecedor"]
+        auditoria.marca = dados["marca"]
+        auditoria.regra_garantia = dados["regra"]
+        auditoria.valor_previsto_fabricante = dados["valor_previsto_fabricante"]
+        if not auditoria.valor_aprovado_fabricante or auditoria.valor_aprovado_fabricante <= Decimal("0.00"):
+            auditoria.valor_aprovado_fabricante = dados["valor_previsto_fabricante"]
+        auditoria.comissao_prevista_tecnica = comissao_prevista
+        auditoria.data_base_cobranca = data_base_cobranca
+        auditoria.prazo_pagamento_dias = prazo_pagamento_dias
+        auditoria.vencimento_previsto = vencimento_previsto
+        auditoria.save(
+            update_fields=[
+                "fornecedor",
+                "marca",
+                "regra_garantia",
+                "valor_previsto_fabricante",
+                "valor_aprovado_fabricante",
+                "comissao_prevista_tecnica",
+                "data_base_cobranca",
+                "prazo_pagamento_dias",
+                "vencimento_previsto",
+                "atualizado_em",
+            ]
+        )
+    dados_com_auditoria = {
+        **dados,
+        "valor_aprovado_fabricante": auditoria.valor_aprovado_fabricante or dados["valor_previsto_fabricante"],
+        "referencia_faturamento": auditoria.referencia_faturamento,
+    }
+    conta = _garantir_conta_garantia(ordem, dados_com_auditoria)
+    if conta and auditoria.conta_receber_id != conta.id:
+        auditoria.conta_receber = conta
+        auditoria.save(update_fields=["conta_receber", "atualizado_em"])
     return auditoria
 
 

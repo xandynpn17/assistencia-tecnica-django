@@ -10,7 +10,7 @@
 <style>
   .reserva-summary {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 10px;
     margin-bottom: 14px;
   }
@@ -37,6 +37,23 @@
     gap: 8px;
     margin-bottom: 12px;
   }
+  .reserva-helper {
+    border: 1px solid #d6e4f0;
+    background: linear-gradient(180deg, #f8fbff 0%, #eef5fb 100%);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .reserva-helper-title {
+    font-weight: 700;
+    color: #16324a;
+    margin-bottom: 4px;
+  }
+  .reserva-helper-copy {
+    color: #587086;
+    font-size: 13px;
+    margin: 0;
+  }
   .reserva-meta {
     display: flex;
     flex-wrap: wrap;
@@ -50,8 +67,28 @@
     gap: 6px;
     margin-top: 6px;
   }
+  .reserva-ponto-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #eef4fb;
+    border: 1px solid #d8e3ef;
+    font-size: 12px;
+    color: #26455f;
+  }
+  .reserva-status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #edf2f7;
+    color: #334e68;
+    font-size: 11px;
+    font-weight: 600;
+  }
   @media (max-width: 991.98px) {
-    .reserva-summary { grid-template-columns: 1fr 1fr; }
+    .reserva-summary { grid-template-columns: 1fr 1fr 1fr; }
   }
   @media (max-width: 575.98px) {
     .reserva-summary { grid-template-columns: 1fr; }
@@ -81,15 +118,41 @@
         <div class="reserva-summary-label">Com OS</div>
         <div class="reserva-summary-value">{{ resumo.com_os }}</div>
       </div>
+      <div class="reserva-summary-card">
+        <div class="reserva-summary-label">Expiram em 48h</div>
+        <div class="reserva-summary-value">{{ resumo.expiram_curto }}</div>
+      </div>
+      <div class="reserva-summary-card">
+        <div class="reserva-summary-label">Sem Estrutura</div>
+        <div class="reserva-summary-value">{{ resumo.sem_estrutura }}</div>
+      </div>
     </div>
 
     <div class="reserva-quick-filters">
-      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick=" class="btn btn-sm {% if not quick %}btn-primary{% else %}btn-outline-primary{% endif %}">Todas</a>
-      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick=ativas" class="btn btn-sm {% if quick == 'ativas' %}btn-success{% else %}btn-outline-success{% endif %}">Ativas</a>
-      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick=vencidas" class="btn btn-sm {% if quick == 'vencidas' %}btn-warning{% else %}btn-outline-warning{% endif %}">Vencidas</a>
-      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick=sem_os" class="btn btn-sm {% if quick == 'sem_os' %}btn-info{% else %}btn-outline-info{% endif %}">Sem OS</a>
-      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick=com_os" class="btn btn-sm {% if quick == 'com_os' %}btn-dark{% else %}btn-outline-dark{% endif %}">Com OS</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&ponto={{ ponto_filtro }}&quick=" class="btn btn-sm {% if not quick %}btn-primary{% else %}btn-outline-primary{% endif %}">Todas</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&ponto={{ ponto_filtro }}&quick=ativas" class="btn btn-sm {% if quick == 'ativas' %}btn-success{% else %}btn-outline-success{% endif %}">Ativas</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&ponto={{ ponto_filtro }}&quick=vencidas" class="btn btn-sm {% if quick == 'vencidas' %}btn-warning{% else %}btn-outline-warning{% endif %}">Vencidas</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&ponto={{ ponto_filtro }}&quick=expiram" class="btn btn-sm {% if quick == 'expiram' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Expiram 48h</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&ponto={{ ponto_filtro }}&quick=sem_os" class="btn btn-sm {% if quick == 'sem_os' %}btn-info{% else %}btn-outline-info{% endif %}">Sem OS</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&ponto={{ ponto_filtro }}&quick=com_os" class="btn btn-sm {% if quick == 'com_os' %}btn-dark{% else %}btn-outline-dark{% endif %}">Com OS</a>
+      <a href="?q={{ q|urlencode }}&status={{ status_filtro }}&ponto={{ ponto_filtro }}&quick=sem_estrutura" class="btn btn-sm {% if quick == 'sem_estrutura' %}btn-danger{% else %}btn-outline-danger{% endif %}">Sem estrutura</a>
     </div>
+
+    <div class="reserva-helper">
+      <div class="reserva-helper-title">Como usar esta tela</div>
+      <p class="reserva-helper-copy mb-0">Filtre por ponto para conferir disponibilidade real por bancada ou loja, acompanhe reservas que expiram em breve e trate primeiro as que estao sem OS ou sem estrutura fisica.</p>
+    </div>
+
+    {% if reservas_por_ponto %}
+      <div class="d-flex flex-wrap mb-3" style="gap:8px;">
+        {% for ponto in reservas_por_ponto %}
+          <span class="reserva-ponto-chip">
+            <strong>{{ ponto.ponto_operacional__codigo|default:"Sem ponto" }}</strong>
+            <span>{{ ponto.total }} ativas</span>
+          </span>
+        {% endfor %}
+      </div>
+    {% endif %}
 
     <form method="get" class="form-row align-items-end">
       <div class="col-lg-5 col-md-6 mb-2">
@@ -106,9 +169,18 @@
         </select>
       </div>
       <div class="col-lg-2 col-md-6 mb-2">
-        <button type="submit" class="btn btn-sm btn-primary btn-block">Filtrar</button>
+        <label>Ponto</label>
+        <select name="ponto" class="form-control form-control-sm">
+          <option value="">Todos pontos</option>
+          {% for ponto in pontos_operacionais %}
+            <option value="{{ ponto.id }}" {% if ponto_filtro == ponto.id|stringformat:"s" %}selected{% endif %}>{{ ponto.codigo }} - {{ ponto.nome }}</option>
+          {% endfor %}
+        </select>
       </div>
       <div class="col-lg-2 col-md-6 mb-2">
+        <button type="submit" class="btn btn-sm btn-primary btn-block">Filtrar</button>
+      </div>
+      <div class="col-lg-12 col-md-6 mb-2">
         <a href="{% url 'estoque:reservas_clientes' %}" class="btn btn-sm btn-outline-secondary btn-block">Limpar</a>
       </div>
     </form>
@@ -141,15 +213,33 @@
               <div class="reserva-meta">
                 <span>{{ r.nome_contato }}</span>
                 <span>{{ r.telefone_contato|default:"-" }}</span>
-                <span>{{ r.get_status_display }}</span>
+                <span class="reserva-status-badge">{{ r.get_status_display }}</span>
               </div>
             </td>
             <td>{{ r.produto.nome }}</td>
             <td>
-              <div>{% if r.ponto_operacional %}{{ r.ponto_operacional.codigo }}{% else %}-{% endif %}</div>
+              <div>{% if r.ponto_operacional %}{{ r.ponto_operacional.codigo }}{% else %}<span class="text-danger">Sem ponto</span>{% endif %}</div>
+              <small class="text-muted d-block">
+                {% if r.ubicacao %}
+                  {{ r.ubicacao.codigo }}{% if r.ubicacao.descricao %} - {{ r.ubicacao.descricao }}{% endif %}
+                {% else %}
+                  <span class="text-danger">Sem ubicacao</span>
+                {% endif %}
+              </small>
               <small class="text-muted">Qtd {{ r.quantidade }}</small>
             </td>
-            <td>{{ r.valido_ate|date:"d/m/Y" }}</td>
+            <td>
+              <div>{{ r.valido_ate|date:"d/m/Y" }}</div>
+              <small class="text-muted">
+                {% if r.status == 'ativa' and r.valido_ate < hoje %}
+                  Vencida
+                {% elif r.status == 'ativa' and r.valido_ate <= limite_proximo %}
+                  Expira em breve
+                {% else %}
+                  Dentro do prazo
+                {% endif %}
+              </small>
+            </td>
             <td>
               <div>{% if r.ordem_servico %}{{ r.ordem_servico.numero_os }}{% else %}<span class="text-muted">Sem OS</span>{% endif %}</div>
               <div class="reserva-meta mt-1">
@@ -189,12 +279,12 @@
     <small class="text-muted">Pagina {{ reservas_page.number }} de {{ reservas_page.paginator.num_pages }}</small>
     <div class="btn-group">
       {% if reservas_page.has_previous %}
-      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick={{ quick }}&page={{ reservas_page.previous_page_number }}">Anterior</a>
+      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick={{ quick }}&ponto={{ ponto_filtro }}&page={{ reservas_page.previous_page_number }}">Anterior</a>
       {% else %}
       <button class="btn btn-sm btn-outline-secondary" disabled>Anterior</button>
       {% endif %}
       {% if reservas_page.has_next %}
-      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick={{ quick }}&page={{ reservas_page.next_page_number }}">Proxima</a>
+      <a class="btn btn-sm btn-outline-secondary" href="?q={{ q|urlencode }}&status={{ status_filtro }}&quick={{ quick }}&ponto={{ ponto_filtro }}&page={{ reservas_page.next_page_number }}">Proxima</a>
       {% else %}
       <button class="btn btn-sm btn-outline-secondary" disabled>Proxima</button>
       {% endif %}

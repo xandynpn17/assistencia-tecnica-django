@@ -6,6 +6,9 @@ from django.utils import timezone
 def preparar_cadastro_produto(produto):
     from .models import PontoOperacional
 
+    if produto.ubicacao_padrao_id and not produto.ponto_operacional_id:
+        produto.ponto_operacional = produto.ubicacao_padrao.ponto_operacional
+
     if not produto.ponto_operacional:
         po3, _ = PontoOperacional.objects.get_or_create(
             codigo="PO3",

@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 import os
 import json
 from datetime import datetime
@@ -38,35 +38,37 @@ EVENTOS_COMUNICACAO = {
         "canais": ["email", "whatsapp"],
         "assunto_padrao": "Recebemos seu equipamento - OS #{numero_os}",
         "corpo_padrao": (
-            "Olá {cliente_nome},\n\n"
+            "Ola {cliente_nome},\n\n"
             "Recebemos seu equipamento e registramos a OS {numero_os}.\n"
             "Equipamento: {equipamento_resumo}\n"
-            "Defeito relatado: {defeito}\n\n"
-            "Em breve enviamos o diagnóstico."
+            "Defeito relatado: {defeito}\n"
+            "PDF da ordem: {link_ordem_pdf}\n"
+            "Confirmacao/assinatura digital: {link_confirmacao}\n\n"
+            "Em breve enviamos o diagnostico."
         ),
     },
     "orcamento.pronto": {
-        "nome": "Orçamento pronto",
-        "descricao": "Orçamento finalizado e aguardando retorno do cliente.",
+        "nome": "Orcamento pronto",
+        "descricao": "Orcamento finalizado e aguardando retorno do cliente.",
         "canais": ["email", "whatsapp"],
-        "assunto_padrao": "Orçamento disponível - OS #{numero_os}",
+        "assunto_padrao": "Orcamento disponivel - OS #{numero_os}",
         "corpo_padrao": (
-            "Olá {cliente_nome},\n\n"
-            "Seu orçamento da OS {numero_os} está disponível.\n"
+            "Ola {cliente_nome},\n\n"
+            "Seu orcamento da OS {numero_os} esta disponivel.\n"
             "Valor total: R$ {valor_orcamento}\n"
             "{linha_link_orcamento}"
-            "Condições: {condicoes}\n"
-            "Código de acompanhamento: {codigo_portal}"
+            "Condicoes: {condicoes}\n"
+            "Codigo de acompanhamento: {codigo_portal}"
         ),
     },
     "orcamento.aprovado": {
-        "nome": "Orçamento aprovado",
-        "descricao": "Confirmação de início do reparo após aprovação.",
+        "nome": "Orcamento aprovado",
+        "descricao": "Confirmacao de inicio do reparo apos aprovacao.",
         "canais": ["email", "whatsapp"],
-        "assunto_padrao": "Aprovação registrada - OS #{numero_os}",
+        "assunto_padrao": "Aprovacao registrada - OS #{numero_os}",
         "corpo_padrao": (
-            "Olá {cliente_nome},\n\n"
-            "Recebemos sua aprovação para a OS {numero_os} e o reparo foi iniciado.\n"
+            "Ola {cliente_nome},\n\n"
+            "Recebemos sua aprovacao para a OS {numero_os} e o reparo foi iniciado.\n"
             "Equipamento: {equipamento_resumo}\n"
             "Prazo estimado: {prazo_reparo}."
         ),
@@ -77,14 +79,28 @@ EVENTOS_COMUNICACAO = {
         "canais": ["email", "whatsapp"],
         "assunto_padrao": "Equipamento pronto - OS #{numero_os}",
         "corpo_padrao": (
-            "Olá {cliente_nome},\n\n"
-            "Seu equipamento da OS {numero_os} está pronto para retirada.\n"
+            "Ola {cliente_nome},\n\n"
+            "Seu equipamento da OS {numero_os} esta pronto para retirada.\n"
             "Status atual: {status_os}\n"
-            "Código de acompanhamento: {codigo_portal}."
+            "Codigo de acompanhamento: {codigo_portal}."
+        ),
+    },
+    "equipamento.recusado": {
+        "nome": "Equipamento recusado/devolucao",
+        "descricao": "Aviso de atendimento encerrado sem reparo executado.",
+        "canais": ["email", "whatsapp"],
+        "assunto_padrao": "Atualizacao sem reparo - OS #{numero_os}",
+        "corpo_padrao": (
+            "Ola {cliente_nome},\n\n"
+            "Finalizamos a avaliacao da OS {numero_os} sem reparo executado.\n"
+            "Status atual: {status_os}\n"
+            "Tipo de reparacao: {tipo_reparacao}\n"
+            "Codigo de acompanhamento: {codigo_portal}.\n"
+            "Se desejar, entre em contato para alinharmos a devolucao."
         ),
     },
     "expedicao.criada": {
-        "nome": "Expedição criada",
+        "nome": "Expedicao criada",
         "descricao": "Equipamento enviado para parceiro externo.",
         "canais": ["sistema"],
         "assunto_padrao": "",
@@ -105,14 +121,14 @@ EVENTOS_COMUNICACAO = {
     },
     "garantia.aberta": {
         "nome": "Garantia aberta",
-        "descricao": "Abertura de OS vinculada a garantia pós-serviço.",
+        "descricao": "Abertura de OS vinculada a garantia pos-servico.",
         "canais": ["sistema", "email", "whatsapp"],
         "assunto_padrao": "OS de garantia aberta - #{numero_os}",
         "corpo_padrao": (
-            "Olá {cliente_nome},\n\n"
+            "Ola {cliente_nome},\n\n"
             "Registramos sua OS de garantia {numero_os}.\n"
             "Equipamento: {equipamento_resumo}\n"
-            "Código de acompanhamento: {codigo_portal}."
+            "Codigo de acompanhamento: {codigo_portal}."
         ),
     },
 }

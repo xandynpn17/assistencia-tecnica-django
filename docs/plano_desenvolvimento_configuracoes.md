@@ -265,7 +265,7 @@ Objetivo:
 
 Escopo:
 - varrer models, forms, templates, services, commands e PDFs em busca de caracteres quebrados;
-- corrigir labels como `UsuÃƒÂ¡rio`, `TÃƒÂ©cnico`, `ConfiguraÃƒÂ§ÃƒÂµes`, `CrÃƒÂ©dito`, `NÃƒÂºmero` e similares;
+- corrigir labels como `Usuário`, `Técnico`, `Configurações`, `Crédito`, `Número` e similares;
 - criar teste de guarda mais abrangente contra mojibake;
 - documentar padrao UTF-8 e regra de escrita de novos textos;
 - iniciar convencao para futura extracao de textos com `gettext`, sem traduzir tudo agora.
@@ -279,6 +279,19 @@ Progresso atual:
 - varredura inicial de mojibake executada nos fontes da app `configuracoes` (excluindo migrations);
 - correcoes aplicadas em `configuracoes/forms.py` para labels, mensagens de validacao e help texts quebrados;
 - ajuste em `configuracoes/tests.py` para manter o teste anti-mojibake sem depender de literal corrompido.
+- refinamento visual da app `configuracoes` iniciado com centrais de navegacao por contexto:
+  - `Central Operacional` para empresa, OS e sistema;
+  - `Catálogo e Atendimento` para marcas, tipos e mensagens;
+  - `Operação e Recuperação` para painel, backup, restore, auditoria e logs.
+- painel principal reorganizado com:
+  - resumo rapido de saude operacional;
+  - bloco “como usar” para orientar o gestor;
+  - atalhos criticos para backup, restore, auditoria e integracoes;
+  - cobertura automatizada adicional para garantir a renderizacao desses atalhos.
+- recuperacao local sem login refinada com:
+  - tela publica de restore mais orientada para contingencia;
+  - link visivel no login, painel, backup e restore quando habilitada;
+  - fallback por terminal documentado na propria interface e na documentacao operacional.
 
 ### Fase Cfg9 - Permissoes 2.0: perfis operacionais e riscos
 Status: concluida

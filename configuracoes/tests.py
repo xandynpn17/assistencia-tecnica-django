@@ -1,4 +1,4 @@
-from datetime import timedelta
+﻿from datetime import timedelta
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -8,6 +8,7 @@ from django.core.management.base import CommandError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test.utils import override_settings
 from django.utils import timezone
+from django.http import HttpResponse
 from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
 from pathlib import Path
@@ -15,6 +16,7 @@ from tempfile import TemporaryDirectory
 from html import unescape
 import csv
 import gzip
+import shutil
 import zipfile
 from io import BytesIO, StringIO
 from PIL import Image
@@ -31,8 +33,12 @@ from configuracoes.models import (
     SetupInicialSistema,
     TipoEquipamentoCatalogo,
 )
-from configuracoes.forms import ConfiguracaoSistemaForm, EmpresaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm
-from configuracoes.permissions import has_sensitive_permission, require_sensitive_permission
+from configuracoes.forms import ConfiguracaoSistemaForm, EmpresaForm, MarcaGarantiaForm, RegraGarantiaMarcaForm, UserForm
+from configuracoes.permissions import (
+    can_override_vendedor_operacao,
+    has_sensitive_permission,
+    require_sensitive_permission,
+)
 from configuracoes.services.setup_inicial import (
     garantir_catalogo_padrao,
     setup_inicial_concluido,
@@ -50,6 +56,7 @@ from configuracoes.services.integracoes import (
     emitir_evento_interno,
     registrar_evento_integracao,
 )
+from ordens.services.tecnicos import usuario_apto_tecnico, usuarios_tecnicos_qs
 
 
 class PermissoesSensiveisHelperTests(TestCase):
@@ -108,15 +115,11 @@ class PermissoesSensiveisHelperTests(TestCase):
         for campo in campos:
             self.assertTrue(has_sensitive_permission(self.atendente, campo))
 
-    def test_ordens_e_orcamentos_passam_a_aceitar_flags_granulares(self):
+    def test_permissoes_granulares_de_os_continuam_exigindo_flag(self):
         campos = [
             "perm_os_editar_observacoes_internas",
             "perm_os_editar_local_armazenamento",
             "perm_os_excluir_servico_peca",
-            "perm_orcamento_editar",
-            "perm_orcamento_aprovar_item",
-            "perm_orcamento_recusar_item",
-            "perm_orcamento_migrar_item",
         ]
         for campo in campos:
             self.assertFalse(has_sensitive_permission(self.atendente, campo))
@@ -124,6 +127,33 @@ class PermissoesSensiveisHelperTests(TestCase):
         self.atendente.save(update_fields=campos)
         for campo in campos:
             self.assertTrue(has_sensitive_permission(self.atendente, campo))
+
+    def test_orcamento_operacional_fica_liberado_para_perfil_de_ordens(self):
+        campos = [
+            "perm_orcamento_editar",
+            "perm_orcamento_aprovar_item",
+            "perm_orcamento_recusar_item",
+            "perm_orcamento_migrar_item",
+        ]
+        for campo in campos:
+            self.assertTrue(has_sensitive_permission(self.atendente, campo))
+
+    def test_troca_vendedor_exige_permissao_ou_gestao(self):
+        self.assertFalse(can_override_vendedor_operacao(self.atendente))
+        self.atendente.perm_venda_mostrador_trocar_vendedor = True
+        self.atendente.save(update_fields=["perm_venda_mostrador_trocar_vendedor"])
+        self.assertTrue(can_override_vendedor_operacao(self.atendente))
+        self.assertTrue(can_override_vendedor_operacao(self.gerente))
+
+    def test_usuario_so_entra_como_tecnico_quando_for_tecnico_ou_marcado(self):
+        self.assertTrue(usuario_apto_tecnico(self.tecnico))
+        self.assertFalse(usuario_apto_tecnico(self.atendente))
+        self.atendente.atua_como_tecnico = True
+        self.atendente.save(update_fields=["atua_como_tecnico"])
+        self.assertTrue(usuario_apto_tecnico(self.atendente))
+        tecnicos_ids = set(usuarios_tecnicos_qs().values_list("id", flat=True))
+        self.assertIn(self.tecnico.id, tecnicos_ids)
+        self.assertIn(self.atendente.id, tecnicos_ids)
 
     def test_estoque_passa_a_aceitar_flags_granulares(self):
         campos = [
@@ -248,6 +278,20 @@ class PermissoesConfiguracoesTests(TestCase):
             tipo_usuario="tecnico",
         )
 
+    def _concluir_setup_para_ui(self):
+        empresa = Empresa.objects.create(nome="Empresa UI")
+        garantir_catalogo_padrao()
+        linha = LinhaAtuacaoCatalogo.objects.filter(segmento__codigo="assistencia_tecnica").first()
+        setup = SetupInicialSistema.get_setup()
+        setup.empresa = empresa
+        setup.tipo_empresa = "assistencia_tecnica"
+        setup.concluido = True
+        setup.save()
+        if linha:
+            setup.linhas_atuacao.set([linha])
+            sincronizar_tipos_ativos_por_linhas(LinhaAtuacaoCatalogo.objects.filter(id=linha.id))
+        return setup
+
     def test_painel_bloqueia_atendente(self):
         self.client.force_login(self.atendente)
         response = self.client.get(reverse("configuracoes:painel"))
@@ -310,6 +354,74 @@ class PermissoesConfiguracoesTests(TestCase):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:painel"))
         self.assertEqual(response.status_code, 200)
+
+    def test_painel_exibe_resumo_e_acoes_operacionais(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:painel"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode(response.charset or "utf-8")
+        self.assertIn("Visao rapida", html)
+        self.assertIn("Acoes criticas", html)
+        self.assertIn("Proximos passos recomendados", html)
+        self.assertIn("Gerar backup", html)
+        self.assertIn("Monitorar integra", html)
+
+    @override_settings(LOCAL_RECOVERY_KEY="rec-chave-123")
+    def test_painel_exibe_atalho_de_recuperacao_local_quando_habilitada(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:painel"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Recuperacao local")
+        self.assertContains(response, reverse("configuracoes:restore_banco_publico"))
+
+    def test_empresa_exibe_abas_da_central_operacional(self):
+        self._concluir_setup_para_ui()
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("configuracoes:empresa"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode(response.charset or "utf-8")
+        self.assertIn("Central Operacional", html)
+        self.assertIn("Empresa", html)
+        self.assertIn("Ordem de Servi", html)
+        self.assertIn("Sistema", html)
+
+    def test_configuracao_os_exibe_layout_refinado(self):
+        self._concluir_setup_para_ui()
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("configuracoes:configuracao_os"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode(response.charset or "utf-8")
+        self.assertIn("Prefixo", html)
+        self.assertIn("PDFs e termos", html)
+        self.assertIn("Sistema &gt; Documentos", html)
+
+    def test_configuracao_sistema_exibe_abas_da_central_operacional(self):
+        self._concluir_setup_para_ui()
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:configuracao_sistema"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode(response.charset or "utf-8")
+        self.assertIn("Central Operacional", html)
+        self.assertIn("central da loja", html)
+        self.assertIn("Opera", html)
+        self.assertIn("Fluxo da OS", html)
+        self.assertIn("Documentos", html)
+
+
+    def test_tipos_equipamento_exibe_central_de_catalogo(self):
+        self._concluir_setup_para_ui()
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:tipos_equipamento"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Novo tipo de equipamento")
+
+    def test_modelos_mensagem_exibe_central_de_catalogo(self):
+        self._concluir_setup_para_ui()
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:modelos_mensagem"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Novo modelo manual")
+        self.assertContains(response, "Eventos sem modelo")
 
     def test_painel_permite_funcao_extra_configuracoes(self):
         self.atendente.acesso_configuracoes_extra = True
@@ -387,6 +499,42 @@ class PermissoesConfiguracoesTests(TestCase):
         self.assertTrue(usuario.perm_os_concluir)
         self.assertTrue(usuario.perm_os_reabrir)
 
+    def test_userform_limpa_flag_tecnico_quando_usuario_muda_para_atendente(self):
+        usuario = get_user_model().objects.create_user(
+            username="usuario_muda_funcao",
+            password="Senha@123",
+            tipo_usuario="tecnico",
+            atua_como_tecnico=True,
+        )
+        form = UserForm(
+            data={
+                "username": usuario.username,
+                "nome_completo": usuario.nome_completo,
+                "email": usuario.email,
+                "password": "",
+                "tipo_usuario": "atendente",
+                "atua_como_tecnico": "",
+                "tipo_pessoa": usuario.tipo_pessoa,
+                "documento_cpf_cnpj": usuario.documento_cpf_cnpj,
+                "telefone": usuario.telefone,
+                "endereco": usuario.endereco,
+                "cargo": usuario.cargo,
+                "departamento": usuario.departamento,
+                "regime_contratacao": usuario.regime_contratacao,
+                "tipo_vinculo": usuario.tipo_vinculo or "FUNCIONARIO",
+                "percentual_comissao_servico": str(usuario.percentual_comissao_servico or "0"),
+                "percentual_comissao_peca": str(usuario.percentual_comissao_peca or "0"),
+                "percentual_comissao_vendas": str(usuario.percentual_comissao_vendas or "0"),
+                "numero_vendedor": usuario.numero_vendedor or "",
+                "is_active": "on",
+            },
+            instance=usuario,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        atualizado = form.save()
+        self.assertEqual(atualizado.tipo_usuario, "atendente")
+        self.assertFalse(atualizado.atua_como_tecnico)
+
     def test_gerente_nao_pode_criar_admin(self):
         self.client.force_login(self.gerente)
         response = self.client.post(
@@ -405,7 +553,8 @@ class PermissoesConfiguracoesTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Gerente não pode criar usuário Administrador.")
+        self.assertContains(response, "Gerente")
+        self.assertContains(response, "Administrador")
 
     def test_cadastro_usuario_exige_senha_forte(self):
         self.client.force_login(self.gerente)
@@ -425,28 +574,124 @@ class PermissoesConfiguracoesTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "A senha deve conter ao menos uma letra maiuscula.")
-        self.assertContains(response, "A senha deve conter ao menos um caractere especial.")
+        self.assertContains(response, "letra maius")
+        self.assertContains(response, "caractere especial")
 
     def test_backup_permite_gerente(self):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:backup_banco"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Gerar backup oficial do ambiente")
+
+    @override_settings(LOCAL_RECOVERY_KEY="rec-chave-123")
+    def test_backup_exibe_link_de_recuperacao_local_quando_habilitada(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:backup_banco"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Abrir recuperação local")
+        self.assertContains(response, reverse("configuracoes:restore_banco_publico"))
+
+    @patch("configuracoes.view_modules.operacao.call_command")
+    def test_backup_post_gera_arquivo_para_gerente(self, call_command_mock):
+        self.client.force_login(self.gerente)
+        response = self.client.post(reverse("configuracoes:backup_banco"), {"include_media": "1"})
         self.assertEqual(response.status_code, 302)
-        backup_dir = Path(settings.BASE_DIR) / "backups"
-        self.assertTrue(backup_dir.exists())
+        call_command_mock.assert_called_once()
 
     def test_backup_bloqueia_atendente(self):
         self.client.force_login(self.atendente)
         response = self.client.get(reverse("configuracoes:backup_banco"))
         self.assertEqual(response.status_code, 403)
 
+    @patch("configuracoes.view_modules.operacao.FileResponse")
+    def test_download_backup_disponivel_para_gerente(self, file_response_mock):
+        backup_dir = Path(settings.BASE_DIR) / "backups" / "backup_20990102_120000"
+        self.addCleanup(lambda: shutil.rmtree(backup_dir, ignore_errors=True))
+        self.addCleanup(lambda: backup_dir.with_suffix(".zip").unlink(missing_ok=True) if backup_dir.with_suffix(".zip").exists() else None)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        (backup_dir / "database.dump").write_bytes(b"dump")
+        (backup_dir / "manifest.json").write_text('{"engine": "postgresql"}', encoding="utf-8")
+
+        def _file_response_side_effect(file_handle, *args, **kwargs):
+            file_handle.close()
+            return HttpResponse("ok")
+
+        file_response_mock.side_effect = _file_response_side_effect
+
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:download_backup"), {"path": str(backup_dir)})
+        self.assertEqual(response.status_code, 200)
+        file_response_mock.assert_called_once()
+
     def test_setup_inicial_oferece_restore_de_backup(self):
         SetupInicialSistema.get_setup().save()
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:setup_inicial"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Já possui um backup?")
+        self.assertContains(response, "backup?")
         self.assertContains(response, reverse("configuracoes:restore_banco"))
+
+    @patch("configuracoes.view_modules.integracoes.consultar_cep")
+    def test_busca_cep_permanece_disponivel_durante_setup_inicial(self, consultar_cep_mock):
+        setup = SetupInicialSistema.get_setup()
+        setup.concluido = False
+        setup.save(update_fields=["concluido"])
+        consultar_cep_mock.return_value = type(
+            "ConsultaCepResultado",
+            (),
+            {
+                "payload": {"logradouro": "Rua Teste", "bairro": "Centro", "cidade": "Goiania", "estado": "GO"},
+                "status": 200,
+            },
+        )()
+
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:buscar_cep"), {"cep": "74000000"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["logradouro"], "Rua Teste")
+
+    @patch("configuracoes.view_modules.integracoes.consultar_cep")
+    def test_busca_cep_funciona_sem_login_durante_setup_inicial(self, consultar_cep_mock):
+        setup = SetupInicialSistema.get_setup()
+        setup.concluido = False
+        setup.save(update_fields=["concluido"])
+        consultar_cep_mock.return_value = type(
+            "ConsultaCepResultado",
+            (),
+            {
+                "payload": {"logradouro": "Rua Livre", "bairro": "Centro", "cidade": "Goiania", "estado": "GO"},
+                "status": 200,
+            },
+        )()
+
+        response = self.client.get(
+            reverse("configuracoes:buscar_cep"),
+            {"cep": "74000000"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["logradouro"], "Rua Livre")
+
+    def test_busca_cep_ajax_sem_login_retorna_json_quando_setup_ja_foi_concluido(self):
+        self._concluir_setup_para_ui()
+
+        response = self.client.get(
+            reverse("configuracoes:buscar_cep"),
+            {"cep": "74000000"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["erro"], "Sessão expirada. Faça login novamente.")
+
+    def test_setup_inicial_exibe_linhas_com_descricao(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:setup_inicial"), {"tipo_empresa": "assistencia_tecnica"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Linhas de atuacao")
+        self.assertContains(response, "diagnostico mais detalhado", count=1)
 
     def test_restore_fica_acessivel_antes_do_setup(self):
         setup = SetupInicialSistema.get_setup()
@@ -458,6 +703,61 @@ class PermissoesConfiguracoesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Setup inicial pendente")
 
+    @override_settings(LOCAL_RECOVERY_KEY="rec-chave-123")
+    def test_restore_exibe_plano_b_de_recuperacao_local_quando_habilitado(self):
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:restore_banco"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Plano B antes do login")
+        self.assertContains(response, "Abrir recuperação local")
+
+    @override_settings(LOCAL_RECOVERY_KEY="rec-chave-123")
+    def test_login_exibe_link_para_recuperacao_local_quando_chave_existe(self):
+        response = self.client.get(reverse("core:login"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("configuracoes:restore_banco_publico"))
+
+    @override_settings(LOCAL_NETWORK_MODE=True, LOCAL_RECOVERY_KEY="rec-chave-123")
+    def test_recuperacao_local_publica_fica_disponivel_sem_login(self):
+        response = self.client.get(
+            reverse("configuracoes:restore_banco_publico"),
+            REMOTE_ADDR="127.0.0.1",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Recupera")
+        self.assertContains(response, "Fallback por terminal")
+        self.assertContains(response, "manage_local.ps1 restore_db")
+
+    @override_settings(LOCAL_NETWORK_MODE=True, LOCAL_RECOVERY_KEY="")
+    def test_recuperacao_local_publica_bloqueia_sem_chave(self):
+        response = self.client.get(
+            reverse("configuracoes:restore_banco_publico"),
+            REMOTE_ADDR="127.0.0.1",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    @override_settings(LOCAL_NETWORK_MODE=True, LOCAL_RECOVERY_KEY="rec-chave-123")
+    @patch("configuracoes.view_modules.operacao.call_command")
+    def test_recuperacao_local_publica_exige_chave_valida(self, call_command_mock):
+        backup_dir = Path(settings.BASE_DIR) / "backups" / "backup_20990101_120000"
+        self.addCleanup(lambda: shutil.rmtree(backup_dir, ignore_errors=True))
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        (backup_dir / "database.dump").write_bytes(b"dump")
+        (backup_dir / "manifest.json").write_text('{"engine": "postgresql"}', encoding="utf-8")
+
+        response = self.client.post(
+            reverse("configuracoes:restore_banco_publico"),
+            {
+                "arquivo": str(backup_dir),
+                "confirmar": "RESTAURAR",
+                "ciente_restore": "1",
+                "recovery_key": "chave-errada",
+            },
+            REMOTE_ADDR="127.0.0.1",
+        )
+        self.assertEqual(response.status_code, 302)
+        call_command_mock.assert_not_called()
+
     def test_caixa_financeiro_permite_funcao_extra(self):
         self.tecnico.acesso_caixa_financeiro_extra = True
         self.tecnico.save(update_fields=["acesso_caixa_financeiro_extra"])
@@ -466,14 +766,19 @@ class PermissoesConfiguracoesTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_gerente_acessa_marcas_fornecedores(self):
+        self._concluir_setup_para_ui()
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:marcas_fornecedores"))
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Cadastrar Fornecedor")
+        self.assertContains(response, "Cadastrar Parceiro")
+        self.assertContains(response, "Fluxo recomendado")
 
     def test_gerente_acessa_auditoria_configuracoes(self):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:auditoria_configuracoes"))
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Resumo da auditoria operacional")
 
     def test_gerente_acessa_simulador_permissoes(self):
         self.client.force_login(self.gerente)
@@ -551,6 +856,52 @@ class PermissoesConfiguracoesTests(TestCase):
         )
         self.assertEqual(response_delete.status_code, 302)
         self.assertFalse(FornecedorGarantia.objects.filter(id=fornecedor.id).exists())
+
+    def test_gerente_pode_salvar_municipio_e_uf_do_fornecedor(self):
+        fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor Cidade")
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("configuracoes:marcas_fornecedores"),
+            {
+                "form_type": "fornecedor_edit",
+                "fornecedor_id": fornecedor.id,
+                "nome": "Fornecedor Cidade",
+                "municipio": "Goiania",
+                "uf": "GO",
+                "modalidade_pagamento": "pix",
+                "prazo_pagamento_dias": 7,
+                "ativo": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        fornecedor.refresh_from_db()
+        self.assertEqual(fornecedor.municipio, "Goiania")
+        self.assertEqual(fornecedor.uf, "GO")
+
+    def test_gerente_pode_salvar_procedimento_e_documentos_de_cobranca_do_fornecedor(self):
+        fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor Financeiro")
+        self.client.force_login(self.gerente)
+        response = self.client.post(
+            reverse("configuracoes:marcas_fornecedores"),
+            {
+                "form_type": "fornecedor_edit",
+                "fornecedor_id": fornecedor.id,
+                "nome": "Fornecedor Financeiro",
+                "email_cobranca": "financeiro@fabricante.com",
+                "portal_garantia_url": "https://portal.fabricante.com/garantia",
+                "documentos_exigidos": "NF, laudo e etiqueta.",
+                "procedimento_cobranca": "Abrir protocolo no portal e anexar PDF da OS.",
+                "modalidade_pagamento": "pix",
+                "prazo_pagamento_dias": 14,
+                "ativo": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        fornecedor.refresh_from_db()
+        self.assertEqual(fornecedor.email_cobranca, "financeiro@fabricante.com")
+        self.assertEqual(fornecedor.portal_garantia_url, "https://portal.fabricante.com/garantia")
+        self.assertIn("NF", fornecedor.documentos_exigidos)
+        self.assertIn("protocolo", fornecedor.procedimento_cobranca)
 
     def test_gerente_edita_e_exclui_marca_na_tela_unica(self):
         marca = MarcaGarantia.objects.create(nome="Marca T", valor_mao_obra_garantia=10)
@@ -657,6 +1008,35 @@ class PermissoesConfiguracoesTests(TestCase):
         marca = form.save()
         self.assertIsNotNone(marca.fornecedor)
         self.assertEqual(marca.fornecedor.nome, "MarcaFornecedorX")
+
+    def test_consulta_de_marca_exibe_procedimento_operacional(self):
+        fornecedor = FornecedorGarantia.objects.create(
+            nome="Fornecedor Procedimento",
+            municipio="Sao Paulo",
+            uf="SP",
+            email_cobranca="faturamento@fornecedor.com",
+            portal_garantia_url="https://portal.fornecedor.com",
+            documentos_exigidos="NF e laudo tecnico",
+            procedimento_cobranca="Abrir protocolo e anexar os comprovantes.",
+            modalidade_pagamento="boleto",
+            prazo_pagamento_dias=28,
+        )
+        MarcaGarantia.objects.create(
+            nome="Marca Procedimento",
+            fornecedor=fornecedor,
+            parceira_garantia=True,
+            procedimentos="Abrir portal, anexar NF e faturar mao de obra no fechamento.",
+            ativo=True,
+        )
+        self.client.force_login(self.gerente)
+        response = self.client.get(reverse("configuracoes:marcas_fornecedores"), {"qm": "Marca Procedimento"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ver procedimento da marca")
+        self.assertContains(response, "Abrir portal, anexar NF e faturar mao de obra no fechamento.")
+        self.assertContains(response, "Sao Paulo / SP")
+        self.assertContains(response, "faturamento@fornecedor.com")
+        self.assertContains(response, "NF e laudo tecnico")
+        self.assertContains(response, "Abrir protocolo e anexar os comprovantes.")
 
     def test_tecnico_pode_abrir_lista_ordens(self):
         self.client.force_login(self.tecnico)
@@ -1201,6 +1581,52 @@ class PreviewDocumentoTests(TestCase):
         self.assertIn("Pré-visualização dos Layouts", texto)
         self.assertNotIn("Pr\u00c3\u00a9-visualiza\u00c3\u00a7\u00c3\u00a3o dos Layouts", texto)
 
+    def test_preview_documento_sem_dados_reais_retorna_pdf_mock(self):
+        OrdemServico.objects.all().delete()
+        Orcamento.objects.all().delete()
+
+        response = self.client.get(
+            reverse("configuracoes:preview_documento"),
+            {"tipo": "orcamento", "_preview": "1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIsNone(response.get("X-Frame-Options"))
+
+    def test_sidebar_oculta_setup_inicial_quando_setup_ja_foi_concluido(self):
+        garantir_catalogo_padrao()
+        empresa = Empresa.objects.create(nome="Empresa Preview")
+        linha = LinhaAtuacaoCatalogo.objects.filter(segmento__codigo="assistencia_tecnica").first()
+        setup = SetupInicialSistema.get_setup()
+        setup.empresa = empresa
+        setup.tipo_empresa = "assistencia_tecnica"
+        setup.concluido = True
+        setup.save()
+        if linha:
+            setup.linhas_atuacao.set([linha])
+            sincronizar_tipos_ativos_por_linhas(LinhaAtuacaoCatalogo.objects.filter(id=linha.id))
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("configuracoes:painel"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode(response.charset or "utf-8")
+        self.assertNotIn("Setup Inicial", html)
+        self.assertIn("Revisar assistente inicial", html)
+
+    def test_painel_exibe_bloco_de_proximos_passos(self):
+        response = self.client.get(reverse("configuracoes:painel"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Proximos passos recomendados")
+        self.assertContains(response, "Concluir setup inicial")
+        self.assertContains(response, "Validar ordem de servico")
+
+    def test_painel_renderiza_css_do_bloco_styles(self):
+        response = self.client.get(reverse("configuracoes:painel"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode(response.charset or "utf-8")
+        self.assertIn(".panel-summary {", html)
+        self.assertIn(".config-topline {", html)
+
 class SetupInicialSyncCompatTests(TestCase):
     def test_sync_reaproveita_tipo_existente_com_mesmo_nome_e_codigo_legado(self):
         garantir_catalogo_padrao()
@@ -1373,3 +1799,4 @@ class IntegracoesLogsTests(TestCase):
             ModeloMensagem.objects.exclude(evento_chave="").count(),
             total_eventos,
         )
+

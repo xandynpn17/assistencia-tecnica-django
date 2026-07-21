@@ -1,4 +1,4 @@
-from django.contrib import messages
+﻿from django.contrib import messages
 from django.core.paginator import Paginator
 from django.forms import modelformset_factory
 from django.shortcuts import redirect, render
@@ -117,3 +117,4 @@ def painel_reincidencias_impl(request):
             "menu_sub": "painel_reincidencias",
         },
     )
+

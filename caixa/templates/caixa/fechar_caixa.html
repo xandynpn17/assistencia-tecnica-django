@@ -1,5 +1,74 @@
 {% extends 'core/base.html' %}
 
+{% block extra_css %}
+<style>
+  .caixa-close-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .9rem;
+  }
+  .caixa-close-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 1rem;
+    box-shadow: 0 14px 24px rgba(30, 51, 74, 0.06);
+  }
+  .caixa-close-label {
+    font-size: .74rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #738290;
+    margin-bottom: .35rem;
+  }
+  .caixa-close-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #223749;
+  }
+  .caixa-close-note {
+    margin-top: .35rem;
+    color: #607080;
+    font-size: .84rem;
+  }
+  .caixa-close-focus-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 1rem;
+  }
+  .caixa-close-focus-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: #fff;
+    padding: 14px 16px;
+  }
+  .caixa-close-focus-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #738290;
+    margin-bottom: 4px;
+  }
+  .caixa-close-focus-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #223749;
+  }
+  .caixa-close-focus-note {
+    margin-top: 4px;
+    color: #607080;
+    font-size: .83rem;
+  }
+  @media (max-width: 991.98px) {
+    .caixa-close-strip,
+    .caixa-close-focus-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-3">
     {% include 'caixa/_subnav_caixa.html' %}
@@ -7,9 +76,9 @@
     <div class="d-flex justify-content-between align-items-start flex-wrap mb-3" style="gap: 12px;">
         <div>
             <h3 class="mb-1">Fechar caixa</h3>
-            <div class="text-muted small">Conferir o apurado, informar o valor contado e justificar qualquer diferença antes de encerrar o dia.</div>
+            <div class="text-muted small">Conferir o apurado, informar o valor contado e justificar qualquer diferen&ccedil;a antes de encerrar o dia.</div>
         </div>
-        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar a Operação</a>
+        <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar &agrave; opera&ccedil;&atilde;o</a>
     </div>
 
     {% if not caixa %}
@@ -18,43 +87,27 @@
         </div>
         <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-primary">Abrir caixa</a>
     {% else %}
-        <div class="row mb-3">
-            <div class="col-md-3">
-                <div class="small-box bg-info">
-                    <div class="inner">
-                        <h4>{{ caixa.data|date:"d/m/Y" }}</h4>
-                        <p>Data</p>
-                    </div>
-                    <div class="icon"><i class="fas fa-calendar-day"></i></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="small-box bg-secondary">
-                    <div class="inner">
-                        <h4>R$ {{ caixa.saldo_inicial|floatformat:2 }}</h4>
-                        <p>Saldo inicial</p>
-                    </div>
-                    <div class="icon"><i class="fas fa-wallet"></i></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="small-box bg-success">
-                    <div class="inner">
-                        <h4>R$ {{ total_entradas|floatformat:2 }}</h4>
-                        <p>Entradas registradas</p>
-                    </div>
-                    <div class="icon"><i class="fas fa-arrow-down"></i></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="small-box bg-danger">
-                    <div class="inner">
-                        <h4>R$ {{ total_saidas|floatformat:2 }}</h4>
-                        <p>Saídas registradas</p>
-                    </div>
-                    <div class="icon"><i class="fas fa-arrow-up"></i></div>
-                </div>
-            </div>
+        <div class="caixa-close-strip mb-3">
+            <article class="caixa-close-card">
+                <div class="caixa-close-label">Data</div>
+                <div class="caixa-close-value">{{ caixa.data|date:"d/m/Y" }}</div>
+                <div class="caixa-close-note">Compet&ecirc;ncia do caixa que ser&aacute; encerrado.</div>
+            </article>
+            <article class="caixa-close-card">
+                <div class="caixa-close-label">Saldo inicial</div>
+                <div class="caixa-close-value">R$ {{ caixa.saldo_inicial|floatformat:2 }}</div>
+                <div class="caixa-close-note">Valor usado para abrir o turno.</div>
+            </article>
+            <article class="caixa-close-card">
+                <div class="caixa-close-label">Entradas registradas</div>
+                <div class="caixa-close-value">R$ {{ total_entradas|floatformat:2 }}</div>
+                <div class="caixa-close-note">{{ quantidade_pagamentos }} pagamento(s) consolidados.</div>
+            </article>
+            <article class="caixa-close-card">
+                <div class="caixa-close-label">Sa&iacute;das registradas</div>
+                <div class="caixa-close-value">R$ {{ total_saidas|floatformat:2 }}</div>
+                <div class="caixa-close-note">{{ quantidade_saidas }} sa&iacute;da(s) lan&ccedil;adas no turno.</div>
+            </article>
         </div>
 
         <div class="row">
@@ -62,12 +115,30 @@
                 <form method="post" class="card shadow-sm border-0" id="form-fechar-caixa">
                     {% csrf_token %}
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <strong>Conferência do fechamento</strong>
-                        <small class="text-muted">Etapa 3 de 3: encerrar com conferência</small>
+                        <strong>Confer&ecirc;ncia do fechamento</strong>
+                        <small class="text-muted">Etapa 3 de 3: encerrar com confer&ecirc;ncia</small>
                     </div>
                     <div class="card-body">
                         <div class="alert alert-light">
-                            Saldo esperado para fecho: <strong>R$ {{ saldo|floatformat:2 }}</strong>. Use esse valor como referência para a contagem física.
+                            Saldo esperado para fecho: <strong>R$ {{ saldo|floatformat:2 }}</strong>. Use esse valor como refer&ecirc;ncia para a contagem f&iacute;sica.
+                        </div>
+
+                        <div class="caixa-close-focus-grid">
+                            <div class="caixa-close-focus-card">
+                                <div class="caixa-close-focus-label">Esperado</div>
+                                <div class="caixa-close-focus-value">R$ {{ saldo|floatformat:2 }}</div>
+                                <div class="caixa-close-focus-note">Valor que o sistema apurou com entradas e sa&iacute;das do turno.</div>
+                            </div>
+                            <div class="caixa-close-focus-card">
+                                <div class="caixa-close-focus-label">Contado</div>
+                                <div class="caixa-close-focus-value">{% if valor_contado_fisico %}R$ {{ valor_contado_fisico }}{% else %}-{% endif %}</div>
+                                <div class="caixa-close-focus-note">Informe o valor real contado para liberar o encerramento.</div>
+                            </div>
+                            <div class="caixa-close-focus-card">
+                                <div class="caixa-close-focus-label">Diferen&ccedil;a</div>
+                                <div class="caixa-close-focus-value text-{{ diferenca_classe }}">R$ {{ diferenca_fechamento|floatformat:2 }}</div>
+                                <div class="caixa-close-focus-note">Qualquer sobra ou falta precisa de justificativa antes do fecho.</div>
+                            </div>
                         </div>
 
                         <div class="row">
@@ -93,13 +164,13 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <div class="border rounded p-3 h-100">
-                                    <div class="text-muted small mb-1">Pagamentos lançados</div>
+                                    <div class="text-muted small mb-1">Pagamentos lan&ccedil;ados</div>
                                     <div class="h4 mb-0">{{ quantidade_pagamentos }}</div>
                                 </div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <div class="border rounded p-3 h-100">
-                                    <div class="text-muted small mb-1">Saídas lançadas</div>
+                                    <div class="text-muted small mb-1">Sa&iacute;das lan&ccedil;adas</div>
                                     <div class="h4 mb-0">{{ quantidade_saidas }}</div>
                                 </div>
                             </div>
@@ -108,7 +179,7 @@
                         <div class="border rounded p-3 mb-3">
                             <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
                                 <div>
-                                    <div class="text-muted small mb-1">Diferença apurada</div>
+                                    <div class="text-muted small mb-1">Diferen&ccedil;a apurada</div>
                                     <div class="h4 mb-0 text-{{ diferenca_classe }}" id="diferenca-fechamento">R$ {{ diferenca_fechamento|floatformat:2 }}</div>
                                 </div>
                                 <span class="badge badge-{{ diferenca_classe }} px-3 py-2" id="diferenca-badge">
@@ -118,9 +189,9 @@
                         </div>
 
                         <div class="form-group mb-0">
-                            <label for="id_justificativa_diferenca"><strong>Justificativa da diferença</strong></label>
+                            <label for="id_justificativa_diferenca"><strong>Justificativa da diferen&ccedil;a</strong></label>
                             <textarea class="form-control" id="id_justificativa_diferenca" name="justificativa_diferenca" rows="3">{{ justificativa_diferenca }}</textarea>
-                            <small class="text-muted" id="hint-justificativa">Obrigatória quando houver diferença no fechamento.</small>
+                            <small class="text-muted" id="hint-justificativa">Obrigatoria quando houver diferenca no fechamento.</small>
                         </div>
                     </div>
                     <div class="card-footer d-flex justify-content-between bg-white">
@@ -134,12 +205,12 @@
 
             <div class="col-lg-5">
                 <div class="card shadow-sm border-0 mb-3">
-                    <div class="card-header bg-white"><strong>Conferência rápida</strong></div>
+                    <div class="card-header bg-white"><strong>Confer&ecirc;ncia r&aacute;pida</strong></div>
                     <div class="card-body">
                         <ol class="pl-3 mb-0">
-                            <li>Conferir pagamentos e saídas do dia.</li>
-                            <li>Contar o numerário real do caixa.</li>
-                            <li>Justificar qualquer diferença antes de fechar.</li>
+                            <li>Conferir pagamentos e sa&iacute;das do dia.</li>
+                            <li>Contar o numer&aacute;rio real do caixa.</li>
+                            <li>Justificar qualquer diferenca antes de fechar.</li>
                         </ol>
                     </div>
                 </div>
@@ -153,7 +224,7 @@
                                     <th>Forma</th>
                                     <th class="text-right">Apurado</th>
                                     <th class="text-right">Conferido</th>
-                                    <th class="text-right">Diferença</th>
+                                    <th class="text-right">Diferenca</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -189,13 +260,13 @@
                 </div>
 
                 <div class="card shadow-sm border-0">
-                    <div class="card-header bg-white"><strong>Últimos movimentos do caixa</strong></div>
+                    <div class="card-header bg-white"><strong>&Uacute;ltimos movimentos do caixa</strong></div>
                     <div class="card-body p-0">
                         <table class="table table-sm mb-0">
                             <thead>
                                 <tr>
                                     <th>Movimento</th>
-                                    <th>Descrição</th>
+                                    <th>Descri&ccedil;&atilde;o</th>
                                     <th class="text-right">Valor</th>
                                 </tr>
                             </thead>
@@ -210,7 +281,7 @@
                                     {% endfor %}
                                     {% for saida in saidas_recentes %}
                                     <tr>
-                                        <td><span class="badge badge-danger">Saída</span></td>
+                                        <td><span class="badge badge-danger">Sa&iacute;da</span></td>
                                         <td>{{ saida.descricao|default:"-" }}</td>
                                         <td class="text-right">R$ {{ saida.valor|floatformat:2 }}</td>
                                     </tr>
@@ -251,7 +322,7 @@ document.addEventListener("DOMContentLoaded", function () {
             diferencaEl.textContent = "R$ 0,00";
             diferencaEl.classList.remove("text-success", "text-warning", "text-danger");
             diferencaEl.classList.add("text-secondary");
-            badgeEl.classList.remove("badge-success", "badge-warning", "badge-danger");
+            badgeEl.classList.remove("badge-secondary", "badge-success", "badge-warning", "badge-danger");
             badgeEl.classList.add("badge-secondary");
             badgeEl.textContent = "Aguardando contagem";
             if (hintEl) hintEl.textContent = "Informe o valor contado fisicamente para concluir o fecho.";
@@ -268,17 +339,17 @@ document.addEventListener("DOMContentLoaded", function () {
             diferencaEl.classList.add("text-success");
             badgeEl.classList.add("badge-success");
             badgeEl.textContent = "Fecho conferido";
-            if (hintEl) hintEl.textContent = "Sem diferença: justificativa opcional.";
+            if (hintEl) hintEl.textContent = "Sem diferenca: justificativa opcional.";
         } else if (diferenca > 0) {
             diferencaEl.classList.add("text-warning");
             badgeEl.classList.add("badge-warning");
             badgeEl.textContent = "Sobra no caixa";
-            if (hintEl) hintEl.textContent = "Obrigatória quando houver diferença no fechamento.";
+            if (hintEl) hintEl.textContent = "Obrigatoria quando houver diferenca no fechamento.";
         } else {
             diferencaEl.classList.add("text-danger");
             badgeEl.classList.add("badge-danger");
             badgeEl.textContent = "Falta no caixa";
-            if (hintEl) hintEl.textContent = "Obrigatória quando houver diferença no fechamento.";
+            if (hintEl) hintEl.textContent = "Obrigatoria quando houver diferenca no fechamento.";
         }
     }
 

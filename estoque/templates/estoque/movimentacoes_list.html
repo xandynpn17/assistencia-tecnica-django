@@ -1,13 +1,13 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 
 {% block header %}
 <div class="ui-module-header">
   <div>
-    <h1 class="ui-module-title">Movimentações de Estoque</h1>
-    <p class="ui-module-subtitle">Rastreio operacional de entradas, saídas, consumos e transferências por período.</p>
+    <h1 class="ui-module-title">Movimentacoes de Estoque</h1>
+    <p class="ui-module-subtitle">Rastreio operacional de entradas, saidas, consumos e transferencias por periodo.</p>
   </div>
   <div class="ui-module-actions">
-    <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm">Nova movimentação</a>
+    <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm">Nova movimentacao</a>
     <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&quick={{ quick }}&export=csv" class="btn btn-outline-secondary btn-sm">Exportar CSV</a>
   </div>
 </div>
@@ -18,15 +18,18 @@
   .filters-panel { border: 1px solid #e8edf3; border-radius: 12px; background: linear-gradient(180deg, #fafcff 0%, #f4f8fb 100%); padding: 18px; }
   .filters-title { font-weight: 700; color: #1f2937; margin-bottom: 4px; }
   .filters-help { color: #667085; font-size: .92rem; }
-  .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
   .summary-box { border: 1px solid #e5ebf2; border-radius: 12px; background: #fff; padding: 14px; height: 100%; }
   .summary-box .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 4px; }
   .summary-box .value { font-size: 1.45rem; font-weight: 700; color: #111827; }
   .summary-chip { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #eef4f8; color: #243447; font-size: 12px; font-weight: 600; margin-right: 8px; margin-bottom: 8px; }
   .quick-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .movement-helper { border: 1px solid #dce6ef; border-radius: 12px; background: #f8fbff; color: #24415d; padding: 12px 14px; margin-bottom: 12px; }
   .table thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; border-top: none; }
   .table-hover tbody tr:hover { background: #f8fbff; }
   .tipo-badge { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; background: #f1f5f9; font-size: 12px; font-weight: 700; color: #334155; }
+  .rota-bloco { line-height: 1.35; }
+  .rota-bloco small { display: block; color: #6b7280; }
   @media (max-width: 991.98px) {
     .summary-grid { grid-template-columns: 1fr 1fr; }
   }
@@ -41,7 +44,7 @@
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>Historico de movimentacoes</span>
     <div class="d-flex">
-      <span class="text-muted small">Operação por filtros e período</span>
+      <span class="text-muted small">Operacao por filtros, tipo e periodo</span>
     </div>
   </div>
 
@@ -49,7 +52,7 @@
     <div class="filters-panel">
       <div class="filters-title">Filtros de movimentacao</div>
       <div class="filters-help mb-3">
-        Combine busca, periodo, tipo e ponto operacional para localizar ajustes, transferencias e consumos com mais rapidez.
+        Combine busca, periodo, tipo e ponto operacional para localizar ajustes, transferencias, avarias e consumos com mais rapidez.
       </div>
 
       <div class="summary-grid">
@@ -69,6 +72,18 @@
           <div class="label">Saidas</div>
           <div class="value">{{ resumo.saidas }}</div>
         </div>
+        <div class="summary-box">
+          <div class="label">Ajustes</div>
+          <div class="value">{{ resumo.ajustes }}</div>
+        </div>
+        <div class="summary-box">
+          <div class="label">Avarias</div>
+          <div class="value">{{ resumo.avarias }}</div>
+        </div>
+      </div>
+
+      <div class="movement-helper">
+        <strong>Como ler esta tela:</strong> acompanhe a <strong>rota fisica</strong> do item entre origem e destino para entender se foi entrada, correcao, avaria ou transferencia real. Isso ajuda na auditoria e na conferencia de estoque.
       </div>
 
       <div class="quick-filters">
@@ -76,6 +91,10 @@
         <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&quick=hoje" class="btn btn-sm {% if quick == 'hoje' %}btn-info{% else %}btn-outline-info{% endif %}">Hoje</a>
         <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&quick=7_dias" class="btn btn-sm {% if quick == '7_dias' %}btn-info{% else %}btn-outline-info{% endif %}">7 dias</a>
         <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&quick=30_dias" class="btn btn-sm {% if quick == '30_dias' %}btn-info{% else %}btn-outline-info{% endif %}">30 dias</a>
+        <a href="?q={{ q|urlencode }}&ponto={{ ponto_filtro }}&quick=transferencias" class="btn btn-sm {% if quick == 'transferencias' %}btn-outline-dark{% else %}btn-outline-secondary{% endif %}">Transferencias</a>
+        <a href="?q={{ q|urlencode }}&ponto={{ ponto_filtro }}&quick=ajustes" class="btn btn-sm {% if quick == 'ajustes' %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}">Ajustes</a>
+        <a href="?q={{ q|urlencode }}&ponto={{ ponto_filtro }}&quick=avarias" class="btn btn-sm {% if quick == 'avarias' %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}">Avarias</a>
+        <a href="?q={{ q|urlencode }}&ponto={{ ponto_filtro }}&quick=saidas" class="btn btn-sm {% if quick == 'saidas' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}">Saidas</a>
       </div>
 
       <form method="get" class="form-row align-items-end">
@@ -134,8 +153,8 @@
           <th>Produto</th>
           <th>Tipo</th>
           <th>Qtd</th>
-          <th>Origem</th>
-          <th>Destino</th>
+          <th>Origem fisica</th>
+          <th>Destino fisico</th>
           <th>Observacao</th>
           <th>Usuario</th>
         </tr>
@@ -150,8 +169,40 @@
         </td>
         <td><span class="tipo-badge">{{ m.get_tipo_display }}</span></td>
         <td>{{ m.quantidade }}</td>
-        <td>{{ m.origem|default:"-" }}</td>
-        <td>{{ m.destino|default:"-" }}</td>
+        <td>
+          <div class="rota-bloco">
+            {% if m.origem %}
+            <strong>{{ m.origem.codigo }} - {{ m.origem.nome }}</strong>
+            {% else %}
+            <strong>-</strong>
+            {% endif %}
+            <small>
+              {% if m.origem_ubicacao %}
+              {{ m.origem_ubicacao.codigo }}{% if m.origem_ubicacao.descricao %} ({{ m.origem_ubicacao.descricao }}){% endif %}
+              {% else %}
+              Sem ubicacao
+              {% endif %}
+            </small>
+          </div>
+        </td>
+        <td>
+          <div class="rota-bloco">
+            {% if m.destino %}
+            <strong>{{ m.destino.codigo }} - {{ m.destino.nome }}</strong>
+            {% else %}
+            <strong>-</strong>
+            {% endif %}
+            <small>
+              {% if m.destino_ubicacao_ref %}
+              {{ m.destino_ubicacao_ref.codigo }}{% if m.destino_ubicacao_ref.descricao %} ({{ m.destino_ubicacao_ref.descricao }}){% endif %}
+              {% elif m.destino_ubicacao %}
+              {{ m.destino_ubicacao }}
+              {% else %}
+              Sem ubicacao
+              {% endif %}
+            </small>
+          </div>
+        </td>
         <td>{{ m.observacao|default:"-" }}</td>
         <td>{{ m.usuario|default:"-" }}</td>
       </tr>

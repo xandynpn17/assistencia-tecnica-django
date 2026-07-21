@@ -114,8 +114,16 @@
         <div class="form-row">
           <div class="col-lg-4 form-group">{{ form.nome_completo.label_tag }}{{ form.nome_completo }}{{ form.nome_completo.errors }}</div>
           <div class="col-lg-2 form-group">{{ form.tipo_usuario.label_tag }}{{ form.tipo_usuario }}{{ form.tipo_usuario.errors }}</div>
+          <div class="col-lg-2 form-group">
+            <label class="d-block">{{ form.atua_como_tecnico.label }}</label>
+            <div class="pt-2">{{ form.atua_como_tecnico }} <span class="ml-1">Incluir este usuário na fila de técnicos</span></div>
+            <small class="form-text text-muted">Use quando gerente, atendente ou administrador também atuar tecnicamente.</small>
+            {{ form.atua_como_tecnico.errors }}
+          </div>
           <div class="col-lg-2 form-group">{{ form.tipo_pessoa.label_tag }}{{ form.tipo_pessoa }}{{ form.tipo_pessoa.errors }}</div>
           <div class="col-lg-2 form-group">{{ form.documento_cpf_cnpj.label_tag }}{{ form.documento_cpf_cnpj }}{{ form.documento_cpf_cnpj.errors }}</div>
+        </div>
+        <div class="form-row">
           <div class="col-lg-2 form-group">{{ form.data_nascimento.label_tag }}{{ form.data_nascimento }}{{ form.data_nascimento.errors }}</div>
         </div>
 
@@ -146,6 +154,14 @@
           <div class="col-lg-3 form-group">{{ form.percentual_comissao_peca.label_tag }}{{ form.percentual_comissao_peca }}{{ form.percentual_comissao_peca.errors }}</div>
           <div class="col-lg-3 form-group">{{ form.percentual_comissao_vendas.label_tag }}{{ form.percentual_comissao_vendas }}{{ form.percentual_comissao_vendas.errors }}</div>
           <div class="col-lg-3 form-group">{{ form.groups.label_tag }}{{ form.groups }}{{ form.groups.errors }}</div>
+        </div>
+        <div class="form-row">
+          <div class="col-lg-4 form-group">
+            <label class="d-block">{{ form.perm_venda_mostrador_trocar_vendedor.label }}</label>
+            <div class="pt-2">{{ form.perm_venda_mostrador_trocar_vendedor }} <span class="ml-1">Permitir informar outro vendedor na venda a mostrador</span></div>
+            <small class="form-text text-muted">Útil para operação assistida ou venda lançada por operador diferente do vendedor comissionado.</small>
+            {{ form.perm_venda_mostrador_trocar_vendedor.errors }}
+          </div>
         </div>
 
         <div class="section-title mt-3">Controles basicos</div>

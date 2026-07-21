@@ -1,30 +1,187 @@
-{% extends "core/base.html" %}
+﻿{% extends "core/base.html" %}
 {% block title %}Backup do Sistema{% endblock %}
 
 {% block content %}
-<div class="card card-modern">
-  <div class="card-modern-header">
-    <i class="fas fa-database"></i> Backup e Restauração do Sistema
+{% include "configuracoes/partials/_operacao_recuperacao_tabs.html" %}
+
+<div class="row mb-4">
+  <div class="col-lg-7 mb-4">
+    <div class="card card-modern border-0 h-100">
+      <div class="card-modern-body">
+        <div class="section-kicker">Rotina crítica</div>
+        <h3 class="h5 mb-3">Gerar backup oficial do ambiente</h3>
+        <p class="text-muted mb-3">
+          Crie uma cópia segura da base e, se necessário, inclua logos, assinaturas, anexos e demais arquivos enviados.
+        </p>
+
+        <div class="alert alert-info soft-alert mb-4">
+          <strong>Banco atual:</strong> {{ engine_label }}<br>
+          <strong>Pasta oficial:</strong> <code>{{ backup_dir }}</code><br>
+          <strong>Retenção configurada:</strong>
+          {% if retencao_dias %}{{ retencao_dias }} dias{% else %}não definida{% endif %}
+        </div>
+
+        <div class="alert alert-light border mb-4">
+          <strong>Uso recomendado:</strong> gere backup antes de mudanças estruturais, antes de levar o sistema para outro computador e no encerramento do dia quando houver cadastros sensíveis.
+        </div>
+
+        {% if local_recovery_enabled %}
+        <div class="alert alert-light border mb-4">
+          <strong>Recuperação local habilitada:</strong> caso o login fique indisponível, existe um fluxo emergencial de restore sem autenticação para uso em rede local controlada.
+          <div class="mt-2">
+            <a href="{% url 'configuracoes:restore_banco_publico' %}" class="btn btn-sm btn-outline-danger">
+              <i class="fas fa-life-ring mr-1"></i> Abrir recuperação local
+            </a>
+          </div>
+        </div>
+        {% endif %}
+
+        <form method="post" class="mb-3">
+          {% csrf_token %}
+          <div class="form-group form-switch-block mb-4">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="include_media" name="include_media" value="1" checked>
+              <label class="custom-control-label" for="include_media">Incluir arquivos enviados (<code>media/</code>)</label>
+            </div>
+            <small class="text-muted d-block mt-2">Recomendado para migração local completa ou restauração em outro computador.</small>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-success">
+              <i class="fas fa-download mr-1"></i> Gerar backup agora
+            </button>
+            <a href="{% url 'configuracoes:restore_banco' %}" class="btn btn-outline-secondary">
+              <i class="fas fa-upload mr-1"></i> Ir para restauração
+            </a>
+            <a href="{% url 'configuracoes:auditoria_configuracoes' %}?acao=backup" class="btn btn-outline-dark">
+              <i class="fas fa-clipboard-list mr-1"></i> Ver auditoria de backup
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
-  <div class="card-modern-body text-center">
-    <p class="lead text-muted mb-4">
-      Nesta página, é possível gerar um backup completo dos dados da aplicação ou restaurar um backup existente.
-    </p>
 
-    <a href="{% url 'configuracoes:backup_banco' %}" class="btn btn-success btn-lg mb-3">
-      <i class="fas fa-download"></i> Fazer Backup
-    </a>
-
-    <a href="{% url 'configuracoes:restore_banco' %}" class="btn btn-secondary btn-lg mb-3">
-      <i class="fas fa-upload"></i> Restaurar Backup
-    </a>
-
-    <div class="alert alert-info mt-4 text-left">
-      <i class="fas fa-info-circle"></i>
-      O backup inclui o banco ativo e, quando disponível, a pasta de arquivos enviados
-      (<code>media/</code>). Para PostgreSQL, a restauração deve ser feita preferencialmente
-      fora do horário de atendimento.
+  <div class="col-lg-5 mb-4">
+    <div class="card card-modern border-0 h-100">
+      <div class="card-modern-body">
+        <div class="section-kicker">Saúde operacional</div>
+        <h3 class="h5 mb-3">Indicadores desta rotina</h3>
+        <div class="row">
+          <div class="col-12 mb-3">
+            <div class="mini-metric border-left-success">
+              <div class="mini-label">Último backup auditado</div>
+              <div class="mini-value">{% if saude_operacional.ultimo_backup_evento %}{{ saude_operacional.ultimo_backup_evento.criado_em|date:"d/m/Y H:i" }}{% else %}-{% endif %}</div>
+              <div class="mini-sub">Evento mais recente registrado em auditoria</div>
+            </div>
+          </div>
+          <div class="col-md-6 mb-3">
+            <div class="mini-metric border-left-info h-100">
+              <div class="mini-label">Recovery local</div>
+              <div class="mini-value">{% if saude_operacional.recovery_local_habilitado %}Ativo{% else %}Desligado{% endif %}</div>
+              <div class="mini-sub">
+                {% if saude_operacional.recovery_local_habilitado %}
+                  Plano B pronto para restore sem login
+                {% else %}
+                  Habilite `DJANGO_LOCAL_RECOVERY_KEY` para usar
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 mb-3">
+            <div class="mini-metric border-left-warning h-100">
+              <div class="mini-label">Último restore</div>
+              <div class="mini-value">{% if saude_operacional.ultimo_restore %}{{ saude_operacional.ultimo_restore.criado_em|date:"d/m H:i" }}{% else %}-{% endif %}</div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="mini-metric border-left-primary">
+              <div class="mini-label">Backups recentes</div>
+              <div class="mini-value">{{ backups|length }}</div>
+              <div class="mini-sub">Itens encontrados na pasta oficial</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card card-modern border-0">
+      <div class="card-modern-body p-0">
+        <div class="table-section-head d-flex justify-content-between align-items-center">
+          <div>
+            <div class="section-kicker text-white-50 mb-1">Histórico local</div>
+            <h3 class="h5 mb-0 text-white">Backups recentes</h3>
+          </div>
+          <span class="badge badge-light">{{ backups|length }}</span>
+        </div>
+
+        {% if backups %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 align-middle">
+            <thead>
+              <tr>
+                <th>Backup</th>
+                <th>Banco</th>
+                <th>Tamanho</th>
+                <th>Conteúdo</th>
+                <th class="text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in backups %}
+              <tr>
+                <td>
+                  <strong>{{ item.name }}</strong>
+                  <div class="text-muted small">{{ item.created_at|default:"Sem manifesto" }}</div>
+                </td>
+                <td>{{ item.engine|default:engine_label }}</td>
+                <td>{{ item.size_label }}</td>
+                <td>
+                  {% if item.has_media %}
+                    <span class="badge badge-success">com media</span>
+                  {% else %}
+                    <span class="badge badge-secondary">somente banco</span>
+                  {% endif %}
+                </td>
+                <td class="text-right text-nowrap">
+                  <a href="{% url 'configuracoes:download_backup' %}?path={{ item.path|urlencode }}" class="btn btn-sm btn-outline-secondary">Baixar</a>
+                  <a href="{% url 'configuracoes:restore_banco' %}" class="btn btn-sm btn-outline-primary">Restaurar</a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="p-4 text-center text-muted">
+          Nenhum backup encontrado ainda. Gere o primeiro backup antes de colocar o sistema em operação.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+.card-modern { border-radius: 16px; box-shadow: 0 10px 28px rgba(18, 42, 66, 0.08); }
+.card-modern-body { padding: 20px; }
+.section-kicker { font-size: .76rem; text-transform: uppercase; letter-spacing: .08em; color: #6b7d91; margin-bottom: 6px; }
+.soft-alert { border-radius: 14px; }
+.form-switch-block { border: 1px solid #dbe4ec; border-radius: 14px; padding: 14px 16px; background: linear-gradient(180deg, #fff 0%, #f8fbff 100%); }
+.table-section-head { padding: 18px 20px; background: #20384f; }
+.mini-metric { border-radius: 14px; background: #fff; padding: 16px; box-shadow: inset 0 0 0 1px rgba(219, 228, 236, 0.9); }
+.mini-label { font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: #71869d; margin-bottom: 8px; }
+.mini-value { font-size: 1.05rem; font-weight: 700; color: #17324d; line-height: 1.3; }
+.mini-sub { color: #6d7f92; font-size: .9rem; margin-top: 6px; }
+.border-left-primary { border-left: 4px solid #2d7ff9 !important; }
+.border-left-success { border-left: 4px solid #1fab5b !important; }
+.border-left-warning { border-left: 4px solid #f0ad4e !important; }
+.border-left-info { border-left: 4px solid #17a2b8 !important; }
+</style>
 {% endblock %}

@@ -1,14 +1,69 @@
-﻿{% extends "core/base.html" %}
+{% extends "core/base.html" %}
 
 {% block title %}Indicadores de Estoque{% endblock %}
 
 {% block header %}
-<h1 class="m-0 text-dark">Indicadores de Estoque</h1>
+<div class="ui-module-header">
+  <div>
+    <h1 class="ui-module-title">Indicadores de Estoque</h1>
+    <p class="ui-module-subtitle">Leitura gerencial do estoque com foco em ruptura, cobertura, margem, avarias e disciplina de estrutura fisica.</p>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_css %}
 {{ block.super }}
 <style>
+  .estoque-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .estoque-kpi-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f2f7fb 100%);
+    padding: 12px;
+    min-height: 96px;
+  }
+  .estoque-kpi-card.is-alerta {
+    border-color: #ffd7a0;
+    background: linear-gradient(180deg, #fffdf7 0%, #fff4de 100%);
+  }
+  .estoque-kpi-card.is-risco {
+    border-color: #f0c6c6;
+    background: linear-gradient(180deg, #fffaf9 0%, #fff0ef 100%);
+  }
+  .estoque-kpi-card.is-sucesso {
+    border-color: #cfe7d4;
+    background: linear-gradient(180deg, #fbfffc 0%, #eefbf1 100%);
+  }
+  .estoque-kpi-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #627487;
+    margin-bottom: 4px;
+  }
+  .estoque-kpi-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #183247;
+  }
+  .estoque-kpi-note {
+    margin-top: 4px;
+    color: #627487;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .estoque-helper {
+    border: 1px solid #dce6ef;
+    border-radius: 12px;
+    background: #f8fbff;
+    color: #24415d;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
   .rateio-track {
     width: 100%;
     height: 10px;
@@ -31,34 +86,256 @@
     font-size: .78rem;
     color: #6c757d;
   }
+  @media (max-width: 991.98px) {
+    .estoque-kpi-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 575.98px) {
+    .estoque-kpi-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
+<div class="estoque-helper">
+  <strong>Leitura recomendada:</strong> primeiro veja risco de estrutura e ruptura, depois cobertura e margem. Os quadros abaixo ajudam a decidir compra, ajuste, inventario e revisao de preco sem precisar abrir varios modulos.
+</div>
+
+<div class="estoque-kpi-grid">
+  <div class="estoque-kpi-card">
+    <div class="estoque-kpi-label">Itens ativos</div>
+    <div class="estoque-kpi-value">{{ kpis.total_itens }}</div>
+    <div class="estoque-kpi-note">Base viva do catalogo com saldo ou relevancia operacional.</div>
+  </div>
+  <div class="estoque-kpi-card is-risco">
+    <div class="estoque-kpi-label">Ruptura</div>
+    <div class="estoque-kpi-value">{{ kpis.ruptura }}</div>
+    <div class="estoque-kpi-note">Itens zerados que ja estao fora do minimo operacional.</div>
+  </div>
+  <div class="estoque-kpi-card is-alerta">
+    <div class="estoque-kpi-label">Abaixo do minimo</div>
+    <div class="estoque-kpi-value">{{ kpis.abaixo_minimo }}</div>
+    <div class="estoque-kpi-note">Candidatos imediatos para reposicao e compra sugerida.</div>
+  </div>
+  <div class="estoque-kpi-card">
+    <div class="estoque-kpi-label">Parados ha 60 dias</div>
+    <div class="estoque-kpi-value">{{ kpis.parados_60 }}</div>
+    <div class="estoque-kpi-note">Primeiro sinal de estoque que merece giro, promocao ou revisao.</div>
+  </div>
+  <div class="estoque-kpi-card is-sucesso">
+    <div class="estoque-kpi-label">Valor do estoque positivo</div>
+    <div class="estoque-kpi-value">R$ {{ kpis.valor_estoque|floatformat:2 }}</div>
+    <div class="estoque-kpi-note">Visao comercial estimada do saldo disponivel.</div>
+  </div>
+  <div class="estoque-kpi-card">
+    <div class="estoque-kpi-label">Valor em custo medio</div>
+    <div class="estoque-kpi-value">R$ {{ kpis.valor_estoque_custo|floatformat:2 }}</div>
+    <div class="estoque-kpi-note">Referencia mais conservadora para capital travado no estoque.</div>
+  </div>
+  <div class="estoque-kpi-card is-risco">
+    <div class="estoque-kpi-label">Itens sem ponto/ubicacao valida</div>
+    <div class="estoque-kpi-value">{{ kpis.produtos_sem_estrutura }}</div>
+    <div class="estoque-kpi-note">Esse grupo costuma gerar erro de separacao, reserva e inventario.</div>
+  </div>
+  <div class="estoque-kpi-card is-risco">
+    <div class="estoque-kpi-label">Divergencias recentes de inventario</div>
+    <div class="estoque-kpi-value">{{ divergencias_inventario_resumo.total_itens|default:0 }}</div>
+    <div class="estoque-kpi-note">Impacto: R$ {{ divergencias_inventario_resumo.impacto|default:0|floatformat:2 }}</div>
+  </div>
+  <div class="estoque-kpi-card">
+    <div class="estoque-kpi-label">Parados ha 90 dias</div>
+    <div class="estoque-kpi-value">{{ kpis.parados_90 }}</div>
+    <div class="estoque-kpi-note">Sinal mais forte de capital parado ou catalogo inflado.</div>
+  </div>
+  <div class="estoque-kpi-card">
+    <div class="estoque-kpi-label">Cobertura media estimada (dias)</div>
+    <div class="estoque-kpi-value">{% if kpis.cobertura_media_dias %}{{ kpis.cobertura_media_dias|floatformat:1 }}{% else %}-{% endif %}</div>
+    <div class="estoque-kpi-note">Media de cobertura com base no giro recente do modulo.</div>
+  </div>
+  <div class="estoque-kpi-card">
+    <div class="estoque-kpi-label">Itens lidos na curva ABC</div>
+    <div class="estoque-kpi-value">{{ abc_curva|length }}</div>
+    <div class="estoque-kpi-note">Amostra gerencial dos itens com maior peso em custo.</div>
+  </div>
+  <div class="estoque-kpi-card is-alerta">
+    <div class="estoque-kpi-label">Ruptura prevista</div>
+    <div class="estoque-kpi-value">{{ kpis.ruptura_prevista }}</div>
+    <div class="estoque-kpi-note">Itens que devem romper antes da proxima janela segura de reposicao.</div>
+  </div>
+  <div class="estoque-kpi-card is-alerta">
+    <div class="estoque-kpi-label">Itens com margem apertada</div>
+    <div class="estoque-kpi-value">{{ kpis.itens_pressao_margem }}</div>
+    <div class="estoque-kpi-note">Produtos que pedem revisao de preco, custo ou taxa comercial.</div>
+  </div>
+  <div class="estoque-kpi-card is-sucesso">
+    <div class="estoque-kpi-label">Margem bruta estimada do estoque</div>
+    <div class="estoque-kpi-value">{{ kpis.margem_real_estoque|floatformat:1 }}%</div>
+    <div class="estoque-kpi-note">Leitura consolidada da relacao entre custo e venda do saldo atual.</div>
+  </div>
+</div>
+
 <div class="row">
-  <div class="col-md-2">
-    <div class="small-box bg-info">
-      <div class="inner"><h3>{{ kpis.total_itens }}</h3><p>Itens ativos</p></div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><strong>Ruptura por ponto</strong></div>
+      <div class="card-body table-responsive p-0">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Ponto</th>
+              <th>Itens</th>
+              <th>Ruptura</th>
+              <th>Abaixo min.</th>
+              <th>Negativos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in ruptura_por_ponto %}
+            <tr>
+              <td><strong>{{ item.ponto_operacional__codigo }}</strong><br><small class="text-muted">{{ item.ponto_operacional__nome }}</small></td>
+              <td>{{ item.itens }}</td>
+              <td>{{ item.ruptura }}</td>
+              <td>{{ item.abaixo_minimo }}</td>
+              <td class="{% if item.negativos %}text-danger font-weight-bold{% endif %}">{{ item.negativos }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-3">Sem dados por ponto.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-  <div class="col-md-2">
-    <div class="small-box bg-danger">
-      <div class="inner"><h3>{{ kpis.ruptura }}</h3><p>Ruptura</p></div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><strong>Valor por ponto operacional</strong></div>
+      <div class="card-body table-responsive p-0">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Ponto</th>
+              <th>Itens</th>
+              <th>Unid.</th>
+              <th>Custo</th>
+              <th>Venda</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in valor_por_ponto %}
+            <tr>
+              <td><strong>{{ item.ponto_operacional__codigo }}</strong><br><small class="text-muted">{{ item.ponto_operacional__nome }}</small></td>
+              <td>{{ item.itens }}</td>
+              <td>{{ item.unidades }}</td>
+              <td>R$ {{ item.valor_custo|default:0|floatformat:2 }}</td>
+              <td>R$ {{ item.valor_venda|default:0|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-3">Sem saldo distribuido por ubicacao.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-  <div class="col-md-2">
-    <div class="small-box bg-warning">
-      <div class="inner"><h3>{{ kpis.abaixo_minimo }}</h3><p>Abaixo do minimo</p></div>
+</div>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><strong>Valor por categoria</strong></div>
+      <div class="card-body table-responsive p-0">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>Itens</th>
+              <th>Unid.</th>
+              <th>Custo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in valor_por_categoria %}
+            <tr>
+              <td>{{ item.categoria_nome }}</td>
+              <td>{{ item.itens }}</td>
+              <td>{{ item.unidades }}</td>
+              <td>R$ {{ item.valor_custo|default:0|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-3">Sem categorias com saldo.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-  <div class="col-md-2">
-    <div class="small-box bg-secondary">
-      <div class="inner"><h3>{{ kpis.parados_60 }}</h3><p>Parados ha 60 dias</p></div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><strong>Impacto de avarias (30 dias)</strong></div>
+      <div class="card-body table-responsive p-0">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Ponto</th>
+              <th>Unidades</th>
+              <th>Impacto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in impacto_avarias_30 %}
+            <tr>
+              <td>{{ item.origem__codigo|default:"Sem ponto" }}{% if item.origem__nome %}<br><small class="text-muted">{{ item.origem__nome }}</small>{% endif %}</td>
+              <td>{{ item.unidades|default:0 }}</td>
+              <td>R$ {{ item.impacto|default:0|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-center text-muted py-3">Sem avarias registradas nos ultimos 30 dias.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-  <div class="col-md-4">
-    <div class="small-box bg-success">
-      <div class="inner"><h3>R$ {{ kpis.valor_estoque|floatformat:2 }}</h3><p>Valor do estoque positivo</p></div>
+</div>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Divergencias recentes de inventario</strong>
+        <span class="text-muted small">
+          {{ divergencias_inventario_resumo.unidades|default:0 }} unid. ajustadas | Impacto R$ {{ divergencias_inventario_resumo.impacto|default:0|floatformat:2 }}
+        </span>
+      </div>
+      <div class="card-body table-responsive p-0">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Inventario</th>
+              <th>Produto</th>
+              <th>Ubicacao</th>
+              <th>Ajuste</th>
+              <th>Impacto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in divergencias_inventario %}
+            <tr>
+              <td>#{{ item.inventario_id }} - {{ item.inventario.ponto_operacional.codigo }}</td>
+              <td>{{ item.produto.nome }}</td>
+              <td>{% if item.ubicacao %}{{ item.ubicacao.codigo }}{% else %}<span class="text-muted">Ponto inteiro</span>{% endif %}</td>
+              <td class="{% if item.ajuste < 0 %}text-danger{% else %}text-success{% endif %}">{{ item.ajuste }}</td>
+              <td>R$ {{ item.impacto|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-3">Sem divergencias recentes de inventario.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -369,6 +646,95 @@
   </div>
   <div class="col-md-6">
     <div class="card">
+      <div class="card-header"><strong>Giro e cobertura (30 dias)</strong></div>
+      <div class="card-body table-responsive">
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>Produto</th><th>Saidas 30d</th><th>Saldo</th><th>Cobertura</th></tr></thead>
+          <tbody>
+            {% for item in giro_30 %}
+            <tr>
+              <td>{{ item.produto }}</td>
+              <td>{{ item.saidas_30|floatformat:0 }}</td>
+              <td>{{ item.saldo_atual }}</td>
+              <td>{% if item.cobertura_dias %}{{ item.cobertura_dias|floatformat:1 }} dias{% else %}<span class="text-muted">Sem giro</span>{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted">Sem dados de giro no periodo.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Ruptura prevista por cobertura</strong>
+        <span class="text-muted small">Base: giro 30 dias x prazo do fornecedor preferencial</span>
+      </div>
+      <div class="card-body table-responsive">
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>Produto</th><th>Saldo</th><th>Cobertura</th><th>Janela</th><th>Fornecedor</th></tr></thead>
+          <tbody>
+            {% for item in ruptura_prevista_lista %}
+            <tr>
+              <td>{{ item.produto }}</td>
+              <td>{{ item.saldo_atual }}</td>
+              <td>{{ item.cobertura_dias|floatformat:1 }} dias</td>
+              <td>
+                {{ item.janela_alerta }} dias
+                {% if item.prazo_fornecedor %}
+                <br><small class="text-muted">Prazo fornecedor</small>
+                {% else %}
+                <br><small class="text-muted">Janela padrao</small>
+                {% endif %}
+              </td>
+              <td>{{ item.fornecedor }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted">Sem risco de ruptura previsto na janela atual.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Pressao de margem</strong>
+        <span class="text-muted small">Itens com margem real abaixo do piso cadastrado</span>
+      </div>
+      <div class="card-body table-responsive">
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>Produto</th><th>Custo</th><th>Preco</th><th>Margem real</th><th>Piso</th></tr></thead>
+          <tbody>
+            {% for linha in margem_pressao %}
+            <tr>
+              <td>{{ linha.produto }}</td>
+              <td>R$ {{ linha.custo_base|floatformat:2 }}</td>
+              <td>R$ {{ linha.preco_final|floatformat:2 }}</td>
+              <td class="{% if linha.margem_real <= 0 %}text-danger font-weight-bold{% else %}text-warning font-weight-bold{% endif %}">
+                {{ linha.margem_real|floatformat:1 }}%
+              </td>
+              <td>{{ linha.margem_minima|floatformat:1 }}%</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted">Sem itens sob pressao de margem.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
       <div class="card-header"><strong>Saldos negativos por ponto</strong></div>
       <div class="card-body table-responsive">
         <table class="table table-sm table-bordered">
@@ -388,7 +754,32 @@
       </div>
     </div>
   </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>Curva ABC por valor em custo</strong></div>
+      <div class="card-body table-responsive">
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>Classe</th><th>Produto</th><th>Qtd.</th><th>Valor custo</th><th>Acum.</th></tr></thead>
+          <tbody>
+            {% for item in abc_curva %}
+            <tr>
+              <td><span class="badge {% if item.classe == 'A' %}badge-danger{% elif item.classe == 'B' %}badge-warning{% else %}badge-secondary{% endif %}">{{ item.classe }}</span></td>
+              <td>{{ item.produto }}</td>
+              <td>{{ item.quantidade }}</td>
+              <td>R$ {{ item.valor_custo|floatformat:2 }}</td>
+              <td>{{ item.percentual_acumulado|floatformat:1 }}%</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted">Sem saldo suficiente para curva ABC.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
+
+
 
 

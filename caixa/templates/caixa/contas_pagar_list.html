@@ -43,6 +43,98 @@
   .badge-atraso-critico { background: #b42318; color: #fff; }
   .badge-atraso-hoje { background: #b54708; color: #fff; }
   .badge-atraso-curto { background: #175cd3; color: #fff; }
+  .carteira-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 1rem;
+  }
+  .carteira-strip-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 14px 16px;
+    box-shadow: 0 14px 24px rgba(30, 51, 74, 0.06);
+  }
+  .carteira-strip-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #70808f;
+    margin-bottom: .35rem;
+  }
+  .carteira-strip-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #223749;
+  }
+  .carteira-strip-note {
+    margin-top: .3rem;
+    font-size: .82rem;
+    color: #607080;
+  }
+  .carteira-toolbar-card,
+  .carteira-filtros-shell {
+    border: 1px solid #e4e8ee;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 14px 24px rgba(30, 51, 74, 0.05);
+    margin-bottom: 1rem;
+  }
+  .carteira-toolbar-card .card-body,
+  .carteira-filtros-shell .card-body {
+    padding: .95rem 1rem;
+  }
+  .carteira-toolbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .carteira-toolbar-title {
+    font-size: .82rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #70808f;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+  .carteira-filtros-avancados {
+    border: 1px solid #e9edf2;
+    border-radius: 12px;
+    background: #f8fafc;
+    margin-top: .9rem;
+    overflow: hidden;
+  }
+  .carteira-filtros-avancados summary {
+    list-style: none;
+    cursor: pointer;
+    padding: .8rem .95rem;
+    font-weight: 700;
+    color: #223749;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .carteira-filtros-avancados summary::-webkit-details-marker {
+    display: none;
+  }
+  .carteira-filtros-avancados summary::after {
+    content: '+';
+    color: #607080;
+  }
+  .carteira-filtros-avancados[open] summary::after {
+    content: '-';
+  }
+  .carteira-filtros-avancados-body {
+    padding: .95rem;
+    border-top: 1px solid #e9edf2;
+  }
+  @media (max-width: 991.98px) {
+    .carteira-strip {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -62,78 +154,45 @@
     </div>
   </div>
 
-  <div class="card mb-3">
-    <div class="card-body py-2 d-flex flex-wrap align-items-center" style="gap: 8px;">
-      <strong class="mr-2">Prioridades:</strong>
-      <a href="{% url 'caixa:contas_pagar' %}?prioridade=hoje" class="btn btn-sm {% if prioridade_filtro == 'hoje' %}btn-primary{% else %}btn-outline-primary{% endif %}">Pagar hoje ({{ pagar_hoje_qtd }})</a>
-      <a href="{% url 'caixa:contas_pagar' %}?prioridade=vencidas" class="btn btn-sm {% if prioridade_filtro == 'vencidas' %}btn-danger{% else %}btn-outline-danger{% endif %}">Vencidas ({{ pagar_vencidas_qtd }})</a>
-      <a href="{% url 'caixa:contas_pagar' %}?prioridade=criticas" class="btn btn-sm {% if prioridade_filtro == 'criticas' %}btn-dark{% else %}btn-outline-dark{% endif %}">Criticas ({{ pagar_criticas_qtd }})</a>
-      <a href="{% url 'caixa:contas_pagar' %}?prioridade=semana" class="btn btn-sm {% if prioridade_filtro == 'semana' %}btn-warning{% else %}btn-outline-warning{% endif %}">Próx. 7 dias ({{ pagar_proximos_7d_qtd }})</a>
-      <a href="{% url 'caixa:contas_pagar' %}?prioridade=sem_categoria" class="btn btn-sm {% if prioridade_filtro == 'sem_categoria' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Sem categoria ({{ pagar_sem_categoria_qtd }})</a>
-      {% if filtros_salvos_existem %}
-      <a href="{% url 'caixa:contas_pagar' %}?restaurar=1" class="btn btn-sm btn-outline-dark">Últimos filtros</a>
-      {% endif %}
-      {% if prioridade_filtro %}
-      <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm btn-outline-secondary">Limpar prioridade</a>
-      {% endif %}
-    </div>
+  <div class="carteira-strip">
+    <article class="carteira-strip-card">
+      <div class="carteira-strip-label">Total em aberto</div>
+      <div class="carteira-strip-value">R$ {{ total_aberto|floatformat:2 }}</div>
+      <div class="carteira-strip-note">Despesas pendentes aguardando pagamento.</div>
+    </article>
+    <article class="carteira-strip-card">
+      <div class="carteira-strip-label">Pagar hoje</div>
+      <div class="carteira-strip-value">R$ {{ pagar_hoje_total|floatformat:2 }}</div>
+      <div class="carteira-strip-note">{{ pagar_hoje_qtd }} conta(s) com prioridade imediata.</div>
+    </article>
+    <article class="carteira-strip-card">
+      <div class="carteira-strip-label">Vencidas</div>
+      <div class="carteira-strip-value">R$ {{ pagar_vencidas_total|floatformat:2 }}</div>
+      <div class="carteira-strip-note">{{ pagar_vencidas_qtd }} conta(s) em atraso.</div>
+    </article>
+    <article class="carteira-strip-card">
+      <div class="carteira-strip-label">Sem categoria</div>
+      <div class="carteira-strip-value">R$ {{ pagar_sem_categoria_total|floatformat:2 }}</div>
+      <div class="carteira-strip-note">{{ pagar_sem_categoria_qtd }} conta(s) precisam de classifica&ccedil;&atilde;o.</div>
+    </article>
   </div>
 
-  <div class="row mb-3">
-    <div class="col-lg-3 col-md-6">
-      <div class="small-box bg-danger">
-        <div class="inner">
-          <h4>R$ {{ total_aberto|floatformat:2 }}</h4>
-          <p>Total em aberto</p>
-        </div>
+  <div class="carteira-toolbar-card">
+    <div class="card-body">
+      <div class="carteira-toolbar-row">
+        <span class="carteira-toolbar-title">Prioridades</span>
+        <a href="{% url 'caixa:contas_pagar' %}?prioridade=hoje" class="btn btn-sm {% if prioridade_filtro == 'hoje' %}btn-primary{% else %}btn-outline-primary{% endif %}">Pagar hoje ({{ pagar_hoje_qtd }})</a>
+        <a href="{% url 'caixa:contas_pagar' %}?prioridade=vencidas" class="btn btn-sm {% if prioridade_filtro == 'vencidas' %}btn-danger{% else %}btn-outline-danger{% endif %}">Vencidas ({{ pagar_vencidas_qtd }})</a>
+        <a href="{% url 'caixa:contas_pagar' %}?prioridade=criticas" class="btn btn-sm {% if prioridade_filtro == 'criticas' %}btn-dark{% else %}btn-outline-dark{% endif %}">Cr&iacute;ticas ({{ pagar_criticas_qtd }})</a>
+        <a href="{% url 'caixa:contas_pagar' %}?prioridade=semana" class="btn btn-sm {% if prioridade_filtro == 'semana' %}btn-warning{% else %}btn-outline-warning{% endif %}">Pr&oacute;x. 7 dias ({{ pagar_proximos_7d_qtd }})</a>
+        <a href="{% url 'caixa:contas_pagar' %}?prioridade=sem_categoria" class="btn btn-sm {% if prioridade_filtro == 'sem_categoria' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Sem categoria ({{ pagar_sem_categoria_qtd }})</a>
+        {% if filtros_salvos_existem %}
+        <a href="{% url 'caixa:contas_pagar' %}?restaurar=1" class="btn btn-sm btn-outline-dark">&Uacute;ltimos filtros</a>
+        {% endif %}
+        {% if prioridade_filtro %}
+        <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm btn-outline-secondary">Limpar prioridade</a>
+        {% endif %}
       </div>
-    </div>
-    <div class="col-lg-3 col-md-6">
-      <div class="small-box bg-warning">
-        <div class="inner">
-          <h4>{{ total_status_aberta|add:total_status_parcial|add:total_status_vencida }}</h4>
-          <p>Contas pendentes</p>
-        </div>
-      </div>
-    </div>
-    <div class="col-lg-3 col-md-6">
-      <div class="small-box bg-success">
-        <div class="inner">
-          <h4>{{ total_status_paga }}</h4>
-          <p>Pagas no filtro</p>
-        </div>
-      </div>
-    </div>
-    <div class="col-lg-3 col-md-6">
-      <div class="small-box bg-secondary">
-        <div class="inner">
-          <h4>{{ total_status_cancelada }}</h4>
-          <p>Canceladas no filtro</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="pagar-resumo-grid mb-3">
-    <div class="pagar-resumo-card">
-      <div class="text-muted small text-uppercase">Pagar hoje</div>
-      <h4>R$ {{ pagar_hoje_total|floatformat:2 }}</h4>
-      <div class="meta">{{ pagar_hoje_qtd }} conta(s)</div>
-    </div>
-    <div class="pagar-resumo-card">
-      <div class="text-muted small text-uppercase">Vencidas</div>
-      <h4>R$ {{ pagar_vencidas_total|floatformat:2 }}</h4>
-      <div class="meta">{{ pagar_vencidas_qtd }} conta(s)</div>
-    </div>
-    <div class="pagar-resumo-card">
-      <div class="text-muted small text-uppercase">Próximos 7 dias</div>
-      <h4>R$ {{ pagar_proximos_7d_total|floatformat:2 }}</h4>
-      <div class="meta">{{ pagar_proximos_7d_qtd }} conta(s)</div>
-    </div>
-    <div class="pagar-resumo-card">
-      <div class="text-muted small text-uppercase">Sem categoria</div>
-      <h4>R$ {{ pagar_sem_categoria_total|floatformat:2 }}</h4>
-      <div class="meta">{{ pagar_sem_categoria_qtd }} conta(s)</div>
     </div>
   </div>
 
@@ -148,61 +207,84 @@
     {% endfor %}
   </div>
 
-  <div class="card mb-3 ui-form-shell">
+  <div class="carteira-filtros-shell">
     <div class="card-body">
-      <form method="get" class="form-row align-items-end">
-        <div class="col-lg-3 col-md-6">
-          <label>Busca</label>
-          <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Fornecedor ou descricao">
-        </div>
-        <div class="col-lg-2 col-md-6">
-          <label>Status</label>
-          <select name="status" class="form-control">
-            <option value="">Todos</option>
-            <option value="aberta" {% if status_filtro == 'aberta' %}selected{% endif %}>Aberta</option>
-            <option value="parcial" {% if status_filtro == 'parcial' %}selected{% endif %}>Parcial</option>
-            <option value="vencida" {% if status_filtro == 'vencida' %}selected{% endif %}>Vencida</option>
-            <option value="paga" {% if status_filtro == 'paga' %}selected{% endif %}>Paga</option>
-            <option value="cancelada" {% if status_filtro == 'cancelada' %}selected{% endif %}>Cancelada</option>
-          </select>
-        </div>
-        <div class="col-lg-3 col-md-6">
-          <label>Categoria</label>
-          <select name="categoria" class="form-control">
-            <option value="">Todas</option>
-            {% for categoria in categorias_despesa %}
-            <option value="{{ categoria.id }}" {% if categoria_filtro == categoria.id|stringformat:'s' %}selected{% endif %}>{{ categoria.nome }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-lg-2 col-md-6">
-          <label>Vencimento início</label>
-          <input type="date" name="vencimento_inicio" value="{{ vencimento_inicio }}" class="form-control">
-        </div>
-        <div class="col-lg-1 col-md-6">
-          <label>Vencimento fim</label>
-          <input type="date" name="vencimento_fim" value="{{ vencimento_fim }}" class="form-control">
-        </div>
-        <div class="col-lg-2 col-md-6 mt-2 mt-lg-0">
-          <label>Preset</label>
-          <select name="preset_vencimento" class="form-control">
-            <option value="" {% if not preset_vencimento %}selected{% endif %}>Personalizado</option>
-            <option value="hoje" {% if preset_vencimento == 'hoje' %}selected{% endif %}>Hoje</option>
-            <option value="7d" {% if preset_vencimento == '7d' %}selected{% endif %}>7 dias</option>
-            <option value="30d" {% if preset_vencimento == '30d' %}selected{% endif %}>30 dias</option>
-            <option value="mes_atual" {% if preset_vencimento == 'mes_atual' %}selected{% endif %}>Mes atual</option>
-            <option value="mes_anterior" {% if preset_vencimento == 'mes_anterior' %}selected{% endif %}>Mes anterior</option>
-          </select>
-        </div>
+      <form method="get">
         <input type="hidden" name="prioridade" value="{{ prioridade_filtro }}">
-        <div class="col-lg-3 col-md-6 mt-2 d-flex" style="gap: 8px;">
-          <button type="submit" class="btn btn-outline-primary flex-fill">Filtrar</button>
-          <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-outline-secondary flex-fill">Limpar</a>
+        <div class="form-row align-items-end">
+          <div class="col-lg-4 col-md-6">
+            <label>Busca</label>
+            <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Fornecedor ou descri&ccedil;&atilde;o">
+          </div>
+          <div class="col-lg-3 col-md-6">
+            <label>Status</label>
+            <select name="status" class="form-control">
+              <option value="">Todos</option>
+              <option value="aberta" {% if status_filtro == 'aberta' %}selected{% endif %}>Aberta</option>
+              <option value="parcial" {% if status_filtro == 'parcial' %}selected{% endif %}>Parcial</option>
+              <option value="vencida" {% if status_filtro == 'vencida' %}selected{% endif %}>Vencida</option>
+              <option value="paga" {% if status_filtro == 'paga' %}selected{% endif %}>Paga</option>
+              <option value="cancelada" {% if status_filtro == 'cancelada' %}selected{% endif %}>Cancelada</option>
+            </select>
+          </div>
+          <div class="col-lg-2 col-md-6">
+            <label>Categoria</label>
+            <select name="categoria" class="form-control">
+              <option value="">Todas</option>
+              {% for categoria in categorias_despesa %}
+              <option value="{{ categoria.id }}" {% if categoria_filtro == categoria.id|stringformat:'s' %}selected{% endif %}>{{ categoria.nome }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-lg-3 col-md-6 d-flex" style="gap: 8px;">
+            <button type="submit" class="btn btn-outline-primary flex-fill">Filtrar</button>
+            <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-outline-secondary flex-fill">Limpar</a>
+          </div>
         </div>
-        <div class="col-12 mt-2 d-flex flex-wrap" style="gap:8px;">
-          <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-sm btn-outline-success">Exportar CSV</a>
-          <a href="?{{ request.GET.urlencode }}&export=pdf" class="btn btn-sm btn-outline-danger">Exportar PDF</a>
-        </div>
+
+        <details class="carteira-filtros-avancados" {% if vencimento_inicio or vencimento_fim or preset_vencimento or aging_filtro %}open{% endif %}>
+          <summary>Filtros avan&ccedil;ados e exporta&ccedil;&atilde;o</summary>
+          <div class="carteira-filtros-avancados-body">
+            <div class="form-row align-items-end">
+              <div class="col-lg-3 col-md-6 mb-2">
+                <label>Centro de custo</label>
+                <input type="text" class="form-control bg-light" value="Use a coluna da tabela para confer&ecirc;ncia r&aacute;pida" readonly>
+              </div>
+              <div class="col-lg-2 col-md-6 mb-2">
+                <label>Venc. in&iacute;cio</label>
+                <input type="date" name="vencimento_inicio" value="{{ vencimento_inicio }}" class="form-control">
+              </div>
+              <div class="col-lg-2 col-md-6 mb-2">
+                <label>Venc. fim</label>
+                <input type="date" name="vencimento_fim" value="{{ vencimento_fim }}" class="form-control">
+              </div>
+              <div class="col-lg-2 col-md-6 mb-2">
+                <label>Preset</label>
+                <select name="preset_vencimento" class="form-control">
+                  <option value="" {% if not preset_vencimento %}selected{% endif %}>Personalizado</option>
+                  <option value="hoje" {% if preset_vencimento == 'hoje' %}selected{% endif %}>Hoje</option>
+                  <option value="7d" {% if preset_vencimento == '7d' %}selected{% endif %}>7 dias</option>
+                  <option value="30d" {% if preset_vencimento == '30d' %}selected{% endif %}>30 dias</option>
+                  <option value="mes_atual" {% if preset_vencimento == 'mes_atual' %}selected{% endif %}>M&ecirc;s atual</option>
+                  <option value="mes_anterior" {% if preset_vencimento == 'mes_anterior' %}selected{% endif %}>M&ecirc;s anterior</option>
+                </select>
+              </div>
+              <div class="col-lg-3 col-md-6 mb-2">
+                <label>Aging</label>
+                <select name="aging" class="form-control">
+                  <option value="">Todas as faixas</option>
+                  {% for row in pagar_aging %}
+                  <option value="{{ row.chave }}" {% if aging_filtro == row.chave %}selected{% endif %}>{{ row.titulo }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-lg-3 col-md-6 mb-2 d-flex flex-wrap align-items-end" style="gap:8px;">
+                <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-sm btn-outline-success">Exportar CSV</a>
+                <a href="?{{ request.GET.urlencode }}&export=pdf" class="btn btn-sm btn-outline-danger">Exportar PDF</a>
+              </div>
+            </div>
+          </div>
+        </details>
       </form>
     </div>
   </div>

@@ -15,8 +15,9 @@ from configuracoes.models import ConfiguracaoSistema, Empresa, FornecedorGaranti
 
 from ..models import (
     ConfiguracaoRateioCustoFixo,
+    EntradaMercadoria,
     EstoqueEvento,
-    MovimentacaoEstoque,
+    ItemEntradaMercadoria,
     PontoOperacional,
     Produto,
     ProdutoHistorico,
@@ -26,7 +27,6 @@ from ..models import (
     VendaRapidaEstoque,
 )
 from ..services import (
-    ajustar_saldo,
     cancelar_reserva,
     consumir_reservas_ordem,
     converter_reserva,
@@ -36,7 +36,9 @@ from ..services import (
     gerar_codigo_guia_venda_rapida,
     limpar_pre_reservas_antigas,
     normalizar_saldos_produto,
+    obter_ubicacao_preferencial,
     recalcular_total_produto,
+    registrar_movimentacao_estoque,
     resumir_cesto_venda_rapida,
     saldo_disponivel,
 )
@@ -112,6 +114,8 @@ def _snapshot_produto(produto):
         "margem_minima": _decimal_to_str(produto.margem_minima),
         "quantidade": int(produto.quantidade or 0),
         "estoque_minimo": int(produto.estoque_minimo or 0),
+        "ponto_operacional_id": getattr(produto, "ponto_operacional_id", None),
+        "ubicacao_padrao_id": getattr(produto, "ubicacao_padrao_id", None),
         "previsao_venda_mensal": int(getattr(produto, "previsao_venda_mensal", 0) or 0),
         "incluir_rateio_custo_fixo": bool(getattr(produto, "incluir_rateio_custo_fixo", False)),
         "permite_comissao_peca": bool(produto.permite_comissao_peca),
@@ -140,13 +144,20 @@ def _aplicar_estoque_inicial(produto, *, estoque_inicial=0, custo_entrada=None, 
         return 0
 
     custo = Decimal(str(custo_entrada or 0))
+    destino_ubicacao_ref = getattr(produto, "ubicacao_padrao", None) or obter_ubicacao_preferencial(
+        produto,
+        produto.ponto_operacional,
+    )
+    if not destino_ubicacao_ref:
+        return 0
     with transaction.atomic():
-        ajustar_saldo(produto, produto.ponto_operacional, quantidade)
-        MovimentacaoEstoque.objects.create(
+        registrar_movimentacao_estoque(
             produto=produto,
             tipo="entrada",
             quantidade=quantidade,
             destino=produto.ponto_operacional,
+            destino_ubicacao_ref=destino_ubicacao_ref,
+            destino_ubicacao=(getattr(destino_ubicacao_ref, "codigo", "") or "")[:80],
             valor_unitario_custo=custo if custo > 0 else None,
             observacao=(observacao or "Entrada inicial no cadastro do produto.")[:200],
             usuario=usuario if getattr(usuario, "is_authenticated", False) else None,
@@ -198,7 +209,7 @@ def _initial_produto_from_origem(origem):
         "marca": origem.marca_id,
         "fornecedor_config": origem.fornecedor_config_id,
         "fornecedor_manual": origem.fornecedor_manual,
-        "localizacao": origem.localizacao,
+        "ubicacao_padrao": origem.ubicacao_padrao_id,
         "garantia_peca_dias": origem.garantia_peca_dias,
         "permite_os": origem.permite_os,
         "permite_comissao_peca": origem.permite_comissao_peca,
@@ -287,10 +298,14 @@ def _normalizar_linha_importacao(linha):
         "categoria": _val("categoria"),
         "marca_nome": _val("marca"),
         "fornecedor_nome": _val("fornecedor"),
+        "fornecedor_manual": _val("fornecedor_manual"),
+        "modelos_compativeis": _val("modelos_compativeis"),
         "preco_final": _val("preco_final", "0"),
         "custo_unitario": _val("custo_unitario", "0"),
         "estoque_minimo": _val("estoque_minimo", "0"),
         "estoque_inicial": _val("estoque_inicial", "0"),
+        "ponto_operacional": _val("ponto_operacional"),
+        "ubicacao": _val("ubicacao"),
     }
 
 
@@ -327,6 +342,62 @@ def _contexto_rateio_produto(produto=None, empresa=None):
         "total_fixos": total_fixos,
         "total_base_rateio": total_base_rateio,
     }
+
+
+def _contexto_precificacao_produto(produto=None):
+    configuracao = ConfiguracaoSistema.get_configuracao()
+    contexto = {
+        "metodo_custo": getattr(configuracao, "estoque_metodo_custo", "pmp"),
+        "metodo_custo_display": getattr(configuracao, "get_estoque_metodo_custo_display", lambda: "PMP")(),
+        "ultimo_custo_entrada": Decimal("0.00"),
+        "ultima_compra_data": None,
+        "ultima_compra_documento": "",
+        "ultima_compra_fornecedor": "",
+        "ultima_compra_quantidade": 0,
+        "tem_historico_compra": False,
+        "compras_recentes": [],
+    }
+    if not produto or not getattr(produto, "pk", None):
+        return contexto
+
+    ultimo_item = (
+        ItemEntradaMercadoria.objects.select_related("entrada", "entrada__fornecedor_config")
+        .filter(produto=produto, entrada__status="recebida")
+        .order_by("-entrada__data_entrada", "-entrada__id", "-id")
+        .first()
+    )
+    if not ultimo_item:
+        return contexto
+
+    entrada = ultimo_item.entrada
+    compras_recentes = []
+    itens_recentes = (
+        ItemEntradaMercadoria.objects.select_related("entrada", "entrada__fornecedor_config")
+        .filter(produto=produto, entrada__status="recebida")
+        .order_by("-entrada__data_entrada", "-entrada__id", "-id")[:5]
+    )
+    for item in itens_recentes:
+        compras_recentes.append(
+            {
+                "data": item.entrada.data_entrada,
+                "documento": item.entrada.documento_numero or item.entrada.numero,
+                "fornecedor": item.entrada.fornecedor_nome,
+                "quantidade": int(item.quantidade or 0),
+                "custo_unitario": item.custo_entrada_unitario,
+            }
+        )
+    contexto.update(
+        {
+            "ultimo_custo_entrada": ultimo_item.custo_entrada_unitario,
+            "ultima_compra_data": entrada.data_entrada,
+            "ultima_compra_documento": entrada.documento_numero or entrada.numero,
+            "ultima_compra_fornecedor": entrada.fornecedor_nome,
+            "ultima_compra_quantidade": int(ultimo_item.quantidade or 0),
+            "tem_historico_compra": True,
+            "compras_recentes": compras_recentes,
+        }
+    )
+    return contexto
 
 
 def _resumo_rateio_atual(empresa=None):
@@ -434,6 +505,7 @@ __all__ = [
     "_codigo_guia",
     "_codigo_reserva",
     "_config_sistema",
+    "_contexto_precificacao_produto",
     "_contexto_rateio_produto",
     "_initial_produto_from_origem",
     "_ler_arquivo_importacao_produtos",

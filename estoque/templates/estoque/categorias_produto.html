@@ -1,0 +1,196 @@
+{% extends "core/base.html" %}
+
+{% block title %}Estoque - Categorias de Produto{% endblock %}
+
+{% block header %}
+<h1 class="m-0 text-dark">Categorias de Produto</h1>
+{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+    .categoria-grid {
+        display: grid;
+        grid-template-columns: minmax(320px, 420px) 1fr;
+        gap: 18px;
+    }
+    .categoria-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+    .categoria-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: .82rem;
+        background: #eef6ff;
+        color: #1d4ed8;
+    }
+    .categoria-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: .78rem;
+        background: #f3f7fb;
+        color: #334155;
+    }
+    @media (max-width: 991.98px) {
+        .categoria-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card-modern mb-3">
+    <div class="card-modern-header">Central de categorias</div>
+    <div class="card-modern-body">
+        <div class="row">
+            <div class="col-lg-8">
+                <p class="mb-2">Use esta tela para manter o catalogo de categorias limpo e reaproveitavel no cadastro de produtos.</p>
+                <div class="categoria-meta">
+                    <span class="categoria-chip"><i class="fas fa-check-circle"></i> Cadastro rapido</span>
+                    <span class="categoria-chip"><i class="fas fa-sync-alt"></i> Reaproveitada no estoque</span>
+                    <span class="categoria-chip"><i class="fas fa-percentage"></i> Margem padrao opcional</span>
+                </div>
+            </div>
+            <div class="col-lg-4 text-lg-right mt-3 mt-lg-0">
+                <a href="{% if next_url %}{{ next_url }}{% else %}{% url 'estoque:criar_produto' %}{% endif %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left mr-1"></i> Voltar ao produto
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="categoria-grid">
+    <div class="card-modern">
+        <div class="card-modern-header">
+            {{ categoria_edicao|yesno:"Editar categoria,Nova categoria" }}
+        </div>
+        <div class="card-modern-body">
+            <form method="post">
+                {% csrf_token %}
+                {% if categoria_edicao %}
+                <input type="hidden" name="categoria_id" value="{{ categoria_edicao.id }}">
+                {% endif %}
+                {% if next_url %}
+                <input type="hidden" name="next" value="{{ next_url }}">
+                {% endif %}
+
+                {% if form.errors %}
+                <div class="alert alert-danger">
+                    Corrija os campos destacados e tente novamente.
+                </div>
+                {% endif %}
+
+                <div class="form-group">
+                    {{ form.nome.label_tag }}
+                    {{ form.nome }}
+                    {% if form.nome.help_text %}<small class="text-muted d-block">{{ form.nome.help_text }}</small>{% endif %}
+                    {% for err in form.nome.errors %}<small class="text-danger d-block">{{ err }}</small>{% endfor %}
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        {{ form.margem_padrao.label_tag }}
+                        {{ form.margem_padrao }}
+                        {% if form.margem_padrao.help_text %}<small class="text-muted d-block">{{ form.margem_padrao.help_text }}</small>{% endif %}
+                        {% for err in form.margem_padrao.errors %}<small class="text-danger d-block">{{ err }}</small>{% endfor %}
+                    </div>
+                    <div class="form-group col-md-4">
+                        {{ form.ordem.label_tag }}
+                        {{ form.ordem }}
+                        {% if form.ordem.help_text %}<small class="text-muted d-block">{{ form.ordem.help_text }}</small>{% endif %}
+                        {% for err in form.ordem.errors %}<small class="text-danger d-block">{{ err }}</small>{% endfor %}
+                    </div>
+                    <div class="form-group col-md-4 d-flex align-items-center">
+                        <div class="form-check mt-4">
+                            {{ form.ativo }} {{ form.ativo.label_tag }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap" style="gap:8px;">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save mr-1"></i> Salvar categoria
+                    </button>
+                    <a href="{% url 'estoque:categorias_produto' %}" class="btn btn-outline-secondary">Limpar</a>
+                    {% if next_url %}
+                    <a href="{{ next_url }}" class="btn btn-outline-primary">Voltar ao cadastro</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card-modern">
+        <div class="card-modern-header d-flex justify-content-between align-items-center">
+            <span>Catalogo atual</span>
+            <form method="get" class="form-inline">
+                {% if next_url %}
+                <input type="hidden" name="next" value="{{ next_url }}">
+                {% endif %}
+                <input type="text" name="q" class="form-control form-control-sm mr-2" value="{{ q }}" placeholder="Buscar categoria">
+                <button type="submit" class="btn btn-sm btn-outline-primary">Filtrar</button>
+            </form>
+        </div>
+        <div class="card-modern-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Categoria</th>
+                            <th>Produtos</th>
+                            <th>Margem padrao</th>
+                            <th>Ordem</th>
+                            <th>Status</th>
+                            <th class="text-right">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for categoria in categorias %}
+                        <tr>
+                            <td>{{ categoria.nome }}</td>
+                            <td>
+                                <span class="categoria-count">
+                                    <i class="fas fa-box-open"></i>
+                                    {{ categoria.total_produtos_ativos|default:0 }} ativos
+                                </span>
+                                {% if categoria.total_produtos|default:0 != categoria.total_produtos_ativos|default:0 %}
+                                <div class="text-muted small mt-1">{{ categoria.total_produtos|default:0 }} no total</div>
+                                {% endif %}
+                            </td>
+                            <td>{{ categoria.margem_padrao|floatformat:2 }}%</td>
+                            <td>{{ categoria.ordem }}</td>
+                            <td>
+                                {% if categoria.ativo %}
+                                <span class="badge badge-success">Ativa</span>
+                                {% else %}
+                                <span class="badge badge-secondary">Inativa</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                <a href="{% url 'estoque:categorias_produto' %}?editar={{ categoria.id }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if next_url %}&next={{ next_url|urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary">
+                                    Editar
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">Nenhuma categoria encontrada.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

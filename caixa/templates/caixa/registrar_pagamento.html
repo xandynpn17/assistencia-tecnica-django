@@ -93,9 +93,223 @@
     font-weight: 700;
     color: #243746;
   }
+  .guia-recebimento-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .guia-recebimento-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 12px 14px;
+  }
+  .guia-recebimento-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6c757d;
+    margin-bottom: 4px;
+  }
+  .guia-recebimento-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #243746;
+    line-height: 1.2;
+  }
+  .guia-recebimento-note {
+    margin-top: 4px;
+    font-size: .8rem;
+    color: #5f6b77;
+  }
+  .resumo-guia-card {
+    border: 1px solid #e4e8ee;
+    border-radius: 12px;
+    background: #f8fbff;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .resumo-guia-topline {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .resumo-guia-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: #eef8f1;
+    color: #1f7a45;
+    border: 1px solid #cfe8d8;
+    font-size: .8rem;
+    font-weight: 700;
+  }
+  .pagamento-misto-box {
+    border: 1px solid #e4e8ee;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 14px 16px;
+    margin-bottom: 1rem;
+  }
+  .pagamento-misto-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .pagamento-misto-title {
+    font-size: .95rem;
+    font-weight: 700;
+    color: #243746;
+  }
+  .pagamento-misto-copy {
+    font-size: .82rem;
+    color: #5f6b77;
+    margin-bottom: 0;
+  }
+  .pagamento-misto-resumo {
+    border: 1px dashed #d7e1eb;
+    border-radius: 10px;
+    background: #f8fafc;
+    padding: 10px 12px;
+    color: #314150;
+    font-size: .85rem;
+  }
+  .pagamento-misto-resumo strong {
+    color: #183247;
+  }
+  .pagamento-misto-resumo small {
+    display: block;
+    color: #5f6b77;
+    margin-top: 4px;
+  }
+  .pagamento-step-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .pagamento-step {
+    border: 1px solid #e4e8ee;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 12px 14px;
+    min-height: 100%;
+  }
+  .pagamento-step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: #1f6feb;
+    color: #fff;
+    font-size: .82rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .pagamento-step-title {
+    font-size: .92rem;
+    font-weight: 700;
+    color: #243746;
+    margin-bottom: 4px;
+  }
+  .pagamento-step-copy {
+    font-size: .82rem;
+    color: #5f6b77;
+    margin-bottom: 0;
+    line-height: 1.4;
+  }
+  .pagamento-core-card {
+    border: 1px solid #dbe5ee;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .pagamento-core-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .pagamento-core-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #243746;
+    margin-bottom: 2px;
+  }
+  .pagamento-core-copy {
+    font-size: .83rem;
+    color: #5f6b77;
+    margin-bottom: 0;
+  }
+  .pagamento-context-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    border: 1px solid #d6e4f7;
+    background: #eef5ff;
+    color: #1d4f91;
+    padding: 6px 10px;
+    font-size: .8rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .pagamento-advanced {
+    border: 1px solid #e4e8ee;
+    border-radius: 12px;
+    background: #fff;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .pagamento-advanced summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 12px 14px;
+    font-weight: 700;
+    color: #243746;
+    background: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .pagamento-advanced summary::-webkit-details-marker {
+    display: none;
+  }
+  .pagamento-advanced summary::after {
+    content: "+";
+    color: #5f6b77;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+  .pagamento-advanced[open] summary::after {
+    content: "-";
+  }
+  .pagamento-advanced-body {
+    padding: 14px;
+    border-top: 1px solid #eef1f4;
+  }
   @media (max-width: 575.98px) {
     .resumo-os-grid {
       grid-template-columns: 1fr;
+    }
+    .guia-recebimento-strip {
+      grid-template-columns: 1fr;
+    }
+    .pagamento-step-strip {
+      grid-template-columns: 1fr;
+    }
+    .pagamento-core-head {
+      flex-direction: column;
     }
   }
 </style>
@@ -105,12 +319,39 @@
 <div class="container-fluid mt-3">
     {% include 'caixa/_subnav_caixa.html' %}
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h3 mb-0">Registrar Pagamento (POS)</h1>
+        <div>
+            <h1 class="h3 mb-0">{% if guia_codigo %}Registrar Pagamento da Guia{% else %}Registrar Pagamento (POS){% endif %}</h1>
+            <small class="text-muted d-block">{% if guia_codigo %}Etapa 4 da venda a mostrador: receber, imprimir comprovante e concluir a baixa financeira.{% else %}Recebimento r&aacute;pido de OS, guias e atendimentos operacionais.{% endif %}</small>
+        </div>
         <div class="d-flex gap-2">
             <a href="{% url 'caixa:taloes' %}" class="btn btn-outline-dark btn-sm">Consultar tal&otilde;es</a>
             <a href="{% if user|is_management %}{% url 'caixa:dashboard_caixa' %}{% else %}{% url 'caixa:registrar_pagamento' %}{% endif %}" class="btn btn-outline-secondary btn-sm">Voltar ao dashboard</a>
         </div>
     </div>
+    {% if guia_codigo and guia_resumo %}
+    <div class="guia-recebimento-strip">
+        <div class="guia-recebimento-card">
+            <div class="guia-recebimento-label">Guia</div>
+            <div class="guia-recebimento-value">{{ guia_resumo.codigo }}</div>
+            <div class="guia-recebimento-note">{{ guia_resumo.status_label }}</div>
+        </div>
+        <div class="guia-recebimento-card">
+            <div class="guia-recebimento-label">Total a receber</div>
+            <div class="guia-recebimento-value">R$ {{ guia_resumo.valor_total|floatformat:2 }}</div>
+            <div class="guia-recebimento-note">{{ guia_resumo.quantidade_total }} unidade(s) em {{ guia_resumo.itens_total }} item(ns)</div>
+        </div>
+        <div class="guia-recebimento-card">
+            <div class="guia-recebimento-label">Pontos</div>
+            <div class="guia-recebimento-value">{{ guia_resumo.pontos_label }}</div>
+            <div class="guia-recebimento-note">Origem: {{ guia_resumo.origem_label }}</div>
+        </div>
+        <div class="guia-recebimento-card">
+            <div class="guia-recebimento-label">Operacao</div>
+            <div class="guia-recebimento-value">{{ guia_resumo.operadores_label }}</div>
+            <div class="guia-recebimento-note">Vendedor: {{ guia_resumo.vendedores_label }}</div>
+        </div>
+    </div>
+    {% endif %}
 
     {% if not caixa %}
         <div class="alert alert-danger">
@@ -120,12 +361,14 @@
         {% if pagamento_sucesso %}
         <div class="alert alert-success d-flex flex-wrap justify-content-between align-items-center">
             <div>
-                <strong>Pagamento registrado com sucesso.</strong>
+                <strong>{% if guia_codigo %}Recebimento da guia concluido com sucesso.{% else %}Pagamento registrado com sucesso.{% endif %}</strong>
                 <span class="d-block text-muted small">Tal&atilde;o {{ pagamento_sucesso.numero_talao }} | {{ pagamento_sucesso.metodo_display }} | R$ {{ pagamento_sucesso.valor|floatformat:2 }}</span>
                 {% if ordem and ordem.fechada and ordem_valor_aberto <= 0 %}
                 <span class="d-block small mt-1"><strong>Entrega:</strong> OS quitada e liberada para entrega ao cliente.</span>
                 {% elif ordem and ordem.fechada %}
                 <span class="d-block small mt-1"><strong>Entrega:</strong> Ainda existe saldo pendente antes da libera&ccedil;&atilde;o.</span>
+                {% elif guia_codigo %}
+                <span class="d-block small mt-1"><strong>Fluxo balc&atilde;o:</strong> estoque baixado, guia vinculada e venda pronta para comprovante.</span>
                 {% endif %}
             </div>
             <div class="d-flex flex-wrap gap-2 mt-2 mt-md-0">
@@ -157,10 +400,17 @@
             <div class="col-lg-8">
                 <div class="card shadow-sm border-0 mb-3">
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <strong>1) Validar Ordem de Servi&ccedil;o</strong>
-                        <small class="text-muted">Digite OS-0123 ou somente 123</small>
+                        <strong>{% if guia_codigo %}1) Origem do recebimento{% else %}1) Validar Ordem de Servi&ccedil;o{% endif %}</strong>
+                        <small class="text-muted">{% if guia_codigo %}Guia carregada para conclus&atilde;o da venda a mostrador{% else %}Digite OS-0123 ou somente 123{% endif %}</small>
                     </div>
                     <div class="card-body">
+                        {% if guia_codigo and vendas_guia %}
+                        <div class="pagamento-helper mb-3">
+                            <p class="mb-1"><strong>Fluxo da venda a mostrador:</strong> guia consolidada, itens conferidos e pronta para recebimento no caixa.</p>
+                            <p class="text-muted mb-0">Se precisar revisar os itens antes de receber, use o resumo lateral ou abra a guia completa.</p>
+                        </div>
+                        {% endif %}
+                        {% if not guia_codigo %}
                         <form method="get" class="form-row align-items-end">
                             <div class="col-md-9">
                                 <label for="id_os_numero_busca"><strong>N&uacute;mero da OS</strong></label>
@@ -178,9 +428,10 @@
                                 </button>
                             </div>
                         </form>
+                        {% endif %}
                         <div class="pagamento-helper mt-3">
-                            <p class="mb-1"><strong>Fluxo r&aacute;pido:</strong> valide a OS, confirme valor e forma de pagamento e finalize no mesmo ecr&atilde;.</p>
-                            <p class="text-muted mb-0">Se precisar confirmar dados t&eacute;cnicos ou hist&oacute;ricos da OS antes do recebimento, use o atalho do resumo lateral.</p>
+                            <p class="mb-1"><strong>Fluxo r&aacute;pido:</strong> {% if guia_codigo %}confirme valor, forma de pagamento e finalize a venda no mesmo ecr&atilde;.{% else %}valide a OS, confirme valor e forma de pagamento e finalize a venda no mesmo ecr&atilde;.{% endif %}</p>
+                            <p class="text-muted mb-0">{% if guia_codigo %}A baixa do estoque e a vincula&ccedil;&atilde;o da venda acontecem junto com este recebimento.{% else %}Se precisar confirmar dados t&eacute;cnicos ou hist&oacute;ricos da OS antes do recebimento, use o atalho do resumo lateral.{% endif %}</p>
                         </div>
                     </div>
                 </div>
@@ -191,6 +442,28 @@
                         <small class="text-muted">F2 valor | F3 forma | F4 finalizar</small>
                     </div>
                     <div class="card-body">
+                        <div class="pagamento-step-strip mb-3">
+                            <div class="pagamento-step">
+                                <div class="pagamento-step-number">1</div>
+                                <div class="pagamento-step-title">Origem</div>
+                                <p class="pagamento-step-copy">{% if guia_codigo %}Guia carregada e pronta para recebimento.{% else %}Confirme a OS antes de receber.{% endif %}</p>
+                            </div>
+                            <div class="pagamento-step">
+                                <div class="pagamento-step-number">2</div>
+                                <div class="pagamento-step-title">Valor</div>
+                                <p class="pagamento-step-copy">{% if guia_codigo %}Use o total da guia ou ajuste o valor de balc&atilde;o.{% else %}Use o saldo aberto da OS ou ajuste manualmente.{% endif %}</p>
+                            </div>
+                            <div class="pagamento-step">
+                                <div class="pagamento-step-number">3</div>
+                                <div class="pagamento-step-title">Forma</div>
+                                <p class="pagamento-step-copy">Selecione a forma principal e, se precisar, complemente com pagamento misto.</p>
+                            </div>
+                            <div class="pagamento-step">
+                                <div class="pagamento-step-number">4</div>
+                                <div class="pagamento-step-title">Concluir</div>
+                                <p class="pagamento-step-copy">Finalize, imprima o comprovante e siga para entrega ou pr&oacute;xima venda.</p>
+                            </div>
+                        </div>
                         <form
                             method="post"
                             id="form-pagamento-pos"
@@ -210,114 +483,214 @@
                                 {{ form.chave_idempotencia }}
                             </div>
 
-                            <div class="form-row">
-                                <div class="form-group col-md-4">
-                                    <label for="{{ form.valor.id_for_label }}"><strong>Valor base</strong></label>
-                                    {{ form.valor|add_class:"form-control form-control-lg"|attr:"id:id_valor_pos" }}
-                                    {% if form.valor.errors %}<small class="text-danger">{{ form.valor.errors|striptags }}</small>{% endif %}
+                            <div class="pagamento-core-card">
+                                <div class="pagamento-core-head">
+                                    <div>
+                                        <div class="pagamento-core-title">Recebimento principal</div>
+                                        <p class="pagamento-core-copy">Este &eacute; o bloco do balc&atilde;o: valor, forma de pagamento, troco e conclus&atilde;o ficam juntos para reduzir cliques.</p>
+                                    </div>
+                                    {% if guia_codigo and guia_resumo %}
+                                    <span class="pagamento-context-chip">Venda a mostrador</span>
+                                    {% elif ordem %}
+                                    <span class="pagamento-context-chip">{{ ordem.status_listagem_label }}</span>
+                                    {% endif %}
                                 </div>
-                                <div class="form-group col-md-5">
-                                    <label for="{{ form.forma_pagamento.id_for_label }}"><strong>Forma de Pagamento</strong></label>
-                                    {{ form.forma_pagamento|add_class:"form-control form-control-lg"|attr:"id:id_forma_pos" }}
-                                    {% if form.forma_pagamento.errors %}<small class="text-danger">{{ form.forma_pagamento.errors|striptags }}</small>{% endif %}
+
+                                <div class="form-row">
+                                    <div class="form-group col-md-4">
+                                        <label for="{{ form.valor.id_for_label }}"><strong>Valor base</strong></label>
+                                        {{ form.valor|add_class:"form-control form-control-lg"|attr:"id:id_valor_pos" }}
+                                        {% if form.valor.errors %}<small class="text-danger">{{ form.valor.errors|striptags }}</small>{% endif %}
+                                    </div>
+                                    <div class="form-group col-md-5">
+                                        <label for="{{ form.forma_pagamento.id_for_label }}"><strong>Forma de Pagamento</strong></label>
+                                        {{ form.forma_pagamento|add_class:"form-control form-control-lg"|attr:"id:id_forma_pos" }}
+                                        {% if form.forma_pagamento.errors %}<small class="text-danger">{{ form.forma_pagamento.errors|striptags }}</small>{% endif %}
+                                    </div>
+                                    <div class="form-group col-md-3">
+                                        <label for="{{ form.referencia.id_for_label }}"><strong>Refer&ecirc;ncia</strong></label>
+                                        {{ form.referencia|add_class:"form-control form-control-lg" }}
+                                        {% if form.referencia.errors %}<small class="text-danger">{{ form.referencia.errors|striptags }}</small>{% endif %}
+                                    </div>
                                 </div>
-                                <div class="form-group col-md-3">
-                                    <label for="{{ form.referencia.id_for_label }}"><strong>Refer&ecirc;ncia</strong></label>
-                                    {{ form.referencia|add_class:"form-control form-control-lg" }}
-                                    {% if form.referencia.errors %}<small class="text-danger">{{ form.referencia.errors|striptags }}</small>{% endif %}
+
+                                <div class="mb-3">
+                                    <label class="d-block mb-2"><strong>Atalhos de pagamento</strong></label>
+                                    <div class="atalhos-forma">
+                                        {% for forma in formas_pagamento_meta %}
+                                        <button type="button" class="btn btn-sm btn-outline-primary js-forma-rapida" data-forma-id="{{ forma.id }}" data-forma-codigo="{{ forma.codigo }}">{{ forma.nome }}</button>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+
+                                <div id="bloco-dinheiro" class="row mb-3 d-none">
+                                    <div class="col-md-5">
+                                        <label for="{{ form.valor_recebido.id_for_label }}"><strong>Valor recebido</strong></label>
+                                        {{ form.valor_recebido|add_class:"form-control form-control-lg"|attr:"id:id_valor_recebido_pos" }}
+                                        {% if form.valor_recebido.errors %}<small class="text-danger">{{ form.valor_recebido.errors|striptags }}</small>{% endif %}
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="d-block"><strong>Troco</strong></label>
+                                        <div class="troco-box">
+                                            <div id="troco-valor" class="troco-valor">R$ 0,00</div>
+                                            <small class="text-muted">Calculado automaticamente para pagamentos em dinheiro.</small>
+                                            <div id="troco-celulas" class="troco-celulas"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="d-block mb-2"><strong>Valores r&aacute;pidos</strong></label>
+                                    <div class="btn-group btn-group-sm flex-wrap" role="group">
+                                        {% if guia_codigo and guia_total > 0 %}
+                                        <button type="button" class="btn btn-outline-primary js-valor-rapido" data-value="{{ guia_total|floatformat:2 }}">Total da guia</button>
+                                        {% elif ordem and ordem_valor_aberto > 0 %}
+                                        <button type="button" class="btn btn-outline-primary js-valor-rapido" data-value="{{ ordem_valor_aberto|floatformat:2 }}">Saldo aberto</button>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="30.00">30,00</button>
+                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="50.00">50,00</button>
+                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="100.00">100,00</button>
+                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="150.00">150,00</button>
+                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="200.00">200,00</button>
+                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="300.00">300,00</button>
+                                    </div>
+                                    {% if guia_codigo and guia_total > 0 %}
+                                    <small class="text-muted d-block mt-2">Total atual da guia: <strong>R$ {{ guia_total|floatformat:2 }}</strong></small>
+                                    {% elif ordem and ordem_valor_aberto > 0 %}
+                                    <small class="text-muted d-block mt-2">Saldo atual da OS: <strong>R$ {{ ordem_valor_aberto|floatformat:2 }}</strong></small>
+                                    {% endif %}
+                                </div>
+
+                                <div class="d-flex justify-content-end">
+                                    <button type="submit" id="btn-finalizar-pos" class="btn btn-success btn-lg px-4">
+                                        Finalizar Pagamento
+                                    </button>
                                 </div>
                             </div>
 
-                            <div class="form-row">
-                                <div class="form-group col-md-4">
-                                    <label for="{{ form.desconto_valor.id_for_label }}"><strong>Desconto (R$)</strong></label>
-                                    {% if pode_aplicar_desconto_caixa %}
-                                    {{ form.desconto_valor|add_class:"form-control"|attr:"id:id_desconto_valor_pos" }}
-                                    {% else %}
-                                    {{ form.desconto_valor|add_class:"form-control"|attr:"id:id_desconto_valor_pos"|attr:"disabled:disabled" }}
-                                    {% endif %}
-                                    {% if form.desconto_valor.errors %}<small class="text-danger">{{ form.desconto_valor.errors|striptags }}</small>{% endif %}
-                                </div>
-                                <div class="form-group col-md-4">
-                                    <label for="{{ form.desconto_percentual.id_for_label }}"><strong>Desconto (%)</strong></label>
-                                    {% if pode_aplicar_desconto_caixa %}
-                                    {{ form.desconto_percentual|add_class:"form-control"|attr:"id:id_desconto_percentual_pos" }}
-                                    {% else %}
-                                    {{ form.desconto_percentual|add_class:"form-control"|attr:"id:id_desconto_percentual_pos"|attr:"disabled:disabled" }}
-                                    <small class="form-text text-muted">Bloqueado para este usuario.</small>
-                                    {% endif %}
-                                    {% if form.desconto_percentual.errors %}<small class="text-danger">{{ form.desconto_percentual.errors|striptags }}</small>{% endif %}
-                                </div>
-                                <div class="form-group col-md-4">
-                                    <label class="d-block"><strong>Total final ao cliente</strong></label>
-                                    <div class="desconto-box">
-                                        <div class="small text-muted">Subtotal: <span id="desconto-subtotal">R$ 0,00</span></div>
-                                        <div class="small text-muted">Desconto: <span id="desconto-total">R$ 0,00</span></div>
-                                        <div id="valor-final-cliente" class="desconto-total">R$ 0,00</div>
+                            <details class="pagamento-advanced">
+                                <summary>
+                                    <span>Pagamento misto opcional</span>
+                                </summary>
+                                <div class="pagamento-advanced-body">
+                                    <div class="pagamento-misto-box mb-0">
+                                        <div class="pagamento-misto-head">
+                                            <div>
+                                                <div class="pagamento-misto-title">Pagamento misto opcional</div>
+                                                <p class="pagamento-misto-copy">Use quando parte do recebimento for em dinheiro, cart&atilde;o, PIX ou outra forma. O sistema separa a parcela secund&aacute;ria e ajusta o troco apenas sobre a parte em dinheiro.</p>
+                                            </div>
+                                            <span class="badge badge-light">Opcional</span>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-4">
+                                                <label for="{{ form.forma_pagamento_secundaria.id_for_label }}"><strong>Forma secund&aacute;ria</strong></label>
+                                                {{ form.forma_pagamento_secundaria|add_class:"form-control"|attr:"id:id_forma_pagamento_secundaria" }}
+                                                {% if form.forma_pagamento_secundaria.errors %}<small class="text-danger">{{ form.forma_pagamento_secundaria.errors|striptags }}</small>{% endif %}
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label for="{{ form.valor_secundario.id_for_label }}"><strong>Valor secund&aacute;rio</strong></label>
+                                                {{ form.valor_secundario|add_class:"form-control"|attr:"id:id_valor_secundario" }}
+                                                {% if form.valor_secundario.errors %}<small class="text-danger">{{ form.valor_secundario.errors|striptags }}</small>{% endif %}
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label for="{{ form.referencia_secundaria.id_for_label }}"><strong>Refer&ecirc;ncia secund&aacute;ria</strong></label>
+                                                {{ form.referencia_secundaria|add_class:"form-control"|attr:"id:id_referencia_secundaria"|attr:"placeholder:Ex: NSU, PIX, comprovante" }}
+                                                {% if form.referencia_secundaria.errors %}<small class="text-danger">{{ form.referencia_secundaria.errors|striptags }}</small>{% endif %}
+                                            </div>
+                                        </div>
+                                        <div id="pagamentoMistoResumo" class="pagamento-misto-resumo">
+                                            <strong>Composi&ccedil;&atilde;o atual:</strong> pagamento em forma &uacute;nica.
+                                            <small>Quando preencher a forma secund&aacute;ria, o valor principal ser&aacute; recalculado automaticamente.</small>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            {% if mensagem_antifraude %}
-                            <div class="alert alert-warning py-2">
-                                <i class="fas fa-shield-alt mr-1"></i>{{ mensagem_antifraude }}
-                            </div>
+                            </details>
+
+                            <details class="pagamento-advanced" {% if mensagem_antifraude or form.desconto_valor.errors or form.desconto_percentual.errors %}open{% endif %}>
+                                <summary>
+                                    <span>Desconto e total final</span>
+                                </summary>
+                                <div class="pagamento-advanced-body">
+                                    {% if mensagem_antifraude %}
+                                    <div class="alert alert-warning py-2">
+                                        <i class="fas fa-shield-alt mr-1"></i>{{ mensagem_antifraude }}
+                                    </div>
+                                    {% endif %}
+                                    <div class="form-row">
+                                        <div class="form-group col-md-4">
+                                            <label for="{{ form.desconto_valor.id_for_label }}"><strong>Desconto (R$)</strong></label>
+                                            {% if pode_aplicar_desconto_caixa %}
+                                            {{ form.desconto_valor|add_class:"form-control"|attr:"id:id_desconto_valor_pos" }}
+                                            {% else %}
+                                            {{ form.desconto_valor|add_class:"form-control"|attr:"id:id_desconto_valor_pos"|attr:"disabled:disabled" }}
+                                            {% endif %}
+                                            {% if form.desconto_valor.errors %}<small class="text-danger">{{ form.desconto_valor.errors|striptags }}</small>{% endif %}
+                                        </div>
+                                        <div class="form-group col-md-4">
+                                            <label for="{{ form.desconto_percentual.id_for_label }}"><strong>Desconto (%)</strong></label>
+                                            {% if pode_aplicar_desconto_caixa %}
+                                            {{ form.desconto_percentual|add_class:"form-control"|attr:"id:id_desconto_percentual_pos" }}
+                                            {% else %}
+                                            {{ form.desconto_percentual|add_class:"form-control"|attr:"id:id_desconto_percentual_pos"|attr:"disabled:disabled" }}
+                                            <small class="form-text text-muted">Bloqueado para este usu&aacute;rio.</small>
+                                            {% endif %}
+                                            {% if form.desconto_percentual.errors %}<small class="text-danger">{{ form.desconto_percentual.errors|striptags }}</small>{% endif %}
+                                        </div>
+                                        <div class="form-group col-md-4">
+                                            <label class="d-block"><strong>Total final ao cliente</strong></label>
+                                            <div class="desconto-box">
+                                                <div class="small text-muted">Subtotal: <span id="desconto-subtotal">R$ 0,00</span></div>
+                                                <div class="small text-muted">Desconto: <span id="desconto-total">R$ 0,00</span></div>
+                                                <div id="valor-final-cliente" class="desconto-total">R$ 0,00</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+
+                            {% if guia_codigo or venda %}
+                            <details class="pagamento-advanced" {% if form.cliente_nome.errors or form.cliente_documento.errors or form.cliente_telefone.errors %}open{% endif %}>
+                                <summary>
+                                    <span>Identificacao opcional do comprador</span>
+                                </summary>
+                                <div class="pagamento-advanced-body">
+                                    <div class="form-row">
+                                        <div class="form-group col-md-5">
+                                            <label for="{{ form.cliente_nome.id_for_label }}"><strong>Comprador</strong></label>
+                                            {{ form.cliente_nome|add_class:"form-control" }}
+                                            {% if form.cliente_nome.errors %}<small class="text-danger">{{ form.cliente_nome.errors|striptags }}</small>{% endif %}
+                                        </div>
+                                        <div class="form-group col-md-3">
+                                            <label for="{{ form.cliente_documento.id_for_label }}"><strong>CPF/CNPJ</strong></label>
+                                            {{ form.cliente_documento|add_class:"form-control" }}
+                                            {% if form.cliente_documento.errors %}<small class="text-danger">{{ form.cliente_documento.errors|striptags }}</small>{% endif %}
+                                        </div>
+                                        <div class="form-group col-md-4">
+                                            <label for="{{ form.cliente_telefone.id_for_label }}"><strong>Telefone/WhatsApp</strong></label>
+                                            {{ form.cliente_telefone|add_class:"form-control" }}
+                                            {% if form.cliente_telefone.errors %}<small class="text-danger">{{ form.cliente_telefone.errors|striptags }}</small>{% endif %}
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">
+                                        Use quando quiser facilitar garantia, troca, devolu&ccedil;&atilde;o ou contato futuro da venda de balc&atilde;o.
+                                    </small>
+                                </div>
+                            </details>
                             {% endif %}
 
-                            <div class="mb-3">
-                                <label class="d-block mb-2"><strong>Atalhos de pagamento</strong></label>
-                                <div class="atalhos-forma">
-                                    {% for forma in formas_pagamento_meta %}
-                                    <button type="button" class="btn btn-sm btn-outline-primary js-forma-rapida" data-forma-id="{{ forma.id }}" data-forma-codigo="{{ forma.codigo }}">{{ forma.nome }}</button>
-                                    {% endfor %}
-                                </div>
-                            </div>
-
-                            <div id="bloco-dinheiro" class="row mb-3 d-none">
-                                <div class="col-md-5">
-                                    <label for="{{ form.valor_recebido.id_for_label }}"><strong>Valor recebido</strong></label>
-                                    {{ form.valor_recebido|add_class:"form-control form-control-lg"|attr:"id:id_valor_recebido_pos" }}
-                                    {% if form.valor_recebido.errors %}<small class="text-danger">{{ form.valor_recebido.errors|striptags }}</small>{% endif %}
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="d-block"><strong>Troco</strong></label>
-                                    <div class="troco-box">
-                                        <div id="troco-valor" class="troco-valor">R$ 0,00</div>
-                                        <small class="text-muted">Calculado automaticamente para pagamentos em dinheiro.</small>
-                                        <div id="troco-celulas" class="troco-celulas"></div>
+                            <details class="pagamento-advanced" {% if form.observacao.errors %}open{% endif %}>
+                                <summary>
+                                    <span>Mensagem adicional no tal&atilde;o</span>
+                                </summary>
+                                <div class="pagamento-advanced-body">
+                                    <div class="form-group mb-0">
+                                        <label for="{{ form.observacao.id_for_label }}"><strong>Mensagem adicional no tal&atilde;o</strong></label>
+                                        {{ form.observacao|add_class:"form-control"|attr:"placeholder:Ex: troca em ate 7 dias com este comprovante." }}
+                                        {% if form.observacao.errors %}<small class="text-danger">{{ form.observacao.errors|striptags }}</small>{% endif %}
+                                        <small class="text-muted">Esse texto sai impresso no tal&atilde;o para observa&ccedil;&otilde;es curtas ao cliente.</small>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div class="form-group mb-3">
-                                <label for="{{ form.observacao.id_for_label }}"><strong>Mensagem adicional no tal&atilde;o</strong></label>
-                                {{ form.observacao|add_class:"form-control"|attr:"placeholder:Ex: Troca em at&eacute; 7 dias com este comprovante." }}
-                                {% if form.observacao.errors %}<small class="text-danger">{{ form.observacao.errors|striptags }}</small>{% endif %}
-                                <small class="text-muted">Esse texto sai impresso no tal&atilde;o para observa&ccedil;&otilde;es curtas ao cliente.</small>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="d-block mb-2"><strong>Valores r&aacute;pidos</strong></label>
-                                <div class="btn-group btn-group-sm flex-wrap" role="group">
-                                    {% if ordem and ordem_valor_aberto > 0 %}
-                                    <button type="button" class="btn btn-outline-primary js-valor-rapido" data-value="{{ ordem_valor_aberto|floatformat:2 }}">Saldo aberto</button>
-                                    {% endif %}
-                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="30.00">30,00</button>
-                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="50.00">50,00</button>
-                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="100.00">100,00</button>
-                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="150.00">150,00</button>
-                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="200.00">200,00</button>
-                                    <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="300.00">300,00</button>
-                                </div>
-                                {% if ordem and ordem_valor_aberto > 0 %}
-                                <small class="text-muted d-block mt-2">Saldo atual da OS: <strong>R$ {{ ordem_valor_aberto|floatformat:2 }}</strong></small>
-                                {% endif %}
-                            </div>
-
-                            <div class="d-flex justify-content-end">
-                                <button type="submit" id="btn-finalizar-pos" class="btn btn-success btn-lg px-4">
-                                    Finalizar Pagamento
-                                </button>
-                            </div>
+                            </details>
                         </form>
                     </div>
                 </div>
@@ -325,7 +698,7 @@
 
             <div class="col-lg-4">
                 <div class="card shadow-sm border-0 mb-3">
-                    <div class="card-header bg-white"><strong>Resumo R&aacute;pido</strong></div>
+                    <div class="card-header bg-white"><strong>{% if guia_codigo and guia_resumo %}Resumo da Guia{% else %}Resumo R&aacute;pido{% endif %}</strong></div>
                     <div class="card-body">
                         <p class="mb-2"><strong>Caixa:</strong> {% if caixa.aberto %}Aberto{% else %}Fechado{% endif %}</p>
                         {% if ordem %}
@@ -389,38 +762,79 @@
                             <p class="mb-1"><strong>Pre-reserva:</strong> #{{ venda.id }}</p>
                             <p class="mb-1"><strong>Produto:</strong> {{ venda.produto.nome }}</p>
                             <p class="mb-0"><strong>Total:</strong> R$ {{ venda.valor_total|floatformat:2 }}</p>
-                        {% elif guia_codigo and vendas_guia %}
-                            <div class="alert alert-success py-2 mb-2">Guia v&aacute;lida</div>
+                        {% elif guia_codigo and guia_resumo %}
+                            <div class="resumo-guia-card">
+                                <div class="resumo-guia-topline">
+                                    <div>
+                                        <div class="resumo-os-label">Guia pronta para caixa</div>
+                                        <div class="resumo-os-value">{{ guia_resumo.codigo }}</div>
+                                        <small class="text-muted d-block mt-1">Venda a mostrador</small>
+                                    </div>
+                                    <span class="resumo-guia-badge">{{ guia_resumo.status_label }}</span>
+                                </div>
+                                <div class="resumo-os-grid">
+                                    <div class="resumo-os-item">
+                                        <span class="resumo-os-label">Origem</span>
+                                        <div class="resumo-os-value">{{ guia_resumo.origem_label }}</div>
+                                    </div>
+                                    <div class="resumo-os-item">
+                                        <span class="resumo-os-label">Pontos</span>
+                                        <div class="resumo-os-value">{{ guia_resumo.pontos_label }}</div>
+                                    </div>
+                                    <div class="resumo-os-item">
+                                        <span class="resumo-os-label">Itens</span>
+                                        <div class="resumo-os-value">{{ guia_resumo.itens_total }}</div>
+                                    </div>
+                                    <div class="resumo-os-item">
+                                        <span class="resumo-os-label">Unidades</span>
+                                        <div class="resumo-os-value">{{ guia_resumo.quantidade_total }}</div>
+                                    </div>
+                                    <div class="resumo-os-item">
+                                        <span class="resumo-os-label">Operador</span>
+                                        <div class="resumo-os-value">{{ guia_resumo.operadores_label }}</div>
+                                    </div>
+                                    <div class="resumo-os-item">
+                                        <span class="resumo-os-label">Vendedor</span>
+                                        <div class="resumo-os-value">{{ guia_resumo.vendedores_label }}</div>
+                                    </div>
+                                    <div class="resumo-os-item">
+                                        <span class="resumo-os-label">Criada em</span>
+                                        <div class="resumo-os-value">{% if guia_resumo.criado_em %}{{ guia_resumo.criado_em|date:"d/m/Y H:i" }}{% else %}-{% endif %}</div>
+                                    </div>
+                                    <div class="resumo-os-item">
+                                        <span class="resumo-os-label">Total</span>
+                                        <div class="resumo-os-value">R$ {{ guia_resumo.valor_total|floatformat:2 }}</div>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="resumo-os-grid">
                                 <div class="resumo-os-item">
-                                    <span class="resumo-os-label">Guia</span>
-                                    <div class="resumo-os-value">{{ guia_codigo }}</div>
-                                </div>
-                                <div class="resumo-os-item">
-                                    <span class="resumo-os-label">Itens</span>
-                                    <div class="resumo-os-value">{{ vendas_guia|length }}</div>
-                                </div>
-                                <div class="resumo-os-item">
-                                    <span class="resumo-os-label">Total</span>
-                                    <div class="resumo-os-value">R$ {{ guia_total|floatformat:2 }}</div>
-                                </div>
-                                <div class="resumo-os-item">
-                                    <span class="resumo-os-label">Origem</span>
-                                    <div class="resumo-os-value">Venda a mostrador</div>
+                                    <span class="resumo-os-label">Itens em confer&ecirc;ncia</span>
+                                    <div class="resumo-os-value">{{ guia_resumo.itens_total }} linha(s) antes da baixa final</div>
                                 </div>
                             </div>
                             <ul class="resumo-guia-lista">
-                                {% for item_guia in vendas_guia|slice:":4" %}
+                                {% for item_guia in guia_resumo.itens_preview %}
                                 <li>{{ item_guia.quantidade }}x {{ item_guia.produto.nome }} <span class="text-muted">({{ item_guia.ponto_operacional.codigo }})</span></li>
                                 {% endfor %}
                             </ul>
-                            {% if vendas_guia|length > 4 %}
-                            <small class="text-muted">+ {{ vendas_guia|length|add:"-4" }} item(ns) na guia.</small>
+                            {% if guia_resumo.itens_total > 5 %}
+                            <small class="text-muted">+ {{ guia_resumo.itens_total|add:"-5" }} item(ns) na guia.</small>
                             {% endif %}
                             <div class="resumo-os-actions mt-3">
                                 <a href="{% url 'estoque:guia_pagamento' guia_codigo %}" target="_blank" class="btn btn-sm btn-outline-secondary">Abrir guia</a>
                                 <a href="{% url 'estoque:consulta_artigos' %}" class="btn btn-sm btn-outline-dark">Voltar ao POS</a>
                             </div>
+                            {% if composicao_preview %}
+                            <div class="pagamento-misto-resumo mt-3">
+                                <strong>Composi&ccedil;&atilde;o prevista do recebimento</strong>
+                                <ul class="mb-0 mt-2 pl-3">
+                                    {% for item_comp in composicao_preview %}
+                                    <li>{{ item_comp.forma_nome }}: R$ {{ item_comp.valor|floatformat:2 }}{% if item_comp.referencia %} <span class="text-muted">({{ item_comp.referencia }})</span>{% endif %}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
                         {% else %}
                             <p class="mb-0 text-muted">Valide a OS para pagamento vinculado.</p>
                         {% endif %}
@@ -438,9 +852,12 @@
 document.addEventListener("DOMContentLoaded", function () {
     const valorInput = document.getElementById("id_valor_pos");
     const formaInput = document.getElementById("id_forma_pos");
+    const formaSecundariaInput = document.getElementById("id_forma_pagamento_secundaria");
+    const valorSecundarioInput = document.getElementById("id_valor_secundario");
     const valorRecebidoInput = document.getElementById("id_valor_recebido_pos");
     const descontoValorInput = document.getElementById("id_desconto_valor_pos");
     const descontoPercentualInput = document.getElementById("id_desconto_percentual_pos");
+    const referenciaSecundariaInput = document.getElementById("id_referencia_secundaria");
     const formPagamento = document.getElementById("form-pagamento-pos");
     const btnFinalizar = document.getElementById("btn-finalizar-pos");
     const confirmarDescontoInput = document.getElementById("id_confirmar_desconto_critico");
@@ -453,6 +870,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const descontoSubtotal = document.getElementById("desconto-subtotal");
     const descontoTotal = document.getElementById("desconto-total");
     const valorFinalCliente = document.getElementById("valor-final-cliente");
+    const pagamentoMistoResumo = document.getElementById("pagamentoMistoResumo");
     const formasMeta = JSON.parse(document.getElementById("formas-pagamento-meta").textContent || "[]");
     const formasPorId = {};
     formasMeta.forEach(function (item) { formasPorId[String(item.id)] = item.codigo; });
@@ -460,7 +878,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function parseMoney(value) {
         if (value === null || value === undefined || value === "") return 0;
-        const normalized = String(value).replace(/\./g, "").replace(",", ".");
+        let normalized = String(value).trim().replace(/[^\d,.\-]/g, "");
+        const hasComma = normalized.includes(",");
+        const hasDot = normalized.includes(".");
+
+        if (hasComma && hasDot) {
+            if (normalized.lastIndexOf(",") > normalized.lastIndexOf(".")) {
+                normalized = normalized.replace(/\./g, "").replace(",", ".");
+            } else {
+                normalized = normalized.replace(/,/g, "");
+            }
+        } else if (hasComma) {
+            normalized = normalized.replace(/\./g, "").replace(",", ".");
+        } else if (hasDot) {
+            const partes = normalized.split(".");
+            if (partes.length > 2) {
+                const decimal = partes.pop();
+                normalized = partes.join("") + "." + decimal;
+            }
+        }
+
         const parsed = parseFloat(normalized);
         return Number.isFinite(parsed) ? parsed : 0;
     }
@@ -496,6 +933,11 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
+    function descreverFormaPorId(formaId) {
+        const meta = formasMeta.find((item) => String(item.id) === String(formaId || ""));
+        return meta ? meta.nome : "Forma principal";
+    }
+
     function calcularTotaisPagamento() {
         const subtotal = parseMoney(valorInput ? valorInput.value : "");
         let desconto = parseMoney(descontoValorInput ? descontoValorInput.value : "");
@@ -511,10 +953,41 @@ document.addEventListener("DOMContentLoaded", function () {
         return { subtotal, desconto, totalFinal };
     }
 
+    function atualizarResumoPagamentoMisto(totalFinal) {
+        if (!pagamentoMistoResumo) return;
+        const formaPrincipalId = formaInput ? formaInput.value : "";
+        const formaSecundariaId = formaSecundariaInput ? formaSecundariaInput.value : "";
+        const valorSecundario = Math.max(0, parseMoney(valorSecundarioInput ? valorSecundarioInput.value : ""));
+        const referenciaSecundaria = (referenciaSecundariaInput ? referenciaSecundariaInput.value : "").trim();
+
+        if (!formaPrincipalId || !formaSecundariaId || valorSecundario <= 0) {
+            pagamentoMistoResumo.innerHTML = "<strong>Composi&ccedil;&atilde;o atual:</strong> pagamento em forma &uacute;nica.<small>Quando preencher a forma secund&aacute;ria, o valor principal ser&aacute; recalculado automaticamente.</small>";
+            return {
+                totalDinheiro: (formasPorId[String(formaPrincipalId)] === "dinheiro") ? totalFinal : 0,
+                valorPrincipal: totalFinal,
+            };
+        }
+
+        const valorPrincipal = Math.max(0, totalFinal - valorSecundario);
+        const descricaoPrincipal = descreverFormaPorId(formaPrincipalId);
+        const descricaoSecundaria = descreverFormaPorId(formaSecundariaId);
+        const partes = [
+            `${descricaoPrincipal}: ${formatMoney(valorPrincipal)}`,
+            `${descricaoSecundaria}: ${formatMoney(valorSecundario)}${referenciaSecundaria ? " (" + referenciaSecundaria + ")" : ""}`,
+        ];
+        pagamentoMistoResumo.innerHTML = `<strong>Composi&ccedil;&atilde;o atual:</strong> ${partes.join(" + ")}<small>Total conferido automaticamente: ${formatMoney(totalFinal)}.</small>`;
+
+        let totalDinheiro = 0;
+        if (formasPorId[String(formaPrincipalId)] === "dinheiro") totalDinheiro += valorPrincipal;
+        if (formasPorId[String(formaSecundariaId)] === "dinheiro") totalDinheiro += valorSecundario;
+        return { totalDinheiro, valorPrincipal };
+    }
+
     function atualizarTroco() {
         if (!formaInput || !blocoDinheiro || !trocoValor) return;
-        const codigo = formasPorId[String(formaInput.value || "")];
-        const isDinheiro = codigo === "dinheiro";
+        const totais = calcularTotaisPagamento();
+        const composicao = atualizarResumoPagamentoMisto(totais.totalFinal);
+        const isDinheiro = composicao.totalDinheiro > 0;
         blocoDinheiro.classList.toggle("d-none", !isDinheiro);
         atualizarAtalhosForma();
         if (!isDinheiro) {
@@ -522,9 +995,8 @@ document.addEventListener("DOMContentLoaded", function () {
             if (trocoCelulas) trocoCelulas.innerHTML = "";
             return;
         }
-        const totais = calcularTotaisPagamento();
         const valorRecebido = parseMoney(valorRecebidoInput ? valorRecebidoInput.value : "");
-        const troco = Math.max(0, valorRecebido - totais.totalFinal);
+        const troco = Math.max(0, valorRecebido - composicao.totalDinheiro);
         trocoValor.textContent = formatMoney(troco);
         sugerirCelulas(troco);
     }
@@ -548,7 +1020,10 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     if (formaInput) formaInput.addEventListener("change", atualizarTroco);
+    if (formaSecundariaInput) formaSecundariaInput.addEventListener("change", atualizarTroco);
     if (valorInput) valorInput.addEventListener("input", atualizarTroco);
+    if (valorSecundarioInput) valorSecundarioInput.addEventListener("input", atualizarTroco);
+    if (referenciaSecundariaInput) referenciaSecundariaInput.addEventListener("input", atualizarTroco);
     if (descontoValorInput) descontoValorInput.addEventListener("input", function () {
         if (descontoPercentualInput && descontoValorInput.value) descontoPercentualInput.value = "";
         atualizarTroco();
@@ -588,7 +1063,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const percentualDesconto = totais.subtotal > 0 ? (totais.desconto / totais.subtotal) * 100 : 0;
                 if (percentualDesconto >= limiarAntifraude && totais.desconto > 0) {
                     const confirmar = window.confirm(
-                        "Desconto critico detectado. Deseja confirmar a operacao?"
+                        "Desconto cr&iacute;tico detectado. Deseja confirmar a opera&ccedil;&atilde;o?"
                     );
                     if (!confirmar) {
                         event.preventDefault();
@@ -614,4 +1089,5 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 {% endblock %}
+
 

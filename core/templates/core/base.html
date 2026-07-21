@@ -1,4 +1,4 @@
-﻿{% load static %}
+﻿{% load static permission_tags %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -78,6 +78,7 @@
   }
   .navbar .search-container { width: 240px; }
   </style>
+  {% block styles %}{% endblock %}
   {% endblock %}
   <style>
   .main-sidebar {
@@ -262,6 +263,13 @@
                   </a>
                 </li>
                 <li class="nav-item">
+                  <a href="{% url 'ordens:conciliacoes_ordens' %}"
+                     class="nav-link {% if menu_sub == 'conciliacao_ordens' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Conciliação de Ordens</p>
+                  </a>
+                </li>
+                <li class="nav-item">
                   <a href="{% url 'ordens:expedir_parceiro' %}"
                      class="nav-link {% if menu_sub == 'expedir_parceiro' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
@@ -359,6 +367,14 @@
                     <p>Movimentacoes</p>
                   </a>
                 </li>
+                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.perm_estoque_cadastro_produto %}
+                <li class="nav-item">
+                  <a href="{% url 'estoque:entradas_mercadoria' %}" class="nav-link {% if menu_sub == 'entradas_mercadoria' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Entradas</p>
+                  </a>
+                </li>
+                {% endif %}
                 <li class="nav-item">
                   <a href="{% url 'estoque:reservas_clientes' %}" class="nav-link {% if menu_sub == 'reservas_clientes' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
@@ -413,6 +429,12 @@
                   </a>
                 </li>
                 {% endif %}
+                <li class="nav-item">
+                  <a href="{% url 'estoque:inventarios_estoque' %}" class="nav-link {% if menu_sub == 'inventarios_estoque' %}active{% endif %}">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Inventários</p>
+                  </a>
+                </li>
               </ul>
             </li>
             {% endif %}
@@ -433,7 +455,7 @@
                 <p>Prêmios e Comissões</p>
               </a>
             </li>
-            {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.tipo_usuario == 'atendente' or user.acesso_caixa_operacional_extra %}
+            {% if user|has_role_alias:"caixa_operational" or user|has_role_alias:"caixa_financial" %}
             <li class="nav-item has-treeview {% if menu_app == 'caixa' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'caixa' %}active{% endif %}">
                 <i class="nav-icon fas fa-cash-register"></i>
@@ -444,7 +466,7 @@
               </a>
               <ul class="nav nav-treeview">
                 <li class="nav-item">
-                  {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+                  {% if user|has_role_alias:"caixa_financial" %}
                   <a href="{% url 'caixa:dashboard_caixa' %}"
                      class="nav-link {% if menu_sub == 'dashboard_caixa' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
@@ -467,7 +489,7 @@
                   </a>
                 </li>
                 <li class="nav-item">
-                  {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+                  {% if user|has_role_alias:"caixa_financial" %}
                   <a href="{% url 'caixa:relatorios' %}"
                      class="nav-link {% if menu_sub == 'relatorios' %}active{% endif %}">
                     <i class="far fa-circle nav-icon"></i>
@@ -489,7 +511,7 @@
                     <p>Registrar Saída</p>
                   </a>
                 </li>
-                {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+                {% if user|has_role_alias:"caixa_financial" %}
                 <li class="nav-item">
                   <a href="{% url 'caixa:contas_receber' %}"
                      class="nav-link {% if menu_sub == 'contas_receber' %}active{% endif %}">
@@ -557,7 +579,7 @@
               </ul>
             </li>
             <!-- Configurações -->
-            {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
+            {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' or user.acesso_configuracoes_extra %}
             <li class="nav-item has-treeview {% if menu_app == 'configuracoes' %}menu-open{% endif %}">
               <a href="#" class="nav-link {% if menu_app == 'configuracoes' %}active{% endif %}">
                 <i class="nav-icon fas fa-cogs"></i>
@@ -567,6 +589,7 @@
                 </p>
               </a>
               <ul class="nav nav-treeview">
+                {% if not setup_inicial_concluido %}
                 <li class="nav-item">
                   <a href="{% url 'configuracoes:setup_inicial' %}"
                      class="nav-link {% if menu_sub == 'setup_inicial' %}active{% endif %}">
@@ -574,6 +597,7 @@
                     <p>Setup Inicial</p>
                   </a>
                 </li>
+                {% endif %}
                 <li class="nav-item">
                   <a href="{% url 'configuracoes:painel' %}"
                      class="nav-link {% if menu_sub == 'painel' %}active{% endif %}">
@@ -871,6 +895,7 @@ document.addEventListener("DOMContentLoaded", function () {
 {% block extra_js %}{% endblock %}
 </body>
 </html>
+
 
 
 

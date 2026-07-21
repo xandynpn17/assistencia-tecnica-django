@@ -1,0 +1,305 @@
+{% extends "core/base.html" %}
+
+{% block title %}Painel da Venda a Mostrador{% endblock %}
+
+{% block extra_css %}
+<style>
+  .pdv-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .pdv-kpi-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+    padding: 14px;
+  }
+  .pdv-kpi-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #627487;
+    margin-bottom: 6px;
+  }
+  .pdv-kpi-value {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #183247;
+  }
+  .pdv-kpi-note {
+    margin-top: 4px;
+    font-size: .8rem;
+    color: #5f6b77;
+  }
+  .pdv-board-grid {
+    display: grid;
+    grid-template-columns: 1.2fr .8fr;
+    gap: 14px;
+  }
+  .pdv-panel-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 14px;
+    background: #fff;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .pdv-panel-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #183247;
+    margin-bottom: 12px;
+  }
+  .pdv-list-clean {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .pdv-list-clean li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #edf2f7;
+  }
+  .pdv-list-clean li:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .pdv-meta-muted {
+    font-size: .82rem;
+    color: #5f6b77;
+  }
+  @media (max-width: 991.98px) {
+    .pdv-kpi-grid,
+    .pdv-board-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ui-module-header">
+  <div>
+    <h1 class="ui-module-title">Painel da venda a mostrador</h1>
+    <p class="ui-module-subtitle">Leitura operacional de guias, cestos, cancelamentos e performance do balcao.</p>
+  </div>
+  <div class="ui-module-actions">
+    <a href="{% url 'estoque:consulta_artigos' %}" class="btn btn-outline-primary btn-sm">Voltar ao POS</a>
+    <a href="{% url 'estoque:pos_venda_balcao' %}" class="btn btn-outline-secondary btn-sm">Pos-venda</a>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="form-row align-items-end">
+      <div class="form-group col-md-2">
+        <label>Data inicial</label>
+        <input type="date" name="data_inicio" class="form-control" value="{{ filtros.data_inicio }}">
+      </div>
+      <div class="form-group col-md-2">
+        <label>Data final</label>
+        <input type="date" name="data_fim" class="form-control" value="{{ filtros.data_fim }}">
+      </div>
+      <div class="form-group col-md-3">
+        <label>Vendedor</label>
+        <select name="vendedor" class="form-control">
+          <option value="">Todos</option>
+          {% for vendedor_item in vendedores %}
+          <option value="{{ vendedor_item.numero_vendedor }}" {% if filtros.vendedor == vendedor_item.numero_vendedor %}selected{% endif %}>
+            {{ vendedor_item.numero_vendedor }} - {{ vendedor_item.username }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group col-md-3">
+        <label>Operador</label>
+        <select name="operador_id" class="form-control">
+          <option value="">Todos</option>
+          {% for operador in operadores %}
+          <option value="{{ operador.id }}" {% if filtros.operador_id == operador.id|stringformat:"s" %}selected{% endif %}>{{ operador.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group col-md-2">
+        <label>Ponto</label>
+        <select name="ponto_id" class="form-control">
+          <option value="">Todos</option>
+          {% for ponto in pontos %}
+          <option value="{{ ponto.id }}" {% if filtros.ponto_id == ponto.id|stringformat:"s" %}selected{% endif %}>{{ ponto.codigo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group col-md-12 d-flex justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+        <a href="{% url 'estoque:painel_venda_mostrador' %}" class="btn btn-outline-secondary">Limpar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="pdv-kpi-grid">
+  <div class="pdv-kpi-card">
+    <div class="pdv-kpi-label">Total vendido</div>
+    <div class="pdv-kpi-value">R$ {{ resumo_pdv.resumo.total_vendido|floatformat:2 }}</div>
+    <div class="pdv-kpi-note">{{ resumo_pdv.resumo.itens_vendidos }} unidade(s) entregues ao cliente.</div>
+  </div>
+  <div class="pdv-kpi-card">
+    <div class="pdv-kpi-label">Ticket medio</div>
+    <div class="pdv-kpi-value">R$ {{ resumo_pdv.resumo.ticket_medio|floatformat:2 }}</div>
+    <div class="pdv-kpi-note">{{ resumo_pdv.resumo.guias_pagas }} guia(s) quitada(s) no periodo.</div>
+  </div>
+  <div class="pdv-kpi-card">
+    <div class="pdv-kpi-label">Guias e pendencias</div>
+    <div class="pdv-kpi-value">{{ resumo_pdv.resumo.guias_pendentes }} pendente(s)</div>
+    <div class="pdv-kpi-note">{{ resumo_pdv.resumo.guias_divergentes }} divergente(s) e {{ resumo_pdv.resumo.estornos }} estorno(s).</div>
+  </div>
+  <div class="pdv-kpi-card">
+    <div class="pdv-kpi-label">Risco operacional</div>
+    <div class="pdv-kpi-value">{{ resumo_pdv.resumo.cestos_abandonados }} cesto(s)</div>
+    <div class="pdv-kpi-note">{{ resumo_pdv.resumo.cancelamentos }} cancelamento(s) e {{ resumo_pdv.resumo.abertas }} item(ns) ainda em pre-reserva.</div>
+  </div>
+</div>
+
+<div class="pdv-board-grid">
+  <div>
+    <div class="pdv-panel-card">
+      <div class="pdv-panel-title">Top produtos</div>
+      <ul class="pdv-list-clean">
+        {% for item in resumo_pdv.top_produtos %}
+        <li>
+          <div>
+            <strong>{{ item.produto__nome }}</strong>
+            <div class="pdv-meta-muted">{{ item.quantidade_total }} unidade(s)</div>
+          </div>
+          <div class="text-right">
+            <strong>R$ {{ item.valor_total|floatformat:2 }}</strong>
+          </div>
+        </li>
+        {% empty %}
+        <li><span class="pdv-meta-muted">Sem vendas suficientes no periodo.</span></li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="pdv-panel-card">
+      <div class="pdv-panel-title">Guias com atencao</div>
+      <div class="row">
+        <div class="col-md-6">
+          <h6 class="mb-2">Pendentes</h6>
+          <ul class="pdv-list-clean">
+            {% for guia in resumo_pdv.guias_pendentes %}
+            <li>
+              <div>
+                <strong>{{ guia.guia }}</strong>
+                <div class="pdv-meta-muted">{{ guia.itens_total }} item(ns) | R$ {{ guia.valor_em_aberto|floatformat:2 }} em aberto</div>
+              </div>
+              <a href="{% url 'caixa:registrar_pagamento' %}?guia={{ guia.guia }}" class="btn btn-sm btn-outline-primary">Ir caixa</a>
+            </li>
+            {% empty %}
+            <li><span class="pdv-meta-muted">Nenhuma guia pendente.</span></li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="col-md-6">
+          <h6 class="mb-2">Divergentes</h6>
+          <ul class="pdv-list-clean">
+            {% for guia in resumo_pdv.guias_divergentes %}
+            <li>
+              <div>
+                <strong>{{ guia.guia }}</strong>
+                <div class="pdv-meta-muted">{{ guia.itens_pre_reserva }} pre-reserva / {{ guia.itens_vendida }} vendida(s)</div>
+              </div>
+              <a href="{% url 'estoque:guia_pagamento' guia.guia %}" class="btn btn-sm btn-outline-danger">Revisar</a>
+            </li>
+            {% empty %}
+            <li><span class="pdv-meta-muted">Sem divergencias recentes.</span></li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="pdv-panel-card">
+      <div class="pdv-panel-title">Top vendedores</div>
+      <ul class="pdv-list-clean">
+        {% for item in resumo_pdv.top_vendedores %}
+        <li>
+          <div>
+            <strong>{{ item.funcionario_numero|default:"Sem numero" }}</strong>
+            <div class="pdv-meta-muted">{{ item.quantidade_total }} unidade(s)</div>
+          </div>
+          <div class="text-right">
+            <strong>R$ {{ item.valor_total|floatformat:2 }}</strong>
+          </div>
+        </li>
+        {% empty %}
+        <li><span class="pdv-meta-muted">Sem desempenho consolidado ainda.</span></li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="pdv-panel-card">
+      <div class="pdv-panel-title">Top operadores</div>
+      <ul class="pdv-list-clean">
+        {% for item in resumo_pdv.top_operadores %}
+        <li>
+          <div>
+            <strong>{{ item.usuario__username|default:"Sem operador" }}</strong>
+            <div class="pdv-meta-muted">{{ item.vendas_total }} registro(s) concluido(s)</div>
+          </div>
+          <div class="text-right">
+            <strong>R$ {{ item.valor_total|floatformat:2 }}</strong>
+          </div>
+        </li>
+        {% empty %}
+        <li><span class="pdv-meta-muted">Sem operadores consolidados no periodo.</span></li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="pdv-panel-card">
+      <div class="pdv-panel-title">Cestos abandonados</div>
+      <ul class="pdv-list-clean">
+        {% for cesto in resumo_pdv.cestos_abandonados_lista %}
+        <li>
+          <div>
+            <strong>{{ cesto.cesto_codigo }}</strong>
+            <div class="pdv-meta-muted">{{ cesto.itens_total }} item(ns) | parado ha {{ cesto.tempo_parado_minutos }} min</div>
+          </div>
+          <div class="text-right">
+            <strong>R$ {{ cesto.valor_total|floatformat:2 }}</strong>
+          </div>
+        </li>
+        {% empty %}
+        <li><span class="pdv-meta-muted">Sem cestos antigos no momento.</span></li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="pdv-panel-card">
+      <div class="pdv-panel-title">Estornos recentes</div>
+      <ul class="pdv-list-clean">
+        {% for evento in resumo_pdv.estornos_recentes %}
+        <li>
+          <div>
+            <strong>{{ evento.evento }}</strong>
+            <div class="pdv-meta-muted">{{ evento.descricao }}</div>
+          </div>
+          <div class="text-right">
+            <strong>{% if evento.valor %}R$ {{ evento.valor|floatformat:2 }}{% else %}-{% endif %}</strong>
+            <div class="pdv-meta-muted">{{ evento.criado_em|date:"d/m/Y H:i" }}</div>
+          </div>
+        </li>
+        {% empty %}
+        <li><span class="pdv-meta-muted">Sem estornos operacionais recentes.</span></li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

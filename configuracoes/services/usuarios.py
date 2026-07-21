@@ -1,4 +1,4 @@
-from django.db import IntegrityError
+﻿from django.db import IntegrityError
 
 
 def normalizar_numero_vendedor(valor):
@@ -30,3 +30,4 @@ def salvar_usuario_com_numero_vendedor(usuario, super_save, *, tentativas=6):
     if ultima_excecao:
         raise ultima_excecao
     return super_save()
+

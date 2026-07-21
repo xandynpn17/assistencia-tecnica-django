@@ -3,6 +3,7 @@ param(
     [string]$HostIp = "",
     [string]$SourceDbEnv = ".env.postgres.local",
     [string]$OutputEnv = ".env.local",
+    [string]$RecoveryKey = "",
     [switch]$Overwrite
 )
 
@@ -71,6 +72,7 @@ if ((Test-Path $OutputEnv) -and -not $Overwrite) {
     throw "Arquivo '$OutputEnv' ja existe. Use -Overwrite para recriar."
 }
 
+$existingEnv = Read-EnvFile -Path $OutputEnv
 $dbEnv = Read-EnvFile -Path $SourceDbEnv
 $required = @("DJANGO_DB_ENGINE", "DJANGO_DB_NAME", "DJANGO_DB_USER", "DJANGO_DB_PASSWORD", "DJANGO_DB_HOST", "DJANGO_DB_PORT")
 $missing = @()
@@ -85,7 +87,11 @@ if ($missing.Count -gt 0) {
 
 $allowedHosts = @("127.0.0.1", "localhost", $HostIp) -join ","
 $csrfOrigins = @("http://127.0.0.1:$Port", "http://localhost:$Port", "http://$HostIp`:$Port") -join ","
-$secretKey = New-DjangoSecretKey
+$secretKey = if ($existingEnv.ContainsKey("DJANGO_SECRET_KEY") -and $existingEnv["DJANGO_SECRET_KEY"]) {
+    $existingEnv["DJANGO_SECRET_KEY"]
+} else {
+    New-DjangoSecretKey
+}
 $connMaxAge = if ($dbEnv.ContainsKey("DJANGO_DB_CONN_MAX_AGE") -and $dbEnv["DJANGO_DB_CONN_MAX_AGE"]) { $dbEnv["DJANGO_DB_CONN_MAX_AGE"] } else { "60" }
 $connectTimeout = if ($dbEnv.ContainsKey("DJANGO_DB_CONNECT_TIMEOUT") -and $dbEnv["DJANGO_DB_CONNECT_TIMEOUT"]) { $dbEnv["DJANGO_DB_CONNECT_TIMEOUT"] } else { "5" }
 
@@ -106,9 +112,24 @@ $lines = @(
     "DJANGO_DB_CONNECT_TIMEOUT=$connectTimeout"
 )
 
+$recoveryKeyFinal = if ($RecoveryKey) {
+    $RecoveryKey
+} elseif ($existingEnv.ContainsKey("DJANGO_LOCAL_RECOVERY_KEY")) {
+    $existingEnv["DJANGO_LOCAL_RECOVERY_KEY"]
+} else {
+    ""
+}
+
+if ($recoveryKeyFinal) {
+    $lines += "DJANGO_LOCAL_RECOVERY_KEY=$recoveryKeyFinal"
+}
+
 $lines | Set-Content -Path $OutputEnv -Encoding UTF8
 
 Write-Host "Arquivo local criado: $OutputEnv"
 Write-Host "IP do servidor local: $HostIp"
 Write-Host "Endereco para outros PCs: http://$HostIp`:$Port/"
+if ($recoveryKeyFinal) {
+    Write-Host "Recuperacao local antes do login: habilitada"
+}
 Write-Host "Segredos e senha nao foram exibidos."

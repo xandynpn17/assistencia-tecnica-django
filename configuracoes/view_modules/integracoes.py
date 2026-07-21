@@ -1,4 +1,4 @@
-from django.http import JsonResponse
+﻿from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.shortcuts import render
 
@@ -51,7 +51,11 @@ def logs_integracoes_impl(request):
             "canal": canal,
             "status_filtro": status,
             "evento": evento,
+            "operacao_tab": "logs",
+            "operacao_title": "Logs de integracoes",
+            "operacao_subtitle": "Visualize eventos de webhook, e-mail, WhatsApp e rotinas internas com filtros rapidos.",
             "menu_app": "configuracoes",
             "menu_sub": "logs_integracoes",
         },
     )
+

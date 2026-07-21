@@ -108,6 +108,69 @@ function Ensure-ProjectPostgres {
     }
 }
 
+function Get-ProjectRunserverProcesses {
+    param([string]$ManagePyPath)
+
+    $managePyNormalizado = $ManagePyPath.ToLowerInvariant()
+    return @(Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -eq "python.exe" -and
+        $_.CommandLine -and
+        $_.CommandLine.ToLowerInvariant().Contains($managePyNormalizado) -and
+        $_.CommandLine -match "\brunserver\b"
+    } | Sort-Object ProcessId -Unique)
+}
+
+function Stop-ProjectRunserverProcesses {
+    param([string]$ManagePyPath)
+
+    $processos = @(Get-ProjectRunserverProcesses -ManagePyPath $ManagePyPath)
+    if (-not $processos.Count) {
+        return
+    }
+
+    Write-Host "Instancias antigas do Django encontradas para este projeto. Limpando antes de subir a nova sessao..."
+    foreach ($processo in $processos) {
+        try {
+            Stop-Process -Id $processo.ProcessId -Force -ErrorAction Stop
+            Write-Host (" - PID {0} encerrado." -f $processo.ProcessId)
+        } catch {
+            Write-Warning ("Nao foi possivel encerrar PID {0}: {1}" -f $processo.ProcessId, $_.Exception.Message)
+        }
+    }
+
+    Start-Sleep -Seconds 1
+}
+
+function Get-ListeningProcessIdsForPort {
+    param([int]$TargetPort)
+
+    try {
+        return @(Get-NetTCPConnection -LocalPort $TargetPort -State Listen -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique)
+    } catch {
+        return @()
+    }
+}
+
+function Assert-PortAvailableForProject {
+    param(
+        [string]$ManagePyPath,
+        [int]$TargetPort
+    )
+
+    $escutando = @(Get-ListeningProcessIdsForPort -TargetPort $TargetPort)
+    if (-not $escutando.Count) {
+        return
+    }
+
+    $runserversProjeto = @(Get-ProjectRunserverProcesses -ManagePyPath $ManagePyPath)
+    $pidsProjeto = @($runserversProjeto | ForEach-Object { $_.ProcessId })
+    $conflitantes = @($escutando | Where-Object { $_ -notin $pidsProjeto })
+
+    if ($conflitantes.Count) {
+        throw "A porta $TargetPort ja esta ocupada por outro processo (PID(s): $($conflitantes -join ', ')). Feche esse processo ou use outra porta no run_local.ps1."
+    }
+}
+
 $envFullPath = Join-Path $PSScriptRoot $EnvPath
 $managePy = Join-Path $PSScriptRoot "manage.py"
 
@@ -139,4 +202,8 @@ if ($CheckOnly) {
     Write-Host "CheckOnly ativo: configuracao local validada, sem iniciar servidor."
     exit 0
 }
-& $python.File @($python.Args + @($managePy, "runserver", "$BindHost`:$Port"))
+
+Stop-ProjectRunserverProcesses -ManagePyPath $managePy
+Assert-PortAvailableForProject -ManagePyPath $managePy -TargetPort $Port
+
+& $python.File @($python.Args + @($managePy, "runserver", "$BindHost`:$Port", "--noreload"))
