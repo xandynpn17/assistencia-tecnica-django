@@ -291,17 +291,22 @@
           <div class="border rounded p-3 bg-light">
             <h6 class="font-weight-bold mb-3"><i class="fas fa-shield-alt mr-2"></i> Backup e recuperacao</h6>
             <div class="row">
-              <div class="col-md-4">
+              <div class="col-md-7">
+                <div class="form-group">
+                  <label>{{ form.backup_diretorio_oficial.label }}</label>
+                  {{ form.backup_diretorio_oficial }}
+                  {% if form.backup_diretorio_oficial.help_text %}<small class="form-text text-muted">{{ form.backup_diretorio_oficial.help_text }}</small>{% endif %}
+                </div>
+              </div>
+              <div class="col-md-5">
                 <div class="form-group mb-0">
                   <label>{{ form.backup_retencao_dias.label }}</label>
                   {{ form.backup_retencao_dias }}
                 </div>
               </div>
-              <div class="col-md-8">
-                <div class="small text-muted pt-2">
-                  Defina por quantos dias os backups oficiais devem ser mantidos. A geracao e a restauracao continuam disponiveis nas telas operacionais para evitar erros durante o uso.
-                </div>
-              </div>
+            </div>
+            <div class="small text-muted">
+              Esta pasta passa a ser a fonte oficial para gerar backups autom?ticos, listar arquivos nas telas de restore e permitir recupera??o antes do login.
             </div>
           </div>
         </div>

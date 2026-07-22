@@ -1,6 +1,8 @@
 import ipaddress
 import json
 import shutil
+import tempfile
+import zipfile
 from pathlib import Path
 import logging
 from unittest.mock import Mock
@@ -24,7 +26,24 @@ logger = logging.getLogger(__name__)
 
 
 def _backup_dir():
-    return Path(settings.BASE_DIR) / "backups"
+    try:
+        return ConfiguracaoSistema.resolver_diretorio_backup()
+    except Exception:
+        return Path(settings.BASE_DIR) / "backups"
+
+
+def _salvar_upload_restore(arquivo):
+    nome = (getattr(arquivo, "name", "backup.zip") or "backup.zip").lower()
+    if not nome.endswith(".zip"):
+        raise ValueError("Envie um arquivo .zip v?lido para restaura??o.")
+
+    temp_dir = Path(tempfile.gettempdir()) / "abgest_restore_uploads"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    destino = temp_dir / f"restore_{next(tempfile._get_candidate_names())}.zip"
+    with destino.open("wb") as fp:
+        for chunk in arquivo.chunks():
+            fp.write(chunk)
+    return destino
 
 
 def _database_engine_label():
@@ -37,7 +56,33 @@ def _database_engine_label():
 
 
 def _ler_manifesto(item):
-    manifesto = item / "manifest.json" if item.is_dir() else item.parent / "manifest.json"
+    if item.is_dir():
+        manifesto = item / "manifest.json"
+        if not manifesto.exists():
+            return {}
+        try:
+            return json.loads(manifesto.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            return {}
+
+    if item.is_file() and item.suffix.lower() == ".zip":
+        try:
+            with zipfile.ZipFile(item, "r") as zipf:
+                manifest_name = next(
+                    (
+                        name
+                        for name in zipf.namelist()
+                        if name.endswith("/manifest.json") or name == "manifest.json"
+                    ),
+                    None,
+                )
+                if not manifest_name:
+                    return {}
+                return json.loads(zipf.read(manifest_name).decode("utf-8"))
+        except (OSError, KeyError, json.JSONDecodeError, UnicodeDecodeError, zipfile.BadZipFile):
+            return {}
+
+    manifesto = item.parent / "manifest.json"
     if not manifesto.exists():
         return {}
     try:
@@ -71,14 +116,24 @@ def _listar_backups(limit=30):
     for item in sorted(backup_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
         if not (item.is_dir() or item.is_file()):
             continue
-        if item.is_file() and item.suffix.lower() == ".zip" and item.with_suffix("").is_dir():
+        if item.is_file() and item.suffix.lower() not in {".zip", ".sqlite3", ".gz", ".dump"}:
+            continue
+        if item.is_dir() and item.with_suffix(".zip").exists():
             continue
         manifesto = _ler_manifesto(item)
+        if item.is_dir() and not (
+            (item / "manifest.json").exists()
+            or (item / "database.dump").exists()
+            or (item / "database.sqlite3").exists()
+            or (item / "database.sqlite3.gz").exists()
+        ):
+            continue
         itens.append(
             {
                 "path": str(item),
                 "name": item.name,
                 "is_dir": item.is_dir(),
+                "is_zip": item.is_file() and item.suffix.lower() == ".zip",
                 "modified_at": item.stat().st_mtime,
                 "created_at": manifesto.get("created_at", ""),
                 "engine": manifesto.get("engine", ""),
@@ -166,9 +221,10 @@ def _executar_restore(
     exige_chave_recuperacao=False,
 ):
     backup_path = (request.POST.get("arquivo") or "").strip()
+    backup_upload = request.FILES.get("arquivo_upload")
     confirmar = (request.POST.get("confirmar") or "").strip().upper()
     if confirmar != "RESTAURAR":
-        messages.error(request, "Confirmação inválida. Digite RESTAURAR para continuar.")
+        messages.error(request, "Confirma??o inv?lida. Digite RESTAURAR para continuar.")
         return redirect(redirect_name)
     if request.POST.get("ciente_restore") != "1":
         messages.error(request, "Confirme que entende o risco do restore antes de continuar.")
@@ -176,34 +232,44 @@ def _executar_restore(
     if exige_chave_recuperacao:
         chave = (request.POST.get("recovery_key") or "").strip()
         if chave != getattr(settings, "LOCAL_RECOVERY_KEY", ""):
-            messages.error(request, "Chave de recuperação inválida.")
+            messages.error(request, "Chave de recupera??o inv?lida.")
             return redirect(redirect_name)
-    if not backup_path:
-        messages.error(request, "Selecione um backup válido.")
+    if not backup_path and not backup_upload:
+        messages.error(request, "Selecione um backup da pasta oficial ou envie um arquivo .zip v?lido.")
         return redirect(redirect_name)
 
-    backup_absoluto = Path(backup_path).resolve()
-    backup_dir_abs = _backup_dir().resolve()
-    if backup_dir_abs not in backup_absoluto.parents:
-        messages.error(request, "Arquivo inválido: use apenas backups da pasta oficial.")
-        return redirect(redirect_name)
-    if backup_absoluto.is_file() and backup_absoluto.suffix.lower() not in {".sqlite3", ".gz", ".dump"}:
-        messages.error(request, "Formato de arquivo inválido para restore.")
-        return redirect(redirect_name)
-    if not backup_absoluto.exists():
-        messages.error(request, "Backup não encontrado.")
-        return redirect(redirect_name)
-
-    restore_media = bool(request.POST.get("restore_media"))
-    repair_single_tenant = bool(request.POST.get("repair_single_tenant"))
-
+    backup_absoluto = None
+    backup_origem_label = ""
+    arquivo_temporario = None
     try:
+        if backup_upload:
+            arquivo_temporario = _salvar_upload_restore(backup_upload)
+            backup_absoluto = arquivo_temporario.resolve()
+            backup_origem_label = getattr(backup_upload, "name", backup_absoluto.name)
+        else:
+            backup_absoluto = Path(backup_path).resolve()
+            backup_origem_label = str(backup_absoluto)
+            backup_dir_abs = _backup_dir().resolve()
+            if backup_dir_abs not in backup_absoluto.parents:
+                messages.error(request, "Arquivo inv?lido: use apenas backups da pasta oficial.")
+                return redirect(redirect_name)
+
+        if backup_absoluto.is_file() and backup_absoluto.suffix.lower() not in {".sqlite3", ".gz", ".dump", ".zip"}:
+            messages.error(request, "Formato de arquivo inv?lido para restore.")
+            return redirect(redirect_name)
+        if not backup_absoluto.exists():
+            messages.error(request, "Backup n?o encontrado.")
+            return redirect(redirect_name)
+
+        restore_media = bool(request.POST.get("restore_media"))
+        repair_single_tenant = bool(request.POST.get("repair_single_tenant"))
+
         registrar_evento_configuracao(
             usuario=getattr(request, "user", None) if getattr(getattr(request, "user", None), "is_authenticated", False) else None,
             acao="restore_solicitado",
             origem=origem,
             alvo="database",
-            depois={"arquivo": str(backup_absoluto), "usuario": usuario_label},
+            depois={"arquivo": backup_origem_label, "usuario": usuario_label},
         )
         call_command(
             "restore_db",
@@ -217,13 +283,15 @@ def _executar_restore(
             acao="restore_executado",
             origem=origem,
             alvo="database",
-            depois={"arquivo": str(backup_absoluto), "usuario": usuario_label},
+            depois={"arquivo": backup_origem_label, "usuario": usuario_label},
         )
         emitir_evento_interno(
             "restore.executado",
-            {"usuario": usuario_label, "arquivo": str(backup_absoluto), "status": "sucesso", "origem": origem},
+            {"usuario": usuario_label, "arquivo": backup_origem_label, "status": "sucesso", "origem": origem},
         )
         messages.success(request, "Restore executado com sucesso.")
+    except ValueError as exc:
+        messages.error(request, str(exc))
     except Exception as exc:
         logger.exception("falha_restore_banco")
         registrar_evento_configuracao(
@@ -231,14 +299,18 @@ def _executar_restore(
             acao="restore_falha",
             origem=origem,
             alvo="database",
-            depois={"arquivo": str(backup_absoluto), "usuario": usuario_label, "erro": str(exc)},
+            depois={"arquivo": backup_origem_label or backup_path, "usuario": usuario_label, "erro": str(exc)},
         )
         emitir_evento_interno(
             "restore.executado",
-            {"usuario": usuario_label, "arquivo": str(backup_absoluto), "status": "falha", "erro": str(exc), "origem": origem},
+            {"usuario": usuario_label, "arquivo": backup_origem_label or backup_path, "status": "falha", "erro": str(exc), "origem": origem},
         )
         messages.error(request, f"Falha no restore: {exc}")
+    finally:
+        if arquivo_temporario and arquivo_temporario.exists():
+            arquivo_temporario.unlink(missing_ok=True)
     return redirect(redirect_name)
+
 
 
 def backup_banco_impl(request, logger):

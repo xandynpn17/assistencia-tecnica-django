@@ -1,4 +1,6 @@
-﻿from django.db import IntegrityError, models, transaction
+﻿from pathlib import Path
+
+from django.db import DatabaseError, IntegrityError, OperationalError, ProgrammingError, models, transaction
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
@@ -805,6 +807,12 @@ class ConfiguracaoSistema(models.Model):
         default=15,
         verbose_name="Retenção de backups (dias)",
     )
+    backup_diretorio_oficial = models.CharField(
+        max_length=260,
+        blank=True,
+        default="",
+        verbose_name="Pasta oficial de backups",
+    )
     lgpd_mascarar_documento = models.BooleanField(
         default=True,
         verbose_name="Mascarar documentos em telas de consulta",
@@ -968,6 +976,23 @@ class ConfiguracaoSistema(models.Model):
     def get_configuracao(cls):
         obj, created = cls.objects.get_or_create(pk=1)
         return obj
+
+    @classmethod
+    def resolver_diretorio_backup(cls):
+        default_dir = Path(settings.BASE_DIR) / "backups"
+        try:
+            config = cls.get_configuracao()
+        except (DatabaseError, OperationalError, ProgrammingError):
+            return default_dir
+
+        diretorio = (getattr(config, "backup_diretorio_oficial", "") or "").strip()
+        if not diretorio:
+            return default_dir
+
+        path = Path(diretorio)
+        if not path.is_absolute():
+            path = Path(settings.BASE_DIR) / path
+        return path
 
     def pontos_venda_mostrador_lista(self):
         codigos = []

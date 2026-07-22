@@ -127,12 +127,17 @@
             <div class="section-kicker">Restore emergencial</div>
             <h2 class="h5 mb-3">Restaurar backup oficial sem login</h2>
 
-            {% if backups %}
-            <form method="post">
+            {% if not backups %}
+            <div class="alert alert-info mb-3">
+              <strong>Nenhum backup encontrado na pasta oficial.</strong> Você ainda pode enviar um arquivo .zip nesta tela para restaurar o sistema.
+            </div>
+            {% endif %}
+
+            <form method="post" enctype="multipart/form-data">
               {% csrf_token %}
               <div class="form-group">
                 <label for="arquivo">Backup oficial disponível</label>
-                <select id="arquivo" name="arquivo" class="form-control" required>
+                <select id="arquivo" name="arquivo" class="form-control">
                   <option value="">Selecione...</option>
                   {% for item in backups %}
                   <option value="{{ item.path }}">
@@ -141,8 +146,14 @@
                   {% endfor %}
                 </select>
                 <small class="form-text text-muted">
-                  São aceitos apenas backups presentes em <code>{{ backup_dir }}</code>.
+                  São aceitos backups presentes em <code>{{ backup_dir }}</code>.
                 </small>
+              </div>
+
+              <div class="form-group">
+                <label for="arquivo_upload">Ou envie um backup em .zip</label>
+                <input id="arquivo_upload" type="file" name="arquivo_upload" class="form-control-file" accept=".zip">
+                <small class="form-text text-muted">Ideal para restaurar um backup vindo de pendrive, rede ou outro computador sem copiar manualmente para a pasta oficial.</small>
               </div>
 
               <div class="form-group">
@@ -178,12 +189,7 @@
                 <a href="{% url 'core:login' %}" class="btn btn-outline-secondary">Voltar ao login</a>
               </div>
             </form>
-            {% else %}
-            <div class="alert alert-info mb-3">
-              <strong>Nenhum backup encontrado.</strong> Coloque primeiro um backup válido dentro da pasta oficial <code>{{ backup_dir }}</code>.
-            </div>
-            <a href="{% url 'core:login' %}" class="btn btn-outline-secondary">Voltar ao login</a>
-            {% endif %}
+
           </div>
 
           <div class="soft-panel">

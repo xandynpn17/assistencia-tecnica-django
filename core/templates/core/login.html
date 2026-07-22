@@ -179,6 +179,37 @@
         display: grid;
         gap: 12px;
       }
+      .login-route-intro {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        border: 1px solid #dde7f1;
+        background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+      }
+      .login-route-intro strong {
+        display: block;
+        margin-bottom: 6px;
+        color: #17314a;
+      }
+      .login-route-list {
+        margin: 0;
+        padding-left: 18px;
+        color: #607489;
+        font-size: .92rem;
+        line-height: 1.55;
+      }
+      .login-helper-meta {
+        margin-top: 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: rgba(13, 110, 253, 0.08);
+        color: #0d63d7;
+        font-size: .78rem;
+        font-weight: 700;
+      }
       .login-helper-card {
         display: flex;
         align-items: flex-start;
@@ -358,12 +389,20 @@
                     </div>
 
                     <div class="login-helper-grid">
+                        <div class="login-route-intro">
+                            <strong>Escolha o caminho certo</strong>
+                            <ul class="login-route-list">
+                                <li>Use <strong>Primeira instala??o</strong> quando este computador ainda n?o tem base pronta.</li>
+                                <li>Use <strong>J? tenho um backup</strong> quando voc? recebeu um pacote oficial <code>.zip</code>.</li>
+                            </ul>
+                        </div>
                         {% if setup_pendente %}
                         <a href="{% url 'configuracoes:setup_inicial' %}" class="login-helper-card">
                             <span class="login-helper-icon"><i class="fas fa-rocket"></i></span>
                             <span class="flex-grow-1">
                                 <span class="login-helper-title">Primeira instalação do sistema</span>
                                 <span class="login-helper-text">Configure empresa, prefixo da OS, linhas de atuação e base inicial antes de começar a operar.</span>
+                                <span class="login-helper-meta"><i class="fas fa-play-circle"></i> come?ar do zero</span>
                             </span>
                             <span class="login-helper-arrow"><i class="fas fa-chevron-right"></i></span>
                         </a>
@@ -374,7 +413,9 @@
                             <span class="login-helper-icon"><i class="fas fa-history"></i></span>
                             <span class="flex-grow-1">
                                 <span class="login-helper-title">Já tenho um backup</span>
-                                <span class="login-helper-text">Restaure a base e os arquivos enviados sem precisar entrar no sistema primeiro.</span>
+                                <span class="login-helper-text">Envie o pacote oficial <code>.zip</code> e restaure a base com os arquivos enviados sem precisar entrar no sistema primeiro.</span>
+                                <span class="login-helper-meta"><i class="fas fa-file-archive"></i> restore por .zip</span>
+                                <span class="login-helper-meta"><i class="fas fa-file-archive"></i> restore por .zip</span>
                             </span>
                             <span class="login-helper-arrow"><i class="fas fa-chevron-right"></i></span>
                         </a>

@@ -32,17 +32,23 @@
         </div>
         {% endif %}
 
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <div class="form-group">
-            <label for="arquivo">Backup disponível</label>
-            <select id="arquivo" name="arquivo" class="form-control" required>
+            <label for="arquivo">Backup disponível na pasta oficial</label>
+            <select id="arquivo" name="arquivo" class="form-control">
               <option value="">Selecione...</option>
               {% for item in backups %}
               <option value="{{ item.path }}">{{ item.name }} | {{ item.engine|default:engine_label }} | {{ item.size_label }}</option>
               {% endfor %}
             </select>
             <small class="form-text text-muted">São listados apenas backups da pasta oficial <code>{{ backup_dir }}</code>.</small>
+          </div>
+
+          <div class="form-group">
+            <label for="arquivo_upload">Ou envie um backup em .zip</label>
+            <input id="arquivo_upload" type="file" name="arquivo_upload" class="form-control-file" accept=".zip">
+            <small class="form-text text-muted">Use esta opção para restaurar um backup trazido de outro computador, sem precisar copiar antes para a pasta oficial.</small>
           </div>
 
           <div class="form-group form-check soft-check">

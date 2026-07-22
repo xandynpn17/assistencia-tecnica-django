@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -30,6 +31,12 @@ class Command(BaseCommand):
             help="Caminho do pg_dump.exe. Se omitido, tenta PATH e caminhos padrao do Windows.",
         )
 
+    def _resolve_output_dir(self, requested):
+        requested = (requested or "backups").strip()
+        if requested and requested != "backups":
+            return Path(requested)
+        return ConfiguracaoSistema.resolver_diretorio_backup()
+
     def handle(self, *args, **options):
         db = settings.DATABASES["default"]
         engine = db.get("ENGINE")
@@ -42,7 +49,7 @@ class Command(BaseCommand):
         raise CommandError(f"Engine de banco nao suportada para backup: {engine}")
 
     def _backup_sqlite(self, db, options):
-        output_dir = Path(options["output_dir"])
+        output_dir = self._resolve_output_dir(options["output_dir"])
         output_dir.mkdir(parents=True, exist_ok=True)
 
         source = Path(db["NAME"])
@@ -50,12 +57,9 @@ class Command(BaseCommand):
             raise CommandError(f"Arquivo de banco nao encontrado: {source}")
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if options["include_media"]:
-            backup_dir = output_dir / f"backup_{stamp}"
-            backup_dir.mkdir(parents=True, exist_ok=True)
-            backup_file = backup_dir / "database.sqlite3"
-        else:
-            backup_file = output_dir / f"db_{stamp}.sqlite3"
+        backup_dir = output_dir / f"backup_{stamp}"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        backup_file = backup_dir / "database.sqlite3"
 
         shutil.copy2(source, backup_file)
 
@@ -66,26 +70,23 @@ class Command(BaseCommand):
             backup_file.unlink(missing_ok=True)
             backup_file = gz_path
 
-        if options["include_media"]:
-            backup_dir = backup_file.parent
-            media_zip = self._zip_media(backup_dir)
-            self._write_manifest(
-                backup_dir,
-                engine="sqlite",
-                database_file=backup_file.name,
-                media_file=media_zip.name if media_zip else "",
-                db=db,
-            )
-            self.stdout.write(self.style.SUCCESS(f"Backup gerado: {backup_dir}"))
-        else:
-            self.stdout.write(self.style.SUCCESS(f"Backup gerado: {backup_file}"))
+        media_zip = self._zip_media(backup_dir) if options["include_media"] else None
+        self._write_manifest(
+            backup_dir,
+            engine="sqlite",
+            database_file=backup_file.name,
+            media_file=media_zip.name if media_zip else "",
+            db=db,
+        )
+        pacote_oficial = self._gerar_pacote_zip(backup_dir)
+        self.stdout.write(self.style.SUCCESS(f"Backup oficial gerado: {pacote_oficial}"))
 
         self._apply_retention(output_dir)
 
     def _backup_postgres(self, db, options):
         pg_dump = self._resolve_pg_tool("pg_dump", options.get("pg_dump"))
 
-        output_dir = Path(options["output_dir"])
+        output_dir = self._resolve_output_dir(options["output_dir"])
         output_dir.mkdir(parents=True, exist_ok=True)
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -132,8 +133,9 @@ class Command(BaseCommand):
             media_file=media_zip.name if media_zip else "",
             db=db,
         )
+        pacote_oficial = self._gerar_pacote_zip(backup_dir)
         self._apply_retention(output_dir)
-        self.stdout.write(self.style.SUCCESS(f"Backup gerado: {backup_dir}"))
+        self.stdout.write(self.style.SUCCESS(f"Backup oficial gerado: {pacote_oficial}"))
 
     def _zip_media(self, backup_dir):
         media_root = Path(getattr(settings, "MEDIA_ROOT", ""))
@@ -162,10 +164,27 @@ class Command(BaseCommand):
             encoding="utf-8",
         )
 
+    def _gerar_pacote_zip(self, backup_dir):
+        zip_path = backup_dir.with_suffix(".zip")
+        if zip_path.exists():
+            zip_path.unlink(missing_ok=True)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            temp_zip = Path(tmp_dir) / zip_path.name
+            with zipfile.ZipFile(temp_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for path in backup_dir.rglob("*"):
+                    if path.is_file():
+                        zipf.write(path, path.relative_to(backup_dir.parent))
+            shutil.copy2(temp_zip, zip_path)
+        return zip_path
+
     def _apply_retention(self, output_dir):
         cfg = ConfiguracaoSistema.get_configuracao()
         cutoff = datetime.now() - timedelta(days=int(cfg.backup_retencao_dias or 15))
-        for file in output_dir.glob("db_*.sqlite3*"):
+        for file in output_dir.iterdir():
+            if not file.is_file():
+                continue
+            if file.suffix.lower() not in {".zip", ".gz", ".sqlite3", ".dump"}:
+                continue
             if datetime.fromtimestamp(file.stat().st_mtime) < cutoff:
                 file.unlink(missing_ok=True)
         for directory in output_dir.glob("backup_*"):

@@ -141,6 +141,9 @@
                 <td>{{ item.engine|default:engine_label }}</td>
                 <td>{{ item.size_label }}</td>
                 <td>
+                  {% if item.is_zip %}
+                    <span class="badge badge-primary">zip oficial</span>
+                  {% endif %}
                   {% if item.has_media %}
                     <span class="badge badge-success">com media</span>
                   {% else %}

@@ -685,6 +685,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'inventario_ciclico_dias',
             'inventario_ultima_execucao',
             'backup_retencao_dias',
+            'backup_diretorio_oficial',
             'lgpd_mascarar_documento',
             'usar_confirmacao_assinatura_digital',
             'enviar_whatsapp_abertura_os',
@@ -738,6 +739,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'inventario_ciclico_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 365}),
             'inventario_ultima_execucao': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'backup_retencao_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 365}),
+            'backup_diretorio_oficial': forms.TextInput(attrs={'class': 'form-control', 'placeholder': r'Ex.: C:\ABGest\backups ou \\SERVIDOR\BackupsABGest'}),
             'api_cep_provedor': forms.Select(attrs={'class': 'form-control'}),
             'mensagem_abertura_whatsapp': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'mensagem_orcamento_email': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
@@ -820,6 +822,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["antifraude_exigir_dupla_confirmacao_exclusao_pagamento"].help_text = "Exige dupla confirmação para excluir pagamentos."
         self.fields["antifraude_desconto_critico_percentual"].help_text = "Percentual a partir do qual o desconto exige validação adicional."
         self.fields["antifraude_motivo_minimo_caracteres"].help_text = "Quantidade mínima de caracteres para justificativas sensíveis."
+        self.fields["backup_diretorio_oficial"].help_text = "Deixe em branco para usar a pasta padr?o do projeto. Voc? tamb?m pode informar uma pasta de rede compartilhada."
 
     def clean_condicoes_orcamento(self):
         valor = (self.cleaned_data.get("condicoes_orcamento") or "").strip()
@@ -844,6 +847,12 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
     def clean_estoque_reposicao_destino_codigo(self):
         valor = (self.cleaned_data.get("estoque_reposicao_destino_codigo") or "PO3").strip().upper()
         return valor
+
+    def clean_backup_diretorio_oficial(self):
+        valor = (self.cleaned_data.get("backup_diretorio_oficial") or "").strip()
+        if not valor:
+            return ""
+        return valor.rstrip('/\\').strip()
 
     def clean_estoque_venda_mostrador_codigos(self):
         bruto = (self.cleaned_data.get("estoque_venda_mostrador_codigos") or "").strip().upper()

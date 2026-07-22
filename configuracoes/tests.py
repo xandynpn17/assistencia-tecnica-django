@@ -769,6 +769,85 @@ class PermissoesConfiguracoesTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    @patch("configuracoes.view_modules.operacao.call_command")
+    def test_backup_usa_diretorio_oficial_configurado(self, call_command_mock):
+        self.client.force_login(self.gerente)
+        config = ConfiguracaoSistema.get_configuracao()
+        config.backup_diretorio_oficial = str(Path(settings.BASE_DIR) / "backups_custom")
+        config.save()
+
+        response = self.client.post(reverse("configuracoes:backup_banco"), {"include_media": "1"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(call_command_mock.call_args.kwargs["output_dir"], config.backup_diretorio_oficial)
+
+    @patch("configuracoes.view_modules.operacao.call_command")
+    def test_restore_administrativo_aceita_upload_zip(self, call_command_mock):
+        self.client.force_login(self.gerente)
+        arquivo = SimpleUploadedFile("backup_abgest.zip", b"PKteste", content_type="application/zip")
+
+        response = self.client.post(
+            reverse("configuracoes:restore_banco"),
+            {
+                "confirmar": "RESTAURAR",
+                "ciente_restore": "1",
+                "repair_single_tenant": "1",
+                "arquivo_upload": arquivo,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        call_command_mock.assert_called_once()
+        self.assertTrue(str(call_command_mock.call_args.args[1]).lower().endswith(".zip"))
+
+    @override_settings(LOCAL_NETWORK_MODE=True, LOCAL_RECOVERY_KEY="rec-chave-123")
+    def test_recuperacao_local_publica_exibe_upload_mesmo_sem_backups_locais(self):
+        backup_dir = Path(settings.BASE_DIR) / "tmp_test_backups_publico_vazio"
+        config = ConfiguracaoSistema.get_configuracao()
+        anterior = config.backup_diretorio_oficial
+        config.backup_diretorio_oficial = str(backup_dir)
+        config.save(update_fields=["backup_diretorio_oficial"])
+        self.addCleanup(
+            lambda: (
+                setattr(config, "backup_diretorio_oficial", anterior),
+                config.save(update_fields=["backup_diretorio_oficial"])
+            )
+        )
+        if backup_dir.exists():
+            shutil.rmtree(backup_dir, ignore_errors=True)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(lambda: shutil.rmtree(backup_dir, ignore_errors=True) if backup_dir.exists() else None)
+
+        response = self.client.get(
+            reverse("configuracoes:restore_banco_publico"),
+            REMOTE_ADDR="127.0.0.1",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="arquivo_upload"')
+        self.assertContains(response, "Nenhum backup encontrado na pasta oficial")
+
+    @override_settings(LOCAL_NETWORK_MODE=True, LOCAL_RECOVERY_KEY="rec-chave-123")
+    @patch("configuracoes.view_modules.operacao.call_command")
+    def test_recuperacao_local_publica_aceita_upload_zip(self, call_command_mock):
+        arquivo = SimpleUploadedFile("backup_abgest.zip", b"PKteste", content_type="application/zip")
+
+        response = self.client.post(
+            reverse("configuracoes:restore_banco_publico"),
+            {
+                "confirmar": "RESTAURAR",
+                "ciente_restore": "1",
+                "recovery_key": "rec-chave-123",
+                "repair_single_tenant": "1",
+                "arquivo_upload": arquivo,
+            },
+            REMOTE_ADDR="127.0.0.1",
+        )
+
+        self.assertEqual(response.status_code, 302)
+        call_command_mock.assert_called_once()
+        self.assertTrue(str(call_command_mock.call_args.args[1]).lower().endswith(".zip"))
+
     @override_settings(LOCAL_NETWORK_MODE=True, LOCAL_RECOVERY_KEY="rec-chave-123")
     @patch("configuracoes.view_modules.operacao.call_command")
     def test_recuperacao_local_publica_exige_chave_valida(self, call_command_mock):
@@ -1353,8 +1432,12 @@ class ComandosConfiguracoesTests(TestCase):
             output_dir = Path(tmp_dir) / "backups"
             with override_settings(DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": str(db_path)}}):
                 call_command("backup_db", output_dir=str(output_dir), gzip=True)
-            files = list(output_dir.glob("db_*.sqlite3.gz"))
+            files = list(output_dir.glob("backup_*.zip"))
             self.assertEqual(len(files), 1)
+            with zipfile.ZipFile(files[0], "r") as zipf:
+                nomes = zipf.namelist()
+            self.assertTrue(any(nome.endswith("manifest.json") for nome in nomes))
+            self.assertTrue(any(nome.endswith("database.sqlite3.gz") for nome in nomes))
 
     def test_backup_db_postgres_gera_dump_manifesto_e_media(self):
         with TemporaryDirectory() as tmp_dir:
@@ -1378,6 +1461,12 @@ class ComandosConfiguracoesTests(TestCase):
             }
             with override_settings(DATABASES=db_settings, MEDIA_ROOT=media_root):
                 with patch("configuracoes.management.commands.backup_db.subprocess.run") as run_mock:
+                    def _mock_pg_dump(*args, **kwargs):
+                        backup_dirs = [item for item in output_dir.glob("backup_*") if item.is_dir()]
+                        if backup_dirs:
+                            (backup_dirs[0] / "database.dump").write_bytes(b"dump")
+                        return None
+                    run_mock.side_effect = _mock_pg_dump
                     call_command(
                         "backup_db",
                         output_dir=str(output_dir),
@@ -1386,10 +1475,16 @@ class ComandosConfiguracoesTests(TestCase):
                     )
 
             run_mock.assert_called_once()
-            backup_dirs = list(output_dir.glob("backup_*"))
+            backup_dirs = [item for item in output_dir.glob("backup_*") if item.is_dir()]
+            backup_zips = list(output_dir.glob("backup_*.zip"))
             self.assertEqual(len(backup_dirs), 1)
+            self.assertEqual(len(backup_zips), 1)
             self.assertTrue((backup_dirs[0] / "manifest.json").exists())
             self.assertTrue((backup_dirs[0] / "media.zip").exists())
+            with zipfile.ZipFile(backup_zips[0], "r") as zipf:
+                nomes = zipf.namelist()
+            self.assertTrue(any(nome.endswith("database.dump") for nome in nomes))
+            self.assertTrue(any(nome.endswith("manifest.json") for nome in nomes))
 
     def test_restore_db_exige_force(self):
         with TemporaryDirectory() as tmp_dir:

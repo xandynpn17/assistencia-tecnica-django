@@ -45,16 +45,21 @@ class Command(BaseCommand):
         if not source.exists():
             raise CommandError(f"Backup nao encontrado: {source}")
 
-        engine = db.get("ENGINE")
-        if engine == "django.db.backends.sqlite3":
-            self._restore_sqlite(db, source)
-        elif engine == "django.db.backends.postgresql":
-            self._restore_postgres(db, source, options)
-        else:
-            raise CommandError(f"Engine de banco nao suportada para restore: {engine}")
+        source_preparado, temp_root = self._preparar_fonte_restore(source)
+        try:
+            engine = db.get("ENGINE")
+            if engine == "django.db.backends.sqlite3":
+                self._restore_sqlite(db, source_preparado)
+            elif engine == "django.db.backends.postgresql":
+                self._restore_postgres(db, source_preparado, options)
+            else:
+                raise CommandError(f"Engine de banco nao suportada para restore: {engine}")
 
-        if options["restore_media"]:
-            self._restore_media_from_backup(source)
+            if options["restore_media"]:
+                self._restore_media_from_backup(source_preparado)
+        finally:
+            if temp_root and temp_root.exists():
+                shutil.rmtree(temp_root, ignore_errors=True)
 
         if options["repair_single_tenant"]:
             resultado = reparar_escopo_empresa_unica()
@@ -132,6 +137,39 @@ class Command(BaseCommand):
             raise CommandError(f"Falha no pg_restore: {erro}") from exc
 
         self.stdout.write(self.style.SUCCESS(f"Banco PostgreSQL restaurado a partir de: {dump_file}"))
+
+    def _preparar_fonte_restore(self, source):
+        if source.is_file() and source.suffix.lower() == ".zip":
+            temp_root = Path(tempfile.mkdtemp(prefix="abgest_restore_"))
+            with zipfile.ZipFile(source, "r") as zipf:
+                for member in zipf.infolist():
+                    target = (temp_root / member.filename).resolve()
+                    if temp_root.resolve() not in target.parents and target != temp_root.resolve():
+                        raise CommandError(f"Arquivo inseguro no zip: {member.filename}")
+                zipf.extractall(temp_root)
+            resolved = self._detectar_raiz_backup(temp_root)
+            return resolved, temp_root
+        return source, None
+
+    def _detectar_raiz_backup(self, temp_root):
+        candidatos = []
+        if self._conteudo_backup_valido(temp_root):
+            candidatos.append(temp_root)
+        for child in temp_root.iterdir():
+            if child.is_dir() and self._conteudo_backup_valido(child):
+                candidatos.append(child)
+        if candidatos:
+            return candidatos[0]
+        raise CommandError("O arquivo .zip enviado nao contem um backup valido do ABGest.")
+
+    def _conteudo_backup_valido(self, path):
+        if not path.exists():
+            return False
+        if (path / "database.dump").exists() or (path / "database.sqlite3").exists() or (path / "database.sqlite3.gz").exists():
+            return True
+        if path.is_file() and path.suffix.lower() in {".dump", ".sqlite3", ".gz"}:
+            return True
+        return False
 
     def _restore_media_from_backup(self, source):
         backup_dir = source if source.is_dir() else source.parent
