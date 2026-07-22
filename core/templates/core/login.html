@@ -9,93 +9,396 @@
     <link rel="stylesheet" href="{% static 'adminlte/plugins/fontawesome-free/css/all.min.css' %}">
     <link rel="stylesheet" href="{% static 'adminlte/plugins/bootstrap/css/bootstrap.min.css' %}">
     <link rel="stylesheet" href="{% static 'adminlte/dist/css/adminlte.min.css' %}">
-    <link rel="stylesheet" href="{% static 'css/app_ui.css' %}">
     <style>
-      /* Fallback visual: mantém login usável mesmo sem app_ui.css carregado */
-      body.ui-login-body {
+      body.login-abgest {
         min-height: 100vh;
         margin: 0;
-        background: radial-gradient(circle at top right, #dbe9f8 0%, #eef3fa 38%, #f5f8fd 100%);
         font-family: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(16, 115, 255, 0.14), transparent 34%),
+          radial-gradient(circle at bottom right, rgba(6, 78, 173, 0.14), transparent 28%),
+          linear-gradient(135deg, #eef5fc 0%, #f8fbff 55%, #edf4fb 100%);
+        color: #183247;
       }
-      .ui-login-shell {
+      .login-layout {
         min-height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 24px 14px;
+        padding: 32px 18px;
       }
-      .ui-login-card {
+      .login-panel {
         width: 100%;
-        max-width: 420px;
-        border: 1px solid #d6e0ec;
-        border-radius: 14px;
-        box-shadow: 0 22px 44px rgba(19, 45, 73, 0.12);
-        overflow: hidden;
+        max-width: 1160px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(360px, 430px);
+        gap: 24px;
+        align-items: stretch;
       }
-      .ui-login-header {
-        padding: 26px 26px 10px;
+      .login-showcase,
+      .login-card {
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(208, 221, 236, 0.95);
+        border-radius: 28px;
+        box-shadow: 0 26px 60px rgba(21, 46, 74, 0.12);
+        backdrop-filter: blur(14px);
       }
-      .ui-login-brand {
+      .login-showcase {
+        padding: 34px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 640px;
+      }
+      .login-logo-wrap {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 12px 0 6px;
+      }
+      .login-logo {
+        width: min(100%, 640px);
+        height: auto;
+        display: block;
+        filter: drop-shadow(0 14px 28px rgba(13, 75, 161, 0.12));
+      }
+      .login-copy {
+        max-width: 560px;
+      }
+      .login-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(14, 109, 255, 0.08);
+        color: #0d61d8;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+      .login-title {
+        margin: 18px 0 12px;
+        font-size: clamp(2rem, 3vw, 3rem);
+        line-height: 1.04;
+        font-weight: 800;
+        color: #122c46;
+      }
+      .login-subtitle {
         margin: 0;
-        font-size: 30px;
+        font-size: 1.02rem;
+        line-height: 1.75;
+        color: #5b6f84;
+      }
+      .login-feature-grid {
+        margin-top: 28px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .login-feature {
+        padding: 16px 18px;
+        border-radius: 18px;
+        border: 1px solid #dfe9f2;
+        background: linear-gradient(180deg, #fbfdff 0%, #f4f8fc 100%);
+      }
+      .login-feature-label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #6d7f90;
+        margin-bottom: 6px;
+      }
+      .login-feature strong {
+        display: block;
+        margin-bottom: 4px;
+        color: #183247;
+      }
+      .login-feature span {
+        color: #5f7286;
+        font-size: .94rem;
+        line-height: 1.45;
+      }
+      .login-card {
+        padding: 26px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+      .login-card-header h1 {
+        margin: 0 0 8px;
+        font-size: 1.95rem;
         font-weight: 800;
         color: #14304a;
       }
-      .ui-login-subtitle {
-        margin: 6px 0 0;
-        color: #5f7286;
+      .login-card-header p {
+        margin: 0;
+        color: #607489;
+        line-height: 1.6;
+      }
+      .login-form {
+        margin-top: 22px;
+      }
+      .login-field-label {
+        display: block;
+        margin-bottom: 8px;
+        color: #173049;
+        font-size: .92rem;
+        font-weight: 700;
+      }
+      .login-input-group {
+        margin-bottom: 18px;
+      }
+      .login-input-group .form-control,
+      .login-input-group .input-group-text {
+        border-radius: 14px;
+        min-height: 54px;
+        border-color: #cfdceb;
+        font-size: 1rem;
+      }
+      .login-input-group .input-group-text {
+        background: #f5f9fd;
+        color: #53708d;
+      }
+      .login-submit {
+        min-height: 54px;
+        border: 0;
+        border-radius: 14px;
+        font-weight: 800;
+        font-size: 1rem;
+        background: linear-gradient(135deg, #0d6efd 0%, #0f87ff 100%);
+        box-shadow: 0 16px 28px rgba(13, 110, 253, 0.24);
+      }
+      .login-submit:hover {
+        filter: brightness(1.03);
+      }
+      .login-helper-grid {
+        margin-top: 22px;
+        display: grid;
+        gap: 12px;
+      }
+      .login-helper-card {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 16px 18px;
+        border-radius: 16px;
+        border: 1px solid #dde7f1;
+        background: #f8fbff;
+        color: inherit;
+        text-decoration: none;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+      }
+      .login-helper-card:hover {
+        color: inherit;
+        text-decoration: none;
+        transform: translateY(-1px);
+        border-color: #b9d1ea;
+        box-shadow: 0 14px 28px rgba(26, 53, 84, 0.08);
+      }
+      .login-helper-card.is-disabled {
+        opacity: .74;
+        cursor: default;
+      }
+      .login-helper-card.is-disabled:hover {
+        transform: none;
+        box-shadow: none;
+        border-color: #dde7f1;
+      }
+      .login-helper-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(13, 110, 253, 0.11);
+        color: #0d63d7;
+        flex: 0 0 42px;
+      }
+      .login-helper-title {
+        margin: 0 0 4px;
+        font-size: .98rem;
+        font-weight: 800;
+        color: #16314b;
+      }
+      .login-helper-text {
+        margin: 0;
+        color: #64778a;
+        line-height: 1.5;
+        font-size: .92rem;
+      }
+      .login-helper-arrow {
+        color: #7b90a5;
+        font-size: .9rem;
+        margin-top: 2px;
+      }
+      .login-footer-note {
+        margin-top: 18px;
+        text-align: center;
+        color: #74879b;
+        font-size: .86rem;
+        line-height: 1.55;
+      }
+      .alert {
+        border-radius: 14px;
+      }
+      @media (max-width: 991.98px) {
+        .login-panel {
+          grid-template-columns: 1fr;
+          max-width: 620px;
+        }
+        .login-showcase {
+          min-height: auto;
+        }
+      }
+      @media (max-width: 575.98px) {
+        .login-layout {
+          padding: 18px 12px;
+        }
+        .login-showcase,
+        .login-card {
+          padding: 22px 18px;
+          border-radius: 22px;
+        }
+        .login-feature-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
 </head>
-<body class="ui-login-body">
-    <main class="ui-login-shell">
-        <section class="ui-login-card card">
-            <header class="ui-login-header">
-                <h1 class="ui-login-brand">ABGest</h1>
-                <p class="ui-login-subtitle">Acesso ao sistema de gestão técnica</p>
-            </header>
-            <div class="card-body">
-                {% if messages %}
-                    {% for message in messages %}
-                        {% if "login" in message.tags %}
-                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="close" data-dismiss="alert" aria-label="Fechar">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-                        {% endif %}
-                    {% endfor %}
-                {% endif %}
-
-                <form method="post" novalidate>
-                    {% csrf_token %}
-                    <div class="input-group mb-3">
-                        <input type="text" name="username" class="form-control" placeholder="Usuário" autocomplete="username" required>
-                        <div class="input-group-append">
-                            <div class="input-group-text"><span class="fas fa-user"></span></div>
-                        </div>
+<body class="login-abgest">
+    <main class="login-layout">
+        <section class="login-panel">
+            <aside class="login-showcase">
+                <div class="login-copy">
+                    <span class="login-eyebrow">
+                        <i class="fas fa-network-wired"></i>
+                        Operação local e em rede
+                    </span>
+                    <div class="login-logo-wrap">
+                        <img src="{% static 'adminlte/img/abgest_login_logo.png' %}" alt="ABGest" class="login-logo">
                     </div>
-
-                    <div class="input-group mb-3">
-                        <input type="password" name="password" class="form-control" placeholder="Senha" autocomplete="current-password" required>
-                        <div class="input-group-append">
-                            <div class="input-group-text"><span class="fas fa-lock"></span></div>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary btn-block">Entrar</button>
-                </form>
-
-                {% if local_recovery_enabled %}
-                <div class="text-center mt-3">
-                    <a href="{% url 'configuracoes:restore_banco_publico' %}" class="small text-muted">
-                        Recuperação local: restaurar backup sem login
-                    </a>
+                    <h2 class="login-title">Gestão de assistência técnica com fluxo claro desde a primeira instalação.</h2>
+                    <p class="login-subtitle">
+                        Entre no sistema para operar a loja, ou use os atalhos abaixo quando estiver preparando um computador novo,
+                        restaurando um ambiente existente ou concluindo a configuração inicial.
+                    </p>
                 </div>
-                {% endif %}
-            </div>
+
+                <div class="login-feature-grid">
+                    <div class="login-feature">
+                        <div class="login-feature-label">Rotina diária</div>
+                        <strong>Ordens, estoque, caixa e comissões</strong>
+                        <span>O time trabalha no navegador com o mesmo ambiente em toda a rede local.</span>
+                    </div>
+                    <div class="login-feature">
+                        <div class="login-feature-label">Instalação guiada</div>
+                        <strong>Primeiro uso e restauração</strong>
+                        <span>O sistema já indica o caminho certo para começar do zero ou recuperar uma base pronta.</span>
+                    </div>
+                    <div class="login-feature">
+                        <div class="login-feature-label">Recuperação local</div>
+                        <strong>Backup oficial com mídia</strong>
+                        <span>Logos, anexos, assinaturas e base podem ser restaurados no mesmo fluxo operacional.</span>
+                    </div>
+                    <div class="login-feature">
+                        <div class="login-feature-label">Ambiente interno</div>
+                        <strong>Pronto para PC principal da loja</strong>
+                        <span>Ideal para deixar o servidor local rodando e os demais postos acessando por navegador.</span>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="login-card">
+                <div>
+                    <header class="login-card-header">
+                        <h1>Acessar o sistema</h1>
+                        <p>Use seu usuário e senha para entrar no ambiente operacional do ABGest.</p>
+                    </header>
+
+                    <div class="login-form">
+                        {% if messages %}
+                            {% for message in messages %}
+                                {% if "login" in message.tags %}
+                                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="close" data-dismiss="alert" aria-label="Fechar">
+                                            <span aria-hidden="true">&times;</span>
+                                        </button>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+
+                        <form method="post" novalidate>
+                            {% csrf_token %}
+
+                            <label class="login-field-label" for="login-username">Usuário</label>
+                            <div class="input-group login-input-group">
+                                <input id="login-username" type="text" name="username" class="form-control" placeholder="Seu usuário de acesso" autocomplete="username" required>
+                                <div class="input-group-append">
+                                    <div class="input-group-text"><span class="fas fa-user"></span></div>
+                                </div>
+                            </div>
+
+                            <label class="login-field-label" for="login-password">Senha</label>
+                            <div class="input-group login-input-group">
+                                <input id="login-password" type="password" name="password" class="form-control" placeholder="Sua senha" autocomplete="current-password" required>
+                                <div class="input-group-append">
+                                    <div class="input-group-text"><span class="fas fa-lock"></span></div>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block login-submit">Entrar no ABGest</button>
+                        </form>
+                    </div>
+
+                    <div class="login-helper-grid">
+                        {% if setup_pendente %}
+                        <a href="{% url 'configuracoes:setup_inicial' %}" class="login-helper-card">
+                            <span class="login-helper-icon"><i class="fas fa-rocket"></i></span>
+                            <span class="flex-grow-1">
+                                <span class="login-helper-title">Primeira instalação do sistema</span>
+                                <span class="login-helper-text">Configure empresa, prefixo da OS, linhas de atuação e base inicial antes de começar a operar.</span>
+                            </span>
+                            <span class="login-helper-arrow"><i class="fas fa-chevron-right"></i></span>
+                        </a>
+                        {% endif %}
+
+                        {% if local_recovery_enabled %}
+                        <a href="{% url 'configuracoes:restore_banco_publico' %}" class="login-helper-card">
+                            <span class="login-helper-icon"><i class="fas fa-history"></i></span>
+                            <span class="flex-grow-1">
+                                <span class="login-helper-title">Já tenho um backup</span>
+                                <span class="login-helper-text">Restaure a base e os arquivos enviados sem precisar entrar no sistema primeiro.</span>
+                            </span>
+                            <span class="login-helper-arrow"><i class="fas fa-chevron-right"></i></span>
+                        </a>
+                        {% else %}
+                        <div class="login-helper-card is-disabled">
+                            <span class="login-helper-icon"><i class="fas fa-database"></i></span>
+                            <span class="flex-grow-1">
+                                <span class="login-helper-title">Restaurar backup</span>
+                                <span class="login-helper-text">A recuperação local sem login ainda não está habilitada neste ambiente. Ative a chave local para usar este fluxo.</span>
+                            </span>
+                            <span class="login-helper-arrow"><i class="fas fa-minus"></i></span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="login-footer-note">
+                    {% if setup_pendente %}
+                    Se este computador é novo, conclua a configuração inicial ou restaure um backup antes de cadastrar dados reais.
+                    {% else %}
+                    Em caso de troca de máquina ou contingência local, use a recuperação por backup para retomar a operação com segurança.
+                    {% endif %}
+                </div>
+            </section>
         </section>
     </main>
 
@@ -103,4 +406,3 @@
     <script src="{% static 'adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
 </body>
 </html>
-

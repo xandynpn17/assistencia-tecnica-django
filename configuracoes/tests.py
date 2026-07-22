@@ -631,6 +631,26 @@ class PermissoesConfiguracoesTests(TestCase):
         self.assertContains(response, "backup?")
         self.assertContains(response, reverse("configuracoes:restore_banco"))
 
+    def test_setup_inicial_fica_disponivel_sem_login_quando_base_esta_pendente(self):
+        setup = SetupInicialSistema.get_setup()
+        setup.concluido = False
+        setup.empresa = None
+        setup.tipo_empresa = ""
+        setup.save()
+
+        response = self.client.get(reverse("configuracoes:setup_inicial"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Setup inicial")
+
+    def test_setup_inicial_sem_login_redireciona_para_login_quando_base_ja_esta_concluida(self):
+        self._concluir_setup_para_ui()
+
+        response = self.client.get(reverse("configuracoes:setup_inicial"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("core:login"))
+
     @patch("configuracoes.view_modules.integracoes.consultar_cep")
     def test_busca_cep_permanece_disponivel_durante_setup_inicial(self, consultar_cep_mock):
         setup = SetupInicialSistema.get_setup()
@@ -716,6 +736,19 @@ class PermissoesConfiguracoesTests(TestCase):
         response = self.client.get(reverse("core:login"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("configuracoes:restore_banco_publico"))
+
+    def test_login_exibe_atalho_de_primeira_instalacao_quando_setup_esta_pendente(self):
+        setup = SetupInicialSistema.get_setup()
+        setup.concluido = False
+        setup.empresa = None
+        setup.tipo_empresa = ""
+        setup.save()
+
+        response = self.client.get(reverse("core:login"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Primeira instalação do sistema")
+        self.assertContains(response, reverse("configuracoes:setup_inicial"))
 
     @override_settings(LOCAL_NETWORK_MODE=True, LOCAL_RECOVERY_KEY="rec-chave-123")
     def test_recuperacao_local_publica_fica_disponivel_sem_login(self):

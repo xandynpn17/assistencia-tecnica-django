@@ -1,10 +1,11 @@
 import logging
 
+from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.views.decorators.clickjacking import xframe_options_exempt
 
-from .permissions import MANAGER_ROLES, ORDER_CREATION_ROLES, role_required
+from .permissions import MANAGER_ROLES, ORDER_CREATION_ROLES, is_management_user, role_required
 from .services.setup_inicial import setup_inicial_concluido
 from .view_modules.catalogo import marcas_fornecedores_impl
 from .view_modules.empresa import (
@@ -46,8 +47,19 @@ def painel(request):
     return painel_impl(request)
 
 
-@role_required(MANAGER_ROLES)
 def setup_inicial(request):
+    try:
+        setup_pendente = not setup_inicial_concluido()
+    except Exception:
+        setup_pendente = True
+
+    if setup_pendente:
+        return setup_inicial_impl(request)
+
+    if not getattr(request.user, "is_authenticated", False):
+        return redirect("core:login")
+    if not is_management_user(request.user):
+        raise PermissionDenied
     return setup_inicial_impl(request)
 
 

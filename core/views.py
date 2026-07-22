@@ -13,6 +13,7 @@ from django.utils import timezone
 from caixa.models import ContaReceber, Pagamento, PagamentoContaPagar
 from clientes.models import Cliente, ORIGEM_CLIENTE_CHOICES
 from configuracoes.permissions import ORDER_ROLES, has_role
+from configuracoes.services.setup_inicial import setup_inicial_concluido
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 from ordens.models import LinhaTrabalho, OrdemServico, ServicoPeca
 from orcamentos.models import Orcamento
@@ -302,7 +303,9 @@ def login_view(request):
     if request.user.is_authenticated:
         return redirect("core:dashboard")
 
+    setup_pendente = not setup_inicial_concluido()
     context = {
+        "setup_pendente": setup_pendente,
         "local_recovery_enabled": bool(getattr(settings, "LOCAL_RECOVERY_KEY", "")),
     }
 
