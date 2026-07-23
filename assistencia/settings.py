@@ -21,6 +21,19 @@ ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 LOCAL_NETWORK_MODE = os.getenv("DJANGO_LOCAL_NETWORK_MODE", "0") == "1"
 LOCAL_RECOVERY_KEY = os.getenv("DJANGO_LOCAL_RECOVERY_KEY", "").strip()
+SESSION_COOKIE_AGE = int(
+    os.getenv(
+        "DJANGO_SESSION_COOKIE_AGE",
+        "28800" if LOCAL_NETWORK_MODE else "1209600",
+    )
+)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = os.getenv(
+    "DJANGO_SESSION_EXPIRE_AT_BROWSER_CLOSE",
+    "1" if LOCAL_NETWORK_MODE else "0",
+) == "1"
+SESSION_SAVE_EVERY_REQUEST = os.getenv("DJANGO_SESSION_SAVE_EVERY_REQUEST", "0") == "1"
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = os.getenv("DJANGO_SESSION_COOKIE_SAMESITE", "Lax")
 
 
 # Application definition

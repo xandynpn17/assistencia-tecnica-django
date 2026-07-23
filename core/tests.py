@@ -4,6 +4,8 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.sessions.models import Session
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -50,6 +52,22 @@ class EncodingIntegrityTests(TestCase):
                 offending.append(str(path.relative_to(base_dir)))
 
         self.assertEqual(offending, [], f"Arquivos com possivel mojibake: {offending}")
+
+
+class LocalSessionSafetyTests(TestCase):
+    def test_clear_all_sessions_remove_sessoes_ativas(self):
+        user_model = get_user_model()
+        usuario = user_model.objects.create_user(
+            username="sessao_local",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+        )
+        self.client.force_login(usuario)
+        self.assertGreater(Session.objects.count(), 0)
+
+        call_command("clear_all_sessions")
+
+        self.assertEqual(Session.objects.count(), 0)
 
 
 class DashboardTests(TestCase):

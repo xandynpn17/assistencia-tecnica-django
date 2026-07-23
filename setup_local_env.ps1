@@ -1,6 +1,7 @@
 param(
     [int]$Port = 8000,
     [string]$HostIp = "",
+    [string[]]$InternalHostNames = @(),
     [string]$SourceDbEnv = ".env.postgres.local",
     [string]$OutputEnv = ".env.local",
     [string]$RecoveryKey = "",
@@ -85,8 +86,20 @@ if ($missing.Count -gt 0) {
     throw "Variaveis ausentes em '$SourceDbEnv': $($missing -join ', ')"
 }
 
-$allowedHosts = @("127.0.0.1", "localhost", $HostIp) -join ","
-$csrfOrigins = @("http://127.0.0.1:$Port", "http://localhost:$Port", "http://$HostIp`:$Port") -join ","
+$hostNames = @("127.0.0.1", "localhost", $HostIp)
+foreach ($item in $InternalHostNames) {
+    $host = ($item | ForEach-Object { $_.Trim() })
+    if ($host -and $hostNames -notcontains $host) {
+        $hostNames += $host
+    }
+}
+
+$allowedHosts = $hostNames -join ","
+$csrfOrigins = @()
+foreach ($host in $hostNames) {
+    $csrfOrigins += "http://$host`:$Port"
+}
+$csrfOrigins = $csrfOrigins -join ","
 $secretKey = if ($existingEnv.ContainsKey("DJANGO_SECRET_KEY") -and $existingEnv["DJANGO_SECRET_KEY"]) {
     $existingEnv["DJANGO_SECRET_KEY"]
 } else {
@@ -109,7 +122,10 @@ $lines = @(
     "DJANGO_DB_HOST=$($dbEnv['DJANGO_DB_HOST'])",
     "DJANGO_DB_PORT=$($dbEnv['DJANGO_DB_PORT'])",
     "DJANGO_DB_CONN_MAX_AGE=$connMaxAge",
-    "DJANGO_DB_CONNECT_TIMEOUT=$connectTimeout"
+    "DJANGO_DB_CONNECT_TIMEOUT=$connectTimeout",
+    "DJANGO_SESSION_COOKIE_AGE=28800",
+    "DJANGO_SESSION_EXPIRE_AT_BROWSER_CLOSE=1",
+    "DJANGO_CLEAR_SESSIONS_ON_SERVER_START=1"
 )
 
 $recoveryKeyFinal = if ($RecoveryKey) {
@@ -129,6 +145,9 @@ $lines | Set-Content -Path $OutputEnv -Encoding UTF8
 Write-Host "Arquivo local criado: $OutputEnv"
 Write-Host "IP do servidor local: $HostIp"
 Write-Host "Endereco para outros PCs: http://$HostIp`:$Port/"
+if ($InternalHostNames.Count -gt 0) {
+    Write-Host "Nomes internos adicionados: $($InternalHostNames -join ', ')"
+}
 if ($recoveryKeyFinal) {
     Write-Host "Recuperacao local antes do login: habilitada"
 }

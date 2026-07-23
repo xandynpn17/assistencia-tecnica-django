@@ -171,6 +171,30 @@ function Assert-PortAvailableForProject {
     }
 }
 
+function Clear-ProjectSessionsIfNeeded {
+    param(
+        [string]$PythonFile,
+        [string[]]$PythonArgs,
+        [string]$ManagePyPath
+    )
+
+    $clearOnStartRaw = [Environment]::GetEnvironmentVariable("DJANGO_CLEAR_SESSIONS_ON_SERVER_START", "Process")
+    $clearOnStart = $false
+
+    if ([string]::IsNullOrWhiteSpace($clearOnStartRaw)) {
+        $clearOnStart = ($env:DJANGO_LOCAL_NETWORK_MODE -eq "1")
+    } else {
+        $clearOnStart = $clearOnStartRaw -eq "1"
+    }
+
+    if (-not $clearOnStart) {
+        return
+    }
+
+    Write-Host "Limpando sessoes ativas antes de subir o servidor local..."
+    & $PythonFile @($PythonArgs + @($ManagePyPath, "clear_all_sessions")) | Out-Host
+}
+
 $envFullPath = Join-Path $PSScriptRoot $EnvPath
 $managePy = Join-Path $PSScriptRoot "manage.py"
 
@@ -205,5 +229,6 @@ if ($CheckOnly) {
 
 Stop-ProjectRunserverProcesses -ManagePyPath $managePy
 Assert-PortAvailableForProject -ManagePyPath $managePy -TargetPort $Port
+Clear-ProjectSessionsIfNeeded -PythonFile $python.File -PythonArgs $python.Args -ManagePyPath $managePy
 
 & $python.File @($python.Args + @($managePy, "runserver", "$BindHost`:$Port", "--noreload"))
