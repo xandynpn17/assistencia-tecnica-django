@@ -6,18 +6,25 @@ Este projeto esta preparado para uso:
 
 - local em um unico PC;
 - local em rede interna com 2 a 3 computadores;
+- PC definitivo da loja com servicos Windows;
 - PostgreSQL como banco principal;
 - backup e restore por interface e por terminal.
 
 ## Fluxo recomendado para uso real
 
-Para a fase atual do projeto, o caminho mais seguro e:
+Hoje existem dois modos oficiais de uso:
 
-1. usar PostgreSQL local no PC principal;
-2. subir o sistema pela rede interna com `run_local.ps1`;
-3. acessar pelos outros PCs via navegador;
-4. manter backup diario;
-5. testar restore antes de colocar em uso definitivo.
+1. Desenvolvimento, testes e homologacao:
+   - usar PostgreSQL local no PC principal;
+   - subir o sistema com `run_local.ps1`;
+   - acessar pelos outros PCs via navegador.
+2. PC definitivo da loja:
+   - PostgreSQL como servico do Windows;
+   - Django servido por `waitress`;
+   - proxy local por `Caddy`;
+   - inicializacao automatica ao ligar o Windows.
+
+Para a operacao real da loja, o caminho mais seguro e o modo com servicos Windows.
 
 ## Requisitos
 
@@ -81,6 +88,31 @@ Ou usando um arquivo de ambiente especifico:
 powershell -ExecutionPolicy Bypass -File .\run_local.ps1 -EnvPath .\.env.local
 ```
 
+## Modo oficial do PC da loja
+
+No PC definitivo, o sistema pode ficar rodando sem terminal aberto usando:
+
+- PostgreSQL como servico;
+- `waitress` para servir o Django;
+- `Caddy` como proxy local para acesso pela rede e HTTPS interno, se configurado.
+
+Nesse modo, o projeto nao deve depender de `manage.py runserver`.
+
+Depois de um `git pull` no PC da loja, o fluxo recomendado e:
+
+```cmd
+ATUALIZAR-APOS-GIT-PULL-COMO-ADMIN.cmd
+```
+
+Esse script:
+
+- instala dependencias novas, incluindo `waitress`;
+- aplica migrations;
+- roda `collectstatic`;
+- valida o projeto;
+- reinicia o servico `ABGestWaitress`;
+- mantem o `ABGestCaddy` disponivel.
+
 ## Comandos operacionais principais
 
 ### Validacoes
@@ -126,6 +158,7 @@ Isso foi pensado justamente para cenarios de falha operacional no PC principal.
 - [Backup e restore local](C:\Users\Xandy\Documents\projetodjango\assistencia\docs\backup_restore_local.md)
 - [Checklist de go-live local](C:\Users\Xandy\Documents\projetodjango\assistencia\docs\checklist_go_live_local.md)
 - [Homologacao de rede local](C:\Users\Xandy\Documents\projetodjango\assistencia\docs\homologacao_rede_local.md)
+- [Operacao do PC da loja com servicos](C:\Users\Xandy\Documents\projetodjango\assistencia\docs\operacao_pc_loja_servicos.md)
 
 ## Observacao importante
 
