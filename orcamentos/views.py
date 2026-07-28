@@ -794,22 +794,45 @@ def imprimir_orcamento(request, pk):
         story.extend([_hero_summary(), Spacer(1, layout_docs["orc_block_gap_cm"] * cm)])
     if layout_preset == "executivo":
         story.extend([_executive_investment(), Spacer(1, layout_docs["orc_block_gap_cm"] * cm)])
+    cliente_rows = []
+    if getattr(config, "pdf_orcamento_exibir_nome_cliente", True):
+        cliente_rows.append([Paragraph("Nome", styles["OrcLabel"]), Paragraph(orcamento.cliente.nome or "-", styles["OrcValue"])])
+    if getattr(config, "pdf_orcamento_exibir_telefone_cliente", True):
+        cliente_rows.append([Paragraph("Telefone", styles["OrcLabel"]), Paragraph(orcamento.cliente.telefone or "-", styles["OrcValue"])])
+    if getattr(config, "pdf_orcamento_exibir_documento_cliente", True):
+        cliente_rows.append(
+            [Paragraph("Documento", styles["OrcLabel"]), Paragraph(orcamento.cliente.get_documento_formatado() or orcamento.cliente.documento or "-", styles["OrcValue"])]
+        )
+    if getattr(config, "pdf_orcamento_exibir_email_cliente", True):
+        cliente_rows.append([Paragraph("Email", styles["OrcLabel"]), Paragraph(orcamento.cliente.email or "-", styles["OrcValue"])])
+    if getattr(config, "pdf_orcamento_exibir_origem_cliente", False):
+        cliente_rows.append([Paragraph("Origem do Cliente", styles["OrcLabel"]), Paragraph(orcamento.cliente.origem_cliente_exibicao or "-", styles["OrcValue"])])
+    if not cliente_rows:
+        cliente_rows.append([Paragraph("Dados", styles["OrcLabel"]), Paragraph("-", styles["OrcValue"])])
+
+    equipamento_rows = []
+    if getattr(config, "pdf_orcamento_exibir_tipo_equipamento", True):
+        equipamento_rows.append([Paragraph("Tipo", styles["OrcLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["OrcValue"])])
+    if getattr(config, "pdf_orcamento_exibir_marca_equipamento", True):
+        equipamento_rows.append([Paragraph("Marca", styles["OrcLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["OrcValue"])])
+    if getattr(config, "pdf_orcamento_exibir_modelo_equipamento", True):
+        equipamento_rows.append([Paragraph("Modelo", styles["OrcLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["OrcValue"])])
+    if getattr(config, "pdf_orcamento_exibir_numero_serie", True):
+        equipamento_rows.append([Paragraph("Número de Série", styles["OrcLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["OrcValue"])])
+    if getattr(config, "pdf_orcamento_exibir_defeito", True):
+        equipamento_rows.append([Paragraph("Defeito", styles["OrcLabel"]), Paragraph(ordem.defeito or "-", styles["OrcValue"])])
+    if getattr(config, "pdf_orcamento_exibir_acessorios", False):
+        equipamento_rows.append([Paragraph("Acessórios", styles["OrcLabel"]), Paragraph(ordem.acessorios or "-", styles["OrcValue"])])
+    if getattr(config, "pdf_orcamento_exibir_peritagem", True):
+        equipamento_rows.append([Paragraph("Peritagem", styles["OrcLabel"]), Paragraph(ordem.peritagem or "-", styles["OrcValue"])])
+    if not equipamento_rows:
+        equipamento_rows.append([Paragraph("Dados", styles["OrcLabel"]), Paragraph("-", styles["OrcValue"])])
+
     story.extend(
         [
-            _section_block(titulo_cliente, [
-                [Paragraph("Nome", styles["OrcLabel"]), Paragraph(orcamento.cliente.nome or "-", styles["OrcValue"])],
-                [Paragraph("Telefone", styles["OrcLabel"]), Paragraph(orcamento.cliente.telefone or "-", styles["OrcValue"])],
-                [Paragraph("Email", styles["OrcLabel"]), Paragraph(orcamento.cliente.email or "-", styles["OrcValue"])],
-            ]),
+            _section_block(titulo_cliente, cliente_rows),
             Spacer(1, layout_docs["orc_block_gap_cm"] * cm),
-            _section_block(titulo_equipamento, [
-                [Paragraph("Tipo", styles["OrcLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["OrcValue"])],
-                [Paragraph("Marca", styles["OrcLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["OrcValue"])],
-                [Paragraph("Modelo", styles["OrcLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["OrcValue"])],
-                [Paragraph("Número de Série", styles["OrcLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["OrcValue"])],
-                [Paragraph("Defeito", styles["OrcLabel"]), Paragraph(ordem.defeito or "-", styles["OrcValue"])],
-                [Paragraph("Peritagem", styles["OrcLabel"]), Paragraph(ordem.peritagem or "-", styles["OrcValue"])],
-            ]),
+            _section_block(titulo_equipamento, equipamento_rows),
             Spacer(1, layout_docs["orc_block_gap_cm"] * cm),
             _section(titulo_itens),
         ]
@@ -886,45 +909,53 @@ def imprimir_orcamento(request, pk):
         ("TOPPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_v"] + 1),
         ("BOTTOMPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_v"] + 1),
     ]))
-    bloco_aprovacao = Table(
-        [
-            [
-                Paragraph(f"Data da aprovacao: ____/____/______  (Validade: {data_validade})", styles["OrcText"]),
-                Paragraph("Assinatura do Cliente: ______________________________", styles["OrcText"]),
-            ],
-            [
-                Paragraph("Nome legivel do cliente: ______________________________", styles["OrcText"]),
-                Paragraph("Assinatura da Assistencia: ______________________________", styles["OrcText"]),
-            ],
-        ],
-        colWidths=[usable_w / 2.0, usable_w / 2.0],
-    )
-    bloco_aprovacao.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.5, tema_docs["section_line"]),
-        ("INNERGRID", (0, 0), (-1, -1), 0.25, tema_docs["section_line"]),
-        ("LEFTPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_h"]),
-        ("RIGHTPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_h"]),
-        ("TOPPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_v"] + 1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_v"] + 1),
-    ]))
-    titulo_condicoes = "Condições Comerciais e Aprovação"
     story.extend([
         tabela_itens,
         Spacer(1, 0.25 * cm),
         KeepTogether([totais]),
-        Spacer(1, 0.24 * cm),
-        KeepTogether([
-            _section(titulo_condicoes),
-            Paragraph(
-                condicoes_orcamento or "Validade de 7 dias. Valores sujeitos à aprovação do cliente.",
-                styles["OrcText"],
-            ),
-        ]),
-        Spacer(1, 0.16 * cm),
-        KeepTogether([bloco_aprovacao]),
-        Spacer(1, 0.14 * cm),
-        Paragraph("Declaro estar ciente dos valores e autorizo o serviço descrito neste orçamento.", styles["OrcMeta"]),
     ])
+
+    if getattr(config, "pdf_orcamento_exibir_condicoes", True):
+        titulo_condicoes = "Condições Comerciais e Aprovação"
+        story.extend([
+            Spacer(1, 0.24 * cm),
+            KeepTogether([
+                _section(titulo_condicoes),
+                Paragraph(
+                    condicoes_orcamento or "Validade de 7 dias. Valores sujeitos à aprovação do cliente.",
+                    styles["OrcText"],
+                ),
+            ]),
+        ])
+
+    if getattr(config, "pdf_orcamento_exibir_aprovacao", True):
+        bloco_aprovacao = Table(
+            [
+                [
+                    Paragraph(f"Data da aprovacao: ____/____/______  (Validade: {data_validade})", styles["OrcText"]),
+                    Paragraph("Assinatura do Cliente: ______________________________", styles["OrcText"]),
+                ],
+                [
+                    Paragraph("Nome legivel do cliente: ______________________________", styles["OrcText"]),
+                    Paragraph("Assinatura da Assistencia: ______________________________", styles["OrcText"]),
+                ],
+            ],
+            colWidths=[usable_w / 2.0, usable_w / 2.0],
+        )
+        bloco_aprovacao.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.5, tema_docs["section_line"]),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, tema_docs["section_line"]),
+            ("LEFTPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_h"]),
+            ("RIGHTPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_h"]),
+            ("TOPPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_v"] + 1),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), layout_docs["orc_cell_pad_v"] + 1),
+        ]))
+        story.extend([
+            Spacer(1, 0.16 * cm),
+            KeepTogether([bloco_aprovacao]),
+            Spacer(1, 0.14 * cm),
+            Paragraph("Declaro estar ciente dos valores e autorizo o serviço descrito neste orçamento.", styles["OrcMeta"]),
+        ])
 
     doc.build(story, canvasmaker=make_numbered_canvas(_draw_footer))
     return _aplicar_xframe_preview(request, response)

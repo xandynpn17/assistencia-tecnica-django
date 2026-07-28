@@ -960,6 +960,230 @@ class ConfiguracaoSistema(models.Model):
         default="colorido",
         verbose_name="Modo de cor dos PDFs",
     )
+    pdf_os_exibir_documento_cliente = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir documento do cliente",
+    )
+    pdf_os_exibir_nome_cliente = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir nome do cliente",
+    )
+    pdf_os_exibir_telefone_cliente = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir telefone do cliente",
+    )
+    pdf_os_exibir_email_cliente = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir e-mail do cliente",
+    )
+    pdf_os_exibir_endereco_cliente = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir endereço e CEP do cliente",
+    )
+    pdf_os_exibir_tipo_equipamento = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir tipo do equipamento",
+    )
+    pdf_os_exibir_marca_equipamento = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir marca do equipamento",
+    )
+    pdf_os_exibir_modelo_equipamento = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir modelo do equipamento",
+    )
+    pdf_os_exibir_numero_serie = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir número de série",
+    )
+    pdf_os_exibir_local_armazenamento = models.BooleanField(
+        default=False,
+        verbose_name="OS: exibir local de armazenamento",
+    )
+    pdf_os_exibir_defeito = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir defeito reclamado",
+    )
+    pdf_os_exibir_acessorios = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir acessórios",
+    )
+    pdf_os_exibir_peritagem = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir peritagem",
+    )
+    pdf_os_exibir_tipo_reparo = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir tipo da OS",
+    )
+    pdf_os_exibir_data_compra = models.BooleanField(
+        default=False,
+        verbose_name="OS: exibir data de compra",
+    )
+    pdf_os_exibir_numero_nota_fiscal = models.BooleanField(
+        default=False,
+        verbose_name="OS: exibir número da nota fiscal",
+    )
+    pdf_os_exibir_referencia_parceiro = models.BooleanField(
+        default=False,
+        verbose_name="OS: exibir referência de parceiro",
+    )
+    pdf_os_exibir_origem_cliente = models.BooleanField(
+        default=False,
+        verbose_name="OS: exibir origem do cliente",
+    )
+    pdf_os_exibir_os_origem_garantia = models.BooleanField(
+        default=False,
+        verbose_name="OS: exibir OS original da garantia",
+    )
+    pdf_os_exibir_classificacao_retorno = models.BooleanField(
+        default=False,
+        verbose_name="OS: exibir classificação do retorno",
+    )
+    pdf_os_exibir_manutencao_preventiva = models.BooleanField(
+        default=False,
+        verbose_name="OS: exibir manutenção preventiva sugerida",
+    )
+    pdf_os_exibir_termos = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir termos e condições",
+    )
+    pdf_os_exibir_assinaturas = models.BooleanField(
+        default=True,
+        verbose_name="OS: exibir bloco de assinaturas",
+    )
+    pdf_orcamento_exibir_nome_cliente = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir nome do cliente",
+    )
+    pdf_orcamento_exibir_telefone_cliente = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir telefone do cliente",
+    )
+    pdf_orcamento_exibir_documento_cliente = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir documento do cliente",
+    )
+    pdf_orcamento_exibir_email_cliente = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir e-mail do cliente",
+    )
+    pdf_orcamento_exibir_origem_cliente = models.BooleanField(
+        default=False,
+        verbose_name="Orçamento: exibir origem do cliente",
+    )
+    pdf_relatorio_exibir_nome_cliente = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir nome do cliente",
+    )
+    pdf_relatorio_exibir_telefone_cliente = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir telefone do cliente",
+    )
+    pdf_relatorio_exibir_documento_cliente = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir documento do cliente",
+    )
+    pdf_relatorio_exibir_email_cliente = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir e-mail do cliente",
+    )
+    pdf_relatorio_exibir_origem_cliente = models.BooleanField(
+        default=False,
+        verbose_name="Relatório: exibir origem do cliente",
+    )
+    pdf_relatorio_exibir_tipo_equipamento = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir tipo do equipamento",
+    )
+    pdf_relatorio_exibir_marca_equipamento = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir marca do equipamento",
+    )
+    pdf_relatorio_exibir_modelo_equipamento = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir modelo do equipamento",
+    )
+    pdf_relatorio_exibir_numero_serie = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir número de série",
+    )
+    pdf_relatorio_exibir_local_armazenamento = models.BooleanField(
+        default=False,
+        verbose_name="Relatório: exibir local de armazenamento",
+    )
+    pdf_relatorio_exibir_defeito = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir defeito reclamado",
+    )
+    pdf_relatorio_exibir_peritagem = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir peritagem",
+    )
+    pdf_relatorio_exibir_acessorios = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir acessórios",
+    )
+    pdf_relatorio_exibir_tipo_reparo = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir tipo da OS",
+    )
+    pdf_relatorio_exibir_tipo_reparacao = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir tipo de reparação",
+    )
+    pdf_relatorio_exibir_datas_movimento = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir datas de entrada e saída",
+    )
+    pdf_relatorio_exibir_responsaveis = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir atendente e técnico",
+    )
+    pdf_relatorio_exibir_servicos_pecas = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: exibir serviços e peças",
+    )
+    pdf_orcamento_exibir_tipo_equipamento = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir tipo do equipamento",
+    )
+    pdf_orcamento_exibir_marca_equipamento = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir marca do equipamento",
+    )
+    pdf_orcamento_exibir_modelo_equipamento = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir modelo do equipamento",
+    )
+    pdf_orcamento_exibir_numero_serie = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir número de série",
+    )
+    pdf_orcamento_exibir_defeito = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir defeito reclamado",
+    )
+    pdf_orcamento_exibir_acessorios = models.BooleanField(
+        default=False,
+        verbose_name="Orçamento: exibir acessórios",
+    )
+    pdf_orcamento_exibir_peritagem = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir peritagem",
+    )
+    pdf_orcamento_exibir_tipo_reparo = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir tipo da OS",
+    )
+    pdf_orcamento_exibir_condicoes = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir condições comerciais",
+    )
+    pdf_orcamento_exibir_aprovacao = models.BooleanField(
+        default=True,
+        verbose_name="Orçamento: exibir quadro de aprovação",
+    )
 
     data_atualizacao = models.DateTimeField(auto_now=True)
 

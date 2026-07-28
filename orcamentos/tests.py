@@ -8,10 +8,11 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph as reportlab_paragraph
 
 from caixa.models import ComissaoItemOrcamento, RegraComissaoTecnico
 from clientes.models import Cliente
-from configuracoes.models import Empresa
+from configuracoes.models import ConfiguracaoSistema, Empresa
 from core.pdf_theme import get_document_theme as real_get_document_theme
 from estoque.models import Produto
 from orcamentos.models import ItemOrcamento, Orcamento
@@ -674,3 +675,43 @@ class ImpressaoOrcamentoPdfTests(TestCase):
         self.assertTrue(response.content.startswith(b"%PDF"))
         self.assertTrue(factory_mock.called)
         self.assertTrue(any(total >= 2 for total in self._pdf_page_counts(response.content)))
+
+    def test_imprimir_orcamento_respeita_campos_ocultos_configurados(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.pdf_orcamento_exibir_documento_cliente = False
+        config.pdf_orcamento_exibir_defeito = False
+        config.pdf_orcamento_exibir_peritagem = False
+        config.pdf_orcamento_exibir_condicoes = False
+        config.pdf_orcamento_exibir_aprovacao = False
+        config.save(
+            update_fields=[
+                "pdf_orcamento_exibir_documento_cliente",
+                "pdf_orcamento_exibir_defeito",
+                "pdf_orcamento_exibir_peritagem",
+                "pdf_orcamento_exibir_condicoes",
+                "pdf_orcamento_exibir_aprovacao",
+            ]
+        )
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(
+            defeito="Nao deveria aparecer como defeito no or?amento.",
+            peritagem="Nao deveria aparecer no or?amento.",
+        )
+        self.ordem.refresh_from_db()
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("orcamentos.views.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("orcamentos:imprimir_orcamento", args=[self.orcamento.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertNotIn("Documento", texto_unificado)
+        self.assertNotIn("Defeito", texto_unificado)
+        self.assertNotIn("Nao deveria aparecer como defeito no or?amento.", texto_unificado)
+        self.assertNotIn("Peritagem", texto_unificado)
+        self.assertNotIn("Nao deveria aparecer no or?amento.", texto_unificado)
+        self.assertNotIn("Condi??es Comerciais e Aprova??o", texto_unificado)
+        self.assertNotIn("Assinatura do Cliente", texto_unificado)

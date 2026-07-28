@@ -32,7 +32,7 @@ from ordens.forms import LinhaTrabalhoForm
 from ordens.models import ConciliacaoOrdem, ConciliacaoOrdemItem, GuiaExpedicaoItem, GuiaExpedicaoParceiro, LogOS, OrdemArquivo, OrdemServico, LinhaTrabalho, NotificacaoCliente, OrdemTalao, PedidoCompra, ServicoPeca
 from ordens.services.fluxo_os_policy import FluxoOSPolicyService
 from ordens.services.resumo_operacional import ResumoOperacionalService
-from ordens.view_modules.impressao import _quebrar_tokens_longos
+from ordens.view_modules.impressao import _draw_etiquetas_corte, _quebrar_tokens_longos
 from core.pdf_utils import logo_or_paragraph, make_numbered_canvas as real_make_numbered_canvas
 
 
@@ -3091,7 +3091,7 @@ class ImpressaoPdfHeadersTests(TestCase):
             response = self.client.get(reverse("ordens:imprimir_ordem_servico", args=[self.ordem.id]))
         self.assertEqual(response.status_code, 200)
         self.assertTrue(factory_mock.called)
-        self.assertIn(1, self._pdf_page_counts(response.content))
+        self.assertIn(2, self._pdf_page_counts(response.content))
 
     def test_imprimir_ordem_servico_preview_aplica_layout_documentos(self):
         observado = {}
@@ -3140,6 +3140,70 @@ class ImpressaoPdfHeadersTests(TestCase):
         self.assertIn(f"em {confirmacao_fmt}", texto_unificado)
         self.assertNotIn(f"em {abertura_fmt}", texto_unificado)
 
+    def test_imprimir_ordem_servico_inclui_peritagem(self):
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(peritagem="Tela com trinca no canto superior.")
+        self.ordem.refresh_from_db()
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Peritagem", texto_unificado)
+        self.assertIn("Tela com trinca no canto superior.", texto_unificado)
+
+    def test_imprimir_ordem_servico_inclui_acessorios_quando_ativo(self):
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(acessorios="Carregador, cabo USB e capa protetora.")
+        self.ordem.refresh_from_db()
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Acessórios", texto_unificado)
+        self.assertIn("Carregador, cabo USB e capa protetora.", texto_unificado)
+
+    def test_imprimir_ordem_servico_respeita_campos_ocultos_configurados(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.pdf_os_exibir_peritagem = False
+        config.pdf_os_exibir_acessorios = False
+        config.pdf_os_exibir_termos = False
+        config.pdf_os_exibir_assinaturas = False
+        config.save(update_fields=["pdf_os_exibir_peritagem", "pdf_os_exibir_acessorios", "pdf_os_exibir_termos", "pdf_os_exibir_assinaturas"])
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(
+            peritagem="Nao deveria aparecer no PDF.",
+            acessorios="Acessorio oculto no PDF.",
+        )
+        self.ordem.refresh_from_db()
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertNotIn("Peritagem", texto_unificado)
+        self.assertNotIn("Nao deveria aparecer no PDF.", texto_unificado)
+        self.assertNotIn("Acessórios", texto_unificado)
+        self.assertNotIn("Acessorio oculto no PDF.", texto_unificado)
+        self.assertNotIn("Termos e Condicoes", texto_unificado)
+        self.assertNotIn("Assinatura do Cliente:", texto_unificado)
+
     def test_imprimir_ordem_servico_impressao_preview_remove_x_frame_options(self):
         response = self.client.get(
             reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]),
@@ -3160,6 +3224,141 @@ class ImpressaoPdfHeadersTests(TestCase):
         counts = self._pdf_page_counts(response.content)
         self.assertTrue(counts)
         self.assertLessEqual(max(counts), 2)
+
+    def test_imprimir_ordem_servico_impressao_inclui_peritagem(self):
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(peritagem="Carcaca com marcas e tampa solta.")
+        self.ordem.refresh_from_db()
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Peritagem", texto_unificado)
+        self.assertIn("Carcaca com marcas e tampa solta.", texto_unificado)
+
+    def test_imprimir_ordem_servico_impressao_inclui_acessorios_quando_ativo(self):
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(acessorios="Fonte original e adaptador.")
+        self.ordem.refresh_from_db()
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Acessórios", texto_unificado)
+        self.assertIn("Fonte original e adaptador.", texto_unificado)
+
+    def test_imprimir_ordem_servico_impressao_inclui_origem_e_vinculo_garantia_quando_ativos(self):
+        origem = OrdemServico.objects.create(
+            cliente=self.ordem.cliente,
+            tipo_equipamento="celular",
+            marca_equipamento="Marca Origem",
+            modelo_equipamento="Modelo Base",
+            defeito="Base anterior",
+            tipo_reparo="Fora de Garantia",
+            status="concluida",
+        )
+        Cliente.objects.filter(pk=self.ordem.cliente_id).update(origem_cliente="google")
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(
+            ordem_origem_garantia=origem,
+            garantia_classificacao_retorno="garantia_mao_obra",
+            manutencao_preventiva_meses=6,
+        )
+        config = ConfiguracaoSistema.get_configuracao()
+        config.pdf_os_exibir_origem_cliente = True
+        config.pdf_os_exibir_os_origem_garantia = True
+        config.pdf_os_exibir_classificacao_retorno = True
+        config.pdf_os_exibir_manutencao_preventiva = True
+        config.save(
+            update_fields=[
+                "pdf_os_exibir_origem_cliente",
+                "pdf_os_exibir_os_origem_garantia",
+                "pdf_os_exibir_classificacao_retorno",
+                "pdf_os_exibir_manutencao_preventiva",
+            ]
+        )
+        self.ordem.refresh_from_db()
+        self.ordem.cliente.refresh_from_db()
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Origem", texto_unificado)
+        self.assertIn("Google", texto_unificado)
+        self.assertIn("OS Original Garantia", texto_unificado)
+        self.assertIn(origem.numero_os, texto_unificado)
+        self.assertIn("Classificação Retorno", texto_unificado)
+        self.assertIn("Garantia de mão de obra", texto_unificado)
+        self.assertIn("Manutenção Preventiva", texto_unificado)
+        self.assertIn("6 meses", texto_unificado)
+
+    def test_imprimir_ordem_servico_impressao_cabecalho_sem_mojibake_e_com_tipo_destacado(self):
+        Empresa.objects.update_or_create(
+            pk=1,
+            defaults={
+                "nome": "ABTECH PECAS E SERVICOS",
+                "cnpj": "67.966.268/0001-53",
+                "endereco": "Avenida Goias, 4067, Qd. 25, Lt. 04, Sala 01",
+                "telefone": "62999999999",
+            },
+        )
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(tipo_reparo="Fora de Garantia")
+        self.ordem.refresh_from_db()
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("ORDEM DE SERVIÇO Nº", texto_unificado)
+        self.assertIn("TIPO DA OS", texto_unificado)
+        self.assertIn("Fora de Garantia", texto_unificado)
+        self.assertNotIn("SERVIÃ", texto_unificado)
+        self.assertNotIn("NÂº", texto_unificado)
+
+    def test_imprimir_ordem_servico_impressao_verso_termos_tem_assinatura_do_cliente(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.pdf_os_exibir_termos = True
+        config.pdf_os_exibir_assinaturas = True
+        config.termos_ordem_servico = "Primeira regra. Segunda regra. Terceira regra."
+        config.save(update_fields=["pdf_os_exibir_termos", "pdf_os_exibir_assinaturas", "termos_ordem_servico"])
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Declaro que li e concordo com os termos e condições acima.", texto_unificado)
+        self.assertIn("Assinatura do Cliente (termos):", texto_unificado)
+        self.assertIn("Primeira regra.", texto_unificado)
 
     def test_imprimir_ordem_servico_impressao_reserva_faixa_para_etiqueta(self):
         frames = []
@@ -3218,6 +3417,82 @@ class ImpressaoPdfHeadersTests(TestCase):
         self.assertTrue(response.content.startswith(b"%PDF"))
         self.assertIsNone(response.get("X-Frame-Options"))
 
+    def test_imprimir_relatorio_tecnico_respeita_campos_ocultos_configurados(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.pdf_relatorio_exibir_documento_cliente = False
+        config.pdf_relatorio_exibir_email_cliente = False
+        config.pdf_relatorio_exibir_defeito = False
+        config.pdf_relatorio_exibir_numero_serie = False
+        config.pdf_relatorio_exibir_peritagem = False
+        config.pdf_relatorio_exibir_acessorios = False
+        config.pdf_relatorio_exibir_tipo_reparo = False
+        config.pdf_relatorio_exibir_servicos_pecas = False
+        config.save(
+            update_fields=[
+                "pdf_relatorio_exibir_documento_cliente",
+                "pdf_relatorio_exibir_email_cliente",
+                "pdf_relatorio_exibir_defeito",
+                "pdf_relatorio_exibir_numero_serie",
+                "pdf_relatorio_exibir_peritagem",
+                "pdf_relatorio_exibir_acessorios",
+                "pdf_relatorio_exibir_tipo_reparo",
+                "pdf_relatorio_exibir_servicos_pecas",
+            ]
+        )
+
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(
+            defeito="Defeito escondido no laudo.",
+            peritagem="Tela com trinca no canto superior.",
+            acessorios="Carregador e capa.",
+        )
+        self.ordem.refresh_from_db()
+        ServicoPeca.objects.create(
+            ordem=self.ordem,
+            tipo="peca",
+            nome="Display frontal",
+            quantidade=1,
+            valor_unitario=Decimal("120.00"),
+        )
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertNotIn(self.ordem.cliente.get_documento_formatado() or self.ordem.cliente.documento or "", texto_unificado)
+        self.assertNotIn("E-mail", texto_unificado)
+        self.assertNotIn("Defeito", texto_unificado)
+        self.assertNotIn("Defeito escondido no laudo.", texto_unificado)
+        self.assertNotIn("Número de Série", texto_unificado)
+        self.assertNotIn("Peritagem", texto_unificado)
+        self.assertNotIn("Acessórios", texto_unificado)
+        self.assertNotIn("Tipo de Reparo (OS)", texto_unificado)
+        self.assertNotIn("RecepÃ§Ã£o", texto_unificado)
+        self.assertNotIn("Serviços e Peças", texto_unificado)
+        self.assertNotIn("Display frontal", texto_unificado)
+
+    def test_imprimir_relatorio_tecnico_inclui_peritagem_quando_ativa(self):
+        OrdemServico.objects.filter(pk=self.ordem.pk).update(peritagem="Gabinete com riscos e tampa ajustada.")
+        self.ordem.refresh_from_db()
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Peritagem", texto_unificado)
+        self.assertIn("Gabinete com riscos e tampa ajustada.", texto_unificado)
+
 
 class ImpressaoPdfUtilsTests(TestCase):
     def test_quebrar_tokens_longos_preserva_texto_e_limita_blocos(self):
@@ -3226,6 +3501,52 @@ class ImpressaoPdfUtilsTests(TestCase):
 
         self.assertEqual(resultado.replace(" ", ""), token_longo)
         self.assertTrue(all(len(parte) <= 10 for parte in resultado.split(" ")))
+
+    def test_draw_etiquetas_corte_usa_texto_os_sem_duplicar_prefixo(self):
+        class CanvasSpy:
+            def __init__(self):
+                self.font_size = None
+                self.textos = []
+
+            def stringWidth(self, texto, _fonte, fonte_tamanho):
+                return len(str(texto)) * (fonte_tamanho * 0.35)
+
+            def setFillColor(self, *_args, **_kwargs):
+                return None
+
+            def setStrokeColor(self, *_args, **_kwargs):
+                return None
+
+            def setLineWidth(self, *_args, **_kwargs):
+                return None
+
+            def roundRect(self, *_args, **_kwargs):
+                return None
+
+            def setFont(self, _fonte, tamanho):
+                self.font_size = tamanho
+
+            def drawCentredString(self, x, y, texto):
+                self.textos.append((x, y, texto, self.font_size))
+
+        canv = CanvasSpy()
+        tema_docs = real_get_document_theme(None)
+        fonts = {"bold": "Helvetica-Bold", "regular": "Helvetica"}
+
+        _draw_etiquetas_corte(
+            canv,
+            width_total=A4[0],
+            y_corte=A4[1] / 2.0,
+            altura_etiqueta=0.90 * cm,
+            texto_os="OS-4700",
+            texto_cliente="Cliente Teste",
+            fonts=fonts,
+            tema_docs=tema_docs,
+        )
+
+        textos_os = [texto for _x, _y, texto, size in canv.textos if size == 8.9]
+        self.assertTrue(textos_os)
+        self.assertTrue(all(texto == "OS-4700" for texto in textos_os))
 
 
 class AgendamentoOrdemServicoTests(TestCase):

@@ -723,6 +723,62 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'layout_os_exibir_etiqueta_corte',
             'layout_documentos_preset',
             'layout_documentos_cor',
+            'pdf_os_exibir_documento_cliente',
+            'pdf_os_exibir_nome_cliente',
+            'pdf_os_exibir_telefone_cliente',
+            'pdf_os_exibir_email_cliente',
+            'pdf_os_exibir_endereco_cliente',
+            'pdf_os_exibir_tipo_equipamento',
+            'pdf_os_exibir_marca_equipamento',
+            'pdf_os_exibir_modelo_equipamento',
+            'pdf_os_exibir_numero_serie',
+            'pdf_os_exibir_local_armazenamento',
+            'pdf_os_exibir_defeito',
+            'pdf_os_exibir_acessorios',
+            'pdf_os_exibir_peritagem',
+            'pdf_os_exibir_tipo_reparo',
+            'pdf_os_exibir_data_compra',
+            'pdf_os_exibir_numero_nota_fiscal',
+            'pdf_os_exibir_referencia_parceiro',
+            'pdf_os_exibir_origem_cliente',
+            'pdf_os_exibir_os_origem_garantia',
+            'pdf_os_exibir_classificacao_retorno',
+            'pdf_os_exibir_manutencao_preventiva',
+            'pdf_os_exibir_termos',
+            'pdf_os_exibir_assinaturas',
+            'pdf_relatorio_exibir_nome_cliente',
+            'pdf_relatorio_exibir_telefone_cliente',
+            'pdf_relatorio_exibir_documento_cliente',
+            'pdf_relatorio_exibir_email_cliente',
+            'pdf_relatorio_exibir_origem_cliente',
+            'pdf_relatorio_exibir_tipo_equipamento',
+            'pdf_relatorio_exibir_marca_equipamento',
+            'pdf_relatorio_exibir_modelo_equipamento',
+            'pdf_relatorio_exibir_numero_serie',
+            'pdf_relatorio_exibir_local_armazenamento',
+            'pdf_relatorio_exibir_defeito',
+            'pdf_relatorio_exibir_peritagem',
+            'pdf_relatorio_exibir_acessorios',
+            'pdf_relatorio_exibir_tipo_reparo',
+            'pdf_relatorio_exibir_tipo_reparacao',
+            'pdf_relatorio_exibir_datas_movimento',
+            'pdf_relatorio_exibir_responsaveis',
+            'pdf_relatorio_exibir_servicos_pecas',
+            'pdf_orcamento_exibir_nome_cliente',
+            'pdf_orcamento_exibir_telefone_cliente',
+            'pdf_orcamento_exibir_documento_cliente',
+            'pdf_orcamento_exibir_email_cliente',
+            'pdf_orcamento_exibir_origem_cliente',
+            'pdf_orcamento_exibir_tipo_equipamento',
+            'pdf_orcamento_exibir_marca_equipamento',
+            'pdf_orcamento_exibir_modelo_equipamento',
+            'pdf_orcamento_exibir_numero_serie',
+            'pdf_orcamento_exibir_defeito',
+            'pdf_orcamento_exibir_acessorios',
+            'pdf_orcamento_exibir_peritagem',
+            'pdf_orcamento_exibir_tipo_reparo',
+            'pdf_orcamento_exibir_condicoes',
+            'pdf_orcamento_exibir_aprovacao',
         ]
         widgets = {
             'estado_padrao': forms.Select(attrs={'class': 'form-control'}),
@@ -801,6 +857,62 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com numero da OS na linha de recorte."
         self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressao, relatorio e orcamento)."
         self.fields["layout_documentos_cor"].help_text = "Escolha se os PDFs saem em colorido ou escala de cinza (preto e branco)."
+        self.fields["pdf_os_exibir_documento_cliente"].help_text = "Controle global da OS padrão usada em todas as vias do documento."
+        self.fields["pdf_os_exibir_nome_cliente"].help_text = "Mantém ou oculta o nome do cliente na OS padrão."
+        self.fields["pdf_os_exibir_telefone_cliente"].help_text = "Controla o telefone do cliente na OS padrão."
+        self.fields["pdf_os_exibir_email_cliente"].help_text = "Controla de forma global se o e-mail aparece na OS padrão."
+        self.fields["pdf_os_exibir_endereco_cliente"].help_text = "Mantém ou remove endereço e CEP na OS padrão, digital e física."
+        self.fields["pdf_os_exibir_tipo_equipamento"].help_text = "Mostra o tipo do equipamento recebido."
+        self.fields["pdf_os_exibir_marca_equipamento"].help_text = "Mostra a marca cadastrada no equipamento."
+        self.fields["pdf_os_exibir_modelo_equipamento"].help_text = "Mostra o modelo informado na abertura da OS."
+        self.fields["pdf_os_exibir_numero_serie"].help_text = "Recomendado manter ativo para rastreabilidade do equipamento."
+        self.fields["pdf_os_exibir_local_armazenamento"].help_text = "Pode ser útil para controle interno impresso em lojas com muitos setores."
+        self.fields["pdf_os_exibir_defeito"].help_text = "Controla a impressão do defeito reclamado pelo cliente."
+        self.fields["pdf_os_exibir_acessorios"].help_text = "Mostra ou oculta os acessórios entregues junto com o equipamento."
+        self.fields["pdf_os_exibir_peritagem"].help_text = "Mantém o registro visual/estético do equipamento na OS padrão."
+        self.fields["pdf_os_exibir_tipo_reparo"].help_text = "Mostra ou oculta o tipo da OS no corpo do documento."
+        self.fields["pdf_os_exibir_data_compra"].help_text = "Útil para ordens em garantia ou análise de histórico."
+        self.fields["pdf_os_exibir_numero_nota_fiscal"].help_text = "Exibe o número da nota fiscal informado na abertura."
+        self.fields["pdf_os_exibir_referencia_parceiro"].help_text = "Mostra a referência externa ou do parceiro quando existir."
+        self.fields["pdf_os_exibir_origem_cliente"].help_text = "Permite mostrar no impresso como esse cliente chegou até a loja."
+        self.fields["pdf_os_exibir_os_origem_garantia"].help_text = "Útil para retorno em garantia de serviço quando você precisa amarrar a OS original no papel."
+        self.fields["pdf_os_exibir_classificacao_retorno"].help_text = "Mostra a classificação do retorno em garantia quando ela já estiver definida."
+        self.fields["pdf_os_exibir_manutencao_preventiva"].help_text = "Exibe o prazo sugerido de manutenção preventiva, quando preenchido."
+        self.fields["pdf_os_exibir_termos"].help_text = "Desative apenas se a OS padrão usar folha separada de termos."
+        self.fields["pdf_os_exibir_assinaturas"].help_text = "Controla o bloco de assinatura da OS padrão, digital e física."
+        self.fields["pdf_relatorio_exibir_nome_cliente"].help_text = "Mantém o nome do cliente no laudo técnico."
+        self.fields["pdf_relatorio_exibir_telefone_cliente"].help_text = "Mantém o telefone do cliente no laudo técnico."
+        self.fields["pdf_relatorio_exibir_documento_cliente"].help_text = "Exibe CPF/CNPJ no relatório quando o documento precisa sair com amarração formal."
+        self.fields["pdf_relatorio_exibir_email_cliente"].help_text = "Remove o e-mail quando o relatório técnico não precisa sair com contato do cliente."
+        self.fields["pdf_relatorio_exibir_origem_cliente"].help_text = "Mostra a origem do cliente no laudo quando isso fizer sentido para parceiros ou auditoria interna."
+        self.fields["pdf_relatorio_exibir_tipo_equipamento"].help_text = "Mantém o tipo do equipamento no bloco técnico."
+        self.fields["pdf_relatorio_exibir_marca_equipamento"].help_text = "Mantém a marca do equipamento no bloco técnico."
+        self.fields["pdf_relatorio_exibir_modelo_equipamento"].help_text = "Mantém o modelo do equipamento no bloco técnico."
+        self.fields["pdf_relatorio_exibir_numero_serie"].help_text = "Ajuda a manter rastreabilidade no laudo final."
+        self.fields["pdf_relatorio_exibir_local_armazenamento"].help_text = "Pode ser útil em laudos internos de conferência ou parceiro."
+        self.fields["pdf_relatorio_exibir_defeito"].help_text = "Mostra o defeito reclamado pelo cliente no laudo."
+        self.fields["pdf_relatorio_exibir_peritagem"].help_text = "Mostra ou oculta o registro visual do equipamento no relatório."
+        self.fields["pdf_relatorio_exibir_acessorios"].help_text = "Permite esconder acessórios quando o laudo precisar ficar mais enxuto."
+        self.fields["pdf_relatorio_exibir_tipo_reparo"].help_text = "Mostra o tipo da OS dentro do relatório técnico."
+        self.fields["pdf_relatorio_exibir_tipo_reparacao"].help_text = "Mostra o resultado técnico final cadastrado pelo reparador."
+        self.fields["pdf_relatorio_exibir_datas_movimento"].help_text = "Controla a exibição das datas de entrada e saída do equipamento."
+        self.fields["pdf_relatorio_exibir_responsaveis"].help_text = "Controla a exibição do atendente e do técnico responsável."
+        self.fields["pdf_relatorio_exibir_servicos_pecas"].help_text = "Controla a tabela final de serviços e peças executados."
+        self.fields["pdf_orcamento_exibir_nome_cliente"].help_text = "Mantém o nome do cliente no orçamento."
+        self.fields["pdf_orcamento_exibir_telefone_cliente"].help_text = "Mantém o telefone do cliente no orçamento."
+        self.fields["pdf_orcamento_exibir_documento_cliente"].help_text = "Exibe CPF/CNPJ no orçamento quando você precisa de conferência formal."
+        self.fields["pdf_orcamento_exibir_email_cliente"].help_text = "Remove o e-mail do cliente do orçamento quando não for necessário."
+        self.fields["pdf_orcamento_exibir_origem_cliente"].help_text = "Permite mostrar a origem do cliente em propostas internas ou comerciais."
+        self.fields["pdf_orcamento_exibir_tipo_equipamento"].help_text = "Mantém o tipo do equipamento no orçamento."
+        self.fields["pdf_orcamento_exibir_marca_equipamento"].help_text = "Mantém a marca do equipamento no orçamento."
+        self.fields["pdf_orcamento_exibir_modelo_equipamento"].help_text = "Mantém o modelo do equipamento no orçamento."
+        self.fields["pdf_orcamento_exibir_numero_serie"].help_text = "Ajuda a amarrar o orçamento ao equipamento certo."
+        self.fields["pdf_orcamento_exibir_defeito"].help_text = "Mostra o defeito reclamado no orçamento."
+        self.fields["pdf_orcamento_exibir_acessorios"].help_text = "Inclui os acessórios recebidos junto com o equipamento."
+        self.fields["pdf_orcamento_exibir_peritagem"].help_text = "Mostra ou oculta a peritagem no orçamento."
+        self.fields["pdf_orcamento_exibir_tipo_reparo"].help_text = "Mostra o tipo da OS no documento comercial."
+        self.fields["pdf_orcamento_exibir_condicoes"].help_text = "Controla a seção de condições comerciais e validade."
+        self.fields["pdf_orcamento_exibir_aprovacao"].help_text = "Mostra ou oculta o quadro de assinatura/aprovação do orçamento."
         self.fields["rodape_relatorio"].help_text = "Texto padrao exibido no final do relatorio tecnico."
         self.fields["enviar_whatsapp_abertura_os"].help_text = "Permite desligar somente a mensagem automática de abertura, sem afetar a assinatura digital."
         self.fields["mensagem_abertura_whatsapp"].help_text = "Mensagem padrão enviada quando a OS é criada e o envio automático estiver ativo."

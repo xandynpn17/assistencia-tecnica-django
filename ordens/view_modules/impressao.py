@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 import os
 import re
 from datetime import datetime
@@ -41,6 +41,7 @@ from core.pdf_theme import get_document_profile, get_document_theme, resolve_lay
 from ..models import OrdemServico, ServicoPeca
 
 logger = logging.getLogger(__name__)
+BULLET_MARK = "\u2022"
 
 
 def _split_termos(termos):
@@ -180,7 +181,7 @@ def _draw_etiquetas_corte(
     fonts,
     tema_docs,
 ):
-    largura_etiqueta = 3.0 * cm
+    largura_etiqueta = 3.2 * cm
     area_util = width_total
     quantidade = max(1, int(area_util // largura_etiqueta))
     if quantidade == 1:
@@ -192,21 +193,24 @@ def _draw_etiquetas_corte(
             quantidade -= 1
             espaco_etiqueta = (area_util - (quantidade * largura_etiqueta)) / (quantidade - 1) if quantidade > 1 else 0
 
-    texto_os_final = _encurtar_canvas_texto(canv, texto_os, largura_etiqueta - (0.16 * cm), fonts["bold"], 6.9)
-    texto_cliente_final = _encurtar_canvas_texto(canv, texto_cliente, largura_etiqueta - (0.16 * cm), fonts["regular"], 5.2)
+    largura_ocupada = (quantidade * largura_etiqueta) + ((quantidade - 1) * espaco_etiqueta)
+    x_inicio = max(0, (area_util - largura_ocupada) / 2.0)
+
+    texto_os_final = _encurtar_canvas_texto(canv, texto_os, largura_etiqueta - (0.22 * cm), fonts["bold"], 8.9)
+    texto_cliente_final = _encurtar_canvas_texto(canv, texto_cliente, largura_etiqueta - (0.22 * cm), fonts["regular"], 5.0)
     y_etiqueta = y_corte - (altura_etiqueta / 2.0)
 
     for idx in range(quantidade):
-        x = idx * (largura_etiqueta + espaco_etiqueta)
+        x = x_inicio + (idx * (largura_etiqueta + espaco_etiqueta))
         canv.setFillColor(colors.white)
         canv.setStrokeColor(tema_docs["section_line"])
         canv.setLineWidth(0.9)
         canv.roundRect(x, y_etiqueta, largura_etiqueta, altura_etiqueta, 1.8, stroke=1, fill=1)
         canv.setFillColor(tema_docs["meta_color"])
-        canv.setFont(fonts["bold"], 6.9)
-        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.51 * cm, texto_os_final)
-        canv.setFont(fonts["regular"], 5.2)
-        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.20 * cm, texto_cliente_final)
+        canv.setFont(fonts["bold"], 8.9)
+        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.54 * cm, texto_os_final)
+        canv.setFont(fonts["regular"], 5.0)
+        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.19 * cm, texto_cliente_final)
         canv.setLineWidth(1)
 
 
@@ -342,6 +346,71 @@ def _config_layout_para_request(request):
         request.GET.get("layout_os_exibir_etiqueta_corte"),
         default=bool(getattr(config, "layout_os_exibir_etiqueta_corte", True)),
     )
+    for attr_name in (
+        "pdf_os_exibir_documento_cliente",
+        "pdf_os_exibir_nome_cliente",
+        "pdf_os_exibir_telefone_cliente",
+        "pdf_os_exibir_email_cliente",
+        "pdf_os_exibir_endereco_cliente",
+        "pdf_os_exibir_tipo_equipamento",
+        "pdf_os_exibir_marca_equipamento",
+        "pdf_os_exibir_modelo_equipamento",
+        "pdf_os_exibir_numero_serie",
+        "pdf_os_exibir_local_armazenamento",
+        "pdf_os_exibir_defeito",
+        "pdf_os_exibir_acessorios",
+        "pdf_os_exibir_peritagem",
+        "pdf_os_exibir_tipo_reparo",
+        "pdf_os_exibir_data_compra",
+        "pdf_os_exibir_numero_nota_fiscal",
+        "pdf_os_exibir_referencia_parceiro",
+        "pdf_os_exibir_origem_cliente",
+        "pdf_os_exibir_os_origem_garantia",
+        "pdf_os_exibir_classificacao_retorno",
+        "pdf_os_exibir_manutencao_preventiva",
+        "pdf_os_exibir_termos",
+        "pdf_os_exibir_assinaturas",
+        "pdf_relatorio_exibir_nome_cliente",
+        "pdf_relatorio_exibir_telefone_cliente",
+        "pdf_relatorio_exibir_documento_cliente",
+        "pdf_relatorio_exibir_email_cliente",
+        "pdf_relatorio_exibir_origem_cliente",
+        "pdf_relatorio_exibir_tipo_equipamento",
+        "pdf_relatorio_exibir_marca_equipamento",
+        "pdf_relatorio_exibir_modelo_equipamento",
+        "pdf_relatorio_exibir_numero_serie",
+        "pdf_relatorio_exibir_local_armazenamento",
+        "pdf_relatorio_exibir_defeito",
+        "pdf_relatorio_exibir_peritagem",
+        "pdf_relatorio_exibir_acessorios",
+        "pdf_relatorio_exibir_tipo_reparo",
+        "pdf_relatorio_exibir_tipo_reparacao",
+        "pdf_relatorio_exibir_datas_movimento",
+        "pdf_relatorio_exibir_responsaveis",
+        "pdf_relatorio_exibir_servicos_pecas",
+        "pdf_orcamento_exibir_nome_cliente",
+        "pdf_orcamento_exibir_telefone_cliente",
+        "pdf_orcamento_exibir_documento_cliente",
+        "pdf_orcamento_exibir_email_cliente",
+        "pdf_orcamento_exibir_origem_cliente",
+        "pdf_orcamento_exibir_tipo_equipamento",
+        "pdf_orcamento_exibir_marca_equipamento",
+        "pdf_orcamento_exibir_modelo_equipamento",
+        "pdf_orcamento_exibir_numero_serie",
+        "pdf_orcamento_exibir_defeito",
+        "pdf_orcamento_exibir_acessorios",
+        "pdf_orcamento_exibir_peritagem",
+        "pdf_orcamento_exibir_tipo_reparo",
+        "pdf_orcamento_exibir_condicoes",
+        "pdf_orcamento_exibir_aprovacao",
+    ):
+        valor_get = request.GET.get(attr_name)
+        if valor_get is not None:
+            setattr(
+                config,
+                attr_name,
+                bool_like(valor_get, default=bool(getattr(config, attr_name, True))),
+            )
     return config
 
 
@@ -636,6 +705,74 @@ def imprimir_ordem_servico(request, pk):
         titulo_equipamento = "Resumo do Equipamento"
         titulo_termos = "Termos Comerciais"
 
+    cliente_rows = []
+    if getattr(config, "pdf_os_exibir_nome_cliente", True):
+        cliente_rows.append([Paragraph("Nome", styles["PdfLabel"]), Paragraph(ordem.cliente.nome or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_telefone_cliente", True):
+        cliente_rows.append([Paragraph("Telefone", styles["PdfLabel"]), Paragraph(ordem.cliente.telefone or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_documento_cliente", True):
+        cliente_rows.append(
+            [Paragraph("Documento", styles["PdfLabel"]), Paragraph(ordem.cliente.get_documento_formatado() or ordem.cliente.documento or "-", styles["PdfValue"])]
+        )
+    if getattr(config, "pdf_os_exibir_email_cliente", True):
+        cliente_rows.append(
+            [Paragraph("Email", styles["PdfLabel"]), Paragraph(ordem.cliente.email or "-", styles["PdfValue"])]
+        )
+    if getattr(config, "pdf_os_exibir_endereco_cliente", True):
+        cliente_rows.extend(
+            [
+                [Paragraph("Endereço", styles["PdfLabel"]), Paragraph(_formatar_endereco_cliente(ordem.cliente), styles["PdfValue"])],
+                [Paragraph("CEP", styles["PdfLabel"]), Paragraph(_formatar_cep_cliente(ordem.cliente), styles["PdfValue"])],
+            ]
+        )
+    if getattr(config, "pdf_os_exibir_origem_cliente", False):
+        cliente_rows.append(
+            [Paragraph("Origem do Cliente", styles["PdfLabel"]), Paragraph(ordem.cliente.origem_cliente_exibicao or "-", styles["PdfValue"])]
+        )
+    if not cliente_rows:
+        cliente_rows.append([Paragraph("Dados", styles["PdfLabel"]), Paragraph("-", styles["PdfValue"])])
+
+    equipamento_rows = []
+    if getattr(config, "pdf_os_exibir_tipo_equipamento", True):
+        equipamento_rows.append([Paragraph("Tipo", styles["PdfLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_marca_equipamento", True):
+        equipamento_rows.append([Paragraph("Marca", styles["PdfLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_modelo_equipamento", True):
+        equipamento_rows.append([Paragraph("Modelo", styles["PdfLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_numero_serie", True):
+        equipamento_rows.append([Paragraph("Número de Série", styles["PdfLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_local_armazenamento", False):
+        equipamento_rows.append([Paragraph("Local de Armazenamento", styles["PdfLabel"]), Paragraph(ordem.local_armazenamento or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_defeito", True):
+        equipamento_rows.append([Paragraph("Defeito", styles["PdfLabel"]), Paragraph(ordem.defeito or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_acessorios", True):
+        equipamento_rows.append([Paragraph("Acessórios", styles["PdfLabel"]), Paragraph(ordem.acessorios or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_peritagem", True):
+        equipamento_rows.append([Paragraph("Peritagem", styles["PdfLabel"]), Paragraph(ordem.peritagem or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_data_compra", False):
+        equipamento_rows.append([Paragraph("Data de Compra", styles["PdfLabel"]), Paragraph(_formatar_data(ordem.data_compra), styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_numero_nota_fiscal", False):
+        equipamento_rows.append([Paragraph("Número da Nota Fiscal", styles["PdfLabel"]), Paragraph(ordem.numero_nota_fiscal or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_referencia_parceiro", False):
+        equipamento_rows.append([Paragraph("Referência Parceiro", styles["PdfLabel"]), Paragraph(ordem.referencia_parceiro or "-", styles["PdfValue"])])
+    if getattr(config, "pdf_os_exibir_os_origem_garantia", False):
+        equipamento_rows.append(
+            [Paragraph("OS Original Garantia", styles["PdfLabel"]), Paragraph(getattr(ordem.ordem_origem_garantia, "numero_os", None) or "-", styles["PdfValue"])]
+        )
+    if getattr(config, "pdf_os_exibir_classificacao_retorno", False):
+        equipamento_rows.append(
+            [Paragraph("Classificação Retorno", styles["PdfLabel"]), Paragraph(ordem.get_garantia_classificacao_retorno_display() or "-", styles["PdfValue"])]
+        )
+    if getattr(config, "pdf_os_exibir_manutencao_preventiva", False):
+        manutencao = (
+            f"{ordem.manutencao_preventiva_meses} meses"
+            if ordem.manutencao_preventiva_meses
+            else "-"
+        )
+        equipamento_rows.append([Paragraph("Manutenção Preventiva", styles["PdfLabel"]), Paragraph(manutencao, styles["PdfValue"])])
+    if not equipamento_rows:
+        equipamento_rows.append([Paragraph("Dados", styles["PdfLabel"]), Paragraph("-", styles["PdfValue"])])
+
     story = [_header_block(), Spacer(1, layout_docs["pdf_header_gap_cm"] * cm)]
     if layout_preset == "executivo":
         story.extend([_hero_summary(), Spacer(1, layout_docs["pdf_block_gap_cm"] * cm)])
@@ -646,41 +783,29 @@ def imprimir_ordem_servico(request, pk):
         [
             _section_block(
                 titulo_cliente,
-                [
-                    [Paragraph("Nome", styles["PdfLabel"]), Paragraph(ordem.cliente.nome or "-", styles["PdfValue"])],
-                    [Paragraph("Telefone", styles["PdfLabel"]), Paragraph(ordem.cliente.telefone or "-", styles["PdfValue"])],
-                    [Paragraph("Documento", styles["PdfLabel"]), Paragraph(ordem.cliente.get_documento_formatado() or ordem.cliente.documento or "-", styles["PdfValue"])],
-                    [Paragraph("Email", styles["PdfLabel"]), Paragraph(ordem.cliente.email or "-", styles["PdfValue"])],
-                    [Paragraph("Endereço", styles["PdfLabel"]), Paragraph(_formatar_endereco_cliente(ordem.cliente), styles["PdfValue"])],
-                    [Paragraph("CEP", styles["PdfLabel"]), Paragraph(_formatar_cep_cliente(ordem.cliente), styles["PdfValue"])],
-                ],
+                cliente_rows,
             ),
             Spacer(1, layout_docs["pdf_block_gap_cm"] * cm),
             _section_block(
                 titulo_equipamento,
-                [
-                    [Paragraph("Tipo", styles["PdfLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["PdfValue"])],
-                    [Paragraph("Marca", styles["PdfLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["PdfValue"])],
-                    [Paragraph("Modelo", styles["PdfLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["PdfValue"])],
-                    [Paragraph("Número de Série", styles["PdfLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["PdfValue"])],
-                    [Paragraph("Defeito", styles["PdfLabel"]), Paragraph(ordem.defeito or "-", styles["PdfValue"])],
-                ],
+                equipamento_rows,
             ),
             Spacer(1, layout_docs["pdf_block_gap_cm"] * cm),
         ]
     )
 
-    termos = _split_termos(termos_os) or ["-"]
-    story.append(
-        KeepTogether(
-            [
-                _section_title(titulo_termos),
-                Paragraph(termos[0], styles["PdfText"], bulletText="•"),
-            ]
+    if getattr(config, "pdf_os_exibir_termos", True):
+        termos = _split_termos(termos_os) or ["-"]
+        story.append(
+            KeepTogether(
+                [
+                    _section_title(titulo_termos),
+                    Paragraph(termos[0], styles["PdfText"], bulletText=BULLET_MARK),
+                ]
+            )
         )
-    )
-    for item in termos[1:]:
-        story.append(Paragraph(item, styles["PdfText"], bulletText="•"))
+        for item in termos[1:]:
+            story.append(Paragraph(item, styles["PdfText"], bulletText=BULLET_MARK))
 
     if layout_cfg["exibir_validacao_digital"]:
         story.extend(
@@ -697,27 +822,28 @@ def imprimir_ordem_servico(request, pk):
             ]
         )
 
-    assinaturas = Table(
-        [
-            [Paragraph("Assinatura do Cliente:", styles["PdfLabel"]), Paragraph("Assinatura da Assistência:", styles["PdfLabel"])],
-            [Paragraph("____________________________________", styles["PdfValue"]), Paragraph("____________________________________", styles["PdfValue"])],
-        ],
-        colWidths=[usable_w / 2.0, usable_w / 2.0],
-    )
-    assinaturas.setStyle(
-        TableStyle(
+    if getattr(config, "pdf_os_exibir_assinaturas", True):
+        assinaturas = Table(
             [
-                ("BOX", (0, 0), (-1, -1), 0.35, tema_docs["section_line"]),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, tema_docs["section_line"]),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ]
+                [Paragraph("Assinatura do Cliente:", styles["PdfLabel"]), Paragraph("Assinatura da Assistência:", styles["PdfLabel"])],
+                [Paragraph("____________________________________", styles["PdfValue"]), Paragraph("____________________________________", styles["PdfValue"])],
+            ],
+            colWidths=[usable_w / 2.0, usable_w / 2.0],
         )
-    )
-    story.extend([Spacer(1, 0.25 * cm), _section_title("Assinaturas"), assinaturas])
+        assinaturas.setStyle(
+            TableStyle(
+                [
+                    ("BOX", (0, 0), (-1, -1), 0.35, tema_docs["section_line"]),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, tema_docs["section_line"]),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ]
+            )
+        )
+        story.extend([Spacer(1, 0.25 * cm), _section_title("Assinaturas"), assinaturas])
 
     doc.build(story, canvasmaker=make_numbered_canvas(_draw_footer))
     return _aplicar_xframe_preview(request, response)
@@ -816,7 +942,7 @@ def imprimir_ordem_servico_impressao(request, pk):
                 width_total=width,
                 y_corte=y,
                 altura_etiqueta=altura_etiqueta_corte,
-                texto_os=f"OS-{ordem.numero_os}",
+                texto_os=ordem.numero_os or "-",
                 texto_cliente=cliente_curto,
                 fonts=fonts,
                 tema_docs=tema_docs,
@@ -877,17 +1003,20 @@ def imprimir_ordem_servico_impressao(request, pk):
         return total
 
     def _bloco_via(rotulo):
-        empresa_linhas = []
+        empresa_nome = ""
+        empresa_meta_linha = ""
+        empresa_endereco_linha = ""
         if empresa:
             if empresa.nome:
-                empresa_linhas.append(empresa.nome)
+                empresa_nome = empresa.nome
+            meta_partes = []
             if empresa.cnpj:
-                empresa_linhas.append(f"CNPJ: {empresa.cnpj}")
-            if empresa.endereco:
-                empresa_linhas.append(empresa.endereco)
+                meta_partes.append(f"CNPJ: {empresa.cnpj}")
             if empresa.telefone:
-                empresa_linhas.append(f"Tel: {empresa.telefone}")
-        empresa_txt = " | ".join(empresa_linhas)
+                meta_partes.append(f"Tel: {empresa.telefone}")
+            empresa_meta_linha = " | ".join(meta_partes)
+            if empresa.endereco:
+                empresa_endereco_linha = empresa.endereco
 
         descida_assinaturas_frente = 0.14 * cm
         densidades = [
@@ -1027,6 +1156,14 @@ def imprimir_ordem_servico_impressao(request, pk):
                 fontSize=max(9.2, styles["PrintTitle"].fontSize * max(0.93, escala)),
                 leading=max(11.0, styles["PrintTitle"].leading * max(0.93, escala)),
             )
+            style_title_type = ParagraphStyle(
+                f"PrintTitleTypeAuto{densidade_idx}",
+                parent=styles["PrintTitle"],
+                fontSize=max(8.6, styles["PrintTitle"].fontSize * max(0.88, escala)),
+                leading=max(10.4, styles["PrintTitle"].leading * max(0.88, escala)),
+                alignment=1,
+                textColor=tema_docs["title_color"],
+            )
             style_section = ParagraphStyle(
                 f"PrintSectionAuto{densidade_idx}",
                 parent=styles["PrintSection"],
@@ -1047,15 +1184,43 @@ def imprimir_ordem_servico_impressao(request, pk):
                 max(1.7 * cm, layout_docs["print_logo_h_cm"] * cm * escala),
             )
             logo_col = max(4.2 * cm, (layout_docs["print_logo_col_cm"] * cm) * escala)
+            tipo_box_w = max(4.6 * cm, min(5.6 * cm, frame_width * 0.25))
+            info_gap = 0.20 * cm
+            info_col_w = frame_width - logo_col - tipo_box_w - info_gap
 
-            head = Paragraph(f"{rotulo} - ORDEM DE SERVIÇO Nº {ordem.numero_os}", style_title)
-            tipo_os_curto = _limitar_texto(ordem.tipo_reparo or "-", cfg["max_tipo_os"])
-            linha_subtitulo = f"<b>Tipo da OS:</b> {tipo_os_curto}"
-            empresa_txt_curto = _limitar_texto(empresa_txt, cfg["max_empresa"])
-            if empresa_txt_curto:
-                linha_subtitulo = f"{empresa_txt_curto} | {linha_subtitulo}"
-            head_empresa = Paragraph(linha_subtitulo, style_small)
-            head_box = Table([[logo, [head, head_empresa]]], colWidths=[logo_col, frame_width - logo_col])
+            head = Paragraph(f"ORDEM DE SERVIÇO Nº {ordem.numero_os}", style_title)
+            head_linhas = [head]
+            if empresa_nome:
+                head_linhas.append(Paragraph(f"<b>{_limitar_texto(empresa_nome, cfg['max_empresa'])}</b>", style_small))
+            if empresa_meta_linha:
+                head_linhas.append(Paragraph(_limitar_texto(empresa_meta_linha, cfg["max_empresa"] + 26), style_small))
+            if empresa_endereco_linha:
+                head_linhas.append(Paragraph(_limitar_texto(empresa_endereco_linha, cfg["max_endereco"] + 36), style_tiny))
+
+            tipo_os_curto = _limitar_texto(ordem.tipo_reparo or "-", cfg["max_tipo_os"] + 12)
+            via_tipo_box = Table(
+                [
+                    [Paragraph(rotulo, style_section)],
+                    [Paragraph("TIPO DA OS", style_tiny)],
+                    [Paragraph(tipo_os_curto, style_title_type)],
+                ],
+                colWidths=[tipo_box_w],
+            )
+            via_tipo_box.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                        ("TOPPADDING", (0, 0), (-1, -1), 3),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("LINEBELOW", (0, 0), (-1, 0), 0.3, tema_docs["section_line"]),
+                    ]
+                )
+            )
+            head_box = Table([[logo, head_linhas, via_tipo_box]], colWidths=[logo_col, info_col_w, tipo_box_w])
             head_box.setStyle(
                 TableStyle(
                     [
@@ -1064,6 +1229,8 @@ def imprimir_ordem_servico_impressao(request, pk):
                         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                         ("TOPPADDING", (0, 0), (-1, -1), 0),
                         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                        ("LEFTPADDING", (1, 0), (1, 0), 2),
+                        ("RIGHTPADDING", (1, 0), (1, 0), info_gap),
                     ]
                 )
             )
@@ -1132,23 +1299,62 @@ def imprimir_ordem_servico_impressao(request, pk):
             max_modelo = 42 if is_executivo else cfg["max_modelo"]
             max_serie = 32 if is_executivo else cfg["max_serie"]
             max_defeito = 120 if is_executivo else cfg["max_defeito"]
+            max_peritagem = 140 if is_executivo else cfg["max_peritagem"]
 
-            dados_cliente = [
-                ("Nome", _limitar_texto(ordem.cliente.nome or "-", cfg["max_cliente"])),
-                ("Telefone", ordem.cliente.telefone or "-"),
-                ("Documento", ordem.cliente.get_documento_formatado() or ordem.cliente.documento or "-"),
-                ("Email", _limitar_texto(ordem.cliente.email or "-", max_email)),
-                ("Endereço", _limitar_texto(_formatar_endereco_cliente(ordem.cliente), max_endereco)),
-                ("CEP", _formatar_cep_cliente(ordem.cliente)),
-            ]
+            dados_cliente = []
+            if getattr(config, "pdf_os_exibir_nome_cliente", True):
+                dados_cliente.append(("Nome", _limitar_texto(ordem.cliente.nome or "-", cfg["max_cliente"])))
+            if getattr(config, "pdf_os_exibir_telefone_cliente", True):
+                dados_cliente.append(("Telefone", ordem.cliente.telefone or "-"))
+            if getattr(config, "pdf_os_exibir_documento_cliente", True):
+                dados_cliente.append(("Documento", ordem.cliente.get_documento_formatado() or ordem.cliente.documento or "-"))
+            if getattr(config, "pdf_os_exibir_email_cliente", True):
+                dados_cliente.append(("Email", _limitar_texto(ordem.cliente.email or "-", max_email)))
+            if getattr(config, "pdf_os_exibir_endereco_cliente", True):
+                dados_cliente.extend(
+                    [
+                        ("Endereço", _limitar_texto(_formatar_endereco_cliente(ordem.cliente), max_endereco)),
+                        ("CEP", _formatar_cep_cliente(ordem.cliente)),
+                    ]
+                )
+            if getattr(config, "pdf_os_exibir_origem_cliente", False):
+                dados_cliente.append(("Origem", ordem.cliente.origem_cliente_exibicao or "-"))
             defeito_curto = _limitar_texto(ordem.defeito or "-", max_defeito)
-            dados_equip = [
-                ("Tipo", ordem.get_tipo_equipamento_display() or "-"),
-                ("Marca", _limitar_texto(ordem.marca_equipamento or "-", max_marca)),
-                ("Modelo", _limitar_texto(ordem.modelo_equipamento or "-", max_modelo)),
-                ("Número de Série", _limitar_texto(ordem.numero_serie_equipamento or "-", max_serie)),
-                ("Defeito", defeito_curto),
-            ]
+            peritagem_curta = _limitar_texto(ordem.peritagem or "-", max_peritagem)
+            dados_equip = []
+            if getattr(config, "pdf_os_exibir_tipo_equipamento", True):
+                dados_equip.append(("Tipo", ordem.get_tipo_equipamento_display() or "-"))
+            if getattr(config, "pdf_os_exibir_marca_equipamento", True):
+                dados_equip.append(("Marca", _limitar_texto(ordem.marca_equipamento or "-", max_marca)))
+            if getattr(config, "pdf_os_exibir_modelo_equipamento", True):
+                dados_equip.append(("Modelo", _limitar_texto(ordem.modelo_equipamento or "-", max_modelo)))
+            if getattr(config, "pdf_os_exibir_numero_serie", True):
+                dados_equip.append(("Número de Série", _limitar_texto(ordem.numero_serie_equipamento or "-", max_serie)))
+            if getattr(config, "pdf_os_exibir_local_armazenamento", False):
+                dados_equip.append(("Local de Armazenamento", _limitar_texto(ordem.local_armazenamento or "-", 28 if is_executivo else 22)))
+            if getattr(config, "pdf_os_exibir_defeito", True):
+                dados_equip.append(("Defeito", defeito_curto))
+            if getattr(config, "pdf_os_exibir_acessorios", True):
+                dados_equip.append(("Acessórios", _limitar_texto(ordem.acessorios or "-", max_defeito)))
+            if getattr(config, "pdf_os_exibir_peritagem", True):
+                dados_equip.append(("Peritagem", peritagem_curta))
+            if getattr(config, "pdf_os_exibir_data_compra", False):
+                dados_equip.append(("Data de Compra", _formatar_data(ordem.data_compra)))
+            if getattr(config, "pdf_os_exibir_numero_nota_fiscal", False):
+                dados_equip.append(("Nota Fiscal", _limitar_texto(ordem.numero_nota_fiscal or "-", 24)))
+            if getattr(config, "pdf_os_exibir_referencia_parceiro", False):
+                dados_equip.append(("Referência Parceiro", _limitar_texto(ordem.referencia_parceiro or "-", 28)))
+            if getattr(config, "pdf_os_exibir_os_origem_garantia", False):
+                dados_equip.append(("OS Original Garantia", getattr(ordem.ordem_origem_garantia, "numero_os", None) or "-"))
+            if getattr(config, "pdf_os_exibir_classificacao_retorno", False):
+                dados_equip.append(("Classificação Retorno", ordem.get_garantia_classificacao_retorno_display() or "-"))
+            if getattr(config, "pdf_os_exibir_manutencao_preventiva", False):
+                manutencao = f"{ordem.manutencao_preventiva_meses} meses" if ordem.manutencao_preventiva_meses else "-"
+                dados_equip.append(("Manutenção Preventiva", manutencao))
+            if not dados_cliente:
+                dados_cliente.append(("Dados", "-"))
+            if not dados_equip:
+                dados_equip.append(("Dados", "-"))
             total_linhas = max(len(dados_cliente), len(dados_equip))
             while len(dados_cliente) < total_linhas:
                 dados_cliente.append(("", ""))
@@ -1342,7 +1548,9 @@ def imprimir_ordem_servico_impressao(request, pk):
             else:
                 gap_assinatura = max(cfg["gap_assin"], alvo_assinatura_frente - altura_sem_gap_assin)
             gap_assinatura = max(0.0, gap_assinatura)
-            return bloco_base + [Spacer(1, gap_assinatura), assin]
+            if getattr(config, "pdf_os_exibir_assinaturas", True):
+                return bloco_base + [Spacer(1, gap_assinatura), assin]
+            return bloco_base
 
         for idx in range(len(densidades)):
             bloco = _montar(idx)
@@ -1351,6 +1559,14 @@ def imprimir_ordem_servico_impressao(request, pk):
         return _montar(len(densidades) - 1)
 
     def _bloco_termos(rotulo):
+        style_small_termos = styles["PrintSmall"]
+        style_label_termos = ParagraphStyle(
+            f"PrintTermsLabel{rotulo}",
+            parent=styles["PrintLabel"],
+            leading=max(styles["PrintLabel"].leading + 0.7, styles["PrintLabel"].fontSize + 2.1),
+            spaceBefore=0.3,
+            spaceAfter=0.3,
+        )
         titulo = Paragraph(f"{rotulo} - TERMOS E CONDIÇÕES", styles["PrintTitle"])
         barra_termos = "TERMOS CONTRATUAIS"
         if layout_preset == "executivo":
@@ -1368,26 +1584,35 @@ def imprimir_ordem_servico_impressao(request, pk):
             )
         )
         bloco = [titulo, Spacer(1, 0.07 * cm), barra, Spacer(1, 0.08 * cm)]
+        assinatura_verso = []
+        if getattr(config, "pdf_os_exibir_assinaturas", True):
+            assinatura_verso = [
+                Spacer(1, max(0.10 * cm, layout_cfg["verso_gap_declaracao_cm"] * cm)),
+                Paragraph("Declaro que li e concordo com os termos e condições acima.", style_small_termos),
+                Spacer(1, max(0.10 * cm, layout_cfg["verso_gap_assinatura_cm"] * cm)),
+                Paragraph("Assinatura do Cliente (termos):", style_label_termos),
+                Paragraph("____________________________________________________________", style_small_termos),
+            ]
         itens_termos = _split_termos(termos_os) or ["-"]
-        limite_bloco = altura_frame_via - 0.22 * cm
+        reserva_assinatura = _altura_total_flowables(assinatura_verso, frame_width, altura_frame_via) if assinatura_verso else 0.0
+        limite_bloco = altura_frame_via - 0.22 * cm - reserva_assinatura
         corpo = []
         for idx_item, item in enumerate(itens_termos):
-            candidato = corpo + [Paragraph(_limitar_texto(item, 220), styles["PrintSmall"], bulletText="•")]
+            candidato = corpo + [Paragraph(_limitar_texto(item, 220), styles["PrintSmall"], bulletText=BULLET_MARK)]
             altura_candidato = _altura_total_flowables(bloco + candidato, frame_width, altura_frame_via)
             if altura_candidato <= limite_bloco:
                 corpo = candidato
                 continue
             if not corpo:
-                corpo = [Paragraph(_limitar_texto(item, 220), styles["PrintSmall"], bulletText="•")]
+                corpo = [Paragraph(_limitar_texto(item, 220), styles["PrintSmall"], bulletText=BULLET_MARK)]
             restantes = len(itens_termos) - idx_item
             if restantes > 0:
                 corpo.append(Paragraph(f"... ({restantes} itens adicionais)", styles["PrintSmall"]))
             break
         if not corpo:
-            corpo = [Paragraph("-", styles["PrintSmall"], bulletText="•")]
+            corpo = [Paragraph("-", styles["PrintSmall"], bulletText=BULLET_MARK)]
         bloco.extend(corpo)
-
-        bloco.append(Paragraph("Assinaturas na frente desta folha.", styles["PrintSmall"]))
+        bloco.extend(assinatura_verso)
         return bloco
 
     limite_half_h = max(1.0 * cm, altura_frame_via - 0.18 * cm)
@@ -1395,12 +1620,17 @@ def imprimir_ordem_servico_impressao(request, pk):
         KeepInFrame(frame_width, limite_half_h, _bloco_via("ORIGINAL"), mode="truncate"),
         FrameBreak(),
         KeepInFrame(frame_width, limite_half_h, _bloco_via("DUPLICADO"), mode="truncate"),
-        NextPageTemplate("main"),
-        PageBreak(),
-        KeepInFrame(frame_width, limite_half_h, _bloco_termos("ORIGINAL"), mode="truncate"),
-        FrameBreak(),
-        KeepInFrame(frame_width, limite_half_h, _bloco_termos("DUPLICADO"), mode="truncate"),
     ]
+    if getattr(config, "pdf_os_exibir_termos", True):
+        story.extend(
+            [
+                NextPageTemplate("main"),
+                PageBreak(),
+                KeepInFrame(frame_width, limite_half_h, _bloco_termos("ORIGINAL"), mode="truncate"),
+                FrameBreak(),
+                KeepInFrame(frame_width, limite_half_h, _bloco_termos("DUPLICADO"), mode="truncate"),
+            ]
+        )
 
     doc.build(story, canvasmaker=make_numbered_canvas(_draw_footer))
     return _aplicar_xframe_preview(request, response)
@@ -1554,7 +1784,7 @@ def imprimir_relatorio_tecnico(request, pk):
     header_right = [
         Paragraph("RELATÓRIO TÉCNICO", styles["RtTitle"]),
         Paragraph(f"<b>Nº OS:</b> {ordem.numero_os}", styles["RtMeta"]),
-        Paragraph(f"<b>Emissao:</b> {(ordem.data_conclusao or datetime.now()).strftime('%d/%m/%Y')}", styles["RtMeta"]),
+        Paragraph(f"<b>Emissão:</b> {(ordem.data_conclusao or datetime.now()).strftime('%d/%m/%Y')}", styles["RtMeta"]),
         Paragraph(f"<b>Status:</b> {ordem.status_listagem_label}", styles["RtMeta"]),
         Paragraph(f"<b>Tipo da OS:</b> {ordem.tipo_reparo or '-'}", styles["RtMeta"]),
     ]
@@ -1588,33 +1818,69 @@ def imprimir_relatorio_tecnico(request, pk):
     if layout_preset == "executivo":
         titulo_cliente_rt = "Resumo do Cliente"
         titulo_equip_rt = "Resumo do Equipamento"
-        titulo_diag_rt = "Conclusao Tecnica"
+        titulo_diag_rt = "Conclusão Técnica"
+    cliente_rows = []
+    if getattr(config, "pdf_relatorio_exibir_nome_cliente", True):
+        cliente_rows.append([Paragraph("Nome", styles["RtLabel"]), Paragraph(ordem.cliente.nome or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_telefone_cliente", True):
+        cliente_rows.append([Paragraph("Telefone", styles["RtLabel"]), Paragraph(ordem.cliente.telefone or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_documento_cliente", True):
+        cliente_rows.append(
+            [Paragraph("Documento", styles["RtLabel"]), Paragraph(ordem.cliente.get_documento_formatado() or ordem.cliente.documento or "-", styles["RtValue"])]
+        )
+    if getattr(config, "pdf_relatorio_exibir_email_cliente", True):
+        cliente_rows.append([Paragraph("E-mail", styles["RtLabel"]), Paragraph(ordem.cliente.email or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_origem_cliente", False):
+        cliente_rows.append([Paragraph("Origem do Cliente", styles["RtLabel"]), Paragraph(ordem.cliente.origem_cliente_exibicao or "-", styles["RtValue"])])
+    if not cliente_rows:
+        cliente_rows.append([Paragraph("Dados", styles["RtLabel"]), Paragraph("-", styles["RtValue"])])
+
+    equipamento_rows = []
+    if getattr(config, "pdf_relatorio_exibir_tipo_equipamento", True):
+        equipamento_rows.append([Paragraph("Tipo", styles["RtLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_marca_equipamento", True):
+        equipamento_rows.append([Paragraph("Marca", styles["RtLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_modelo_equipamento", True):
+        equipamento_rows.append([Paragraph("Modelo", styles["RtLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_numero_serie", True):
+        equipamento_rows.append([Paragraph("Número de Série", styles["RtLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_local_armazenamento", False):
+        equipamento_rows.append([Paragraph("Local de Armazenamento", styles["RtLabel"]), Paragraph(ordem.local_armazenamento or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_defeito", True):
+        equipamento_rows.append([Paragraph("Defeito", styles["RtLabel"]), Paragraph(ordem.defeito or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_tipo_reparacao", True):
+        equipamento_rows.append([Paragraph("Tipo de Reparação", styles["RtLabel"]), Paragraph(ordem.get_tipo_reparacao_display() or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_datas_movimento", True):
+        equipamento_rows.extend(
+            [
+                [Paragraph("Data de Entrada", styles["RtLabel"]), Paragraph(_formatar_data_hora(ordem.assinatura_entrada_registrada_em), styles["RtValue"])],
+                [Paragraph("Data de Saída", styles["RtLabel"]), Paragraph(_formatar_data_hora(ordem.data_assinatura_saida), styles["RtValue"])],
+            ]
+        )
+    if getattr(config, "pdf_relatorio_exibir_peritagem", True):
+        equipamento_rows.append([Paragraph("Peritagem", styles["RtLabel"]), Paragraph(ordem.peritagem or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_acessorios", True):
+        equipamento_rows.append([Paragraph("Acessórios", styles["RtLabel"]), Paragraph(ordem.acessorios or "-", styles["RtValue"])])
+    if getattr(config, "pdf_relatorio_exibir_responsaveis", True):
+        equipamento_rows.extend(
+            [
+                [Paragraph("Atendente", styles["RtLabel"]), Paragraph(str(ordem.atendente_abertura or "-"), styles["RtValue"])],
+                [Paragraph("Técnico Responsável", styles["RtLabel"]), Paragraph(str(ordem.tecnico_responsavel_valido or "-"), styles["RtValue"])],
+            ]
+        )
+    if not equipamento_rows:
+        equipamento_rows.append([Paragraph("Dados", styles["RtLabel"]), Paragraph("-", styles["RtValue"])])
+
     story.extend(
         [
             _section_block(
                 titulo_cliente_rt,
-                [
-                    [Paragraph("Nome", styles["RtLabel"]), Paragraph(ordem.cliente.nome or "-", styles["RtValue"])],
-                    [Paragraph("Telefone", styles["RtLabel"]), Paragraph(ordem.cliente.telefone or "-", styles["RtValue"])],
-                    [Paragraph("Email", styles["RtLabel"]), Paragraph(ordem.cliente.email or "-", styles["RtValue"])],
-                ],
+                cliente_rows,
             ),
             Spacer(1, layout_docs["rt_block_gap_cm"] * cm),
             _section_block(
                 titulo_equip_rt,
-                [
-                    [Paragraph("Tipo", styles["RtLabel"]), Paragraph(ordem.get_tipo_equipamento_display() or "-", styles["RtValue"])],
-                    [Paragraph("Marca", styles["RtLabel"]), Paragraph(ordem.marca_equipamento or "-", styles["RtValue"])],
-                    [Paragraph("Modelo", styles["RtLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["RtValue"])],
-                    [Paragraph("Número de Série", styles["RtLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["RtValue"])],
-                    [Paragraph("Tipo de Reparo (OS)", styles["RtLabel"]), Paragraph(ordem.tipo_reparo or "-", styles["RtValue"])],
-                    [Paragraph("Tipo de Reparação", styles["RtLabel"]), Paragraph(ordem.get_tipo_reparacao_display() or "-", styles["RtValue"])],
-                    [Paragraph("Data de Entrada", styles["RtLabel"]), Paragraph(_formatar_data_hora(ordem.assinatura_entrada_registrada_em), styles["RtValue"])],
-                    [Paragraph("Data de Saída", styles["RtLabel"]), Paragraph(_formatar_data_hora(ordem.data_assinatura_saida), styles["RtValue"])],
-                    [Paragraph("Acessórios", styles["RtLabel"]), Paragraph(ordem.acessorios or "-", styles["RtValue"])],
-                    [Paragraph("Atendente", styles["RtLabel"]), Paragraph(str(ordem.atendente_abertura or "-"), styles["RtValue"])],
-                    [Paragraph("Técnico Responsável", styles["RtLabel"]), Paragraph(str(ordem.tecnico_responsavel_valido or "-"), styles["RtValue"])],
-                ],
+                equipamento_rows,
             ),
             Spacer(1, layout_docs["rt_block_gap_cm"] * cm),
             _title_bar(titulo_diag_rt),
@@ -1623,7 +1889,7 @@ def imprimir_relatorio_tecnico(request, pk):
         ]
     )
     itens = list(ServicoPeca.objects.filter(ordem=ordem))
-    if itens:
+    if itens and getattr(config, "pdf_relatorio_exibir_servicos_pecas", True):
         story.append(_title_bar("Serviços e Peças"))
         linhas = [
             [
@@ -1797,3 +2063,5 @@ __all__ = [
     "imprimir_ordem_servico_impressao",
     "imprimir_relatorio_tecnico",
 ]
+
+

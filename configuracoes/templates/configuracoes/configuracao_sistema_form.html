@@ -39,6 +39,197 @@
   .config-system-card-hidden {
     display: none;
   }
+  .config-system-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 0.85rem;
+    margin-bottom: 1rem;
+  }
+  .config-system-summary-card {
+    border: 1px solid #e5edf8;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 0.95rem 1rem;
+    box-shadow: 0 10px 24px rgba(17, 24, 39, 0.04);
+  }
+  .config-system-summary-card h6 {
+    margin: 0 0 0.3rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7f98;
+    font-weight: 700;
+  }
+  .config-system-summary-card p {
+    margin: 0;
+    color: #274164;
+    line-height: 1.35;
+  }
+  .config-system-summary-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.7rem;
+  }
+  .config-system-summary-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.38rem 0.7rem;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.76rem;
+    font-weight: 700;
+  }
+  .print-settings-card {
+    border: 1px solid #e5edf8;
+    border-radius: 14px;
+    padding: 1rem;
+    background: #fff;
+  }
+  .print-settings-card .section-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7f98;
+    font-weight: 700;
+    margin-bottom: 0.45rem;
+  }
+  .print-settings-card .form-group {
+    margin-bottom: 0.55rem;
+  }
+  .print-settings-card small {
+    display: block;
+    line-height: 1.25;
+  }
+  .print-doc-card {
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 12px 24px rgba(17, 24, 39, 0.04);
+  }
+  .print-doc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid #edf2fb;
+    background: linear-gradient(180deg, #fbfdff 0%, #f7faff 100%);
+  }
+  .print-doc-meta {
+    min-width: 0;
+  }
+  .print-doc-title {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.15rem;
+  }
+  .print-doc-title strong {
+    color: #173863;
+  }
+  .print-doc-title i {
+    color: #3b82f6;
+  }
+  .print-doc-subtitle {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #6b7f98;
+  }
+  .print-doc-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-shrink: 0;
+  }
+  .print-doc-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 82px;
+    padding: 0.38rem 0.7rem;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-align: center;
+  }
+  .print-doc-toggle {
+    border: 1px solid #d7e3f4;
+    background: #fff;
+    color: #28476f;
+    border-radius: 999px;
+    padding: 0.38rem 0.8rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .print-doc-body {
+    padding: 1rem;
+  }
+  .print-doc-body.is-collapsed {
+    display: none;
+  }
+  .print-doc-grid-note {
+    margin-top: 0.35rem;
+    font-size: 0.82rem;
+    color: #6b7f98;
+  }
+  .compact-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .compact-card-meta small {
+    display: block;
+    margin-top: 0.1rem;
+    color: #6b7f98;
+  }
+  .compact-card-toggle {
+    border: 1px solid #d7e3f4;
+    background: #fff;
+    color: #28476f;
+    border-radius: 999px;
+    padding: 0.38rem 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .compact-card-body.is-collapsed {
+    display: none;
+  }
+  .preview-grid-card {
+    border: 1px solid #e5edf8;
+    border-radius: 12px;
+    padding: 0.75rem;
+    background: #fbfdff;
+    height: 100%;
+  }
+  .preview-grid-card label {
+    display: block;
+    margin-bottom: 0.45rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #6b7f98;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  @media (max-width: 767.98px) {
+    .config-system-summary {
+      grid-template-columns: 1fr;
+    }
+    .print-doc-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .print-doc-actions {
+      width: 100%;
+      justify-content: space-between;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -49,8 +240,21 @@
     <i class="fas fa-cogs"></i> Configura&ccedil;&otilde;es do Sistema
   </div>
   <div class="card-modern-body">
-    <div class="alert alert-light border mb-4">
-      <strong>O que ajustamos aqui:</strong> comportamento padrão da operação, campos obrigatórios, SLA, integrações, estoque, garantia, antifraude e layout dos documentos.
+    <div class="config-system-summary">
+      <div class="config-system-summary-card">
+        <h6>Visão rápida</h6>
+        <p>Esta tela centraliza as regras do dia a dia da loja: abertura de OS, controle de estoque, garantias, alertas e conteúdo dos documentos.</p>
+        <div class="config-system-summary-tags">
+          <span class="config-system-summary-tag"><i class="fas fa-tools"></i> Operação</span>
+          <span class="config-system-summary-tag"><i class="fas fa-boxes"></i> Estoque</span>
+          <span class="config-system-summary-tag"><i class="fas fa-shield-alt"></i> Controle</span>
+          <span class="config-system-summary-tag"><i class="fas fa-file-alt"></i> PDFs</span>
+        </div>
+      </div>
+      <div class="config-system-summary-card">
+        <h6>Como usar</h6>
+        <p>Escolha um bloco acima, ajuste apenas o que for necessário e salve. As áreas de prévia e comparador ficam recolhidas quando você não estiver revisando layout.</p>
+      </div>
     </div>
     <div class="config-system-nav" id="config-system-nav">
       <button type="button" class="config-system-tab is-active" data-config-group="base">
@@ -581,39 +785,208 @@
         </div>
       </div>
 
-      <div class="card mb-3" id="grupo-documentos" data-config-group="documentos">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <h5 class="mb-0"><i class="fas fa-eye mr-2"></i> Pr&eacute;-visualiza&ccedil;&atilde;o dos Layouts</h5>
-          <small class="text-muted">Se nao houver OS real, o sistema usa uma amostra de layout segura.</small>
+      <div class="card mb-3" data-config-group="os">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-list-check mr-2"></i> Conteúdo impresso</h5>
         </div>
         <div class="card-body">
           <div class="row">
             <div class="col-lg-6 mb-3">
-              <label class="small text-muted">OS Impress&atilde;o</label>
-              <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_impressao&amp;_preview=1" width="100%" height="320" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+              <div class="print-settings-card print-doc-card h-100" data-print-card>
+                <div class="print-doc-header">
+                  <div class="print-doc-meta">
+                    <div class="print-doc-title">
+                      <i class="fas fa-file-alt"></i>
+                      <strong>Ordem de Serviço</strong>
+                    </div>
+                    <p class="print-doc-subtitle">Documento padrão da operação.</p>
+                  </div>
+                  <div class="print-doc-actions">
+                    <span class="print-doc-badge" data-print-count>0 ativos</span>
+                    <button type="button" class="print-doc-toggle" data-print-toggle>Ocultar</button>
+                  </div>
+                </div>
+                <div class="print-doc-body" data-print-body>
+                <div class="small text-uppercase text-muted font-weight-bold mb-2">Cliente</div>
+                <div class="row mb-2">
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_nome_cliente }}<label class="form-check-label" for="{{ form.pdf_os_exibir_nome_cliente.id_for_label }}">{{ form.pdf_os_exibir_nome_cliente.label }}</label></div>{% if form.pdf_os_exibir_nome_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_nome_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_telefone_cliente }}<label class="form-check-label" for="{{ form.pdf_os_exibir_telefone_cliente.id_for_label }}">{{ form.pdf_os_exibir_telefone_cliente.label }}</label></div>{% if form.pdf_os_exibir_telefone_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_telefone_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_documento_cliente }}<label class="form-check-label" for="{{ form.pdf_os_exibir_documento_cliente.id_for_label }}">{{ form.pdf_os_exibir_documento_cliente.label }}</label></div>{% if form.pdf_os_exibir_documento_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_documento_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_email_cliente }}<label class="form-check-label" for="{{ form.pdf_os_exibir_email_cliente.id_for_label }}">{{ form.pdf_os_exibir_email_cliente.label }}</label></div>{% if form.pdf_os_exibir_email_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_email_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_endereco_cliente }}<label class="form-check-label" for="{{ form.pdf_os_exibir_endereco_cliente.id_for_label }}">{{ form.pdf_os_exibir_endereco_cliente.label }}</label></div>{% if form.pdf_os_exibir_endereco_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_endereco_cliente.help_text }}</small>{% endif %}</div>
+                </div>
+                <div class="small text-uppercase text-muted font-weight-bold mb-2">Equipamento e reclamação</div>
+                <div class="row mb-2">
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_tipo_equipamento }}<label class="form-check-label" for="{{ form.pdf_os_exibir_tipo_equipamento.id_for_label }}">{{ form.pdf_os_exibir_tipo_equipamento.label }}</label></div>{% if form.pdf_os_exibir_tipo_equipamento.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_tipo_equipamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_marca_equipamento }}<label class="form-check-label" for="{{ form.pdf_os_exibir_marca_equipamento.id_for_label }}">{{ form.pdf_os_exibir_marca_equipamento.label }}</label></div>{% if form.pdf_os_exibir_marca_equipamento.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_marca_equipamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_modelo_equipamento }}<label class="form-check-label" for="{{ form.pdf_os_exibir_modelo_equipamento.id_for_label }}">{{ form.pdf_os_exibir_modelo_equipamento.label }}</label></div>{% if form.pdf_os_exibir_modelo_equipamento.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_modelo_equipamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_numero_serie }}<label class="form-check-label" for="{{ form.pdf_os_exibir_numero_serie.id_for_label }}">{{ form.pdf_os_exibir_numero_serie.label }}</label></div>{% if form.pdf_os_exibir_numero_serie.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_numero_serie.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_local_armazenamento }}<label class="form-check-label" for="{{ form.pdf_os_exibir_local_armazenamento.id_for_label }}">{{ form.pdf_os_exibir_local_armazenamento.label }}</label></div>{% if form.pdf_os_exibir_local_armazenamento.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_local_armazenamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_defeito }}<label class="form-check-label" for="{{ form.pdf_os_exibir_defeito.id_for_label }}">{{ form.pdf_os_exibir_defeito.label }}</label></div>{% if form.pdf_os_exibir_defeito.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_defeito.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_acessorios }}<label class="form-check-label" for="{{ form.pdf_os_exibir_acessorios.id_for_label }}">{{ form.pdf_os_exibir_acessorios.label }}</label></div>{% if form.pdf_os_exibir_acessorios.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_acessorios.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_peritagem }}<label class="form-check-label" for="{{ form.pdf_os_exibir_peritagem.id_for_label }}">{{ form.pdf_os_exibir_peritagem.label }}</label></div>{% if form.pdf_os_exibir_peritagem.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_peritagem.help_text }}</small>{% endif %}</div>
+                </div>
+                <div class="small text-uppercase text-muted font-weight-bold mb-2">Atendimento e contexto</div>
+                <div class="row">
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_tipo_reparo }}<label class="form-check-label" for="{{ form.pdf_os_exibir_tipo_reparo.id_for_label }}">{{ form.pdf_os_exibir_tipo_reparo.label }}</label></div>{% if form.pdf_os_exibir_tipo_reparo.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_tipo_reparo.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_data_compra }}<label class="form-check-label" for="{{ form.pdf_os_exibir_data_compra.id_for_label }}">{{ form.pdf_os_exibir_data_compra.label }}</label></div>{% if form.pdf_os_exibir_data_compra.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_data_compra.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_numero_nota_fiscal }}<label class="form-check-label" for="{{ form.pdf_os_exibir_numero_nota_fiscal.id_for_label }}">{{ form.pdf_os_exibir_numero_nota_fiscal.label }}</label></div>{% if form.pdf_os_exibir_numero_nota_fiscal.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_numero_nota_fiscal.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_referencia_parceiro }}<label class="form-check-label" for="{{ form.pdf_os_exibir_referencia_parceiro.id_for_label }}">{{ form.pdf_os_exibir_referencia_parceiro.label }}</label></div>{% if form.pdf_os_exibir_referencia_parceiro.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_referencia_parceiro.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_origem_cliente }}<label class="form-check-label" for="{{ form.pdf_os_exibir_origem_cliente.id_for_label }}">{{ form.pdf_os_exibir_origem_cliente.label }}</label></div>{% if form.pdf_os_exibir_origem_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_origem_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_os_origem_garantia }}<label class="form-check-label" for="{{ form.pdf_os_exibir_os_origem_garantia.id_for_label }}">{{ form.pdf_os_exibir_os_origem_garantia.label }}</label></div>{% if form.pdf_os_exibir_os_origem_garantia.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_os_origem_garantia.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_classificacao_retorno }}<label class="form-check-label" for="{{ form.pdf_os_exibir_classificacao_retorno.id_for_label }}">{{ form.pdf_os_exibir_classificacao_retorno.label }}</label></div>{% if form.pdf_os_exibir_classificacao_retorno.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_classificacao_retorno.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_manutencao_preventiva }}<label class="form-check-label" for="{{ form.pdf_os_exibir_manutencao_preventiva.id_for_label }}">{{ form.pdf_os_exibir_manutencao_preventiva.label }}</label></div>{% if form.pdf_os_exibir_manutencao_preventiva.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_manutencao_preventiva.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-2"><div class="form-check">{{ form.pdf_os_exibir_termos }}<label class="form-check-label" for="{{ form.pdf_os_exibir_termos.id_for_label }}">{{ form.pdf_os_exibir_termos.label }}</label></div>{% if form.pdf_os_exibir_termos.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_termos.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-0"><div class="form-check">{{ form.pdf_os_exibir_assinaturas }}<label class="form-check-label" for="{{ form.pdf_os_exibir_assinaturas.id_for_label }}">{{ form.pdf_os_exibir_assinaturas.label }}</label></div>{% if form.pdf_os_exibir_assinaturas.help_text %}<small class="form-text text-muted">{{ form.pdf_os_exibir_assinaturas.help_text }}</small>{% endif %}</div>
+                </div>
+                <div class="print-doc-grid-note">Essas opções controlam o conteúdo do documento padrão em todas as vias da OS.</div>
+                </div>
+              </div>
             </div>
             <div class="col-lg-6 mb-3">
-              <label class="small text-muted">OS Digital</label>
-              <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1" width="100%" height="320" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+              <div class="print-settings-card print-doc-card h-100" data-print-card data-collapsed-default="1">
+                <div class="print-doc-header">
+                  <div class="print-doc-meta">
+                    <div class="print-doc-title">
+                      <i class="fas fa-file-invoice-dollar"></i>
+                      <strong>Orçamento</strong>
+                    </div>
+                    <p class="print-doc-subtitle">Documento comercial enviado ao cliente.</p>
+                  </div>
+                  <div class="print-doc-actions">
+                    <span class="print-doc-badge" data-print-count>0 ativos</span>
+                    <button type="button" class="print-doc-toggle" data-print-toggle>Expandir</button>
+                  </div>
+                </div>
+                <div class="print-doc-body is-collapsed" data-print-body>
+                <div class="section-label">Cliente</div>
+                <div class="row mb-2">
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_nome_cliente }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_nome_cliente.id_for_label }}">{{ form.pdf_orcamento_exibir_nome_cliente.label }}</label></div>{% if form.pdf_orcamento_exibir_nome_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_nome_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_telefone_cliente }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_telefone_cliente.id_for_label }}">{{ form.pdf_orcamento_exibir_telefone_cliente.label }}</label></div>{% if form.pdf_orcamento_exibir_telefone_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_telefone_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_documento_cliente }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_documento_cliente.id_for_label }}">{{ form.pdf_orcamento_exibir_documento_cliente.label }}</label></div>{% if form.pdf_orcamento_exibir_documento_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_documento_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_email_cliente }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_email_cliente.id_for_label }}">{{ form.pdf_orcamento_exibir_email_cliente.label }}</label></div>{% if form.pdf_orcamento_exibir_email_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_email_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-0"><div class="form-check">{{ form.pdf_orcamento_exibir_origem_cliente }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_origem_cliente.id_for_label }}">{{ form.pdf_orcamento_exibir_origem_cliente.label }}</label></div>{% if form.pdf_orcamento_exibir_origem_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_origem_cliente.help_text }}</small>{% endif %}</div>
+                </div>
+                <div class="section-label">Equipamento</div>
+                <div class="row mb-2">
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_tipo_equipamento }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_tipo_equipamento.id_for_label }}">{{ form.pdf_orcamento_exibir_tipo_equipamento.label }}</label></div>{% if form.pdf_orcamento_exibir_tipo_equipamento.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_tipo_equipamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_marca_equipamento }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_marca_equipamento.id_for_label }}">{{ form.pdf_orcamento_exibir_marca_equipamento.label }}</label></div>{% if form.pdf_orcamento_exibir_marca_equipamento.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_marca_equipamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_modelo_equipamento }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_modelo_equipamento.id_for_label }}">{{ form.pdf_orcamento_exibir_modelo_equipamento.label }}</label></div>{% if form.pdf_orcamento_exibir_modelo_equipamento.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_modelo_equipamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_numero_serie }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_numero_serie.id_for_label }}">{{ form.pdf_orcamento_exibir_numero_serie.label }}</label></div>{% if form.pdf_orcamento_exibir_numero_serie.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_numero_serie.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_defeito }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_defeito.id_for_label }}">{{ form.pdf_orcamento_exibir_defeito.label }}</label></div>{% if form.pdf_orcamento_exibir_defeito.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_defeito.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_acessorios }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_acessorios.id_for_label }}">{{ form.pdf_orcamento_exibir_acessorios.label }}</label></div>{% if form.pdf_orcamento_exibir_acessorios.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_acessorios.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-0"><div class="form-check">{{ form.pdf_orcamento_exibir_peritagem }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_peritagem.id_for_label }}">{{ form.pdf_orcamento_exibir_peritagem.label }}</label></div>{% if form.pdf_orcamento_exibir_peritagem.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_peritagem.help_text }}</small>{% endif %}</div>
+                </div>
+                <div class="section-label">Comercial</div>
+                <div class="row">
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_tipo_reparo }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_tipo_reparo.id_for_label }}">{{ form.pdf_orcamento_exibir_tipo_reparo.label }}</label></div>{% if form.pdf_orcamento_exibir_tipo_reparo.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_tipo_reparo.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_condicoes }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_condicoes.id_for_label }}">{{ form.pdf_orcamento_exibir_condicoes.label }}</label></div>{% if form.pdf_orcamento_exibir_condicoes.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_condicoes.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-0"><div class="form-check">{{ form.pdf_orcamento_exibir_aprovacao }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_aprovacao.id_for_label }}">{{ form.pdf_orcamento_exibir_aprovacao.label }}</label></div>{% if form.pdf_orcamento_exibir_aprovacao.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_aprovacao.help_text }}</small>{% endif %}</div>
+                </div>
+                <div class="print-doc-grid-note">Use este bloco para decidir o que aparece no PDF comercial do orçamento.</div>
+                </div>
+              </div>
             </div>
             <div class="col-lg-6 mb-3">
-              <label class="small text-muted">Relat&oacute;rio T&eacute;cnico</label>
-              <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=relatorio&amp;_preview=1" width="100%" height="320" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+              <div class="print-settings-card print-doc-card h-100" data-print-card data-collapsed-default="1">
+                <div class="print-doc-header">
+                  <div class="print-doc-meta">
+                    <div class="print-doc-title">
+                      <i class="fas fa-clipboard-check"></i>
+                      <strong>Relatório Técnico</strong>
+                    </div>
+                    <p class="print-doc-subtitle">Laudo final com dados técnicos e conclusão.</p>
+                  </div>
+                  <div class="print-doc-actions">
+                    <span class="print-doc-badge" data-print-count>0 ativos</span>
+                    <button type="button" class="print-doc-toggle" data-print-toggle>Expandir</button>
+                  </div>
+                </div>
+                <div class="print-doc-body is-collapsed" data-print-body>
+                <div class="section-label">Cliente</div>
+                <div class="row mb-2">
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_nome_cliente }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_nome_cliente.id_for_label }}">{{ form.pdf_relatorio_exibir_nome_cliente.label }}</label></div>{% if form.pdf_relatorio_exibir_nome_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_nome_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_telefone_cliente }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_telefone_cliente.id_for_label }}">{{ form.pdf_relatorio_exibir_telefone_cliente.label }}</label></div>{% if form.pdf_relatorio_exibir_telefone_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_telefone_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_documento_cliente }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_documento_cliente.id_for_label }}">{{ form.pdf_relatorio_exibir_documento_cliente.label }}</label></div>{% if form.pdf_relatorio_exibir_documento_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_documento_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_email_cliente }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_email_cliente.id_for_label }}">{{ form.pdf_relatorio_exibir_email_cliente.label }}</label></div>{% if form.pdf_relatorio_exibir_email_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_email_cliente.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-0"><div class="form-check">{{ form.pdf_relatorio_exibir_origem_cliente }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_origem_cliente.id_for_label }}">{{ form.pdf_relatorio_exibir_origem_cliente.label }}</label></div>{% if form.pdf_relatorio_exibir_origem_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_origem_cliente.help_text }}</small>{% endif %}</div>
+                </div>
+                <div class="section-label">Equipamento e atendimento</div>
+                <div class="row mb-2">
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_tipo_equipamento }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_tipo_equipamento.id_for_label }}">{{ form.pdf_relatorio_exibir_tipo_equipamento.label }}</label></div>{% if form.pdf_relatorio_exibir_tipo_equipamento.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_tipo_equipamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_marca_equipamento }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_marca_equipamento.id_for_label }}">{{ form.pdf_relatorio_exibir_marca_equipamento.label }}</label></div>{% if form.pdf_relatorio_exibir_marca_equipamento.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_marca_equipamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_modelo_equipamento }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_modelo_equipamento.id_for_label }}">{{ form.pdf_relatorio_exibir_modelo_equipamento.label }}</label></div>{% if form.pdf_relatorio_exibir_modelo_equipamento.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_modelo_equipamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_numero_serie }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_numero_serie.id_for_label }}">{{ form.pdf_relatorio_exibir_numero_serie.label }}</label></div>{% if form.pdf_relatorio_exibir_numero_serie.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_numero_serie.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_local_armazenamento }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_local_armazenamento.id_for_label }}">{{ form.pdf_relatorio_exibir_local_armazenamento.label }}</label></div>{% if form.pdf_relatorio_exibir_local_armazenamento.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_local_armazenamento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_defeito }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_defeito.id_for_label }}">{{ form.pdf_relatorio_exibir_defeito.label }}</label></div>{% if form.pdf_relatorio_exibir_defeito.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_defeito.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_peritagem }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_peritagem.id_for_label }}">{{ form.pdf_relatorio_exibir_peritagem.label }}</label></div>{% if form.pdf_relatorio_exibir_peritagem.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_peritagem.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-0"><div class="form-check">{{ form.pdf_relatorio_exibir_acessorios }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_acessorios.id_for_label }}">{{ form.pdf_relatorio_exibir_acessorios.label }}</label></div>{% if form.pdf_relatorio_exibir_acessorios.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_acessorios.help_text }}</small>{% endif %}</div>
+                </div>
+                <div class="section-label">Laudo final</div>
+                <div class="row">
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_tipo_reparo }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_tipo_reparo.id_for_label }}">{{ form.pdf_relatorio_exibir_tipo_reparo.label }}</label></div>{% if form.pdf_relatorio_exibir_tipo_reparo.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_tipo_reparo.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_tipo_reparacao }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_tipo_reparacao.id_for_label }}">{{ form.pdf_relatorio_exibir_tipo_reparacao.label }}</label></div>{% if form.pdf_relatorio_exibir_tipo_reparacao.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_tipo_reparacao.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_datas_movimento }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_datas_movimento.id_for_label }}">{{ form.pdf_relatorio_exibir_datas_movimento.label }}</label></div>{% if form.pdf_relatorio_exibir_datas_movimento.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_datas_movimento.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_responsaveis }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_responsaveis.id_for_label }}">{{ form.pdf_relatorio_exibir_responsaveis.label }}</label></div>{% if form.pdf_relatorio_exibir_responsaveis.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_responsaveis.help_text }}</small>{% endif %}</div>
+                  <div class="col-md-6 form-group mb-0"><div class="form-check">{{ form.pdf_relatorio_exibir_servicos_pecas }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_servicos_pecas.id_for_label }}">{{ form.pdf_relatorio_exibir_servicos_pecas.label }}</label></div>{% if form.pdf_relatorio_exibir_servicos_pecas.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_servicos_pecas.help_text }}</small>{% endif %}</div>
+                </div>
+                <div class="print-doc-grid-note">Aqui definimos o nível de detalhe do relatório técnico entregue ao cliente.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <small class="text-muted">Na OS essas opções valem para o documento padrão em todas as vias. No orçamento, controlam o PDF comercial. No relatório técnico, definem o nível de detalhe do laudo final.</small>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="grupo-documentos" data-config-group="documentos" data-compact-card data-collapsed-default="1">
+        <div class="card-header bg-light compact-card-header">
+          <div class="compact-card-meta">
+            <h5 class="mb-0"><i class="fas fa-eye mr-2"></i> Pr&eacute;-visualiza&ccedil;&atilde;o dos Layouts</h5>
+            <small>Se não houver OS real, o sistema usa uma amostra segura de prévia.</small>
+          </div>
+          <button type="button" class="compact-card-toggle" data-compact-card-toggle>Expandir</button>
+        </div>
+        <div class="card-body compact-card-body is-collapsed" data-compact-card-body>
+          <div class="row">
+            <div class="col-lg-6 mb-3">
+              <div class="preview-grid-card">
+                <label>OS Impress&atilde;o</label>
+                <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_impressao&amp;_preview=1" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+              </div>
             </div>
             <div class="col-lg-6 mb-3">
-              <label class="small text-muted">Or&ccedil;amento</label>
-              <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=orcamento&amp;_preview=1" width="100%" height="320" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+              <div class="preview-grid-card">
+                <label>OS Digital</label>
+                <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+              </div>
+            </div>
+            <div class="col-lg-6 mb-3">
+              <div class="preview-grid-card">
+                <label>Relat&oacute;rio T&eacute;cnico</label>
+                <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=relatorio&amp;_preview=1" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+              </div>
+            </div>
+            <div class="col-lg-6 mb-3">
+              <div class="preview-grid-card">
+                <label>Or&ccedil;amento</label>
+                <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=orcamento&amp;_preview=1" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+              </div>
             </div>
           </div>
           <small class="text-muted">Salve as configura&ccedil;&otilde;es e recarregue a p&aacute;gina para visualizar o novo formato.</small>
         </div>
       </div>
 
-      <div class="card mb-3" data-config-group="documentos">
-        <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-columns mr-2"></i> Comparador de Presets</h5>
+      <div class="card mb-3" data-config-group="documentos" data-compact-card data-collapsed-default="1">
+        <div class="card-header bg-light compact-card-header">
+          <div class="compact-card-meta">
+            <h5 class="mb-0"><i class="fas fa-columns mr-2"></i> Comparador de Presets</h5>
+            <small>Use somente quando quiser comparar dois layouts lado a lado.</small>
+          </div>
+          <button type="button" class="compact-card-toggle" data-compact-card-toggle>Expandir</button>
         </div>
-        <div class="card-body">
+        <div class="card-body compact-card-body is-collapsed" data-compact-card-body>
           <div class="row">
             <div class="col-md-4 form-group">
               <label class="small text-muted">Tipo de Documento</label>
@@ -668,6 +1041,40 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+  (function () {
+    const cards = Array.from(document.querySelectorAll("[data-compact-card]"));
+    if (!cards.length) {
+      return;
+    }
+
+    function atualizarCard(card) {
+      const body = card.querySelector("[data-compact-card-body]");
+      const toggle = card.querySelector("[data-compact-card-toggle]");
+      if (!body || !toggle) {
+        return;
+      }
+      const recolhido = body.classList.contains("is-collapsed");
+      toggle.textContent = recolhido ? "Expandir" : "Ocultar";
+    }
+
+    cards.forEach((card) => {
+      const body = card.querySelector("[data-compact-card-body]");
+      const toggle = card.querySelector("[data-compact-card-toggle]");
+      if (!body || !toggle) {
+        return;
+      }
+      if (card.dataset.collapsedDefault === "1") {
+        body.classList.add("is-collapsed");
+      }
+      toggle.addEventListener("click", function () {
+        body.classList.toggle("is-collapsed");
+        atualizarCard(card);
+      });
+      atualizarCard(card);
+    });
+  })();
+</script>
 <script>
   (function () {
     const nav = document.getElementById("config-system-nav");
@@ -740,6 +1147,60 @@
     });
 
     ativarGrupo("base");
+  })();
+</script>
+<script>
+  (function () {
+    const cards = Array.from(document.querySelectorAll("[data-print-card]"));
+    if (!cards.length) {
+      return;
+    }
+
+    function atualizarResumo(card) {
+      const inputs = Array.from(card.querySelectorAll('input[type="checkbox"]'));
+      const ativos = inputs.filter((input) => input.checked).length;
+      const total = inputs.length;
+      const badge = card.querySelector("[data-print-count]");
+      if (badge) {
+        badge.textContent = `${ativos}/${total} ativos`;
+      }
+    }
+
+    function atualizarEstado(card) {
+      const body = card.querySelector("[data-print-body]");
+      const toggle = card.querySelector("[data-print-toggle]");
+      if (!body || !toggle) {
+        return;
+      }
+      const recolhido = body.classList.contains("is-collapsed");
+      toggle.textContent = recolhido ? "Expandir" : "Ocultar";
+    }
+
+    cards.forEach((card) => {
+      const body = card.querySelector("[data-print-body]");
+      const toggle = card.querySelector("[data-print-toggle]");
+      const inputs = Array.from(card.querySelectorAll('input[type="checkbox"]'));
+
+      if (toggle && body) {
+        toggle.addEventListener("click", function () {
+          body.classList.toggle("is-collapsed");
+          atualizarEstado(card);
+        });
+      }
+
+      inputs.forEach((input) => {
+        input.addEventListener("change", function () {
+          atualizarResumo(card);
+        });
+      });
+
+      if (card.dataset.collapsedDefault === "1" && body) {
+        body.classList.add("is-collapsed");
+      }
+
+      atualizarResumo(card);
+      atualizarEstado(card);
+    });
   })();
 </script>
 <script>
