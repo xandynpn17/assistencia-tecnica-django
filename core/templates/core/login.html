@@ -313,11 +313,14 @@
             </div>
 
             <div class="login-footer-note">
-                {% if setup_pendente %}
-                Se este computador &eacute; novo, conclua a configura&ccedil;&atilde;o inicial ou restaure um backup antes de cadastrar dados reais.
-                {% else %}
-                Em caso de troca de m&aacute;quina ou conting&ecirc;ncia local, use a recupera&ccedil;&atilde;o por backup para retomar a opera&ccedil;&atilde;o com seguran&ccedil;a.
-                {% endif %}
+                <div><strong>{{ system_version_label }}</strong>{% if system_release_date %} · release {{ system_release_date }}{% endif %}</div>
+                <div class="mt-1">
+                    {% if setup_pendente %}
+                    Se este computador &eacute; novo, conclua a configura&ccedil;&atilde;o inicial ou restaure um backup antes de cadastrar dados reais.
+                    {% else %}
+                    Em caso de troca de m&aacute;quina ou conting&ecirc;ncia local, use a recupera&ccedil;&atilde;o por backup para retomar a opera&ccedil;&atilde;o com seguran&ccedil;a.
+                    {% endif %}
+                </div>
             </div>
         </section>
     </main>

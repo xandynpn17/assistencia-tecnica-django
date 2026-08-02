@@ -8,10 +8,14 @@ import os
 import sys
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
+from .version import SYSTEM_RELEASE_DATE, SYSTEM_VERSION, SYSTEM_VERSION_LABEL
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 RUNNING_TESTS = "test" in sys.argv
+APP_VERSION = SYSTEM_VERSION
+APP_VERSION_LABEL = SYSTEM_VERSION_LABEL
+APP_RELEASE_DATE = SYSTEM_RELEASE_DATE
 
 
 # Quick-start development settings - unsuitable for production

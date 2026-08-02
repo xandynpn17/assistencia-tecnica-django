@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.0 - 2026-08-02
+
+Primeira versao oficial padronizada do ABGest para uso local e em rede interna, com numero de release centralizado no codigo.
+
+### Principais entregas
+- versao oficial centralizada em `assistencia/version.py`;
+- rodape e telas principais lendo a mesma referencia de versao;
+- login exibindo release atual de forma discreta;
+- alinhamento entre codigo, interface e changelog para futuras atualizacoes.
+
 ## v0.2.0 - 2026-05-13
 
 Consolidacao do ciclo de evolucao operacional com foco em PostgreSQL, permissoes granulares, expedicoes e amadurecimento de estoque/caixa.

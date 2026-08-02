@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.db import DatabaseError
 
 from .models import ConfiguracaoSistema
@@ -66,4 +67,7 @@ def empresa_context(request):
         "ddd_brasil": getattr(ConfiguracaoSistema, "DDD_BRASIL", []),
         "tenant_context": tenant_ctx,
         "sla_badges": sla_badges,
+        "system_version": getattr(settings, "APP_VERSION", "1.0.0"),
+        "system_version_label": getattr(settings, "APP_VERSION_LABEL", "v1.0.0"),
+        "system_release_date": getattr(settings, "APP_RELEASE_DATE", ""),
     }
