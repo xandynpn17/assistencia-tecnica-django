@@ -19,7 +19,7 @@ from configuracoes.services.setup_inicial import (
     setup_inicial_concluido,
     sincronizar_tipos_ativos_por_linhas,
 )
-from configuracoes.services.tenant_guard import obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, obter_empresa_ativa
 from estoque.services_estrutura import garantir_estrutura_estoque_padrao
 from configuracoes.services.integracoes import (
     garantir_modelos_operacionais_padrao,
@@ -346,8 +346,8 @@ def setup_inicial_impl(request):
                 setup.concluido = True
                 setup.save()
                 setup.linhas_atuacao.set(linhas)
-                sincronizar_tipos_ativos_por_linhas(linhas)
-                garantir_estrutura_estoque_padrao()
+                sincronizar_tipos_ativos_por_linhas(linhas, empresa=empresa)
+                garantir_estrutura_estoque_padrao(empresa=empresa)
 
                 messages.success(request, "Setup inicial concluido com sucesso.")
                 return redirect("core:dashboard")
@@ -510,20 +510,22 @@ def modelos_mensagem_impl(request):
 
 
 def tipos_equipamento_impl(request):
+    empresa = obter_empresa_ativa(request, strict=False)
+    tipos_empresa = filtrar_catalogo_empresa(TipoEquipamentoConfig.objects.all(), empresa)
     editar_id = (request.GET.get("edit") or "").strip()
     instancia = None
     if editar_id.isdigit():
-        instancia = TipoEquipamentoConfig.objects.filter(id=int(editar_id)).first()
+        instancia = tipos_empresa.filter(id=int(editar_id)).first()
 
     if request.method == "POST":
         form_type = request.POST.get("form_type")
         if form_type == "delete":
-            item = get_object_or_404(TipoEquipamentoConfig, id=request.POST.get("item_id"))
+            item = get_object_or_404(tipos_empresa, id=request.POST.get("item_id"))
             item.delete()
             messages.success(request, "Tipo de equipamento removido.")
             return redirect("configuracoes:tipos_equipamento")
         if form_type == "toggle":
-            item = get_object_or_404(TipoEquipamentoConfig, id=request.POST.get("item_id"))
+            item = get_object_or_404(tipos_empresa, id=request.POST.get("item_id"))
             item.ativo = not item.ativo
             item.save(update_fields=["ativo"])
             messages.success(request, "Tipo de equipamento atualizado.")
@@ -531,22 +533,22 @@ def tipos_equipamento_impl(request):
 
         item_id = request.POST.get("item_id")
         if item_id:
-            instancia = get_object_or_404(TipoEquipamentoConfig, id=item_id)
-        form = TipoEquipamentoConfigForm(request.POST, instance=instancia)
+            instancia = get_object_or_404(tipos_empresa, id=item_id)
+        form = TipoEquipamentoConfigForm(request.POST, instance=instancia, empresa=empresa)
         if form.is_valid():
             form.save()
             messages.success(request, "Tipo de equipamento salvo.")
             return redirect("configuracoes:tipos_equipamento")
         messages.error(request, "Nao foi possivel salvar. Verifique os campos informados.")
     else:
-        form = TipoEquipamentoConfigForm(instance=instancia)
+        form = TipoEquipamentoConfigForm(instance=instancia, empresa=empresa)
 
     return render(
         request,
         "configuracoes/tipos_equipamento.html",
         {
             "form": form,
-            "itens": TipoEquipamentoConfig.objects.order_by("nome"),
+            "itens": tipos_empresa.order_by("nome"),
             "edit_item_id": instancia.id if instancia else None,
             "catalogo_tab": "tipos",
             "catalogo_title": "Tipos de equipamento",

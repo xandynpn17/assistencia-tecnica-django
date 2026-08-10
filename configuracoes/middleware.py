@@ -7,6 +7,7 @@ import logging
 from configuracoes.permissions import is_management_user
 from configuracoes.services.setup_inicial import setup_inicial_concluido
 from configuracoes.services.tenant import resolve_tenant_context
+from configuracoes.services.tenant_runtime import definir_empresa_runtime, restaurar_empresa_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,21 @@ class TenantContextMiddleware:
         tenant_ctx = resolve_tenant_context(request)
         request.tenant_context = tenant_ctx
         request.empresa_ativa = tenant_ctx.empresa
-        return self.get_response(request)
+        request.usuario_empresa_ativa = None
+        token = definir_empresa_runtime(tenant_ctx.empresa)
+        try:
+            if getattr(request, "user", None) and request.user.is_authenticated and tenant_ctx.empresa:
+                vinculo = request.user.vinculos_empresas.filter(
+                    empresa=tenant_ctx.empresa,
+                    ativo=True,
+                ).first()
+                request.usuario_empresa_ativa = vinculo
+                if vinculo:
+                    request.user._tenant_tipo_usuario = vinculo.tipo_usuario or request.user.tipo_usuario
+                    request.user._tenant_permissoes = dict(vinculo.permissoes or {})
+            return self.get_response(request)
+        finally:
+            restaurar_empresa_runtime(token)
 
 
 class SetupInicialMiddleware:

@@ -158,10 +158,14 @@
                         {% endif %}
                     </small>
                 </div>
-                <a class="btn btn-sm btn-primary"
-                   href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ saldo_financeiro_os|floatformat:2 }}">
-                    Registrar pagamento
-                </a>
+                {% if not os_pago %}
+                    <a class="btn btn-sm btn-primary"
+                       href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ saldo_financeiro_os|floatformat:2 }}">
+                        Registrar pagamento
+                    </a>
+                {% else %}
+                    <span class="badge badge-success px-3 py-2">Sem recebimento pendente</span>
+                {% endif %}
             </div>
 
             {% if ordem.tipo_reparo == 'Garantia' %}

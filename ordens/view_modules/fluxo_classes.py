@@ -311,9 +311,9 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        empresa = obter_empresa_ativa(self.request, strict=False)
         cliente_id = self.kwargs.get("cliente_id")
         if cliente_id:
-            empresa = obter_empresa_ativa(self.request, strict=False)
             context["cliente"] = filtrar_queryset_empresa(Cliente.objects.filter(id=cliente_id), empresa).get()
         context["menu_app"] = "ordens"
         context["menu_sub"] = "nova_ordem_cliente"
@@ -327,7 +327,7 @@ class OrdemServicoCreateView(RoleRequiredMixin, CreateView):
                     "procedimentos": (m.procedimentos or "").strip(),
                     "parceira_garantia": bool(m.parceira_garantia),
                 }
-                for m in MarcaGarantia.objects.filter(ativo=True)
+                for m in filtrar_catalogo_empresa(MarcaGarantia.objects.filter(ativo=True), empresa)
             }
         )
         cliente_id = self.kwargs.get("cliente_id")

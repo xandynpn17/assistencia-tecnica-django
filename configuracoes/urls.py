@@ -5,9 +5,11 @@ from . import views
 app_name = "configuracoes"
 
 urlpatterns = [
+    path("trocar-empresa/", views.trocar_empresa, name="trocar_empresa"),
     path("setup-inicial/", views.setup_inicial, name="setup_inicial"),
     path("painel/", views.painel, name="painel"),
     path("empresa/", views.empresa_edit, name="empresa"),
+    path("empresa/nova/", views.empresa_criar, name="empresa_criar"),
     path("aliquotas/", views.lista_aliquotas, name="lista_aliquotas"),
     path("aliquotas/adicionar/", views.adicionar_aliquota, name="adicionar_aliquota"),
     path("aliquotas/<int:aliquota_id>/editar/", views.editar_aliquota, name="editar_aliquota"),

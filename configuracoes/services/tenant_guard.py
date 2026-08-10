@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.core.exceptions import PermissionDenied
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 
 from configuracoes.models import Empresa, SetupInicialSistema
 
@@ -33,3 +33,10 @@ def filtrar_queryset_empresa(queryset: QuerySet, empresa: Empresa | None, *, cam
             return queryset
         return queryset.none()
     return queryset.filter(**{campo: empresa})
+
+
+def filtrar_catalogo_empresa(queryset: QuerySet, empresa: Empresa | None, *, campo: str = "empresa") -> QuerySet:
+    """Restringe catalogos ao tenant; sem contexto explicito preserva compatibilidade interna/testes."""
+    if empresa is None:
+        return queryset
+    return queryset.filter(Q(**{campo: empresa}) | Q(**{f"{campo}__isnull": True}))

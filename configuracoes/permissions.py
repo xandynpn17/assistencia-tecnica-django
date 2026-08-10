@@ -57,10 +57,14 @@ SENSITIVE_PERMISSION_MESSAGES = {
     "perm_caixa_excluir_pagamento": "Você não tem permissão para excluir pagamentos.",
     "perm_caixa_ver_dre": "Você não tem permissão para acessar o DRE.",
     "perm_caixa_gerir_comissoes": "Você não tem permissão para gerir comissões.",
+    "perm_caixa_lancamento_retroativo": "Você não tem permissão para registrar datas financeiras retroativas.",
     "perm_caixa_ver_auditoria": "Você não tem permissão para acessar a auditoria operacional.",
     "perm_estoque_cadastro_produto": "Você não tem permissão para cadastrar ou editar produtos do estoque.",
     "perm_estoque_excluir_produto": "Você não tem permissão para excluir produtos do estoque.",
     "perm_estoque_ajuste_manual": "Você não tem permissão para registrar ajustes manuais de estoque.",
+    "perm_estoque_avaria": "Você não tem permissão para registrar avarias ou quebras de estoque.",
+    "perm_estoque_oferta": "Você não tem permissão para registrar ofertas de produtos.",
+    "perm_estoque_cedencia": "Você não tem permissão para registrar cedências internas de produtos.",
     "perm_estoque_transferencia": "Você não tem permissão para transferir ou repor estoque entre pontos.",
     "perm_estoque_inventario_finalizar": "Você não tem permissão para finalizar inventários de estoque.",
     "perm_estoque_converter_reserva": "Você não tem permissão para converter reservas de estoque.",
@@ -81,12 +85,23 @@ SENSITIVE_PERMISSION_DEFAULT_ROLES = {
 }
 
 
+def _effective_role(user):
+    return getattr(user, "_tenant_tipo_usuario", None) or getattr(user, "tipo_usuario", None)
+
+
+def _effective_permission(user, permission_name, default=False):
+    overrides = getattr(user, "_tenant_permissoes", {}) or {}
+    if permission_name in overrides:
+        return bool(overrides[permission_name])
+    return bool(getattr(user, permission_name, default))
+
+
 def is_management_user(user):
     if not getattr(user, "is_authenticated", False):
         return False
     if user.is_superuser:
         return True
-    return getattr(user, "tipo_usuario", None) in MANAGER_ROLES
+    return _effective_role(user) in MANAGER_ROLES
 
 
 def has_role(user, allowed_roles):
@@ -94,11 +109,11 @@ def has_role(user, allowed_roles):
         return False
     if user.is_superuser:
         return True
-    if getattr(user, "tipo_usuario", None) in allowed_roles:
+    if _effective_role(user) in allowed_roles:
         return True
     capability = getattr(allowed_roles, "capability", None)
     if capability:
-        return bool(getattr(user, capability, False))
+        return _effective_permission(user, capability)
     return False
 
 
@@ -110,7 +125,7 @@ def has_sensitive_permission(user, permission_name):
     default_roles = SENSITIVE_PERMISSION_DEFAULT_ROLES.get(permission_name)
     if default_roles and has_role(user, default_roles):
         return True
-    return bool(getattr(user, permission_name, False))
+    return _effective_permission(user, permission_name)
 
 
 def can_override_vendedor_operacao(user):
@@ -118,7 +133,7 @@ def can_override_vendedor_operacao(user):
         return False
     if is_management_user(user):
         return True
-    return bool(getattr(user, "perm_venda_mostrador_trocar_vendedor", False))
+    return _effective_permission(user, "perm_venda_mostrador_trocar_vendedor")
 
 
 def require_sensitive_permission(user, permission_name, message=None):

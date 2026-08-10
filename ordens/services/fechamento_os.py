@@ -46,7 +46,26 @@ def _total_pagamentos_liquidados(ordem, ignorar_pagamento_id=None):
 
 
 def garantir_conta_receber_os(ordem, ignorar_pagamento_id=None):
+    total_os = _total_servicos_pecas(ordem)
+    total_pago = _total_pagamentos_liquidados(ordem, ignorar_pagamento_id=ignorar_pagamento_id)
+    valor_aberto = max(Decimal("0.00"), total_os - total_pago)
+    conta = (
+        ContaReceber.objects.filter(ordem_servico=ordem, tipo_origem="cliente_os")
+        .order_by("-id")
+        .first()
+    )
+
+    if total_os <= Decimal("0.00"):
+        if conta:
+            conta.empresa = ordem.empresa
+            conta.valor_original = Decimal("0.00")
+            conta.valor_aberto = Decimal("0.00")
+            conta.status = "paga"
+            conta.save(update_fields=["empresa", "valor_original", "valor_aberto", "status", "atualizado_em"])
+        return conta
+
     categoria, _ = CategoriaFinanceira.objects.get_or_create(
+        empresa=ordem.empresa,
         nome="Cliente OS",
         tipo="receber",
         defaults={"ativa": True},
@@ -55,15 +74,6 @@ def garantir_conta_receber_os(ordem, ignorar_pagamento_id=None):
         categoria.tipo = "receber"
         categoria.ativa = True
         categoria.save(update_fields=["tipo", "ativa"])
-    total_os = _total_servicos_pecas(ordem)
-    total_pago = _total_pagamentos_liquidados(ordem, ignorar_pagamento_id=ignorar_pagamento_id)
-    valor_aberto = max(Decimal("0.00"), total_os - total_pago)
-
-    conta = (
-        ContaReceber.objects.filter(ordem_servico=ordem, tipo_origem="cliente_os")
-        .order_by("-id")
-        .first()
-    )
     if not conta:
         conta = ContaReceber.objects.create(
             empresa=ordem.empresa,

@@ -60,7 +60,10 @@ class OrdemServicoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self._cliente_id = cliente_id
         self._empresa = empresa
-        tipos_cfg = list(TipoEquipamentoConfig.objects.filter(ativo=True).order_by("nome"))
+        tipos_queryset = TipoEquipamentoConfig.objects.filter(ativo=True)
+        if empresa:
+            tipos_queryset = tipos_queryset.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        tipos_cfg = list(tipos_queryset.order_by("nome"))
         opcoes_tipo = []
         if tipos_cfg:
             # Tipos vindos das configuracoes (editaveis pelo usuario).
@@ -79,7 +82,10 @@ class OrdemServicoForm(forms.ModelForm):
             self.initial["tipo_equipamento"] = self.OUTROS_TIPO_EQUIPAMENTO
             self.initial["tipo_equipamento_manual"] = tipo_atual
 
-        marcas = list(MarcaGarantia.objects.filter(ativo=True).order_by("nome"))
+        marcas_qs = MarcaGarantia.objects.filter(ativo=True)
+        if empresa:
+            marcas_qs = marcas_qs.filter(empresa=empresa)
+        marcas = list(marcas_qs.order_by("nome"))
         self._marcas_map = {str(m.id): m for m in marcas}
         self.fields["marca_catalogo"].choices = [
             ("", "---------"),
@@ -88,7 +94,10 @@ class OrdemServicoForm(forms.ModelForm):
         ]
         marca_atual = (getattr(self.instance, "marca_equipamento", "") or "").strip()
         if marca_atual:
-            marca = MarcaGarantia.objects.filter(nome__iexact=marca_atual, ativo=True).first()
+            marca_qs = MarcaGarantia.objects.filter(nome__iexact=marca_atual, ativo=True)
+            if empresa:
+                marca_qs = marca_qs.filter(empresa=empresa)
+            marca = marca_qs.first()
             if marca:
                 self.initial["marca_catalogo"] = str(marca.id)
             else:
@@ -256,9 +265,15 @@ class ServicoPecaForm(forms.ModelForm):
     produto_estoque_id = forms.IntegerField(required=False, widget=forms.HiddenInput())
 
     def __init__(self, *args, **kwargs):
+        self.empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
         self.fields["tecnico_responsavel"].queryset = usuarios_tecnicos_qs()
-        self.fields["ponto_operacional_reserva"].queryset = PontoOperacional.objects.filter(ativo=True).order_by("codigo")
+        pontos_reserva = PontoOperacional.objects.filter(ativo=True)
+        if self.empresa:
+            pontos_reserva = pontos_reserva.filter(Q(empresa=self.empresa) | Q(empresa__isnull=True))
+        else:
+            pontos_reserva = pontos_reserva.filter(empresa__isnull=True)
+        self.fields["ponto_operacional_reserva"].queryset = pontos_reserva.order_by("codigo")
         self.fields["ponto_operacional_reserva"].required = False
 
     def clean(self):
@@ -266,7 +281,12 @@ class ServicoPecaForm(forms.ModelForm):
         produto_id = cleaned.pop("produto_estoque_id", None)
         produto = None
         if produto_id:
-            produto = Produto.objects.filter(id=produto_id, ativo=True, permite_os=True).first()
+            produtos = Produto.objects.filter(id=produto_id, ativo=True, permite_os=True)
+            if self.empresa:
+                produtos = produtos.filter(Q(empresa=self.empresa) | Q(empresa__isnull=True))
+            else:
+                produtos = produtos.filter(empresa__isnull=True)
+            produto = produtos.first()
             if not produto:
                 self.add_error(None, "Produto do estoque inválido para vincular ao item da OS.")
                 return cleaned
@@ -363,6 +383,7 @@ class ExpedicaoParceiroForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
+        self._empresa = empresa
         queryset_ordens = (
             OrdemServico.objects.filter(fechada=False, status="pronto_envio_parceiro")
             .exclude(itens_expedicao__status="expedida")
@@ -374,7 +395,10 @@ class ExpedicaoParceiroForm(forms.ModelForm):
         self.fields["ordens_servico"].label_from_instance = lambda ordem: (
             f"{ordem.numero_os} - {ordem.cliente.nome} - {ordem.status_listagem_label}"
         )
-        parceiros = list(ParceiroExpedicao.objects.filter(ativo=True).order_by("nome").values_list("id", "nome"))
+        parceiros_queryset = ParceiroExpedicao.objects.filter(ativo=True)
+        if empresa:
+            parceiros_queryset = parceiros_queryset.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        parceiros = list(parceiros_queryset.order_by("nome").values_list("id", "nome"))
         self.fields["parceiro_config"].choices = [("", "Selecione"), *[(str(pid), nome) for pid, nome in parceiros], ("outros", "Outros (digitar manualmente)")]
 
     def clean(self):
@@ -388,7 +412,12 @@ class ExpedicaoParceiroForm(forms.ModelForm):
                 cleaned["parceiro_nome_resolvido"] = parceiro_manual
             return cleaned
         if parceiro_config:
-            parceiro_obj = ParceiroExpedicao.objects.filter(id=int(parceiro_config), ativo=True).first()
+            parceiro_queryset = ParceiroExpedicao.objects.filter(id=int(parceiro_config), ativo=True)
+            if self._empresa:
+                parceiro_queryset = parceiro_queryset.filter(
+                    Q(empresa=self._empresa) | Q(empresa__isnull=True)
+                )
+            parceiro_obj = parceiro_queryset.first()
             if parceiro_obj:
                 cleaned["parceiro_nome_resolvido"] = parceiro_obj.nome
             else:

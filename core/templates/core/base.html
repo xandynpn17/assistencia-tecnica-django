@@ -149,6 +149,23 @@
 
     <ul class="navbar-nav ml-auto align-items-center">
       {% if user.is_authenticated %}
+      {% if pode_trocar_empresa %}
+      <li class="nav-item mr-2">
+        <form method="post" action="{% url 'configuracoes:trocar_empresa' %}" class="form-inline mb-0">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <label class="sr-only" for="empresa-ativa-select">Empresa ativa</label>
+          <select id="empresa-ativa-select" name="empresa_id" class="form-control form-control-sm"
+                  aria-label="Empresa ativa" onchange="this.form.submit()">
+            {% for empresa_opcao in empresas_disponiveis %}
+            <option value="{{ empresa_opcao.id }}" {% if empresa and empresa_opcao.id == empresa.id %}selected{% endif %}>
+              {{ empresa_opcao.nome }}
+            </option>
+            {% endfor %}
+          </select>
+        </form>
+      </li>
+      {% endif %}
       <!-- Barra de Pesquisa -->
       <li class="nav-item">
         <div class="search-container">

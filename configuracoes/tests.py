@@ -930,7 +930,7 @@ class PermissoesConfiguracoesTests(TestCase):
         self.assertIn("eventos", payload)
         self.assertIn("configuracoes.alterada", payload["eventos"])
 
-    def test_tenant_context_resolve_por_header(self):
+    def test_tenant_context_nao_troca_empresa_do_usuario_por_header(self):
         empresa_a = Empresa.objects.create(nome="Empresa A")
         empresa_b = Empresa.objects.create(nome="Empresa B")
         self.admin.empresa = empresa_a
@@ -942,7 +942,7 @@ class PermissoesConfiguracoesTests(TestCase):
             HTTP_X_TENANT=str(empresa_b.id),
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["empresa"].id, empresa_b.id)
+        self.assertEqual(response.context["empresa"].id, empresa_a.id)
 
     def test_gerente_edita_e_exclui_fornecedor_na_tela_unica(self):
         fornecedor = FornecedorGarantia.objects.create(nome="Fornecedor X")

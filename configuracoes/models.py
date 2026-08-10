@@ -3,6 +3,7 @@
 from django.db import DatabaseError, IntegrityError, OperationalError, ProgrammingError, models, transaction
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.utils import timezone
 from django.utils.text import slugify
@@ -68,6 +69,20 @@ class Empresa(models.Model):
     ipi = models.DecimalField(max_digits=6, decimal_places=3, default=0)
     pis = models.DecimalField(max_digits=6, decimal_places=3, default=0)
     cofins = models.DecimalField(max_digits=6, decimal_places=3, default=0)
+    limite_oferta_sem_aprovacao = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=100,
+        validators=[MinValueValidator(0)],
+        help_text="Custo total máximo que pode ser oferecido sem aprovação gerencial.",
+    )
+    limite_cedencia_sem_aprovacao = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=250,
+        validators=[MinValueValidator(0)],
+        help_text="Custo total máximo que pode ser cedido sem aprovação gerencial.",
+    )
 
     def __str__(self):
         return self.nome
@@ -89,13 +104,26 @@ class Empresa(models.Model):
 
 
 class TipoEquipamentoConfig(models.Model):
-    codigo = models.CharField(max_length=80, unique=True)
-    nome = models.CharField(max_length=80, unique=True)
+    empresa = models.ForeignKey(
+        "Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="tipos_equipamento_config",
+    )
+    codigo = models.CharField(max_length=80)
+    nome = models.CharField(max_length=80)
     ativo = models.BooleanField(default=True)
     ordem = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["ordem", "nome"]
+        constraints = [
+            models.UniqueConstraint(fields=["empresa", "codigo"], condition=models.Q(empresa__isnull=False), name="config_tipo_eq_empresa_codigo_unico"),
+            models.UniqueConstraint(fields=["empresa", "nome"], condition=models.Q(empresa__isnull=False), name="config_tipo_eq_empresa_nome_unico"),
+            models.UniqueConstraint(fields=["codigo"], condition=models.Q(empresa__isnull=True), name="config_tipo_eq_legado_codigo_unico"),
+            models.UniqueConstraint(fields=["nome"], condition=models.Q(empresa__isnull=True), name="config_tipo_eq_legado_nome_unico"),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.codigo and self.nome:
@@ -171,8 +199,18 @@ class FornecedorGarantia(models.Model):
         ("outro", "Outro"),
     ]
 
-    nome = models.CharField(max_length=120, unique=True)
+    empresa = models.ForeignKey(
+        "Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="fornecedores_garantia",
+    )
+    nome = models.CharField(max_length=120)
     cnpj = models.CharField(max_length=18, blank=True)
+    cnpj_normalizado = models.CharField(max_length=14, blank=True, db_index=True, editable=False)
+    fornecedor_comercial = models.BooleanField(default=True)
+    origem_cadastro = models.CharField(max_length=20, default="manual", choices=[("manual", "Manual"), ("xml_nfe", "XML de NF-e")])
     inscricao_estadual = models.CharField(max_length=30, blank=True)
     razao_social = models.CharField(max_length=160, blank=True)
     contato = models.CharField(max_length=120, blank=True)
@@ -200,9 +238,49 @@ class FornecedorGarantia(models.Model):
 
     class Meta:
         ordering = ["nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "cnpj_normalizado"],
+                condition=models.Q(empresa__isnull=False) & ~models.Q(cnpj_normalizado=""),
+                name="config_fornecedor_empresa_cnpj_unico",
+            ),
+            models.UniqueConstraint(
+                fields=["empresa", "nome"],
+                condition=models.Q(empresa__isnull=False),
+                name="config_fornecedor_empresa_nome_unico",
+            ),
+            models.UniqueConstraint(
+                fields=["nome"],
+                condition=models.Q(empresa__isnull=True),
+                name="config_fornecedor_legado_nome_unico",
+            ),
+        ]
 
     def __str__(self):
         return self.nome
+
+    @staticmethod
+    def _cnpj_valido(cnpj):
+        if len(cnpj) != 14 or cnpj == cnpj[0] * 14:
+            return False
+        for tamanho in (12, 13):
+            pesos = list(range(tamanho - 7, 1, -1)) + list(range(9, 1, -1))
+            soma = sum(int(cnpj[indice]) * pesos[indice] for indice in range(tamanho))
+            digito = 11 - (soma % 11)
+            digito = 0 if digito >= 10 else digito
+            if digito != int(cnpj[tamanho]):
+                return False
+        return True
+
+    def clean(self):
+        super().clean()
+        cnpj = "".join(caractere for caractere in (self.cnpj or "") if caractere.isdigit())
+        if cnpj and not self._cnpj_valido(cnpj):
+            raise ValidationError({"cnpj": "Informe um CNPJ válido."})
+
+    def save(self, *args, **kwargs):
+        self.cnpj_normalizado = "".join(caractere for caractere in (self.cnpj or "") if caractere.isdigit())
+        return super().save(*args, **kwargs)
 
     @property
     def endereco_resumido(self):
@@ -214,7 +292,14 @@ class FornecedorGarantia(models.Model):
 
 
 class ParceiroExpedicao(models.Model):
-    nome = models.CharField(max_length=120, unique=True)
+    empresa = models.ForeignKey(
+        "Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="parceiros_expedicao",
+    )
+    nome = models.CharField(max_length=120)
     contato = models.CharField(max_length=120, blank=True)
     telefone = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)
@@ -223,13 +308,31 @@ class ParceiroExpedicao(models.Model):
 
     class Meta:
         ordering = ["nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "nome"],
+                condition=models.Q(empresa__isnull=False),
+                name="config_parceiro_empresa_nome_unico",
+            ),
+            models.UniqueConstraint(
+                fields=["nome"],
+                condition=models.Q(empresa__isnull=True),
+                name="config_parceiro_legado_nome_unico",
+            ),
+        ]
 
     def __str__(self):
         return self.nome
 
-
 class MarcaGarantia(models.Model):
-    nome = models.CharField(max_length=80, unique=True)
+    empresa = models.ForeignKey(
+        "Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="marcas_garantia",
+    )
+    nome = models.CharField(max_length=80)
     fornecedor = models.ForeignKey(
         FornecedorGarantia,
         on_delete=models.PROTECT,
@@ -244,6 +347,27 @@ class MarcaGarantia(models.Model):
 
     class Meta:
         ordering = ["nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "nome"],
+                condition=models.Q(empresa__isnull=False),
+                name="config_marca_empresa_nome_unico",
+            ),
+            models.UniqueConstraint(
+                fields=["nome"],
+                condition=models.Q(empresa__isnull=True),
+                name="config_marca_legado_nome_unico",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if (
+            self.fornecedor_id
+            and self.fornecedor.empresa_id is not None
+            and self.empresa_id != self.fornecedor.empresa_id
+        ):
+            raise ValidationError({"fornecedor": "Selecione um fornecedor da mesma empresa da marca."})
 
     def __str__(self):
         return self.nome
@@ -297,7 +421,13 @@ class RegraGarantiaMarca(models.Model):
         if not valor:
             return "-"
         try:
-            item = TipoEquipamentoConfig.objects.filter(codigo=valor).first()
+            tipos = TipoEquipamentoConfig.objects.filter(codigo=valor)
+            empresa_id = getattr(self.marca, "empresa_id", None)
+            if empresa_id:
+                item = tipos.filter(empresa_id=empresa_id).first()
+                item = item or tipos.filter(empresa__isnull=True).first()
+            else:
+                item = tipos.first()
             if item:
                 return item.nome
         except Exception:
@@ -416,9 +546,13 @@ class User(AbstractUser):
     perm_caixa_ver_dre = models.BooleanField(default=False)
     perm_caixa_gerir_comissoes = models.BooleanField(default=False)
     perm_caixa_ver_auditoria = models.BooleanField(default=False)
+    perm_caixa_lancamento_retroativo = models.BooleanField(default=False)
     perm_estoque_cadastro_produto = models.BooleanField(default=False)
     perm_estoque_excluir_produto = models.BooleanField(default=False)
     perm_estoque_ajuste_manual = models.BooleanField(default=False)
+    perm_estoque_avaria = models.BooleanField(default=False)
+    perm_estoque_oferta = models.BooleanField(default=False)
+    perm_estoque_cedencia = models.BooleanField(default=False)
     perm_estoque_transferencia = models.BooleanField(default=False)
     perm_estoque_inventario_finalizar = models.BooleanField(default=False)
     perm_estoque_converter_reserva = models.BooleanField(default=False)
@@ -486,6 +620,56 @@ class User(AbstractUser):
             self,
             lambda: super(User, self).save(*args, **kwargs),
         )
+
+
+class UsuarioEmpresa(models.Model):
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="vinculos_empresas",
+    )
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.CASCADE,
+        related_name="vinculos_usuarios",
+    )
+    ativo = models.BooleanField(default=True)
+    padrao = models.BooleanField(default=False)
+    tipo_usuario = models.CharField(
+        max_length=20,
+        choices=User.TIPO_CHOICES,
+        blank=True,
+        help_text="Perfil usado somente nesta empresa. Em branco, herda o perfil geral do usuario.",
+    )
+    permissoes = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Sobrescritas de permissoes por empresa no formato {\"campo\": true/false}.",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["empresa__nome", "usuario__username"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["usuario", "empresa"],
+                name="config_usuario_empresa_unico",
+            ),
+            models.UniqueConstraint(
+                fields=["usuario"],
+                condition=models.Q(padrao=True),
+                name="config_usuario_empresa_padrao_unico",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.padrao and not self.ativo:
+            raise ValidationError({"padrao": "O vinculo padrao precisa estar ativo."})
+
+    def __str__(self):
+        return f"{self.usuario} - {self.empresa}"
 
 
 class UsuarioArquivo(models.Model):
@@ -574,6 +758,13 @@ class PermissaoModulo(models.Model):
 
 
 class ConfiguracaoOrdemServico(models.Model):
+    empresa = models.OneToOneField(
+        Empresa,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="configuracao_ordem_servico",
+    )
     prefixo_os = models.CharField(
         max_length=10,
         default="OS",
@@ -599,23 +790,49 @@ class ConfiguracaoOrdemServico(models.Model):
         verbose_name = "Configuração da Ordem de Serviço"
         verbose_name_plural = "Configuração da Ordem de Serviço"
 
-    def save(self, *args, **kwargs):
-        self.pk = 1
-        super().save(*args, **kwargs)
-
     @classmethod
-    def get_configuracao(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+    def get_configuracao(cls, empresa=None):
+        if empresa is None:
+            from configuracoes.services.tenant_runtime import obter_empresa_runtime
+            empresa = obter_empresa_runtime()
+        if not empresa:
+            obj, _ = cls.objects.get_or_create(pk=1, defaults={"empresa": None})
+            return obj
+        obj = cls.objects.filter(empresa=empresa).first()
+        if obj:
+            return obj
+        base = cls.objects.filter(empresa__isnull=True).first()
+        defaults = {}
+        if base:
+            defaults = {
+                "prefixo_os": base.prefixo_os,
+                "inicio_id_ordem": base.inicio_id_ordem,
+                "gerar_numero_automatico": base.gerar_numero_automatico,
+                "rodape_relatorio": base.rodape_relatorio,
+            }
+        if Empresa.objects.exclude(pk=empresa.pk).exists():
+            defaults["prefixo_os"] = f"{defaults.get('prefixo_os', 'OS')}{empresa.pk}"
+        obj, _ = cls.objects.get_or_create(empresa=empresa, defaults=defaults)
         return obj
 
 
 class SequenciaOS(models.Model):
+    empresa = models.OneToOneField(
+        Empresa,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="sequencia_ordem_servico",
+    )
     ultimo = models.PositiveIntegerField(default=0)
 
     @classmethod
-    def novo_numero(cls):
+    def novo_numero(cls, empresa=None):
         with transaction.atomic():
-            seq, _ = cls.objects.select_for_update().get_or_create(pk=1)
+            if empresa:
+                seq, _ = cls.objects.select_for_update().get_or_create(empresa=empresa)
+            else:
+                seq, _ = cls.objects.select_for_update().get_or_create(pk=1, defaults={"empresa": None})
             seq.ultimo += 1
             seq.save()
             return seq.ultimo
@@ -629,6 +846,13 @@ class SequenciaOS(models.Model):
 # ============================
 
 class ConfiguracaoSistema(models.Model):
+    empresa = models.OneToOneField(
+        Empresa,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="configuracao_sistema",
+    )
     COMISSAO_CRITERIO_OS_PRONTO = "pronto_contactado"
     COMISSAO_CRITERIO_OS_ENTREGUE = "entregue"
     COMISSAO_CRITERIO_OS_CHOICES = [
@@ -1191,14 +1415,25 @@ class ConfiguracaoSistema(models.Model):
         verbose_name = 'Configuração do Sistema'
         verbose_name_plural = 'Configurações do Sistema'
 
-    def save(self, *args, **kwargs):
-        # Garantir que só existe uma configuração
-        self.pk = 1
-        super().save(*args, **kwargs)
-
     @classmethod
-    def get_configuracao(cls):
-        obj, created = cls.objects.get_or_create(pk=1)
+    def get_configuracao(cls, empresa=None):
+        if empresa is None:
+            from configuracoes.services.tenant_runtime import obter_empresa_runtime
+            empresa = obter_empresa_runtime()
+        if not empresa:
+            obj, _ = cls.objects.get_or_create(pk=1, defaults={"empresa": None})
+            return obj
+        obj = cls.objects.filter(empresa=empresa).first()
+        if obj:
+            return obj
+        base = cls.objects.filter(empresa__isnull=True).first()
+        defaults = {}
+        if base:
+            for field in cls._meta.concrete_fields:
+                if field.primary_key or field.name in {"empresa", "data_atualizacao"}:
+                    continue
+                defaults[field.name] = getattr(base, field.name)
+        obj, _ = cls.objects.get_or_create(empresa=empresa, defaults=defaults)
         return obj
 
     @classmethod
@@ -1252,12 +1487,14 @@ class SetupInicialSistema(models.Model):
         verbose_name = "Setup inicial do sistema"
         verbose_name_plural = "Setup inicial do sistema"
 
-    def save(self, *args, **kwargs):
-        self.pk = 1
-        super().save(*args, **kwargs)
-
     @classmethod
-    def get_setup(cls):
+    def get_setup(cls, empresa=None):
+        if empresa is None:
+            from configuracoes.services.tenant_runtime import obter_empresa_runtime
+            empresa = obter_empresa_runtime()
+        if empresa:
+            obj, _ = cls.objects.get_or_create(empresa=empresa)
+            return obj
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
 

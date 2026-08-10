@@ -1,17 +1,24 @@
 import logging
 
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import redirect
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 from django.views.decorators.clickjacking import xframe_options_exempt
 
-from .permissions import MANAGER_ROLES, ORDER_CREATION_ROLES, is_management_user, role_required
+from .permissions import ADM_ROLES, MANAGER_ROLES, ORDER_CREATION_ROLES, is_management_user, role_required
 from .services.setup_inicial import setup_inicial_concluido
+from .services.auditoria import registrar_evento_configuracao
+from .services.tenant import empresas_autorizadas_usuario
 from .view_modules.catalogo import marcas_fornecedores_impl
 from .view_modules.empresa import (
     adicionar_aliquota_impl,
     editar_aliquota_impl,
     empresa_edit_impl,
+    empresa_criar_impl,
     excluir_aliquota_impl,
     lista_aliquotas_impl,
 )
@@ -40,6 +47,40 @@ logger = logging.getLogger(__name__)
 
 def _is_ajax_request(request):
     return (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest"
+
+
+@login_required
+@require_POST
+def trocar_empresa(request):
+    empresa_id = (request.POST.get("empresa_id") or "").strip()
+    empresa = None
+    if empresa_id.isdigit():
+        empresa = empresas_autorizadas_usuario(request.user).filter(id=int(empresa_id)).first()
+
+    destino = (request.POST.get("next") or "").strip()
+    if not url_has_allowed_host_and_scheme(
+        destino,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        destino = "core:dashboard"
+
+    if not empresa:
+        messages.error(request, "Empresa nao autorizada para este usuario.")
+        return redirect(destino)
+
+    empresa_anterior = getattr(request, "empresa_ativa", None)
+    request.session["empresa_ativa_id"] = empresa.id
+    registrar_evento_configuracao(
+        usuario=request.user,
+        acao="empresa_ativa_alterada",
+        origem="ui",
+        alvo=f"empresa:{empresa.id}",
+        antes={"empresa_id": getattr(empresa_anterior, "id", None)},
+        depois={"empresa_id": empresa.id},
+    )
+    messages.success(request, f"Empresa ativa alterada para {empresa.nome}.")
+    return redirect(destino)
 
 
 @role_required(MANAGER_ROLES)
@@ -76,6 +117,11 @@ def tipos_equipamento(request):
 @role_required(MANAGER_ROLES)
 def empresa_edit(request):
     return empresa_edit_impl(request)
+
+
+@role_required(ADM_ROLES)
+def empresa_criar(request):
+    return empresa_criar_impl(request)
 
 
 @role_required(MANAGER_ROLES)

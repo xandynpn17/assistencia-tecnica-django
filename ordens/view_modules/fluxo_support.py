@@ -21,7 +21,7 @@ from clientes.forms import ClienteForm
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema, Empresa, MarcaGarantia, ModeloMensagem
 from configuracoes.permissions import ORDER_CREATION_ROLES, ORDER_ROLES, RoleRequiredMixin, role_required
-from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, filtrar_queryset_empresa, obter_empresa_ativa
 from orcamentos.forms import ItemOrcamentoForm, OrcamentoForm
 from orcamentos.models import Orcamento
 from ..forms import LinhaTrabalhoForm, OrdemSerieForm, OrdemServicoForm, ServicoPecaForm

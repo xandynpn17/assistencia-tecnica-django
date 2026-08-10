@@ -32,7 +32,7 @@ class OrdemServico(models.Model):
         related_name="ordens_servico",
     )
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='ordens')
-    numero_os = models.CharField(max_length=10, unique=True, blank=True, editable=False)
+    numero_os = models.CharField(max_length=24, unique=True, blank=True, editable=False)
     codigo_portal = models.CharField(max_length=12, unique=True, blank=True, editable=False)
 
     TIPO_EQUIPAMENTO_CHOICES = [
@@ -219,7 +219,12 @@ class OrdemServico(models.Model):
         try:
             from configuracoes.models import TipoEquipamentoConfig
 
-            item = TipoEquipamentoConfig.objects.filter(codigo=valor).first()
+            tipos = TipoEquipamentoConfig.objects.filter(codigo=valor)
+            if self.empresa_id:
+                item = tipos.filter(empresa_id=self.empresa_id).first()
+                item = item or tipos.filter(empresa__isnull=True).first()
+            else:
+                item = tipos.first()
             if item:
                 return item.nome
         except Exception:
@@ -239,6 +244,7 @@ class OrdemServico(models.Model):
             self.numero_os = gerar_numero_ordem_servico(
                 configuracao_model=ConfiguracaoOrdemServico,
                 sequencia_model=SequenciaOS,
+                empresa=self.empresa,
             )
 
         super().save(*args, **kwargs)

@@ -5,6 +5,7 @@ from django import forms
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
+from django.db.models import Q
 from django.utils.text import slugify
 from PIL import Image
 from .models import (
@@ -27,6 +28,7 @@ from django.contrib.auth.models import Group
 from .services.capabilities import aplicar_preset, listar_presets
 from .services.documentos import formatar_cnpj, normalizar_cnpj, somente_digitos, validar_cnpj_alfanumerico
 from .services.integracoes import listar_eventos_comunicacao
+from .services.tenant_guard import filtrar_catalogo_empresa
 
 
 def _somente_digitos(valor):
@@ -93,6 +95,7 @@ class EmpresaForm(forms.ModelForm):
             'regime_tributario', 'anexo_simples', 'modo_tributario',
             'aliquota_comercio', 'aliquota_servico',
             'icms', 'ipi', 'pis', 'cofins',
+            'limite_oferta_sem_aprovacao', 'limite_cedencia_sem_aprovacao',
         ]
         widgets = {
             'nome': forms.TextInput(attrs={'class': 'form-control'}),
@@ -123,10 +126,14 @@ class EmpresaForm(forms.ModelForm):
             'ipi': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
             'pis': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
             'cofins': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
+            'limite_oferta_sem_aprovacao': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
+            'limite_cedencia_sem_aprovacao': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["limite_oferta_sem_aprovacao"].required = False
+        self.fields["limite_cedencia_sem_aprovacao"].required = False
         self.fields["nome"].label = "Nome principal"
         self.fields["nome"].help_text = "Nome usado na interface e como fallback quando nao houver logo."
         self.fields["nome_fantasia"].label = "Nome fantasia"
@@ -405,9 +412,13 @@ class UserForm(forms.ModelForm):
             'perm_caixa_ver_dre',
             'perm_caixa_gerir_comissoes',
             'perm_caixa_ver_auditoria',
+            'perm_caixa_lancamento_retroativo',
             'perm_estoque_cadastro_produto',
             'perm_estoque_excluir_produto',
             'perm_estoque_ajuste_manual',
+            'perm_estoque_avaria',
+            'perm_estoque_oferta',
+            'perm_estoque_cedencia',
             'perm_estoque_transferencia',
             'perm_estoque_inventario_finalizar',
             'perm_estoque_converter_reserva',
@@ -506,9 +517,13 @@ class UserForm(forms.ModelForm):
             "perm_caixa_ver_dre",
             "perm_caixa_gerir_comissoes",
             "perm_caixa_ver_auditoria",
+            "perm_caixa_lancamento_retroativo",
             "perm_estoque_cadastro_produto",
             "perm_estoque_excluir_produto",
             "perm_estoque_ajuste_manual",
+            "perm_estoque_avaria",
+            "perm_estoque_oferta",
+            "perm_estoque_cedencia",
             "perm_estoque_transferencia",
             "perm_estoque_inventario_finalizar",
             "perm_estoque_converter_reserva",
@@ -550,9 +565,13 @@ class UserForm(forms.ModelForm):
         self.fields["perm_caixa_ver_dre"].label = "Ver DRE"
         self.fields["perm_caixa_gerir_comissoes"].label = "Gerir comissoes"
         self.fields["perm_caixa_ver_auditoria"].label = "Ver auditoria operacional"
+        self.fields["perm_caixa_lancamento_retroativo"].label = "Registrar datas financeiras retroativas"
         self.fields["perm_estoque_cadastro_produto"].label = "Cadastrar e editar produtos"
         self.fields["perm_estoque_excluir_produto"].label = "Excluir produtos"
         self.fields["perm_estoque_ajuste_manual"].label = "Registrar ajuste manual"
+        self.fields["perm_estoque_avaria"].label = "Registrar avaria ou quebra"
+        self.fields["perm_estoque_oferta"].label = "Registrar oferta"
+        self.fields["perm_estoque_cedencia"].label = "Registrar cedência interna"
         self.fields["perm_estoque_transferencia"].label = "Transferir e repor estoque"
         self.fields["perm_estoque_inventario_finalizar"].label = "Finalizar inventario"
         self.fields["perm_estoque_converter_reserva"].label = "Converter reserva"
@@ -1068,7 +1087,11 @@ class FornecedorGarantiaForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
+        self.empresa = empresa or getattr(self.instance, "empresa", None)
+        if self.empresa and not self.instance.empresa_id:
+            self.instance.empresa = self.empresa
         self.fields["endereco"].label = "Endereco / logradouro"
         self.fields["endereco"].help_text = "Rua, avenida, numero base ou referencia principal."
         self.fields["municipio"].label = "Municipio"
@@ -1143,7 +1166,15 @@ class MarcaGarantiaForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
+        self.empresa = empresa or getattr(self.instance, "empresa", None)
+        if self.empresa and not self.instance.empresa_id:
+            self.instance.empresa = self.empresa
+        fornecedores = FornecedorGarantia.objects.filter(ativo=True)
+        if self.empresa:
+            fornecedores = fornecedores.filter(Q(empresa=self.empresa) | Q(empresa__isnull=True))
+        self.fields["fornecedor"].queryset = fornecedores.order_by("nome")
         self.fields["fornecedor"].required = False
         self.fields["fornecedor"].help_text = (
             "Opcional. Vincule quando a marca tambem depende de um fornecedor homologado ou quando o fabricante atende direto."
@@ -1167,6 +1198,7 @@ class MarcaGarantiaForm(forms.ModelForm):
         usar_mesmo_nome = self.cleaned_data.get("fornecedor_igual_marca")
         if usar_mesmo_nome:
             fornecedor, _ = FornecedorGarantia.objects.get_or_create(
+                empresa=self.empresa,
                 nome=instance.nome,
                 defaults={
                     "razao_social": instance.nome,
@@ -1180,6 +1212,12 @@ class MarcaGarantiaForm(forms.ModelForm):
 
 
 class ParceiroExpedicaoForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        self.empresa = kwargs.pop("empresa", None)
+        super().__init__(*args, **kwargs)
+        if self.empresa and not self.instance.empresa_id:
+            self.instance.empresa = self.empresa
+
     class Meta:
         model = ParceiroExpedicao
         fields = ["nome", "contato", "telefone", "email", "observacoes", "ativo"]
@@ -1201,8 +1239,14 @@ class RegraGarantiaMarcaForm(forms.ModelForm):
     )
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        tipos_cfg = list(TipoEquipamentoConfig.objects.filter(ativo=True).order_by("nome"))
+        tipos_cfg = list(
+            filtrar_catalogo_empresa(TipoEquipamentoConfig.objects.filter(ativo=True), empresa).order_by("nome")
+        )
+        self.fields["marca"].queryset = filtrar_catalogo_empresa(
+            MarcaGarantia.objects.all(), empresa
+        ).order_by("nome")
         if tipos_cfg:
             opcoes_tipo = [(t.codigo, t.nome) for t in tipos_cfg]
         else:
@@ -1269,6 +1313,12 @@ class ModeloMensagemForm(forms.ModelForm):
 
 
 class TipoEquipamentoConfigForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        self.empresa = kwargs.pop("empresa", None)
+        super().__init__(*args, **kwargs)
+        if self.empresa and not self.instance.empresa_id:
+            self.instance.empresa = self.empresa
+
     class Meta:
         model = TipoEquipamentoConfig
         fields = ["nome", "ativo"]

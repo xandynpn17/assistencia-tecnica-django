@@ -6,6 +6,8 @@ from configuracoes.models import Aliquota, Empresa
 from configuracoes.services.auditoria import registrar_evento_configuracao
 from configuracoes.services.integracoes import emitir_evento_interno
 from configuracoes.services.tenant_guard import obter_empresa_ativa
+from configuracoes.services.onboarding_empresa import provisionar_empresa
+from configuracoes.models import SetupInicialSistema
 
 
 def empresa_edit_impl(request):
@@ -37,6 +39,41 @@ def empresa_edit_impl(request):
                 "Concentre aqui a identidade visual, os contatos oficiais e a base tributária "
                 "que sustenta documentos, PDFs e rotinas comerciais da operação."
             ),
+        },
+    )
+
+
+def empresa_criar_impl(request):
+    setup_origem = SetupInicialSistema.get_setup()
+    if request.method == "POST":
+        form = EmpresaForm(request.POST, request.FILES)
+        if form.is_valid():
+            empresa = provisionar_empresa(
+                empresa=form.save(commit=False),
+                usuario_admin=request.user,
+                setup_origem=setup_origem,
+            )
+            request.session["empresa_ativa_id"] = empresa.id
+            registrar_evento_configuracao(
+                usuario=request.user,
+                acao="empresa_provisionada",
+                origem="ui",
+                alvo=f"empresa:{empresa.id}",
+                depois={"nome": empresa.nome, "cnpj": empresa.cnpj},
+            )
+            messages.success(request, "Nova empresa criada com estrutura, configuracoes e catalogos proprios.")
+            return redirect("configuracoes:painel")
+    else:
+        form = EmpresaForm()
+    return render(
+        request,
+        "configuracoes/empresa_form.html",
+        {
+            "form": form,
+            "criando_empresa": True,
+            "config_operacional_tab": "empresa",
+            "config_operacional_title": "Nova empresa",
+            "config_operacional_subtitle": "Crie um ambiente isolado com estoque, financeiro, impostos e permissoes proprios.",
         },
     )
 

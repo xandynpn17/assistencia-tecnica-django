@@ -7,12 +7,15 @@ from .models import ConfiguracaoSistema
 from configuracoes.services.sla import calcular_pendencias_sla
 from configuracoes.services.setup_inicial import setup_inicial_concluido
 from configuracoes.services.tenant_guard import obter_empresa_ativa
+from configuracoes.services.tenant import empresas_autorizadas_usuario
 
 logger = logging.getLogger(__name__)
 
 
 def empresa_context(request):
     empresa = obter_empresa_ativa(request, strict=False)
+    user = getattr(request, "user", None)
+    empresas_disponiveis = list(empresas_autorizadas_usuario(user))
     try:
         config = ConfiguracaoSistema.get_configuracao()
     except DatabaseError as exc:
@@ -34,7 +37,6 @@ def empresa_context(request):
         "parceiro_externo_atrasado": 0,
         "peca_reservada_vencendo": 0,
     }
-    user = getattr(request, "user", None)
     if user and user.is_authenticated and (
         user.is_superuser or getattr(user, "tipo_usuario", "") in {"adm", "gerente"}
     ):
@@ -66,6 +68,8 @@ def empresa_context(request):
         "estados_brasil": getattr(ConfiguracaoSistema, "ESTADOS_BRASIL", []),
         "ddd_brasil": getattr(ConfiguracaoSistema, "DDD_BRASIL", []),
         "tenant_context": tenant_ctx,
+        "empresas_disponiveis": empresas_disponiveis,
+        "pode_trocar_empresa": len(empresas_disponiveis) > 1,
         "sla_badges": sla_badges,
         "system_version": getattr(settings, "APP_VERSION", "1.0.0"),
         "system_version_label": getattr(settings, "APP_VERSION_LABEL", "v1.0.0"),

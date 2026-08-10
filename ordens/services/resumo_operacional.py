@@ -35,11 +35,14 @@ class ResumoOperacionalService:
         total_os = total_os if total_os is not None else sum((item.total() for item in ordem.servicos_pecas.all()), Decimal("0.00"))
         if total_pago is None:
             total_pago = sum(
-                (pagamento.valor for pagamento in Pagamento.objects.filter(ordem_servico=ordem)),
+                (
+                    (pagamento.valor or Decimal("0.00")) + (pagamento.desconto or Decimal("0.00"))
+                    for pagamento in Pagamento.objects.filter(ordem_servico=ordem)
+                ),
                 Decimal("0.00"),
             )
         saldo_financeiro = saldo_financeiro if saldo_financeiro is not None else max(Decimal("0.00"), total_os - total_pago)
-        os_pago = os_pago if os_pago is not None else (total_os > 0 and total_pago >= total_os)
+        os_pago = os_pago if os_pago is not None else (total_os <= Decimal("0.00") or total_pago >= total_os)
 
         if ordem.data_abertura:
             dias_aberta = max((timezone.localdate() - ordem.data_abertura.date()).days, 0)

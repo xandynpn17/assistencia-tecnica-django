@@ -9,6 +9,7 @@ from .models import (
     PermissaoModulo,
     User,
     UsuarioArquivo,
+    UsuarioEmpresa,
     UsuarioLog,
 )
 
@@ -29,8 +30,15 @@ class SingletonModelAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context=extra_context)
 
 
+class UsuarioEmpresaInline(admin.TabularInline):
+    model = UsuarioEmpresa
+    extra = 0
+    autocomplete_fields = ("empresa",)
+
+
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
+    inlines = (UsuarioEmpresaInline,)
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         (
@@ -100,18 +108,28 @@ class PermissaoModuloAdmin(admin.ModelAdmin):
 
 
 @admin.register(Empresa)
-class EmpresaAdmin(SingletonModelAdmin):
+class EmpresaAdmin(admin.ModelAdmin):
     list_display = ("nome", "cnpj", "email")
+    search_fields = ("nome", "nome_fantasia", "razao_social", "cnpj")
+
+
+@admin.register(UsuarioEmpresa)
+class UsuarioEmpresaAdmin(admin.ModelAdmin):
+    list_display = ("usuario", "empresa", "tipo_usuario", "ativo", "padrao", "atualizado_em")
+    list_filter = ("ativo", "padrao", "empresa")
+    search_fields = ("usuario__username", "usuario__nome_completo", "empresa__nome")
+    autocomplete_fields = ("usuario", "empresa")
 
 
 @admin.register(ConfiguracaoOrdemServico)
-class ConfiguracaoOrdemServicoAdmin(SingletonModelAdmin):
-    list_display = ("prefixo_os", "inicio_id_ordem", "gerar_numero_automatico")
+class ConfiguracaoOrdemServicoAdmin(admin.ModelAdmin):
+    list_display = ("empresa", "prefixo_os", "inicio_id_ordem", "gerar_numero_automatico")
+    list_filter = ("empresa",)
     fieldsets = (
         (
             "Numeração",
             {
-                "fields": ("prefixo_os", "inicio_id_ordem", "gerar_numero_automatico"),
+                "fields": ("empresa", "prefixo_os", "inicio_id_ordem", "gerar_numero_automatico"),
                 "description": "Configurações de geração automática de número da OS",
             },
         ),

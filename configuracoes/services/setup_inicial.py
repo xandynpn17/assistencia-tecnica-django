@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Q
 
 from configuracoes.models import (
     LinhaAtuacaoCatalogo,
@@ -191,7 +192,7 @@ def garantir_catalogo_padrao():
 
 
 @transaction.atomic
-def sincronizar_tipos_ativos_por_linhas(linhas):
+def sincronizar_tipos_ativos_por_linhas(linhas, *, empresa=None):
     linhas_ids = list(linhas.values_list("id", flat=True))
     catalogo = list(
         TipoEquipamentoCatalogo.objects.filter(ativo=True, linha_id__in=linhas_ids)
@@ -202,27 +203,45 @@ def sincronizar_tipos_ativos_por_linhas(linhas):
     for ordem, item in enumerate(catalogo):
         codigos_desejados.append(item.codigo)
 
-        registro = TipoEquipamentoConfig.objects.filter(codigo=item.codigo).first()
+        registros = TipoEquipamentoConfig.objects.all()
+        if empresa:
+            registros = registros.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+            registro = registros.filter(empresa=empresa, codigo=item.codigo).first()
+            registro = registro or registros.filter(empresa__isnull=True, codigo=item.codigo).first()
+        else:
+            registro = registros.filter(codigo=item.codigo).first()
         if not registro:
             # Compatibilidade com bases antigas:
             # se o nome ja existir com codigo legado, reaproveitamos o mesmo registro.
-            registro = TipoEquipamentoConfig.objects.filter(nome=item.nome).first()
+            if empresa:
+                registro = registros.filter(empresa=empresa, nome=item.nome).first()
+                registro = registro or registros.filter(empresa__isnull=True, nome=item.nome).first()
+            else:
+                registro = registros.filter(nome=item.nome).first()
 
         if registro:
             registro.codigo = item.codigo
             registro.nome = item.nome
             registro.ativo = True
             registro.ordem = ordem
-            registro.save(update_fields=["codigo", "nome", "ativo", "ordem"])
+            campos_atualizados = ["codigo", "nome", "ativo", "ordem"]
+            if empresa and not registro.empresa_id:
+                registro.empresa = empresa
+                campos_atualizados.append("empresa")
+            registro.save(update_fields=campos_atualizados)
         else:
             TipoEquipamentoConfig.objects.create(
+                empresa=empresa,
                 codigo=item.codigo,
                 nome=item.nome,
                 ativo=True,
                 ordem=ordem,
             )
 
-    TipoEquipamentoConfig.objects.exclude(codigo__in=codigos_desejados).delete()
+    tipos_gerenciados = TipoEquipamentoConfig.objects.all()
+    if empresa:
+        tipos_gerenciados = tipos_gerenciados.filter(empresa=empresa)
+    tipos_gerenciados.exclude(codigo__in=codigos_desejados).delete()
 
 
 def setup_inicial_concluido():
@@ -238,4 +257,7 @@ def setup_inicial_concluido():
         return False
     if not setup.linhas_atuacao.exists():
         return False
-    return TipoEquipamentoConfig.objects.filter(ativo=True).exists()
+    return TipoEquipamentoConfig.objects.filter(
+        Q(empresa=setup.empresa) | Q(empresa__isnull=True),
+        ativo=True,
+    ).exists()

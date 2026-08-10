@@ -63,7 +63,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             descricao__startswith="Status alterado de",
         ).order_by("-criado_em", "-id")
         context["linha_form"] = LinhaTrabalhoForm()
-        context["servico_form"] = ServicoPecaForm()
+        context["servico_form"] = ServicoPecaForm(empresa=ordem.empresa)
         context["orcamento_form"] = OrcamentoForm()
         context["tipos_reparacao"] = OrdemServico.TIPOS_REPARACAO
         context["item_form"] = ItemOrcamentoForm()
@@ -99,7 +99,10 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["total_pago_os"] = total_pago
         context["total_desconto_os"] = total_desconto
         context["saldo_financeiro_os"] = saldo_financeiro
-        context["os_pago"] = context["total_os"] > 0 and total_pago >= context["total_os"]
+        context["os_pago"] = (
+            context["total_os"] <= Decimal("0.00")
+            or total_pago + total_desconto >= context["total_os"]
+        )
         context["referencias_pagamento"] = referencias_pagamento
         resumo_operacional = ResumoOperacionalService.construir(
             ordem,
@@ -335,7 +338,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
         # Serviços & Peças
         elif form_type == "servico_peca":
-            servico_form = ServicoPecaForm(request.POST)
+            servico_form = ServicoPecaForm(request.POST, empresa=self.object.empresa)
             if servico_form.is_valid():
                 try:
                     with transaction.atomic():
@@ -567,11 +570,14 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 extra={"total_os": f"{resultado.total_os:.2f}", "reservas_processadas": resultado.reservas_processadas},
             )
 
-            messages.success(
-                request,
-                f"OS finalizada! Continue no Caixa para registrar o pagamento de {resultado.total_os:.2f}.",
-            )
-            if request.POST.get("ir_caixa") == "1":
+            if resultado.total_os > Decimal("0.00"):
+                messages.success(
+                    request,
+                    f"OS finalizada! Continue no Caixa para registrar o pagamento de {resultado.total_os:.2f}.",
+                )
+            else:
+                messages.success(request, "OS finalizada sem valor a receber. Nenhum pagamento foi gerado.")
+            if request.POST.get("ir_caixa") == "1" and resultado.total_os > Decimal("0.00"):
                 return redirect(f"{reverse('caixa:registrar_pagamento')}?os={self.object.id}&valor={resultado.total_os:.2f}")
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 

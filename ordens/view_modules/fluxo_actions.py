@@ -411,7 +411,8 @@ def toggle_fechamento_pedido_compra(request, pedido_id):
 # ===========================
 @role_required(ORDER_ROLES)
 def toggle_fechamento_os(request, pk):
-    ordem = get_object_or_404(OrdemServico, id=pk)
+    empresa = obter_empresa_ativa(request, strict=False)
+    ordem = get_object_or_404(filtrar_queryset_empresa(OrdemServico.objects.all(), empresa), id=pk)
     try:
         fechando = not ordem.fechada
         confirmar_financeiro = request.GET.get("confirmar_financeiro") == "1" or request.GET.get("ir_caixa") == "1"
@@ -457,7 +458,7 @@ def toggle_fechamento_os(request, pk):
                     criado_por=request.user,
                 )
 
-        if ordem.fechada and request.GET.get("ir_caixa") == "1":
+        if ordem.fechada and request.GET.get("ir_caixa") == "1" and resultado.total_os > Decimal("0.00"):
             messages.success(request, "Ordem fechada. Redirecionando para registro de pagamento no Caixa.")
             return redirect(f"{reverse('caixa:registrar_pagamento')}?os={ordem.id}&valor={resultado.total_os:.2f}")
         _log_os(

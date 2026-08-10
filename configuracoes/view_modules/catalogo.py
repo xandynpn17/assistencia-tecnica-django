@@ -9,6 +9,7 @@ from configuracoes.forms import FornecedorGarantiaForm, MarcaGarantiaForm, Parce
 from configuracoes.models import FornecedorGarantia, MarcaGarantia, ParceiroExpedicao, RegraGarantiaMarca
 from configuracoes.services.auditoria import registrar_evento_configuracao
 from configuracoes.services.integracoes import emitir_evento_interno
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, obter_empresa_ativa
 
 
 def _audit_catalogo(request, acao: str, alvo: str, antes=None, depois=None):
@@ -24,6 +25,7 @@ def _audit_catalogo(request, acao: str, alvo: str, antes=None, depois=None):
 
 
 def marcas_fornecedores_impl(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     busca_fornecedor = (request.GET.get("qf") or "").strip()
     busca_marca = (request.GET.get("qm") or "").strip()
     busca_parceiro = (request.GET.get("qp") or "").strip()
@@ -32,10 +34,10 @@ def marcas_fornecedores_impl(request):
     edit_parceiro_id = (request.GET.get("edit_parceiro") or "").strip()
     edit_regra_id = (request.GET.get("edit_regra") or "").strip()
 
-    fornecedor_form = FornecedorGarantiaForm()
-    marca_form = MarcaGarantiaForm()
-    parceiro_form = ParceiroExpedicaoForm()
-    regra_form = RegraGarantiaMarcaForm()
+    fornecedor_form = FornecedorGarantiaForm(empresa=empresa)
+    marca_form = MarcaGarantiaForm(empresa=empresa)
+    parceiro_form = ParceiroExpedicaoForm(empresa=empresa)
+    regra_form = RegraGarantiaMarcaForm(empresa=empresa)
     marca_em_edicao = None
     regra_em_edicao = None
     aba_ativa = (request.GET.get("aba") or "").strip()
@@ -44,7 +46,7 @@ def marcas_fornecedores_impl(request):
         form_type = request.POST.get("form_type")
         if form_type == "fornecedor":
             aba_ativa = "fornecedor-cad"
-            fornecedor_form = FornecedorGarantiaForm(request.POST, request.FILES)
+            fornecedor_form = FornecedorGarantiaForm(request.POST, request.FILES, empresa=empresa)
             if fornecedor_form.is_valid():
                 fornecedor = fornecedor_form.save()
                 _audit_catalogo(request, "fornecedor_criado", f"fornecedor:{fornecedor.id}", depois={"nome": fornecedor.nome})
@@ -52,8 +54,8 @@ def marcas_fornecedores_impl(request):
                 return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "fornecedor_edit":
             aba_ativa = "fornecedor-cad"
-            fornecedor = get_object_or_404(FornecedorGarantia, id=request.POST.get("fornecedor_id"))
-            fornecedor_form = FornecedorGarantiaForm(request.POST, request.FILES, instance=fornecedor)
+            fornecedor = get_object_or_404(filtrar_catalogo_empresa(FornecedorGarantia.objects.all(), empresa), id=request.POST.get("fornecedor_id"))
+            fornecedor_form = FornecedorGarantiaForm(request.POST, request.FILES, instance=fornecedor, empresa=empresa)
             if fornecedor_form.is_valid():
                 fornecedor = fornecedor_form.save()
                 _audit_catalogo(request, "fornecedor_editado", f"fornecedor:{fornecedor.id}", depois={"nome": fornecedor.nome})
@@ -61,7 +63,7 @@ def marcas_fornecedores_impl(request):
                 return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "fornecedor_delete":
             aba_ativa = "fornecedor-cons"
-            fornecedor = get_object_or_404(FornecedorGarantia, id=request.POST.get("fornecedor_id"))
+            fornecedor = get_object_or_404(filtrar_catalogo_empresa(FornecedorGarantia.objects.all(), empresa), id=request.POST.get("fornecedor_id"))
             try:
                 _audit_catalogo(request, "fornecedor_excluido", f"fornecedor:{fornecedor.id}", antes={"nome": fornecedor.nome})
                 fornecedor.delete()
@@ -71,7 +73,7 @@ def marcas_fornecedores_impl(request):
             return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "marca":
             aba_ativa = "marca-cad"
-            marca_form = MarcaGarantiaForm(request.POST)
+            marca_form = MarcaGarantiaForm(request.POST, empresa=empresa)
             if marca_form.is_valid():
                 marca = marca_form.save()
                 _audit_catalogo(request, "marca_criada", f"marca:{marca.id}", depois={"nome": marca.nome})
@@ -79,8 +81,8 @@ def marcas_fornecedores_impl(request):
                 return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
         elif form_type == "marca_edit":
             aba_ativa = "marca-cad"
-            marca = get_object_or_404(MarcaGarantia, id=request.POST.get("marca_id"))
-            marca_form = MarcaGarantiaForm(request.POST, instance=marca)
+            marca = get_object_or_404(filtrar_catalogo_empresa(MarcaGarantia.objects.all(), empresa), id=request.POST.get("marca_id"))
+            marca_form = MarcaGarantiaForm(request.POST, instance=marca, empresa=empresa)
             if marca_form.is_valid():
                 marca = marca_form.save()
                 _audit_catalogo(request, "marca_editada", f"marca:{marca.id}", depois={"nome": marca.nome})
@@ -88,14 +90,14 @@ def marcas_fornecedores_impl(request):
                 return redirect(f"{reverse('configuracoes:marcas_fornecedores')}?edit_marca={marca.id}#tab-marca-cad")
         elif form_type == "marca_delete":
             aba_ativa = "marca-cons"
-            marca = get_object_or_404(MarcaGarantia, id=request.POST.get("marca_id"))
+            marca = get_object_or_404(filtrar_catalogo_empresa(MarcaGarantia.objects.all(), empresa), id=request.POST.get("marca_id"))
             _audit_catalogo(request, "marca_excluida", f"marca:{marca.id}", antes={"nome": marca.nome})
             marca.delete()
             messages.success(request, "Marca excluida com sucesso.")
             return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "parceiro":
             aba_ativa = "parceiro-cad"
-            parceiro_form = ParceiroExpedicaoForm(request.POST)
+            parceiro_form = ParceiroExpedicaoForm(request.POST, empresa=empresa)
             if parceiro_form.is_valid():
                 parceiro = parceiro_form.save()
                 _audit_catalogo(request, "parceiro_criado", f"parceiro:{parceiro.id}", depois={"nome": parceiro.nome})
@@ -103,8 +105,11 @@ def marcas_fornecedores_impl(request):
                 return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "parceiro_edit":
             aba_ativa = "parceiro-cad"
-            parceiro = get_object_or_404(ParceiroExpedicao, id=request.POST.get("parceiro_id"))
-            parceiro_form = ParceiroExpedicaoForm(request.POST, instance=parceiro)
+            parceiro = get_object_or_404(
+                filtrar_catalogo_empresa(ParceiroExpedicao.objects.all(), empresa),
+                id=request.POST.get("parceiro_id"),
+            )
+            parceiro_form = ParceiroExpedicaoForm(request.POST, instance=parceiro, empresa=empresa)
             if parceiro_form.is_valid():
                 parceiro = parceiro_form.save()
                 _audit_catalogo(request, "parceiro_editado", f"parceiro:{parceiro.id}", depois={"nome": parceiro.nome})
@@ -112,7 +117,10 @@ def marcas_fornecedores_impl(request):
                 return redirect("configuracoes:marcas_fornecedores")
         elif form_type == "parceiro_delete":
             aba_ativa = "parceiro-cons"
-            parceiro = get_object_or_404(ParceiroExpedicao, id=request.POST.get("parceiro_id"))
+            parceiro = get_object_or_404(
+                filtrar_catalogo_empresa(ParceiroExpedicao.objects.all(), empresa),
+                id=request.POST.get("parceiro_id"),
+            )
             _audit_catalogo(request, "parceiro_excluido", f"parceiro:{parceiro.id}", antes={"nome": parceiro.nome})
             parceiro.delete()
             messages.success(request, "Parceiro excluido com sucesso.")
@@ -120,12 +128,12 @@ def marcas_fornecedores_impl(request):
         elif form_type == "regra_add":
             aba_ativa = "marca-cad"
             marca_id_post = (request.POST.get("marca_id") or "").strip()
-            marca = get_object_or_404(MarcaGarantia, id=marca_id_post)
-            marca_form = MarcaGarantiaForm(instance=marca)
+            marca = get_object_or_404(filtrar_catalogo_empresa(MarcaGarantia.objects.all(), empresa), id=marca_id_post)
+            marca_form = MarcaGarantiaForm(instance=marca, empresa=empresa)
             marca_em_edicao = marca
             regra_payload = request.POST.copy()
             regra_payload["marca"] = str(marca.id)
-            regra_form = RegraGarantiaMarcaForm(regra_payload)
+            regra_form = RegraGarantiaMarcaForm(regra_payload, empresa=empresa)
             if regra_form.is_valid():
                 regra = regra_form.save(commit=False)
                 regra.marca = marca
@@ -137,14 +145,14 @@ def marcas_fornecedores_impl(request):
             aba_ativa = "marca-cad"
             marca_id_post = (request.POST.get("marca_id") or "").strip()
             regra_id_post = (request.POST.get("regra_id") or "").strip()
-            marca = get_object_or_404(MarcaGarantia, id=marca_id_post)
+            marca = get_object_or_404(filtrar_catalogo_empresa(MarcaGarantia.objects.all(), empresa), id=marca_id_post)
             regra_obj = get_object_or_404(RegraGarantiaMarca, id=regra_id_post, marca=marca)
-            marca_form = MarcaGarantiaForm(instance=marca)
+            marca_form = MarcaGarantiaForm(instance=marca, empresa=empresa)
             marca_em_edicao = marca
             regra_em_edicao = regra_obj
             regra_payload = request.POST.copy()
             regra_payload["marca"] = str(marca.id)
-            regra_form = RegraGarantiaMarcaForm(regra_payload, instance=regra_obj)
+            regra_form = RegraGarantiaMarcaForm(regra_payload, instance=regra_obj, empresa=empresa)
             if regra_form.is_valid():
                 regra = regra_form.save(commit=False)
                 regra.marca = marca
@@ -156,7 +164,7 @@ def marcas_fornecedores_impl(request):
             aba_ativa = "marca-cad"
             marca_id_post = (request.POST.get("marca_id") or "").strip()
             regra_id_post = (request.POST.get("regra_id") or "").strip()
-            marca = get_object_or_404(MarcaGarantia, id=marca_id_post)
+            marca = get_object_or_404(filtrar_catalogo_empresa(MarcaGarantia.objects.all(), empresa), id=marca_id_post)
             regra_obj = get_object_or_404(RegraGarantiaMarca, id=regra_id_post, marca=marca)
             _audit_catalogo(request, "regra_garantia_excluida", f"regra:{regra_obj.id}", antes={"marca": marca.id})
             regra_obj.delete()
@@ -165,28 +173,30 @@ def marcas_fornecedores_impl(request):
     else:
         if edit_fornecedor_id.isdigit():
             aba_ativa = aba_ativa or "fornecedor-cad"
-            fornecedor_obj = FornecedorGarantia.objects.filter(id=int(edit_fornecedor_id)).first()
-            fornecedor_form = FornecedorGarantiaForm(instance=fornecedor_obj)
+            fornecedor_obj = filtrar_catalogo_empresa(FornecedorGarantia.objects.all(), empresa).filter(id=int(edit_fornecedor_id)).first()
+            fornecedor_form = FornecedorGarantiaForm(instance=fornecedor_obj, empresa=empresa)
 
         if edit_marca_id.isdigit():
             aba_ativa = aba_ativa or "marca-cad"
-            marca_em_edicao = MarcaGarantia.objects.filter(id=int(edit_marca_id)).first()
+            marca_em_edicao = filtrar_catalogo_empresa(MarcaGarantia.objects.all(), empresa).filter(id=int(edit_marca_id)).first()
             if marca_em_edicao:
-                marca_form = MarcaGarantiaForm(instance=marca_em_edicao)
+                marca_form = MarcaGarantiaForm(instance=marca_em_edicao, empresa=empresa)
                 if edit_regra_id.isdigit():
                     regra_em_edicao = RegraGarantiaMarca.objects.filter(
                         id=int(edit_regra_id),
                         marca=marca_em_edicao,
                     ).first()
                 if regra_em_edicao:
-                    regra_form = RegraGarantiaMarcaForm(instance=regra_em_edicao)
+                    regra_form = RegraGarantiaMarcaForm(instance=regra_em_edicao, empresa=empresa)
                 else:
-                    regra_form = RegraGarantiaMarcaForm(initial={"marca": marca_em_edicao.id})
+                    regra_form = RegraGarantiaMarcaForm(initial={"marca": marca_em_edicao.id}, empresa=empresa)
         if edit_parceiro_id.isdigit():
             aba_ativa = aba_ativa or "parceiro-cad"
-            parceiro_obj = ParceiroExpedicao.objects.filter(id=int(edit_parceiro_id)).first()
+            parceiro_obj = filtrar_catalogo_empresa(ParceiroExpedicao.objects.all(), empresa).filter(
+                id=int(edit_parceiro_id)
+            ).first()
             if parceiro_obj:
-                parceiro_form = ParceiroExpedicaoForm(instance=parceiro_obj)
+                parceiro_form = ParceiroExpedicaoForm(instance=parceiro_obj, empresa=empresa)
 
     if not aba_ativa:
         if busca_fornecedor:
@@ -198,20 +208,26 @@ def marcas_fornecedores_impl(request):
         else:
             aba_ativa = "fornecedor-cad"
 
+    fornecedores_empresa_qs = filtrar_catalogo_empresa(FornecedorGarantia.objects.all(), empresa)
+    marcas_empresa_qs = filtrar_catalogo_empresa(
+        MarcaGarantia.objects.select_related("fornecedor").prefetch_related("regras_garantia"),
+        empresa,
+    )
     fornecedores_qs = (
-        FornecedorGarantia.objects.filter(nome__icontains=busca_fornecedor)
+        fornecedores_empresa_qs.filter(nome__icontains=busca_fornecedor)
         if busca_fornecedor
-        else FornecedorGarantia.objects.all()
+        else fornecedores_empresa_qs
     )
     marcas_qs = (
-        MarcaGarantia.objects.select_related("fornecedor").prefetch_related("regras_garantia").filter(nome__icontains=busca_marca)
+        marcas_empresa_qs.filter(nome__icontains=busca_marca)
         if busca_marca
-        else MarcaGarantia.objects.select_related("fornecedor").prefetch_related("regras_garantia").all()
+        else marcas_empresa_qs
     )
+    parceiros_empresa_qs = filtrar_catalogo_empresa(ParceiroExpedicao.objects.all(), empresa)
     parceiros_qs = (
-        ParceiroExpedicao.objects.filter(nome__icontains=busca_parceiro)
+        parceiros_empresa_qs.filter(nome__icontains=busca_parceiro)
         if busca_parceiro
-        else ParceiroExpedicao.objects.all()
+        else parceiros_empresa_qs
     )
     fornecedores_page = Paginator(fornecedores_qs.order_by("nome"), 10).get_page(request.GET.get("page_f"))
     marcas_page = Paginator(marcas_qs.order_by("nome"), 10).get_page(request.GET.get("page_m"))
@@ -220,18 +236,18 @@ def marcas_fornecedores_impl(request):
     if marca_em_edicao:
         regras_marca = RegraGarantiaMarca.objects.filter(marca=marca_em_edicao).order_by("-inicio_vigencia", "tipo_produto")
     resumo_catalogo = {
-        "fornecedores_total": FornecedorGarantia.objects.count(),
-        "fornecedores_ativos": FornecedorGarantia.objects.filter(ativo=True).count(),
-        "marcas_total": MarcaGarantia.objects.count(),
-        "marcas_com_fornecedor": MarcaGarantia.objects.filter(fornecedor__isnull=False).count(),
-        "marcas_sem_fornecedor": MarcaGarantia.objects.filter(fornecedor__isnull=True).count(),
-        "marcas_com_regras": MarcaGarantia.objects.annotate(
+        "fornecedores_total": fornecedores_empresa_qs.count(),
+        "fornecedores_ativos": fornecedores_empresa_qs.filter(ativo=True).count(),
+        "marcas_total": marcas_empresa_qs.count(),
+        "marcas_com_fornecedor": marcas_empresa_qs.filter(fornecedor__isnull=False).count(),
+        "marcas_sem_fornecedor": marcas_empresa_qs.filter(fornecedor__isnull=True).count(),
+        "marcas_com_regras": marcas_empresa_qs.annotate(
             regras_ativas=Count("regras_garantia", filter=Q(regras_garantia__ativo=True))
         ).filter(regras_ativas__gt=0).count(),
-        "parceiros_total": ParceiroExpedicao.objects.count(),
-        "parceiros_ativos": ParceiroExpedicao.objects.filter(ativo=True).count(),
-        "regras_total": RegraGarantiaMarca.objects.count(),
-        "regras_ativas": RegraGarantiaMarca.objects.filter(ativo=True).count(),
+        "parceiros_total": parceiros_empresa_qs.count(),
+        "parceiros_ativos": parceiros_empresa_qs.filter(ativo=True).count(),
+        "regras_total": RegraGarantiaMarca.objects.filter(marca__empresa=empresa).count(),
+        "regras_ativas": RegraGarantiaMarca.objects.filter(ativo=True, marca__empresa=empresa).count(),
     }
 
     return render(
@@ -245,7 +261,7 @@ def marcas_fornecedores_impl(request):
             "fornecedores": fornecedores_page,
             "marcas": marcas_page,
             "parceiros": parceiros_page,
-            "regras": RegraGarantiaMarca.objects.select_related("marca", "marca__fornecedor").all(),
+            "regras": RegraGarantiaMarca.objects.select_related("marca", "marca__fornecedor").filter(marca__empresa=empresa),
             "regras_marca": regras_marca,
             "busca_fornecedor": busca_fornecedor,
             "busca_marca": busca_marca,

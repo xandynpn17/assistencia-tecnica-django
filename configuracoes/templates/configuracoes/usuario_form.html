@@ -262,6 +262,11 @@
             <small>Permite abrir auditoria operacional do caixa.</small>
             {{ form.perm_caixa_ver_auditoria.errors }}
           </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_caixa_lancamento_retroativo }} {{ form.perm_caixa_lancamento_retroativo.label }}</label>
+            <small>Permite informar competência ou movimentação em data anterior, sem alterar o registro de auditoria.</small>
+            {{ form.perm_caixa_lancamento_retroativo.errors }}
+          </div>
         </div>
 
         <div class="text-muted small mt-3 mb-2">Estoque critico</div>
@@ -280,6 +285,21 @@
             <label class="mb-0">{{ form.perm_estoque_ajuste_manual }} {{ form.perm_estoque_ajuste_manual.label }}</label>
             <small>Permite ajustes manuais e correcoes de estoque.</small>
             {{ form.perm_estoque_ajuste_manual.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_estoque_avaria }} {{ form.perm_estoque_avaria.label }}</label>
+            <small>Permite baixar perdas por avaria, dano ou quebra.</small>
+            {{ form.perm_estoque_avaria.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_estoque_oferta }} {{ form.perm_estoque_oferta.label }}</label>
+            <small>Permite oferecer produtos a clientes com rastreabilidade de custo.</small>
+            {{ form.perm_estoque_oferta.errors }}
+          </div>
+          <div class="module-option">
+            <label class="mb-0">{{ form.perm_estoque_cedencia }} {{ form.perm_estoque_cedencia.label }}</label>
+            <small>Permite cedencias internas sem gerar uma venda.</small>
+            {{ form.perm_estoque_cedencia.errors }}
           </div>
           <div class="module-option">
             <label class="mb-0">{{ form.perm_estoque_transferencia }} {{ form.perm_estoque_transferencia.label }}</label>
