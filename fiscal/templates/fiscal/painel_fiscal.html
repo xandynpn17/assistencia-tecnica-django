@@ -6,13 +6,18 @@
     <div class="card">
       <div class="card-header"><h3 class="card-title mb-0">Configuração Fiscal</h3></div>
       <div class="card-body">
+        <div class="alert alert-warning">
+          <strong>Emiss&atilde;o fiscal indispon&iacute;vel.</strong>
+          O sistema ainda n&atilde;o possui integra&ccedil;&atilde;o real com autorizador fiscal. Nenhuma chave, protocolo ou autoriza&ccedil;&atilde;o ser&aacute; simulada.
+        </div>
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <div class="form-group">{{ form.ambiente.label_tag }}{{ form.ambiente }}{{ form.ambiente.errors }}</div>
           <div class="form-group">{{ form.modo_integracao.label_tag }}{{ form.modo_integracao }}{{ form.modo_integracao.errors }}</div>
           <div class="form-group">{{ form.fornecedor_api.label_tag }}{{ form.fornecedor_api }}{{ form.fornecedor_api.errors }}</div>
-          <div class="form-group">{{ form.certificado_a1.label_tag }}{{ form.certificado_a1 }}{{ form.certificado_a1.errors }}</div>
-          <div class="form-group">{{ form.senha_certificado.label_tag }}{{ form.senha_certificado }}{{ form.senha_certificado.errors }}</div>
+          <div class="alert alert-light border small">
+          A emiss&atilde;o permanece desabilitada. Para receber NF-e de fornecedores, configure o A1 na Caixa fiscal; arquivo e senha ficam cifrados e separados por empresa.
+          </div>
           <div class="form-row">
             <div class="col-md-6 form-group">{{ form.cnpj_emitente.label_tag }}{{ form.cnpj_emitente }}{{ form.cnpj_emitente.errors }}</div>
             <div class="col-md-6 form-group">{{ form.inscricao_estadual.label_tag }}{{ form.inscricao_estadual }}{{ form.inscricao_estadual.errors }}</div>
@@ -35,9 +40,11 @@
       <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0">Documentos fiscais</h3>
         <div>
+          <a href="{% url 'fiscal:caixa_entrada_dfe' %}" class="btn btn-success btn-sm">Caixa fiscal NF-e</a>
+          <a href="{% url 'fiscal:motor_tributario' %}" class="btn btn-outline-primary btn-sm">Motor tributário</a>
           <form method="post" action="{% url 'fiscal:processar_fila_fiscal' %}" class="d-inline">
             {% csrf_token %}
-            <button type="submit" class="btn btn-outline-secondary btn-sm">Processar fila</button>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Validar fila</button>
           </form>
           <a href="{% url 'fiscal:novo_documento_fiscal' %}" class="btn btn-primary btn-sm">Novo documento</a>
         </div>

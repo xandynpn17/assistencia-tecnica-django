@@ -1,0 +1,61 @@
+{% extends "core/base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div><h2 class="mb-1">Motor tributário gerencial</h2><p class="text-muted mb-0">Perfis e regras são versionados por empresa e vigência. A homologação deve refletir a orientação documentada do contador.</p></div>
+  <a href="{% url 'fiscal:painel_fiscal' %}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+</div>
+<div class="alert alert-warning"><strong>Atenção:</strong> os valores são estimativas para preço, margem e gestão. Não substituem PGDAS-D, escrituração ou apuração oficial.</div>
+
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong>Prontidão da precificação automática</strong>
+    <span class="badge {% if prontidao.pronto %}badge-success{% else %}badge-danger{% endif %}">{{ prontidao.percentual }}%</span>
+  </div>
+  <div class="card-body">
+    <div class="progress mb-3" style="height: 10px;"><div class="progress-bar {% if prontidao.pronto %}bg-success{% else %}bg-warning{% endif %}" style="width: {{ prontidao.percentual }}%"></div></div>
+    <div class="row">
+      {% for item in prontidao.itens %}
+      <div class="col-lg-6 mb-2">
+        <div class="border rounded p-2 h-100">
+          <div class="d-flex justify-content-between">
+            <strong>{{ item.titulo }}</strong>
+            <span class="badge {% if item.nivel == 'critico' %}badge-danger{% elif item.nivel == 'aviso' %}badge-warning{% else %}badge-success{% endif %}">{{ item.nivel|upper }}</span>
+          </div>
+          <div class="small text-muted mt-1">{{ item.detalhe }}</div>
+          {% if item.url and item.nivel != 'ok' %}<a class="btn btn-outline-primary btn-sm mt-2" href="{{ item.url }}">Resolver</a>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if prontidao.criticos %}<div class="alert alert-danger mb-0 mt-2">Existem {{ prontidao.criticos }} bloqueio(s) crítico(s). Até serem resolvidos, cálculos com fallback devem ser tratados como estimativa não homologada.</div>{% endif %}
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-7">
+    <div class="card mb-3"><div class="card-header"><strong>Fila de classificação fiscal</strong> · {{ produtos_pendentes_total }} pendência(s)</div><div class="card-body p-0"><table class="table table-sm table-bordered mb-0"><thead><tr><th>Produto/serviço</th><th>Tipo</th><th>Pendência</th><th></th></tr></thead><tbody>{% for produto in produtos_pendentes %}<tr><td>{{ produto.nome }}</td><td>{{ produto.get_tipo_item_display }}</td><td>{% if produto.tipo_item == 'servico' %}Código do serviço{% else %}NCM{% endif %}</td><td><a href="{% url 'estoque:editar_produto' produto.id %}" class="btn btn-outline-primary btn-sm">Classificar</a></td></tr>{% empty %}<tr><td colspan="4" class="text-center text-success">Nenhuma pendência de classificação básica.</td></tr>{% endfor %}</tbody></table></div></div>
+    <div class="card mb-3"><div class="card-header"><strong>Simulador de impacto no preço e na margem</strong></div><div class="card-body">
+      <form method="post">{% csrf_token %}<input type="hidden" name="form_tipo" value="simulacao"><div class="row">{% for field in simulacao_form %}<div class="col-md-4 mb-2">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}</div><button class="btn btn-outline-primary btn-sm">Comparar cenários</button></form>
+      {% if simulacoes %}<table class="table table-sm table-bordered mt-3 mb-0"><thead><tr><th>Data</th><th>Regra</th><th>Alíquota</th><th>Preço sugerido</th><th>Lucro no preço atual</th><th>Margem atual</th></tr></thead><tbody>{% for cenario in simulacoes %}<tr><td>{{ cenario.memoria.data_referencia }}</td><td>{{ cenario.regra_codigo }}</td><td>{{ cenario.aliquota_efetiva }}%</td><td>R$ {{ cenario.preco_sugerido|floatformat:2 }}</td><td>R$ {{ cenario.resultado_preco_atual.lucro|floatformat:2 }}</td><td>{{ cenario.resultado_preco_atual.margem_receita|floatformat:2 }}%</td></tr>{% endfor %}</tbody></table>{% endif %}
+    </div></div>
+    {% for perfil in perfis %}
+    <div class="card mb-3">
+      <div class="card-header"><strong>{{ perfil.nome }}</strong> · {{ perfil.get_regime_display }} · {{ perfil.get_status_display }} · vigência {{ perfil.inicio_vigencia|date:"d/m/Y" }}</div>
+      <div class="card-body">
+        <div class="small mb-2">RBT12: R$ {{ perfil.rbt12|floatformat:2 }} · Folha 12 meses: R$ {{ perfil.folha_12|floatformat:2 }} · Fator R: {{ perfil.fator_r|default:"não calculado" }}</div>
+        <table class="table table-sm table-bordered mb-0"><thead><tr><th>Regra</th><th>Aplicação</th><th>Tratamento</th><th>Anexo</th><th>Status</th><th>Faixas/tributos</th></tr></thead><tbody>
+        {% for regra in perfil.regras.all %}<tr><td>{{ regra.codigo }} — {{ regra.nome }}</td><td>{{ regra.get_tipo_item_display }} / {{ regra.get_finalidade_display }}</td><td>{{ regra.get_tratamento_display }}</td><td>{{ regra.anexo_simples|default:"por Fator R/configuração" }}</td><td>{{ regra.get_status_display }}</td><td>{{ regra.faixas.count }} / {{ regra.tributos_parametrizados.count }}</td></tr>{% empty %}<tr><td colspan="6" class="text-muted text-center">Sem regras.</td></tr>{% endfor %}
+        </tbody></table>
+      </div>
+    </div>
+    {% empty %}<div class="alert alert-info">Ainda não há perfil tributário para esta empresa.</div>{% endfor %}
+  </div>
+  <div class="col-lg-5">
+    <div class="card mb-3"><div class="card-header"><strong>Nova versão de regra homologada</strong></div><div class="card-body"><div class="alert alert-light border py-2">Regras homologadas são imutáveis. A versão anterior tem a vigência encerrada e faixas/tributos são copiados para um novo rascunho auditável.</div><form method="post">{% csrf_token %}<input type="hidden" name="form_tipo" value="versao">{{ versao_form.as_p }}<button class="btn btn-warning btn-sm">Criar nova versão</button></form></div></div>
+    <div class="card mb-3"><div class="card-header"><strong>Novo perfil</strong></div><div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="form_tipo" value="perfil">{{ perfil_form.as_p }}<button class="btn btn-primary btn-sm">Adicionar perfil</button></form></div></div>
+    <div class="card mb-3"><div class="card-header"><strong>Nova regra</strong></div><div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="form_tipo" value="regra">{{ regra_form.as_p }}<button class="btn btn-primary btn-sm">Adicionar regra</button></form></div></div>
+    <div class="card mb-3"><div class="card-header"><strong>Nova faixa</strong></div><div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="form_tipo" value="faixa">{{ faixa_form.as_p }}<button class="btn btn-primary btn-sm">Adicionar faixa</button></form></div></div>
+    <div class="card mb-3"><div class="card-header"><strong>Tributo por vigência (CBS, IBS, IS ou atual)</strong></div><div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="form_tipo" value="tributo">{{ tributo_form.as_p }}<button class="btn btn-primary btn-sm">Adicionar tributo</button></form></div></div>
+  </div>
+</div>
+{% endblock %}

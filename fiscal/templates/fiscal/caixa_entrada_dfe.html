@@ -1,0 +1,148 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h3 class="mb-1">Caixa fiscal de entrada — NF-e</h3>
+    <p class="text-muted mb-0">Consulta documentos destinados à empresa ativa e prepara compras para conferência no estoque.</p>
+  </div>
+  <a href="{% url 'fiscal:painel_fiscal' %}" class="btn btn-outline-secondary btn-sm">Configuração fiscal</a>
+</div>
+
+<div class="alert alert-info">
+  <strong>Escopo seguro:</strong> esta tela não emite nota e não envia manifestação do destinatário.
+  A importação cria uma entrada em rascunho; o estoque só aumenta depois da conferência e do recebimento.
+</div>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><h4 class="card-title mb-0">1. Certificado A1 da empresa</h4></div>
+      <div class="card-body">
+        {% if config.certificado_a1_configurado %}
+          <div class="alert alert-success py-2">Certificado validado e protegido.</div>
+          <dl class="row small mb-3">
+            <dt class="col-sm-4">Titular</dt><dd class="col-sm-8 text-break">{{ config.certificado_titular|default:"Não informado no certificado" }}</dd>
+            <dt class="col-sm-4">CNPJ lido</dt><dd class="col-sm-8">{{ config.certificado_cnpj|default:"Não identificado" }}</dd>
+            <dt class="col-sm-4">Validade</dt><dd class="col-sm-8">{{ config.certificado_validade|date:"d/m/Y H:i" }}</dd>
+            <dt class="col-sm-4">Impressão digital</dt><dd class="col-sm-8"><code>{{ config.certificado_fingerprint_sha256|slice:":12" }}…</code></dd>
+          </dl>
+          <form method="post" action="{% url 'fiscal:remover_certificado_a1' %}" onsubmit="return confirm('Remover o A1 desta empresa? O histórico será preservado.');">
+            {% csrf_token %}<input type="hidden" name="confirmar" value="1">
+            <button class="btn btn-outline-danger btn-sm" type="submit">Remover certificado</button>
+          </form>
+          <hr>
+          <p class="small text-muted">Para substituir, envie o novo arquivo abaixo. A senha nunca é exibida novamente.</p>
+        {% else %}
+          <div class="alert alert-warning py-2">Nenhum A1 configurado para esta empresa.</div>
+        {% endif %}
+        <form method="post" enctype="multipart/form-data" action="{% url 'fiscal:salvar_certificado_a1' %}">
+          {% csrf_token %}
+          <div class="form-group">{{ certificado_form.arquivo_a1.label_tag }}{{ certificado_form.arquivo_a1 }}</div>
+          <div class="form-group">{{ certificado_form.senha_a1.label_tag }}{{ certificado_form.senha_a1 }}</div>
+          <div class="form-check mb-3">{{ certificado_form.confirmar_titular_sem_cnpj }} {{ certificado_form.confirmar_titular_sem_cnpj.label_tag }}</div>
+          <button class="btn btn-primary btn-sm" type="submit">Validar e salvar A1</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mt-3 mt-lg-0">
+    <div class="card h-100">
+      <div class="card-header"><h4 class="card-title mb-0">2. Sincronização oficial</h4></div>
+      <div class="card-body">
+        <dl class="row small">
+          <dt class="col-sm-5">Ambiente</dt><dd class="col-sm-7">{{ config.get_ambiente_display }}</dd>
+          <dt class="col-sm-5">Último NSU</dt><dd class="col-sm-7"><code>{{ config.ultimo_nsu }}</code></dd>
+          <dt class="col-sm-5">Máximo informado</dt><dd class="col-sm-7"><code>{{ config.max_nsu }}</code></dd>
+          <dt class="col-sm-5">Última consulta</dt><dd class="col-sm-7">{{ config.ultima_sincronizacao_dfe|date:"d/m/Y H:i:s"|default:"Nunca" }}</dd>
+          <dt class="col-sm-5">Próxima permitida</dt><dd class="col-sm-7">{{ config.proxima_sincronizacao_dfe|date:"d/m/Y H:i:s"|default:"Agora" }}</dd>
+          <dt class="col-sm-5">Retorno</dt><dd class="col-sm-7">{% if config.ultimo_status_dfe %}{{ config.ultimo_status_dfe }} — {{ config.ultima_mensagem_dfe }}{% else %}-{% endif %}</dd>
+        </dl>
+        <form method="post" action="{% url 'fiscal:sincronizar_caixa_dfe' %}">
+          {% csrf_token %}
+          <button class="btn btn-success" type="submit" {% if not config.certificado_a1_configurado %}disabled{% endif %}>Buscar novas NF-e</button>
+        </form>
+        <p class="small text-muted mt-3 mb-0">
+          A SEFAZ entrega documentos em sequência por NSU. Por isso, o número da nota serve para pesquisar depois da sincronização, não como chave suficiente para consultar diretamente.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header"><h4 class="card-title mb-0">3. Documentos recebidos</h4></div>
+  <div class="card-body">
+    <form method="get" class="form-row align-items-end mb-3">
+      <div class="col-md-5 form-group mb-md-0">
+        <label for="dfe-q">Número, chave, fornecedor ou CNPJ</label>
+        <input id="dfe-q" name="q" value="{{ busca }}" class="form-control" placeholder="Ex.: 32837">
+      </div>
+      <div class="col-md-3 form-group mb-md-0">
+        <label for="dfe-disponibilidade">Documento</label>
+        <select id="dfe-disponibilidade" name="disponibilidade" class="form-control">
+          <option value="">Todos</option>
+          {% for valor, rotulo in disponibilidade_choices %}<option value="{{ valor }}" {% if disponibilidade == valor %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 form-group mb-md-0">
+        <label for="dfe-importacao">Estoque</label>
+        <select id="dfe-importacao" name="importacao" class="form-control">
+          <option value="">Todos</option>
+          <option value="pendente" {% if importacao == "pendente" %}selected{% endif %}>Pendente</option>
+          <option value="importado" {% if importacao == "importado" %}selected{% endif %}>Importado</option>
+        </select>
+      </div>
+      <div class="col-md-2"><button class="btn btn-outline-primary btn-block" type="submit">Pesquisar</button></div>
+    </form>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-bordered mb-0">
+      <thead><tr><th>NF-e</th><th>Fornecedor</th><th>Emissão</th><th>Valor</th><th>Disponibilidade</th><th>Estoque</th></tr></thead>
+      <tbody>
+        {% for doc in documentos %}
+          <tr>
+            <td><strong>{{ doc.numero|default:"-" }}</strong> / {{ doc.serie|default:"-" }}<br><small class="text-muted">NSU {{ doc.nsu }}</small></td>
+            <td>{{ doc.nome_emitente|default:"-" }}<br><small>{{ doc.cnpj_emitente|default:"-" }}</small></td>
+            <td>{{ doc.data_emissao|date:"d/m/Y H:i"|default:"-" }}</td>
+            <td>R$ {{ doc.valor_total|floatformat:2 }}</td>
+            <td>{{ doc.get_disponibilidade_display }}</td>
+            <td style="min-width:260px">
+              {% if doc.entrada_mercadoria_id %}
+                <a class="btn btn-outline-success btn-sm" href="{% url 'estoque:detalhe_entrada_mercadoria' doc.entrada_mercadoria_id %}">Ver entrada #{{ doc.entrada_mercadoria_id }}</a>
+              {% elif doc.disponibilidade == "xml_completo" %}
+                <details>
+                  <summary class="btn btn-primary btn-sm">Preparar importação</summary>
+                  <form method="post" action="{% url 'fiscal:importar_documento_dfe' doc.id %}" class="border rounded p-2 mt-2">
+                    {% csrf_token %}
+                    <div class="form-group mb-2">{{ importar_form.ponto_operacional.label_tag }}{{ importar_form.ponto_operacional }}</div>
+                    <div class="form-group mb-2">{{ importar_form.ubicacao.label_tag }}{{ importar_form.ubicacao }}</div>
+                    <div class="form-check mb-2">{{ importar_form.gerar_conta_pagar }} {{ importar_form.gerar_conta_pagar.label_tag }}</div>
+                    <div class="form-group mb-2">{{ importar_form.vencimento_conta_pagar.label_tag }}{{ importar_form.vencimento_conta_pagar }}</div>
+                    <button class="btn btn-success btn-sm" type="submit">Criar entrada para conferência</button>
+                  </form>
+                </details>
+              {% else %}
+                <span class="text-muted small">Aguardando XML completo; nenhuma manifestação será enviada automaticamente.</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-4">Nenhum documento encontrado. Configure o A1 e faça a primeira sincronização.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header"><h4 class="card-title mb-0">Histórico de sincronizações</h4></div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0"><thead><tr><th>Início</th><th>Status</th><th>SEFAZ</th><th>NSU</th><th>Recebidos / novos</th><th>Usuário</th></tr></thead><tbody>
+      {% for execucao in execucoes %}<tr><td>{{ execucao.iniciado_em|date:"d/m/Y H:i:s" }}</td><td>{{ execucao.get_status_display }}</td><td>{{ execucao.codigo_status|default:"-" }} {{ execucao.mensagem_status }}</td><td>{{ execucao.nsu_inicial }} → {{ execucao.ultimo_nsu|default:"-" }}</td><td>{{ execucao.documentos_recebidos }} / {{ execucao.documentos_novos }}</td><td>{{ execucao.iniciado_por|default:"Sistema" }}</td></tr>
+      {% empty %}<tr><td colspan="6" class="text-center text-muted">Nenhuma sincronização registrada.</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+</div>
+{% endblock %}

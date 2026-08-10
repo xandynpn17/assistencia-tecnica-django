@@ -1,6 +1,7 @@
 asgiref==3.11.0
 charset-normalizer==3.4.4
 crispy-bootstrap5==2025.6
+cryptography==49.0.0
 Django==5.2.6
 django-crispy-forms==2.5
 django-extensions==4.1
