@@ -748,6 +748,16 @@
               Cadastre pelo menos um usuario com numero de vendedor para usar a venda a mostrador.
             {% endif %}
           </small>
+          <div class="form-group mt-3 mb-0">
+            <label for="pdvTabelaPreco" class="mb-1">Tabela de preco</label>
+            <select class="form-control" id="pdvTabelaPreco">
+              <option value="">Preco padrao do produto</option>
+              {% for tabela in tabelas_preco %}
+              <option value="{{ tabela.id }}">{{ tabela.nome }}</option>
+              {% endfor %}
+            </select>
+            <small class="form-text text-muted">A tabela escolhida sera aplicada aos proximos itens e gravada como referencia da venda.</small>
+          </div>
         </div>
 
         <div class="pdv-summary-strip">
@@ -1764,6 +1774,7 @@ document.addEventListener("DOMContentLoaded", function () {
     payload.append("quantidade", document.getElementById("addQuantidade").value);
     payload.append("funcionario_numero", vendedorNumero);
     payload.append("cesto_codigo", cestoCodigoAtual);
+    payload.append("tabela_preco_id", document.getElementById("pdvTabelaPreco")?.value || "");
 
     fetch(`{% url 'estoque:api_venda_rapida' %}`, {
       method: "POST",
@@ -1811,6 +1822,7 @@ document.addEventListener("DOMContentLoaded", function () {
     payload.append("quantidade", "1");
     payload.append("funcionario_numero", vendedorNumero);
     payload.append("cesto_codigo", cestoCodigoAtual);
+    payload.append("tabela_preco_id", document.getElementById("pdvTabelaPreco")?.value || "");
 
     fetch(`{% url 'estoque:api_venda_rapida' %}`, {
       method: "POST",

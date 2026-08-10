@@ -59,6 +59,40 @@
   <a href="{% url 'estoque:auditoria_estoque' %}" class="btn btn-outline-primary btn-sm">Abrir auditoria operacional</a>
 </div>
 
+{% if auditoria_atrasada %}
+<div class="alert alert-warning">
+  <strong>Monitoramento pendente:</strong> ainda nao existe uma auditoria persistida nas ultimas 25 horas. Programe o comando <code>monitorar_estoque --empresa {{ request.user.empresa_id }} --falhar-se-divergir</code> para execucao diaria.
+</div>
+{% elif ultima_execucao_auditoria.status == 'ok' %}
+<div class="alert alert-success">
+  <strong>Ultima auditoria automatizada sem divergencias.</strong> Executada em {{ ultima_execucao_auditoria.criado_em|date:"d/m/Y H:i" }}.
+</div>
+{% else %}
+<div class="alert alert-danger">
+  <strong>Ultima auditoria com {{ ultima_execucao_auditoria.total_divergencias }} divergencia(s).</strong> Executada em {{ ultima_execucao_auditoria.criado_em|date:"d/m/Y H:i" }}.
+</div>
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-header">Historico do monitoramento</div>
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Data</th><th>Status</th><th>Origem</th><th class="text-right">Divergencias</th><th>Escopo</th></tr></thead>
+      <tbody>
+        {% for execucao in execucoes_auditoria %}
+        <tr>
+          <td>{{ execucao.criado_em|date:"d/m/Y H:i" }}</td>
+          <td>{% if execucao.status == 'ok' %}<span class="badge badge-success">Sem divergencias</span>{% elif execucao.status == 'divergencia' %}<span class="badge badge-danger">Com divergencias</span>{% else %}<span class="badge badge-warning">Erro</span>{% endif %}</td>
+          <td>{{ execucao.get_origem_display }}</td>
+          <td class="text-right">{{ execucao.total_divergencias }}</td>
+          <td>{% if execucao.apenas_ativos %}Produtos ativos{% else %}Todos os produtos{% endif %}</td>
+        </tr>
+        {% empty %}<tr><td colspan="5" class="text-center text-muted">Nenhuma execucao persistida.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <div class="div-summary">
   <div class="div-card"><div class="div-label">Pre-reservas antigas</div><div class="div-value">{{ resumo.pre_reservas_antigas }}</div></div>
   <div class="div-card"><div class="div-label">Reservas vencidas</div><div class="div-value">{{ resumo.reservas_vencidas }}</div></div>
@@ -68,6 +102,21 @@
   <div class="div-card"><div class="div-label">Saldos negativos</div><div class="div-value">{{ resumo.negativos }}</div></div>
   <div class="div-card"><div class="div-label">Ponto x ubicacao</div><div class="div-value">{{ resumo.delta_ponto_ubicacao }}</div></div>
   <div class="div-card"><div class="div-label">Transferencias pendentes</div><div class="div-value">{{ resumo.transferencias_pendentes }}</div></div>
+  <div class="div-card"><div class="div-label">Reservas excedentes</div><div class="div-value">{{ resumo.reservas_excedentes }}</div></div>
+  <div class="div-card"><div class="div-label">Divergências de lote</div><div class="div-value">{{ resumo.lotes }}</div></div>
+  <div class="div-card"><div class="div-label">Divergências de série</div><div class="div-value">{{ resumo.series }}</div></div>
+</div>
+
+<div class="row">
+  <div class="col-lg-4"><div class="card"><div class="card-header">Reservas acima do físico</div><div class="card-body"><ul class="mb-0">
+    {% for item in reservas_excedentes %}<li>{{ item.produto__nome }} — reservado {{ item.quantidade_reservada }}, físico {{ item.saldo_fisico }} em {{ item.ponto_operacional__codigo|default:"Sem ponto" }}/{{ item.ubicacao__codigo|default:"Sem localização" }}</li>{% empty %}<li class="text-muted">Sem divergências</li>{% endfor %}
+  </ul></div></div></div>
+  <div class="col-lg-4"><div class="card"><div class="card-header">Saldo físico x lotes</div><div class="card-body"><ul class="mb-0">
+    {% for item in divergencias_lotes %}<li>{{ item.produto_nome }} — físico {{ item.quantidade_fisica }}, lotes {{ item.quantidade_rastreada }} em {{ item.ponto_codigo }}/{{ item.ubicacao_codigo }}</li>{% empty %}<li class="text-muted">Sem divergências</li>{% endfor %}
+  </ul></div></div></div>
+  <div class="col-lg-4"><div class="card"><div class="card-header">Saldo físico x séries</div><div class="card-body"><ul class="mb-0">
+    {% for item in divergencias_series %}<li>{{ item.produto_nome }} — físico {{ item.quantidade_fisica }}, séries {{ item.quantidade_rastreada }} em {{ item.ponto_codigo }}/{{ item.ubicacao_codigo }}</li>{% empty %}<li class="text-muted">Sem divergências</li>{% endfor %}
+  </ul></div></div></div>
 </div>
 
 <div class="div-helper">

@@ -186,16 +186,35 @@
           <span class="import-column-chip">fornecedor_manual</span>
           <span class="import-column-chip">modelos_compativeis</span>
           <span class="import-column-chip">custo_unitario</span>
+          <span class="import-column-chip">custo_frete</span>
+          <span class="import-column-chip">custo_impostos</span>
+          <span class="import-column-chip">custo_comissao</span>
+          <span class="import-column-chip">custo_marketplace</span>
+          <span class="import-column-chip">custo_cac</span>
+          <span class="import-column-chip">margem_lucro</span>
+          <span class="import-column-chip">margem_minima</span>
           <span class="import-column-chip">preco_final</span>
+          <span class="import-column-chip">ncm</span>
+          <span class="import-column-chip">cest</span>
+          <span class="import-column-chip">cfop</span>
+          <span class="import-column-chip">cst_csosn</span>
+          <span class="import-column-chip">origem_mercadoria</span>
+          <span class="import-column-chip">unidade_comercial</span>
           <span class="import-column-chip">estoque_minimo</span>
           <span class="import-column-chip">estoque_inicial</span>
           <span class="import-column-chip">ponto_operacional (opcional)</span>
           <span class="import-column-chip">ubicacao (opcional)</span>
         </div>
+        <a href="{% url 'estoque:modelo_importacao_produtos' %}" class="btn btn-sm btn-outline-primary mt-3">Baixar modelo CSV completo</a>
       </div>
 
       <form method="post" enctype="multipart/form-data" class="import-panel">
         {% csrf_token %}
+        <div class="row mb-3">
+          <div class="col-md-6"><label class="font-weight-bold">Mapeamento salvo</label><select class="form-control" name="mapeamento_salvo"><option value="">Cabe&ccedil;alhos padr&atilde;o do sistema</option>{% for mapa in mapeamentos %}<option value="{{ mapa.id }}" {% if mapeamento_selecionado == mapa.id|stringformat:'s' %}selected{% endif %}>{{ mapa.nome }}{% if mapa.fornecedor_id %} &middot; {{ mapa.fornecedor.nome }}{% endif %}</option>{% endfor %}</select><small class="text-muted">Reaplica nomes de colunas e valores padr&atilde;o daquele fornecedor.</small></div>
+          <div class="col-md-6"><label class="font-weight-bold">Fornecedor padr&atilde;o</label><select class="form-control" name="fornecedor_mapeamento"><option value="">Sem fornecedor padr&atilde;o</option>{% for fornecedor in fornecedores_mapeamento %}<option value="{{ fornecedor.id }}" {% if fornecedor_mapeamento_id == fornecedor.id|stringformat:'s' %}selected{% endif %}>{{ fornecedor.nome }}</option>{% endfor %}</select></div>
+        </div>
+        <details class="mb-3"><summary>Salvar novo mapeamento de colunas</summary><div class="row mt-2"><div class="col-md-4"><label>Nome do mapeamento</label><input class="form-control" name="nome_mapeamento" placeholder="Ex.: Cat&aacute;logo fornecedor X"></div><div class="col-md-8"><label>Rela&ccedil;&atilde;o de colunas</label><textarea class="form-control" name="mapeamento_colunas" rows="2" placeholder="nome=Descricao do item; custo_unitario=Custo compra; ncm=Classificacao"></textarea><small class="text-muted">Use campo_sistema=coluna_arquivo. Se deixar vazio, os cabe&ccedil;alhos que j&aacute; tiverem nomes padr&atilde;o ser&atilde;o memorizados.</small></div></div><div class="form-check mt-2"><input type="checkbox" class="form-check-input" id="salvar-mapeamento" name="salvar_mapeamento" value="1"><label class="form-check-label" for="salvar-mapeamento">Salvar/regravar este mapeamento ao validar o arquivo</label></div></details>
         <div class="import-form-row">
           <div>
             <label for="id_arquivo" class="font-weight-bold">Arquivo</label>
@@ -281,6 +300,7 @@
                 <th>Nome</th>
                 <th>Tipo</th>
                 <th>EAN</th>
+                <th>NCM / CFOP</th>
                 <th>Ponto</th>
                 <th>Ubicacao</th>
                 <th>Custo</th>
@@ -296,6 +316,7 @@
                 <td>{{ row.nome }}</td>
                 <td>{{ row.tipo_item }}</td>
                 <td>{{ row.ean|default:"-" }}</td>
+                <td>{{ row.ncm|default:"-" }} / {{ row.cfop_padrao|default:"-" }}</td>
                 <td>{% if row.ponto_resolvido %}{{ row.ponto_resolvido.codigo }}{% else %}-{% endif %}</td>
                 <td>{% if row.ubicacao_resolvida %}{{ row.ubicacao_resolvida.codigo }}{% else %}-{% endif %}</td>
                 <td>{{ row.custo_unitario }}</td>
@@ -333,6 +354,8 @@
       <div class="import-side-title">O que revisar antes de importar</div>
       <ul class="import-list">
         <li>Preco final coerente com custo e margem.</li>
+        <li>Use pre&ccedil;o final zero quando quiser adotar a sugest&atilde;o autom&aacute;tica calculada com custos, tributos e margem.</li>
+        <li>Revise NCM, CEST, CFOP e CST/CSOSN; estes dados orientam o motor fiscal, mas n&atilde;o substituem a valida&ccedil;&atilde;o cont&aacute;bil.</li>
         <li>Fornecedor e marca com nomes consistentes.</li>
         <li>Colunas obrigatorias preenchidas nas linhas do lote.</li>
         <li>Se nao vier ponto/ubicacao no arquivo, confira os padroes escolhidos antes de importar.</li>

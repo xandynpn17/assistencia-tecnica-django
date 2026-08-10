@@ -16,7 +16,7 @@ from configuracoes.permissions import (
     require_sensitive_permission,
     role_required,
 )
-from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, filtrar_queryset_empresa, obter_empresa_ativa
 
 from ..models import PontoOperacional, Produto, ReservaEstoque, UbicacaoEstoque
 from ..services import criar_reserva_estoque
@@ -206,7 +206,9 @@ def reservas_clientes(request):
     )
     reservas = reservas.order_by("-criado_em", "-id")
     reservas_page = Paginator(reservas, 40).get_page(page_number)
-    pontos_operacionais = list(PontoOperacional.objects.filter(ativo=True).order_by("codigo"))
+    pontos_operacionais = list(
+        filtrar_catalogo_empresa(PontoOperacional.objects.filter(ativo=True), empresa).order_by("codigo")
+    )
     return render(
         request,
         "estoque/reservas_clientes.html",

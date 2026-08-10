@@ -1,15 +1,17 @@
 ﻿from decimal import Decimal
 import logging
+import csv
 from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, F, Q, Sum
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from configuracoes.permissions import (
     ORDER_ROLES,
@@ -19,10 +21,11 @@ from configuracoes.permissions import (
     require_sensitive_permission,
     role_required,
 )
-from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, filtrar_queryset_empresa, obter_empresa_ativa
 
 from ..forms import CategoriaProdutoForm, ProdutoEquivalenteForm, ProdutoFornecedorForm, ProdutoForm, ProdutoKitItemForm, ProdutoPrecoTabelaForm, TabelaPrecoForm
-from ..models import CategoriaProduto, EstoqueLote, EstoqueSerie, ItemEntradaMercadoria, PontoOperacional, Produto, ProdutoEquivalente, ProdutoFornecedor, ProdutoKitItem, ProdutoPrecoTabela, ReservaEstoque, SaldoEstoquePonto, TabelaPreco, UbicacaoEstoque
+from ..models import CategoriaProduto, EstoqueLote, EstoqueSerie, ItemEntradaMercadoria, MapeamentoImportacaoProduto, PontoOperacional, Produto, ProdutoEquivalente, ProdutoFornecedor, ProdutoKitItem, ProdutoPrecoTabela, ReservaEstoque, SaldoEstoquePonto, TabelaPreco, UbicacaoEstoque
+from ..services_produto import calcular_aliquota_efetiva, calcular_precificacao, calcular_rentabilidade_kit, decimal_seguro, simular_precificacao
 from .helpers import (
     Empresa,
     FornecedorGarantia,
@@ -42,9 +45,55 @@ from .helpers import (
 
 logger = logging.getLogger(__name__)
 
+COLUNAS_IMPORTACAO_PRODUTO = {
+    "nome", "sku", "ean", "tipo_item", "categoria", "marca", "fornecedor",
+    "fornecedor_manual", "modelos_compativeis", "preco_final", "custo_unitario",
+    "custo_frete", "custo_impostos", "custo_comissao", "custo_marketplace", "custo_cac",
+    "margem_lucro", "margem_minima", "ncm", "cest", "cfop", "cfop_padrao",
+    "cst_csosn", "origem_mercadoria", "unidade_comercial", "codigo_beneficio_fiscal",
+    "estoque_minimo", "estoque_inicial", "ponto_operacional", "ubicacao",
+}
 
-def _categorias_catalogo_payload():
+
+def _interpretar_mapeamento_colunas(texto, cabecalhos):
+    cabecalhos_por_nome = {str(c).strip().casefold(): str(c).strip() for c in cabecalhos if str(c).strip()}
+    if not str(texto or "").strip():
+        return {coluna: cabecalhos_por_nome[coluna.casefold()] for coluna in COLUNAS_IMPORTACAO_PRODUTO if coluna.casefold() in cabecalhos_por_nome}
+    mapeamento = {}
+    linhas = str(texto).replace(";", "\n").splitlines()
+    for linha in linhas:
+        if not linha.strip():
+            continue
+        if "=" not in linha:
+            raise ValueError(f"Mapeamento invalido: '{linha}'. Use campo_sistema=coluna_arquivo.")
+        destino, origem = (parte.strip() for parte in linha.split("=", 1))
+        if destino not in COLUNAS_IMPORTACAO_PRODUTO:
+            raise ValueError(f"Campo de destino desconhecido: {destino}.")
+        origem_real = cabecalhos_por_nome.get(origem.casefold())
+        if not origem_real:
+            raise ValueError(f"A coluna '{origem}' nao existe no arquivo.")
+        mapeamento[destino] = origem_real
+    return mapeamento
+
+
+def _aplicar_mapeamento_colunas(linhas, mapeamento, padroes=None):
+    resultado = []
+    for linha in linhas:
+        origem_casefold = {str(k).strip().casefold(): v for k, v in linha.items()}
+        nova = dict(linha)
+        for destino, origem in (mapeamento or {}).items():
+            nova[destino] = origem_casefold.get(str(origem).strip().casefold(), "")
+        for destino, valor in (padroes or {}).items():
+            if not nova.get(destino):
+                nova[destino] = valor
+        resultado.append(nova)
+    return resultado
+
+
+def _categorias_catalogo_payload(empresa=None):
     categorias = CategoriaProduto.objects.filter(ativo=True).order_by("ordem", "nome")
+    if empresa:
+        categorias = filtrar_catalogo_empresa(categorias, empresa)
     return [
         {
             "id": categoria.id,
@@ -197,6 +246,11 @@ def _recomendacao_recompra_produto(produto, fornecedores_contexto):
 def _contexto_form_produto(*, form, empresa, menu_sub, modo_edicao, produto=None, produto_origem=None):
     referencia_rateio = produto if modo_edicao else produto_origem
     referencia_precificacao = produto if modo_edicao else produto_origem
+    from caixa.models import FormaPagamento
+
+    formas_pagamento = filtrar_catalogo_empresa(
+        FormaPagamento.objects.filter(ativa=True), empresa
+    ).order_by("nome")
     return {
         "form": form,
         "produto": produto,
@@ -207,8 +261,195 @@ def _contexto_form_produto(*, form, empresa, menu_sub, modo_edicao, produto=None
         "precificacao_context": _contexto_precificacao_produto(referencia_precificacao),
         "rateio_context": _contexto_rateio_produto(referencia_rateio, empresa=empresa),
         "empresa": empresa,
-        "categorias_catalogo": _categorias_catalogo_payload(),
+        "tributacao_context": {
+            "empresa_configurada": bool(empresa),
+            "regime": getattr(empresa, "regime_tributario", "") or "",
+            "regime_display": empresa.get_regime_tributario_display() if empresa else "Nao configurado",
+            "modo": getattr(empresa, "modo_tributario", "") or "",
+            "modo_display": empresa.get_modo_tributario_display() if empresa else "Nao configurado",
+            "aliquota_comercio": float(getattr(empresa, "aliquota_comercio", 0) or 0),
+            "aliquota_servico": float(getattr(empresa, "aliquota_servico", 0) or 0),
+            "icms": float(getattr(empresa, "icms", 0) or 0),
+            "ipi": float(getattr(empresa, "ipi", 0) or 0),
+            "pis": float(getattr(empresa, "pis", 0) or 0),
+            "cofins": float(getattr(empresa, "cofins", 0) or 0),
+        },
+        "categorias_catalogo": _categorias_catalogo_payload(empresa),
+        "formas_pagamento_precificacao": formas_pagamento,
     }
+
+
+def _decimal_post(request, campo):
+    try:
+        return Decimal(str(request.POST.get(campo) or "0").replace(",", "."))
+    except (TypeError, ValueError, ArithmeticError):
+        return Decimal("0")
+
+
+@role_required(STOCK_MANAGE_ROLES)
+@require_POST
+def api_simular_precificacao(request):
+    empresa = obter_empresa_ativa(request, strict=True)
+    produto_id = (request.POST.get("produto_id") or "").strip()
+    produto = None
+    if produto_id.isdigit():
+        produto = filtrar_queryset_empresa(Produto.objects.all(), empresa).filter(id=int(produto_id)).first()
+
+    tipo_item = (request.POST.get("tipo_item") or "produto").strip()
+    produto_fiscal = produto or Produto(empresa=empresa)
+    produto_fiscal.empresa = empresa
+    produto_fiscal.tipo_item = tipo_item
+    produto_fiscal.is_servico = tipo_item == "servico"
+    produto_fiscal.ncm = "".join(ch for ch in (request.POST.get("ncm") or "") if ch.isdigit())[:8]
+    produto_fiscal.cest = "".join(ch for ch in (request.POST.get("cest") or "") if ch.isdigit())[:10]
+    produto_fiscal.origem_mercadoria = (request.POST.get("origem_mercadoria") or "").strip()[:2]
+    produto_fiscal.codigo_servico = (request.POST.get("codigo_servico") or "").strip()[:20]
+    produto_fiscal.cfop_padrao = "".join(ch for ch in (request.POST.get("cfop_padrao") or "") if ch.isdigit())[:4]
+    produto_fiscal.cst_csosn = "".join(ch for ch in (request.POST.get("cst_csosn") or "") if ch.isdigit())[:4]
+    produto_fiscal.codigo_beneficio_fiscal = (request.POST.get("codigo_beneficio_fiscal") or "").strip()[:20]
+    regra_id = (request.POST.get("regra_tributaria") or "").strip()
+    if regra_id.isdigit():
+        from fiscal.models import RegraTributaria
+
+        produto_fiscal.regra_tributaria = RegraTributaria.objects.filter(
+            pk=int(regra_id), perfil__empresa=empresa,
+        ).exclude(status="inativo").first()
+    else:
+        produto_fiscal.regra_tributaria = None
+    custo_unitario = _decimal_post(request, "custo_unitario")
+    custo_operacional_manual = _decimal_post(request, "custo_operacional")
+    custos_detalhados = sum(
+        (_decimal_post(request, campo) for campo in (
+            "custo_frete",
+            "custo_impostos",
+            "custo_comissao",
+            "custo_marketplace",
+            "custo_cac",
+        )),
+        Decimal("0"),
+    )
+    custo_operacional_sem_rateio = custos_detalhados if custos_detalhados > 0 else custo_operacional_manual
+    margem_alvo = _decimal_post(request, "margem_lucro")
+    margem_minima = _decimal_post(request, "margem_minima")
+    modo_preco = (request.POST.get("modo_preco") or "simples").strip()
+    preco_final = _decimal_post(request, "preco_final")
+    previsao = max(0, int(_decimal_post(request, "previsao_venda_mensal")))
+    incluir_rateio = request.POST.get("incluir_rateio_custo_fixo") in {"1", "true", "on", "True"}
+
+    aliquota = calcular_aliquota_efetiva(
+        empresa=empresa,
+        tipo_item=tipo_item,
+        usar_aliquota_manual=request.POST.get("usar_aliquota_manual") in {"1", "true", "on", "True"},
+        aliquota_manual=_decimal_post(request, "aliquota_manual"),
+        icms=_decimal_post(request, "icms"),
+        ipi=_decimal_post(request, "ipi"),
+        pis=_decimal_post(request, "pis"),
+        cofins=_decimal_post(request, "cofins"),
+        pis_cofins=_decimal_post(request, "pis_cofins"),
+        produto=produto_fiscal,
+    )
+
+    tributacao = None
+    usar_aliquota_manual = request.POST.get("usar_aliquota_manual") in {"1", "true", "on", "True"}
+    if not usar_aliquota_manual:
+        from fiscal.services_tributacao import calcular_estimativa_tributaria
+
+        tributacao = calcular_estimativa_tributaria(
+            empresa=empresa,
+            tipo_item=tipo_item,
+            produto=produto_fiscal,
+        )
+
+    from caixa.models import FormaPagamento
+
+    formas = filtrar_catalogo_empresa(FormaPagamento.objects.filter(ativa=True), empresa)
+    forma_id = (request.POST.get("forma_pagamento_id") or "").strip()
+    forma_referencia = formas.filter(id=int(forma_id)).first() if forma_id.isdigit() else None
+    taxa_fallback = _decimal_post(request, "taxa_cartao")
+    taxa_referencia = decimal_seguro(getattr(forma_referencia, "taxa_percentual", taxa_fallback))
+
+    def taxa_canal(codigos, fallback=Decimal("0")):
+        forma = formas.filter(codigo__in=codigos).order_by("codigo").first()
+        return decimal_seguro(getattr(forma, "taxa_percentual", fallback))
+
+    canais = {
+        "dinheiro": taxa_canal(["dinheiro"], _decimal_post(request, "taxa_dinheiro")),
+        "pix": taxa_canal(["pix"], _decimal_post(request, "taxa_pix")),
+        "cartao": taxa_canal(["cartao_credito", "credito"], taxa_referencia),
+        "marketplace": taxa_canal(["marketplace"], _decimal_post(request, "taxa_marketplace")),
+    }
+
+    custo_sem_rateio = custo_unitario + custo_operacional_sem_rateio
+    preliminar = calcular_precificacao(
+        custo_base=custo_sem_rateio,
+        margem_alvo=margem_alvo,
+        margem_minima=margem_minima,
+        taxa_cartao=taxa_referencia,
+        aliquota=aliquota,
+        modo_preco=modo_preco,
+    )
+    rateio = Decimal("0.00")
+    if tipo_item != "servico" and incluir_rateio and previsao > 0:
+        simulacao_produto = Produto(
+            empresa=empresa,
+            tipo_item=tipo_item,
+            is_servico=False,
+            incluir_rateio_custo_fixo=True,
+            previsao_venda_mensal=previsao,
+            custo_unitario=custo_unitario,
+            custo_operacional=custo_operacional_sem_rateio,
+            custo_frete=_decimal_post(request, "custo_frete"),
+            custo_impostos=_decimal_post(request, "custo_impostos"),
+            custo_comissao=_decimal_post(request, "custo_comissao"),
+            custo_marketplace=_decimal_post(request, "custo_marketplace"),
+            custo_cac=_decimal_post(request, "custo_cac"),
+            preco_final=preco_final,
+            preco_sugerido=preliminar["preco_sugerido"],
+        )
+        if produto:
+            simulacao_produto.pk = produto.pk
+        rateio = simulacao_produto.calcular_rateio_custo_fixo_unitario(
+            previsao_override=previsao,
+            incluir_override=True,
+        ).quantize(Decimal("0.01"))
+
+    custo_operacional = custo_operacional_sem_rateio + rateio
+    resultado = simular_precificacao(
+        custo_base=custo_unitario + custo_operacional,
+        margem_alvo=margem_alvo,
+        margem_minima=margem_minima,
+        taxa_referencia=taxa_referencia,
+        aliquota=aliquota,
+        modo_preco=modo_preco,
+        preco_final=preco_final,
+        desconto=_decimal_post(request, "desconto"),
+        canais=canais,
+    )
+
+    def serializar(valor):
+        if isinstance(valor, Decimal):
+            return str(valor)
+        if isinstance(valor, dict):
+            return {chave: serializar(item) for chave, item in valor.items()}
+        return valor
+
+    return JsonResponse({
+        "ok": True,
+        # Mantém o contrato público anterior da API (três casas percentuais),
+        # embora a memória interna do motor preserve quatro casas.
+        "aliquota": str(Decimal(str(aliquota)).quantize(Decimal("0.001"))),
+        "taxa_referencia": str(taxa_referencia),
+        "forma_referencia": getattr(forma_referencia, "nome", "") or "Taxa media do produto",
+        "tributacao": {
+            "regra_codigo": tributacao["regra_codigo"],
+            "anexo": tributacao["anexo"],
+            "homologado": tributacao["homologado"],
+            "alertas": tributacao["alertas"],
+        } if tributacao else {"origem": "manual", "alertas": []},
+        "custo_operacional": str(custo_operacional.quantize(Decimal("0.01"))),
+        "custo_rateio_fixo": str(rateio),
+        "resultado": serializar(resultado),
+    })
 
 
 def _url_retorno_produto_salvo(produto):
@@ -375,7 +616,7 @@ def lista_produtos(request):
     context = {
         "produtos": produtos_page or [],
         "produtos_page": produtos_page,
-        "pontos": PontoOperacional.objects.filter(ativo=True),
+        "pontos": filtrar_catalogo_empresa(PontoOperacional.objects.filter(ativo=True), empresa),
         "menu_app": "estoque",
         "menu_sub": "lista_produtos",
         "filtro": filtro,
@@ -391,20 +632,21 @@ def lista_produtos(request):
 @role_required(STOCK_MANAGE_ROLES)
 def categorias_produto(request):
     require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
+    empresa = obter_empresa_ativa(request, strict=True)
     q = (request.GET.get("q") or "").strip()
     editar_id = request.GET.get("editar")
     next_url = (request.GET.get("next") or request.POST.get("next") or "").strip()
 
     categoria_edicao = None
     if editar_id and str(editar_id).isdigit():
-        categoria_edicao = CategoriaProduto.objects.filter(id=int(editar_id)).first()
+        categoria_edicao = filtrar_catalogo_empresa(CategoriaProduto.objects.all(), empresa).filter(id=int(editar_id)).first()
 
     if request.method == "POST":
         categoria_id = request.POST.get("categoria_id")
         instancia = None
         if categoria_id and str(categoria_id).isdigit():
-            instancia = CategoriaProduto.objects.filter(id=int(categoria_id)).first()
-        form = CategoriaProdutoForm(request.POST, instance=instancia)
+            instancia = filtrar_catalogo_empresa(CategoriaProduto.objects.all(), empresa).filter(id=int(categoria_id)).first()
+        form = CategoriaProdutoForm(request.POST, instance=instancia, empresa=empresa)
         if form.is_valid():
             categoria = form.save()
             messages.success(request, f"Categoria '{categoria.nome}' salva com sucesso.")
@@ -412,9 +654,9 @@ def categorias_produto(request):
                 return redirect(next_url)
             return redirect("estoque:categorias_produto")
     else:
-        form = CategoriaProdutoForm(instance=categoria_edicao)
+        form = CategoriaProdutoForm(instance=categoria_edicao, empresa=empresa)
 
-    categorias = CategoriaProduto.objects.order_by("ordem", "nome")
+    categorias = filtrar_catalogo_empresa(CategoriaProduto.objects.all(), empresa).order_by("ordem", "nome")
     if q:
         categorias = categorias.filter(nome__icontains=q)
     categorias = categorias.annotate(
@@ -440,6 +682,7 @@ def categorias_produto(request):
 @role_required(STOCK_MANAGE_ROLES)
 def api_categoria_produto_criar(request):
     require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
+    empresa = obter_empresa_ativa(request, strict=True)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo nao permitido."}, status=405)
 
@@ -449,7 +692,11 @@ def api_categoria_produto_criar(request):
     if not nome:
         return JsonResponse({"ok": False, "erro": "Informe o nome da categoria."}, status=400)
 
-    categoria_existente = CategoriaProduto.encontrar_por_nome(nome, incluir_inativas=True)
+    categoria_existente = CategoriaProduto.encontrar_por_nome(
+        nome,
+        incluir_inativas=True,
+        empresa=empresa,
+    )
     if categoria_existente:
         if not categoria_existente.ativo:
             categoria_existente.ativo = True
@@ -473,7 +720,8 @@ def api_categoria_produto_criar(request):
             "margem_padrao": margem_padrao or "0",
             "ordem": "0",
             "ativo": "on",
-        }
+        },
+        empresa=empresa,
     )
     if not form.is_valid():
         erros = []
@@ -495,6 +743,32 @@ def api_categoria_produto_criar(request):
             },
         }
     )
+
+
+@role_required(STOCK_MANAGE_ROLES)
+def api_marca_produto_criar(request):
+    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
+    empresa = obter_empresa_ativa(request, strict=True)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "erro": "Metodo nao permitido."}, status=405)
+    nome = " ".join((request.POST.get("nome") or "").strip().split())[:80]
+    if not nome:
+        return JsonResponse({"ok": False, "erro": "Informe o nome da marca/fabricante."}, status=400)
+    marca = MarcaGarantia.objects.filter(empresa=empresa, nome__iexact=nome).first()
+    criada = False
+    if marca:
+        if not marca.ativo:
+            marca.ativo = True
+            marca.save(update_fields=["ativo"])
+    else:
+        marca = MarcaGarantia.objects.create(empresa=empresa, nome=nome, ativo=True)
+        criada = True
+    return JsonResponse({
+        "ok": True,
+        "criada": criada,
+        "mensagem": "Marca criada e selecionada." if criada else "Marca existente reaproveitada.",
+        "marca": {"id": marca.pk, "nome": marca.nome},
+    })
 
 
 @role_required(STOCK_MANAGE_ROLES)
@@ -528,9 +802,7 @@ def criar_produto(request):
             initial["estoque_inicial"] = 0
 
     if request.method == "POST":
-        form = ProdutoForm(request.POST, request.FILES)
-        if empresa:
-            form.instance.empresa = empresa
+        form = ProdutoForm(request.POST, request.FILES, empresa=empresa)
         if form.is_valid():
             abaixo_minimo = bool(form.cleaned_data.get("preco_abaixo_minimo_detectado"))
             permitir_abaixo = bool(form.cleaned_data.get("permitir_preco_abaixo_minimo"))
@@ -592,7 +864,7 @@ def criar_produto(request):
             messages.success(request, "Produto cadastrado com sucesso.")
             return redirect(_url_retorno_produto_salvo(produto))
     else:
-        form = ProdutoForm(initial=initial)
+        form = ProdutoForm(initial=initial, empresa=empresa)
 
     return render(request, "estoque/form_produto.html", _contexto_form_produto(form=form, empresa=empresa, menu_sub="criar_produto", modo_edicao=False, produto_origem=produto_origem))
 
@@ -604,7 +876,7 @@ def editar_produto(request, produto_id):
     produto = get_object_or_404(filtrar_queryset_empresa(Produto.objects.all(), empresa), id=produto_id)
     if request.method == "POST":
         snapshot_antes = _snapshot_produto(produto)
-        form = ProdutoForm(request.POST, request.FILES, instance=produto)
+        form = ProdutoForm(request.POST, request.FILES, instance=produto, empresa=empresa)
         if form.is_valid():
             abaixo_minimo = bool(form.cleaned_data.get("preco_abaixo_minimo_detectado"))
             permitir_abaixo = bool(form.cleaned_data.get("permitir_preco_abaixo_minimo"))
@@ -663,7 +935,7 @@ def editar_produto(request, produto_id):
             messages.success(request, "Produto atualizado com sucesso!")
             return redirect(_url_retorno_produto_salvo(produto))
     else:
-        form = ProdutoForm(instance=produto)
+        form = ProdutoForm(instance=produto, empresa=empresa)
 
     return render(request, "estoque/form_produto.html", _contexto_form_produto(form=form, empresa=empresa, menu_sub="lista_produtos", modo_edicao=True, produto=produto))
 
@@ -674,15 +946,49 @@ def duplicar_produto(request, produto_id):
 
 
 @role_required(STOCK_MANAGE_ROLES)
+def baixar_modelo_importacao_produtos(request):
+    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="modelo_importacao_produtos.csv"'
+    response.write("\ufeff")
+    escritor = csv.writer(response, delimiter=";")
+    escritor.writerow([
+        "nome", "sku", "ean", "tipo_item", "categoria", "marca", "fornecedor",
+        "fornecedor_manual", "modelos_compativeis", "custo_unitario", "custo_frete",
+        "custo_impostos", "custo_comissao", "custo_marketplace", "custo_cac",
+        "margem_lucro", "margem_minima", "preco_final", "ncm", "cest", "cfop",
+        "cst_csosn", "origem_mercadoria", "unidade_comercial", "estoque_minimo",
+        "estoque_inicial", "ponto_operacional", "ubicacao",
+    ])
+    escritor.writerow([
+        "Capa exemplo", "CAPA-001", "7890000000000", "produto", "Acessorios", "",
+        "", "", "", "20.00", "2.00", "0.00", "0.00", "0.00", "0.00",
+        "35.00", "20.00", "0", "39269090", "0100100", "5102", "102", "0",
+        "UN", "2", "0", "LOJA", "A1",
+    ])
+    return response
+
+
+@role_required(STOCK_MANAGE_ROLES)
 def importar_produtos(request):
     require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
     empresa = obter_empresa_ativa(request, strict=True)
     preview = []
     erros = []
     importados = 0
-    pontos_ativos = list(PontoOperacional.objects.filter(ativo=True).order_by("codigo"))
+    mapeamentos = MapeamentoImportacaoProduto.objects.filter(empresa=empresa, ativo=True).select_related("fornecedor")
+    fornecedores_mapeamento = filtrar_catalogo_empresa(
+        FornecedorGarantia.objects.filter(ativo=True, fornecedor_comercial=True), empresa
+    ).order_by("nome")
+    pontos_ativos = list(
+        filtrar_catalogo_empresa(PontoOperacional.objects.filter(ativo=True), empresa).order_by("codigo")
+    )
     ubicacoes_ativas = list(
-        UbicacaoEstoque.objects.filter(ativo=True).select_related("ponto_operacional").order_by("ponto_operacional__codigo", "codigo")
+        filtrar_catalogo_empresa(
+            UbicacaoEstoque.objects.filter(ativo=True).select_related("ponto_operacional"),
+            empresa,
+            campo="ponto_operacional__empresa",
+        ).order_by("ponto_operacional__codigo", "codigo")
     )
     ultimo_produto = filtrar_queryset_empresa(Produto.objects.all(), empresa).order_by("-id").first()
     ponto_default_id = (request.POST.get("ponto_operacional_padrao") or "").strip()
@@ -723,6 +1029,34 @@ def importar_produtos(request):
             messages.error(request, str(exc))
             return redirect("estoque:importar_produtos")
 
+        mapeamento_id = (request.POST.get("mapeamento_salvo") or "").strip()
+        fornecedor_map_id = (request.POST.get("fornecedor_mapeamento") or "").strip()
+        fornecedor_mapeamento = fornecedores_mapeamento.filter(pk=fornecedor_map_id).first() if fornecedor_map_id.isdigit() else None
+        mapeamento_usado = mapeamentos.filter(pk=mapeamento_id).first() if mapeamento_id.isdigit() else None
+        if mapeamento_usado:
+            linhas = _aplicar_mapeamento_colunas(linhas, mapeamento_usado.mapeamento, mapeamento_usado.padroes)
+            mapeamento_usado.ultimo_uso_em = timezone.now()
+            mapeamento_usado.save(update_fields=["ultimo_uso_em", "atualizado_em"])
+        elif request.POST.get("salvar_mapeamento") == "1":
+            nome_mapeamento = " ".join((request.POST.get("nome_mapeamento") or "").strip().split())
+            if not nome_mapeamento:
+                messages.error(request, "Informe um nome para salvar o mapeamento.")
+                return redirect("estoque:importar_produtos")
+            try:
+                cabecalhos = list(linhas[0].keys()) if linhas else []
+                mapa = _interpretar_mapeamento_colunas(request.POST.get("mapeamento_colunas"), cabecalhos)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect("estoque:importar_produtos")
+            formato = "xlsx" if (getattr(arquivo, "name", "") or "").lower().endswith(".xlsx") else "csv"
+            padroes = {"fornecedor": fornecedor_mapeamento.nome} if fornecedor_mapeamento else {}
+            filtros = {"empresa": empresa, "fornecedor": fornecedor_mapeamento, "nome": nome_mapeamento}
+            mapeamento_usado, _ = MapeamentoImportacaoProduto.objects.update_or_create(
+                **filtros,
+                defaults={"formato": formato, "mapeamento": mapa, "padroes": padroes, "ativo": True, "criado_por": request.user},
+            )
+            linhas = _aplicar_mapeamento_colunas(linhas, mapa, padroes)
+
         normalizadas = []
         nomes_arquivo = set()
         eans_arquivo = set()
@@ -745,7 +1079,7 @@ def importar_produtos(request):
                 row["erros"].append("Nome duplicado no arquivo.")
             elif nome_key:
                 nomes_arquivo.add(nome_key)
-            if row["tipo_item"] not in {"produto", "peca", "consumivel", "servico"}:
+            if row["tipo_item"] not in {"produto", "peca", "consumivel", "fabricado", "servico"}:
                 row["erros"].append("Tipo de item invalido.")
             ean_limpo = "".join(ch for ch in (row["ean"] or "") if ch.isdigit())
             row["ean"] = ean_limpo
@@ -757,19 +1091,54 @@ def importar_produtos(request):
                 else:
                     eans_arquivo.add(ean_limpo)
             try:
-                row["preco_final_dec"] = Decimal(str(row["preco_final"] or "0"))
+                row["preco_final_dec"] = Decimal(str(row["preco_final"] or "0").replace(",", "."))
                 if row["preco_final_dec"] < 0:
                     row["erros"].append("Preco final nao pode ser negativo.")
             except (ArithmeticError, ValueError, TypeError):
                 row["erros"].append("Preco final invalido.")
                 row["preco_final_dec"] = Decimal("0")
             try:
-                row["custo_unitario_dec"] = Decimal(str(row["custo_unitario"] or "0"))
+                row["custo_unitario_dec"] = Decimal(str(row["custo_unitario"] or "0").replace(",", "."))
                 if row["custo_unitario_dec"] < 0:
                     row["erros"].append("Custo unitario nao pode ser negativo.")
             except (ArithmeticError, ValueError, TypeError):
                 row["erros"].append("Custo unitario invalido.")
                 row["custo_unitario_dec"] = Decimal("0")
+            for campo_decimal, rotulo in (
+                ("custo_frete", "Custo de frete"),
+                ("custo_impostos", "Impostos no custo"),
+                ("custo_comissao", "Custo de comissÃ£o"),
+                ("custo_marketplace", "Custo de marketplace"),
+                ("custo_cac", "CAC"),
+                ("margem_lucro", "Margem alvo"),
+                ("margem_minima", "Margem mÃ­nima"),
+            ):
+                try:
+                    valor_decimal = Decimal(str(row.get(campo_decimal) or "0").replace(",", "."))
+                    if valor_decimal < 0:
+                        row["erros"].append(f"{rotulo} nÃ£o pode ser negativo.")
+                    if campo_decimal in {"margem_lucro", "margem_minima"} and valor_decimal >= 100:
+                        row["erros"].append(f"{rotulo} deve ser menor que 100%.")
+                except (ArithmeticError, ValueError, TypeError):
+                    row["erros"].append(f"{rotulo} invÃ¡lido.")
+                    valor_decimal = Decimal("0")
+                row[f"{campo_decimal}_dec"] = valor_decimal
+
+            row["ncm"] = "".join(ch for ch in row.get("ncm", "") if ch.isdigit())
+            row["cest"] = "".join(ch for ch in row.get("cest", "") if ch.isdigit())
+            row["cfop_padrao"] = "".join(ch for ch in row.get("cfop_padrao", "") if ch.isdigit())
+            row["cst_csosn"] = "".join(ch for ch in row.get("cst_csosn", "") if ch.isdigit())
+            row["origem_mercadoria"] = "".join(ch for ch in row.get("origem_mercadoria", "") if ch.isdigit())
+            if row["ncm"] and len(row["ncm"]) != 8:
+                row["erros"].append("NCM deve ter 8 dÃ­gitos.")
+            if row["cest"] and len(row["cest"]) != 7:
+                row["erros"].append("CEST deve ter 7 dÃ­gitos.")
+            if row["cfop_padrao"] and len(row["cfop_padrao"]) != 4:
+                row["erros"].append("CFOP deve ter 4 dÃ­gitos.")
+            if row["cst_csosn"] and len(row["cst_csosn"]) not in {2, 3, 4}:
+                row["erros"].append("CST/CSOSN deve ter 2 a 4 dÃ­gitos.")
+            if row["origem_mercadoria"] and len(row["origem_mercadoria"]) != 1:
+                row["erros"].append("Origem da mercadoria deve ter 1 dÃ­gito.")
             try:
                 row["estoque_minimo_int"] = max(0, int(str(row["estoque_minimo"] or "0")))
                 row["estoque_inicial_int"] = max(0, int(str(row["estoque_inicial"] or "0")))
@@ -801,12 +1170,12 @@ def importar_produtos(request):
         if acao == "importar" and not erros:
             with transaction.atomic():
                 for row in normalizadas:
-                    marca = MarcaGarantia.objects.filter(nome__iexact=row["marca_nome"], ativo=True).first() if row["marca_nome"] else None
-                    fornecedor = FornecedorGarantia.objects.filter(nome__iexact=row["fornecedor_nome"], ativo=True).first() if row["fornecedor_nome"] else None
+                    marca = filtrar_catalogo_empresa(MarcaGarantia.objects.filter(nome__iexact=row["marca_nome"], ativo=True), empresa).first() if row["marca_nome"] else None
+                    fornecedor = filtrar_catalogo_empresa(FornecedorGarantia.objects.filter(nome__iexact=row["fornecedor_nome"], ativo=True), empresa).first() if row["fornecedor_nome"] else None
                     categoria_config = None
                     categoria_manual = (row.get("categoria") or "").strip()
                     if categoria_manual:
-                        categoria_config, _ = CategoriaProduto.obter_ou_criar_por_nome(categoria_manual)
+                        categoria_config, _ = CategoriaProduto.obter_ou_criar_por_nome(categoria_manual, empresa=empresa)
                         categoria_manual = categoria_config.nome
                     produto = Produto.objects.create(
                         empresa=empresa,
@@ -821,6 +1190,20 @@ def importar_produtos(request):
                         fornecedor_manual=row.get("fornecedor_manual", ""),
                         modelos_compativeis=row.get("modelos_compativeis", ""),
                         custo_unitario=row["custo_unitario_dec"],
+                        custo_frete=row["custo_frete_dec"],
+                        custo_impostos=row["custo_impostos_dec"],
+                        custo_comissao=row["custo_comissao_dec"],
+                        custo_marketplace=row["custo_marketplace_dec"],
+                        custo_cac=row["custo_cac_dec"],
+                        margem_lucro=row["margem_lucro_dec"] or (categoria_config.margem_padrao if categoria_config else 0),
+                        margem_minima=row["margem_minima_dec"],
+                        ncm=row["ncm"],
+                        cest=row["cest"],
+                        cfop_padrao=row["cfop_padrao"],
+                        cst_csosn=row["cst_csosn"],
+                        origem_mercadoria=row["origem_mercadoria"],
+                        unidade_comercial=(row["unidade_comercial"] or "UN")[:10],
+                        codigo_beneficio_fiscal=row["codigo_beneficio_fiscal"][:20],
                         preco_final=row["preco_final_dec"],
                         estoque_minimo=row["estoque_minimo_int"],
                         quantidade=0,
@@ -858,6 +1241,10 @@ def importar_produtos(request):
                 ubicacao_default_texto
                 or (ubicacao_padrao.codigo if ubicacao_padrao else "")
             ),
+            "mapeamentos": mapeamentos,
+            "fornecedores_mapeamento": fornecedores_mapeamento,
+            "mapeamento_selecionado": request.POST.get("mapeamento_salvo", ""),
+            "fornecedor_mapeamento_id": request.POST.get("fornecedor_mapeamento", ""),
         },
     )
 
@@ -865,25 +1252,29 @@ def importar_produtos(request):
 @role_required(STOCK_MANAGE_ROLES)
 def tabelas_preco(request):
     require_sensitive_permission(request.user, "perm_estoque_configurar_estrutura")
+    empresa = obter_empresa_ativa(request, strict=True)
+    tabelas_qs = TabelaPreco.objects.filter(empresa=empresa)
     if request.method == "POST":
         acao = (request.POST.get("acao") or "").strip()
         if acao == "excluir":
             tabela_id = request.POST.get("tabela_id")
             if tabela_id and tabela_id.isdigit():
-                tabela = TabelaPreco.objects.filter(id=int(tabela_id)).first()
+                tabela = tabelas_qs.filter(id=int(tabela_id)).first()
                 if tabela:
                     tabela.delete()
                     messages.success(request, "Tabela de preco excluida.")
             return redirect("estoque:tabelas_preco")
         form = TabelaPrecoForm(request.POST)
         if form.is_valid():
-            form.save()
+            tabela = form.save(commit=False)
+            tabela.empresa = empresa
+            tabela.save()
             messages.success(request, "Tabela de preco salva.")
             return redirect("estoque:tabelas_preco")
     else:
         form = TabelaPrecoForm()
 
-    return render(request, "estoque/tabelas_preco.html", {"form": form, "tabelas": TabelaPreco.objects.order_by("nome"), "menu_app": "estoque", "menu_sub": "tabelas_preco"})
+    return render(request, "estoque/tabelas_preco.html", {"form": form, "tabelas": tabelas_qs.order_by("nome"), "menu_app": "estoque", "menu_sub": "tabelas_preco"})
 
 
 @role_required(STOCK_MANAGE_ROLES)
@@ -894,7 +1285,7 @@ def estrutura_produto(request, produto_id):
     if request.method == "POST":
         acao = (request.POST.get("acao") or "").strip()
         if acao == "adicionar_preco_tabela":
-            preco_form = ProdutoPrecoTabelaForm(request.POST)
+            preco_form = ProdutoPrecoTabelaForm(request.POST, produto=produto)
             if preco_form.is_valid():
                 item, _ = ProdutoPrecoTabela.objects.update_or_create(produto=produto, tabela=preco_form.cleaned_data["tabela"], defaults={"preco": preco_form.cleaned_data["preco"]})
                 messages.success(request, f"Preco da tabela '{item.tabela.nome}' atualizado.")
@@ -916,7 +1307,7 @@ def estrutura_produto(request, produto_id):
                 messages.success(request, "Componente de kit adicionado.")
                 return redirect("estoque:estrutura_produto", produto_id=produto.id)
         elif acao == "adicionar_fornecedor":
-            fornecedor_form = ProdutoFornecedorForm(request.POST)
+            fornecedor_form = ProdutoFornecedorForm(request.POST, empresa=empresa)
             if fornecedor_form.is_valid():
                 rel = fornecedor_form.save(commit=False)
                 rel.produto = produto
@@ -949,18 +1340,20 @@ def estrutura_produto(request, produto_id):
                 return redirect("estoque:estrutura_produto", produto_id=produto.id)
 
     fornecedores_contexto = _comparativo_fornecedores_produto(produto)
+    kit_componentes = ProdutoKitItem.objects.select_related("componente").filter(produto_kit=produto)
     return render(
         request,
         "estoque/estrutura_produto.html",
         {
             "produto": produto,
-            "preco_form": ProdutoPrecoTabelaForm(),
+            "preco_form": ProdutoPrecoTabelaForm(produto=produto),
             "equivalente_form": ProdutoEquivalenteForm(produto=produto),
             "kit_form": ProdutoKitItemForm(produto=produto),
-            "fornecedor_form": ProdutoFornecedorForm(),
+            "fornecedor_form": ProdutoFornecedorForm(empresa=empresa),
             "precos_tabela": ProdutoPrecoTabela.objects.select_related("tabela").filter(produto=produto),
             "equivalentes": ProdutoEquivalente.objects.select_related("equivalente").filter(produto=produto),
-            "kit_componentes": ProdutoKitItem.objects.select_related("componente").filter(produto_kit=produto),
+            "kit_componentes": kit_componentes,
+            "rentabilidade_kit": calcular_rentabilidade_kit(produto),
             "fornecedores_relacionados": ProdutoFornecedor.objects.select_related("fornecedor_config").filter(produto=produto),
             "fornecedores_contexto": fornecedores_contexto,
             "recompra_contexto": _recomendacao_recompra_produto(produto, fornecedores_contexto),
@@ -989,8 +1382,9 @@ def excluir_produto(request, produto_id):
     empresa = obter_empresa_ativa(request, strict=True)
     produto = get_object_or_404(filtrar_queryset_empresa(Produto.objects.all(), empresa), id=produto_id)
     if request.method == "POST":
-        produto.delete()
-        messages.success(request, "Produto excluido com sucesso!")
+        produto.ativo = False
+        produto.save(update_fields=["ativo"], _skip_rateio_refresh=True)
+        messages.success(request, "Produto inativado. O historico de estoque foi preservado.")
         return redirect("estoque:lista_produtos")
     return render(request, "estoque/confirm_delete.html", {"produto": produto, "menu_app": "estoque", "menu_sub": "lista_produtos"})
 
@@ -1168,13 +1562,16 @@ def api_sugerir_pecas_os(request):
 
 
 __all__ = [
+    "api_simular_precificacao",
     "buscar_produtos",
     "lista_produtos",
     "categorias_produto",
     "api_categoria_produto_criar",
+    "api_marca_produto_criar",
     "criar_produto",
     "editar_produto",
     "duplicar_produto",
+    "baixar_modelo_importacao_produtos",
     "importar_produtos",
     "tabelas_preco",
     "estrutura_produto",

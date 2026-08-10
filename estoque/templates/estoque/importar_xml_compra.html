@@ -1,0 +1,10 @@
+{% extends "core/base.html" %}
+{% block header %}<div class="ui-module-header"><div><h1 class="ui-module-title">Importar documentos de compra</h1><p class="ui-module-subtitle">Cada NF-e será criada como rascunho e não movimentará estoque ou financeiro.</p></div></div>{% endblock %}
+{% block content %}
+<div class="row"><div class="col-lg-7"><div class="card"><div class="card-body">
+  <div class="alert alert-primary">Envie um XML individual ou um ZIP com até 50 XMLs. O lote inteiro é validado antes da criação dos rascunhos.</div>
+  <div class="alert alert-info">O sistema valida o CNPJ destinatário, impede duplicidade pela chave de acesso e exige conferência dos produtos e tributos antes do recebimento.</div>
+  <div class="alert alert-light border">Se o certificado A1 estiver configurado, use a <a href="{% url 'fiscal:caixa_entrada_dfe' %}">Caixa fiscal NF-e</a> para buscar documentos destinados à empresa sem localizar o arquivo manualmente.</div>
+  <form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Ler documentos e criar rascunhos</button><a href="{% url 'estoque:entradas_mercadoria' %}" class="btn btn-outline-secondary">Cancelar</a></form>
+</div></div></div></div>
+{% endblock %}

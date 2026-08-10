@@ -32,6 +32,11 @@ class Command(BaseCommand):
         diagnostico = diagnosticar_inconsistencias_estoque(apenas_ativos=apenas_ativos)
         divergencias = list(diagnostico["divergencias_totais"])
         saldos_negativos = list(diagnostico["saldos_negativos"])
+        divergencias_ubicacoes = list(diagnostico["divergencias_ubicacoes"])
+        divergencias_camadas = list(diagnostico["divergencias_camadas"])
+        reservas_excedentes = list(diagnostico["reservas_excedentes"])
+        divergencias_lotes = list(diagnostico["divergencias_lotes"])
+        divergencias_series = list(diagnostico["divergencias_series"])
 
         self.stdout.write(f"Divergências de total: {len(divergencias)}")
         for item in divergencias:
@@ -49,17 +54,72 @@ class Command(BaseCommand):
                 )
             )
 
+        self.stdout.write(f"Divergencias ponto x ubicacoes: {len(divergencias_ubicacoes)}")
+        for item in divergencias_ubicacoes:
+            self.stdout.write(
+                " - Produto #{produto_id} {produto_nome} em {ponto_codigo}: ponto={quantidade_ponto} "
+                "ubicacoes={quantidade_ubicacoes} delta={delta:+d}".format(**item)
+            )
+
+        self.stdout.write(f"Divergencias ubicacao x camadas de custo: {len(divergencias_camadas)}")
+        for item in divergencias_camadas:
+            self.stdout.write(
+                " - Produto #{produto_id} {produto_nome} em {ponto_codigo}/{ubicacao_codigo}: "
+                "ubicacao={quantidade_ubicacao} camadas={quantidade_camadas} delta={delta:+d}".format(**item)
+            )
+
+        self.stdout.write(f"Reservas acima do saldo fisico: {len(reservas_excedentes)}")
+        for item in reservas_excedentes:
+            self.stdout.write(
+                " - Produto #{produto_id} {produto__nome} em {ponto_operacional__codigo}/{ubicacao__codigo}: "
+                "reservado={quantidade_reservada} fisico={saldo_fisico} excesso={excesso}".format(**item)
+            )
+
+        self.stdout.write(f"Divergencias de lote: {len(divergencias_lotes)}")
+        for item in divergencias_lotes:
+            self.stdout.write(
+                " - Produto #{produto_id} {produto_nome} em {ponto_codigo}/{ubicacao_codigo}: "
+                "fisico={quantidade_fisica} lotes={quantidade_rastreada} delta={delta:+d}".format(**item)
+            )
+
+        self.stdout.write(f"Divergencias de serie: {len(divergencias_series)}")
+        for item in divergencias_series:
+            self.stdout.write(
+                " - Produto #{produto_id} {produto_nome} em {ponto_codigo}/{ubicacao_codigo}: "
+                "fisico={quantidade_fisica} series={quantidade_rastreada} delta={delta:+d}".format(**item)
+            )
+
         if corrigir_totais and divergencias:
             corrigidos = reconciliar_totais_produto(apenas_ativos=apenas_ativos)
             self.stdout.write(self.style.SUCCESS(f"Totais reconciliados: {corrigidos}"))
             diagnostico = diagnosticar_inconsistencias_estoque(apenas_ativos=apenas_ativos)
             divergencias = list(diagnostico["divergencias_totais"])
             saldos_negativos = list(diagnostico["saldos_negativos"])
+            divergencias_ubicacoes = list(diagnostico["divergencias_ubicacoes"])
+            divergencias_camadas = list(diagnostico["divergencias_camadas"])
             self.stdout.write(f"Divergências restantes: {len(divergencias)}")
             self.stdout.write(f"Saldos negativos restantes: {len(saldos_negativos)}")
 
-        if falhar_se_divergir and (divergencias or saldos_negativos):
+        if falhar_se_divergir and (
+            divergencias
+            or saldos_negativos
+            or divergencias_ubicacoes
+            or divergencias_camadas
+            or reservas_excedentes
+            or divergencias_lotes
+            or divergencias_series
+        ):
             raise CommandError("Auditoria de estoque encontrou divergências.")
 
-        if not divergencias and not saldos_negativos:
+        if not any(
+            [
+                divergencias,
+                saldos_negativos,
+                divergencias_ubicacoes,
+                divergencias_camadas,
+                reservas_excedentes,
+                divergencias_lotes,
+                divergencias_series,
+            ]
+        ):
             self.stdout.write(self.style.SUCCESS("Auditoria concluída sem divergências."))

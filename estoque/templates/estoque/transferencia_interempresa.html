@@ -1,0 +1,13 @@
+{% extends "core/base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <div class="card mb-3"><div class="card-header"><strong>Transferência controlada entre empresas/CNPJs</strong></div><div class="card-body">
+    <div class="alert alert-warning">Esta rotina não é uma transferência interna comum. Ela exige documento fiscal e gera uma saída na empresa de origem e uma entrada separada na empresa de destino, preservando custo e auditoria.</div>
+    <p><strong>Empresa de origem:</strong> {{ empresa_origem }}</p>
+    <form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Validar documento e executar</button><a class="btn btn-outline-secondary" href="{% url 'estoque:movimentacoes' %}">Voltar</a></form>
+  </div></div>
+  <div class="card"><div class="card-header"><strong>Histórico</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Data</th><th>Origem</th><th>Destino</th><th>Produtos</th><th>Qtd.</th><th>Documento fiscal</th></tr></thead><tbody>
+  {% for item in historico %}<tr><td>{{ item.data_operacao|date:'d/m/Y' }}</td><td>{{ item.empresa_origem }}</td><td>{{ item.empresa_destino }}</td><td>{{ item.produto_origem }} → {{ item.produto_destino }}</td><td>{{ item.quantidade }}</td><td>{{ item.documento_fiscal }}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Nenhuma operação registrada.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+</div>
+{% endblock %}

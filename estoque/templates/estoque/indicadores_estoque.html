@@ -274,29 +274,48 @@
   </div>
   <div class="col-lg-6">
     <div class="card">
-      <div class="card-header"><strong>Impacto de avarias (30 dias)</strong></div>
+      <div class="card-header"><strong>Impacto de avarias, ofertas e cedencias (30 dias)</strong></div>
       <div class="card-body table-responsive p-0">
         <table class="table table-sm mb-0">
           <thead>
             <tr>
               <th>Ponto</th>
+              <th>Motivo</th>
               <th>Unidades</th>
               <th>Impacto</th>
             </tr>
           </thead>
           <tbody>
-            {% for item in impacto_avarias_30 %}
+            {% for item in impacto_perdas_30 %}
             <tr>
               <td>{{ item.origem__codigo|default:"Sem ponto" }}{% if item.origem__nome %}<br><small class="text-muted">{{ item.origem__nome }}</small>{% endif %}</td>
+              <td>{{ item.tipo|title }}</td>
               <td>{{ item.unidades|default:0 }}</td>
               <td>R$ {{ item.impacto|default:0|floatformat:2 }}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="3" class="text-center text-muted py-3">Sem avarias registradas nos ultimos 30 dias.</td></tr>
+            <tr><td colspan="4" class="text-center text-muted py-3">Sem perdas registradas nos ultimos 30 dias.</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+      {% if impacto_saidas_estruturadas_30 %}
+      <div class="card-footer p-0 table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Finalidade</th><th>Campanha / centro</th><th>Solicitações</th><th>Custo</th></tr></thead>
+          <tbody>
+            {% for item in impacto_saidas_estruturadas_30 %}
+            <tr>
+              <td>{{ item.finalidade|title }}</td>
+              <td>{{ item.campanha|default:item.centro_custo_nome|default:"Sem classificação" }}</td>
+              <td>{{ item.solicitacoes }} / {{ item.unidades }} un.</td>
+              <td>R$ {{ item.impacto|default:0|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>

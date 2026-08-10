@@ -8,7 +8,9 @@
   </div>
   <div class="ui-module-actions">
     {% if entrada.status == 'rascunho' %}
+    {% if not entrada.importada_xml %}
     <a href="{% url 'estoque:editar_entrada_mercadoria' entrada.id %}" class="btn btn-outline-primary btn-sm">Editar entrada</a>
+    {% endif %}
     <form method="post" action="{% url 'estoque:receber_entrada_mercadoria' entrada.id %}">
       {% csrf_token %}
       <button type="submit" class="btn btn-success btn-sm">Receber no estoque</button>
@@ -86,6 +88,97 @@
   <strong>Leitura operacional desta entrada:</strong>
   confira documento, fornecedor, custo final e destino f&iacute;sico antes do recebimento. Depois de recebida, a entrada vira base de saldo, custo, lote e rastreabilidade.
 </div>
+
+{% if entrada.importada_xml %}
+<div class="card mb-3 border-primary">
+  <div class="card-header d-flex justify-content-between"><strong>Conferência do XML</strong><span>{{ itens_xml_pendentes }} pendência(s)</span></div>
+  <div class="card-body">
+    <div class="row mb-3"><div class="col-md-8"><strong>Chave:</strong> {{ entrada.chave_acesso_nfe }}</div><div class="col-md-4"><strong>Valor NF-e:</strong> R$ {{ entrada.xml_resumo.valor_nfe|default:"0" }}</div></div>
+    <div class="alert {% if entrada.xml_resumo.diferenca_produtos == '0.00' or entrada.xml_resumo.diferenca_produtos == '0' %}alert-success{% else %}alert-danger{% endif %} py-2">Produtos no total da NF-e: R$ {{ entrada.xml_resumo.valor_produtos }} · soma dos itens: R$ {{ entrada.xml_resumo.soma_itens }} · diferença: R$ {{ entrada.xml_resumo.diferenca_produtos }}.</div>
+    {% if fornecedor_xml_pendente %}
+    <div class="alert alert-warning">
+      {% if entrada.xml_resumo.fornecedor_novo %}O fornecedor foi criado a partir do XML e precisa ser confirmado.{% else %}O fornecedor foi encontrado pelo CNPJ, mas há dados cadastrais diferentes no XML.{% endif %}
+      {% if entrada.xml_divergencias_fornecedor %}<div class="small mt-1">Diferenças: {{ entrada.xml_divergencias_fornecedor }}</div>{% endif %}
+      <form method="post" action="{% url 'estoque:confirmar_fornecedor_xml' entrada.id %}" class="mt-2">{% csrf_token %}<button class="btn btn-sm btn-warning">Confirmar fornecedor desta entrada</button></form>
+    </div>
+    {% else %}<div class="alert alert-success py-2">Fornecedor confirmado para esta entrada.</div>{% endif %}
+    {% if entrada.gerar_conta_pagar %}
+    <div class="card mb-3"><div class="card-header"><strong>Condições financeiras da compra</strong></div><div class="card-body">
+      <p class="text-muted">As contas a pagar serão criadas somente no recebimento. Revise as parcelas importadas antes de confirmar o estoque.</p>
+      <form method="post" action="{% url 'estoque:revisar_parcelas_entrada' entrada.id %}">{% csrf_token %}
+        <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Parcela</th><th>Origem</th><th>Vencimento</th><th>Valor</th><th>Conta gerada</th></tr></thead><tbody>
+        {% for parcela in parcelas_financeiras %}<tr><td>{{ parcela.numero }}</td><td>{{ parcela.get_origem_display }}</td><td><input class="form-control form-control-sm" type="date" name="parcela_{{ parcela.id }}_vencimento" value="{{ parcela.vencimento|date:'Y-m-d' }}" {% if entrada.status != 'rascunho' %}readonly{% endif %}></td><td><input class="form-control form-control-sm" type="number" step="0.01" min="0.01" name="parcela_{{ parcela.id }}_valor" value="{{ parcela.valor|stringformat:'.2f' }}" {% if entrada.status != 'rascunho' %}readonly{% endif %}></td><td>{% if parcela.conta_pagar_id %}#{{ parcela.conta_pagar_id }}{% else %}Será criada ao receber{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="text-muted">Nenhuma parcela encontrada.</td></tr>{% endfor %}
+        </tbody></table></div>
+        {% if entrada.status == 'rascunho' and parcelas_financeiras %}<button class="btn btn-sm btn-outline-primary">Salvar revisão das parcelas</button>{% endif %}
+      </form>
+    </div></div>
+    {% endif %}
+    {% if entrada.status == 'rascunho' and itens_xml_pendentes %}
+    <div class="card mb-3 border-info">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Revis&atilde;o coletiva e cria&ccedil;&atilde;o de produtos</strong>
+        <span class="badge badge-info">{{ itens_xml_pendentes }} pendente(s)</span>
+      </div>
+      <div class="card-body">
+        <p class="text-muted mb-3">
+          Selecione os itens. As correspond&ecirc;ncias encontradas ser&atilde;o confirmadas sem alterar o cadastro existente;
+          itens desconhecidos ser&atilde;o cadastrados com custo completo rateado e precifica&ccedil;&atilde;o autom&aacute;tica.
+        </p>
+        <form method="post" action="{% url 'estoque:resolver_itens_xml_massa' entrada.id %}">
+          {% csrf_token %}
+          <div class="table-responsive mb-3">
+            <table class="table table-sm table-hover align-middle">
+              <thead><tr><th style="width: 42px;">Usar</th><th>Item da nota</th><th>Estado</th><th>Nome proposto</th><th>Categoria</th><th>Marca</th><th style="width: 110px;">NCM</th><th style="width: 130px;">Pre&ccedil;o final</th></tr></thead>
+              <tbody>
+              {% for item, form_xml in formularios_xml %}
+                {% if not item.resolvido %}
+                <tr>
+                  <td><input class="form-check-input" type="checkbox" name="item_ids" value="{{ item.id }}" {% if item.nivel_correspondencia == 'provavel' or item.nivel_correspondencia == 'conflito' %}disabled{% else %}checked{% endif %} aria-label="Selecionar item {{ item.numero_item }}"></td>
+                  <td><strong>{{ item.numero_item }} &mdash; {{ item.descricao }}</strong><div class="small text-muted">{{ item.quantidade }} {{ item.unidade }} &middot; custo XML R$ {{ item.custo_entrada_preview|floatformat:2 }} &middot; NCM {{ item.ncm|default:"-" }}</div></td>
+                  <td>{% if item.produto_id %}<span class="badge badge-success">Produto existente</span><div class="small text-muted">{{ item.produto.nome }}</div>{% elif item.nivel_correspondencia == 'provavel' %}<span class="badge badge-info">Sugest&atilde;o prov&aacute;vel</span><div class="small text-muted">Resolver individualmente</div>{% elif item.nivel_correspondencia == 'conflito' %}<span class="badge badge-danger">Conflito</span><div class="small text-muted">Resolver individualmente</div>{% elif item.status_pre_cadastro == 'pronto' %}<span class="badge badge-primary">Pronto para aprovar</span>{% else %}<span class="badge badge-warning">Rascunho</span><div class="small text-muted">{% if item.pendencias_cadastro %}Falta: {{ item.pendencias_cadastro|join:', ' }}{% endif %}</div>{% endif %}</td>
+                  <td><input class="form-control form-control-sm" type="text" maxlength="100" name="nome_{{ item.id }}" value="{% if item.produto_id %}{{ item.produto.nome }}{% else %}{{ item.nome_proposto }}{% endif %}" {% if item.produto_id %}readonly{% endif %}></td>
+                  <td>{% if item.produto_id %}{{ item.produto.categoria_config.nome|default:'-' }}{% else %}<select class="form-control form-control-sm js-categoria-xml" name="categoria_{{ item.id }}"><option value="">Selecione</option>{% for categoria in categorias_massa %}<option value="{{ categoria.id }}" {% if item.categoria_proposta_id == categoria.id %}selected{% endif %}>{{ categoria.nome }}</option>{% endfor %}<option value="__nova__">Outros / criar categoria</option></select>{% if item.sugestoes_cadastro.categoria.id %}<div class="small text-info">Sugest&atilde;o {{ item.sugestoes_cadastro.categoria.confianca }}: {{ item.sugestoes_cadastro.categoria.motivo }}</div>{% endif %}{% endif %}</td>
+                  <td>{% if item.produto_id %}{{ item.produto.marca.nome|default:'-' }}{% else %}<select class="form-control form-control-sm js-marca-xml" name="marca_{{ item.id }}"><option value="">Sem marca</option>{% for marca in marcas_massa %}<option value="{{ marca.id }}" {% if item.marca_proposta_id == marca.id %}selected{% endif %}>{{ marca.nome }}</option>{% endfor %}<option value="__nova__">Outros / criar marca</option></select>{% if item.sugestoes_cadastro.marca.id %}<div class="small text-info">Sugest&atilde;o {{ item.sugestoes_cadastro.marca.confianca }}: {{ item.sugestoes_cadastro.marca.motivo }}</div>{% endif %}{% endif %}</td>
+                  <td><input class="form-control form-control-sm" type="text" inputmode="numeric" maxlength="8" name="ncm_{{ item.id }}" value="{% if item.produto_id %}{{ item.produto.ncm }}{% else %}{{ item.ncm_proposto }}{% endif %}" {% if item.produto_id %}readonly{% endif %}></td>
+                  <td><input class="form-control form-control-sm" type="number" min="0" step="0.01" name="preco_final_{{ item.id }}" value="{% if item.produto_id %}{{ item.produto.preco_final|stringformat:'.2f' }}{% else %}{{ item.preco_final_proposto|stringformat:'.2f' }}{% endif %}" {% if item.produto_id %}readonly{% endif %}><div class="small text-muted">0 = sugerido</div></td>
+                </tr>
+                {% endif %}
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="row">
+            <div class="col-md-3 mb-2"><label>Natureza dos novos itens</label><select class="form-control" name="tipo_item"><option value="produto">Produto para revenda</option><option value="peca">Pe&ccedil;a</option><option value="consumivel">Consum&iacute;vel</option><option value="fabricado">Produto fabricado</option></select></div>
+            <div class="col-md-3 mb-2"><label>Categoria comum (opcional)</label><select class="form-control js-categoria-xml" name="categoria"><option value="">Manter escolha de cada item</option>{% for categoria in categorias_massa %}<option value="{{ categoria.id }}">{{ categoria.nome }}</option>{% endfor %}<option value="__nova__">Outros / criar categoria</option></select></div>
+            <div class="col-md-2 mb-2"><label>Marca comum (opcional)</label><select class="form-control js-marca-xml" name="marca"><option value="">Manter escolha de cada item</option>{% for marca in marcas_massa %}<option value="{{ marca.id }}">{{ marca.nome }}</option>{% endfor %}<option value="__nova__">Outros / criar marca</option></select></div>
+            <div class="col-md-2 mb-2"><label>Margem alvo (%)</label><input class="form-control" type="number" min="0" max="99.99" step="0.01" name="margem_lucro" value="0"><div class="small text-muted">0 = padr&atilde;o da categoria</div></div>
+            <div class="col-md-2 mb-2"><label>Margem m&iacute;nima (%)</label><input class="form-control" type="number" min="0" max="99.99" step="0.01" name="margem_minima" value="0"></div>
+          </div>
+          {% include "estoque/_xml_cadastro_rapido.html" %}
+          <div class="form-check my-3">
+            <input class="form-check-input" type="checkbox" value="1" id="confirmar-revisao-massa" name="confirmar_revisao" required>
+            <label class="form-check-label" for="confirmar-revisao-massa">Revisei correspond&ecirc;ncias, custos, NCM/CFOP e pre&ccedil;os; confirmo o processamento selecionado.</label>
+          </div>
+          <button class="btn btn-outline-primary" type="submit" name="acao" value="salvar_rascunho" formnovalidate>Salvar pr&eacute;-cadastro</button>
+          <button class="btn btn-info" type="submit" name="acao" value="aprovar">Aprovar selecionados e criar produtos</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+    {% for item, form_xml in formularios_xml %}
+    <div class="border rounded p-3 mb-3">
+      <div class="d-flex justify-content-between"><strong>Item {{ item.numero_item }} — {{ item.descricao }}</strong>{% if item.resolvido %}<span class="badge badge-success">Conferido</span>{% else %}<span class="badge badge-warning">Pendente</span>{% endif %}</div>
+      <div class="text-muted small mb-2">Código {{ item.codigo_fornecedor|default:"-" }} · GTIN {{ item.gtin|default:"-" }} · NCM {{ item.ncm|default:"-" }} · CFOP {{ item.cfop|default:"-" }} · {{ item.quantidade }} {{ item.unidade }} · R$ {{ item.valor_produtos|floatformat:2 }}</div>
+      {% if item.candidatos_correspondencia and not item.produto_id %}<div class="alert {% if item.nivel_correspondencia == 'conflito' %}alert-danger{% else %}alert-info{% endif %} py-2 small"><strong>{% if item.nivel_correspondencia == 'conflito' %}Conflito detectado{% else %}Poss&iacute;veis correspond&ecirc;ncias{% endif %}:</strong> {% for candidato in item.candidatos_correspondencia %}{{ candidato.nome }} ({{ candidato.score }}%{% if candidato.motivo %}, {{ candidato.motivo }}{% endif %}){% if not forloop.last %}; {% endif %}{% endfor %}. Confirme o produto correto no formul&aacute;rio abaixo ou cadastre um novo.</div>{% endif %}
+      <div class="small mb-2"><strong>Custo anterior:</strong> R$ {{ item.custo_anterior_preview|floatformat:2 }} · <strong>custo desta entrada:</strong> R$ {{ item.custo_entrada_preview|floatformat:2 }} · <strong>médio projetado:</strong> R$ {{ item.custo_medio_preview|floatformat:2 }}</div>
+      <details {% if not item.resolvido %}open{% endif %}><summary>Associação e revisão do custo</summary>
+        <form method="post" action="{% url 'estoque:resolver_item_xml' item.id %}" class="mt-2">{% csrf_token %}{{ form_xml.as_p }}<button class="btn btn-sm btn-primary">Confirmar item</button></form>
+      </details>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <div class="card mb-3">
   <div class="card-body">

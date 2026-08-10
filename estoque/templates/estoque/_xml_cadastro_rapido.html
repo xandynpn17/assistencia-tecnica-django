@@ -1,0 +1,104 @@
+<div class="card border-success mb-3 d-none" id="xml-cadastro-rapido">
+  <div class="card-header py-2"><strong id="xml-cadastro-rapido-titulo">Criar cadastro</strong></div>
+  <div class="card-body py-3">
+    <div class="row align-items-end d-none" id="xml-nova-categoria-bloco">
+      <div class="col-md-6 mb-2"><label for="xml-nova-categoria-nome">Nome da nova categoria</label><input class="form-control" id="xml-nova-categoria-nome" maxlength="100" placeholder="Ex.: Copos de liquidificador"></div>
+      <div class="col-md-3 mb-2"><label for="xml-nova-categoria-margem">Margem padr&atilde;o (%)</label><input class="form-control" id="xml-nova-categoria-margem" type="number" min="0" max="99.99" step="0.01" value="0"></div>
+      <div class="col-md-3 mb-2"><button type="button" class="btn btn-success btn-block" id="xml-criar-categoria">Criar e selecionar</button></div>
+    </div>
+    <div class="row align-items-end d-none" id="xml-nova-marca-bloco">
+      <div class="col-md-9 mb-2"><label for="xml-nova-marca-nome">Nome da marca/fabricante</label><input class="form-control" id="xml-nova-marca-nome" maxlength="80" placeholder="Ex.: Mondial"></div>
+      <div class="col-md-3 mb-2"><button type="button" class="btn btn-success btn-block" id="xml-criar-marca">Criar e selecionar</button></div>
+    </div>
+    <div class="small" id="xml-cadastro-rapido-feedback" role="status"></div>
+    <button type="button" class="btn btn-link btn-sm px-0 mt-1" id="xml-cadastro-rapido-cancelar">Cancelar</button>
+  </div>
+</div>
+<script>
+(function () {
+  const painel = document.getElementById("xml-cadastro-rapido");
+  if (!painel) return;
+  const blocoCategoria = document.getElementById("xml-nova-categoria-bloco");
+  const blocoMarca = document.getElementById("xml-nova-marca-bloco");
+  const titulo = document.getElementById("xml-cadastro-rapido-titulo");
+  const feedback = document.getElementById("xml-cadastro-rapido-feedback");
+  let selectAlvo = null;
+
+  function csrfToken() {
+    return document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || "";
+  }
+  function abrir(tipo, select) {
+    selectAlvo = select;
+    painel.classList.remove("d-none");
+    blocoCategoria.classList.toggle("d-none", tipo !== "categoria");
+    blocoMarca.classList.toggle("d-none", tipo !== "marca");
+    titulo.textContent = tipo === "categoria" ? "Criar categoria sem sair da NF-e" : "Criar marca/fabricante sem sair da NF-e";
+    feedback.textContent = "";
+    const campo = document.getElementById(tipo === "categoria" ? "xml-nova-categoria-nome" : "xml-nova-marca-nome");
+    campo?.focus();
+    painel.scrollIntoView({behavior: "smooth", block: "nearest"});
+  }
+  function fechar() {
+    if (selectAlvo?.value === "__nova__") selectAlvo.value = "";
+    selectAlvo = null;
+    painel.classList.add("d-none");
+    feedback.textContent = "";
+  }
+  function adicionarOpcao(seletor, id, nome) {
+    document.querySelectorAll(seletor).forEach((select) => {
+      let option = Array.from(select.options).find((item) => String(item.value) === String(id));
+      if (!option) {
+        option = new Option(nome, id);
+        const optionNova = Array.from(select.options).find((item) => item.value === "__nova__");
+        select.insertBefore(option, optionNova || null);
+      }
+      if (select === selectAlvo) select.value = String(id);
+    });
+  }
+  document.addEventListener("change", (event) => {
+    const select = event.target;
+    if (select?.matches?.(".js-categoria-xml") && select.value === "__nova__") abrir("categoria", select);
+    if (select?.matches?.(".js-marca-xml") && select.value === "__nova__") abrir("marca", select);
+  });
+  document.getElementById("xml-cadastro-rapido-cancelar")?.addEventListener("click", fechar);
+  document.getElementById("xml-criar-categoria")?.addEventListener("click", async () => {
+    const nome = document.getElementById("xml-nova-categoria-nome").value.trim();
+    const margem = document.getElementById("xml-nova-categoria-margem").value || "0";
+    if (!nome) { feedback.textContent = "Informe o nome da categoria."; return; }
+    const body = new FormData(); body.append("csrfmiddlewaretoken", csrfToken()); body.append("nome", nome); body.append("margem_padrao", margem);
+    feedback.textContent = "Salvando categoria...";
+    try {
+      const response = await fetch("{% url 'estoque:api_categoria_produto_criar' %}", {method: "POST", body});
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.erro || "Não foi possível criar a categoria.");
+      adicionarOpcao(".js-categoria-xml", data.categoria.id, data.categoria.nome);
+      feedback.textContent = data.mensagem;
+      document.getElementById("xml-nova-categoria-nome").value = "";
+      setTimeout(fechar, 500);
+    } catch (erro) { feedback.textContent = erro.message; }
+  });
+  document.getElementById("xml-criar-marca")?.addEventListener("click", async () => {
+    const nome = document.getElementById("xml-nova-marca-nome").value.trim();
+    if (!nome) { feedback.textContent = "Informe o nome da marca/fabricante."; return; }
+    const body = new FormData(); body.append("csrfmiddlewaretoken", csrfToken()); body.append("nome", nome);
+    feedback.textContent = "Salvando marca...";
+    try {
+      const response = await fetch("{% url 'estoque:api_marca_produto_criar' %}", {method: "POST", body});
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.erro || "Não foi possível criar a marca.");
+      adicionarOpcao(".js-marca-xml", data.marca.id, data.marca.nome);
+      feedback.textContent = data.mensagem;
+      document.getElementById("xml-nova-marca-nome").value = "";
+      setTimeout(fechar, 500);
+    } catch (erro) { feedback.textContent = erro.message; }
+  });
+  document.querySelectorAll("form").forEach((form) => form.addEventListener("submit", (event) => {
+    const pendente = Array.from(form.querySelectorAll("select")).find((select) => select.value === "__nova__");
+    if (pendente && !event.submitter?.hasAttribute("formnovalidate")) {
+      event.preventDefault();
+      feedback.textContent = "Conclua a criação rápida antes de aprovar.";
+      painel.classList.remove("d-none");
+    }
+  }));
+})();
+</script>

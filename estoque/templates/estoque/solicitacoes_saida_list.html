@@ -1,0 +1,83 @@
+{% extends "core/base.html" %}
+
+{% block header %}<h1 class="m-0 text-dark">Ofertas e cedências</h1>{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
+    <div>
+      <h3 class="card-title mb-1">Solicitações e aprovações</h3>
+      <div class="small text-muted">O estoque só é baixado quando a solicitação está executada.</div>
+    </div>
+    <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-primary btn-sm">Nova oferta ou cedência</a>
+  </div>
+  <div class="card-body border-bottom">
+    <form method="get" class="form-row align-items-end">
+      <div class="col-md-3 form-group mb-md-0">
+        <label>Status</label>
+        <select name="status" class="form-control">
+          <option value="">Todos</option>
+          <option value="pendente" {% if status_filtro == 'pendente' %}selected{% endif %}>Pendente</option>
+          <option value="executada" {% if status_filtro == 'executada' %}selected{% endif %}>Executada</option>
+          <option value="rejeitada" {% if status_filtro == 'rejeitada' %}selected{% endif %}>Rejeitada</option>
+          <option value="devolvida" {% if status_filtro == 'devolvida' %}selected{% endif %}>Devolvida</option>
+          <option value="cancelada" {% if status_filtro == 'cancelada' %}selected{% endif %}>Cancelada</option>
+        </select>
+      </div>
+      <div class="col-md-3 form-group mb-md-0">
+        <label>Tipo</label>
+        <select name="tipo" class="form-control">
+          <option value="">Todos</option>
+          <option value="oferta" {% if tipo_filtro == 'oferta' %}selected{% endif %}>Oferta</option>
+          <option value="cedencia" {% if tipo_filtro == 'cedencia' %}selected{% endif %}>Cedência</option>
+        </select>
+      </div>
+      <div class="col-md-3"><button class="btn btn-outline-primary" type="submit">Filtrar</button></div>
+    </form>
+  </div>
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>#</th><th>Tipo / finalidade</th><th>Produto</th><th>Recebedor</th><th>Quantidade</th><th>Custo</th><th>Status</th><th>Responsáveis</th><th>Ação</th></tr></thead>
+      <tbody>
+        {% for s in solicitacoes %}
+        <tr>
+          <td>{{ s.id }}<div class="small text-muted">{{ s.criado_em|date:"d/m/Y H:i" }}</div></td>
+          <td>{{ s.get_tipo_display }}<div class="small text-muted">{{ s.get_finalidade_display }}</div></td>
+          <td>{{ s.produto.nome }}<div class="small text-muted">{{ s.origem.codigo }}/{{ s.origem_ubicacao.codigo }}</div></td>
+          <td>{{ s.beneficiario_nome }}{% if s.cliente %}<div class="small text-muted">Cliente: {{ s.cliente.nome }}</div>{% endif %}{% if s.campanha %}<div class="small text-muted">{{ s.campanha }}</div>{% endif %}</td>
+          <td>{{ s.quantidade }}</td>
+          <td>R$ {{ s.valor_total_custo|floatformat:2 }}{% if s.exige_aprovacao %}<div class="small text-warning">Acima da alçada</div>{% endif %}</td>
+          <td>
+            {% if s.status == 'executada' %}<span class="badge badge-success">Executada</span>
+            {% elif s.status == 'devolvida' %}<span class="badge badge-info">Devolvida</span>
+            {% elif s.status == 'pendente' %}<span class="badge badge-warning">Pendente</span>
+            {% elif s.status == 'rejeitada' %}<span class="badge badge-danger">Rejeitada</span>
+            {% else %}<span class="badge badge-secondary">{{ s.get_status_display }}</span>{% endif %}
+            {% if s.movimento_id %}<div class="small text-muted">Mov. #{{ s.movimento_id }}</div>{% endif %}
+          </td>
+          <td><div>Solicitou: {{ s.solicitado_por }}</div>{% if s.aprovado_por %}<div class="small text-success">Aprovou: {{ s.aprovado_por }}</div>{% endif %}{% if s.rejeitado_por %}<div class="small text-danger">Rejeitou: {{ s.rejeitado_por }}</div>{% endif %}</td>
+          <td style="min-width:220px;">
+            <a class="btn btn-outline-secondary btn-sm mb-2" target="_blank" href="{% url 'estoque:comprovante_solicitacao_saida' s.id %}">Comprovante PDF</a>
+            {% if s.status == 'pendente' and pode_aprovar %}
+            <form method="post" action="{% url 'estoque:decidir_solicitacao_saida' s.id %}" class="mb-2">
+              {% csrf_token %}<input type="hidden" name="acao" value="aprovar">
+              <button class="btn btn-success btn-sm" type="submit">Aprovar e baixar</button>
+            </form>
+            <form method="post" action="{% url 'estoque:decidir_solicitacao_saida' s.id %}">
+              {% csrf_token %}<input type="hidden" name="acao" value="rejeitar">
+              <div class="input-group input-group-sm"><input class="form-control" name="motivo_rejeicao" placeholder="Motivo obrigatório"><div class="input-group-append"><button class="btn btn-outline-danger" type="submit">Rejeitar</button></div></div>
+            </form>
+            {% elif s.status == 'executada' and s.finalidade == 'cedencia_temporaria' and pode_aprovar %}
+            <form method="post" action="{% url 'estoque:decidir_solicitacao_saida' s.id %}">
+              {% csrf_token %}<input type="hidden" name="acao" value="devolver">
+              <div class="input-group input-group-sm"><input class="form-control" name="observacao_devolucao" placeholder="Condição na devolução"><div class="input-group-append"><button class="btn btn-outline-info" type="submit">Registrar retorno</button></div></div>
+            </form>
+            {% elif s.motivo_rejeicao %}<span class="small text-danger">{{ s.motivo_rejeicao }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}<tr><td colspan="9" class="text-center text-muted py-4">Nenhuma solicitação encontrada.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

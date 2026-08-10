@@ -5,6 +5,8 @@ from django import forms
 from django.db.models import Q
 from django.utils import timezone
 
+from caixa.models import CentroCusto
+from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema, FornecedorGarantia, MarcaGarantia
 
 from .models import (
@@ -13,6 +15,7 @@ from .models import (
     EntradaMercadoria,
     EstoqueSerie,
     ItemEntradaMercadoria,
+    ItemImportacaoXML,
     MovimentacaoEstoque,
     PontoOperacional,
     Produto,
@@ -21,13 +24,64 @@ from .models import (
     ProdutoKitItem,
     ProdutoPrecoTabela,
     ServicoReferencia,
+    SolicitacaoSaidaEstoque,
     TabelaPreco,
+    TransferenciaEstoqueInterempresa,
     UbicacaoEstoque,
 )
 from .services_estrutura import garantir_estrutura_estoque_padrao
+from .services_produto import calcular_aliquota_efetiva, calcular_precificacao
+
+
+class TransferenciaEstoqueInterempresaForm(forms.ModelForm):
+    class Meta:
+        model = TransferenciaEstoqueInterempresa
+        fields = ["empresa_destino", "produto_origem", "produto_destino", "origem", "origem_ubicacao", "destino", "destino_ubicacao", "quantidade", "documento_fiscal", "natureza_operacao", "data_operacao", "observacao"]
+        widgets = {"data_operacao": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, **kwargs):
+        empresa_origem = kwargs.pop("empresa_origem")
+        usuario = kwargs.pop("usuario")
+        super().__init__(*args, **kwargs)
+        from configuracoes.models import Empresa
+        self.empresa_origem = empresa_origem
+        empresas_permitidas = Empresa.objects.all() if usuario.is_superuser else Empresa.objects.filter(
+            Q(vinculos_usuarios__usuario=usuario, vinculos_usuarios__ativo=True) | Q(pk=getattr(usuario, "empresa_id", None))
+        ).distinct()
+        self.fields["empresa_destino"].queryset = empresas_permitidas.exclude(pk=empresa_origem.pk).order_by("nome")
+        self.fields["produto_origem"].queryset = Produto.objects.filter(empresa=empresa_origem, ativo=True).order_by("nome")
+        self.fields["origem"].queryset = PontoOperacional.objects.filter(empresa=empresa_origem, ativo=True)
+        self.fields["origem_ubicacao"].queryset = UbicacaoEstoque.objects.filter(ponto_operacional__empresa=empresa_origem, ativo=True)
+        destino_id = self.data.get("empresa_destino") if self.is_bound else None
+        if destino_id and not self.fields["empresa_destino"].queryset.filter(pk=destino_id).exists():
+            destino_id = None
+        self.fields["produto_destino"].queryset = Produto.objects.filter(empresa_id=destino_id, ativo=True).order_by("nome") if destino_id else Produto.objects.none()
+        self.fields["destino"].queryset = PontoOperacional.objects.filter(empresa_id=destino_id, ativo=True) if destino_id else PontoOperacional.objects.none()
+        self.fields["destino_ubicacao"].queryset = UbicacaoEstoque.objects.filter(ponto_operacional__empresa_id=destino_id, ativo=True) if destino_id else UbicacaoEstoque.objects.none()
+        self.fields["documento_fiscal"].help_text = "Obrigatório: a movimentação só ocorre após emissão/validação fiscal."
+
+    def clean(self):
+        dados = super().clean()
+        if dados.get("origem_ubicacao") and dados.get("origem") and dados["origem_ubicacao"].ponto_operacional_id != dados["origem"].pk:
+            self.add_error("origem_ubicacao", "A localização não pertence ao ponto de origem.")
+        if dados.get("destino_ubicacao") and dados.get("destino") and dados["destino_ubicacao"].ponto_operacional_id != dados["destino"].pk:
+            self.add_error("destino_ubicacao", "A localização não pertence ao ponto de destino.")
+        return dados
 
 
 class ProdutoForm(forms.ModelForm):
+    marca_manual = forms.CharField(
+        label="Outra marca / fabricante",
+        required=False,
+        max_length=80,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "Digite a marca ou fabricante",
+            }
+        ),
+        help_text="Se a marca nao estiver na lista, digite aqui. Ela sera adicionada ao catalogo ao salvar.",
+    )
     ubicacao_padrao_texto = forms.CharField(
         label="Ubicacao / posicao fisica",
         required=False,
@@ -85,6 +139,15 @@ class ProdutoForm(forms.ModelForm):
             "ean",
             "foto",
             "tipo_item",
+            "regra_tributaria",
+            "ncm",
+            "cest",
+            "origem_mercadoria",
+            "codigo_servico",
+            "unidade_comercial",
+            "cfop_padrao",
+            "cst_csosn",
+            "codigo_beneficio_fiscal",
             "modo_preco",
             "descricao",
             "observacao_interna",
@@ -136,6 +199,15 @@ class ProdutoForm(forms.ModelForm):
             "ean": forms.TextInput(attrs={"class": "form-control", "placeholder": "Se vazio, gera automatico (13 digitos)"}),
             "foto": forms.ClearableFileInput(attrs={"class": "form-control-file"}),
             "tipo_item": forms.Select(attrs={"class": "form-control"}),
+            "regra_tributaria": forms.Select(attrs={"class": "form-control"}),
+            "ncm": forms.TextInput(attrs={"class": "form-control"}),
+            "cest": forms.TextInput(attrs={"class": "form-control"}),
+            "origem_mercadoria": forms.TextInput(attrs={"class": "form-control", "maxlength": 2}),
+            "codigo_servico": forms.TextInput(attrs={"class": "form-control"}),
+            "unidade_comercial": forms.TextInput(attrs={"class": "form-control", "maxlength": 10}),
+            "cfop_padrao": forms.TextInput(attrs={"class": "form-control", "maxlength": 4}),
+            "cst_csosn": forms.TextInput(attrs={"class": "form-control", "maxlength": 4}),
+            "codigo_beneficio_fiscal": forms.TextInput(attrs={"class": "form-control"}),
             "modo_preco": forms.Select(attrs={"class": "form-control"}),
             "descricao": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
             "observacao_interna": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
@@ -185,13 +257,34 @@ class ProdutoForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        garantir_estrutura_estoque_padrao()
+        self.empresa = empresa or getattr(self.instance, "empresa", None)
+        if self.empresa and not self.instance.empresa_id:
+            self.instance.empresa = self.empresa
+        garantir_estrutura_estoque_padrao(empresa=self.empresa)
         self.fields["data_entrada"].required = False
         self.fields["categoria_config"].required = False
         self.fields["fornecedor_config"].required = False
         self.fields["marca"].required = False
         self.fields["servicos_compativeis"].required = False
+        self.fields["regra_tributaria"].required = False
+        from fiscal.models import RegraTributaria
+
+        regras = RegraTributaria.objects.none()
+        if self.empresa:
+            regras = RegraTributaria.objects.filter(perfil__empresa=self.empresa).exclude(status="inativo").select_related("perfil")
+        self.fields["regra_tributaria"].queryset = regras.order_by("prioridade", "codigo")
+        self.fields["regra_tributaria"].label = "Regra tributária"
+        self.fields["regra_tributaria"].help_text = "Regra específica do item. Deixe vazio para seleção automática por operação e classificação."
+        self.fields["ncm"].label = "NCM"
+        self.fields["cest"].label = "CEST"
+        self.fields["origem_mercadoria"].label = "Origem da mercadoria"
+        self.fields["codigo_servico"].label = "Código do serviço"
+        self.fields["unidade_comercial"].label = "Unidade comercial"
+        self.fields["cfop_padrao"].label = "CFOP padrão"
+        self.fields["cst_csosn"].label = "CST/CSOSN"
+        self.fields["codigo_beneficio_fiscal"].label = "Código de benefício fiscal"
         self.fields["previsao_venda_mensal"].label = "Previsao venda mensal"
         self.fields["previsao_venda_mensal"].help_text = "Quantidade estimada de unidades vendidas por mes para usar o rateio."
         self.fields["incluir_rateio_custo_fixo"].label = "Incluir rateio de custo fixo"
@@ -206,9 +299,9 @@ class ProdutoForm(forms.ModelForm):
         self.fields["fornecedor_manual"].label = "Fornecedor manual (opcional)"
         self.fields["fornecedor_manual"].help_text = "Use apenas quando o fornecedor nao estiver cadastrado."
         self.fields["modo_preco"].label = "Modo de preco"
-        self.fields["modo_preco"].help_text = "Simples aplica margem direto sobre o custo total. Avancado preserva margem apos taxas e tributos da venda."
+        self.fields["modo_preco"].help_text = "Simples aplica margem sobre o custo e acrescenta automaticamente taxas e tributos. Avancado calcula uma margem-alvo sobre a receita."
         self.fields["modelos_compativeis"].help_text = "Ajuda na busca comercial e tecnica. Informe modelos separados por virgula, ex.: A10, A20, SM-G998B."
-        self.fields["custo_unitario"].label = "Custo de compra (R$)"
+        self.fields["custo_unitario"].label = "Último custo de compra (R$)"
         self.fields["custo_operacional"].label = "Custo adicional manual (R$)"
         self.fields["custo_frete"].label = "Frete de compra (R$)"
         self.fields["custo_impostos"].label = "Impostos variaveis da venda (R$)"
@@ -228,7 +321,7 @@ class ProdutoForm(forms.ModelForm):
         self.fields["pis"].label = "PIS venda (%)"
         self.fields["cofins"].label = "COFINS venda (%)"
         self.fields["pis_cofins"].label = "PIS/COFINS (%)"
-        self.fields["custo_unitario"].help_text = "Valor base de compra da peca/produto, antes da margem de venda."
+        self.fields["custo_unitario"].help_text = "Custo unitário da compra mais recente; é a base de referência para a precificação. Não confundir com o custo médio ponderado usado nas baixas PMP."
         self.fields["custo_frete"].help_text = "Parcela do frete de aquisicao que compoe o custo de compra desta unidade."
         self.fields["custo_impostos"].help_text = "Use para custo monetario da venda por unidade. Ex.: imposto nao recuperavel, taxa fiscal ou despesa similar."
         self.fields["custo_operacional"].help_text = "Reserva para custo adicional em R$ quando voce nao quiser detalhar frete, venda, CAC ou comissao separadamente."
@@ -268,13 +361,25 @@ class ProdutoForm(forms.ModelForm):
                 self.fields[field_name].required = False
                 if self.fields[field_name].initial in (None, ""):
                     self.fields[field_name].initial = 0
-        self.fields["categoria_config"].queryset = CategoriaProduto.objects.filter(ativo=True).order_by("ordem", "nome")
-        self.fields["fornecedor_config"].queryset = FornecedorGarantia.objects.filter(ativo=True).order_by("nome")
-        self.fields["marca"].queryset = MarcaGarantia.objects.filter(ativo=True).order_by("nome")
-        self.fields["servicos_compativeis"].queryset = ServicoReferencia.objects.filter(ativo=True).order_by("nome")
+        categorias = CategoriaProduto.objects.filter(ativo=True)
+        fornecedores = FornecedorGarantia.objects.filter(ativo=True)
+        marcas = MarcaGarantia.objects.filter(ativo=True)
+        pontos = PontoOperacional.objects.filter(ativo=True)
+        if self.empresa:
+            categorias = categorias.filter(Q(empresa=self.empresa) | Q(empresa__isnull=True))
+            fornecedores = fornecedores.filter(Q(empresa=self.empresa) | Q(empresa__isnull=True))
+            marcas = marcas.filter(Q(empresa=self.empresa) | Q(empresa__isnull=True))
+            pontos = pontos.filter(Q(empresa=self.empresa) | Q(empresa__isnull=True))
+        self.fields["categoria_config"].queryset = categorias.order_by("ordem", "nome")
+        self.fields["fornecedor_config"].queryset = fornecedores.order_by("nome")
+        self.fields["marca"].queryset = marcas.order_by("nome")
+        servicos = ServicoReferencia.objects.filter(ativo=True)
+        if self.empresa:
+            servicos = servicos.filter(Q(empresa=self.empresa) | Q(empresa__isnull=True))
+        self.fields["servicos_compativeis"].queryset = servicos.order_by("nome")
         self.fields["servicos_compativeis"].label = "Servicos compativeis"
         self.fields["servicos_compativeis"].help_text = "Relacione esta peca aos servicos em que ela costuma ser usada."
-        self.fields["ponto_operacional"].queryset = PontoOperacional.objects.filter(ativo=True).order_by("codigo", "nome")
+        self.fields["ponto_operacional"].queryset = pontos.order_by("codigo", "nome")
         self.fields["ponto_operacional"].label = "Ponto operacional"
         self.fields["ponto_operacional"].help_text = "Selecione onde este item fisico fica por padrao: loja, bancada, estoque central etc."
         self.fields["controla_lote"].label = "Controlar por lote"
@@ -284,7 +389,12 @@ class ProdutoForm(forms.ModelForm):
         self.fields["ubicacao_padrao"].required = False
         self.fields["ubicacao_padrao"].label = "Ubicacao padrao"
         self.fields["ubicacao_padrao"].help_text = "Campo tecnico interno. O sistema tenta vincular a ubicacao digitada neste ponto automaticamente."
-        self.fields["ubicacao_padrao"].queryset = UbicacaoEstoque.objects.filter(ativo=True).select_related("ponto_operacional").order_by("ponto_operacional__codigo", "codigo")
+        ubicacoes = UbicacaoEstoque.objects.filter(ativo=True).select_related("ponto_operacional")
+        if self.empresa:
+            ubicacoes = ubicacoes.filter(
+                Q(ponto_operacional__empresa=self.empresa) | Q(ponto_operacional__empresa__isnull=True)
+            )
+        self.fields["ubicacao_padrao"].queryset = ubicacoes.order_by("ponto_operacional__codigo", "codigo")
         self.fields["ubicacao_padrao"].label_from_instance = (
             lambda u: f"{u.ponto_operacional.codigo} - {u.codigo}" + (f" ({u.descricao})" if u.descricao else "")
         )
@@ -369,6 +479,8 @@ class ProdutoForm(forms.ModelForm):
             cleaned["fornecedor"] = fornecedor_manual
         else:
             cleaned["fornecedor"] = ""
+
+        cleaned["marca_manual"] = " ".join(str(cleaned.get("marca_manual") or "").strip().split())
 
         if categoria_cfg and (cleaned.get("margem_lucro") or 0) <= 0 and (categoria_cfg.margem_padrao or 0) > 0:
             cleaned["margem_lucro"] = categoria_cfg.margem_padrao
@@ -456,17 +568,44 @@ class ProdutoForm(forms.ModelForm):
                     incluir_override=incluir_rateio,
                 )
             )
-        margem_min = Decimal(str(cleaned.get("margem_minima") or 0))
         preco_final = Decimal(str(cleaned.get("preco_final") or 0))
         permitir_abaixo = bool(cleaned.get("permitir_preco_abaixo_minimo"))
 
         custo_oper_detalhado = custo_frete + custo_impostos + custo_comissao + custo_marketplace + custo_cac + custo_rateio_fixo
         custo_base = custo_unit + (custo_oper_detalhado if custo_oper_detalhado > 0 else custo_oper)
-        if margem_min > 0:
-            fator_min = Decimal("1") - (margem_min / Decimal("100"))
-            preco_minimo = custo_base if fator_min <= 0 else (custo_base / fator_min)
-        else:
-            preco_minimo = custo_base
+        produto_fiscal = Produto(
+            empresa=self.empresa,
+            tipo_item=tipo_item or "produto",
+            regra_tributaria=cleaned.get("regra_tributaria"),
+            ncm=cleaned.get("ncm") or "",
+            cest=cleaned.get("cest") or "",
+            origem_mercadoria=cleaned.get("origem_mercadoria") or "",
+            codigo_servico=cleaned.get("codigo_servico") or "",
+            cfop_padrao=cleaned.get("cfop_padrao") or "",
+            cst_csosn=cleaned.get("cst_csosn") or "",
+            codigo_beneficio_fiscal=cleaned.get("codigo_beneficio_fiscal") or "",
+        )
+        produto_fiscal.pk = getattr(self.instance, "pk", None)
+        aliquota = calcular_aliquota_efetiva(
+            empresa=self.empresa,
+            tipo_item=tipo_item,
+            usar_aliquota_manual=cleaned.get("usar_aliquota_manual"),
+            aliquota_manual=cleaned.get("aliquota_manual"),
+            icms=cleaned.get("icms"),
+            ipi=cleaned.get("ipi"),
+            pis=cleaned.get("pis"),
+            cofins=cleaned.get("cofins"),
+            pis_cofins=cleaned.get("pis_cofins"),
+            produto=produto_fiscal,
+        )
+        preco_minimo = calcular_precificacao(
+            custo_base=custo_base,
+            margem_alvo=cleaned.get("margem_lucro"),
+            margem_minima=cleaned.get("margem_minima"),
+            taxa_cartao=cleaned.get("taxa_cartao"),
+            aliquota=aliquota,
+            modo_preco=cleaned.get("modo_preco") or "simples",
+        )["preco_minimo"]
 
         preco_abaixo = preco_final > 0 and preco_final < preco_minimo
         justificativa = (cleaned.get("justificativa_preco_abaixo_minimo") or "").strip()
@@ -483,14 +622,31 @@ class ProdutoForm(forms.ModelForm):
         instance = super().save(commit=False)
         categoria_cfg = self.cleaned_data.get("categoria_config")
         categoria_manual = (self.cleaned_data.get("categoria") or "").strip()
+        marca_manual = " ".join(str(self.cleaned_data.get("marca_manual") or "").strip().split())
         ubicacao_padrao_texto = " ".join(str(self.cleaned_data.get("ubicacao_padrao_texto") or "").strip().split())
 
         if not categoria_cfg and categoria_manual:
-            categoria_cfg, _ = CategoriaProduto.obter_ou_criar_por_nome(categoria_manual)
+            categoria_cfg, _ = CategoriaProduto.obter_ou_criar_por_nome(
+                categoria_manual,
+                empresa=self.empresa,
+            )
 
         if categoria_cfg:
             instance.categoria_config = categoria_cfg
             instance.categoria = categoria_cfg.nome
+
+        if not instance.marca_id and marca_manual:
+            marca_qs = MarcaGarantia.objects.filter(nome__iexact=marca_manual)
+            if self.empresa:
+                marca_qs = marca_qs.filter(Q(empresa=self.empresa) | Q(empresa__isnull=True))
+            marca = marca_qs.first()
+            if marca:
+                if not marca.ativo:
+                    marca.ativo = True
+                    marca.save(update_fields=["ativo"])
+            else:
+                marca = MarcaGarantia.objects.create(nome=marca_manual, ativo=True, empresa=self.empresa)
+            instance.marca = marca
 
         if not instance.eh_servico:
             instance.localizacao = ubicacao_padrao_texto
@@ -534,7 +690,11 @@ class CategoriaProdutoForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
+        self.empresa = empresa or getattr(self.instance, "empresa", None)
+        if self.empresa and not self.instance.empresa_id:
+            self.instance.empresa = self.empresa
         self.fields["nome"].help_text = "Nome visivel no cadastro e na busca de produtos."
         self.fields["margem_padrao"].label = "Margem padrao (%)"
         self.fields["margem_padrao"].help_text = "Opcional. Preenche a margem do produto quando ela ainda estiver zerada."
@@ -567,6 +727,18 @@ class GerarSnapshotRateioForm(forms.Form):
 
 
 class MovimentacaoEstoqueForm(forms.ModelForm):
+    TIPOS_MANUAIS = {
+        "entrada",
+        "transferencia",
+        "avaria",
+        "perda",
+        "vencimento",
+        "uso_interno",
+        "ajuste",
+        "oferta",
+        "cedencia",
+        "inventario",
+    }
     origem_ubicacao = forms.ModelChoiceField(
         label="Ubicacao de origem",
         queryset=UbicacaoEstoque.objects.none(),
@@ -578,6 +750,42 @@ class MovimentacaoEstoqueForm(forms.ModelForm):
         queryset=UbicacaoEstoque.objects.none(),
         required=False,
         widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    finalidade = forms.ChoiceField(
+        label="Finalidade",
+        choices=[("", "Selecione")] + list(SolicitacaoSaidaEstoque.FINALIDADE_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    beneficiario_nome = forms.CharField(
+        label="Beneficiário / recebedor",
+        required=False,
+        max_length=160,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Pessoa, setor ou organização"}),
+    )
+    cliente = forms.ModelChoiceField(
+        label="Cliente relacionado",
+        queryset=Cliente.objects.none(),
+        required=False,
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    campanha = forms.CharField(
+        label="Campanha / ação",
+        required=False,
+        max_length=120,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Opcional"}),
+    )
+    centro_custo = forms.ModelChoiceField(
+        label="Centro de custo",
+        queryset=CentroCusto.objects.none(),
+        required=False,
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    documento_autorizacao = forms.CharField(
+        label="Documento de autorização",
+        required=False,
+        max_length=120,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "E-mail, chamado, termo ou referência"}),
     )
 
     class Meta:
@@ -612,9 +820,13 @@ class MovimentacaoEstoqueForm(forms.ModelForm):
             self.add_error("quantidade", "Entrada exige quantidade positiva.")
         if tipo == "devolucao_reserva" and (quantidade is None or int(quantidade) <= 0):
             self.add_error("quantidade", "Devolucao exige quantidade positiva.")
+        if tipo in {"avaria", "perda", "vencimento", "uso_interno", "oferta", "cedencia"} and (quantidade is None or int(quantidade) <= 0):
+            self.add_error("quantidade", "Saída de estoque exige quantidade positiva.")
         if tipo == "entrada" and not destino:
             self.add_error("destino", "Entrada de estoque exige ponto de destino.")
-        if tipo in {"transferencia", "venda", "consumo_os", "reserva"} and origem and not origem_ubicacao:
+        if tipo in {"avaria", "perda", "vencimento", "uso_interno", "oferta", "cedencia"} and not origem:
+            self.add_error("origem", "Informe o ponto de origem da saída.")
+        if tipo in {"transferencia", "venda", "consumo_os", "reserva", "avaria", "perda", "vencimento", "uso_interno", "oferta", "cedencia"} and origem and not origem_ubicacao:
             self.add_error("origem_ubicacao", "Informe a ubicacao de origem.")
         if tipo in {"transferencia", "entrada", "devolucao_reserva"} and destino and not destino_ubicacao_ref:
             self.add_error("destino_ubicacao_ref", "Informe a ubicacao de destino.")
@@ -639,8 +851,18 @@ class MovimentacaoEstoqueForm(forms.ModelForm):
         ):
             self.add_error("destino_ubicacao", "Informe a localizacao no ponto de destino para este retorno.")
         observacao = (cleaned.get("observacao") or "").strip()
-        if tipo in {"ajuste", "avaria", "inventario"} and not observacao:
+        if tipo in {"ajuste", "avaria", "perda", "vencimento", "uso_interno", "inventario", "oferta", "cedencia"} and not observacao:
             self.add_error("observacao", "Informe observacao para este tipo de movimentacao.")
+        if tipo in {"oferta", "cedencia"}:
+            if not cleaned.get("finalidade"):
+                self.add_error("finalidade", "Informe a finalidade da saída.")
+            if not (cleaned.get("beneficiario_nome") or "").strip():
+                self.add_error("beneficiario_nome", "Informe quem receberá o item.")
+            finalidade = cleaned.get("finalidade")
+            if tipo == "oferta" and finalidade in {"cedencia_temporaria", "cedencia_definitiva"}:
+                self.add_error("finalidade", "Essa finalidade exige o tipo cedência.")
+            if tipo == "cedencia" and finalidade in {"brinde_comercial", "cortesia_pos_venda", "doacao"}:
+                self.add_error("finalidade", "Essa finalidade exige o tipo oferta.")
         if destino and destino_ubicacao_ref and not destino_ubicacao:
             cleaned["destino_ubicacao"] = (
                 f"{destino_ubicacao_ref.codigo}"
@@ -649,12 +871,33 @@ class MovimentacaoEstoqueForm(forms.ModelForm):
         return cleaned
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        garantir_estrutura_estoque_padrao()
-        self.fields["produto"].queryset = Produto.objects.ativos().nao_servicos().order_by("nome")
-        self.fields["origem"].queryset = PontoOperacional.objects.filter(ativo=True).order_by("codigo", "nome")
-        self.fields["destino"].queryset = PontoOperacional.objects.filter(ativo=True).order_by("codigo", "nome")
+        garantir_estrutura_estoque_padrao(empresa=empresa)
+        produtos = Produto.objects.ativos().nao_servicos()
+        if empresa:
+            produtos = produtos.filter(empresa=empresa)
+        self.fields["produto"].queryset = produtos.order_by("nome")
+        self.fields["tipo"].choices = [
+            escolha for escolha in MovimentacaoEstoque.TIPO_CHOICES if escolha[0] in self.TIPOS_MANUAIS
+        ]
+        pontos = PontoOperacional.objects.filter(ativo=True)
+        centros = CentroCusto.objects.filter(ativo=True)
+        if empresa:
+            pontos = pontos.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+            centros = centros.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["origem"].queryset = pontos.order_by("codigo", "nome")
+        self.fields["destino"].queryset = pontos.order_by("codigo", "nome")
+        clientes = Cliente.objects.all()
+        if empresa:
+            clientes = clientes.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["cliente"].queryset = clientes.order_by("nome")
+        self.fields["centro_custo"].queryset = centros.order_by("nome")
         ubicacoes = UbicacaoEstoque.objects.filter(ativo=True).select_related("ponto_operacional").order_by("ponto_operacional__codigo", "codigo")
+        if empresa:
+            ubicacoes = ubicacoes.filter(
+                Q(ponto_operacional__empresa=empresa) | Q(ponto_operacional__empresa__isnull=True)
+            )
         self.fields["origem_ubicacao"].queryset = ubicacoes
         self.fields["destino_ubicacao_ref"].queryset = ubicacoes
         self.fields["origem_ubicacao"].label_from_instance = (
@@ -709,10 +952,17 @@ class EntradaMercadoriaForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        garantir_estrutura_estoque_padrao()
+        self.empresa = empresa
+        garantir_estrutura_estoque_padrao(empresa=empresa)
         self.fields["fornecedor_config"].required = False
-        self.fields["fornecedor_config"].queryset = FornecedorGarantia.objects.filter(ativo=True).order_by("nome")
+        fornecedores = FornecedorGarantia.objects.filter(ativo=True)
+        pontos = PontoOperacional.objects.filter(ativo=True)
+        if empresa:
+            fornecedores = fornecedores.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+            pontos = pontos.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["fornecedor_config"].queryset = fornecedores.order_by("nome")
         self.fields["fornecedor_config"].label = "Fornecedor (catalogo)"
         self.fields["fornecedor_manual"].label = "Fornecedor manual"
         self.fields["fornecedor_manual"].help_text = "Use apenas quando o fornecedor ainda nao estiver cadastrado."
@@ -731,8 +981,13 @@ class EntradaMercadoriaForm(forms.ModelForm):
         self.fields["outras_despesas_total"].help_text = "Despesas acessorias que entram no custo da entrada."
         self.fields["desconto_total"].help_text = "Abatimento global da compra para reduzir o custo final."
         self.fields["observacao"].help_text = "Use para observacoes de recebimento, conferencia ou divergencias."
-        self.fields["ponto_operacional"].queryset = PontoOperacional.objects.filter(ativo=True).order_by("codigo", "nome")
-        self.fields["ubicacao"].queryset = UbicacaoEstoque.objects.filter(ativo=True).select_related("ponto_operacional").order_by("ponto_operacional__codigo", "codigo")
+        self.fields["ponto_operacional"].queryset = pontos.order_by("codigo", "nome")
+        ubicacoes = UbicacaoEstoque.objects.filter(ativo=True).select_related("ponto_operacional")
+        if empresa:
+            ubicacoes = ubicacoes.filter(
+                Q(ponto_operacional__empresa=empresa) | Q(ponto_operacional__empresa__isnull=True)
+            )
+        self.fields["ubicacao"].queryset = ubicacoes.order_by("ponto_operacional__codigo", "codigo")
         self.fields["ubicacao"].label_from_instance = (
             lambda u: f"{u.ponto_operacional.codigo} - {u.codigo}" + (f" ({u.descricao})" if u.descricao else "")
         )
@@ -747,6 +1002,101 @@ class EntradaMercadoriaForm(forms.ModelForm):
             self.add_error("fornecedor_manual", "Informe um fornecedor do catalogo ou manual.")
         if ponto and ubicacao and ubicacao.ponto_operacional_id != ponto.id:
             self.add_error("ubicacao", "A ubicacao nao pertence ao ponto operacional informado.")
+        return cleaned
+
+
+class ImportarXMLCompraForm(forms.Form):
+    arquivo_xml = forms.FileField(
+        label="XML da NF-e ou lote ZIP",
+        help_text="Envie um XML ou um ZIP com atÃ© 50 XMLs de NF-e modelo 55.",
+        widget=forms.ClearableFileInput(attrs={"accept": ".xml,.zip"}),
+    )
+    ponto_operacional = forms.ModelChoiceField(queryset=PontoOperacional.objects.none(), label="Ponto de entrada")
+    ubicacao = forms.ModelChoiceField(queryset=UbicacaoEstoque.objects.none(), label="Ubicação de destino")
+    gerar_conta_pagar = forms.BooleanField(required=False, label="Gerar conta a pagar ao receber")
+    vencimento_conta_pagar = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        self.fields["ponto_operacional"].queryset = PontoOperacional.objects.filter(empresa=empresa, ativo=True)
+        self.fields["ubicacao"].queryset = UbicacaoEstoque.objects.filter(ponto_operacional__empresa=empresa, ativo=True).select_related("ponto_operacional")
+
+    def clean(self):
+        cleaned = super().clean()
+        ponto, ubicacao = cleaned.get("ponto_operacional"), cleaned.get("ubicacao")
+        if ponto and ubicacao and ubicacao.ponto_operacional_id != ponto.id:
+            self.add_error("ubicacao", "A ubicação não pertence ao ponto selecionado.")
+        if cleaned.get("gerar_conta_pagar"):
+            self.fields["vencimento_conta_pagar"].help_text = "Usado somente quando o XML não trouxer duplicatas/vencimentos."
+        return cleaned
+
+
+class ImportarDocumentoConferenciaForm(forms.Form):
+    tipo = forms.ChoiceField(
+        choices=[("cte", "CT-e (XML)"), ("nfse", "NFS-e/RPS (XML)"), ("sped", "SPED/EFD (TXT)")],
+        label="Tipo de documento",
+    )
+    arquivo = forms.FileField(
+        label="Arquivo estruturado",
+        widget=forms.ClearableFileInput(attrs={"accept": ".xml,.txt"}),
+    )
+    observacao = forms.CharField(required=False, max_length=240, widget=forms.Textarea(attrs={"rows": 2}))
+
+
+class ResolverItemXMLForm(forms.Form):
+    produto = forms.ModelChoiceField(queryset=Produto.objects.none(), required=False)
+    criar_produto = forms.BooleanField(required=False, label="Cadastrar este item como produto novo")
+    nome_produto = forms.CharField(max_length=100, required=False, label="Nome proposto")
+    tipo_item = forms.ChoiceField(
+        choices=[opcao for opcao in Produto.TIPO_ITEM_CHOICES if opcao[0] != "servico"],
+        required=False,
+        label="Natureza",
+    )
+    categoria = forms.ModelChoiceField(queryset=CategoriaProduto.objects.none(), required=False)
+    marca = forms.ModelChoiceField(queryset=MarcaGarantia.objects.none(), required=False)
+    ncm = forms.CharField(max_length=8, required=False, label="NCM")
+    margem_lucro = forms.DecimalField(min_value=0, max_value=99.99, max_digits=5, decimal_places=2, initial=0, required=False, label="Margem alvo (%)")
+    margem_minima = forms.DecimalField(min_value=0, max_value=99.99, max_digits=5, decimal_places=2, initial=0, required=False, label="Margem mínima (%)")
+    preco_final = forms.DecimalField(min_value=0, max_digits=10, decimal_places=2, initial=0, required=False, label="Preço final")
+    impostos_custo_total = forms.DecimalField(min_value=0, max_digits=14, decimal_places=2, initial=0, label="Tributos que compõem o custo")
+    tributos_recuperaveis_total = forms.DecimalField(min_value=0, max_digits=14, decimal_places=2, initial=0, label="Tributos recuperáveis")
+    confirmar_revisao = forms.BooleanField(label="Revisei o tratamento tributário deste item")
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        item = kwargs.pop("item")
+        super().__init__(*args, **kwargs)
+        self.fields["produto"].queryset = Produto.objects.filter(empresa=empresa, ativo=True, is_servico=False).order_by("nome")
+        self.fields["categoria"].queryset = CategoriaProduto.objects.filter(empresa=empresa, ativo=True).order_by("ordem", "nome")
+        self.fields["marca"].queryset = MarcaGarantia.objects.filter(empresa=empresa, ativo=True).order_by("nome")
+        self.fields["categoria"].widget.attrs["class"] = "form-control js-categoria-xml"
+        self.fields["marca"].widget.attrs["class"] = "form-control js-marca-xml"
+        self.fields["categoria"].widget.choices = [*self.fields["categoria"].choices, ("__nova__", "Outros / criar categoria")]
+        self.fields["marca"].widget.choices = [*self.fields["marca"].choices, ("__nova__", "Outros / criar marca")]
+        self.fields["produto"].initial = item.produto_id
+        self.fields["nome_produto"].initial = item.nome_proposto or item.descricao[:100]
+        self.fields["tipo_item"].initial = item.tipo_item_proposto or "produto"
+        self.fields["categoria"].initial = item.categoria_proposta_id
+        self.fields["marca"].initial = item.marca_proposta_id
+        self.fields["ncm"].initial = item.ncm_proposto or item.ncm
+        self.fields["margem_lucro"].initial = item.margem_lucro_proposta
+        self.fields["margem_minima"].initial = item.margem_minima_proposta
+        self.fields["preco_final"].initial = item.preco_final_proposto
+        self.fields["impostos_custo_total"].initial = item.impostos_custo_total
+        self.fields["tributos_recuperaveis_total"].initial = item.tributos_recuperaveis_total
+
+    def clean(self):
+        cleaned = super().clean()
+        if bool(cleaned.get("produto")) == bool(cleaned.get("criar_produto")):
+            raise forms.ValidationError("Selecione um produto existente ou marque o cadastro de produto novo.")
+        if cleaned.get("criar_produto"):
+            if not cleaned.get("nome_produto"):
+                self.add_error("nome_produto", "Informe o nome do produto.")
+            if not cleaned.get("categoria"):
+                self.add_error("categoria", "Selecione ou crie uma categoria.")
+            if not cleaned.get("ncm"):
+                self.add_error("ncm", "Informe o NCM antes da aprovação.")
         return cleaned
 
 
@@ -783,8 +1133,12 @@ class ItemEntradaMercadoriaForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        self.fields["produto"].queryset = Produto.objects.ativos().nao_servicos().order_by("nome")
+        produtos = Produto.objects.ativos().nao_servicos()
+        if empresa:
+            produtos = produtos.filter(empresa=empresa)
+        self.fields["produto"].queryset = produtos.order_by("nome")
         self.fields["produto"].label_from_instance = lambda p: f"{p.nome} | SKU {p.sku or '-'} | EAN {p.ean or '-'}"
         self.fields["custo_unitario"].label = "Custo compra (R$)"
         self.fields["impostos_entrada_unitario"].label = "Impostos que compoem custo (R$)"
@@ -867,6 +1221,12 @@ class PontoOperacionalForm(forms.ModelForm):
         model = PontoOperacional
         fields = ["codigo", "nome", "ativo"]
 
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
+        super().__init__(*args, **kwargs)
+        if empresa and not self.instance.empresa_id:
+            self.instance.empresa = empresa
+
 
 class UbicacaoEstoqueForm(forms.ModelForm):
     class Meta:
@@ -899,6 +1259,22 @@ class ProdutoPrecoTabelaForm(forms.ModelForm):
             "tabela": forms.Select(attrs={"class": "form-control"}),
             "preco": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": 0}),
         }
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
+        super().__init__(*args, **kwargs)
+        pontos = PontoOperacional.objects.filter(ativo=True)
+        if empresa:
+            pontos = pontos.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["ponto_operacional"].queryset = pontos.order_by("codigo", "nome")
+
+    def __init__(self, *args, **kwargs):
+        produto = kwargs.pop("produto", None)
+        super().__init__(*args, **kwargs)
+        tabelas = TabelaPreco.objects.filter(ativo=True).order_by("nome")
+        if produto and produto.empresa_id:
+            tabelas = tabelas.filter(Q(empresa=produto.empresa) | Q(empresa__isnull=True))
+        self.fields["tabela"].queryset = tabelas
 
 
 class ProdutoEquivalenteForm(forms.ModelForm):
@@ -933,7 +1309,7 @@ class ProdutoKitItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         queryset = Produto.objects.ativos().nao_servicos().order_by("nome")
         if produto:
-            queryset = queryset.exclude(id=produto.id)
+            queryset = queryset.filter(empresa_id=produto.empresa_id).exclude(id=produto.id)
         self.fields["componente"].queryset = queryset
 
 
@@ -962,9 +1338,13 @@ class ProdutoFornecedorForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
         self.fields["fornecedor_config"].required = False
-        self.fields["fornecedor_config"].queryset = FornecedorGarantia.objects.filter(ativo=True).order_by("nome")
+        fornecedores = FornecedorGarantia.objects.filter(ativo=True)
+        if empresa:
+            fornecedores = fornecedores.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["fornecedor_config"].queryset = fornecedores.order_by("nome")
         self.fields["fornecedor_config"].label = "Fornecedor (catalogo)"
         self.fields["fornecedor_manual"].label = "Fornecedor manual"
         self.fields["codigo_fornecedor"].label = "Codigo no fornecedor"

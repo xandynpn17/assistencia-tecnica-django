@@ -137,7 +137,7 @@ def atualizar_rastreabilidade_movimento(
                 serie.save(update_fields=["ponto_operacional", "ubicacao", "atualizado_em"])
         return
 
-    baixa = tipo in {"venda", "consumo_os", "reserva"} or (
+    baixa = tipo in {"venda", "consumo_os", "reserva", "oferta", "cedencia"} or (
         tipo in {"ajuste", "avaria", "inventario"} and int(quantidade or 0) < 0
     )
     if baixa:

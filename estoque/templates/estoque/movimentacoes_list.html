@@ -8,6 +8,8 @@
   </div>
   <div class="ui-module-actions">
     <a href="{% url 'estoque:registrar_movimentacao' %}" class="btn btn-success btn-sm">Nova movimentacao</a>
+    <a href="{% url 'estoque:solicitacoes_saida' %}" class="btn btn-outline-warning btn-sm">Ofertas e cedências</a>
+    <a href="{% url 'estoque:transferencia_interempresa' %}" class="btn btn-outline-primary btn-sm">Entre empresas/CNPJs</a>
     <a href="?q={{ q|urlencode }}&tipo={{ tipo_filtro }}&ponto={{ ponto_filtro }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&quick={{ quick }}&export=csv" class="btn btn-outline-secondary btn-sm">Exportar CSV</a>
   </div>
 </div>
@@ -153,6 +155,7 @@
           <th>Produto</th>
           <th>Tipo</th>
           <th>Qtd</th>
+          <th>Custo total</th>
           <th>Origem fisica</th>
           <th>Destino fisico</th>
           <th>Observacao</th>
@@ -169,6 +172,7 @@
         </td>
         <td><span class="tipo-badge">{{ m.get_tipo_display }}</span></td>
         <td>{{ m.quantidade }}</td>
+        <td>R$ {{ m.valor_total_custo|floatformat:2 }}</td>
         <td>
           <div class="rota-bloco">
             {% if m.origem %}
@@ -203,12 +207,15 @@
             </small>
           </div>
         </td>
-        <td>{{ m.observacao|default:"-" }}</td>
+        <td>
+          <div>{{ m.observacao|default:"-" }}</div>
+          {% if m.origem_referencia %}<small class="text-muted">{{ m.origem_tipo }}: {{ m.origem_referencia }}</small>{% endif %}
+        </td>
         <td>{{ m.usuario|default:"-" }}</td>
       </tr>
       {% empty %}
       <tr>
-        <td colspan="8" class="text-center text-muted py-4">Sem movimentacoes para os filtros informados.</td>
+        <td colspan="9" class="text-center text-muted py-4">Sem movimentacoes para os filtros informados.</td>
       </tr>
       {% endfor %}
       </tbody>

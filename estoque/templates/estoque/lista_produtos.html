@@ -263,7 +263,7 @@
                         <a href="{% url 'estoque:estrutura_produto' produto.id %}" class="btn btn-sm btn-outline-dark">Estrutura</a>
                         <a href="{% url 'estoque:duplicar_produto' produto.id %}" class="btn btn-sm btn-outline-primary" title="Duplicar"><i class="fas fa-copy"></i></a>
                         <a href="{% url 'estoque:editar_produto' produto.id %}" class="btn btn-sm btn-primary" title="Editar"><i class="fas fa-edit"></i></a>
-                        <a href="{% url 'estoque:excluir_produto' produto.id %}" class="btn btn-sm btn-danger" title="Excluir"><i class="fas fa-trash"></i></a>
+                        <a href="{% url 'estoque:excluir_produto' produto.id %}" class="btn btn-sm btn-warning" title="Inativar"><i class="fas fa-ban"></i></a>
                     </td>
                 </tr>
                 {% empty %}

@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from configuracoes.permissions import STOCK_MANAGE_ROLES, STOCK_VIEW_ROLES, require_sensitive_permission, role_required
-from configuracoes.services.tenant_guard import obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, obter_empresa_ativa
 
 from ..models import CategoriaProduto, InventarioEstoque, ItemInventarioEstoque, PontoOperacional, UbicacaoEstoque
 from ..services_inventario_operacional import (
@@ -30,7 +30,7 @@ def _inventarios_empresa_queryset(empresa):
 def inventarios_estoque(request):
     empresa = obter_empresa_ativa(request, strict=False)
     if request.method == "POST":
-        ponto = get_object_or_404(PontoOperacional.objects.filter(ativo=True), id=request.POST.get("ponto_id"))
+        ponto = get_object_or_404(filtrar_catalogo_empresa(PontoOperacional.objects.filter(ativo=True), empresa), id=request.POST.get("ponto_id"))
         ubicacao = None
         categoria = None
         ubicacao_id = (request.POST.get("ubicacao_id") or "").strip()
@@ -38,7 +38,7 @@ def inventarios_estoque(request):
         if ubicacao_id:
             ubicacao = get_object_or_404(UbicacaoEstoque.objects.filter(ativo=True), id=ubicacao_id, ponto_operacional=ponto)
         if categoria_id:
-            categoria = get_object_or_404(CategoriaProduto.objects.filter(ativo=True), id=categoria_id)
+            categoria = get_object_or_404(filtrar_catalogo_empresa(CategoriaProduto.objects.filter(ativo=True), empresa), id=categoria_id)
         inventario = gerar_inventario_operacional(
             empresa=empresa,
             usuario=request.user,
@@ -73,9 +73,9 @@ def inventarios_estoque(request):
         "status_filtro": status,
         "ponto_filtro": ponto_filtro,
         "categoria_filtro": categoria_filtro,
-        "pontos": PontoOperacional.objects.filter(ativo=True).order_by("codigo"),
-        "ubicacoes": UbicacaoEstoque.objects.filter(ativo=True).select_related("ponto_operacional").order_by("ponto_operacional__codigo", "codigo"),
-        "categorias": CategoriaProduto.objects.filter(ativo=True).order_by("ordem", "nome"),
+        "pontos": filtrar_catalogo_empresa(PontoOperacional.objects.filter(ativo=True), empresa).order_by("codigo"),
+        "ubicacoes": filtrar_catalogo_empresa(UbicacaoEstoque.objects.filter(ativo=True).select_related("ponto_operacional"), empresa, campo="ponto_operacional__empresa").order_by("ponto_operacional__codigo", "codigo"),
+        "categorias": filtrar_catalogo_empresa(CategoriaProduto.objects.filter(ativo=True), empresa).order_by("ordem", "nome"),
         "resumo": {
             "abertos": inventarios.filter(status__in=["aberto", "em_conferencia"]).count(),
             "fechados": inventarios.filter(status="fechado").count(),

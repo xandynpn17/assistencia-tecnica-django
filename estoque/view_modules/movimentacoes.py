@@ -18,17 +18,19 @@ from configuracoes.permissions import (
     STOCK_MANAGE_ROLES,
     STOCK_VIEW_ROLES,
     has_role,
+    is_management_user,
     require_sensitive_permission,
     role_required,
 )
-from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, filtrar_queryset_empresa, obter_empresa_ativa
 from ordens.models import ServicoPeca
 
-from ..forms import ConfiguracaoRateioCustoFixoForm, GerarSnapshotRateioForm, MovimentacaoEstoqueForm, PontoOperacionalForm, UbicacaoEstoqueForm
+from ..forms import ConfiguracaoRateioCustoFixoForm, GerarSnapshotRateioForm, MovimentacaoEstoqueForm, PontoOperacionalForm, TransferenciaEstoqueInterempresaForm, UbicacaoEstoqueForm
 from ..models import (
     ConfiguracaoRateioCustoFixo,
     EntradaMercadoria,
     EstoqueEvento,
+    ExecucaoAuditoriaEstoque,
     ItemEntradaMercadoria,
     ItemInventarioEstoque,
     MovimentacaoEstoque,
@@ -39,19 +41,31 @@ from ..models import (
     ReservaEstoque,
     SaldoEstoquePonto,
     SaldoEstoqueUbicacao,
+    SolicitacaoSaidaEstoque,
+    TransferenciaEstoqueInterempresa,
     UbicacaoEstoque,
     VendaRapidaEstoque,
 )
-from ..services import obter_ubicacao_preferencial, registrar_movimentacao_estoque
+from ..services import (
+    criar_solicitacao_saida_estoque,
+    diagnosticar_inconsistencias_estoque,
+    devolver_cedencia_estoque,
+    executar_solicitacao_saida_estoque,
+    executar_transferencia_interempresa,
+    obter_ubicacao_preferencial,
+    registrar_movimentacao_estoque,
+    rejeitar_solicitacao_saida_estoque,
+)
 from .helpers import _registrar_evento_estoque, _resumo_rateio_atual, saldo_disponivel
 
 
-def _pontos_reposicao_por_config():
+def _pontos_reposicao_por_config(empresa):
     config = ConfiguracaoSistema.get_configuracao()
     codigo_origem = (getattr(config, "estoque_reposicao_origem_codigo", "PO2") or "PO2").strip().upper()
     codigo_destino = (getattr(config, "estoque_reposicao_destino_codigo", "PO3") or "PO3").strip().upper()
-    ponto_origem = PontoOperacional.objects.filter(codigo__iexact=codigo_origem, ativo=True).first()
-    ponto_destino = PontoOperacional.objects.filter(codigo__iexact=codigo_destino, ativo=True).first()
+    pontos = filtrar_catalogo_empresa(PontoOperacional.objects.filter(ativo=True), empresa)
+    ponto_origem = pontos.filter(codigo__iexact=codigo_origem).first()
+    ponto_destino = pontos.filter(codigo__iexact=codigo_destino).first()
     return config, ponto_origem, ponto_destino, codigo_origem, codigo_destino
 
 
@@ -71,32 +85,284 @@ def _fornecedores_preferenciais_por_produto(produtos):
 
 @role_required(STOCK_MANAGE_ROLES)
 def registrar_movimentacao(request):
-    require_sensitive_permission(request.user, "perm_estoque_ajuste_manual")
+    empresa = obter_empresa_ativa(request, strict=True)
     if request.method == "POST":
-        form = MovimentacaoEstoqueForm(request.POST)
+        form = MovimentacaoEstoqueForm(request.POST, empresa=empresa)
         if form.is_valid():
+            permissao_por_tipo = {
+                "transferencia": "perm_estoque_transferencia",
+                "avaria": "perm_estoque_avaria",
+                "perda": "perm_estoque_avaria",
+                "vencimento": "perm_estoque_avaria",
+                "uso_interno": "perm_estoque_ajuste_manual",
+                "oferta": "perm_estoque_oferta",
+                "cedencia": "perm_estoque_cedencia",
+                "inventario": "perm_estoque_inventario_finalizar",
+            }
+            require_sensitive_permission(
+                request.user,
+                permissao_por_tipo.get(form.cleaned_data["tipo"], "perm_estoque_ajuste_manual"),
+            )
             try:
-                registrar_movimentacao_estoque(
-                    produto=form.cleaned_data["produto"],
-                    tipo=form.cleaned_data["tipo"],
-                    quantidade=form.cleaned_data["quantidade"],
-                    origem=form.cleaned_data.get("origem"),
-                    destino=form.cleaned_data.get("destino"),
-                    origem_ubicacao=form.cleaned_data.get("origem_ubicacao"),
-                    destino_ubicacao_ref=form.cleaned_data.get("destino_ubicacao_ref"),
-                    destino_ubicacao=form.cleaned_data.get("destino_ubicacao", ""),
-                    valor_unitario_custo=form.cleaned_data.get("valor_unitario_custo"),
-                    observacao=form.cleaned_data.get("observacao", ""),
-                    usuario=request.user,
-                )
+                if form.cleaned_data["tipo"] in {"oferta", "cedencia"}:
+                    solicitacao = criar_solicitacao_saida_estoque(
+                        produto=form.cleaned_data["produto"],
+                        tipo=form.cleaned_data["tipo"],
+                        quantidade=form.cleaned_data["quantidade"],
+                        origem=form.cleaned_data.get("origem"),
+                        origem_ubicacao=form.cleaned_data.get("origem_ubicacao"),
+                        finalidade=form.cleaned_data.get("finalidade"),
+                        beneficiario_nome=form.cleaned_data.get("beneficiario_nome"),
+                        cliente=form.cleaned_data.get("cliente"),
+                        campanha=form.cleaned_data.get("campanha", ""),
+                        centro_custo=form.cleaned_data.get("centro_custo"),
+                        documento_autorizacao=form.cleaned_data.get("documento_autorizacao", ""),
+                        observacao=form.cleaned_data.get("observacao", ""),
+                        usuario=request.user,
+                        aprovar_automaticamente=is_management_user(request.user),
+                    )
+                else:
+                    solicitacao = None
+                    registrar_movimentacao_estoque(
+                        produto=form.cleaned_data["produto"],
+                        tipo=form.cleaned_data["tipo"],
+                        quantidade=form.cleaned_data["quantidade"],
+                        origem=form.cleaned_data.get("origem"),
+                        destino=form.cleaned_data.get("destino"),
+                        origem_ubicacao=form.cleaned_data.get("origem_ubicacao"),
+                        destino_ubicacao_ref=form.cleaned_data.get("destino_ubicacao_ref"),
+                        destino_ubicacao=form.cleaned_data.get("destino_ubicacao", ""),
+                        valor_unitario_custo=form.cleaned_data.get("valor_unitario_custo"),
+                        observacao=form.cleaned_data.get("observacao", ""),
+                        usuario=request.user,
+                        origem_tipo="manual",
+                        origem_referencia="tela_movimentacao",
+                    )
             except ValueError as exc:
                 messages.error(request, str(exc))
                 return redirect("estoque:registrar_movimentacao")
-            messages.success(request, "Movimentacao registrada com sucesso.")
+            if solicitacao and solicitacao.status == "pendente":
+                messages.warning(
+                    request,
+                    f"Solicitação #{solicitacao.id} criada e enviada para aprovação gerencial. O estoque ainda não foi baixado.",
+                )
+            else:
+                messages.success(request, "Movimentacao registrada com sucesso.")
             return redirect("estoque:movimentacoes")
     else:
-        form = MovimentacaoEstoqueForm()
+        form = MovimentacaoEstoqueForm(empresa=empresa)
     return render(request, "estoque/movimentacao_form.html", {"form": form, "menu_app": "estoque", "menu_sub": "movimentacoes"})
+
+
+@role_required(STOCK_MANAGE_ROLES)
+def transferencia_estoque_interempresa(request):
+    require_sensitive_permission(request.user, "perm_estoque_transferencia")
+    empresa = obter_empresa_ativa(request, strict=True)
+    form = TransferenciaEstoqueInterempresaForm(request.POST or None, empresa_origem=empresa, usuario=request.user)
+    if request.method == "POST" and form.is_valid():
+        dados = form.cleaned_data
+        try:
+            executar_transferencia_interempresa(
+                empresa_origem=empresa, empresa_destino=dados["empresa_destino"],
+                produto_origem=dados["produto_origem"], produto_destino=dados["produto_destino"],
+                origem=dados["origem"], origem_ubicacao=dados["origem_ubicacao"],
+                destino=dados["destino"], destino_ubicacao=dados["destino_ubicacao"],
+                quantidade=dados["quantidade"], documento_fiscal=dados["documento_fiscal"],
+                natureza_operacao=dados["natureza_operacao"], data_operacao=dados["data_operacao"],
+                observacao=dados.get("observacao", ""), usuario=request.user,
+                chave=f"interempresa:{empresa.pk}:{timezone.now().timestamp()}",
+            )
+            messages.success(request, "Transferência entre empresas executada com rastreio fiscal e movimentos separados.")
+            return redirect("estoque:transferencia_interempresa")
+        except ValueError as exc:
+            form.add_error(None, exc)
+    historico = TransferenciaEstoqueInterempresa.objects.filter(
+        Q(empresa_origem=empresa) | Q(empresa_destino=empresa)
+    ).select_related("empresa_origem", "empresa_destino", "produto_origem", "produto_destino", "executado_por")[:100]
+    return render(request, "estoque/transferencia_interempresa.html", {
+        "form": form, "historico": historico, "empresa_origem": empresa,
+        "menu_app": "estoque", "menu_sub": "movimentacoes",
+    })
+
+
+@role_required(STOCK_VIEW_ROLES)
+def solicitacoes_saida_estoque(request):
+    empresa = obter_empresa_ativa(request, strict=True)
+    solicitacoes = (
+        SolicitacaoSaidaEstoque.objects.select_related(
+            "produto", "origem", "origem_ubicacao", "solicitado_por", "aprovado_por", "cliente", "centro_custo", "movimento"
+        )
+        .filter(empresa=empresa)
+        .order_by("-criado_em", "-id")
+    )
+    status = (request.GET.get("status") or "").strip()
+    tipo = (request.GET.get("tipo") or "").strip()
+    if status:
+        solicitacoes = solicitacoes.filter(status=status)
+    if tipo:
+        solicitacoes = solicitacoes.filter(tipo=tipo)
+    return render(
+        request,
+        "estoque/solicitacoes_saida_list.html",
+        {
+            "solicitacoes": solicitacoes[:300],
+            "status_filtro": status,
+            "tipo_filtro": tipo,
+            "pode_aprovar": is_management_user(request.user),
+            "menu_app": "estoque",
+            "menu_sub": "movimentacoes",
+        },
+    )
+
+
+@role_required(STOCK_VIEW_ROLES)
+def comprovante_solicitacao_saida_estoque(request, solicitacao_id):
+    from xml.sax.saxutils import escape
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    from core.pdf_utils import get_pdf_fonts
+
+    empresa = obter_empresa_ativa(request, strict=True)
+    solicitacao = get_object_or_404(
+        SolicitacaoSaidaEstoque.objects.select_related(
+            "produto", "origem", "origem_ubicacao", "solicitado_por", "aprovado_por",
+            "rejeitado_por", "devolvido_por", "cliente", "centro_custo", "movimento",
+        ),
+        pk=solicitacao_id,
+        empresa=empresa,
+    )
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="comprovante-saida-{solicitacao.id}.pdf"'
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=A4,
+        leftMargin=1.55 * cm,
+        rightMargin=1.55 * cm,
+        topMargin=1.35 * cm,
+        bottomMargin=1.35 * cm,
+        title=f"Comprovante de {solicitacao.get_tipo_display()} #{solicitacao.id}",
+        author=empresa.nome,
+        creator="Assistencia PDF Engine",
+        pageCompression=1,
+    )
+    fonts = get_pdf_fonts()
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("SaidaTitle", parent=styles["Title"], fontName=fonts["bold"], fontSize=17, leading=21, textColor=colors.HexColor("#102a43"))
+    subtitle = ParagraphStyle("SaidaSubtitle", parent=styles["BodyText"], fontName=fonts["regular"], fontSize=8.7, leading=11, textColor=colors.HexColor("#52606d"))
+    label = ParagraphStyle("SaidaLabel", parent=subtitle, fontName=fonts["bold"], textColor=colors.HexColor("#334e68"))
+    value = ParagraphStyle("SaidaValue", parent=styles["BodyText"], fontName=fonts["regular"], fontSize=9.2, leading=12, textColor=colors.HexColor("#102a43"))
+    section = ParagraphStyle("SaidaSection", parent=label, fontSize=10.2, leading=13, textColor=colors.white)
+
+    def p(valor, estilo=value):
+        texto = escape(str(valor if valor not in (None, "") else "-"))
+        return Paragraph(texto.replace("\n", "<br/>"), estilo)
+
+    def bloco(titulo, linhas):
+        cabecalho = Table([[p(titulo, section)]], colWidths=[17.9 * cm])
+        cabecalho.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1f5f8b")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        dados = []
+        for esquerda, direita in linhas:
+            dados.append([p(esquerda, label), p(direita)])
+        tabela = Table(dados, colWidths=[4.4 * cm, 13.5 * cm], repeatRows=0)
+        tabela.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f4f8")),
+            ("GRID", (0, 0), (-1, -1), 0.45, colors.HexColor("#bcccdc")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 7), ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        return KeepTogether([cabecalho, tabela, Spacer(1, 0.32 * cm)])
+
+    tipo_titulo = "OFERTA / BRINDE" if solicitacao.tipo == "oferta" else "CEDENCIA DE ESTOQUE"
+    empresa_meta = " | ".join(item for item in [empresa.razao_social or empresa.nome, f"CNPJ {empresa.cnpj}" if empresa.cnpj else "", empresa.telefone, empresa.email] if item)
+    story = [
+        p(empresa.nome_fantasia or empresa.nome, title),
+        p(empresa_meta, subtitle),
+        Spacer(1, 0.35 * cm),
+        p(f"COMPROVANTE DE {tipo_titulo} - Nº {solicitacao.id}", title),
+        p(f"Emitido em {timezone.localtime():%d/%m/%Y as %H:%M} | Status: {solicitacao.get_status_display()}", subtitle),
+        Spacer(1, 0.45 * cm),
+        bloco("IDENTIFICACAO E JUSTIFICATIVA", [
+            ("Tipo / finalidade", f"{solicitacao.get_tipo_display()} - {solicitacao.get_finalidade_display()}"),
+            ("Beneficiario", solicitacao.beneficiario_nome),
+            ("Cliente vinculado", solicitacao.cliente or "Nao informado"),
+            ("Campanha", solicitacao.campanha or "Nao informada"),
+            ("Centro de custo", solicitacao.centro_custo_nome or solicitacao.centro_custo or "Nao informado"),
+            ("Justificativa", solicitacao.observacao),
+            ("Documento autorizador", solicitacao.documento_autorizacao or "Nao informado"),
+        ]),
+        bloco("PRODUTO E VALOR CONTABIL", [
+            ("Produto", f"{solicitacao.produto.nome} | SKU {solicitacao.produto.sku or '-'}"),
+            ("Quantidade", solicitacao.quantidade),
+            ("Origem", f"{solicitacao.origem.codigo} - {solicitacao.origem.nome} / {solicitacao.origem_ubicacao.codigo}"),
+            ("Custo unitario", f"R$ {solicitacao.valor_unitario_custo:.2f}"),
+            ("Custo total baixado", f"R$ {solicitacao.valor_total_custo:.2f}"),
+            ("Movimento de estoque", f"#{solicitacao.movimento_id}" if solicitacao.movimento_id else "Ainda nao executado"),
+        ]),
+        bloco("RESPONSABILIDADE E APROVACAO", [
+            ("Solicitado por", f"{solicitacao.solicitado_por} em {timezone.localtime(solicitacao.criado_em):%d/%m/%Y %H:%M}"),
+            ("Aprovado por", f"{solicitacao.aprovado_por} em {timezone.localtime(solicitacao.aprovado_em):%d/%m/%Y %H:%M}" if solicitacao.aprovado_por and solicitacao.aprovado_em else "Nao aprovado"),
+            ("Rejeicao", solicitacao.motivo_rejeicao or "Nao aplicavel"),
+            ("Retorno da cedencia", f"{solicitacao.devolvido_por} em {timezone.localtime(solicitacao.devolvido_em):%d/%m/%Y %H:%M} - {solicitacao.observacao_devolucao}" if solicitacao.devolvido_por and solicitacao.devolvido_em else "Nao registrado"),
+        ]),
+        Spacer(1, 0.55 * cm),
+        p("Declaro o recebimento do item acima para a finalidade informada.", value),
+        Spacer(1, 1.25 * cm),
+        Table(
+            [[p("________________________________________", value), p("________________________________________", value)],
+             [p("Responsavel / aprovador", subtitle), p("Beneficiario / recebedor", subtitle)]],
+            colWidths=[8.7 * cm, 8.7 * cm],
+            style=TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "TOP")]),
+        ),
+        Spacer(1, 0.7 * cm),
+        p("Este documento registra a baixa pelo custo de aquisicao/operacional. Nao representa venda nem recebimento em caixa.", subtitle),
+    ]
+    doc.build(story)
+    return response
+
+
+@role_required(STOCK_MANAGE_ROLES)
+def decidir_solicitacao_saida_estoque(request, solicitacao_id):
+    if request.method != "POST":
+        return redirect("estoque:solicitacoes_saida")
+    if not is_management_user(request.user):
+        messages.error(request, "Somente gerente ou administrador pode decidir esta solicitação.")
+        return redirect("estoque:solicitacoes_saida")
+    empresa = obter_empresa_ativa(request, strict=True)
+    solicitacao = get_object_or_404(SolicitacaoSaidaEstoque, pk=solicitacao_id, empresa=empresa)
+    acao = (request.POST.get("acao") or "").strip()
+    try:
+        if acao == "aprovar":
+            executar_solicitacao_saida_estoque(solicitacao, aprovador=request.user)
+            messages.success(request, f"Solicitação #{solicitacao.id} aprovada e estoque baixado.")
+        elif acao == "rejeitar":
+            rejeitar_solicitacao_saida_estoque(
+                solicitacao,
+                usuario=request.user,
+                motivo=request.POST.get("motivo_rejeicao", ""),
+            )
+            messages.success(request, f"Solicitação #{solicitacao.id} rejeitada sem alterar o estoque.")
+        elif acao == "devolver":
+            devolver_cedencia_estoque(
+                solicitacao,
+                usuario=request.user,
+                observacao=request.POST.get("observacao_devolucao", ""),
+            )
+            messages.success(request, f"Cedência #{solicitacao.id} devolvida e saldo recomposto.")
+        else:
+            messages.error(request, "Ação inválida.")
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    return redirect("estoque:solicitacoes_saida")
 
 
 @role_required(STOCK_VIEW_ROLES)
@@ -133,7 +399,7 @@ def listar_movimentacoes(request):
     elif quick == "avarias":
         tipo = "avaria"
     elif quick == "saidas":
-        movimentacoes = movimentacoes.filter(tipo__in=["venda", "consumo_os", "avaria"])
+        movimentacoes = movimentacoes.filter(tipo__in=["venda", "consumo_os", "avaria", "oferta", "cedencia"])
 
     if tipo:
         movimentacoes = movimentacoes.filter(tipo=tipo)
@@ -158,7 +424,7 @@ def listar_movimentacoes(request):
         "total": resumo_qs.count(),
         "entradas": resumo_qs.filter(tipo="entrada").count(),
         "transferencias": resumo_qs.filter(tipo="transferencia").count(),
-        "saidas": resumo_qs.filter(tipo__in=["venda", "consumo_os", "avaria"]).count(),
+        "saidas": resumo_qs.filter(tipo__in=["venda", "consumo_os", "avaria", "oferta", "cedencia"]).count(),
         "ajustes": resumo_qs.filter(tipo="ajuste").count(),
         "avarias": resumo_qs.filter(tipo="avaria").count(),
     }
@@ -168,7 +434,10 @@ def listar_movimentacoes(request):
         response["Content-Disposition"] = 'attachment; filename="movimentacoes_estoque.csv"'
         response.write("\ufeff")
         writer = csv.writer(response, delimiter=";")
-        writer.writerow(["data", "produto", "tipo", "quantidade", "origem", "destino", "observacao", "usuario"])
+        writer.writerow([
+            "data", "produto", "tipo", "quantidade", "custo_unitario", "custo_total",
+            "origem", "destino", "origem_sistema", "referencia_origem", "observacao", "usuario",
+        ])
         for m in resumo_qs:
             writer.writerow(
                 [
@@ -176,8 +445,12 @@ def listar_movimentacoes(request):
                     m.produto.nome,
                     m.get_tipo_display(),
                     m.quantidade,
+                    m.valor_unitario_custo,
+                    m.valor_total_custo,
                     str(m.origem or "-"),
                     str(m.destino or "-"),
+                    m.origem_tipo,
+                    m.origem_referencia,
                     m.observacao or "-",
                     str(m.usuario or "-"),
                 ]
@@ -192,7 +465,7 @@ def listar_movimentacoes(request):
             "movimentacoes": movimentacoes_page,
             "movimentacoes_page": movimentacoes_page,
             "tipos_mov": MovimentacaoEstoque.TIPO_CHOICES,
-            "pontos": PontoOperacional.objects.filter(ativo=True),
+            "pontos": filtrar_catalogo_empresa(PontoOperacional.objects.filter(ativo=True), empresa),
             "tipo_filtro": tipo,
             "ponto_filtro": ponto,
             "q": q,
@@ -209,29 +482,31 @@ def listar_movimentacoes(request):
 @role_required(STOCK_MANAGE_ROLES)
 def pontos_operacionais(request):
     require_sensitive_permission(request.user, "perm_estoque_configurar_estrutura")
+    empresa = obter_empresa_ativa(request, strict=True)
     if request.method == "POST":
-        form = PontoOperacionalForm(request.POST)
+        form = PontoOperacionalForm(request.POST, empresa=empresa)
         if form.is_valid():
             form.save()
             messages.success(request, "Ponto operacional salvo.")
             return redirect("estoque:pontos_operacionais")
     else:
-        form = PontoOperacionalForm()
-    return render(request, "estoque/pontos_operacionais.html", {"form": form, "pontos": PontoOperacional.objects.all(), "menu_app": "estoque", "menu_sub": "pontos_operacionais"})
+        form = PontoOperacionalForm(empresa=empresa)
+    return render(request, "estoque/pontos_operacionais.html", {"form": form, "pontos": filtrar_catalogo_empresa(PontoOperacional.objects.all(), empresa), "menu_app": "estoque", "menu_sub": "pontos_operacionais"})
 
 
 @role_required(STOCK_MANAGE_ROLES)
 def ubicacoes_estoque(request):
     require_sensitive_permission(request.user, "perm_estoque_configurar_estrutura")
+    empresa = obter_empresa_ativa(request, strict=True)
     if request.method == "POST":
-        form = UbicacaoEstoqueForm(request.POST)
+        form = UbicacaoEstoqueForm(request.POST, empresa=empresa)
         if form.is_valid():
             form.save()
             messages.success(request, "Ubicacao salva.")
             return redirect("estoque:ubicacoes_estoque")
     else:
-        form = UbicacaoEstoqueForm()
-    return render(request, "estoque/ubicacoes_estoque.html", {"form": form, "ubicacoes": UbicacaoEstoque.objects.select_related("ponto_operacional").all(), "menu_app": "estoque", "menu_sub": "ubicacoes_estoque"})
+        form = UbicacaoEstoqueForm(empresa=empresa)
+    return render(request, "estoque/ubicacoes_estoque.html", {"form": form, "ubicacoes": filtrar_catalogo_empresa(UbicacaoEstoque.objects.select_related("ponto_operacional"), empresa, campo="ponto_operacional__empresa"), "menu_app": "estoque", "menu_sub": "ubicacoes_estoque"})
 
 
 @role_required(STOCK_MANAGE_ROLES)
@@ -244,8 +519,8 @@ def transferir_estoque(request):
     if q:
         produtos = produtos.filter(Q(nome__icontains=q) | Q(ean__icontains=q) | Q(sku__icontains=q))
     produtos = produtos.order_by("nome")[:50]
-    pontos = PontoOperacional.objects.filter(ativo=True).order_by("codigo")
-    ubicacoes = UbicacaoEstoque.objects.select_related("ponto_operacional").filter(ativo=True).order_by("ponto_operacional__codigo", "codigo")
+    pontos = filtrar_catalogo_empresa(PontoOperacional.objects.filter(ativo=True), empresa).order_by("codigo")
+    ubicacoes = filtrar_catalogo_empresa(UbicacaoEstoque.objects.select_related("ponto_operacional").filter(ativo=True), empresa, campo="ponto_operacional__empresa").order_by("ponto_operacional__codigo", "codigo")
     produto_selecionado = None
     if produto_id.isdigit():
         produto_selecionado = (
@@ -362,7 +637,7 @@ def transferir_estoque(request):
 def reposicao_estoque(request):
     require_sensitive_permission(request.user, "perm_estoque_transferencia")
     empresa = obter_empresa_ativa(request, strict=True)
-    _, ponto_origem, ponto_destino, codigo_origem, codigo_destino = _pontos_reposicao_por_config()
+    _, ponto_origem, ponto_destino, codigo_origem, codigo_destino = _pontos_reposicao_por_config(empresa)
     q = (request.GET.get("q") or "").strip()
     quick = (request.GET.get("quick") or "").strip()
     export = (request.GET.get("export") or "").strip().lower()
@@ -392,7 +667,10 @@ def reposicao_estoque(request):
         )
         fornecedor_config = None
         if fornecedor_id.isdigit():
-            fornecedor_config = FornecedorGarantia.objects.filter(id=int(fornecedor_id), ativo=True).first()
+            fornecedor_config = filtrar_catalogo_empresa(
+                FornecedorGarantia.objects.filter(ativo=True),
+                empresa,
+            ).filter(id=int(fornecedor_id)).first()
         if not produtos_compra:
             messages.error(request, "A sugestao nao possui itens validos para gerar a entrada.")
             return redirect("estoque:reposicao_estoque")
@@ -776,7 +1054,7 @@ def indicadores_estoque(request):
     corte_30 = timezone.now() - timedelta(days=30)
     corte_60 = timezone.now() - timedelta(days=60)
     corte_90 = timezone.now() - timedelta(days=90)
-    rateio_config = ConfiguracaoRateioCustoFixo.get_solo()
+    rateio_config = ConfiguracaoRateioCustoFixo.get_solo(empresa)
     config_form = ConfiguracaoRateioCustoFixoForm(instance=rateio_config)
     snapshot_form = GerarSnapshotRateioForm(initial={"competencia": hoje.replace(day=1)})
     if request.method == "POST" and has_role(request.user, STOCK_MANAGE_ROLES):
@@ -806,6 +1084,7 @@ def indicadores_estoque(request):
                     competencia=snapshot_form.cleaned_data["competencia"],
                     usuario=request.user,
                     observacao=snapshot_form.cleaned_data.get("observacao", ""),
+                    empresa=empresa,
                 )
                 _registrar_evento_estoque(
                     "rateio_snapshot_gerado",
@@ -930,24 +1209,33 @@ def indicadores_estoque(request):
         )
         .order_by("-valor_custo", "categoria_nome")[:12]
     )
-    impacto_avarias_30 = list(
+    impacto_perdas_30 = list(
         MovimentacaoEstoque.objects.filter(
             produto__empresa=empresa,
-            tipo="avaria",
+            tipo__in=["avaria", "oferta", "cedencia"],
             criado_em__gte=corte_30,
+            movimentos_de_estorno__isnull=True,
         )
-        .values("origem__codigo", "origem__nome")
+        .values("tipo", "origem__codigo", "origem__nome")
         .annotate(
             unidades=Sum(Abs(F("quantidade"))),
-            impacto=Sum(
-                ExpressionWrapper(
-                    Abs(F("quantidade"))
-                    * Coalesce(F("valor_unitario_custo"), F("produto__custo_medio"), F("produto__custo_unitario"), Value(Decimal("0.00"))),
-                    output_field=DecimalField(max_digits=14, decimal_places=2),
-                )
-            ),
+            impacto=Sum("valor_total_custo"),
         )
-        .order_by("-impacto", "origem__codigo")
+        .order_by("-impacto", "tipo", "origem__codigo")
+    )
+    impacto_saidas_estruturadas_30 = list(
+        SolicitacaoSaidaEstoque.objects.filter(
+            empresa=empresa,
+            status="executada",
+            aprovado_em__gte=corte_30,
+        )
+        .values("tipo", "finalidade", "campanha", "centro_custo_nome")
+        .annotate(
+            solicitacoes=Count("id"),
+            unidades=Sum("quantidade"),
+            impacto=Sum("valor_total_custo"),
+        )
+        .order_by("-impacto", "tipo", "finalidade")[:20]
     )
     divergencias_inventario_qs = (
         ItemInventarioEstoque.objects.select_related(
@@ -1174,7 +1462,8 @@ def indicadores_estoque(request):
             "ruptura_por_ponto": ruptura_por_ponto,
             "valor_por_ponto": valor_por_ponto,
             "valor_por_categoria": valor_por_categoria,
-            "impacto_avarias_30": impacto_avarias_30,
+            "impacto_perdas_30": impacto_perdas_30,
+            "impacto_saidas_estruturadas_30": impacto_saidas_estruturadas_30,
             "divergencias_inventario": divergencias_inventario_qs[:20],
             "divergencias_inventario_resumo": divergencias_inventario_resumo,
             "hoje": hoje,
@@ -1194,7 +1483,7 @@ def detalhe_rateio_competencia(request, snapshot_id):
     empresa = obter_empresa_ativa(request, strict=True)
     snapshot_qs = RateioCustoFixoCompetencia.objects.select_related("gerado_por")
     if empresa:
-        snapshot_qs = snapshot_qs.filter(itens__produto__empresa=empresa).distinct()
+        snapshot_qs = snapshot_qs.filter(empresa=empresa)
     else:
         snapshot_qs = snapshot_qs.none()
     snapshot = get_object_or_404(snapshot_qs, pk=snapshot_id)
@@ -1208,7 +1497,7 @@ def exportar_rateio_competencia(request, snapshot_id):
     empresa = obter_empresa_ativa(request, strict=True)
     snapshot_qs = RateioCustoFixoCompetencia.objects.select_related("gerado_por")
     if empresa:
-        snapshot_qs = snapshot_qs.filter(itens__produto__empresa=empresa).distinct()
+        snapshot_qs = snapshot_qs.filter(empresa=empresa)
     else:
         snapshot_qs = snapshot_qs.none()
     snapshot = get_object_or_404(snapshot_qs, pk=snapshot_id)
@@ -1227,7 +1516,7 @@ def exportar_rateio_competencia_excel(request, snapshot_id):
     empresa = obter_empresa_ativa(request, strict=True)
     snapshot_qs = RateioCustoFixoCompetencia.objects.select_related("gerado_por")
     if empresa:
-        snapshot_qs = snapshot_qs.filter(itens__produto__empresa=empresa).distinct()
+        snapshot_qs = snapshot_qs.filter(empresa=empresa)
     else:
         snapshot_qs = snapshot_qs.none()
     snapshot = get_object_or_404(snapshot_qs, pk=snapshot_id)
@@ -1304,7 +1593,7 @@ def relatorio_divergencias_estoque(request):
                 "delta": int(saldo.quantidade or 0) - int(total_ubicacao or 0),
             }
         )
-    po2 = PontoOperacional.objects.filter(codigo__iexact="PO2").first()
+    po2 = filtrar_catalogo_empresa(PontoOperacional.objects.all(), empresa).filter(codigo__iexact="PO2").first()
     mov_po2_sem_ubicacao = MovimentacaoEstoque.objects.none()
     if po2:
         mov_po2_sem_ubicacao = (
@@ -1313,6 +1602,13 @@ def relatorio_divergencias_estoque(request):
             .filter(Q(destino_ubicacao__isnull=True) | Q(destino_ubicacao__exact=""))
             .order_by("-criado_em")
         )
+    diagnostico_integral = diagnosticar_inconsistencias_estoque(empresa=empresa)
+    execucoes_auditoria = ExecucaoAuditoriaEstoque.objects.filter(empresa=empresa).order_by("-criado_em", "-id")
+    ultima_execucao_auditoria = execucoes_auditoria.first()
+    auditoria_atrasada = bool(
+        not ultima_execucao_auditoria
+        or ultima_execucao_auditoria.criado_em < timezone.now() - timedelta(hours=25)
+    )
     return render(
         request,
         "estoque/relatorio_divergencias.html",
@@ -1327,6 +1623,12 @@ def relatorio_divergencias_estoque(request):
             "negativos_ponto": negativos_ponto[:200],
             "saldos_ponto_x_ubicacao": saldos_ponto_x_ubicacao[:200],
             "mov_po2_sem_ubicacao": mov_po2_sem_ubicacao[:200],
+            "reservas_excedentes": diagnostico_integral["reservas_excedentes"][:200],
+            "divergencias_lotes": diagnostico_integral["divergencias_lotes"][:200],
+            "divergencias_series": diagnostico_integral["divergencias_series"][:200],
+            "ultima_execucao_auditoria": ultima_execucao_auditoria,
+            "execucoes_auditoria": execucoes_auditoria[:20],
+            "auditoria_atrasada": auditoria_atrasada,
             "resumo": {
                 "pre_reservas_antigas": total_pre_reservas_antigas,
                 "reservas_vencidas": reservas_vencidas_ativas.count(),
@@ -1336,6 +1638,9 @@ def relatorio_divergencias_estoque(request):
                 "negativos": negativos_ponto.count(),
                 "delta_ponto_ubicacao": len(saldos_ponto_x_ubicacao),
                 "transferencias_pendentes": mov_po2_sem_ubicacao.count(),
+                "reservas_excedentes": len(diagnostico_integral["reservas_excedentes"]),
+                "lotes": len(diagnostico_integral["divergencias_lotes"]),
+                "series": len(diagnostico_integral["divergencias_series"]),
             },
             "menu_app": "estoque",
             "menu_sub": "relatorio_divergencias",
@@ -1348,7 +1653,11 @@ __all__ = [
     "exportar_rateio_competencia_excel",
     "exportar_rateio_competencia",
     "registrar_movimentacao",
+    "transferencia_estoque_interempresa",
     "listar_movimentacoes",
+    "solicitacoes_saida_estoque",
+    "comprovante_solicitacao_saida_estoque",
+    "decidir_solicitacao_saida_estoque",
     "pontos_operacionais",
     "ubicacoes_estoque",
     "transferir_estoque",

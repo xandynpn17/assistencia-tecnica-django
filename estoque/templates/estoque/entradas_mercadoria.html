@@ -7,6 +7,9 @@
     <p class="ui-module-subtitle">Recebimento organizado de compras e reposicoes com destino fisico definido.</p>
   </div>
   <div class="ui-module-actions">
+    <a href="{% url 'fiscal:caixa_entrada_dfe' %}" class="btn btn-outline-success btn-sm">Buscar NF-e com A1</a>
+    <a href="{% url 'estoque:importar_xml_compra' %}" class="btn btn-outline-primary btn-sm">Importar XML/ZIP</a>
+    <a href="{% url 'estoque:documentos_fiscais_conferencia' %}" class="btn btn-outline-info btn-sm">CT-e / NFS-e / SPED</a>
     <a href="{% url 'estoque:nova_entrada_mercadoria' %}" class="btn btn-primary btn-sm">Nova entrada</a>
   </div>
 </div>
@@ -64,6 +67,23 @@
     }
   }
 </style>
+
+{% if lotes_recentes %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong>Lotes recentes de documentos</strong>
+    {% if lote_id %}<a href="{% url 'estoque:entradas_mercadoria' %}" class="btn btn-sm btn-outline-secondary">Sair do filtro do lote</a>{% endif %}
+  </div>
+  <div class="card-body py-2">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Lote</th><th>Arquivo</th><th>Documentos</th><th>Pend&ecirc;ncias</th><th>Status</th><th></th></tr></thead>
+        <tbody>{% for lote in lotes_recentes %}<tr class="{% if lote.id == lote_id %}table-info{% endif %}"><td><code>{{ lote.codigo|stringformat:'s'|slice:':8' }}</code><div class="small text-muted">{{ lote.criado_em|date:'d/m/Y H:i' }}</div></td><td>{{ lote.arquivo_nome }}<div class="small text-muted">{{ lote.get_origem_display }}</div></td><td>{{ lote.total_documentos }} <span class="small text-muted">({{ lote.documentos_novos }} novo(s))</span></td><td>{% if lote.pendencias %}<span class="badge badge-warning">{{ lote.pendencias }}</span>{% else %}<span class="badge badge-success">0</span>{% endif %}</td><td>{{ lote.get_status_display }}</td><td><a class="btn btn-sm btn-primary" href="{% url 'estoque:detalhe_lote_importacao' lote.id %}">Central do lote</a> <a class="btn btn-sm btn-outline-primary" href="?lote={{ lote.id }}">Documentos</a></td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <div class="card-modern">
   <div class="card-modern-header d-flex justify-content-between align-items-center">

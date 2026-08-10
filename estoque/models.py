@@ -3,6 +3,7 @@ from decimal import Decimal
 import random
 import string
 import unicodedata
+import uuid
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
@@ -14,17 +15,37 @@ from .services_produto import (
     aplicar_politica_tipo_item_produto,
     aplicar_precificacao_produto,
     atualizar_produtos_relacionados_rateio,
+    calcular_aliquota_efetiva,
     preparar_cadastro_produto,
 )
 
 
 class PontoOperacional(models.Model):
-    codigo = models.CharField(max_length=10, unique=True)
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="pontos_operacionais",
+    )
+    codigo = models.CharField(max_length=10)
     nome = models.CharField(max_length=80)
     ativo = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["codigo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "codigo"],
+                condition=models.Q(empresa__isnull=False),
+                name="estoque_ponto_empresa_codigo_unico",
+            ),
+            models.UniqueConstraint(
+                fields=["codigo"],
+                condition=models.Q(empresa__isnull=True),
+                name="estoque_ponto_legado_codigo_unico",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.codigo} - {self.nome}"
@@ -50,7 +71,14 @@ class UbicacaoEstoque(models.Model):
 
 
 class CategoriaProduto(models.Model):
-    nome = models.CharField(max_length=80, unique=True)
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="categorias_produto",
+    )
+    nome = models.CharField(max_length=80)
     margem_padrao = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -62,6 +90,18 @@ class CategoriaProduto(models.Model):
 
     class Meta:
         ordering = ["ordem", "nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "nome"],
+                condition=models.Q(empresa__isnull=False),
+                name="estoque_categoria_empresa_nome_unico",
+            ),
+            models.UniqueConstraint(
+                fields=["nome"],
+                condition=models.Q(empresa__isnull=True),
+                name="estoque_categoria_legado_nome_unico",
+            ),
+        ]
 
     @staticmethod
     def nome_canonico(valor):
@@ -73,28 +113,30 @@ class CategoriaProduto(models.Model):
         return texto.casefold()
 
     @classmethod
-    def encontrar_por_nome(cls, valor, *, incluir_inativas=True):
+    def encontrar_por_nome(cls, valor, *, incluir_inativas=True, empresa=None):
         canonico = cls.nome_canonico(valor)
         if not canonico:
             return None
         queryset = cls.objects.all() if incluir_inativas else cls.objects.filter(ativo=True)
+        if empresa is not None:
+            queryset = queryset.filter(models.Q(empresa=empresa) | models.Q(empresa__isnull=True))
         for categoria in queryset.only("id", "nome", "ativo").order_by("ordem", "nome"):
             if cls.nome_canonico(categoria.nome) == canonico:
                 return categoria
         return None
 
     @classmethod
-    def obter_ou_criar_por_nome(cls, valor):
+    def obter_ou_criar_por_nome(cls, valor, *, empresa=None):
         nome_limpo = " ".join(str(valor or "").strip().split())
         if not nome_limpo:
             raise ValidationError({"nome": "Informe o nome da categoria."})
-        categoria = cls.encontrar_por_nome(nome_limpo, incluir_inativas=True)
+        categoria = cls.encontrar_por_nome(nome_limpo, incluir_inativas=True, empresa=empresa)
         if categoria:
             if not categoria.ativo:
                 categoria.ativo = True
                 categoria.save(update_fields=["ativo"])
             return categoria, False
-        return cls.objects.create(nome=nome_limpo, ativo=True), True
+        return cls.objects.create(nome=nome_limpo, ativo=True, empresa=empresa), True
 
     def clean(self):
         super().clean()
@@ -102,7 +144,13 @@ class CategoriaProduto(models.Model):
         canonico = self.nome_canonico(self.nome)
         if not canonico:
             raise ValidationError({"nome": "Informe o nome da categoria."})
-        for categoria in CategoriaProduto.objects.exclude(pk=self.pk).only("id", "nome"):
+        equivalentes = CategoriaProduto.objects.exclude(pk=self.pk)
+        equivalentes = (
+            equivalentes.filter(empresa_id=self.empresa_id)
+            if self.empresa_id
+            else equivalentes.filter(empresa__isnull=True)
+        )
+        for categoria in equivalentes.only("id", "nome"):
             if self.nome_canonico(categoria.nome) == canonico:
                 raise ValidationError({"nome": "Ja existe categoria equivalente (considerando acentos e caixa)."})
 
@@ -115,11 +163,30 @@ class CategoriaProduto(models.Model):
 
 
 class ServicoReferencia(models.Model):
-    nome = models.CharField(max_length=120, unique=True)
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="servicos_referencia_estoque",
+    )
+    nome = models.CharField(max_length=120)
     ativo = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "nome"],
+                condition=models.Q(empresa__isnull=False),
+                name="estoque_servico_ref_empresa_nome_unico",
+            ),
+            models.UniqueConstraint(
+                fields=["nome"],
+                condition=models.Q(empresa__isnull=True),
+                name="estoque_servico_ref_legado_nome_unico",
+            ),
+        ]
 
     def __str__(self):
         return self.nome
@@ -149,6 +216,7 @@ class Produto(models.Model):
         ("produto", "Produto"),
         ("peca", "Peca"),
         ("consumivel", "Consumivel"),
+        ("fabricado", "Produto fabricado / industrializado"),
         ("servico", "Servico"),
     ]
 
@@ -161,7 +229,7 @@ class Produto(models.Model):
     )
     nome = models.CharField(max_length=100)
     sku = models.CharField(max_length=50, blank=True, null=True)
-    ean = models.CharField(max_length=50, blank=True, null=True, unique=True)
+    ean = models.CharField(max_length=50, blank=True, null=True)
     descricao = models.TextField(blank=True)
     categoria = models.CharField(max_length=50, blank=True)
     categoria_config = models.ForeignKey(
@@ -227,11 +295,25 @@ class Produto(models.Model):
     cofins = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
     taxa_cartao = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
     tipo_item = models.CharField(max_length=20, choices=TIPO_ITEM_CHOICES, default="produto")
+    regra_tributaria = models.ForeignKey(
+        "fiscal.RegraTributaria", on_delete=models.SET_NULL, null=True, blank=True, related_name="produtos"
+    )
+    ncm = models.CharField(max_length=8, blank=True)
+    cest = models.CharField(max_length=10, blank=True)
+    origem_mercadoria = models.CharField(max_length=2, blank=True)
+    codigo_servico = models.CharField(max_length=20, blank=True)
+    unidade_comercial = models.CharField(max_length=10, blank=True, default="UN")
+    cfop_padrao = models.CharField(max_length=4, blank=True)
+    cst_csosn = models.CharField(max_length=4, blank=True)
+    codigo_beneficio_fiscal = models.CharField(max_length=20, blank=True)
     usar_aliquota_manual = models.BooleanField(default=False)
     aliquota_manual = models.DecimalField(max_digits=6, decimal_places=3, default=0, blank=True)
     preco_sugerido = models.DecimalField(max_digits=10, decimal_places=2, editable=False, default=0)
     preco_minimo = models.DecimalField(max_digits=10, decimal_places=2, editable=False, default=0)
     preco_final = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    precificacao_versao = models.PositiveIntegerField(default=1, editable=False)
+    precificacao_atualizada_em = models.DateTimeField(null=True, blank=True, editable=False)
+    precificacao_snapshot = models.JSONField(default=dict, blank=True, editable=False)
 
     preco = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     quantidade = models.PositiveIntegerField(default=0)
@@ -263,6 +345,15 @@ class Produto(models.Model):
         related_name="produtos",
     )
     objects = ProdutoQuerySet.as_manager()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "ean"],
+                condition=models.Q(empresa__isnull=False, ean__isnull=False) & ~models.Q(ean=""),
+                name="produto_empresa_ean_unico",
+            ),
+        ]
 
     def _gerar_codigo_ean(self):
         base_qs = Produto.objects.all()
@@ -301,21 +392,18 @@ class Produto(models.Model):
             base += 1
 
     def _aliquota_percentual(self):
-        if self.usar_aliquota_manual:
-            return Decimal(str(self.aliquota_manual or 0))
-
-        empresa = self.empresa
-
-        if empresa:
-            regime = (empresa.regime_tributario or "simples")
-            modo = (empresa.modo_tributario or "basico")
-            if regime == "simples" and modo == "basico":
-                if self.eh_servico:
-                    return Decimal(str(empresa.aliquota_servico or 0))
-                return Decimal(str(empresa.aliquota_comercio or 0))
-            return Decimal(str((empresa.icms or 0) + (empresa.ipi or 0) + (empresa.pis or 0) + (empresa.cofins or 0)))
-
-        return Decimal(str((self.icms or 0) + (self.ipi or 0) + (self.pis or 0) + (self.cofins or 0) or (self.pis_cofins or 0)))
+        return calcular_aliquota_efetiva(
+            empresa=self.empresa,
+            tipo_item="servico" if self.eh_servico else self.tipo_item,
+            produto=self,
+            usar_aliquota_manual=self.usar_aliquota_manual,
+            aliquota_manual=self.aliquota_manual,
+            icms=self.icms,
+            ipi=self.ipi,
+            pis=self.pis,
+            cofins=self.cofins,
+            pis_cofins=self.pis_cofins,
+        )
 
     def _competencia_rateio_atual(self):
         hoje = timezone.localdate()
@@ -349,7 +437,7 @@ class Produto(models.Model):
         )
 
     def base_rateio_custo_fixo(self, criterio=None, previsao_override=None, incluir_override=None):
-        criterio = criterio or ConfiguracaoRateioCustoFixo.get_solo().criterio_rateio
+        criterio = criterio or ConfiguracaoRateioCustoFixo.get_solo(self.empresa).criterio_rateio
         incluir = self.incluir_rateio_custo_fixo if incluir_override is None else bool(incluir_override)
         previsao_atual = int(previsao_override if previsao_override is not None else (self.previsao_venda_mensal or 0))
         if self.eh_servico or not incluir or previsao_atual <= 0:
@@ -371,7 +459,7 @@ class Produto(models.Model):
     ):
         competencia = competencia or self._competencia_rateio_atual()
         previsao_atual = int(previsao_override if previsao_override is not None else (self.previsao_venda_mensal or 0))
-        criterio = criterio_override or ConfiguracaoRateioCustoFixo.get_solo().criterio_rateio
+        criterio = criterio_override or ConfiguracaoRateioCustoFixo.get_solo(self.empresa).criterio_rateio
         base_atual = self.base_rateio_custo_fixo(
             criterio=criterio,
             previsao_override=previsao_override,
@@ -385,11 +473,11 @@ class Produto(models.Model):
         except Exception:
             return Decimal("0.00")
 
+        custos_fixos_qs = CustoFixoMensal.objects.filter(competencia=competencia, ativo=True)
+        if self.empresa_id:
+            custos_fixos_qs = custos_fixos_qs.filter(models.Q(empresa=self.empresa) | models.Q(empresa__isnull=True))
         total_fixos = (
-            CustoFixoMensal.objects.filter(
-                competencia=competencia,
-                ativo=True,
-            )
+            custos_fixos_qs
             .exclude(status="cancelado")
             .aggregate(total=Sum("valor_previsto"))["total"]
             or Decimal("0.00")
@@ -401,6 +489,8 @@ class Produto(models.Model):
             incluir_rateio_custo_fixo=True,
             previsao_venda_mensal__gt=0,
         )
+        if self.empresa_id:
+            produtos_rateio = produtos_rateio.filter(empresa_id=self.empresa_id)
         if self.pk:
             produtos_rateio = produtos_rateio.exclude(pk=self.pk)
 
@@ -416,10 +506,28 @@ class Produto(models.Model):
 
     def save(self, *args, **kwargs):
         skip_rateio_refresh = kwargs.pop("_skip_rateio_refresh", False)
+        if self.regra_tributaria_id and self.empresa_id and self.regra_tributaria.perfil.empresa_id != self.empresa_id:
+            raise ValidationError("A regra tributária do produto pertence a outra empresa.")
+        self.ncm = "".join(ch for ch in str(self.ncm or "") if ch.isdigit())[:8]
+        self.cest = "".join(ch for ch in str(self.cest or "") if ch.isdigit())[:10]
+        self.origem_mercadoria = str(self.origem_mercadoria or "").strip()[:2]
+        self.cfop_padrao = "".join(ch for ch in str(self.cfop_padrao or "") if ch.isdigit())[:4]
+        self.cst_csosn = "".join(ch for ch in str(self.cst_csosn or "") if ch.isdigit())[:4]
         preparar_cadastro_produto(self)
         aplicar_custos_base_produto(self)
         aplicar_politica_tipo_item_produto(self)
         aplicar_precificacao_produto(self)
+
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {
+                "preco_sugerido",
+                "preco_minimo",
+                "preco_final",
+                "preco",
+                "precificacao_versao",
+                "precificacao_atualizada_em",
+                "precificacao_snapshot",
+            }
 
         super().save(*args, **kwargs)
         if not skip_rateio_refresh:
@@ -438,7 +546,8 @@ class Produto(models.Model):
 
     @property
     def lucro_estimado(self):
-        return (self.preco_final or 0) - (self.custo_total or 0)
+        preco = Decimal(str(self.preco_final or 0))
+        return preco - Decimal(str(self.custo_total or 0)) - self.valor_impostos - self.valor_taxa_cartao
 
     @property
     def margem_real_percentual(self):
@@ -452,8 +561,13 @@ class Produto(models.Model):
         return (self.preco_final or 0) * (Decimal("1") - (taxa / Decimal("100")))
 
     @property
+    def valor_taxa_cartao(self):
+        taxa = Decimal(str(self.taxa_cartao or 0)) / Decimal("100")
+        return Decimal(str(self.preco_final or 0)) * taxa
+
+    @property
     def lucro_cartao(self):
-        return self.valor_recebido_cartao - (self.custo_total or 0)
+        return self.valor_recebido_cartao - Decimal(str(self.custo_total or 0)) - self.valor_impostos
 
     @property
     def venda_abaixo_margem_minima(self):
@@ -461,12 +575,14 @@ class Produto(models.Model):
 
     @property
     def valor_impostos(self):
-        impostos_totais = (self.icms + self.ipi + self.pis_cofins) / 100
-        return self.custo_total * impostos_totais
+        return Decimal(str(self.preco_final or 0)) * (self._aliquota_percentual() / Decimal("100"))
 
     @property
     def preco_sugerido_sem_margem(self):
-        return self.custo_total * (1 + (self.icms + self.ipi + self.pis_cofins) / 100)
+        divisor = Decimal("1") - (self._aliquota_percentual() / Decimal("100")) - (
+            Decimal(str(self.taxa_cartao or 0)) / Decimal("100")
+        )
+        return self.custo_total if divisor <= 0 else Decimal(str(self.custo_total or 0)) / divisor
 
     @property
     def lucro_reais(self):
@@ -489,6 +605,13 @@ class ConfiguracaoRateioCustoFixo(models.Model):
         (CRITERIO_MARGEM, "Margem prevista"),
     ]
 
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="configuracoes_rateio_estoque",
+    )
     criterio_rateio = models.CharField(max_length=20, choices=CRITERIO_CHOICES, default=CRITERIO_UNIDADES)
     ativo = models.BooleanField(default=True)
     atualizado_em = models.DateTimeField(auto_now=True)
@@ -496,28 +619,57 @@ class ConfiguracaoRateioCustoFixo(models.Model):
     class Meta:
         verbose_name = "Configuracao de rateio de custo fixo"
         verbose_name_plural = "Configuracoes de rateio de custo fixo"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa"],
+                condition=models.Q(empresa__isnull=False),
+                name="estoque_rateio_config_empresa_unica",
+            )
+        ]
 
     def __str__(self):
         return f"Rateio por {self.get_criterio_rateio_display()}"
 
     @classmethod
-    def get_solo(cls):
-        configuracao, _ = cls.objects.get_or_create(pk=1, defaults={"criterio_rateio": cls.CRITERIO_UNIDADES, "ativo": True})
+    def get_solo(cls, empresa=None):
+        if empresa is None:
+            from configuracoes.models import Empresa
+
+            empresas = list(Empresa.objects.order_by("id")[:2])
+            if len(empresas) == 1:
+                empresa = empresas[0]
+        if empresa:
+            configuracao, _ = cls.objects.get_or_create(
+                empresa=empresa,
+                defaults={"criterio_rateio": cls.CRITERIO_UNIDADES, "ativo": True},
+            )
+            return configuracao
+        configuracao = cls.objects.filter(empresa__isnull=True).order_by("id").first()
+        if not configuracao:
+            configuracao = cls.objects.create(criterio_rateio=cls.CRITERIO_UNIDADES, ativo=True)
         return configuracao
 
     def save(self, *args, **kwargs):
-        self.pk = 1
         result = super().save(*args, **kwargs)
         produtos_rateio = Produto.objects.ativos().nao_servicos().filter(
             incluir_rateio_custo_fixo=True,
         )
+        if self.empresa_id:
+            produtos_rateio = produtos_rateio.filter(empresa_id=self.empresa_id)
         for produto in produtos_rateio:
             produto.save(_skip_rateio_refresh=True)
         return result
 
 
 class RateioCustoFixoCompetencia(models.Model):
-    competencia = models.DateField(unique=True)
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="snapshots_rateio_estoque",
+    )
+    competencia = models.DateField()
     criterio_rateio = models.CharField(
         max_length=20,
         choices=ConfiguracaoRateioCustoFixo.CRITERIO_CHOICES,
@@ -533,6 +685,13 @@ class RateioCustoFixoCompetencia(models.Model):
 
     class Meta:
         ordering = ["-competencia", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "competencia"],
+                condition=models.Q(empresa__isnull=False),
+                name="estoque_rateio_snapshot_empresa_comp",
+            )
+        ]
 
     def __str__(self):
         return f"Rateio {self.competencia:%m/%Y}"
@@ -544,11 +703,13 @@ class RateioCustoFixoCompetencia(models.Model):
         return inicio, proximo_mes
 
     @classmethod
-    def _realizado_por_produto(cls, competencia):
+    def _realizado_por_produto(cls, competencia, empresa=None):
         inicio, proximo_mes = cls._intervalo_competencia(competencia)
         realizado = {}
 
         vendas = VendaRapidaEstoque.objects.select_related("produto").filter(status="vendida")
+        if empresa:
+            vendas = vendas.filter(produto__empresa=empresa)
         for venda in vendas:
             data_ref = timezone.localtime(venda.concluido_em or venda.criado_em).date()
             if not (inicio <= data_ref < proximo_mes) or not venda.produto_id:
@@ -571,6 +732,8 @@ class RateioCustoFixoCompetencia(models.Model):
             tipo="peca",
             produto_estoque__isnull=False,
         )
+        if empresa:
+            itens_os = itens_os.filter(produto_estoque__empresa=empresa)
         for item in itens_os:
             data_base = item.estoque_consumido_em or item.criado_em
             data_ref = timezone.localtime(data_base).date()
@@ -589,22 +752,27 @@ class RateioCustoFixoCompetencia(models.Model):
         return realizado
 
     @classmethod
-    def gerar_snapshot(cls, *, competencia, usuario=None, observacao="", sobrescrever=False):
+    def gerar_snapshot(cls, *, competencia, usuario=None, observacao="", sobrescrever=False, empresa=None):
         competencia = competencia.replace(day=1)
         from caixa.models import CustoFixoMensal
 
-        configuracao = ConfiguracaoRateioCustoFixo.get_solo()
-        realizado_por_produto = cls._realizado_por_produto(competencia)
-        snapshot = cls.objects.filter(competencia=competencia).first()
+        configuracao = ConfiguracaoRateioCustoFixo.get_solo(empresa)
+        realizado_por_produto = cls._realizado_por_produto(competencia, empresa=empresa)
+        snapshot_qs = cls.objects.filter(competencia=competencia)
+        snapshot_qs = snapshot_qs.filter(empresa=empresa) if empresa else snapshot_qs.filter(empresa__isnull=True)
+        snapshot = snapshot_qs.first()
         criado = False
         if snapshot and not sobrescrever:
             return snapshot, False
         if not snapshot:
-            snapshot = cls(competencia=competencia)
+            snapshot = cls(competencia=competencia, empresa=empresa)
             criado = True
 
+        custos_fixos_qs = CustoFixoMensal.objects.filter(competencia=competencia, ativo=True)
+        if empresa:
+            custos_fixos_qs = custos_fixos_qs.filter(models.Q(empresa=empresa) | models.Q(empresa__isnull=True))
         total_fixos = (
-            CustoFixoMensal.objects.filter(competencia=competencia, ativo=True)
+            custos_fixos_qs
             .exclude(status="cancelado")
             .aggregate(total=Sum("valor_previsto"))["total"]
             or Decimal("0.00")
@@ -615,6 +783,8 @@ class RateioCustoFixoCompetencia(models.Model):
                 previsao_venda_mensal__gt=0,
             ).order_by("nome")
         )
+        if empresa:
+            produtos = [produto for produto in produtos if produto.empresa_id == empresa.id]
 
         itens = []
         total_base = Decimal("0.00")
@@ -701,7 +871,14 @@ class RateioCustoFixoItemCompetencia(models.Model):
 
 
 class TabelaPreco(models.Model):
-    nome = models.CharField(max_length=80, unique=True)
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="tabelas_preco_estoque",
+    )
+    nome = models.CharField(max_length=80)
     ativo = models.BooleanField(default=True)
     margem_extra = models.DecimalField(
         max_digits=5,
@@ -712,14 +889,16 @@ class TabelaPreco(models.Model):
 
     class Meta:
         ordering = ["nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "nome"],
+                condition=models.Q(empresa__isnull=False),
+                name="estoque_tabela_preco_empresa_nome",
+            )
+        ]
 
     def __str__(self):
         return self.nome
-
-    @property
-    def eh_servico(self):
-        return self.tipo_item == "servico"
-
 
 class ProdutoHistorico(models.Model):
     ACAO_CHOICES = [
@@ -784,6 +963,15 @@ class ProdutoPrecoTabela(models.Model):
     def __str__(self):
         return f"{self.produto.nome} - {self.tabela.nome}"
 
+    def clean(self):
+        if (
+            self.produto_id
+            and self.tabela_id
+            and self.tabela.empresa_id
+            and self.tabela.empresa_id != self.produto.empresa_id
+        ):
+            raise ValidationError("A tabela de preco e o produto devem pertencer a mesma empresa.")
+
 
 class ProdutoEquivalente(models.Model):
     produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="equivalentes_principais")
@@ -814,6 +1002,16 @@ class ProdutoKitItem(models.Model):
     def clean(self):
         if self.produto_kit_id and self.componente_id and self.produto_kit_id == self.componente_id:
             raise ValidationError("Componente do kit nao pode ser o mesmo produto.")
+        if self.produto_kit_id and self.componente_id and self.produto_kit.empresa_id != self.componente.empresa_id:
+            raise ValidationError("Kit e componente devem pertencer a mesma empresa.")
+        if self.componente_id and not self.componente.ativo:
+            raise ValidationError({"componente": "Um componente inativo nao pode ser incluido em um kit."})
+        if self.componente_id and self.componente.kit_componentes.exists():
+            raise ValidationError(
+                {"componente": "Kits aninhados nao sao permitidos; inclua diretamente os componentes fisicos."}
+            )
+        if self.quantidade and Decimal(str(self.quantidade)) % 1 != 0:
+            raise ValidationError({"quantidade": "Componentes controlados em estoque exigem quantidade inteira."})
 
     def __str__(self):
         return f"{self.produto_kit.nome} -> {self.componente.nome} ({self.quantidade})"
@@ -862,16 +1060,23 @@ class MovimentacaoEstoque(models.Model):
         ("entrada", "Entrada de estoque"),
         ("transferencia", "Transferencia"),
         ("avaria", "Avaria"),
+        ("perda", "Perda / extravio"),
+        ("vencimento", "Vencimento / validade expirada"),
+        ("uso_interno", "Uso / consumo interno"),
         ("ajuste", "Ajuste"),
         ("venda", "Venda"),
+        ("oferta", "Oferta / brinde"),
+        ("cedencia", "Cedencia interna"),
         ("reserva", "Reserva"),
         ("consumo_os", "Consumo em OS"),
         ("devolucao_reserva", "Devolucao de reserva"),
         ("inventario", "Inventario"),
+        ("transferencia_interempresa_saida", "Transferência entre empresas - saída"),
+        ("transferencia_interempresa_entrada", "Transferência entre empresas - entrada"),
     ]
 
-    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="movimentacoes")
-    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="transferencia")
+    produto = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name="movimentacoes")
+    tipo = models.CharField(max_length=40, choices=TIPO_CHOICES, default="transferencia")
     quantidade = models.IntegerField()
     origem = models.ForeignKey(
         "estoque.PontoOperacional",
@@ -903,6 +1108,18 @@ class MovimentacaoEstoque(models.Model):
     )
     destino_ubicacao = models.CharField(max_length=80, blank=True)
     valor_unitario_custo = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    valor_total_custo = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    referencia_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    chave_idempotencia = models.CharField(max_length=120, null=True, blank=True, unique=True)
+    origem_tipo = models.CharField(max_length=30, default="manual")
+    origem_referencia = models.CharField(max_length=120, blank=True)
+    movimento_estornado = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="movimentos_de_estorno",
+    )
     observacao = models.CharField(max_length=200, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     usuario = models.ForeignKey("configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True)
@@ -918,6 +1135,170 @@ class MovimentacaoEstoque(models.Model):
 
     def __str__(self):
         return f"{self.produto.nome} - {self.get_tipo_display()} ({self.quantidade})"
+
+
+class TransferenciaEstoqueInterempresa(models.Model):
+    empresa_origem = models.ForeignKey("configuracoes.Empresa", on_delete=models.PROTECT, related_name="transferencias_estoque_saida")
+    empresa_destino = models.ForeignKey("configuracoes.Empresa", on_delete=models.PROTECT, related_name="transferencias_estoque_entrada")
+    produto_origem = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name="transferencias_interempresa_saida")
+    produto_destino = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name="transferencias_interempresa_entrada")
+    origem = models.ForeignKey(PontoOperacional, on_delete=models.PROTECT, related_name="transferencias_interempresa_saida")
+    origem_ubicacao = models.ForeignKey(UbicacaoEstoque, on_delete=models.PROTECT, related_name="transferencias_interempresa_saida")
+    destino = models.ForeignKey(PontoOperacional, on_delete=models.PROTECT, related_name="transferencias_interempresa_entrada")
+    destino_ubicacao = models.ForeignKey(UbicacaoEstoque, on_delete=models.PROTECT, related_name="transferencias_interempresa_entrada")
+    quantidade = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    documento_fiscal = models.CharField(max_length=120, help_text="Chave/número do documento fiscal que autoriza a operação.")
+    natureza_operacao = models.CharField(max_length=160)
+    data_operacao = models.DateField(default=timezone.localdate)
+    observacao = models.CharField(max_length=240, blank=True)
+    movimento_saida = models.OneToOneField(MovimentacaoEstoque, on_delete=models.PROTECT, null=True, blank=True, related_name="transferencia_interempresa_saida")
+    movimento_entrada = models.OneToOneField(MovimentacaoEstoque, on_delete=models.PROTECT, null=True, blank=True, related_name="transferencia_interempresa_entrada")
+    executado_por = models.ForeignKey("configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True)
+    executado_em = models.DateTimeField(auto_now_add=True)
+    chave_idempotencia = models.CharField(max_length=120, unique=True)
+
+    class Meta:
+        ordering = ["-data_operacao", "-id"]
+
+    def clean(self):
+        super().clean()
+        if self.empresa_origem_id == self.empresa_destino_id:
+            raise ValidationError("Use a transferência comum quando origem e destino forem a mesma empresa.")
+        if self.produto_origem_id and self.produto_origem.empresa_id != self.empresa_origem_id:
+            raise ValidationError("O produto de origem não pertence à empresa de origem.")
+        if self.produto_destino_id and self.produto_destino.empresa_id != self.empresa_destino_id:
+            raise ValidationError("O produto de destino não pertence à empresa de destino.")
+        if not (self.documento_fiscal or "").strip():
+            raise ValidationError("Informe o documento fiscal antes de movimentar estoque entre CNPJs.")
+
+
+class SolicitacaoSaidaEstoque(models.Model):
+    TIPO_CHOICES = [
+        ("oferta", "Oferta / brinde"),
+        ("cedencia", "Cedência"),
+    ]
+    FINALIDADE_CHOICES = [
+        ("brinde_comercial", "Brinde comercial"),
+        ("cortesia_pos_venda", "Cortesia de pós-venda"),
+        ("uso_interno", "Uso interno"),
+        ("demonstracao", "Demonstração"),
+        ("doacao", "Doação"),
+        ("cedencia_temporaria", "Cedência temporária"),
+        ("cedencia_definitiva", "Cedência definitiva"),
+        ("outro", "Outro"),
+    ]
+    STATUS_CHOICES = [
+        ("pendente", "Pendente de aprovação"),
+        ("executada", "Aprovada e executada"),
+        ("devolvida", "Cedência devolvida"),
+        ("rejeitada", "Rejeitada"),
+        ("cancelada", "Cancelada"),
+    ]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        related_name="solicitacoes_saida_estoque",
+    )
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    finalidade = models.CharField(max_length=30, choices=FINALIDADE_CHOICES)
+    produto = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name="solicitacoes_saida")
+    quantidade = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    origem = models.ForeignKey(PontoOperacional, on_delete=models.PROTECT, related_name="solicitacoes_saida")
+    origem_ubicacao = models.ForeignKey(UbicacaoEstoque, on_delete=models.PROTECT, related_name="solicitacoes_saida")
+    beneficiario_nome = models.CharField(max_length=160)
+    cliente = models.ForeignKey(
+        "clientes.Cliente",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="solicitacoes_saida_estoque",
+    )
+    campanha = models.CharField(max_length=120, blank=True)
+    centro_custo = models.ForeignKey(
+        "caixa.CentroCusto",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="solicitacoes_saida_estoque",
+    )
+    centro_custo_nome = models.CharField(max_length=120, blank=True)
+    documento_autorizacao = models.CharField(max_length=120, blank=True)
+    observacao = models.CharField(max_length=240)
+    valor_unitario_custo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valor_total_custo = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    exige_aprovacao = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pendente")
+    solicitado_por = models.ForeignKey(
+        "configuracoes.User",
+        on_delete=models.PROTECT,
+        related_name="solicitacoes_saida_estoque",
+    )
+    aprovado_por = models.ForeignKey(
+        "configuracoes.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="saidas_estoque_aprovadas",
+    )
+    aprovado_em = models.DateTimeField(null=True, blank=True)
+    rejeitado_por = models.ForeignKey(
+        "configuracoes.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="saidas_estoque_rejeitadas",
+    )
+    rejeitado_em = models.DateTimeField(null=True, blank=True)
+    motivo_rejeicao = models.CharField(max_length=240, blank=True)
+    movimento = models.OneToOneField(
+        MovimentacaoEstoque,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="solicitacao_saida",
+    )
+    movimento_retorno = models.OneToOneField(
+        MovimentacaoEstoque,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="retorno_solicitacao_saida",
+    )
+    devolvido_por = models.ForeignKey(
+        "configuracoes.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cedencias_estoque_devolvidas",
+    )
+    devolvido_em = models.DateTimeField(null=True, blank=True)
+    observacao_devolucao = models.CharField(max_length=240, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        indexes = [
+            models.Index(fields=["empresa", "status", "-criado_em"], name="idx_sol_saida_emp_status"),
+            models.Index(fields=["tipo", "-criado_em"], name="idx_sol_saida_tipo_data"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.produto_id and self.produto.empresa_id != self.empresa_id:
+            raise ValidationError({"produto": "O produto deve pertencer à empresa da solicitação."})
+        if self.origem_ubicacao_id and self.origem_id and self.origem_ubicacao.ponto_operacional_id != self.origem_id:
+            raise ValidationError({"origem_ubicacao": "A localização não pertence ao ponto de origem."})
+        if self.cliente_id and self.cliente.empresa_id and self.cliente.empresa_id != self.empresa_id:
+            raise ValidationError({"cliente": "O cliente deve pertencer à mesma empresa."})
+        if self.tipo == "oferta" and self.finalidade in {"cedencia_temporaria", "cedencia_definitiva"}:
+            raise ValidationError({"finalidade": "Use uma finalidade de oferta ou cortesia."})
+        if self.tipo == "cedencia" and self.finalidade in {"brinde_comercial", "cortesia_pos_venda", "doacao"}:
+            raise ValidationError({"finalidade": "Use uma finalidade compatível com cedência."})
+
+    def __str__(self):
+        return f"#{self.pk or '-'} {self.get_tipo_display()} - {self.produto.nome} ({self.quantidade})"
 
 
 class SaldoEstoquePonto(models.Model):
@@ -959,6 +1340,15 @@ class VendaRapidaEstoque(models.Model):
     quantidade = models.PositiveIntegerField(default=1)
     valor_unitario = models.DecimalField(max_digits=10, decimal_places=2)
     valor_total = models.DecimalField(max_digits=12, decimal_places=2)
+    tabela_preco = models.ForeignKey(
+        TabelaPreco,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vendas_rapidas",
+    )
+    tabela_preco_nome = models.CharField(max_length=80, blank=True)
+    composicao_kit_snapshot = models.JSONField(default=list, blank=True)
     funcionario_numero = models.CharField(max_length=30)
     cesto_codigo = models.CharField(max_length=24, blank=True, db_index=True)
     guia_pagamento = models.CharField(max_length=24, blank=True, db_index=True)
@@ -1309,6 +1699,21 @@ class EntradaMercadoria(models.Model):
     fornecedor_manual = models.CharField(max_length=120, blank=True)
     documento_numero = models.CharField(max_length=40, blank=True)
     serie_documento = models.CharField(max_length=20, blank=True)
+    chave_acesso_nfe = models.CharField(max_length=44, blank=True, db_index=True)
+    xml_arquivo = models.FileField(upload_to="estoque/xml_compras/%Y/%m/", blank=True, null=True)
+    xml_sha256 = models.CharField(max_length=64, blank=True, db_index=True)
+    xml_resumo = models.JSONField(default=dict, blank=True)
+    xml_divergencias_fornecedor = models.JSONField(default=dict, blank=True)
+    importada_xml = models.BooleanField(default=False)
+    gerar_conta_pagar = models.BooleanField(default=False)
+    vencimento_conta_pagar = models.DateField(null=True, blank=True)
+    conta_pagar = models.OneToOneField(
+        "caixa.ContaPagar",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="entrada_mercadoria",
+    )
     data_emissao = models.DateField(default=timezone.localdate)
     data_entrada = models.DateField(default=timezone.localdate)
     ponto_operacional = models.ForeignKey(
@@ -1337,6 +1742,13 @@ class EntradaMercadoria(models.Model):
             models.Index(fields=["status", "-criado_em"], name="idx_entmerc_status_criado"),
             models.Index(fields=["empresa", "-criado_em"], name="idx_entmerc_empresa_criado"),
             models.Index(fields=["ponto_operacional", "status"], name="idx_entmerc_ponto_status"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "chave_acesso_nfe"],
+                condition=models.Q(empresa__isnull=False) & ~models.Q(chave_acesso_nfe=""),
+                name="entrada_empresa_chave_nfe_unica",
+            ),
         ]
 
     def __str__(self):
@@ -1435,6 +1847,36 @@ class EntradaMercadoria(models.Model):
         super().save(*args, **kwargs)
 
 
+class ParcelaEntradaMercadoria(models.Model):
+    entrada = models.ForeignKey(EntradaMercadoria, on_delete=models.CASCADE, related_name="parcelas_financeiras")
+    numero = models.CharField(max_length=30)
+    vencimento = models.DateField()
+    valor = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))])
+    origem = models.CharField(max_length=12, choices=[("xml", "XML"), ("manual", "Manual")], default="manual")
+    revisada = models.BooleanField(default=False)
+    conta_pagar = models.OneToOneField(
+        "caixa.ContaPagar",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="parcela_entrada_mercadoria",
+    )
+
+    class Meta:
+        ordering = ["vencimento", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["entrada", "numero"], name="entrada_parcela_numero_unico")
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.valor is not None and self.valor <= 0:
+            raise ValidationError({"valor": "O valor da parcela deve ser positivo."})
+
+    def __str__(self):
+        return f"{self.entrada.numero} · parcela {self.numero} · {self.vencimento:%d/%m/%Y}"
+
+
 class ItemEntradaMercadoria(models.Model):
     entrada = models.ForeignKey(EntradaMercadoria, on_delete=models.CASCADE, related_name="itens")
     produto = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name="itens_entrada_mercadoria")
@@ -1496,6 +1938,232 @@ class ItemEntradaMercadoria(models.Model):
     def numeros_serie_lista(self):
         texto = str(self.numeros_serie or "").replace(";", "\n").replace(",", "\n")
         return [linha.strip() for linha in texto.splitlines() if linha.strip()]
+
+
+class ItemImportacaoXML(models.Model):
+    NIVEL_CORRESPONDENCIA_CHOICES = [
+        ("exato", "Exato"),
+        ("provavel", "Provavel"),
+        ("novo", "Novo"),
+        ("conflito", "Conflito"),
+    ]
+    STATUS_PRE_CADASTRO_CHOICES = [
+        ("nao_iniciado", "Não iniciado"),
+        ("rascunho", "Rascunho incompleto"),
+        ("pronto", "Pronto para aprovação"),
+        ("aprovado", "Aprovado"),
+        ("nao_aplicavel", "Produto existente"),
+    ]
+    entrada = models.ForeignKey(EntradaMercadoria, on_delete=models.CASCADE, related_name="itens_xml")
+    numero_item = models.PositiveIntegerField()
+    codigo_fornecedor = models.CharField(max_length=60, blank=True)
+    gtin = models.CharField(max_length=50, blank=True)
+    descricao = models.CharField(max_length=255)
+    ncm = models.CharField(max_length=10, blank=True)
+    cest = models.CharField(max_length=10, blank=True)
+    cfop = models.CharField(max_length=10, blank=True)
+    unidade = models.CharField(max_length=10, blank=True)
+    quantidade = models.DecimalField(max_digits=14, decimal_places=4)
+    valor_unitario = models.DecimalField(max_digits=14, decimal_places=6)
+    valor_produtos = models.DecimalField(max_digits=14, decimal_places=2)
+    desconto_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tributos_informados = models.JSONField(default=dict, blank=True)
+    impostos_custo_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tributos_recuperaveis_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    revisao_tributaria_confirmada = models.BooleanField(default=False)
+    produto = models.ForeignKey(Produto, on_delete=models.PROTECT, null=True, blank=True, related_name="itens_xml_compra")
+    item_entrada = models.OneToOneField(ItemEntradaMercadoria, on_delete=models.SET_NULL, null=True, blank=True, related_name="origem_xml")
+    correspondencia = models.CharField(max_length=20, blank=True, choices=[("gtin", "GTIN"), ("codigo_fornecedor", "Código no fornecedor"), ("manual", "Manual"), ("novo", "Produto novo")])
+    nivel_correspondencia = models.CharField(
+        max_length=12, blank=True, choices=NIVEL_CORRESPONDENCIA_CHOICES
+    )
+    candidatos_correspondencia = models.JSONField(default=list, blank=True)
+    dados_originais = models.JSONField(default=dict, blank=True)
+    status_pre_cadastro = models.CharField(
+        max_length=20, choices=STATUS_PRE_CADASTRO_CHOICES, default="nao_iniciado"
+    )
+    nome_proposto = models.CharField(max_length=100, blank=True)
+    tipo_item_proposto = models.CharField(
+        max_length=20, choices=Produto.TIPO_ITEM_CHOICES, default="produto"
+    )
+    categoria_proposta = models.ForeignKey(
+        CategoriaProduto,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_xml_propostos",
+    )
+    marca_proposta = models.ForeignKey(
+        "configuracoes.MarcaGarantia",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_xml_propostos",
+    )
+    ncm_proposto = models.CharField(max_length=8, blank=True)
+    margem_lucro_proposta = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    margem_minima_proposta = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    preco_final_proposto = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    sugestoes_cadastro = models.JSONField(default=dict, blank=True)
+    pendencias_cadastro = models.JSONField(default=list, blank=True)
+    rascunho_salvo_em = models.DateTimeField(null=True, blank=True)
+    rascunho_salvo_por = models.ForeignKey(
+        "configuracoes.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rascunhos_produto_xml_salvos",
+    )
+
+    class Meta:
+        ordering = ["numero_item"]
+        constraints = [models.UniqueConstraint(fields=["entrada", "numero_item"], name="entrada_xml_numero_item_unico")]
+
+    @property
+    def resolvido(self):
+        return bool(self.produto_id and self.revisao_tributaria_confirmada)
+
+
+class LoteImportacaoCompra(models.Model):
+    ORIGEM_CHOICES = [("xml", "XML"), ("zip_xml", "Lote ZIP de XML")]
+    STATUS_CHOICES = [
+        ("em_revisao", "Em revisao"),
+        ("concluido", "Concluido"),
+        ("cancelado", "Cancelado"),
+    ]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="lotes_importacao_compra"
+    )
+    codigo = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    origem = models.CharField(max_length=12, choices=ORIGEM_CHOICES)
+    arquivo_nome = models.CharField(max_length=255)
+    arquivo_sha256 = models.CharField(max_length=64)
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default="em_revisao")
+    total_documentos = models.PositiveIntegerField(default=0)
+    documentos_novos = models.PositiveIntegerField(default=0)
+    documentos_existentes = models.PositiveIntegerField(default=0)
+    criado_por = models.ForeignKey(
+        "configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="lotes_importacao_compra",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "arquivo_sha256"], name="lote_compra_empresa_arquivo_unico"
+            )
+        ]
+
+    @property
+    def pendencias(self):
+        return ItemImportacaoXML.objects.filter(
+            entrada__documentos_lote__lote=self
+        ).filter(models.Q(produto__isnull=True) | models.Q(revisao_tributaria_confirmada=False)).count()
+
+    def __str__(self):
+        return f"{str(self.codigo)[:8]} - {self.arquivo_nome}"
+
+
+class DocumentoLoteImportacao(models.Model):
+    lote = models.ForeignKey(
+        LoteImportacaoCompra, on_delete=models.CASCADE, related_name="documentos"
+    )
+    entrada = models.ForeignKey(
+        EntradaMercadoria, on_delete=models.PROTECT, related_name="documentos_lote"
+    )
+    criada_na_importacao = models.BooleanField(default=False)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["entrada__documento_numero", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["lote", "entrada"], name="lote_compra_entrada_unica")
+        ]
+
+
+class MapeamentoImportacaoProduto(models.Model):
+    FORMATO_CHOICES = [("csv", "CSV"), ("xlsx", "XLSX")]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="mapeamentos_importacao_produto"
+    )
+    fornecedor = models.ForeignKey(
+        "configuracoes.FornecedorGarantia", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="mapeamentos_importacao_produto",
+    )
+    nome = models.CharField(max_length=100)
+    formato = models.CharField(max_length=8, choices=FORMATO_CHOICES)
+    mapeamento = models.JSONField(default=dict)
+    padroes = models.JSONField(default=dict, blank=True)
+    ativo = models.BooleanField(default=True)
+    criado_por = models.ForeignKey(
+        "configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="mapeamentos_importacao_produto_criados",
+    )
+    ultimo_uso_em = models.DateTimeField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["fornecedor__nome", "nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "fornecedor", "nome"],
+                condition=models.Q(fornecedor__isnull=False),
+                name="map_importacao_empresa_fornecedor_nome_unico",
+            ),
+            models.UniqueConstraint(
+                fields=["empresa", "nome"],
+                condition=models.Q(fornecedor__isnull=True),
+                name="map_importacao_empresa_geral_nome_unico",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.nome} - {self.fornecedor.nome if self.fornecedor_id else 'Geral'}"
+
+
+class DocumentoFiscalConferencia(models.Model):
+    TIPO_CHOICES = [("cte", "CT-e"), ("nfse", "NFS-e"), ("sped", "SPED/EFD")]
+    STATUS_CHOICES = [("conferir", "A conferir"), ("conferido", "Conferido"), ("rejeitado", "Rejeitado")]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="documentos_fiscais_conferencia"
+    )
+    tipo = models.CharField(max_length=8, choices=TIPO_CHOICES)
+    arquivo = models.FileField(upload_to="estoque/documentos_conferencia/%Y/%m/")
+    arquivo_nome = models.CharField(max_length=255)
+    arquivo_sha256 = models.CharField(max_length=64)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="conferir")
+    numero_documento = models.CharField(max_length=60, blank=True)
+    chave_documento = models.CharField(max_length=60, blank=True)
+    emitente_documento = models.CharField(max_length=30, blank=True)
+    valor_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    data_documento = models.DateField(null=True, blank=True)
+    resumo = models.JSONField(default=dict, blank=True)
+    observacao = models.CharField(max_length=240, blank=True)
+    criado_por = models.ForeignKey(
+        "configuracoes.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="documentos_fiscais_conferencia_criados",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    conferido_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "tipo", "arquivo_sha256"],
+                name="doc_conferencia_empresa_tipo_hash_unico",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} {self.numero_documento or self.arquivo_nome}"
 
 
 class EstoqueLote(models.Model):
@@ -1588,6 +2256,46 @@ class EstoqueSerie(models.Model):
 
     def __str__(self):
         return f"{self.produto.nome} - serie {self.numero}"
+
+
+class ExecucaoAuditoriaEstoque(models.Model):
+    STATUS_CHOICES = [
+        ("ok", "Sem divergencias"),
+        ("divergencia", "Com divergencias"),
+        ("erro", "Erro de execucao"),
+    ]
+    ORIGEM_CHOICES = [
+        ("agendada", "Agendada"),
+        ("manual", "Manual"),
+        ("sistema", "Sistema"),
+    ]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="execucoes_auditoria_estoque",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    origem = models.CharField(max_length=20, choices=ORIGEM_CHOICES, default="agendada")
+    apenas_ativos = models.BooleanField(default=True)
+    total_divergencias = models.PositiveIntegerField(default=0)
+    resumo = models.JSONField(default=dict, blank=True)
+    detalhes = models.JSONField(default=dict, blank=True)
+    mensagem_erro = models.TextField(blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        indexes = [
+            models.Index(fields=["empresa", "-criado_em"], name="idx_audest_emp_criado"),
+            models.Index(fields=["status", "-criado_em"], name="idx_audest_status_criado"),
+        ]
+
+    def __str__(self):
+        empresa = getattr(self.empresa, "nome", None) or "Todas as empresas"
+        return f"Auditoria {empresa} - {self.get_status_display()} - {self.criado_em:%d/%m/%Y %H:%M}"
 
 
 

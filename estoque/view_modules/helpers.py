@@ -8,7 +8,7 @@ import re
 import string
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from configuracoes.models import ConfiguracaoSistema, Empresa, FornecedorGarantia, MarcaGarantia
@@ -161,6 +161,8 @@ def _aplicar_estoque_inicial(produto, *, estoque_inicial=0, custo_entrada=None, 
             valor_unitario_custo=custo if custo > 0 else None,
             observacao=(observacao or "Entrada inicial no cadastro do produto.")[:200],
             usuario=usuario if getattr(usuario, "is_authenticated", False) else None,
+            origem_tipo="cadastro_produto",
+            origem_referencia=str(produto.pk),
         )
     return quantidade
 
@@ -302,6 +304,20 @@ def _normalizar_linha_importacao(linha):
         "modelos_compativeis": _val("modelos_compativeis"),
         "preco_final": _val("preco_final", "0"),
         "custo_unitario": _val("custo_unitario", "0"),
+        "custo_frete": _val("custo_frete", "0"),
+        "custo_impostos": _val("custo_impostos", "0"),
+        "custo_comissao": _val("custo_comissao", "0"),
+        "custo_marketplace": _val("custo_marketplace", "0"),
+        "custo_cac": _val("custo_cac", "0"),
+        "margem_lucro": _val("margem_lucro", "0"),
+        "margem_minima": _val("margem_minima", "0"),
+        "ncm": _val("ncm"),
+        "cest": _val("cest"),
+        "cfop_padrao": _val("cfop_padrao") or _val("cfop"),
+        "cst_csosn": _val("cst_csosn") or _val("csosn") or _val("cst"),
+        "origem_mercadoria": _val("origem_mercadoria"),
+        "unidade_comercial": _val("unidade_comercial", "UN"),
+        "codigo_beneficio_fiscal": _val("codigo_beneficio_fiscal") or _val("cbenef"),
         "estoque_minimo": _val("estoque_minimo", "0"),
         "estoque_inicial": _val("estoque_inicial", "0"),
         "ponto_operacional": _val("ponto_operacional"),
@@ -311,13 +327,16 @@ def _normalizar_linha_importacao(linha):
 
 def _contexto_rateio_produto(produto=None, empresa=None):
     competencia = timezone.localdate().replace(day=1)
-    configuracao = ConfiguracaoRateioCustoFixo.get_solo()
+    configuracao = ConfiguracaoRateioCustoFixo.get_solo(empresa)
     total_fixos = Decimal("0.00")
     try:
         from caixa.models import CustoFixoMensal
 
+        custos_fixos_qs = CustoFixoMensal.objects.filter(competencia=competencia, ativo=True)
+        if empresa:
+            custos_fixos_qs = custos_fixos_qs.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
         total_fixos = (
-            CustoFixoMensal.objects.filter(competencia=competencia, ativo=True)
+            custos_fixos_qs
             .exclude(status="cancelado")
             .aggregate(total=Sum("valor_previsto"))["total"]
             or Decimal("0.00")
@@ -402,13 +421,16 @@ def _contexto_precificacao_produto(produto=None):
 
 def _resumo_rateio_atual(empresa=None):
     competencia = timezone.localdate().replace(day=1)
-    configuracao = ConfiguracaoRateioCustoFixo.get_solo()
+    configuracao = ConfiguracaoRateioCustoFixo.get_solo(empresa)
     total_fixos = Decimal("0.00")
     try:
         from caixa.models import CustoFixoMensal
 
+        custos_fixos_qs = CustoFixoMensal.objects.filter(competencia=competencia, ativo=True)
+        if empresa:
+            custos_fixos_qs = custos_fixos_qs.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
         total_fixos = (
-            CustoFixoMensal.objects.filter(competencia=competencia, ativo=True)
+            custos_fixos_qs
             .exclude(status="cancelado")
             .aggregate(total=Sum("valor_previsto"))["total"]
             or Decimal("0.00")
@@ -423,7 +445,7 @@ def _resumo_rateio_atual(empresa=None):
         produtos = [produto for produto in produtos if produto.empresa_id == empresa.id]
     detalhes = []
     total_base = Decimal("0.00")
-    realizado_por_produto = RateioCustoFixoCompetencia._realizado_por_produto(competencia)
+    realizado_por_produto = RateioCustoFixoCompetencia._realizado_por_produto(competencia, empresa=empresa)
     for produto in produtos:
         base_rateio = produto.base_rateio_custo_fixo(criterio=configuracao.criterio_rateio)
         if base_rateio <= 0:
@@ -452,7 +474,9 @@ def _resumo_rateio_atual(empresa=None):
             detalhe["percentual_realizado"] = (Decimal(str(detalhe["quantidade_realizada"])) / Decimal(str(previsao))) * Decimal("100")
 
     detalhes.sort(key=lambda item: (item["custo_rateio_total"], item["produto"].nome), reverse=True)
-    snapshots = list(RateioCustoFixoCompetencia.objects.select_related("gerado_por").prefetch_related("itens").order_by("-competencia")[:6])
+    snapshots_qs = RateioCustoFixoCompetencia.objects.select_related("gerado_por").prefetch_related("itens")
+    snapshots_qs = snapshots_qs.filter(empresa=empresa) if empresa else snapshots_qs.filter(empresa__isnull=True)
+    snapshots = list(snapshots_qs.order_by("-competencia")[:6])
     historico_competencias = []
     for snapshot in snapshots:
         previstos = sum((int(item.previsao_venda_mensal or 0) for item in snapshot.itens.all()), 0)
@@ -492,7 +516,7 @@ def _resumo_rateio_atual(empresa=None):
         "produtos": detalhes[:20],
         "snapshots": snapshots,
         "historico_competencias": historico_competencias,
-        "snapshot_atual": RateioCustoFixoCompetencia.objects.filter(competencia=competencia).first(),
+        "snapshot_atual": snapshots_qs.filter(competencia=competencia).first(),
     }
 
 

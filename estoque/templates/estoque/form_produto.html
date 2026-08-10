@@ -502,11 +502,24 @@
                         </div>
                     </div>
                     <div class="row mt-2 campo-compacto">
-                        <div class="col-md-4">{{ form.marca.label_tag }}{{ form.marca }}{% if form.marca.help_text %}<small class="text-muted d-block">{{ form.marca.help_text }}</small>{% endif %}</div>
+                        <div class="col-md-4">
+                            {{ form.marca.label_tag }}{{ form.marca }}
+                            {% if form.marca.help_text %}<small class="text-muted d-block">{{ form.marca.help_text }}</small>{% endif %}
+                            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="btn-toggle-marca-manual">
+                                <i class="fas fa-pen mr-1"></i> Outra marca / fabricante
+                            </button>
+                        </div>
                         <div class="col-md-4">{{ form.fornecedor_config.label_tag }}{{ form.fornecedor_config }}{% if form.fornecedor_config.help_text %}<small class="text-muted d-block">{{ form.fornecedor_config.help_text }}</small>{% endif %}</div>
                         <div class="col-md-4">
                             {{ form.modelos_compativeis.label_tag }}{{ form.modelos_compativeis }}
                             {% if form.modelos_compativeis.help_text %}<small class="text-muted d-block">{{ form.modelos_compativeis.help_text }}</small>{% endif %}
+                        </div>
+                    </div>
+                    <div class="row mt-2 campo-compacto" id="bloco-marca-manual" style="display:none;">
+                        <div class="col-md-4">
+                            {{ form.marca_manual.label_tag }}{{ form.marca_manual }}
+                            {% if form.marca_manual.errors %}<div class="text-danger small">{{ form.marca_manual.errors|join:", " }}</div>{% endif %}
+                            {% if form.marca_manual.help_text %}<small class="text-muted d-block">{{ form.marca_manual.help_text }}</small>{% endif %}
                         </div>
                     </div>
                     <div class="row mt-2 campo-compacto">
@@ -807,8 +820,30 @@
                         </div>
                     </div>
 
-                    <div class="pricing-subsection modo-avancado" id="bloco-tributos">
+                    <div class="pricing-subsection" id="bloco-tributos">
                         <div class="pricing-subsection-title">3. Tributos da venda (%)</div>
+                        <div class="alert alert-success border py-2 mb-3 small" id="tributacao-automatica-status">
+                            A regra vigente da empresa será aplicada automaticamente. <a href="{% url 'fiscal:motor_tributario' %}">Configurar motor tributário</a>.
+                        </div>
+                        {% if modo_edicao and produto.precificacao_snapshot %}
+                        <div class="alert alert-light border py-2 mb-3 small">
+                            <strong>Rastreabilidade:</strong> motor {{ produto.precificacao_snapshot.motor }}, versão {{ produto.precificacao_versao }}, calculada em {{ produto.precificacao_atualizada_em|date:"d/m/Y H:i" }}. Alíquota efetiva: {{ produto.precificacao_snapshot.aliquota_efetiva }}% · regra {{ produto.precificacao_snapshot.tributacao.regra_codigo|default:"legada/manual" }} · anexo {{ produto.precificacao_snapshot.tributacao.anexo|default:"-" }}.
+                            {% if produto.precificacao_snapshot.tributacao_alertas %}<div class="text-warning mt-1">{{ produto.precificacao_snapshot.tributacao_alertas|join:" " }}</div>{% endif %}
+                        </div>
+                        {% endif %}
+                        <div class="row campo-compacto mb-2">
+                            <div class="col-md-4">{{ form.regra_tributaria.label_tag }}{{ form.regra_tributaria }}<small class="text-muted d-block">{{ form.regra_tributaria.help_text }}</small></div>
+                            <div class="col-md-2">{{ form.ncm.label_tag }}{{ form.ncm }}</div>
+                            <div class="col-md-2">{{ form.cest.label_tag }}{{ form.cest }}</div>
+                            <div class="col-md-2">{{ form.origem_mercadoria.label_tag }}{{ form.origem_mercadoria }}</div>
+                            <div class="col-md-2">{{ form.codigo_servico.label_tag }}{{ form.codigo_servico }}</div>
+                        </div>
+                        <div class="row campo-compacto mb-2">
+                            <div class="col-md-2">{{ form.unidade_comercial.label_tag }}{{ form.unidade_comercial }}</div>
+                            <div class="col-md-2">{{ form.cfop_padrao.label_tag }}{{ form.cfop_padrao }}</div>
+                            <div class="col-md-2">{{ form.cst_csosn.label_tag }}{{ form.cst_csosn }}</div>
+                            <div class="col-md-3">{{ form.codigo_beneficio_fiscal.label_tag }}{{ form.codigo_beneficio_fiscal }}</div>
+                        </div>
                         <div class="row campo-compacto">
                             <div class="col-md-2 form-check mt-4">{{ form.usar_aliquota_manual }} {{ form.usar_aliquota_manual.label_tag }}</div>
                             <div class="col-md-2">
@@ -844,8 +879,8 @@
                             <div class="col-lg-6 mb-2 mb-lg-0">
                                 <div class="produto-flow-card h-100">
                                     <h4>Modo simples</h4>
-                                    <p class="mb-1">Usa o <strong>custo total</strong> e aplica a <strong>margem desejada</strong> diretamente.</p>
-                                    <small class="text-muted">Formula base: custo total x (1 + margem).</small>
+                                    <p class="mb-1">Aplica a <strong>margem sobre o custo</strong> e acrescenta automaticamente tributos e taxa de cartao.</p>
+                                    <small class="text-muted">Formula: custo x (1 + margem) / (1 - tributos - cartao).</small>
                                 </div>
                             </div>
                             <div class="col-lg-6">
@@ -995,13 +1030,23 @@
                     <div class="secao mt-3 mb-0">
                         <div class="secao-titulo mb-2">Simulador por forma de pagamento</div>
                         <div class="row campo-compacto">
+                            <div class="col-md-4">
+                                <label for="id_forma_pagamento_simulacao">Forma usada no preço sugerido</label>
+                                <select id="id_forma_pagamento_simulacao" class="form-control">
+                                    <option value="">Taxa média do produto (fallback)</option>
+                                    {% for forma in formas_pagamento_precificacao %}
+                                    <option value="{{ forma.id }}">{{ forma.nome }} — {{ forma.taxa_percentual|floatformat:2 }}%</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">A taxa cadastrada no Caixa substitui a taxa média apenas nesta simulação.</small>
+                            </div>
                             <div class="col-md-2">
                                 <label for="id_taxa_pix_ui">Taxa PIX (%)</label>
-                                <input id="id_taxa_pix_ui" class="form-control" type="number" step="0.01" min="0" value="0.00">
+                                <input id="id_taxa_pix_ui" class="form-control calc-readonly" type="number" step="0.01" min="0" value="0.00" readonly>
                             </div>
                             <div class="col-md-2">
                                 <label for="id_taxa_dinheiro_ui">Taxa dinheiro (%)</label>
-                                <input id="id_taxa_dinheiro_ui" class="form-control" type="number" step="0.01" min="0" value="0.00">
+                                <input id="id_taxa_dinheiro_ui" class="form-control calc-readonly" type="number" step="0.01" min="0" value="0.00" readonly>
                             </div>
                             <div class="col-md-2">
                                 <label for="id_taxa_marketplace_ui">Taxa marketplace (%)</label>
@@ -1077,6 +1122,7 @@
     </div>
 </div>
 {{ categorias_catalogo|json_script:"categorias-catalogo-data" }}
+{{ tributacao_context|json_script:"tributacao-context-data" }}
 {% endblock %}
 
 {% block extra_js %}
@@ -1092,6 +1138,12 @@ function moeda(valor) {
 
 function percentual(valor) {
     return `${valor.toFixed(2).replace(".", ",")}%`;
+}
+
+function htmlSeguro(valor) {
+    const elemento = document.createElement("div");
+    elemento.textContent = String(valor ?? "");
+    return elemento.innerHTML;
 }
 
 function precoArredondadoComCentavos(valor, centavosDesejados) {
@@ -1143,6 +1195,18 @@ function atualizarCategoriaManual() {
         botao.classList.toggle("btn-secondary", deveMostrar);
         botao.classList.toggle("btn-outline-secondary", !deveMostrar);
     }
+}
+
+function atualizarMarcaManual() {
+    const bloco = document.getElementById("bloco-marca-manual");
+    const campoCatalogo = document.getElementById("id_marca");
+    const campoManual = document.getElementById("id_marca_manual");
+    const botao = document.getElementById("btn-toggle-marca-manual");
+    if (!bloco || !campoManual) return;
+    const deveMostrar = !!campoManual.dataset.forcarAberto || (!!campoManual.value && !campoCatalogo?.value);
+    bloco.style.display = deveMostrar ? "" : "none";
+    botao?.classList.toggle("btn-secondary", deveMostrar);
+    botao?.classList.toggle("btn-outline-secondary", !deveMostrar);
 }
 
 function atualizarCategoriaRapida() {
@@ -1366,188 +1430,147 @@ function sincronizarUbicacaoDigitada() {
 
 function atualizarCamposTributarios() {
     const usarManual = document.getElementById("id_usar_aliquota_manual")?.checked;
-    const modoPreco = document.getElementById("id_modo_preco")?.value || "avancado";
     const aliquotaManual = document.getElementById("id_aliquota_manual");
     if (aliquotaManual) {
-        aliquotaManual.readOnly = !usarManual || modoPreco === "simples";
+        aliquotaManual.readOnly = !usarManual;
     }
-    const blocoTributos = document.getElementById("bloco-tributos");
-    if (blocoTributos) {
-        blocoTributos.style.display = modoPreco === "simples" ? "none" : "";
+    atualizarStatusTributacao();
+}
+
+function tributacaoConfigurada() {
+    const script = document.getElementById("tributacao-context-data");
+    if (!script) return {};
+    try {
+        return JSON.parse(script.textContent || "{}");
+    } catch (error) {
+        return {};
     }
 }
 
-function aliquotaTotal() {
-    const usarManual = document.getElementById("id_usar_aliquota_manual")?.checked;
-    if (usarManual) return numero("id_aliquota_manual");
-    return numero("id_icms") + numero("id_ipi") + numero("id_pis") + numero("id_cofins");
-}
-
-function lucroUnitarioReferenciaRateio(custoOperacionalFinal, precoSugeridoAtual) {
-    const precoFinal = numero("id_preco_final");
-    const precoReferencia = precoFinal > 0 ? precoFinal : precoSugeridoAtual;
-    const custoSemRateio = numero("id_custo_unitario") + custoOperacionalFinal;
-    return Math.max(0, precoReferencia - custoSemRateio);
-}
-
-function calcularRateioFixoUnitario() {
-    const campoRateio = document.getElementById("id_custo_rateio_fixo_ui");
-    const incluirRateio = document.getElementById("id_incluir_rateio_custo_fixo")?.checked;
-    const tipoItem = document.getElementById("id_tipo_item")?.value || "produto";
-    const previsaoMensal = numero("id_previsao_venda_mensal");
-    const totalFixos = parseFloat((campoRateio?.dataset.totalFixos || "0").replace(",", ".")) || 0;
-    const totalBaseExistente = parseFloat((campoRateio?.dataset.totalBaseRateio || "0").replace(",", ".")) || 0;
-    const criterioRateio = campoRateio?.dataset.criterioRateio || "unidades";
-    const custoOperacionalSemRateio =
-        numero("id_custo_frete") +
-        numero("id_custo_impostos") +
-        numero("id_custo_comissao") +
-        numero("id_custo_marketplace") +
-        numero("id_custo_cac");
-    const custoOperacionalBase = custoOperacionalSemRateio > 0 ? custoOperacionalSemRateio : numero("id_custo_operacional");
-    const custoTotalSemRateio = numero("id_custo_unitario") + custoOperacionalBase;
-    const modoPreco = document.getElementById("id_modo_preco")?.value || "avancado";
-    let precoSugeridoBase = custoTotalSemRateio;
-    if (modoPreco === "simples") {
-        precoSugeridoBase = custoTotalSemRateio * (1 + (numero("id_margem_lucro") / 100));
+function atualizarStatusTributacao() {
+    const alvo = document.getElementById("tributacao-automatica-status");
+    if (!alvo) return;
+    const config = tributacaoConfigurada();
+    const manual = document.getElementById("id_usar_aliquota_manual")?.checked;
+    if (manual) {
+        alvo.innerHTML = "<strong>Excecao manual:</strong> o motor oficial validara a aliquota informada.";
+    } else if (config.empresa_configurada) {
+        const tipo = document.getElementById("id_tipo_item")?.value === "servico" ? "servico" : "comercio";
+        alvo.innerHTML = `<strong>Calculo automatico:</strong> ${config.regime_display} / ${config.modo_display}; o motor oficial calculara a aliquota de ${tipo}.`;
     } else {
-        const fator = 1 - (aliquotaTotal() / 100) - (numero("id_taxa_cartao") / 100) - (numero("id_margem_lucro") / 100);
-        precoSugeridoBase = fator <= 0 ? custoTotalSemRateio : custoTotalSemRateio / fator;
+        alvo.innerHTML = "<strong>Sem empresa tributaria vinculada:</strong> o motor oficial validara os tributos informados no produto.";
     }
-    if (!campoRateio || !incluirRateio || tipoItem === "servico" || previsaoMensal <= 0 || totalFixos <= 0) {
-        if (campoRateio) campoRateio.value = "0.00";
-        return 0;
-    }
-
-    let baseAtual = previsaoMensal;
-    if (criterioRateio === "faturamento") {
-        const precoFinal = numero("id_preco_final");
-        const precoReferencia = precoFinal > 0 ? precoFinal : precoSugeridoBase;
-        baseAtual = previsaoMensal * precoReferencia;
-    } else if (criterioRateio === "margem") {
-        baseAtual = previsaoMensal * lucroUnitarioReferenciaRateio(custoOperacionalBase, precoSugeridoBase);
-    }
-
-    const totalBase = totalBaseExistente + baseAtual;
-    if (totalBase <= 0 || baseAtual <= 0) {
-        campoRateio.value = "0.00";
-        return 0;
-    }
-
-    const alocacaoTotal = totalFixos * (baseAtual / totalBase);
-    const rateioUnitario = alocacaoTotal / previsaoMensal;
-    campoRateio.value = rateioUnitario.toFixed(2);
-    return rateioUnitario;
 }
 
-function recalcularPreco() {
-    const custoUnitario = numero("id_custo_unitario");
-    const custoOperacional = numero("id_custo_operacional");
-    const frete = numero("id_custo_frete");
-    const impostos = numero("id_custo_impostos");
-    const comissao = numero("id_custo_comissao");
-    const marketplace = numero("id_custo_marketplace");
-    const cac = numero("id_custo_cac");
-    const rateioFixo = calcularRateioFixoUnitario();
-    const margemLucro = numero("id_margem_lucro");
-    const margemMinima = numero("id_margem_minima");
-    const taxaCartao = numero("id_taxa_cartao");
-    const modoPreco = document.getElementById("id_modo_preco")?.value || "avancado";
+let precificacaoServidorTimer = null;
+let precificacaoServidorController = null;
+let ultimaAliquotaServidor = 0;
 
-    const custosDetalhados = frete + impostos + comissao + marketplace + cac + rateioFixo;
-    const custoOperacionalFinal = custosDetalhados > 0 ? custosDetalhados : custoOperacional;
-    const custoCompra = custoUnitario + frete;
-    const custoVendaVariavel = impostos + comissao + marketplace + cac + rateioFixo;
-    const custoTotal = custoUnitario + custoOperacionalFinal;
-    const campoCustoOper = document.getElementById("id_custo_operacional");
-    const hintCustoOper = document.getElementById("hint-custo-operacional");
+function aplicarResultadoCanal(codigo, resultado) {
+    if (!resultado) return;
+    const mapa = {
+        dinheiro: ["sim-lucro-dinheiro", "sim-margem-dinheiro", "sim-recebido-dinheiro", "sim-minimo-dinheiro", "id_taxa_dinheiro_ui"],
+        pix: ["sim-lucro-pix", "sim-margem-pix", "sim-recebido-pix", "sim-minimo-pix", "id_taxa_pix_ui"],
+        cartao: ["sim-lucro-cartao", "sim-margem-cartao", "sim-recebido-cartao", "sim-minimo-cartao", null],
+        marketplace: ["sim-lucro-marketplace", "sim-margem-marketplace", "sim-recebido-marketplace", "sim-minimo-marketplace", "id_taxa_marketplace_ui"],
+    };
+    const ids = mapa[codigo];
+    if (!ids) return;
+    const [lucroId, margemId, recebidoId, minimoId, taxaId] = ids;
+    const lucro = Number(resultado.lucro || 0);
+    const margem = Number(resultado.margem_receita || 0);
+    const recebido = Number(resultado.recebido || 0);
+    const minimo = Number(resultado.preco_minimo || 0);
+    if (document.getElementById(lucroId)) document.getElementById(lucroId).textContent = moeda(lucro);
+    if (document.getElementById(margemId)) document.getElementById(margemId).textContent = `Margem sobre receita ${percentual(margem)}`;
+    if (document.getElementById(recebidoId)) document.getElementById(recebidoId).textContent = `Recebe ${moeda(recebido)}`;
+    if (document.getElementById(minimoId)) document.getElementById(minimoId).textContent = `Minimo ${moeda(minimo)}`;
+    if (taxaId && document.getElementById(taxaId)) document.getElementById(taxaId).value = Number(resultado.taxa_percentual || 0).toFixed(2);
+}
 
-    if (custosDetalhados > 0) {
-        if (campoCustoOper) {
-            campoCustoOper.value = custoOperacionalFinal.toFixed(2);
+async function executarPrecificacaoServidor() {
+    const form = document.getElementById("form-produto");
+    if (!form) return;
+    if (precificacaoServidorController) precificacaoServidorController.abort();
+    precificacaoServidorController = new AbortController();
+    const dados = new FormData(form);
+    dados.set("produto_id", "{{ produto.id|default:'' }}");
+    dados.set("forma_pagamento_id", document.getElementById("id_forma_pagamento_simulacao")?.value || "");
+    dados.set("taxa_pix", document.getElementById("id_taxa_pix_ui")?.value || "0");
+    dados.set("taxa_dinheiro", document.getElementById("id_taxa_dinheiro_ui")?.value || "0");
+    dados.set("taxa_marketplace", document.getElementById("id_taxa_marketplace_ui")?.value || "0");
+    dados.set("desconto", document.getElementById("id_desconto_simulado_ui")?.value || "0");
+    try {
+        const resposta = await fetch("{% url 'estoque:api_simular_precificacao' %}", {
+            method: "POST",
+            body: dados,
+            headers: {"X-CSRFToken": dados.get("csrfmiddlewaretoken") || ""},
+            signal: precificacaoServidorController.signal,
+        });
+        const payload = await resposta.json();
+        if (!resposta.ok || !payload.ok) throw new Error(payload.erro || "Falha ao simular precificacao.");
+
+        const resultado = payload.resultado || {};
+        const principal = resultado.resultado_principal || {};
+        const custoUnitario = numero("id_custo_unitario");
+        const frete = numero("id_custo_frete");
+        const custoOperacional = Number(payload.custo_operacional || 0);
+        const custoTotal = Number(resultado.custo_base || 0);
+        const precoSugerido = Number(resultado.preco_sugerido || 0);
+        const precoMinimo = Number(resultado.preco_minimo || 0);
+        const precoUsado = Number(resultado.preco_usado || 0);
+        ultimaAliquotaServidor = Number(payload.aliquota || 0);
+
+        const campoCustoOper = document.getElementById("id_custo_operacional");
+        const campoRateio = document.getElementById("id_custo_rateio_fixo_ui");
+        const custosDetalhados = ["id_custo_frete", "id_custo_impostos", "id_custo_comissao", "id_custo_marketplace", "id_custo_cac"].some((id) => numero(id) > 0);
+        if (campoCustoOper && (custosDetalhados || Number(payload.custo_rateio_fixo || 0) > 0)) {
+            campoCustoOper.value = custoOperacional.toFixed(2);
             campoCustoOper.readOnly = true;
             campoCustoOper.classList.add("calc-readonly");
-        }
-        if (hintCustoOper) hintCustoOper.textContent = "Custos detalhados ativos: campo recalculado automaticamente.";
-    } else {
-        if (campoCustoOper) {
+        } else if (campoCustoOper) {
             campoCustoOper.readOnly = false;
             campoCustoOper.classList.remove("calc-readonly");
         }
-        if (hintCustoOper) hintCustoOper.textContent = "Sem custos detalhados: campo operacional editavel manualmente.";
+        if (campoRateio) campoRateio.value = Number(payload.custo_rateio_fixo || 0).toFixed(2);
+        if (document.getElementById("id_preco_sugerido_ui")) document.getElementById("id_preco_sugerido_ui").value = precoSugerido.toFixed(2);
+        if (document.getElementById("id_preco_minimo_ui")) document.getElementById("id_preco_minimo_ui").value = precoMinimo.toFixed(2);
+
+        document.getElementById("kpi-custo").textContent = moeda(custoTotal);
+        document.getElementById("kpi-custo-compra").textContent = moeda(custoUnitario + frete);
+        document.getElementById("kpi-custo-venda").textContent = moeda(Math.max(0, custoOperacional - frete));
+        document.getElementById("kpi-preco-sugerido").textContent = moeda(precoSugerido);
+        document.getElementById("kpi-lucro").textContent = moeda(Number(principal.lucro || 0));
+        document.getElementById("kpi-margem").textContent = percentual(Number(principal.margem_receita || 0));
+        document.getElementById("kpi-lucro-cartao").textContent = moeda(Number((resultado.canais || {}).cartao?.lucro || 0));
+
+        const alerta = document.getElementById("alerta-minimo");
+        if (alerta) alerta.style.display = (precoUsado > 0 && precoUsado < precoMinimo) ? "block" : "none";
+        const blocoJustificativa = document.getElementById("bloco-justificativa-abaixo-minimo");
+        const checkAbaixoMin = document.getElementById("id_permitir_preco_abaixo_minimo");
+        if (blocoJustificativa) blocoJustificativa.style.display = (precoUsado > 0 && precoUsado < precoMinimo && !!checkAbaixoMin?.checked) ? "" : "none";
+
+        Object.entries(resultado.canais || {}).forEach(([codigo, item]) => aplicarResultadoCanal(codigo, item));
+        const status = document.getElementById("tributacao-automatica-status");
+        if (status) {
+            const tributacao = payload.tributacao || {};
+            const regra = htmlSeguro(tributacao.regra_codigo || "sem regra correspondente");
+            const anexo = tributacao.anexo ? `, anexo ${htmlSeguro(tributacao.anexo)}` : "";
+            const alertas = Array.isArray(tributacao.alertas) ? tributacao.alertas : [];
+            status.classList.toggle("alert-warning", alertas.length > 0 || tributacao.homologado === false);
+            status.classList.toggle("alert-success", alertas.length === 0 && tributacao.homologado !== false);
+            const formaReferencia = htmlSeguro(payload.forma_referencia || "padrao");
+            const alertasSeguros = alertas.map(htmlSeguro).join(" ");
+            status.innerHTML = `<strong>Motor tributario:</strong> regra ${regra}${anexo}; aliquota ${percentual(ultimaAliquotaServidor)}. Taxa de referencia ${percentual(Number(payload.taxa_referencia || 0))} (${formaReferencia}).${alertasSeguros ? `<div class="mt-1">${alertasSeguros}</div>` : ""}`;
+        }
+    } catch (error) {
+        if (error.name !== "AbortError") console.error(error);
     }
+}
 
-    let precoSugerido = custoTotal;
-    if (modoPreco === "simples") {
-        precoSugerido = custoTotal * (1 + (margemLucro / 100));
-    } else {
-        const fator = 1 - (aliquotaTotal() / 100) - (taxaCartao / 100) - (margemLucro / 100);
-        precoSugerido = fator <= 0 ? custoTotal : custoTotal / fator;
-    }
-
-    let precoMinimo = custoTotal;
-    if (margemMinima > 0) {
-        const fatorMinimo = 1 - (margemMinima / 100);
-        precoMinimo = fatorMinimo <= 0 ? custoTotal : custoTotal / fatorMinimo;
-    }
-
-    const campoSug = document.getElementById("id_preco_sugerido_ui");
-    const campoMin = document.getElementById("id_preco_minimo_ui");
-    if (campoSug) campoSug.value = precoSugerido.toFixed(2);
-    if (campoMin) campoMin.value = precoMinimo.toFixed(2);
-
-    const precoFinal = numero("id_preco_final");
-    const precoUsado = precoFinal > 0 ? precoFinal : precoSugerido;
-    const lucro = precoUsado - custoTotal;
-    const margemReal = precoUsado > 0 ? (lucro / precoUsado) * 100 : 0;
-    const recebidoCartao = precoUsado * (1 - (taxaCartao / 100));
-    const lucroCartao = recebidoCartao - custoTotal;
-
-    const alerta = document.getElementById("alerta-minimo");
-    const blocoJustificativa = document.getElementById("bloco-justificativa-abaixo-minimo");
-    const checkAbaixoMin = document.getElementById("id_permitir_preco_abaixo_minimo");
-    if (alerta) {
-        alerta.style.display = (precoUsado > 0 && precoUsado < precoMinimo) ? "block" : "none";
-    }
-    if (blocoJustificativa) {
-        const precisaJustificativa = precoUsado > 0 && precoUsado < precoMinimo && !!checkAbaixoMin?.checked;
-        blocoJustificativa.style.display = precisaJustificativa ? "" : "none";
-    }
-
-    document.getElementById("kpi-custo").textContent = moeda(custoTotal);
-    document.getElementById("kpi-custo-compra").textContent = moeda(custoCompra);
-    document.getElementById("kpi-custo-venda").textContent = moeda(custoVendaVariavel);
-    document.getElementById("kpi-preco-sugerido").textContent = moeda(precoSugerido);
-    document.getElementById("kpi-lucro").textContent = moeda(lucro);
-    document.getElementById("kpi-margem").textContent = percentual(margemReal);
-    document.getElementById("kpi-lucro-cartao").textContent = moeda(lucroCartao);
-
-    const taxaDinheiro = numero("id_taxa_dinheiro_ui");
-    const taxaPix = numero("id_taxa_pix_ui");
-    const taxaMarketplace = numero("id_taxa_marketplace_ui");
-    const descontoSimulado = Math.min(Math.max(numero("id_desconto_simulado_ui"), 0), 100);
-    const precoSimulado = precoUsado * (1 - (descontoSimulado / 100));
-    const taxas = [
-        { taxa: taxaDinheiro, lucroId: "sim-lucro-dinheiro", margemId: "sim-margem-dinheiro", recebidoId: "sim-recebido-dinheiro", minimoId: "sim-minimo-dinheiro" },
-        { taxa: taxaPix, lucroId: "sim-lucro-pix", margemId: "sim-margem-pix", recebidoId: "sim-recebido-pix", minimoId: "sim-minimo-pix" },
-        { taxa: taxaCartao, lucroId: "sim-lucro-cartao", margemId: "sim-margem-cartao", recebidoId: "sim-recebido-cartao", minimoId: "sim-minimo-cartao" },
-        { taxa: taxaMarketplace, lucroId: "sim-lucro-marketplace", margemId: "sim-margem-marketplace", recebidoId: "sim-recebido-marketplace", minimoId: "sim-minimo-marketplace" },
-    ];
-    taxas.forEach((item) => {
-        const recebido = precoSimulado * (1 - (item.taxa / 100));
-        const lucroCanal = recebido - custoTotal;
-        const margemCanal = recebido > 0 ? (lucroCanal / recebido) * 100 : 0;
-        const fatorCanal = 1 - (item.taxa / 100);
-        const precoMinimoCanal = fatorCanal <= 0 ? 0 : precoMinimo / fatorCanal;
-        const elLucro = document.getElementById(item.lucroId);
-        const elMargem = document.getElementById(item.margemId);
-        const elRecebido = document.getElementById(item.recebidoId);
-        const elMinimo = document.getElementById(item.minimoId);
-        if (elLucro) elLucro.textContent = moeda(lucroCanal);
-        if (elMargem) elMargem.textContent = `Margem ${percentual(margemCanal)}`;
-        if (elRecebido) elRecebido.textContent = `Recebe ${moeda(recebido)}`;
-        if (elMinimo) elMinimo.textContent = `Minimo ${moeda(precoMinimoCanal)}`;
-    });
+function recalcularPreco() {
+    clearTimeout(precificacaoServidorTimer);
+    precificacaoServidorTimer = setTimeout(executarPrecificacaoServidor, 180);
 }
 
 function configurarGeracaoEAN() {
@@ -1764,7 +1787,7 @@ document.addEventListener("DOMContentLoaded", () => {
         el.addEventListener("input", recalcularPreco);
         el.addEventListener("change", recalcularPreco);
     });
-    ["id_taxa_pix_ui", "id_taxa_dinheiro_ui", "id_taxa_marketplace_ui", "id_desconto_simulado_ui", "id_permitir_preco_abaixo_minimo"].forEach((id) => {
+    ["id_forma_pagamento_simulacao", "id_taxa_pix_ui", "id_taxa_dinheiro_ui", "id_taxa_marketplace_ui", "id_desconto_simulado_ui", "id_permitir_preco_abaixo_minimo"].forEach((id) => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener("input", recalcularPreco);
@@ -1786,6 +1809,23 @@ document.addEventListener("DOMContentLoaded", () => {
             campo.focus();
         }
     });
+    document.getElementById("btn-toggle-marca-manual")?.addEventListener("click", () => {
+        const campo = document.getElementById("id_marca_manual");
+        if (!campo) return;
+        if (campo.dataset.forcarAberto) delete campo.dataset.forcarAberto;
+        else campo.dataset.forcarAberto = "1";
+        atualizarMarcaManual();
+        if (campo.dataset.forcarAberto) campo.focus();
+    });
+    document.getElementById("id_marca")?.addEventListener("change", () => {
+        const campo = document.getElementById("id_marca_manual");
+        if (document.getElementById("id_marca")?.value && campo) {
+            campo.value = "";
+            delete campo.dataset.forcarAberto;
+        }
+        atualizarMarcaManual();
+    });
+    document.getElementById("id_marca_manual")?.addEventListener("input", atualizarMarcaManual);
     document.getElementById("id_categoria_config")?.addEventListener("change", () => {
         const campo = document.getElementById("id_categoria");
         if (!campo) return;
@@ -1801,6 +1841,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("id_tipo_item")?.addEventListener("change", () => {
         atualizarVisibilidadeTipoItem();
         atualizarUbicacoesPorPonto();
+        atualizarCamposTributarios();
+        recalcularPreco();
     });
     document.getElementById("id_ponto_operacional")?.addEventListener("change", atualizarUbicacoesPorPonto);
     document.getElementById("id_ubicacao_padrao")?.addEventListener("change", atualizarResumoOperacional);
@@ -1863,6 +1905,7 @@ document.addEventListener("DOMContentLoaded", () => {
     atualizarUbicacoesPorPonto();
     atualizarCamposTributarios();
     atualizarCategoriaManual();
+    atualizarMarcaManual();
     atualizarCategoriaRapida();
     atualizarCategoriaCatalogoInfo();
     atualizarResumoOperacional();

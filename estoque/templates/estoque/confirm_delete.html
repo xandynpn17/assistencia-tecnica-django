@@ -1,19 +1,20 @@
 ﻿{% extends "core/base.html" %}
 
-{% block title %}Confirmar Exclusao{% endblock %}
+{% block title %}Confirmar Inativacao{% endblock %}
 
 {% block header %}
-<h1 class="m-0 text-dark">Confirmar Exclusao</h1>
+<h1 class="m-0 text-dark">Confirmar Inativacao</h1>
 {% endblock %}
 
 {% block content %}
 <div class="card card-modern">
     <div class="card-modern-header">Confirmacao</div>
     <div class="card-modern-body">
-        <p>Voce tem certeza que deseja excluir o produto <strong>{{ produto.nome }}</strong>?</p>
+        <p>Voce tem certeza que deseja inativar o produto <strong>{{ produto.nome }}</strong>?</p>
+        <p class="text-muted">O produto deixara de aparecer nos fluxos ativos, mas movimentos, custos e historico serao preservados.</p>
         <form method="post">
             {% csrf_token %}
-            <button type="submit" class="btn btn-danger">Sim, excluir</button>
+            <button type="submit" class="btn btn-warning">Sim, inativar</button>
             <a href="{% url 'estoque:lista_produtos' %}" class="btn btn-secondary">Cancelar</a>
         </form>
     </div>

@@ -2,11 +2,12 @@ from datetime import date
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from configuracoes.permissions import ORDER_ROLES, STOCK_MANAGE_ROLES, has_role, role_required
-from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, filtrar_queryset_empresa, obter_empresa_ativa
 
 from ..models import AtendimentoPosVendaBalcao, PontoOperacional, VendaRapidaEstoque
 from ..services_pdv import (
@@ -36,7 +37,7 @@ def _lista_vendedores(empresa):
     )
     qs = base_qs
     if empresa:
-        qs = base_qs.filter(empresa=empresa)
+        qs = base_qs.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
         if not qs.exists():
             qs = base_qs
     qs = qs.order_by("username")
@@ -63,7 +64,11 @@ def painel_venda_mostrador(request):
 
     user_model = get_user_model()
     operadores = list(user_model.objects.filter(is_active=True, empresa=empresa).order_by("username").values("id", "username"))
-    pontos = list(PontoOperacional.objects.filter(ativo=True).order_by("codigo").values("id", "codigo", "nome"))
+    pontos = list(
+        filtrar_catalogo_empresa(PontoOperacional.objects.filter(ativo=True), empresa)
+        .order_by("codigo")
+        .values("id", "codigo", "nome")
+    )
 
     return render(
         request,

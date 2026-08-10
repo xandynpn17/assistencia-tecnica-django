@@ -20,9 +20,9 @@ from configuracoes.permissions import (
     has_role,
     role_required,
 )
-from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, filtrar_queryset_empresa, obter_empresa_ativa
 
-from ..models import PontoOperacional, Produto, ReservaEstoque, VendaRapidaEstoque
+from ..models import PontoOperacional, Produto, ReservaEstoque, TabelaPreco, VendaRapidaEstoque
 from ..services import (
     criar_item_cesto_venda_rapida,
     finalizar_cesto_venda_rapida,
@@ -44,7 +44,7 @@ def _listar_vendedores_operacao(empresa):
     )
     vendedores_qs = base_qs
     if empresa:
-        vendedores_qs = base_qs.filter(empresa=empresa)
+        vendedores_qs = base_qs.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
         if not vendedores_qs.exists():
             vendedores_qs = base_qs
     return vendedores_qs.order_by("username")
@@ -72,6 +72,11 @@ def consulta_artigos(request):
     config = ConfiguracaoSistema.get_configuracao()
     vendedores_qs = _listar_vendedores_operacao(empresa)
     vendedores = vendedores_qs.values("id", "username", "numero_vendedor")
+    tabelas_preco = TabelaPreco.objects.filter(ativo=True)
+    if empresa:
+        tabelas_preco = tabelas_preco.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+    else:
+        tabelas_preco = tabelas_preco.filter(empresa__isnull=True)
     return render(
         request,
         "estoque/consulta_artigos.html",
@@ -83,6 +88,7 @@ def consulta_artigos(request):
             "vendedores_disponiveis": list(vendedores),
             "pode_venda_mostrador": has_role(request.user, STOCK_MANAGE_ROLES),
             "pontos_venda_mostrador": config.pontos_venda_mostrador_lista(),
+            "tabelas_preco": tabelas_preco.order_by("nome"),
         },
     )
 
@@ -167,7 +173,9 @@ def api_resumo_artigo(request, produto_id):
         ativo=True,
     )
     _normalizar_saldos_produto(produto)
-    pontos = list(PontoOperacional.objects.filter(ativo=True).order_by("codigo"))
+    pontos = list(
+        filtrar_catalogo_empresa(PontoOperacional.objects.filter(ativo=True), produto.empresa).order_by("codigo")
+    )
     saldos_map = {
         s.ponto_operacional_id: s.quantidade
         for s in produto.saldos_por_ponto.select_related("ponto_operacional").only("ponto_operacional_id", "quantidade")
@@ -247,6 +255,7 @@ def api_venda_rapida(request):
     ponto_id = request.POST.get("ponto_id")
     funcionario_numero = (request.POST.get("funcionario_numero") or "").strip()
     cesto_codigo = (request.POST.get("cesto_codigo") or "").strip()
+    tabela_id = (request.POST.get("tabela_preco_id") or "").strip()
     try:
         quantidade = int(request.POST.get("quantidade") or "1")
     except ValueError:
@@ -263,6 +272,12 @@ def api_venda_rapida(request):
         id=produto_id,
     )
     ponto = get_object_or_404(PontoOperacional, id=ponto_id, ativo=True)
+    tabela_preco = None
+    if tabela_id:
+        tabelas_qs = TabelaPreco.objects.filter(ativo=True)
+        if empresa:
+            tabelas_qs = tabelas_qs.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        tabela_preco = get_object_or_404(tabelas_qs, id=tabela_id)
     _normalizar_saldos_produto(produto)
     try:
         resultado = criar_item_cesto_venda_rapida(
@@ -272,6 +287,7 @@ def api_venda_rapida(request):
             funcionario_numero=funcionario_numero,
             cesto_codigo=cesto_codigo,
             usuario=request.user,
+            tabela_preco=tabela_preco,
         )
     except ValueError as exc:
         status_code = 409 if "ja foi finalizado" in str(exc) else 400

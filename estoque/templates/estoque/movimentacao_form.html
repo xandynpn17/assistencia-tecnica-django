@@ -160,7 +160,8 @@
     <div class="mov-card-header">
       <h2 class="mov-card-title">Registrar movimentacao</h2>
       <div class="mov-card-subtitle">
-        Use esta tela para entradas, transferencias e ajustes operacionais com rastreabilidade mais clara.
+        Use esta tela para entradas, transferencias, ofertas, cedencias e ajustes operacionais com rastreabilidade mais clara.
+        <a href="{% url 'estoque:solicitacoes_saida' %}" class="ml-2">Ver solicitações e aprovações</a>
       </div>
     </div>
     <div class="mov-card-body">
@@ -192,6 +193,14 @@
         <button type="button" class="mov-flow-btn" data-flow="avaria" data-tipo="avaria">
           <strong>Registrar avaria</strong>
           <span>Perda, dano ou item fora de condicao de venda.</span>
+        </button>
+        <button type="button" class="mov-flow-btn" data-flow="oferta" data-tipo="oferta">
+          <strong>Oferecer / dar brinde</strong>
+          <span>Baixa o item pelo custo, sem registrar venda ou saida no Caixa.</span>
+        </button>
+        <button type="button" class="mov-flow-btn" data-flow="cedencia" data-tipo="cedencia">
+          <strong>Registrar cedencia</strong>
+          <span>Entrega interna ou a terceiro, com motivo e beneficiario.</span>
         </button>
         <button type="button" class="mov-flow-btn" data-flow="inventario" data-tipo="inventario">
           <strong>Ajuste de inventario</strong>
@@ -288,6 +297,45 @@
             <div class="mov-help">Opcional. Atualiza o custo medio quando o tipo for entrada de estoque.</div>
           </div>
 
+          <div class="mov-field-full" id="governanca-saida" style="display:none;">
+            <div class="mov-context mb-3">
+              Oferta e cedência exigem identificação do recebedor e finalidade. Se o custo ultrapassar o limite da empresa,
+              a solicitação ficará pendente e o estoque somente será baixado após aprovação gerencial.
+            </div>
+            <div class="mov-grid">
+              <div>
+                <label class="mov-label" for="{{ form.finalidade.id_for_label }}">{{ form.finalidade.label }}</label>
+                {{ form.finalidade }}
+                {% if form.finalidade.errors %}<div class="text-danger small mt-1">{{ form.finalidade.errors|join:", " }}</div>{% endif %}
+              </div>
+              <div>
+                <label class="mov-label" for="{{ form.beneficiario_nome.id_for_label }}">{{ form.beneficiario_nome.label }}</label>
+                {{ form.beneficiario_nome }}
+                {% if form.beneficiario_nome.errors %}<div class="text-danger small mt-1">{{ form.beneficiario_nome.errors|join:", " }}</div>{% endif %}
+              </div>
+              <div>
+                <label class="mov-label" for="{{ form.cliente.id_for_label }}">{{ form.cliente.label }}</label>
+                {{ form.cliente }}
+                {% if form.cliente.errors %}<div class="text-danger small mt-1">{{ form.cliente.errors|join:", " }}</div>{% endif %}
+              </div>
+              <div>
+                <label class="mov-label" for="{{ form.centro_custo.id_for_label }}">{{ form.centro_custo.label }}</label>
+                {{ form.centro_custo }}
+                {% if form.centro_custo.errors %}<div class="text-danger small mt-1">{{ form.centro_custo.errors|join:", " }}</div>{% endif %}
+              </div>
+              <div>
+                <label class="mov-label" for="{{ form.campanha.id_for_label }}">{{ form.campanha.label }}</label>
+                {{ form.campanha }}
+                {% if form.campanha.errors %}<div class="text-danger small mt-1">{{ form.campanha.errors|join:", " }}</div>{% endif %}
+              </div>
+              <div>
+                <label class="mov-label" for="{{ form.documento_autorizacao.id_for_label }}">{{ form.documento_autorizacao.label }}</label>
+                {{ form.documento_autorizacao }}
+                {% if form.documento_autorizacao.errors %}<div class="text-danger small mt-1">{{ form.documento_autorizacao.errors|join:", " }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
           <div class="mov-field-full">
             <label class="mov-label" for="{{ form.observacao.id_for_label }}">Observacao</label>
             {{ form.observacao }}
@@ -320,6 +368,18 @@
       <div class="mov-chip-row">
         <span class="mov-chip">Atualiza saldo</span>
         <span class="mov-chip">Pode recalcular custo medio</span>
+      </div>
+    </div>
+
+    <div class="mov-tip">
+      <div class="mov-tip-title">
+        <i class="fas fa-gift text-primary"></i>
+        Oferta e cedencia
+      </div>
+      <div>Use para brindes ou entregas sem venda. O estoque e baixado pelo custo contabil do item e o Caixa nao e movimentado.</div>
+      <div class="mov-chip-row">
+        <span class="mov-chip">Nao usa preco de venda</span>
+        <span class="mov-chip">Motivo obrigatorio</span>
       </div>
     </div>
 
@@ -361,14 +421,18 @@ document.addEventListener("DOMContentLoaded", function () {
   const destino = document.getElementById("id_destino");
   const origemUbicacao = document.getElementById("id_origem_ubicacao");
   const destinoUbicacao = document.getElementById("id_destino_ubicacao_ref");
+  const destinoComplemento = document.getElementById("id_destino_ubicacao");
   const custo = document.getElementById("id_valor_unitario_custo");
   const contexto = document.getElementById("mov-contexto");
+  const governancaSaida = document.getElementById("governanca-saida");
 
   const fluxoContexto = {
     entrada: "Fluxo de entrada: informa o destino fisico e, se quiser, o custo unitario da entrada para atualizar o custo do item.",
     transferencia: "Fluxo de transferencia: exige origem e destino diferentes, com ubicacoes coerentes em cada ponta.",
     ajuste: "Fluxo de correcao: use para acertar saldo quando houver divergencia operacional. Observacao obrigatoria.",
     avaria: "Fluxo de avaria: registra perda ou dano no estoque. Informe a causa na observacao.",
+    oferta: "Fluxo de oferta: baixa o item pelo custo, sem venda e sem lancamento no Caixa. Informe cliente, campanha ou motivo.",
+    cedencia: "Fluxo de cedencia: baixa o item pelo custo, sem venda e sem lancamento no Caixa. Informe beneficiario e finalidade.",
     inventario: "Fluxo de inventario: use para ajuste identificado em contagem fisica. Observacao obrigatoria.",
   };
 
@@ -425,6 +489,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const entrada = tipoAtual === "entrada";
     const ajusteLocal = ["ajuste", "avaria", "inventario"].includes(tipoAtual);
     const transferencia = tipoAtual === "transferencia";
+    const saidaSemDestino = ["venda", "consumo_os", "reserva", "oferta", "cedencia"].includes(tipoAtual);
+    if (governancaSaida) {
+      governancaSaida.style.display = ["oferta", "cedencia"].includes(tipoAtual) ? "block" : "none";
+    }
 
     origem.disabled = entrada;
     if (origemUbicacao) {
@@ -437,14 +505,21 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
     destino.disabled = false;
-    if (ajusteLocal) {
+    if (ajusteLocal || saidaSemDestino) {
       destino.disabled = true;
       destino.value = "";
+      if (destinoComplemento) {
+        destinoComplemento.value = "";
+        destinoComplemento.disabled = true;
+      }
       if (destinoUbicacao) {
         destinoUbicacao.value = "";
         destinoUbicacao.disabled = true;
       }
     } else {
+      if (destinoComplemento) {
+        destinoComplemento.disabled = false;
+      }
       if (destinoUbicacao) {
         destinoUbicacao.disabled = false;
       }
@@ -499,7 +574,7 @@ document.addEventListener("DOMContentLoaded", function () {
       selecionarPontoPorCodigo(destino, codigoProduto);
     } else if (fluxo === "transferencia") {
       selecionarPontoPorCodigo(origem, codigoProduto);
-    } else if (["ajuste", "avaria", "inventario"].includes(fluxo)) {
+    } else if (["ajuste", "avaria", "inventario", "oferta", "cedencia"].includes(fluxo)) {
       selecionarPontoPorCodigo(origem, codigoProduto);
     }
     ajustarCamposPorTipo();

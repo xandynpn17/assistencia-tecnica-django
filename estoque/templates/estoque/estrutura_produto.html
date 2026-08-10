@@ -340,6 +340,32 @@
           {% endfor %}
           </tbody>
         </table>
+        {% if rentabilidade_kit.tem_componentes %}
+          <div class="estrutura-recompra mt-3">
+            <h5>Rentabilidade consolidada</h5>
+            <div class="estrutura-resumo-grid">
+              <div class="estrutura-mini-box">
+                <div class="estrutura-mini-box-label">Custo dos componentes</div>
+                <div class="estrutura-mini-box-value">R$ {{ rentabilidade_kit.custo_componentes|floatformat:2 }}</div>
+              </div>
+              <div class="estrutura-mini-box">
+                <div class="estrutura-mini-box-label">Lucro liquido estimado</div>
+                <div class="estrutura-mini-box-value">R$ {{ rentabilidade_kit.lucro|floatformat:2 }}</div>
+              </div>
+              <div class="estrutura-mini-box">
+                <div class="estrutura-mini-box-label">Margem sobre receita</div>
+                <div class="estrutura-mini-box-value">{{ rentabilidade_kit.margem_receita|floatformat:2 }}%</div>
+              </div>
+            </div>
+            <p class="small text-muted mt-2 mb-0">
+              Preco R$ {{ rentabilidade_kit.preco|floatformat:2 }}; tributos R$ {{ rentabilidade_kit.tributos|floatformat:2 }};
+              taxa R$ {{ rentabilidade_kit.taxa|floatformat:2 }}; capacidade atual: {{ rentabilidade_kit.quantidade_montavel }} kit(s).
+            </p>
+            {% if rentabilidade_kit.preco < rentabilidade_kit.preco_minimo %}
+              <div class="alert alert-warning py-2 mt-2 mb-0">O preco atual esta abaixo do minimo calculado para a margem cadastrada.</div>
+            {% endif %}
+          </div>
+        {% endif %}
       </div>
     </div>
 

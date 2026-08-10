@@ -3,17 +3,20 @@ from decimal import Decimal
 from io import StringIO
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from caixa.models import Caixa
-from caixa.models import CustoFixoMensal, FormaPagamento, Pagamento
+from caixa.models import CategoriaFinanceira, CentroCusto, CustoFixoMensal, FormaPagamento, Pagamento
 from clientes.models import Cliente
-from configuracoes.models import ConfiguracaoSistema, Empresa
+from configuracoes.forms import MarcaGarantiaForm
+from configuracoes.models import ConfiguracaoSistema, Empresa, FornecedorGarantia, MarcaGarantia
 from estoque.forms import MovimentacaoEstoqueForm, ProdutoForm
 from estoque.models import (
     AtendimentoPosVendaBalcao,
@@ -23,21 +26,25 @@ from estoque.models import (
     EstoqueEvento,
     EstoqueLote,
     EstoqueSerie,
+    ExecucaoAuditoriaEstoque,
     ConfiguracaoRateioCustoFixo,
     InventarioEstoque,
     ItemEntradaMercadoria,
     ItemInventarioEstoque,
+    MapeamentoImportacaoProduto,
     MovimentacaoEstoque,
     PontoOperacional,
     Produto,
     ProdutoHistorico,
     ProdutoEquivalente,
     ProdutoFornecedor,
+    ProdutoKitItem,
     ProdutoPrecoTabela,
     RateioCustoFixoCompetencia,
     ReservaEstoque,
     SaldoEstoquePonto,
     SaldoEstoqueUbicacao,
+    SolicitacaoSaidaEstoque,
     TabelaPreco,
     UbicacaoEstoque,
     VendaRapidaEstoque,
@@ -64,6 +71,9 @@ class ConsultaArtigosTests(TestCase):
             perm_estoque_cadastro_produto=True,
             perm_estoque_excluir_produto=True,
             perm_estoque_ajuste_manual=True,
+            perm_estoque_avaria=True,
+            perm_estoque_oferta=True,
+            perm_estoque_cedencia=True,
             perm_estoque_transferencia=True,
             perm_estoque_inventario_finalizar=True,
             perm_estoque_converter_reserva=True,
@@ -1089,6 +1099,69 @@ class ConsultaArtigosTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
         self.assertIn("proprio numero de vendedor", response.json()["erro"])
+
+    def test_excluir_produto_inativa_e_preserva_historico(self):
+        movimento = MovimentacaoEstoque.objects.create(
+            produto=self.produto,
+            tipo="ajuste",
+            quantidade=1,
+            origem=self.ponto_loja,
+            origem_ubicacao=self.ubicacao_loja,
+            observacao="Historico a preservar",
+        )
+
+        response = self.client.post(reverse("estoque:excluir_produto", args=[self.produto.id]))
+
+        self.assertEqual(response.status_code, 302)
+        self.produto.refresh_from_db()
+        self.assertFalse(self.produto.ativo)
+        self.assertTrue(MovimentacaoEstoque.objects.filter(pk=movimento.pk).exists())
+
+    def test_movimentacao_manual_nao_aceita_produto_de_outra_empresa(self):
+        outra_empresa = Empresa.objects.create(nome="Empresa isolada")
+        produto_alheio = Produto.objects.create(
+            empresa=outra_empresa,
+            nome="Produto de outra empresa",
+            tipo_item="produto",
+            quantidade=1,
+            preco_final=10,
+            preco=10,
+        )
+
+        response = self.client.post(
+            reverse("estoque:registrar_movimentacao"),
+            {
+                "produto": produto_alheio.pk,
+                "tipo": "ajuste",
+                "quantidade": 1,
+                "destino": self.ponto_loja.pk,
+                "destino_ubicacao_ref": self.ubicacao_loja.pk,
+                "observacao": "Tentativa cruzada",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(MovimentacaoEstoque.objects.filter(produto=produto_alheio).exists())
+
+    def test_oferta_exige_permissao_especifica(self):
+        self.user.perm_estoque_oferta = False
+        self.user.save(update_fields=["perm_estoque_oferta"])
+
+        response = self.client.post(
+            reverse("estoque:registrar_movimentacao"),
+            {
+                "produto": self.produto.pk,
+                "tipo": "oferta",
+                "quantidade": 1,
+                "origem": self.ponto_loja.pk,
+                "origem_ubicacao": self.ubicacao_loja.pk,
+                "finalidade": "brinde_comercial",
+                "beneficiario_nome": "Cliente sem autorização",
+                "observacao": "Brinde sem autorizacao",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
 
     def test_gerente_pode_trocar_vendedor_com_rastro_operacional(self):
         user_model = get_user_model()
@@ -2524,6 +2597,41 @@ class AuditoriaEstoqueCommandTests(TestCase):
         with self.assertRaises(CommandError):
             call_command("auditar_estoque", falhar_se_divergir=True)
 
+    def test_monitoramento_persiste_execucao_limpa_por_empresa(self):
+        empresa = Empresa.objects.create(nome="Empresa auditoria limpa")
+        out = StringIO()
+
+        call_command("monitorar_estoque", empresa=empresa.id, origem="agendada", stdout=out)
+
+        execucao = ExecucaoAuditoriaEstoque.objects.get(empresa=empresa)
+        self.assertEqual(execucao.status, "ok")
+        self.assertEqual(execucao.total_divergencias, 0)
+        self.assertIn("Monitoramento concluido", out.getvalue())
+
+    def test_monitoramento_grava_divergencia_antes_de_retornar_falha(self):
+        empresa = Empresa.objects.create(nome="Empresa auditoria divergente")
+        ponto = PontoOperacional.objects.create(codigo="AUD1", nome="Auditoria", ativo=True)
+        produto = Produto.objects.create(
+            empresa=empresa,
+            nome="Produto monitorado",
+            ean="7891234500099",
+            sku="SKU-AUD-MON",
+            preco_final=Decimal("10.00"),
+            preco=Decimal("10.00"),
+            quantidade=1,
+            ponto_operacional=ponto,
+            ativo=True,
+        )
+        SaldoEstoquePonto.objects.create(produto=produto, ponto_operacional=ponto, quantidade=-1)
+
+        with self.assertRaises(CommandError):
+            call_command("monitorar_estoque", empresa=empresa.id, falhar_se_divergir=True)
+
+        execucao = ExecucaoAuditoriaEstoque.objects.get(empresa=empresa)
+        self.assertEqual(execucao.status, "divergencia")
+        self.assertGreater(execucao.total_divergencias, 0)
+        self.assertTrue(execucao.detalhes["saldos_negativos"])
+
 
 class EstruturaProdutoTests(TestCase):
     def setUp(self):
@@ -2675,6 +2783,8 @@ class ProdutoCadastroAprimoradoTests(TestCase):
             nome="Empresa Cadastro",
             regime_tributario="simples",
             modo_tributario="basico",
+            aliquota_comercio=Decimal("6.00"),
+            aliquota_servico=Decimal("8.00"),
         )
         self.user = user_model.objects.create_user(
             username="estoque_cadastro_aprimorado",
@@ -2788,6 +2898,8 @@ class ProdutoCadastroAprimoradoTests(TestCase):
         self.assertContains(response, "Mapa rapido desta aba")
         self.assertContains(response, "Custos de compra em R$")
         self.assertContains(response, "Politica em %")
+        self.assertContains(response, "Outra marca / fabricante")
+        self.assertContains(response, "Calculo automatico")
 
     def test_form_produto_garante_pontos_operacionais_em_base_nova(self):
         PontoOperacional.objects.all().delete()
@@ -2825,6 +2937,122 @@ class ProdutoCadastroAprimoradoTests(TestCase):
         categoria = CategoriaProduto.objects.get(nome="Cabos especiais")
         self.assertEqual(produto.categoria_config_id, categoria.id)
         self.assertEqual(produto.categoria, "Cabos especiais")
+
+    def test_criar_produto_com_marca_manual_cria_e_vincula_catalogo(self):
+        response = self.client.post(
+            reverse("estoque:criar_produto"),
+            data=self._payload_produto(
+                nome="Produto Marca Manual",
+                marca="",
+                marca_manual="Fabricante Especial",
+            ),
+        )
+        self.assertEqual(response.status_code, 302)
+        produto = Produto.objects.get(nome="Produto Marca Manual")
+        self.assertEqual(produto.marca.nome, "Fabricante Especial")
+        self.assertEqual(MarcaGarantia.objects.filter(nome__iexact="Fabricante Especial").count(), 1)
+
+    def test_marca_manual_reaproveita_marca_inativa_sem_duplicar(self):
+        marca = MarcaGarantia.objects.create(nome="Marca Reutilizada", ativo=False)
+        response = self.client.post(
+            reverse("estoque:criar_produto"),
+            data=self._payload_produto(
+                nome="Produto Marca Reutilizada",
+                marca="",
+                marca_manual="  marca reutilizada  ",
+            ),
+        )
+        self.assertEqual(response.status_code, 302)
+        marca.refresh_from_db()
+        produto = Produto.objects.get(nome="Produto Marca Reutilizada")
+        self.assertTrue(marca.ativo)
+        self.assertEqual(produto.marca_id, marca.id)
+        self.assertEqual(MarcaGarantia.objects.filter(nome__iexact="Marca Reutilizada").count(), 1)
+
+    def test_simples_calcula_tributo_da_empresa_automaticamente(self):
+        produto = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Produto Simples Automatico",
+            modo_preco="simples",
+            custo_unitario=Decimal("100.00"),
+            custo_operacional=Decimal("0.00"),
+            margem_lucro=Decimal("20.00"),
+            margem_minima=Decimal("10.00"),
+            taxa_cartao=Decimal("2.00"),
+            preco_final=Decimal("0.00"),
+            preco=Decimal("0.00"),
+            ponto_operacional=self.ponto,
+            ubicacao_padrao=self.ubicacao,
+            ativo=True,
+        )
+        self.assertEqual(produto._aliquota_percentual(), Decimal("6.00"))
+        self.assertEqual(produto.preco_sugerido.quantize(Decimal("0.01")), Decimal("130.43"))
+        self.assertEqual(produto.preco_minimo.quantize(Decimal("0.01")), Decimal("121.95"))
+        self.assertEqual(produto.precificacao_versao, 1)
+        self.assertEqual(produto.precificacao_snapshot["regime_tributario"], "simples")
+        self.assertEqual(produto.precificacao_snapshot["origem_aliquota"], "empresa")
+        self.assertEqual(Decimal(produto.precificacao_snapshot["aliquota_efetiva"]), Decimal("6.000"))
+
+        self.empresa.aliquota_comercio = Decimal("8.00")
+        self.empresa.save(update_fields=["aliquota_comercio"])
+        produto.save(update_fields=["nome"])
+        produto.refresh_from_db()
+
+        self.assertEqual(produto.precificacao_versao, 2)
+        self.assertEqual(Decimal(produto.precificacao_snapshot["aliquota_efetiva"]), Decimal("8.000"))
+        self.assertEqual(produto.preco_sugerido, Decimal("133.33"))
+
+    def test_previa_precificacao_considera_classificacao_ainda_nao_salva(self):
+        from fiscal.models import PerfilTributario, RegraTributaria
+
+        perfil = PerfilTributario.objects.create(
+            empresa=self.empresa,
+            nome="Perfil para previa",
+            regime="simples",
+            inicio_vigencia=timezone.localdate(),
+            status="homologado",
+            rbt12=Decimal("100000.00"),
+        )
+        RegraTributaria.objects.create(
+            perfil=perfil,
+            codigo="GERAL-PREVIA",
+            nome="Regra geral",
+            tipo_item="produto",
+            finalidade="revenda",
+            aliquota_estimativa=Decimal("6.00"),
+            prioridade=100,
+            inicio_vigencia=timezone.localdate(),
+            status="homologado",
+        )
+        especifica = RegraTributaria.objects.create(
+            perfil=perfil,
+            codigo="NCM-PREVIA",
+            nome="Regra específica por NCM",
+            tipo_item="produto",
+            finalidade="revenda",
+            ncm_prefixo="8517",
+            aliquota_estimativa=Decimal("9.00"),
+            prioridade=1,
+            inicio_vigencia=timezone.localdate(),
+            status="homologado",
+        )
+
+        response = self.client.post(
+            reverse("estoque:api_simular_precificacao"),
+            data={
+                "tipo_item": "produto",
+                "ncm": "8517.13.00",
+                "custo_unitario": "100.00",
+                "margem_lucro": "20.00",
+                "margem_minima": "10.00",
+                "modo_preco": "avancado",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["tributacao"]["regra_codigo"], especifica.codigo)
+        self.assertEqual(Decimal(payload["aliquota"]), Decimal("9.000"))
 
     def test_criar_produto_com_ubicacao_texto_cria_ubicacao_no_ponto(self):
         response = self.client.post(
@@ -3094,6 +3322,49 @@ class ProdutoCadastroAprimoradoTests(TestCase):
             ProdutoHistorico.objects.filter(produto=produto, acao="IMPORTACAO").exists()
         )
 
+    def test_baixar_modelo_importacao_inclui_custos_e_classificacao_fiscal(self):
+        response = self.client.get(reverse("estoque:modelo_importacao_produtos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("modelo_importacao_produtos.csv", response["Content-Disposition"])
+        conteudo = response.content.decode("utf-8-sig")
+        self.assertIn("custo_frete", conteudo)
+        self.assertIn("margem_lucro", conteudo)
+        self.assertIn("ncm", conteudo)
+        self.assertIn("cst_csosn", conteudo)
+
+    def test_mapeamento_de_planilha_e_salvo_por_fornecedor_e_reutilizado(self):
+        fornecedor = FornecedorGarantia.objects.create(
+            empresa=self.empresa, nome="Fornecedor planilha", fornecedor_comercial=True
+        )
+        conteudo = "Descricao do item;Custo compra;Classificacao;Preco\nCapa mapeada;18.50;39269090;0\n"
+        response = self.client.post(
+            reverse("estoque:importar_produtos"),
+            {
+                "arquivo": SimpleUploadedFile("catalogo.csv", conteudo.encode("utf-8"), content_type="text/csv"),
+                "acao": "validar", "ponto_operacional_padrao": str(self.ponto.id),
+                "ubicacao_padrao_importacao": str(self.ubicacao.id),
+                "fornecedor_mapeamento": str(fornecedor.id), "salvar_mapeamento": "1",
+                "nome_mapeamento": "Catalogo padrao",
+                "mapeamento_colunas": "nome=Descricao do item;custo_unitario=Custo compra;ncm=Classificacao;preco_final=Preco",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        mapa = MapeamentoImportacaoProduto.objects.get(empresa=self.empresa, fornecedor=fornecedor)
+        self.assertEqual(mapa.mapeamento["nome"], "Descricao do item")
+
+        response = self.client.post(
+            reverse("estoque:importar_produtos"),
+            {
+                "arquivo": SimpleUploadedFile("catalogo.csv", conteudo.encode("utf-8"), content_type="text/csv"),
+                "acao": "importar", "ponto_operacional_padrao": str(self.ponto.id),
+                "ubicacao_padrao_importacao": str(self.ubicacao.id), "mapeamento_salvo": str(mapa.id),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        produto = Produto.objects.get(nome="Capa mapeada")
+        self.assertEqual(produto.ncm, "39269090")
+        self.assertEqual(produto.fornecedor_config, fornecedor)
+
     def test_importar_produtos_rejeita_ponto_invalido_no_arquivo(self):
         csv_content = "\n".join(
             [
@@ -3113,6 +3384,35 @@ class ProdutoCadastroAprimoradoTests(TestCase):
         self.assertEqual(response_validar.status_code, 200)
         self.assertContains(response_validar, "Ponto operacional da linha nao encontrado")
         self.assertFalse(Produto.objects.filter(nome="Produto Sem Estrutura").exists())
+
+    def test_importar_planilha_fiscal_aplica_custos_classificacao_e_preco_automatico(self):
+        csv_content = "\n".join(
+            [
+                "nome,sku,ean,tipo_item,categoria,custo_unitario,custo_frete,custo_impostos,margem_lucro,preco_final,ncm,cest,cfop,cst_csosn,origem_mercadoria,unidade_comercial,estoque_inicial",
+                "Capa Fiscal Lote,SKU-FISC-01,7894440000099,produto,Acessorios,20.00,2.00,1.00,35.00,0,39269090,0100100,5102,102,0,UN,0",
+            ]
+        )
+        arquivo = SimpleUploadedFile("produtos_fiscais.csv", csv_content.encode("utf-8"), content_type="text/csv")
+        response = self.client.post(
+            reverse("estoque:importar_produtos"),
+            {
+                "arquivo": arquivo,
+                "acao": "importar",
+                "ponto_operacional_padrao": str(self.ponto.id),
+                "ubicacao_padrao_importacao": str(self.ubicacao.id),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        produto = Produto.objects.get(nome="Capa Fiscal Lote")
+        self.assertEqual(produto.ncm, "39269090")
+        self.assertEqual(produto.cest, "0100100")
+        self.assertEqual(produto.cfop_padrao, "5102")
+        self.assertEqual(produto.cst_csosn, "102")
+        self.assertEqual(produto.custo_frete, Decimal("2.00"))
+        self.assertEqual(produto.custo_impostos, Decimal("1.00"))
+        self.assertEqual(produto.margem_lucro, Decimal("35.00"))
+        self.assertGreater(produto.preco_final, Decimal("23.00"))
+        self.assertTrue(produto.precificacao_snapshot)
 
     def test_produto_calcula_rateio_custo_fixo_unitario(self):
         CustoFixoMensal.objects.create(
@@ -3457,6 +3757,447 @@ class PoliticaCustoEstoqueTests(TestCase):
         self.assertIsNotNone(camada_destino)
         self.assertEqual(camada_destino.quantidade_saldo, 1)
         self.assertEqual(camada_destino.custo_unitario, Decimal("18.00"))
+
+    def test_oferta_baixa_estoque_pelo_custo_sem_movimentar_caixa(self):
+        from estoque.services import registrar_movimentacao_estoque
+
+        self._registrar_entrada(3, "12.00")
+        pagamentos_antes = Pagamento.objects.count()
+
+        movimento = registrar_movimentacao_estoque(
+            produto=self.produto,
+            tipo="oferta",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=self.ubicacao_origem,
+            observacao="Brinde para cliente da campanha de fidelizacao",
+        )
+
+        self.assertEqual(movimento.quantidade, -1)
+        self.assertEqual(movimento.valor_unitario_custo, Decimal("12.00"))
+        saldo = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_origem)
+        self.assertEqual(saldo.quantidade, 2)
+        self.assertEqual(Pagamento.objects.count(), pagamentos_antes)
+
+    def test_cedencia_baixa_estoque_e_exige_justificativa(self):
+        from estoque.services import registrar_movimentacao_estoque
+
+        self._registrar_entrada(2, "15.00")
+        with self.assertRaisesMessage(ValueError, "motivo ou beneficiario"):
+            registrar_movimentacao_estoque(
+                produto=self.produto,
+                tipo="cedencia",
+                quantidade=1,
+                origem=self.ponto_origem,
+                origem_ubicacao=self.ubicacao_origem,
+                observacao="",
+            )
+
+        movimento = registrar_movimentacao_estoque(
+            produto=self.produto,
+            tipo="cedencia",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=self.ubicacao_origem,
+            observacao="Cedida ao laboratorio interno para testes",
+        )
+        self.assertEqual(movimento.quantidade, -1)
+
+    def test_form_oferta_exige_quantidade_positiva_e_observacao(self):
+        form = MovimentacaoEstoqueForm(
+            data={
+                "produto": self.produto.id,
+                "tipo": "oferta",
+                "quantidade": -1,
+                "origem": self.ponto_origem.id,
+                "origem_ubicacao": self.ubicacao_origem.id,
+                "observacao": "",
+            }
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("quantidade", form.errors)
+        self.assertIn("observacao", form.errors)
+
+    def test_avaria_recebe_quantidade_positiva_e_grava_baixa_com_custo(self):
+        from estoque.services import registrar_movimentacao_estoque
+
+        self._registrar_entrada(3, "11.50")
+        movimento = registrar_movimentacao_estoque(
+            produto=self.produto,
+            tipo="avaria",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=self.ubicacao_origem,
+            observacao="Quebra durante manuseio",
+        )
+
+        self.assertEqual(movimento.quantidade, -1)
+        self.assertEqual(movimento.valor_total_custo, Decimal("11.50"))
+        self.assertEqual(
+            SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_origem).quantidade,
+            2,
+        )
+
+    def test_oferta_nao_consume_saldo_reservado(self):
+        from estoque.services import criar_reserva_estoque, registrar_movimentacao_estoque, saldo_disponivel
+
+        self._registrar_entrada(3, "10.00")
+        criar_reserva_estoque(
+            produto=self.produto,
+            ponto_operacional=self.ponto_origem,
+            ubicacao=self.ubicacao_origem,
+            quantidade=2,
+            nome_contato="Cliente reservado",
+            valido_ate=timezone.localdate() + timedelta(days=1),
+        )
+        self.assertEqual(saldo_disponivel(self.produto, self.ponto_origem, self.ubicacao_origem), 1)
+
+        with self.assertRaisesMessage(ValueError, "Disponivel apos reservas: 1"):
+            registrar_movimentacao_estoque(
+                produto=self.produto,
+                tipo="oferta",
+                quantidade=2,
+                origem=self.ponto_origem,
+                origem_ubicacao=self.ubicacao_origem,
+                observacao="Oferta indevida",
+            )
+
+    def test_oferta_acima_da_alcada_fica_pendente_sem_baixar_estoque(self):
+        from estoque.services import criar_solicitacao_saida_estoque
+
+        self._registrar_entrada(3, "20.00")
+        self.empresa.limite_oferta_sem_aprovacao = Decimal("5.00")
+        self.empresa.save(update_fields=["limite_oferta_sem_aprovacao"])
+        solicitante = get_user_model().objects.create_user(
+            username="solicitante_oferta",
+            password="senha-forte-123",
+            empresa=self.empresa,
+            tipo_usuario="atendente",
+        )
+
+        solicitacao = criar_solicitacao_saida_estoque(
+            produto=self.produto,
+            tipo="oferta",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=self.ubicacao_origem,
+            finalidade="brinde_comercial",
+            beneficiario_nome="Cliente campanha",
+            campanha="Lançamento",
+            observacao="Brinde autorizado por campanha",
+            usuario=solicitante,
+        )
+
+        self.assertEqual(solicitacao.status, "pendente")
+        self.assertTrue(solicitacao.exige_aprovacao)
+        self.assertIsNone(solicitacao.movimento_id)
+        self.assertEqual(
+            SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_origem).quantidade,
+            3,
+        )
+
+    def test_gerente_aprova_solicitacao_e_baixa_pelo_custo(self):
+        from estoque.services import criar_solicitacao_saida_estoque, executar_solicitacao_saida_estoque
+
+        self._registrar_entrada(2, "18.00")
+        self.empresa.limite_cedencia_sem_aprovacao = Decimal("1.00")
+        self.empresa.save(update_fields=["limite_cedencia_sem_aprovacao"])
+        solicitante = get_user_model().objects.create_user(
+            username="solicitante_cedencia",
+            password="senha-forte-123",
+            empresa=self.empresa,
+            tipo_usuario="atendente",
+        )
+        gerente = get_user_model().objects.create_user(
+            username="gerente_cedencia",
+            password="senha-forte-123",
+            empresa=self.empresa,
+            tipo_usuario="gerente",
+        )
+        solicitacao = criar_solicitacao_saida_estoque(
+            produto=self.produto,
+            tipo="cedencia",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=self.ubicacao_origem,
+            finalidade="uso_interno",
+            beneficiario_nome="Laboratório",
+            observacao="Teste interno",
+            usuario=solicitante,
+        )
+
+        solicitacao = executar_solicitacao_saida_estoque(solicitacao, aprovador=gerente)
+
+        self.assertEqual(solicitacao.status, "executada")
+        self.assertEqual(solicitacao.valor_total_custo, Decimal("18.00"))
+        self.assertEqual(solicitacao.movimento.quantidade, -1)
+        self.assertEqual(solicitacao.movimento.origem_tipo, "solicitacao_saida")
+        self.assertEqual(solicitacao.aprovado_por, gerente)
+
+    def test_rejeicao_preserva_saldo_e_motivo(self):
+        from estoque.services import criar_solicitacao_saida_estoque, rejeitar_solicitacao_saida_estoque
+
+        self._registrar_entrada(1, "12.00")
+        self.empresa.limite_oferta_sem_aprovacao = Decimal("0.00")
+        self.empresa.save(update_fields=["limite_oferta_sem_aprovacao"])
+        solicitante = get_user_model().objects.create_user(
+            username="solicitante_rejeicao",
+            password="senha-forte-123",
+            empresa=self.empresa,
+            tipo_usuario="atendente",
+        )
+        gerente = get_user_model().objects.create_user(
+            username="gerente_rejeicao",
+            password="senha-forte-123",
+            empresa=self.empresa,
+            tipo_usuario="gerente",
+        )
+        solicitacao = criar_solicitacao_saida_estoque(
+            produto=self.produto,
+            tipo="oferta",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=self.ubicacao_origem,
+            finalidade="doacao",
+            beneficiario_nome="Entidade",
+            observacao="Solicitação de doação",
+            usuario=solicitante,
+        )
+
+        rejeitar_solicitacao_saida_estoque(solicitacao, usuario=gerente, motivo="Fora da política comercial")
+        solicitacao.refresh_from_db()
+
+        self.assertEqual(solicitacao.status, "rejeitada")
+        self.assertEqual(solicitacao.motivo_rejeicao, "Fora da política comercial")
+        self.assertIsNone(solicitacao.movimento_id)
+        self.assertEqual(
+            SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_origem).quantidade,
+            1,
+        )
+
+    def test_cedencia_temporaria_devolvida_recompoe_quantidade_e_custo(self):
+        from estoque.services import criar_solicitacao_saida_estoque, devolver_cedencia_estoque
+
+        self._registrar_entrada(2, "16.00")
+        gerente = get_user_model().objects.create_user(
+            username="gerente_retorno_cedencia",
+            password="senha-forte-123",
+            empresa=self.empresa,
+            tipo_usuario="gerente",
+        )
+        solicitacao = criar_solicitacao_saida_estoque(
+            produto=self.produto,
+            tipo="cedencia",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=self.ubicacao_origem,
+            finalidade="cedencia_temporaria",
+            beneficiario_nome="Equipe de demonstração",
+            observacao="Uso em evento",
+            usuario=gerente,
+            aprovar_automaticamente=True,
+        )
+
+        solicitacao = devolver_cedencia_estoque(
+            solicitacao,
+            usuario=gerente,
+            observacao="Item devolvido em bom estado",
+        )
+
+        self.assertEqual(solicitacao.status, "devolvida")
+        self.assertEqual(solicitacao.movimento_retorno.quantidade, 1)
+        self.assertEqual(solicitacao.movimento_retorno.valor_unitario_custo, Decimal("16.00"))
+        self.assertEqual(
+            SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_origem).quantidade,
+            2,
+        )
+
+    def test_auditoria_detecta_reserva_lote_e_serie_inconsistentes(self):
+        from estoque.services import diagnosticar_inconsistencias_estoque
+
+        self._registrar_entrada(1, "10.00")
+        self.produto.controla_lote = True
+        self.produto.controla_serie = True
+        self.produto.save(update_fields=["controla_lote", "controla_serie"])
+        ReservaEstoque.objects.create(
+            codigo_reserva="RES-AUDIT01",
+            produto=self.produto,
+            ponto_operacional=self.ponto_origem,
+            ubicacao=self.ubicacao_origem,
+            quantidade=2,
+            nome_contato="Reserva inconsistente",
+            valido_ate=timezone.localdate() + timedelta(days=1),
+            status="ativa",
+        )
+
+        diagnostico = diagnosticar_inconsistencias_estoque(empresa=self.empresa)
+
+        self.assertEqual(len(diagnostico["reservas_excedentes"]), 1)
+        self.assertEqual(diagnostico["reservas_excedentes"][0]["excesso"], 1)
+        self.assertEqual(len(diagnostico["divergencias_lotes"]), 1)
+        self.assertEqual(len(diagnostico["divergencias_series"]), 1)
+
+    def test_chave_idempotencia_impede_baixa_duplicada(self):
+        from estoque.services import registrar_movimentacao_estoque
+
+        self._registrar_entrada(3, "9.00")
+        parametros = {
+            "produto": self.produto,
+            "tipo": "oferta",
+            "quantidade": 1,
+            "origem": self.ponto_origem,
+            "origem_ubicacao": self.ubicacao_origem,
+            "observacao": "Brinde idempotente",
+            "chave_idempotencia": "campanha:2026:cliente-1",
+        }
+        primeiro = registrar_movimentacao_estoque(**parametros)
+        segundo = registrar_movimentacao_estoque(**parametros)
+
+        self.assertEqual(primeiro.pk, segundo.pk)
+        self.assertEqual(MovimentacaoEstoque.objects.filter(chave_idempotencia=parametros["chave_idempotencia"]).count(), 1)
+        self.assertEqual(
+            SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_origem).quantidade,
+            2,
+        )
+
+    def test_estorno_formal_restaura_saida_e_fica_vinculado(self):
+        from estoque.services import estornar_movimentacao_estoque, registrar_movimentacao_estoque
+
+        self._registrar_entrada(2, "14.00")
+        saida = registrar_movimentacao_estoque(
+            produto=self.produto,
+            tipo="cedencia",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=self.ubicacao_origem,
+            observacao="Uso interno",
+        )
+        estorno = estornar_movimentacao_estoque(saida, motivo="Cedencia lancada em duplicidade")
+
+        self.assertEqual(estorno.movimento_estornado_id, saida.pk)
+        self.assertEqual(estorno.valor_total_custo, Decimal("14.00"))
+        self.assertEqual(
+            SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_origem).quantidade,
+            2,
+        )
+
+    def test_tabela_de_preco_e_aplicada_e_fica_registrada_no_cesto(self):
+        from estoque.services import criar_item_cesto_venda_rapida
+
+        self._registrar_entrada(2, "10.00")
+        tabela = TabelaPreco.objects.create(empresa=self.empresa, nome="Atacado")
+        ProdutoPrecoTabela.objects.create(produto=self.produto, tabela=tabela, preco=Decimal("77.00"))
+        self.config.estoque_venda_mostrador_codigos = self.ponto_origem.codigo
+        self.config.save(update_fields=["estoque_venda_mostrador_codigos", "data_atualizacao"])
+        vendedor = get_user_model().objects.create_user(
+            username="vendedor_tabela_preco",
+            password="senha-forte-123",
+            empresa=self.empresa,
+            tipo_usuario="atendente",
+        )
+
+        resultado = criar_item_cesto_venda_rapida(
+            produto=self.produto,
+            ponto_operacional=self.ponto_origem,
+            quantidade=1,
+            funcionario_numero=vendedor.numero_vendedor,
+            tabela_preco=tabela,
+        )
+
+        self.assertEqual(resultado["venda"].valor_unitario, Decimal("77.00"))
+        self.assertEqual(resultado["venda"].tabela_preco_nome, "Atacado")
+
+    def test_pre_reserva_de_kit_compromete_saldo_dos_componentes(self):
+        from estoque.services import componentes_fisicos_venda, saldo_disponivel
+
+        self._registrar_entrada(5, "8.00")
+        kit = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Kit duas pecas",
+            tipo_item="produto",
+            preco_final=Decimal("40.00"),
+            preco=Decimal("40.00"),
+            ponto_operacional=self.ponto_origem,
+        )
+        ProdutoKitItem.objects.create(produto_kit=kit, componente=self.produto, quantidade=2)
+        VendaRapidaEstoque.objects.create(
+            produto=kit,
+            ponto_operacional=self.ponto_origem,
+            quantidade=2,
+            valor_unitario=Decimal("40.00"),
+            valor_total=Decimal("80.00"),
+            funcionario_numero="99",
+            status="pre_reserva",
+        )
+
+        self.assertEqual(componentes_fisicos_venda(kit, 2), [(self.produto, 4)])
+        self.assertEqual(saldo_disponivel(self.produto, self.ponto_origem), 1)
+
+    def test_pre_reserva_preserva_composicao_historica_do_kit(self):
+        from estoque.services import componentes_fisicos_item_venda, criar_item_cesto_venda_rapida, saldo_disponivel
+
+        self._registrar_entrada(5, "8.00")
+        kit = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Kit com snapshot",
+            tipo_item="produto",
+            preco_final=Decimal("40.00"),
+            preco=Decimal("40.00"),
+            ponto_operacional=self.ponto_origem,
+        )
+        item_kit = ProdutoKitItem.objects.create(produto_kit=kit, componente=self.produto, quantidade=2)
+        self.config.estoque_venda_mostrador_codigos = self.ponto_origem.codigo
+        self.config.save(update_fields=["estoque_venda_mostrador_codigos", "data_atualizacao"])
+        vendedor = get_user_model().objects.create_user(
+            username="vendedor_snapshot_kit",
+            password="senha-forte-123",
+            empresa=self.empresa,
+            tipo_usuario="atendente",
+        )
+        venda = criar_item_cesto_venda_rapida(
+            produto=kit,
+            ponto_operacional=self.ponto_origem,
+            quantidade=2,
+            funcionario_numero=vendedor.numero_vendedor,
+            usuario=vendedor,
+        )["venda"]
+
+        item_kit.quantidade = 1
+        item_kit.save(update_fields=["quantidade"])
+
+        self.assertEqual(componentes_fisicos_item_venda(venda), [(self.produto, 4)])
+        self.assertEqual(venda.composicao_kit_snapshot[0]["produto_id"], self.produto.pk)
+        self.assertEqual(saldo_disponivel(self.produto, self.ponto_origem), 1)
+
+    def test_kit_rejeita_componente_inativo_e_kit_aninhado(self):
+        componente_inativo = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Componente inativo",
+            tipo_item="produto",
+            preco_final=Decimal("10.00"),
+            preco=Decimal("10.00"),
+            ativo=False,
+        )
+        kit_interno = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Kit interno",
+            tipo_item="produto",
+            preco_final=Decimal("20.00"),
+            preco=Decimal("20.00"),
+        )
+        ProdutoKitItem.objects.create(produto_kit=kit_interno, componente=self.produto, quantidade=1)
+        kit_externo = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Kit externo",
+            tipo_item="produto",
+            preco_final=Decimal("30.00"),
+            preco=Decimal("30.00"),
+        )
+
+        with self.assertRaisesMessage(ValidationError, "componente inativo"):
+            ProdutoKitItem(produto_kit=kit_externo, componente=componente_inativo, quantidade=1).full_clean()
+        with self.assertRaisesMessage(ValidationError, "Kits aninhados"):
+            ProdutoKitItem(produto_kit=kit_externo, componente=kit_interno, quantidade=1).full_clean()
 
 
 class EntradaMercadoriaTests(TestCase):
@@ -3872,4 +4613,64 @@ class InventarioOperacionalViewsTests(TestCase):
         self.assertEqual(inventarios[0].ponto_operacional_id, ponto_secundario.id)
         self.assertEqual(response.context["ponto_filtro"], str(ponto_secundario.id))
         self.assertEqual(response.context["categoria_filtro"], str(categoria_secundaria.id))
+
+
+class CatalogosMultiempresaEstoqueTests(TestCase):
+    def setUp(self):
+        self.empresa_a = Empresa.objects.create(nome="Empresa Catalogo A")
+        self.empresa_b = Empresa.objects.create(nome="Empresa Catalogo B")
+
+    def test_nomes_e_codigos_podem_se_repetir_em_empresas_diferentes(self):
+        for empresa in (self.empresa_a, self.empresa_b):
+            PontoOperacional.objects.create(empresa=empresa, codigo="PO3", nome="Loja")
+            CategoriaProduto.objects.create(empresa=empresa, nome="Acessorios")
+            CategoriaFinanceira.objects.create(empresa=empresa, nome="Compras", tipo="saida")
+            CentroCusto.objects.create(empresa=empresa, nome="Operacional")
+            fornecedor = FornecedorGarantia.objects.create(empresa=empresa, nome="Fabricante")
+            MarcaGarantia.objects.create(empresa=empresa, nome="Marca X", fornecedor=fornecedor)
+
+        self.assertEqual(PontoOperacional.objects.filter(codigo="PO3").count(), 2)
+        self.assertEqual(CategoriaProduto.objects.filter(nome="Acessorios").count(), 2)
+        self.assertEqual(CategoriaFinanceira.objects.filter(nome="Compras", tipo="saida").count(), 2)
+        self.assertEqual(CentroCusto.objects.filter(nome="Operacional").count(), 2)
+        self.assertEqual(FornecedorGarantia.objects.filter(nome="Fabricante").count(), 2)
+        self.assertEqual(MarcaGarantia.objects.filter(nome="Marca X").count(), 2)
+
+    def test_duplicidade_na_mesma_empresa_e_bloqueada(self):
+        CategoriaFinanceira.objects.create(empresa=self.empresa_a, nome="Compras", tipo="saida")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            CategoriaFinanceira.objects.create(empresa=self.empresa_a, nome="Compras", tipo="saida")
+
+    def test_formulario_produto_nao_aceita_catalogo_de_outra_empresa(self):
+        categoria_a = CategoriaProduto.objects.create(empresa=self.empresa_a, nome="Categoria A")
+        categoria_b = CategoriaProduto.objects.create(empresa=self.empresa_b, nome="Categoria B")
+        fornecedor_a = FornecedorGarantia.objects.create(empresa=self.empresa_a, nome="Fornecedor A")
+        fornecedor_b = FornecedorGarantia.objects.create(empresa=self.empresa_b, nome="Fornecedor B")
+        marca_a = MarcaGarantia.objects.create(empresa=self.empresa_a, nome="Marca A", fornecedor=fornecedor_a)
+        marca_b = MarcaGarantia.objects.create(empresa=self.empresa_b, nome="Marca B", fornecedor=fornecedor_b)
+
+        form = ProdutoForm(empresa=self.empresa_a)
+
+        self.assertIn(categoria_a, form.fields["categoria_config"].queryset)
+        self.assertNotIn(categoria_b, form.fields["categoria_config"].queryset)
+        self.assertIn(fornecedor_a, form.fields["fornecedor_config"].queryset)
+        self.assertNotIn(fornecedor_b, form.fields["fornecedor_config"].queryset)
+        self.assertIn(marca_a, form.fields["marca"].queryset)
+        self.assertNotIn(marca_b, form.fields["marca"].queryset)
+
+    def test_marca_nao_pode_vincular_fornecedor_de_outra_empresa(self):
+        fornecedor_b = FornecedorGarantia.objects.create(empresa=self.empresa_b, nome="Fornecedor B")
+        form = MarcaGarantiaForm(
+            data={
+                "nome": "Marca A",
+                "fornecedor": fornecedor_b.id,
+                "parceira_garantia": "",
+                "procedimentos": "",
+                "ativo": "on",
+            },
+            empresa=self.empresa_a,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("fornecedor", form.errors)
 
