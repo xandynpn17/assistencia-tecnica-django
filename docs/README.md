@@ -5,6 +5,7 @@
 - `plano_desenvolvimento_sistema.md`: roadmap tecnico e status das fases.
 - `plano_desenvolvimento_estoque.md`: roadmap tecnico especifico do modulo de estoque.
 - `plano_desenvolvimento_caixa.md`: diagnostico e roadmap tecnico especifico do modulo de caixa.
+- `plano_fiscal_tributario_financeiro_2026.md`: plano consolidado de correcao fiscal/tributaria, caixa, bancos, conciliacao, estoque e preparacao para IBS/CBS.
 - `plano_desenvolvimento_comissoes.md`: politica operacional, roadmap e homologacao da apuracao de comissoes.
 - `plano_desenvolvimento_venda_mostrador.md`: roadmap operacional e tecnico especifico do fluxo de venda a mostrador/PDV.
 - `plano_desenvolvimento_configuracoes.md`: diagnostico e roadmap tecnico da app configuracoes com foco em integracoes e preparacao SaaS.
@@ -20,6 +21,8 @@
 - `ownership_modulos.md`: ownership tecnico atual por app e ponto oficial de manutencao.
 - `checklist_homologacao_manual.md`: validacoes manuais de operacao.
 - `checklist_homologacao_estoque.md`: roteiro de homologacao manual por perfil do estoque (Fase E7).
+- `manual_estoque_fiscal_caixa.md`: manual operacional após as melhorias de estoque, XML, tributação, preço, caixa e conciliação.
+- `manual_caixa_fiscal_dfe.md`: configuração segura do certificado A1, consulta oficial de NF-e destinadas por NSU e importação para conferência no estoque.
 - `checklist_homologacao_configuracoes.md`: roteiro de homologacao manual por perfil da app configuracoes.
 - `checklist_migracao_postgresql.md`: guia de validacao da futura migracao de banco.
 - `backup_restore_local.md`: procedimento operacional de backup/restore local com PostgreSQL e media.
