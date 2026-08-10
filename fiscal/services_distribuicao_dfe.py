@@ -15,6 +15,8 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from configuracoes.services.documentos import normalizar_cnpj, validar_cnpj_alfanumerico
+
 from .models import ConfiguracaoFiscal, DocumentoDistribuicaoDFe, ExecucaoSincronizacaoDFe
 from .services_seguranca import (
     desproteger_bytes,
@@ -39,6 +41,10 @@ UF_IBGE = {
 
 def _digitos(valor):
     return re.sub(r"\D", "", str(valor or ""))
+
+
+def _cnpj(valor):
+    return normalizar_cnpj(valor)
 
 
 def _tag(elemento):
@@ -149,7 +155,7 @@ def _metadata_documento(conteudo, raiz, schema):
         data_emissao = timezone.make_aware(data_emissao)
     return {
         "tipo": tipo, "disponibilidade": disponibilidade, "chave_acesso": chave[:44],
-        "numero": numero, "serie": serie, "cnpj_emitente": _digitos(emitente)[:14],
+        "numero": numero, "serie": serie, "cnpj_emitente": _cnpj(emitente)[:14],
         "nome_emitente": nome_emitente[:200], "data_emissao": data_emissao,
         "valor_total": valor, "situacao_nfe": situacao[:10],
         "xml_sha256": hashlib.sha256(conteudo).hexdigest(), "xml_protegido": proteger_bytes(conteudo),
@@ -187,8 +193,8 @@ def _interpretar_resposta(conteudo):
 
 
 def _consultar_servico(*, config, empresa):
-    cnpj = _digitos(empresa.cnpj)
-    if len(cnpj) != 14:
+    cnpj = _cnpj(empresa.cnpj)
+    if not validar_cnpj_alfanumerico(cnpj):
         raise ValidationError("Cadastre um CNPJ válido na empresa ativa.")
     pfx = desproteger_bytes(config.certificado_a1_protegido)
     senha = desproteger_texto(config.senha_certificado_protegida)

@@ -9,13 +9,25 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.x509.oid import ObjectIdentifier
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
+from configuracoes.services.documentos import (
+    formatar_cnpj,
+    normalizar_cnpj,
+    validar_cnpj_alfanumerico,
+)
+
 
 VERSAO_CIFRA = "fernet-v1:"
 MAX_CERTIFICADO_BYTES = 5 * 1024 * 1024
+OID_ICP_BRASIL_CNPJ = ObjectIdentifier("2.16.76.1.3.3")
+PADRAO_CNPJ_CERTIFICADO = re.compile(
+    r"(?<![A-Z0-9])([A-Z0-9]{12}\d{2})(?![A-Z0-9])",
+    re.IGNORECASE,
+)
 
 
 def _fernet():
@@ -52,18 +64,45 @@ def desproteger_texto(valor):
     return desproteger_bytes(valor).decode("utf-8")
 
 
-def _cnpj_do_certificado(certificado):
+def _candidatos_cnpj(valor):
+    if isinstance(valor, bytes):
+        valor = valor.decode("latin-1", errors="ignore")
     candidatos = []
+    for encontrado in PADRAO_CNPJ_CERTIFICADO.findall(str(valor or "").upper()):
+        cnpj = normalizar_cnpj(encontrado)
+        if validar_cnpj_alfanumerico(cnpj) and cnpj not in candidatos:
+            candidatos.append(cnpj)
+    return candidatos
+
+
+def _cnpjs_do_certificado(certificado):
+    """Lê e-CNPJ ICP-Brasil sem confundir outros identificadores do titular."""
+    prioritarios = []
+    secundarios = []
     for atributo in certificado.subject:
-        candidatos.extend(re.findall(r"(?<!\d)\d{14}(?!\d)", str(atributo.value or "")))
+        destino = prioritarios if atributo.oid == OID_ICP_BRASIL_CNPJ else secundarios
+        destino.extend(_candidatos_cnpj(atributo.value))
     try:
         san = certificado.extensions.get_extension_for_class(
             x509.SubjectAlternativeName
         ).value
         for nome in san:
-            candidatos.extend(re.findall(r"(?<!\d)\d{14}(?!\d)", str(getattr(nome, "value", "") or "")))
-    except Exception:
+            destino = (
+                prioritarios
+                if isinstance(nome, x509.OtherName) and nome.type_id == OID_ICP_BRASIL_CNPJ
+                else secundarios
+            )
+            destino.extend(_candidatos_cnpj(getattr(nome, "value", "")))
+    except x509.ExtensionNotFound:
         pass
+    return list(dict.fromkeys(prioritarios + secundarios))
+
+
+def _cnpj_do_certificado(certificado, cnpj_esperado=""):
+    candidatos = _cnpjs_do_certificado(certificado)
+    esperado = normalizar_cnpj(cnpj_esperado)
+    if esperado and esperado in candidatos:
+        return esperado
     return candidatos[0] if candidatos else ""
 
 
@@ -97,10 +136,14 @@ def validar_certificado_a1(conteudo, senha, *, cnpj_esperado=""):
         raise ValidationError("O certificado ainda não está vigente.")
     if agora >= fim:
         raise ValidationError("O certificado A1 está vencido.")
-    cnpj_certificado = _cnpj_do_certificado(certificado)
-    cnpj_esperado = re.sub(r"\D", "", cnpj_esperado or "")
+    cnpj_esperado = normalizar_cnpj(cnpj_esperado)
+    cnpj_certificado = _cnpj_do_certificado(certificado, cnpj_esperado)
     if cnpj_esperado and cnpj_certificado and cnpj_certificado != cnpj_esperado:
-        raise ValidationError("O CNPJ encontrado no certificado é diferente da empresa ativa.")
+        raise ValidationError(
+            "O CNPJ identificado no certificado "
+            f"({formatar_cnpj(cnpj_certificado)}) é diferente do CNPJ da empresa ativa "
+            f"({formatar_cnpj(cnpj_esperado)}). Confirme também qual empresa está selecionada no topo da tela."
+        )
     return {
         "certificado": certificado,
         "chave": chave,

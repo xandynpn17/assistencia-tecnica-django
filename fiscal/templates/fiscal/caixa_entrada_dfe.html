@@ -14,6 +14,15 @@
   A importação cria uma entrada em rascunho; o estoque só aumenta depois da conferência e do recebimento.
 </div>
 
+{% if config.ambiente == "homologacao" %}
+  <div class="alert alert-warning">
+    <strong>Ambiente de Homologação:</strong> notas fiscais reais da empresa não aparecem neste ambiente.
+    Para consultar NF-e recebidas de fornecedores, revise a
+    <a href="{% url 'fiscal:painel_fiscal' %}" class="alert-link">Configuração fiscal</a>
+    e selecione Produção conscientemente.
+  </div>
+{% endif %}
+
 <div class="row">
   <div class="col-lg-6">
     <div class="card h-100">

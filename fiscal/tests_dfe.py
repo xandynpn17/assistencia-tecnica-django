@@ -8,7 +8,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import pkcs12
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import NameOID, ObjectIdentifier
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -23,15 +23,23 @@ from .forms import CertificadoA1Form
 from .models import ConfiguracaoFiscal, DocumentoDistribuicaoDFe
 from .services_distribuicao_dfe import (
     _interpretar_resposta,
+    _metadata_documento,
+    _soap_distribuicao,
     importar_documento_dfe_no_estoque,
     sincronizar_distribuicao_dfe,
 )
 from .services_seguranca import desproteger_bytes, proteger_bytes
 
 
-def certificado_teste(cnpj, senha="senha-forte"):
+def certificado_teste(cnpj, senha="senha-forte", *, outros_identificadores=()):
     chave = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    nome = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"EMPRESA TESTE:{cnpj}")])
+    nome = x509.Name([
+        *[
+            x509.NameAttribute(NameOID.SERIAL_NUMBER, identificador)
+            for identificador in outros_identificadores
+        ],
+        x509.NameAttribute(NameOID.COMMON_NAME, f"EMPRESA TESTE:{cnpj}"),
+    ])
     agora = datetime.now(dt_timezone.utc)
     certificado = (
         x509.CertificateBuilder()
@@ -97,6 +105,54 @@ class SegurancaCertificadoA1Tests(TestCase):
         )
         self.assertFalse(outro_cnpj.is_valid())
 
+    def test_formulario_encontra_cnpj_correto_entre_outros_identificadores(self):
+        pfx = certificado_teste(
+            "11222333000181",
+            outros_identificadores=("99888777000166",),
+        )
+        form = CertificadoA1Form(
+            {"senha_a1": "senha-forte"},
+            {"arquivo_a1": SimpleUploadedFile("empresa.pfx", pfx)},
+            empresa=self.empresa,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.metadados["cnpj"], "11222333000181")
+
+    def test_formulario_prioriza_oid_oficial_do_cnpj(self):
+        chave = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        nome = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "EMPRESA TESTE:99888777000166"),
+        ])
+        agora = datetime.now(dt_timezone.utc)
+        certificado = (
+            x509.CertificateBuilder()
+            .subject_name(nome).issuer_name(nome).public_key(chave.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(agora - timedelta(days=1))
+            .not_valid_after(agora + timedelta(days=365))
+            .add_extension(
+                x509.SubjectAlternativeName([
+                    x509.OtherName(
+                        ObjectIdentifier("2.16.76.1.3.3"),
+                        b"\x0c\x0e11222333000181",
+                    ),
+                ]),
+                critical=False,
+            )
+            .sign(chave, hashes.SHA256())
+        )
+        pfx = pkcs12.serialize_key_and_certificates(
+            b"empresa", chave, certificado, None,
+            serialization.BestAvailableEncryption(b"senha-forte"),
+        )
+        form = CertificadoA1Form(
+            {"senha_a1": "senha-forte"},
+            {"arquivo_a1": SimpleUploadedFile("empresa.pfx", pfx)},
+            empresa=self.empresa,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.metadados["cnpj"], "11222333000181")
+
 
 class DistribuicaoDFeTests(TestCase):
     def setUp(self):
@@ -117,6 +173,30 @@ class DistribuicaoDFeTests(TestCase):
         retorno = _interpretar_resposta(resposta_distribuicao(("1", "resNFe_v1.01.xsd", resumo)))
         self.assertEqual(retorno["codigo"], "138")
         self.assertEqual(retorno["documentos"][0]["nsu"], "000000000000001")
+
+    def test_soap_e_metadados_preservam_cnpj_alfanumerico(self):
+        cnpj = "12ABC34501DE35"
+        soap = _soap_distribuicao(
+            cnpj=cnpj,
+            uf="SP",
+            ambiente="homologacao",
+            ultimo_nsu="0",
+        )
+        raiz_soap = __import__("xml.etree.ElementTree", fromlist=["ElementTree"]).fromstring(soap)
+        cnpj_enviado = next(
+            item.text for item in raiz_soap.iter() if item.tag.rsplit("}", 1)[-1] == "CNPJ"
+        )
+        self.assertEqual(cnpj_enviado, cnpj)
+        resumo = (
+            f'<resNFe xmlns="http://www.portalfiscal.inf.br/nfe">'
+            f'<chNFe>35260811444777000161550010000001231000001237</chNFe>'
+            f'<CNPJ>{cnpj}</CNPJ><xNome>Fornecedor alfanumérico</xNome>'
+            f'<dhEmi>2026-08-05T10:00:00-03:00</dhEmi><vNF>24.00</vNF><cSitNFe>1</cSitNFe>'
+            f'</resNFe>'
+        ).encode()
+        raiz = __import__("xml.etree.ElementTree", fromlist=["ElementTree"]).fromstring(resumo)
+        metadados = _metadata_documento(resumo, raiz, "resNFe_v1.01.xsd")
+        self.assertEqual(metadados["cnpj_emitente"], cnpj)
 
     @patch("fiscal.services_distribuicao_dfe._consultar_servico")
     def test_sincronizacao_grava_documento_nsu_e_auditoria(self, consultar):
