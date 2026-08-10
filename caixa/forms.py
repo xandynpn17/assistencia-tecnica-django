@@ -2,25 +2,182 @@
 from uuid import uuid4
 
 from django import forms
+from django.db.models import Q
+from django.utils import timezone
 
 from .models import (
+    Caixa,
+    AporteCapital,
     CategoriaFinanceira,
     CentroCusto,
     ComissaoItemOrcamento,
     ComissaoTecnico,
     ContaPagar,
+    ContaBancaria,
     ContaReceber,
     CustoFixoMensal,
     DespesaRecorrente,
     FaixaPremioMeta,
     FormaPagamento,
     LancamentoCaixa,
+    LinhaExtratoBancario,
+    MovimentoBancario,
     Pagamento,
     PagamentoContaPagar,
+    TransferenciaTesouraria,
     PremioColaboradorCompetencia,
     RegraComissaoTecnico,
     RegraPremioMeta,
 )
+
+
+class ContaBancariaForm(forms.ModelForm):
+    class Meta:
+        model = ContaBancaria
+        fields = ["nome", "banco_codigo", "banco_nome", "agencia", "numero", "tipo", "saldo_inicial", "data_saldo_inicial", "ativa"]
+        widgets = {"data_saldo_inicial": forms.DateInput(attrs={"type": "date"})}
+
+
+class TransferenciaTesourariaForm(forms.ModelForm):
+    class Meta:
+        model = TransferenciaTesouraria
+        fields = ["conta_origem", "caixa_origem", "conta_destino", "caixa_destino", "valor", "data_movimento", "descricao"]
+        widgets = {"data_movimento": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            self.fields["data_movimento"].initial = timezone.localdate()
+        self.fields["conta_origem"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
+        self.fields["conta_destino"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
+        self.fields["caixa_origem"].queryset = Caixa.objects.filter(empresa=empresa)
+        self.fields["caixa_destino"].queryset = Caixa.objects.filter(empresa=empresa)
+
+
+class AporteCapitalForm(forms.ModelForm):
+    class Meta:
+        model = AporteCapital
+        fields = ["tipo", "descricao", "aportante", "documento_referencia", "valor", "data_competencia", "data_movimento", "conta_bancaria", "caixa"]
+        widgets = {
+            "data_competencia": forms.DateInput(attrs={"type": "date"}),
+            "data_movimento": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            hoje = timezone.localdate()
+            self.fields["data_competencia"].initial = hoje
+            self.fields["data_movimento"].initial = hoje
+        self.fields["conta_bancaria"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
+        self.fields["caixa"].queryset = Caixa.objects.filter(empresa=empresa, aberto=True)
+        self.fields["conta_bancaria"].help_text = "Informe conta bancária ou caixa, nunca os dois."
+
+    def clean(self):
+        dados = super().clean()
+        if bool(dados.get("conta_bancaria")) == bool(dados.get("caixa")):
+            raise forms.ValidationError("Informe exatamente um destino: conta bancária ou caixa.")
+        return dados
+
+
+class ImportarExtratoForm(forms.Form):
+    conta = forms.ModelChoiceField(queryset=ContaBancaria.objects.none())
+    arquivo = forms.FileField(help_text="CSV com colunas data, descricao, valor e identificador opcional.")
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        self.fields["conta"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
+
+
+class ConciliarExtratoForm(forms.Form):
+    movimento = forms.ModelChoiceField(queryset=MovimentoBancario.objects.none())
+    justificativa = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}))
+
+    def __init__(self, *args, **kwargs):
+        linha, empresa = kwargs.pop("linha"), kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        self.fields["movimento"].queryset = MovimentoBancario.objects.filter(
+            empresa=empresa, conta=linha.conta
+        ).exclude(
+            historico_conciliacoes__conciliacao__status__in=["conciliado", "divergente"]
+        ).order_by("-data_movimento", "-id")
+        def rotulo_movimento(movimento):
+            valor_assinado = movimento.valor if movimento.tipo == "entrada" else -movimento.valor
+            exato = "CORRESPONDÊNCIA EXATA · " if valor_assinado == linha.valor else ""
+            dias = abs((movimento.data_movimento - linha.data_movimento).days)
+            return f"{exato}{movimento} · diferença de data: {dias} dia(s)"
+        self.fields["movimento"].label_from_instance = rotulo_movimento
+
+
+class ConciliacaoBancariaGrupoForm(forms.Form):
+    conta = forms.ModelChoiceField(queryset=ContaBancaria.objects.none())
+    linhas = forms.ModelMultipleChoiceField(
+        queryset=LinhaExtratoBancario.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        label="Linhas do extrato",
+    )
+    movimentos = forms.ModelMultipleChoiceField(
+        queryset=MovimentoBancario.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        label="Movimentos do sistema",
+        required=False,
+    )
+    registrar_diferenca = forms.BooleanField(
+        required=False,
+        label="Registrar a diferença encontrada",
+        help_text="Cria automaticamente a tarifa, juros, rendimento ou ajuste no financeiro.",
+    )
+    tipo_diferenca = forms.ChoiceField(
+        required=False,
+        choices=[("", "---------"), ("tarifa", "Tarifa bancária"), ("juros", "Juros"), ("rendimento", "Rendimento"), ("ajuste", "Outro ajuste")],
+    )
+    descricao_diferenca = forms.CharField(required=False, max_length=255, label="Descrição da diferença")
+    justificativa = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        help_text="Obrigatória somente quando os totais forem diferentes.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        contas = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
+        self.fields["conta"].queryset = contas
+        self.fields["conta"].widget.attrs["onchange"] = "window.location='?conta=' + this.value"
+        conta_id = self.data.get("conta") if self.is_bound else self.initial.get("conta")
+        try:
+            conta_id = int(conta_id) if conta_id else None
+        except (TypeError, ValueError):
+            conta_id = None
+        if conta_id and contas.filter(pk=conta_id).exists():
+            self.fields["linhas"].queryset = LinhaExtratoBancario.objects.filter(
+                empresa=empresa, conta_id=conta_id, status="pendente"
+            ).order_by("data_movimento", "id")
+            self.fields["movimentos"].queryset = MovimentoBancario.objects.filter(
+                empresa=empresa, conta_id=conta_id
+            ).exclude(
+                historico_conciliacoes__conciliacao__status__in=["conciliado", "divergente"]
+            ).order_by("data_movimento", "id")
+
+    def clean(self):
+        dados = super().clean()
+        conta = dados.get("conta")
+        if conta:
+            if any(item.conta_id != conta.id for item in dados.get("linhas") or []):
+                self.add_error("linhas", "Há uma linha que não pertence à conta selecionada.")
+            if any(item.conta_id != conta.id for item in dados.get("movimentos") or []):
+                self.add_error("movimentos", "Há um movimento que não pertence à conta selecionada.")
+        if dados.get("registrar_diferenca"):
+            if not dados.get("tipo_diferenca"):
+                self.add_error("tipo_diferenca", "Informe o tipo da diferença.")
+            if not (dados.get("descricao_diferenca") or "").strip():
+                self.add_error("descricao_diferenca", "Descreva a diferença encontrada no extrato.")
+        elif not dados.get("movimentos"):
+            self.add_error("movimentos", "Selecione movimentos ou marque o registro da diferença.")
+        return dados
 
 
 class PagamentoForm(forms.ModelForm):
@@ -66,15 +223,29 @@ class PagamentoForm(forms.ModelForm):
             "valor",
             "forma_pagamento",
             "referencia",
+            "data_competencia",
+            "data_movimento",
             "observacao",
             "metodo",
         ]
+        widgets = {
+            "data_competencia": forms.DateInput(attrs={"type": "date"}),
+            "data_movimento": forms.DateInput(attrs={"type": "date"}),
+        }
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
         self.fields["ordem_servico"].required = False
+        ordens = self.fields["ordem_servico"].queryset
+        self.fields["ordem_servico"].queryset = (
+            ordens.filter(empresa=empresa) if empresa is not None else ordens.filter(empresa__isnull=True)
+        )
         self.fields["forma_pagamento"].required = True
-        self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(ativa=True).order_by("nome")
+        formas = FormaPagamento.objects.filter(ativa=True)
+        if empresa:
+            formas = formas.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["forma_pagamento"].queryset = formas.order_by("nome")
         self.fields["forma_pagamento_secundaria"].queryset = self.fields["forma_pagamento"].queryset
         self.fields["forma_pagamento_secundaria"].label = "Forma secundaria"
         self.fields["valor_secundario"].label = "Valor secundario"
@@ -96,11 +267,17 @@ class PagamentoForm(forms.ModelForm):
         self.fields["observacao"].label = "Mensagem adicional no talão"
         self.fields["observacao"].required = False
         self.fields["observacao"].widget = forms.Textarea(attrs={"rows": 2})
+        self.fields["data_competencia"].label = "Data de competência"
+        self.fields["data_movimento"].label = "Data da movimentação"
+        self.fields["data_competencia"].required = False
+        self.fields["data_movimento"].required = False
         if not self.is_bound and not self.initial.get("chave_idempotencia"):
             self.initial["chave_idempotencia"] = uuid4().hex
 
     def clean(self):
         cleaned_data = super().clean()
+        cleaned_data["data_competencia"] = cleaned_data.get("data_competencia") or timezone.localdate()
+        cleaned_data["data_movimento"] = cleaned_data.get("data_movimento") or timezone.localdate()
         forma_pagamento = cleaned_data.get("forma_pagamento")
         forma_secundaria = cleaned_data.get("forma_pagamento_secundaria")
         valor = cleaned_data.get("valor") or Decimal("0.00")
@@ -138,31 +315,55 @@ class PagamentoForm(forms.ModelForm):
 
 class LancamentoCaixaForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+        categorias = CategoriaFinanceira.objects.filter(
             tipo="saida",
             ativa=True,
-        ).order_by("nome")
+        )
+        centros = CentroCusto.objects.filter(ativo=True)
+        if empresa:
+            categorias = categorias.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+            centros = centros.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["categoria"].queryset = categorias.order_by("nome")
         self.fields["categoria"].required = True
-        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
+        self.fields["centro_custo"].queryset = centros.order_by("nome")
         self.fields["categoria"].label = "Categoria"
         self.fields["centro_custo"].required = True
         self.fields["descricao"].label = "Descricao"
         self.fields["centro_custo"].label = "Centro de custo"
         self.fields["valor"].label = "Valor"
+        self.fields["data_competencia"].label = "Data de competência"
+        self.fields["data_movimento"].label = "Data da movimentação"
+        self.fields["data_competencia"].required = False
+        self.fields["data_movimento"].required = False
 
     class Meta:
         model = LancamentoCaixa
-        fields = ["descricao", "categoria", "centro_custo", "valor"]
+        fields = ["descricao", "categoria", "centro_custo", "valor", "data_competencia", "data_movimento"]
+        widgets = {
+            "data_competencia": forms.DateInput(attrs={"type": "date"}),
+            "data_movimento": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        cleaned_data["data_competencia"] = cleaned_data.get("data_competencia") or timezone.localdate()
+        cleaned_data["data_movimento"] = cleaned_data.get("data_movimento") or timezone.localdate()
+        return cleaned_data
 
 
 class ContaReceberForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+        categorias = CategoriaFinanceira.objects.filter(
             tipo__in=["entrada", "receber"],
             ativa=True,
-        ).order_by("nome")
+        )
+        if empresa:
+            categorias = categorias.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["categoria"].queryset = categorias.order_by("nome")
 
     class Meta:
         model = ContaReceber
@@ -190,12 +391,16 @@ class ContaReceberForm(forms.ModelForm):
 
 class ContaReceberEdicaoForm(forms.ModelForm):
     def __init__(self, *args, allow_financial_changes=True, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
         self.allow_financial_changes = allow_financial_changes
-        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+        categorias = CategoriaFinanceira.objects.filter(
             tipo__in=["entrada", "receber"],
             ativa=True,
-        ).order_by("nome")
+        )
+        if empresa:
+            categorias = categorias.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["categoria"].queryset = categorias.order_by("nome")
         if not allow_financial_changes:
             self.fields["ordem_servico"].disabled = True
             self.fields["valor_original"].disabled = True
@@ -240,8 +445,12 @@ class BaixaContaReceberForm(forms.Form):
     forma_pagamento = forms.ModelChoiceField(queryset=FormaPagamento.objects.none())
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(ativa=True).order_by("nome")
+        formas = FormaPagamento.objects.filter(ativa=True)
+        if empresa:
+            formas = formas.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["forma_pagamento"].queryset = formas.order_by("nome")
         self.fields["valor"].label = "Valor principal recebido"
         self.fields["desconto"].label = "Desconto concedido"
         self.fields["juros"].label = "Juros recebidos"
@@ -254,6 +463,12 @@ class CategoriaFinanceiraForm(forms.ModelForm):
     class Meta:
         model = CategoriaFinanceira
         fields = ["nome", "tipo", "ativa"]
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
+        super().__init__(*args, **kwargs)
+        if empresa and not self.instance.empresa_id:
+            self.instance.empresa = empresa
 
 
 class RegraComissaoTecnicoForm(forms.ModelForm):
@@ -315,18 +530,24 @@ class CustoFixoMensalForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        self.fields["categoria_financeira"].queryset = CategoriaFinanceira.objects.filter(
+        categorias = CategoriaFinanceira.objects.filter(
             tipo="saida",
             ativa=True,
-        ).order_by("nome")
+        )
+        centros = CentroCusto.objects.filter(ativo=True)
+        if empresa:
+            categorias = categorias.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+            centros = centros.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["categoria_financeira"].queryset = categorias.order_by("nome")
         self.fields["categoria_financeira"].required = False
         self.fields["categoria_financeira"].label = "Categoria"
         if self.instance and self.instance.pk and self.instance.categoria and not self.instance.categoria_financeira_id:
-            categoria = CategoriaFinanceira.objects.filter(nome=self.instance.categoria, tipo="saida").first()
+            categoria = categorias.filter(nome=self.instance.categoria).first()
             if categoria:
                 self.initial.setdefault("categoria_financeira", categoria.id)
-        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
+        self.fields["centro_custo"].queryset = centros.order_by("nome")
         for field_name in self.fields:
             css_class = "form-check-input" if field_name == "ativo" else "form-control form-control-sm"
             self.fields[field_name].widget.attrs.setdefault("class", css_class)
@@ -355,22 +576,41 @@ class CentroCustoForm(forms.ModelForm):
         model = CentroCusto
         fields = ["nome", "tipo", "ativo"]
 
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
+        super().__init__(*args, **kwargs)
+        if empresa and not self.instance.empresa_id:
+            self.instance.empresa = empresa
+
 
 class FormaPagamentoForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
+        super().__init__(*args, **kwargs)
+        if empresa and not self.instance.empresa_id:
+            self.instance.empresa = empresa
+        self.fields["conta_bancaria_liquidacao"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True) if empresa else ContaBancaria.objects.none()
+
     class Meta:
         model = FormaPagamento
-        fields = ["nome", "codigo", "tipo", "taxa_percentual", "dias_recebimento", "ativa"]
+        fields = ["nome", "codigo", "tipo", "taxa_percentual", "dias_recebimento", "conta_bancaria_liquidacao", "ativa"]
 
 
 class ContaPagarForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+        categorias = CategoriaFinanceira.objects.filter(
             tipo="saida",
             ativa=True,
-        ).order_by("nome")
+        )
+        centros = CentroCusto.objects.filter(ativo=True)
+        if empresa:
+            categorias = categorias.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+            centros = centros.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["categoria"].queryset = categorias.order_by("nome")
         self.fields["categoria"].required = True
-        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
+        self.fields["centro_custo"].queryset = centros.order_by("nome")
         self.fields["categoria"].label = "Categoria"
         self.fields["centro_custo"].label = "Centro de custo"
 
@@ -384,14 +624,20 @@ class ContaPagarForm(forms.ModelForm):
 
 class ContaPagarEdicaoForm(forms.ModelForm):
     def __init__(self, *args, allow_financial_changes=True, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
         self.allow_financial_changes = allow_financial_changes
-        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+        categorias = CategoriaFinanceira.objects.filter(
             tipo="saida",
             ativa=True,
-        ).order_by("nome")
+        )
+        centros = CentroCusto.objects.filter(ativo=True)
+        if empresa:
+            categorias = categorias.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+            centros = centros.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["categoria"].queryset = categorias.order_by("nome")
         self.fields["categoria"].required = True
-        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(ativo=True).order_by("nome")
+        self.fields["centro_custo"].queryset = centros.order_by("nome")
         self.fields["categoria"].label = "Categoria"
         self.fields["centro_custo"].label = "Centro de custo"
         if not allow_financial_changes:
@@ -421,7 +667,11 @@ class PagamentoContaPagarForm(forms.ModelForm):
         fields = ["valor", "forma_pagamento", "referencia", "observacao"]
 
     def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
-        self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(ativa=True).order_by("nome")
+        formas = FormaPagamento.objects.filter(ativa=True)
+        if empresa:
+            formas = formas.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        self.fields["forma_pagamento"].queryset = formas.order_by("nome")
 
 

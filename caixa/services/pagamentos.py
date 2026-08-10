@@ -2,9 +2,161 @@
 import logging
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+def _aliquota_empresa_pagamento(empresa, tipo_item):
+    if not empresa:
+        return Decimal("0.00")
+    from fiscal.services_tributacao import calcular_estimativa_tributaria
+
+    tipo_fiscal = "servico" if tipo_item == "servico" else ("industrializado" if tipo_item in {"fabricado", "industrializado"} else "produto")
+    return Decimal(str(calcular_estimativa_tributaria(
+        empresa=empresa, tipo_item=tipo_fiscal,
+    )["aliquota_efetiva"]))
+
+
+def _calculo_tributario_pagamento(empresa, tipo_item, *, valor=0, produto=None, data_referencia=None):
+    from fiscal.services_tributacao import calcular_estimativa_tributaria
+
+    tipo_fiscal = "servico" if tipo_item == "servico" else ("industrializado" if tipo_item in {"fabricado", "industrializado"} else "produto")
+    return calcular_estimativa_tributaria(
+        empresa=empresa, valor=valor, tipo_item=tipo_fiscal,
+        produto=produto, data_referencia=data_referencia,
+    )
+
+
+def calcular_snapshot_encargos_pagamento(pagamento):
+    from caixa.models import FormaPagamento
+
+    valor = Decimal(str(pagamento.valor or 0))
+    empresa = getattr(pagamento, "empresa", None)
+    base_servico = Decimal("0.00")
+    base_produto = Decimal("0.00")
+    origem_tributaria = "empresa_comercio"
+    memorias_tributarias = []
+    data_pagamento = getattr(pagamento, "data", None)
+    data_referencia = data_pagamento.date() if hasattr(data_pagamento, "date") else data_pagamento
+
+    if pagamento.stock_item_id:
+        produto = pagamento.stock_item
+        calculo_produto = _calculo_tributario_pagamento(
+            empresa, produto.tipo_item, valor=valor, produto=produto, data_referencia=data_referencia,
+        )
+        aliquota = Decimal(str(calculo_produto["aliquota_efetiva"]))
+        memorias_tributarias.append(calculo_produto["memoria"])
+        base_produto = valor
+        origem_tributaria = f"produto:{produto.id}"
+    elif pagamento.ordem_servico_id:
+        ordem = pagamento.ordem_servico
+        for item in ordem.servicos_pecas.all():
+            total_item = Decimal(str(item.valor_unitario or 0)) * Decimal(int(item.quantidade or 0))
+            if item.tipo == "servico":
+                base_servico += total_item
+            else:
+                base_produto += total_item
+        total_origem = base_servico + base_produto
+        if total_origem > 0:
+            proporcao_servico = base_servico / total_origem
+            calculo_servico = _calculo_tributario_pagamento(empresa, "servico", valor=base_servico, data_referencia=data_referencia)
+            calculo_produto = _calculo_tributario_pagamento(empresa, "produto", valor=base_produto, data_referencia=data_referencia)
+            aliquota = (
+                Decimal(str(calculo_servico["aliquota_efetiva"])) * proporcao_servico
+                + Decimal(str(calculo_produto["aliquota_efetiva"])) * (Decimal("1") - proporcao_servico)
+            )
+            memorias_tributarias.extend([calculo_servico["memoria"], calculo_produto["memoria"]])
+            base_servico = valor * proporcao_servico
+            base_produto = valor - base_servico
+            origem_tributaria = "os_rateada_servico_produto"
+        else:
+            calculo_servico = _calculo_tributario_pagamento(empresa, "servico", valor=valor, data_referencia=data_referencia)
+            aliquota = Decimal(str(calculo_servico["aliquota_efetiva"]))
+            memorias_tributarias.append(calculo_servico["memoria"])
+            base_servico = valor
+            origem_tributaria = "os_servico"
+    else:
+        calculo_produto = _calculo_tributario_pagamento(empresa, "produto", valor=valor, data_referencia=data_referencia)
+        aliquota = Decimal(str(calculo_produto["aliquota_efetiva"]))
+        memorias_tributarias.append(calculo_produto["memoria"])
+        base_produto = valor
+
+    impostos = (valor * aliquota / Decimal("100")).quantize(Decimal("0.01"))
+    taxas = Decimal("0.00")
+    taxas_detalhe = []
+    composicao = pagamento.formas_pagamento_compostas or []
+    if composicao:
+        forma_ids = [item.get("forma_id") for item in composicao if item.get("forma_id")]
+        formas_queryset = FormaPagamento.objects.filter(id__in=forma_ids)
+        if pagamento.empresa_id:
+            formas_queryset = formas_queryset.filter(
+                Q(empresa_id=pagamento.empresa_id) | Q(empresa__isnull=True)
+            )
+        formas = formas_queryset.in_bulk()
+        for item in composicao:
+            forma = formas.get(item.get("forma_id"))
+            valor_parcela = Decimal(str(item.get("valor") or 0))
+            taxa_percentual = Decimal(str(getattr(forma, "taxa_percentual", 0) or 0))
+            taxa_valor = (valor_parcela * taxa_percentual / Decimal("100")).quantize(Decimal("0.01"))
+            taxas += taxa_valor
+            taxas_detalhe.append(
+                {
+                    "forma_id": getattr(forma, "id", None),
+                    "forma_nome": getattr(forma, "nome", None) or item.get("forma_nome") or "-",
+                    "valor": str(valor_parcela),
+                    "taxa_percentual": str(taxa_percentual),
+                    "taxa_valor": str(taxa_valor),
+                }
+            )
+    else:
+        forma = pagamento.forma_pagamento
+        taxa_percentual = Decimal(str(getattr(forma, "taxa_percentual", 0) or 0))
+        taxas = (valor * taxa_percentual / Decimal("100")).quantize(Decimal("0.01"))
+        taxas_detalhe.append(
+            {
+                "forma_id": getattr(forma, "id", None),
+                "forma_nome": getattr(forma, "nome", None) or pagamento.metodo or "-",
+                "valor": str(valor),
+                "taxa_percentual": str(taxa_percentual),
+                "taxa_valor": str(taxas),
+            }
+        )
+    return {
+        "impostos_estimados": impostos,
+        "taxas_recebimento_estimadas": taxas,
+        "aliquota_tributaria_estimada": aliquota.quantize(Decimal("0.001")),
+        "snapshot": {
+            "motor": "encargos_gerenciais_v1",
+            "origem_tributaria": origem_tributaria,
+            "valor_receita": str(valor),
+            "base_servico": str(base_servico.quantize(Decimal("0.01"))),
+            "base_produto": str(base_produto.quantize(Decimal("0.01"))),
+            "aliquota_tributaria": str(aliquota.quantize(Decimal("0.001"))),
+            "impostos_estimados": str(impostos),
+            "taxas_recebimento": str(taxas),
+            "taxas_detalhe": taxas_detalhe,
+            "memorias_tributarias": memorias_tributarias,
+        },
+    }
+
+
+def registrar_snapshot_encargos_pagamento(pagamento):
+    from caixa.models import Pagamento
+
+    calculo = calcular_snapshot_encargos_pagamento(pagamento)
+    Pagamento.objects.filter(pk=pagamento.pk).update(
+        impostos_estimados=calculo["impostos_estimados"],
+        taxas_recebimento_estimadas=calculo["taxas_recebimento_estimadas"],
+        aliquota_tributaria_estimada=calculo["aliquota_tributaria_estimada"],
+        encargos_gerenciais_snapshot=calculo["snapshot"],
+    )
+    pagamento.impostos_estimados = calculo["impostos_estimados"]
+    pagamento.taxas_recebimento_estimadas = calculo["taxas_recebimento_estimadas"]
+    pagamento.aliquota_tributaria_estimada = calculo["aliquota_tributaria_estimada"]
+    pagamento.encargos_gerenciais_snapshot = calculo["snapshot"]
+    return pagamento
 
 
 def gerar_numero_talao_pagamento(*, pagamento, configuracao_sistema_model=None):
@@ -36,13 +188,26 @@ def excluir_pagamento_com_justificativa(*, pagamento, usuario, justificativa):
     from caixa.models import RecebimentoConta
     from estoque.models import VendaRapidaEstoque
     from estoque.services import (
+        componentes_fisicos_item_venda,
         consumir_estoque_ordem_no_pagamento,
         obter_ubicacao_preferencial,
         registrar_movimentacao_estoque,
     )
     from ordens.models import OrdemTalao, ServicoPeca
+    from caixa.services.livro_financeiro import estornar_pagamento_no_livro
+    from caixa.services.tesouraria import estornar_pagamento_bancario
 
     with transaction.atomic():
+        estornar_pagamento_no_livro(
+            pagamento=pagamento,
+            motivo=justificativa,
+            usuario=usuario,
+        )
+        estornar_pagamento_bancario(
+            pagamento=pagamento,
+            motivo=justificativa,
+            usuario=usuario,
+        )
         recebimentos = list(
             RecebimentoConta.objects.select_related("conta").filter(pagamento=pagamento)
         )
@@ -59,20 +224,24 @@ def excluir_pagamento_com_justificativa(*, pagamento, usuario, justificativa):
         )
         for venda in vendas:
             if venda.status == "vendida":
-                destino_ubicacao = obter_ubicacao_preferencial(venda.produto, venda.ponto_operacional)
-                if not destino_ubicacao:
-                    raise ValueError(
-                        f"Produto {venda.produto.nome} sem ubicacao ativa para estorno no ponto {venda.ponto_operacional.codigo}."
+                for componente, quantidade_componente in componentes_fisicos_item_venda(venda):
+                    destino_ubicacao = obter_ubicacao_preferencial(componente, venda.ponto_operacional)
+                    if not destino_ubicacao:
+                        raise ValueError(
+                            f"Produto {componente.nome} sem ubicacao ativa para estorno no ponto {venda.ponto_operacional.codigo}."
+                        )
+                    registrar_movimentacao_estoque(
+                        produto=componente,
+                        tipo="devolucao_reserva",
+                        quantidade=quantidade_componente,
+                        destino=venda.ponto_operacional,
+                        destino_ubicacao_ref=destino_ubicacao,
+                        observacao=f"Estorno do pagamento #{pagamento.id} - {justificativa[:140]}",
+                        usuario=usuario,
+                        chave_idempotencia=f"pagamento:{pagamento.id}:venda:{venda.id}:componente:{componente.id}:estorno",
+                        origem_tipo="pagamento",
+                        origem_referencia=str(pagamento.id),
                     )
-                registrar_movimentacao_estoque(
-                    produto=venda.produto,
-                    tipo="devolucao_reserva",
-                    quantidade=int(venda.quantidade),
-                    destino=venda.ponto_operacional,
-                    destino_ubicacao_ref=destino_ubicacao,
-                    observacao=f"Estorno do pagamento #{pagamento.id} - {justificativa[:140]}",
-                    usuario=usuario,
-                )
             venda.pagamento = None
             venda.status = "pre_reserva"
             venda.concluido_em = None
@@ -210,6 +379,7 @@ def processar_pagamento_pos_transacional(
     from caixa.models import LancamentoCaixa, RecebimentoConta
     from configuracoes.models import ConfiguracaoSistema
     from estoque.services import (
+        componentes_fisicos_item_venda,
         consumir_estoque_ordem_no_pagamento,
         obter_ubicacao_preferencial,
         registrar_movimentacao_estoque,
@@ -256,21 +426,25 @@ def processar_pagamento_pos_transacional(
         )
 
         if venda:
-            origem_ubicacao = obter_ubicacao_preferencial(venda.produto, venda.ponto_operacional)
-            if not origem_ubicacao:
-                raise ValueError(
-                    f"Produto {venda.produto.nome} sem ubicacao ativa para venda no ponto {venda.ponto_operacional.codigo}."
-                )
             try:
-                registrar_movimentacao_estoque(
-                    produto=venda.produto,
-                    tipo="venda",
-                    quantidade=int(venda.quantidade),
-                    origem=venda.ponto_operacional,
-                    origem_ubicacao=origem_ubicacao,
-                    observacao=f"Venda finalizada no caixa #{pagamento.id} (pre-reserva {venda.id})",
-                    usuario=usuario,
-                )
+                for componente, quantidade_componente in componentes_fisicos_item_venda(venda):
+                    origem_ubicacao = obter_ubicacao_preferencial(componente, venda.ponto_operacional)
+                    if not origem_ubicacao:
+                        raise ValueError(
+                            f"Produto {componente.nome} sem ubicacao ativa para venda no ponto {venda.ponto_operacional.codigo}."
+                        )
+                    registrar_movimentacao_estoque(
+                        produto=componente,
+                        tipo="venda",
+                        quantidade=quantidade_componente,
+                        origem=venda.ponto_operacional,
+                        origem_ubicacao=origem_ubicacao,
+                        observacao=f"Venda finalizada no caixa #{pagamento.id} (pre-reserva {venda.id})",
+                        usuario=usuario,
+                        chave_idempotencia=f"pagamento:{pagamento.id}:venda:{venda.id}:componente:{componente.id}",
+                        origem_tipo="pagamento",
+                        origem_referencia=str(pagamento.id),
+                    )
             except ValueError:
                 raise ValueError(
                     f"Saldo insuficiente para concluir venda #{venda.id} em {venda.ponto_operacional.codigo}."
@@ -282,21 +456,25 @@ def processar_pagamento_pos_transacional(
             processar_evento_venda_mostrador_cb(venda, evento="VENDA_MOSTRADOR")
         elif vendas_guia:
             for item_guia in vendas_guia:
-                origem_ubicacao = obter_ubicacao_preferencial(item_guia.produto, item_guia.ponto_operacional)
-                if not origem_ubicacao:
-                    raise ValueError(
-                        f"Produto {item_guia.produto.nome} sem ubicacao ativa para venda no ponto {item_guia.ponto_operacional.codigo}."
-                    )
                 try:
-                    registrar_movimentacao_estoque(
-                        produto=item_guia.produto,
-                        tipo="venda",
-                        quantidade=int(item_guia.quantidade),
-                        origem=item_guia.ponto_operacional,
-                        origem_ubicacao=origem_ubicacao,
-                        observacao=f"Venda finalizada no caixa #{pagamento.id} (guia {guia_codigo})",
-                        usuario=usuario,
-                    )
+                    for componente, quantidade_componente in componentes_fisicos_item_venda(item_guia):
+                        origem_ubicacao = obter_ubicacao_preferencial(componente, item_guia.ponto_operacional)
+                        if not origem_ubicacao:
+                            raise ValueError(
+                                f"Produto {componente.nome} sem ubicacao ativa para venda no ponto {item_guia.ponto_operacional.codigo}."
+                            )
+                        registrar_movimentacao_estoque(
+                            produto=componente,
+                            tipo="venda",
+                            quantidade=quantidade_componente,
+                            origem=item_guia.ponto_operacional,
+                            origem_ubicacao=origem_ubicacao,
+                            observacao=f"Venda finalizada no caixa #{pagamento.id} (guia {guia_codigo})",
+                            usuario=usuario,
+                            chave_idempotencia=f"pagamento:{pagamento.id}:venda:{item_guia.id}:componente:{componente.id}",
+                            origem_tipo="pagamento",
+                            origem_referencia=str(pagamento.id),
+                        )
                 except ValueError:
                     raise ValueError(
                         f"Saldo insuficiente para concluir item da guia {guia_codigo} no ponto {item_guia.ponto_operacional.codigo}."

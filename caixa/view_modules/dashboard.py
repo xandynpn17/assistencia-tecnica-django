@@ -65,11 +65,136 @@ from .helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _validar_datas_financeiras(form, usuario):
+    hoje = timezone.localdate()
+    competencia = form.cleaned_data.get("data_competencia")
+    movimento = form.cleaned_data.get("data_movimento")
+    if movimento and movimento > hoje:
+        form.add_error("data_movimento", "A data da movimentação não pode estar no futuro.")
+        return False
+    datas_alteradas = any(data and data != hoje for data in (competencia, movimento))
+    if datas_alteradas and not has_sensitive_permission(usuario, "perm_caixa_lancamento_retroativo"):
+        mensagem = "Você não tem permissão para registrar datas financeiras diferentes de hoje."
+        if competencia and competencia != hoje:
+            form.add_error("data_competencia", mensagem)
+        if movimento and movimento != hoje:
+            form.add_error("data_movimento", mensagem)
+        return False
+    return True
+
+
+def _componentes_pagamento_conferencia(pagamento):
+    valor_pagamento = Decimal(str(pagamento.valor or 0)).quantize(Decimal("0.01"))
+    componentes = []
+    for item in pagamento.formas_pagamento_compostas or []:
+        try:
+            valor = Decimal(str((item or {}).get("valor") or 0)).quantize(Decimal("0.01"))
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+        if valor <= Decimal("0.00"):
+            continue
+        componentes.append(
+            {
+                "codigo": ((item or {}).get("forma_codigo") or "sem_forma").strip() or "sem_forma",
+                "nome": ((item or {}).get("forma_nome") or "Sem forma").strip() or "Sem forma",
+                "valor": valor,
+            }
+        )
+
+    if not componentes:
+        return [
+            {
+                "codigo": (
+                    (getattr(pagamento.forma_pagamento, "codigo", "") or pagamento.metodo or "sem_forma").strip()
+                    or "sem_forma"
+                ),
+                "nome": getattr(pagamento.forma_pagamento, "nome", "") or pagamento.metodo_display or "Sem forma",
+                "valor": valor_pagamento,
+            }
+        ]
+
+    diferenca = valor_pagamento - sum((item["valor"] for item in componentes), Decimal("0.00"))
+    if diferenca:
+        codigo_principal = (
+            (getattr(pagamento.forma_pagamento, "codigo", "") or pagamento.metodo or "sem_forma").strip()
+            or "sem_forma"
+        )
+        componente_principal = next((item for item in componentes if item["codigo"] == codigo_principal), None)
+        if componente_principal:
+            componente_principal["valor"] += diferenca
+        else:
+            componentes.append(
+                {
+                    "codigo": codigo_principal,
+                    "nome": getattr(pagamento.forma_pagamento, "nome", "") or pagamento.metodo_display or "Sem forma",
+                    "valor": diferenca,
+                }
+            )
+    return componentes
+
+
+def _montar_conferencia_formas(pagamentos, payload=None):
+    agrupados = {}
+    for pagamento in pagamentos:
+        for componente in _componentes_pagamento_conferencia(pagamento):
+            codigo = componente["codigo"]
+            item = agrupados.setdefault(
+                codigo,
+                {
+                    "codigo": codigo,
+                    "nome": componente["nome"],
+                    "apurado": Decimal("0.00"),
+                    "contado": Decimal("0.00"),
+                    "diferenca": Decimal("0.00"),
+                    "campo": f"conferencia_{codigo}",
+                },
+            )
+            item["apurado"] += componente["valor"]
+
+    linhas = []
+    for item in agrupados.values():
+        valor_payload = item["apurado"]
+        if payload is not None:
+            bruto = (payload.get(item["campo"]) or "").strip()
+            if bruto:
+                try:
+                    valor_payload = Decimal(str(bruto))
+                except (InvalidOperation, TypeError, ValueError):
+                    valor_payload = item["apurado"]
+        item["contado"] = valor_payload
+        item["diferenca"] = valor_payload - item["apurado"]
+        linhas.append(item)
+    return sorted(linhas, key=lambda row: (row["nome"] or "").lower())
+
+
+def _saldo_dinheiro_esperado(caixa, resumo_caixa, conferencia_formas):
+    recebimentos_dinheiro = sum(
+        (item["apurado"] for item in conferencia_formas if item["codigo"] == "dinheiro"),
+        Decimal("0.00"),
+    )
+    lancamentos = resumo_caixa["lancamentos"]
+    entradas_manuais = sum(
+        (
+            lancamento.valor
+            for lancamento in lancamentos
+            if lancamento.tipo == "entrada" and not lancamento.pagamento_id
+        ),
+        Decimal("0.00"),
+    )
+    saidas = sum(
+        (lancamento.valor for lancamento in lancamentos if lancamento.tipo == "saida"),
+        Decimal("0.00"),
+    )
+    return Decimal(caixa.saldo_inicial or 0) + recebimentos_dinheiro + entradas_manuais - saidas
+
+
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def abrir_caixa(request):
-    caixa_hoje = _caixa_por_data()
-    caixa = caixa_atual()
-    ultimo_caixa = Caixa.objects.filter(aberto=False).order_by("-data", "-id").first()
+    empresa = getattr(request.user, "empresa", None)
+    caixa_hoje = _caixa_por_data(empresa=empresa)
+    caixa = caixa_atual(empresa)
+    caixas_empresa = Caixa.objects.filter(empresa=empresa) if empresa is not None else Caixa.objects.filter(empresa__isnull=True)
+    ultimo_caixa = caixas_empresa.filter(aberto=False).order_by("-data", "-id").first()
     resumo_ultimo_caixa = _resumo_movimento_caixa(ultimo_caixa)
     saldo_sugerido_abertura = Decimal("0.00")
     if ultimo_caixa:
@@ -120,13 +245,17 @@ def abrir_caixa(request):
             )
         try:
             with transaction.atomic():
-                novo_caixa = Caixa.objects.create(saldo_inicial=saldo_inicial, aberto=True)
+                novo_caixa = Caixa.objects.create(
+                    saldo_inicial=saldo_inicial,
+                    aberto=True,
+                    empresa=getattr(request.user, "empresa", None),
+                )
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
             return render(
                 request,
                 "caixa/abrir_caixa.html",
-                _contexto_abrir(_caixa_por_data() or caixa_atual(), False, "A abertura do caixa foi bloqueada pela regra operacional.", saldo_digitado=saldo_bruto),
+                _contexto_abrir(_caixa_por_data(empresa=empresa) or caixa_atual(empresa), False, "A abertura do caixa foi bloqueada pela regra operacional.", saldo_digitado=saldo_bruto),
             )
         _log_financeiro("caixa_aberto", request.user, valor=saldo_inicial, descricao=f"Caixa #{novo_caixa.id}")
         return _redirect_pos_operacao(request, "caixa:registrar_pagamento")
@@ -140,69 +269,37 @@ def abrir_caixa(request):
 
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def fechar_caixa(request):
-    caixa = caixa_atual()
+    caixa = caixa_atual(getattr(request.user, "empresa", None))
     if not caixa:
         return _redirect_pos_operacao(request, "caixa:registrar_pagamento")
-
-    def _montar_conferencia_formas(pagamentos_qs, payload=None):
-        agrupados = {}
-        for pagamento in pagamentos_qs:
-            codigo = (getattr(pagamento.forma_pagamento, "codigo", "") or pagamento.metodo or "sem_forma").strip() or "sem_forma"
-            nome = getattr(pagamento.forma_pagamento, "nome", "") or pagamento.metodo_display or "Sem forma"
-            item = agrupados.setdefault(
-                codigo,
-                {
-                    "codigo": codigo,
-                    "nome": nome,
-                    "apurado": Decimal("0.00"),
-                    "contado": Decimal("0.00"),
-                    "diferenca": Decimal("0.00"),
-                    "campo": f"conferencia_{codigo}",
-                },
-            )
-            item["apurado"] += pagamento.valor or Decimal("0.00")
-        linhas = []
-        for codigo, item in agrupados.items():
-            valor_payload = item["apurado"]
-            if payload is not None:
-                bruto = (payload.get(item["campo"]) or "").strip()
-                if bruto:
-                    try:
-                        valor_payload = Decimal(str(bruto))
-                    except Exception:
-                        valor_payload = item["apurado"]
-            item["contado"] = valor_payload
-            item["diferenca"] = valor_payload - item["apurado"]
-            linhas.append(item)
-        return sorted(linhas, key=lambda row: (row["nome"] or "").lower())
 
     def _contexto_fechar(valor_contado_fisico=None, justificativa_diferenca=""):
         resumo_caixa = _resumo_movimento_caixa(caixa)
         total_entradas = resumo_caixa["total_entradas"]
         total_saidas = resumo_caixa["total_saidas"]
-        saldo_atual = resumo_caixa["saldo"]
+        saldo_contabil = resumo_caixa["saldo"]
         pagamentos_qs = resumo_caixa["pagamentos"].select_related("ordem_servico", "forma_pagamento")
         saidas_qs = resumo_caixa["lancamentos"].filter(tipo="saida").select_related("categoria", "centro_custo")
         conferencia_formas = _montar_conferencia_formas(pagamentos_qs)
+        saldo_dinheiro = _saldo_dinheiro_esperado(caixa, resumo_caixa, conferencia_formas)
         if valor_contado_fisico in (None, ""):
             valor_contado_fisico_exibicao = ""
             diferenca = Decimal("0.00")
         else:
             valor_contado_fisico_exibicao = valor_contado_fisico
-            diferenca = valor_contado_fisico - saldo_atual
+            diferenca = valor_contado_fisico - saldo_dinheiro
         diferenca_classe = "success" if diferenca == Decimal("0.00") else ("warning" if diferenca > 0 else "danger")
-        formas_pagamento_resumo = [
-            {
-                "nome": row["forma_pagamento__nome"] or row["metodo"] or "-",
-                "total": row["total"] or Decimal("0.00"),
-            }
-            for row in pagamentos_qs.values("forma_pagamento__nome", "metodo").annotate(total=Sum("valor")).order_by("-total")[:5]
-        ]
+        formas_pagamento_resumo = sorted(
+            ({"nome": row["nome"], "total": row["apurado"]} for row in conferencia_formas),
+            key=lambda row: row["total"],
+            reverse=True,
+        )[:5]
         return {
             "caixa": caixa,
             "total_entradas": total_entradas,
             "total_saidas": total_saidas,
-            "saldo": saldo_atual,
+            "saldo": saldo_dinheiro,
+            "saldo_contabil": saldo_contabil,
             "valor_contado_fisico": valor_contado_fisico_exibicao,
             "diferenca_fechamento": diferenca,
             "diferenca_classe": diferenca_classe,
@@ -218,7 +315,8 @@ def fechar_caixa(request):
         }
 
     contexto_base = _contexto_fechar()
-    saldo_atual = contexto_base["saldo"]
+    saldo_dinheiro = contexto_base["saldo"]
+    saldo_contabil = contexto_base["saldo_contabil"]
 
     if request.method == "POST":
         valor_contado_raw = (request.POST.get("valor_contado_fisico") or "").strip()
@@ -229,8 +327,29 @@ def fechar_caixa(request):
                 "caixa/fechar_caixa.html",
                 _contexto_fechar(valor_contado_fisico="", justificativa_diferenca=(request.POST.get("justificativa_diferenca") or "").strip()),
             )
-        valor_contado = Decimal(str(valor_contado_raw))
-        diferenca = valor_contado - saldo_atual
+        try:
+            valor_contado = Decimal(str(valor_contado_raw))
+        except (InvalidOperation, TypeError, ValueError):
+            messages.error(request, "Informe um valor contado valido para fechar o caixa.")
+            return render(
+                request,
+                "caixa/fechar_caixa.html",
+                _contexto_fechar(
+                    valor_contado_fisico=valor_contado_raw,
+                    justificativa_diferenca=(request.POST.get("justificativa_diferenca") or "").strip(),
+                ),
+            )
+        if valor_contado < Decimal("0.00"):
+            messages.error(request, "O valor contado fisicamente nao pode ser negativo.")
+            return render(
+                request,
+                "caixa/fechar_caixa.html",
+                _contexto_fechar(
+                    valor_contado_fisico=valor_contado,
+                    justificativa_diferenca=(request.POST.get("justificativa_diferenca") or "").strip(),
+                ),
+            )
+        diferenca = valor_contado - saldo_dinheiro
         justificativa = (request.POST.get("justificativa_diferenca") or "").strip()
         pagamentos_qs = _resumo_movimento_caixa(caixa)["pagamentos"].select_related("forma_pagamento")
         conferencia_formas = _montar_conferencia_formas(pagamentos_qs, payload=request.POST)
@@ -246,7 +365,7 @@ def fechar_caixa(request):
                 },
             )
         caixa.aberto = False
-        caixa.saldo_final = saldo_atual
+        caixa.saldo_final = saldo_contabil
         caixa.valor_contado_fisico = valor_contado
         caixa.diferenca_fechamento = diferenca
         caixa.justificativa_diferenca = justificativa
@@ -264,8 +383,11 @@ def fechar_caixa(request):
         _log_financeiro(
             "caixa_fechado",
             request.user,
-            valor=saldo_atual,
-            descricao=f"Caixa #{caixa.id} | contado={valor_contado:.2f} | diferenca={diferenca:.2f}",
+            valor=saldo_contabil,
+            descricao=(
+                f"Caixa #{caixa.id} | saldo_contabil={saldo_contabil:.2f} | "
+                f"dinheiro_esperado={saldo_dinheiro:.2f} | contado={valor_contado:.2f} | diferenca={diferenca:.2f}"
+            ),
         )
         return _redirect_pos_operacao(request, "caixa:registrar_pagamento")
 
@@ -322,6 +444,8 @@ def _dashboard_caixa_context(request, menu_sub):
     _atualizar_status_contas_abertas()
     _atualizar_status_contas_pagar_abertas()
     hoje = timezone.localdate()
+    empresa = getattr(request.user, "empresa", None)
+    filtro_empresa = {"empresa": empresa} if empresa is not None else {"empresa__isnull": True}
     preset_periodo = (request.GET.get("preset") or "").strip()
     data_inicio_raw = (request.GET.get("data_inicio") or "").strip()
     data_fim_raw = (request.GET.get("data_fim") or "").strip()
@@ -360,7 +484,7 @@ def _dashboard_caixa_context(request, menu_sub):
         data_inicio = hoje
         data_fim = hoje
 
-    caixas_periodo = Caixa.objects.filter(data__gte=data_inicio, data__lte=data_fim).order_by("-data", "-id")
+    caixas_periodo = Caixa.objects.filter(**filtro_empresa, data__gte=data_inicio, data__lte=data_fim).order_by("-data", "-id")
     caixa = caixas_periodo.first() if data_inicio == data_fim else None
     resumo_caixa = _resumo_movimento_caixas(caixas_periodo) if caixas_periodo.exists() else _resumo_movimento_caixa(None)
     pagamentos = resumo_caixa["pagamentos"]
@@ -370,7 +494,7 @@ def _dashboard_caixa_context(request, menu_sub):
     total_saidas = resumo_caixa["total_saidas"]
     saldo = resumo_caixa["saldo"]
 
-    contas_abertas = ContaReceber.objects.filter(status__in=["aberta", "parcial", "vencida"])
+    contas_abertas = ContaReceber.objects.filter(**filtro_empresa, status__in=["aberta", "parcial", "vencida"])
     a_receber_total = contas_abertas.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     vencidas_total = contas_abertas.filter(vencimento__lt=timezone.localdate()).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     a_receber_garantia = contas_abertas.filter(tipo_origem="garantia_fabricante").aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
@@ -417,6 +541,7 @@ def _dashboard_caixa_context(request, menu_sub):
         for row in lancamentos.filter(tipo="saida").values("centro_custo__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:5]
     ]
     pagamentos_conta_pagar_periodo = PagamentoContaPagar.objects.filter(
+        conta__empresa=empresa,
         data__date__gte=data_inicio,
         data__date__lte=data_fim,
     )
@@ -436,6 +561,7 @@ def _dashboard_caixa_context(request, menu_sub):
         or Decimal("0.00")
     )
     novos_clientes_periodo = Cliente.objects.filter(
+        **filtro_empresa,
         data_cadastro__date__gte=data_inicio,
         data_cadastro__date__lte=data_fim,
     ).count()
@@ -453,7 +579,7 @@ def _dashboard_caixa_context(request, menu_sub):
     qtd_caixas_fechados = caixas_periodo.filter(aberto=False).count()
     diferenca_fechamento_total = caixas_periodo.aggregate(total=Sum("diferenca_fechamento"))["total"] or Decimal("0.00")
     competencia_custos_fixos = data_fim.replace(day=1)
-    custos_fixos_mes_qs = CustoFixoMensal.objects.filter(competencia=competencia_custos_fixos, ativo=True)
+    custos_fixos_mes_qs = CustoFixoMensal.objects.filter(**filtro_empresa, competencia=competencia_custos_fixos, ativo=True)
     custos_fixos_previsto_mes = custos_fixos_mes_qs.exclude(status="cancelado").aggregate(total=Sum("valor_previsto"))["total"] or Decimal("0.00")
     custos_fixos_pago_mes = custos_fixos_mes_qs.exclude(status="cancelado").aggregate(total=Sum("valor_pago"))["total"] or Decimal("0.00")
     custos_fixos_diferenca_mes = custos_fixos_previsto_mes - custos_fixos_pago_mes
@@ -461,7 +587,7 @@ def _dashboard_caixa_context(request, menu_sub):
     dias_periodo = (data_fim - data_inicio).days + 1
     inicio_anterior = data_inicio - timedelta(days=dias_periodo)
     fim_anterior = data_inicio - timedelta(days=1)
-    caixas_periodo_anterior = Caixa.objects.filter(data__gte=inicio_anterior, data__lte=fim_anterior).order_by("-data", "-id")
+    caixas_periodo_anterior = Caixa.objects.filter(**filtro_empresa, data__gte=inicio_anterior, data__lte=fim_anterior).order_by("-data", "-id")
     resumo_anterior = _resumo_movimento_caixas(caixas_periodo_anterior) if caixas_periodo_anterior.exists() else _resumo_movimento_caixa(None)
     lancamentos_anterior = resumo_anterior["lancamentos"]
     comparativos = {
@@ -483,9 +609,9 @@ def _dashboard_caixa_context(request, menu_sub):
         "Sem categoria",
     )
 
-    contas_pagar_abertas_qs = ContaPagar.objects.filter(status__in=["aberta", "parcial", "vencida"])
+    contas_pagar_abertas_qs = ContaPagar.objects.filter(**filtro_empresa, status__in=["aberta", "parcial", "vencida"])
     contas_pagar_vencidas = (
-        ContaPagar.objects.filter(status="vencida")
+        ContaPagar.objects.filter(**filtro_empresa, status="vencida")
         .select_related("categoria", "centro_custo")
         .order_by("vencimento", "-id")[:8]
     )
@@ -577,7 +703,7 @@ def _dashboard_caixa_context(request, menu_sub):
     for _ in range(6):
         inicio_mes = mes_cursor
         fim_mes = date(mes_cursor.year, mes_cursor.month, monthrange(mes_cursor.year, mes_cursor.month)[1])
-        caixas_mes = Caixa.objects.filter(data__gte=inicio_mes, data__lte=fim_mes)
+        caixas_mes = Caixa.objects.filter(**filtro_empresa, data__gte=inicio_mes, data__lte=fim_mes)
         resumo_mes = _resumo_movimento_caixas(caixas_mes) if caixas_mes.exists() else _resumo_movimento_caixa(None)
         entradas_mes = resumo_mes["total_entradas"]
         saidas_mes = resumo_mes["total_saidas"]
@@ -717,7 +843,10 @@ def dashboard_financeiro(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def detalhe_caixa(request, caixa_id):
-    caixa = get_object_or_404(Caixa.objects.filter(aberto=False), id=caixa_id)
+    empresa = getattr(request.user, "empresa", None)
+    caixas = Caixa.objects.filter(aberto=False)
+    caixas = caixas.filter(empresa=empresa) if empresa is not None else caixas.filter(empresa__isnull=True)
+    caixa = get_object_or_404(caixas, id=caixa_id)
     resumo_caixa = _resumo_movimento_caixa(caixa)
     pagamentos = resumo_caixa["pagamentos"].select_related("ordem_servico", "forma_pagamento").order_by("-data", "-id")
     lancamentos = resumo_caixa["lancamentos"].select_related("categoria", "centro_custo", "usuario").order_by("-data", "-id")
@@ -750,8 +879,9 @@ def detalhe_caixa(request, caixa_id):
 
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def registrar_pagamento(request):
-    _garantir_formas_pagamento_padrao()
-    caixa = caixa_atual()
+    empresa = getattr(request.user, "empresa", None)
+    _garantir_formas_pagamento_padrao(empresa)
+    caixa = caixa_atual(empresa)
     if not caixa:
         return redirect("caixa:abrir_caixa")
 
@@ -764,6 +894,7 @@ def registrar_pagamento(request):
     pagamento_sucesso = None
     guia_total = Decimal("0.00")
     guia_resumo = None
+    filtro_empresa = {"empresa": empresa} if empresa is not None else {"empresa__isnull": True}
 
     def _total_liquidado_pagamentos(qs):
         return sum(
@@ -771,10 +902,12 @@ def registrar_pagamento(request):
             Decimal("0.00"),
         )
 
-    ordem = OrdemServico.objects.filter(id=os_id).first() if os_id else None
+    ordem = OrdemServico.objects.filter(**filtro_empresa, id=os_id).first() if os_id else None
     numero_os_busca = os_numero_get
     if not ordem and os_numero_get:
         ordem = _buscar_ordem_por_numero(os_numero_get)
+        if ordem and ordem.empresa_id != getattr(empresa, "id", None):
+            ordem = None
         if not ordem:
             messages.error(request, f"OS '{os_numero_get}' nao encontrada.")
 
@@ -782,7 +915,7 @@ def registrar_pagamento(request):
     if stock_id:
         from estoque.models import Produto
 
-        item = Produto.objects.filter(id=stock_id).first()
+        item = Produto.objects.filter(**filtro_empresa, id=stock_id).first()
 
     venda = None
     vendas_guia = []
@@ -791,7 +924,7 @@ def registrar_pagamento(request):
 
         venda = (
             VendaRapidaEstoque.objects.select_related("produto", "ponto_operacional")
-            .filter(id=venda_id, status="pre_reserva")
+            .filter(produto__empresa=empresa, id=venda_id, status="pre_reserva")
             .first()
         )
         if not venda:
@@ -802,7 +935,7 @@ def registrar_pagamento(request):
 
         vendas_guia = list(
             VendaRapidaEstoque.objects.select_related("produto", "ponto_operacional")
-            .filter(guia_pagamento=guia_codigo, status="pre_reserva")
+            .filter(produto__empresa=empresa, guia_pagamento=guia_codigo, status="pre_reserva")
             .order_by("id")
         )
         if not vendas_guia:
@@ -858,7 +991,7 @@ def registrar_pagamento(request):
     if pagamento_sucesso_id:
         pagamento_sucesso = (
             Pagamento.objects.select_related("ordem_servico", "forma_pagamento")
-            .filter(id=pagamento_sucesso_id)
+            .filter(**filtro_empresa, id=pagamento_sucesso_id)
             .first()
         )
 
@@ -996,11 +1129,13 @@ def registrar_pagamento(request):
             ordem = _buscar_ordem_por_numero(os_numero_post)
             if not ordem:
                 messages.error(request, f"OS '{os_numero_post}' nao encontrada.")
-        form = PagamentoForm(_payload_pagamento_normalizado(request))
+        form = PagamentoForm(_payload_pagamento_normalizado(request), empresa=empresa)
         if os_numero_post and not ordem:
             form.add_error(None, "OS informada nao encontrada. Verifique o numero.")
             return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
         if form.is_valid():
+            if not _validar_datas_financeiras(form, request.user):
+                return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             pagamento_preview = form.save(commit=False)
             desconto_valor = form.cleaned_data.get("desconto_valor") or Decimal("0.00")
             desconto_percentual = form.cleaned_data.get("desconto_percentual") or Decimal("0.00")
@@ -1117,7 +1252,7 @@ def registrar_pagamento(request):
                         nome__iexact=(ordem.marca_equipamento or "").strip(),
                         ativo=True,
                         parceira_garantia=True,
-                    ).first()
+                    ).filter(Q(empresa=ordem.empresa) | Q(empresa__isnull=True)).first()
                     if not marca:
                         erro_metodo = "Pagamento em garantia bloqueado: a marca da OS nao esta cadastrada como parceira de garantia."
                         form.add_error("forma_pagamento", erro_metodo)
@@ -1211,7 +1346,7 @@ def registrar_pagamento(request):
         if ordem:
             initial["ordem_servico"] = ordem.id
             if garantia_sugerida is not None:
-                forma_garantia = _forma_pagamento_por_codigo("garantia_fabricante")
+                forma_garantia = _forma_pagamento_por_codigo("garantia_fabricante", empresa)
                 if forma_garantia:
                     initial["forma_pagamento"] = forma_garantia.id
                 initial["metodo"] = "garantia_fabricante"
@@ -1222,7 +1357,7 @@ def registrar_pagamento(request):
             initial["valor"] = sum((v.valor_total for v in vendas_guia), Decimal("0.00"))
         if valor_query:
             initial["valor"] = valor_query
-        form = PagamentoForm(initial=initial)
+        form = PagamentoForm(initial=initial, empresa=empresa)
 
     return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
 
@@ -1234,7 +1369,10 @@ def excluir_pagamento(request, pagamento_id):
         "perm_caixa_excluir_pagamento",
         message="Voce nao tem permissao para excluir pagamentos.",
     )
-    pagamento = get_object_or_404(Pagamento.objects.select_related("ordem_servico", "forma_pagamento"), id=pagamento_id)
+    empresa = getattr(request.user, "empresa", None)
+    pagamentos = Pagamento.objects.select_related("ordem_servico", "forma_pagamento")
+    pagamentos = pagamentos.filter(empresa=empresa) if empresa is not None else pagamentos.filter(empresa__isnull=True)
+    pagamento = get_object_or_404(pagamentos, id=pagamento_id)
     config_sistema = ConfiguracaoSistema.get_configuracao()
     if request.method == "POST":
         justificativa = (request.POST.get("justificativa") or "").strip()
@@ -1289,11 +1427,12 @@ def excluir_pagamento(request, pagamento_id):
 
 @role_required(CAIXA_OPERATIONAL_ROLES)
 def registrar_saida(request):
-    caixa = caixa_atual()
+    empresa = getattr(request.user, "empresa", None)
+    caixa = caixa_atual(empresa)
     if not caixa:
         return redirect("caixa:abrir_caixa")
-    _garantir_categorias_financeiras_padrao()
-    _garantir_centros_custo_padrao()
+    _garantir_categorias_financeiras_padrao(empresa)
+    _garantir_centros_custo_padrao(empresa)
     saldo_atual = _resumo_movimento_caixa(caixa)["saldo"]
     hoje = timezone.localdate()
     saidas_qs = LancamentoCaixa.objects.filter(caixa=caixa, tipo="saida").select_related("categoria", "centro_custo", "usuario")
@@ -1302,8 +1441,23 @@ def registrar_saida(request):
     quantidade_saidas_hoje = saidas_qs.filter(data__date=hoje).count()
 
     if request.method == "POST":
-        form = LancamentoCaixaForm(request.POST)
+        form = LancamentoCaixaForm(request.POST, empresa=empresa)
         if form.is_valid():
+            if not _validar_datas_financeiras(form, request.user):
+                return render(
+                    request,
+                    "caixa/registrar_saida.html",
+                    {
+                        "form": form,
+                        "menu_app": "caixa",
+                        "menu_sub": "registrar_saida",
+                        "caixa": caixa,
+                        "saldo": saldo_atual,
+                        "saidas_recentes": saidas_recentes,
+                        "total_saidas_hoje": total_saidas_hoje,
+                        "quantidade_saidas_hoje": quantidade_saidas_hoje,
+                    },
+                )
             saida = form.save(commit=False)
             saida.caixa = caixa
             saida.tipo = "saida"
@@ -1312,7 +1466,7 @@ def registrar_saida(request):
             _log_financeiro("saida_registrada", request.user, valor=saida.valor, descricao=saida.descricao)
             return _redirect_pos_operacao(request, "caixa:registrar_saida")
     else:
-        form = LancamentoCaixaForm()
+        form = LancamentoCaixaForm(empresa=empresa)
 
     return render(
         request,

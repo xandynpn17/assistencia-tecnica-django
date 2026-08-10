@@ -9,11 +9,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from configuracoes.models import FornecedorGarantia, MarcaGarantia
-from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, require_sensitive_permission, role_required
+from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, is_management_user, require_sensitive_permission, role_required
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, obter_empresa_ativa
 from ordens.models import LinhaTrabalho, OrdemServico
+from estoque.models import CategoriaProduto, MovimentacaoEstoque, PontoOperacional, SolicitacaoSaidaEstoque
 
 from ..forms import DespesaRecorrenteForm
-from ..models import AuditoriaFinanceira, AuditoriaGarantia, Caixa, CategoriaFinanceira, CentroCusto, ContaReceber, DespesaRecorrente, FormaPagamento, LancamentoCaixa, Pagamento, RecebimentoConta
+from ..models import AuditoriaFinanceira, AuditoriaGarantia, Caixa, CategoriaFinanceira, CentroCusto, ContaReceber, DREFechamento, DespesaRecorrente, FormaPagamento, LancamentoCaixa, MovimentoFinanceiro, Pagamento, RecebimentoConta
 from .common import caixa_atual
 from .helpers import (
     _atualizar_status_contas_abertas,
@@ -79,10 +81,78 @@ def dre(request):
             reverse=True,
         )[:8]
 
+    # Mantem compatibilidade com bases legadas sem tenant, mas sempre prioriza
+    # a empresa ativa nos ambientes multiempresa.
+    empresa = obter_empresa_ativa(request, strict=False)
+
+    def _custos_estoque_periodo(inicio, fim):
+        movimentos = MovimentacaoEstoque.objects.filter(
+            criado_em__date__gte=inicio,
+            criado_em__date__lte=fim,
+            movimentos_de_estorno__isnull=True,
+        )
+        if empresa:
+            movimentos = movimentos.filter(produto__empresa=empresa)
+        movimentos = _aplicar_filtros_movimentos(movimentos)
+        cmv = movimentos.filter(tipo__in=["venda", "consumo_os", "reserva"]).aggregate(
+            total=Sum("valor_total_custo")
+        )["total"] or Decimal("0.00")
+        perdas_qs = movimentos.filter(
+            Q(tipo__in=["avaria", "oferta", "cedencia"])
+            | Q(tipo__in=["ajuste", "inventario"], quantidade__lt=0)
+        )
+        perdas = perdas_qs.aggregate(total=Sum("valor_total_custo"))["total"] or Decimal("0.00")
+        perdas_por_tipo = {
+            row["tipo"]: row["total"] or Decimal("0.00")
+            for row in perdas_qs.values("tipo").annotate(total=Sum("valor_total_custo"))
+        }
+        return cmv, perdas, perdas_por_tipo
+
     hoje = timezone.localdate()
-    periodo = (request.GET.get("periodo") or "30").strip()
-    data_inicio_raw = (request.GET.get("data_inicio") or "").strip()
-    data_fim_raw = (request.GET.get("data_fim") or "").strip()
+    parametros = request.POST if request.method == "POST" else request.GET
+    periodo = (parametros.get("periodo") or "30").strip()
+    data_inicio_raw = (parametros.get("data_inicio") or "").strip()
+    data_fim_raw = (parametros.get("data_fim") or "").strip()
+    ponto_id = (parametros.get("ponto") or "").strip()
+    categoria_produto_id = (parametros.get("categoria_produto") or "").strip()
+    categoria_financeira_id = (parametros.get("categoria_financeira") or "").strip()
+    centro_custo_id = (parametros.get("centro_custo") or "").strip()
+    motivo_estoque = (parametros.get("motivo_estoque") or "").strip()
+    campanha = (parametros.get("campanha") or "").strip()
+
+    def _aplicar_filtros_pagamentos(queryset):
+        if ponto_id.isdigit():
+            queryset = queryset.filter(
+                Q(stock_item__ponto_operacional_id=int(ponto_id))
+                | Q(ordem_servico__servicos_pecas__ponto_operacional_reserva_id=int(ponto_id))
+                | Q(ordem_servico__servicos_pecas__produto_estoque__ponto_operacional_id=int(ponto_id))
+            ).distinct()
+        if categoria_produto_id.isdigit():
+            queryset = queryset.filter(
+                Q(stock_item__categoria_config_id=int(categoria_produto_id))
+                | Q(ordem_servico__servicos_pecas__produto_estoque__categoria_config_id=int(categoria_produto_id))
+            ).distinct()
+        return queryset
+
+    def _aplicar_filtros_saidas(queryset):
+        if categoria_financeira_id.isdigit():
+            queryset = queryset.filter(categoria_id=int(categoria_financeira_id))
+        if centro_custo_id.isdigit():
+            queryset = queryset.filter(centro_custo_id=int(centro_custo_id))
+        return queryset
+
+    def _aplicar_filtros_movimentos(queryset):
+        if ponto_id.isdigit():
+            queryset = queryset.filter(Q(origem_id=int(ponto_id)) | Q(destino_id=int(ponto_id)))
+        if categoria_produto_id.isdigit():
+            queryset = queryset.filter(produto__categoria_config_id=int(categoria_produto_id))
+        if motivo_estoque in {"avaria", "oferta", "cedencia", "ajuste", "inventario"}:
+            queryset = queryset.filter(tipo=motivo_estoque)
+        if campanha:
+            queryset = queryset.filter(solicitacao_saida__campanha__iexact=campanha)
+        if centro_custo_id.isdigit():
+            queryset = queryset.filter(solicitacao_saida__centro_custo_id=int(centro_custo_id))
+        return queryset
     data_inicio, data_fim = _parse_intervalo_datas(data_inicio_raw, data_fim_raw)
     if not data_inicio and not data_fim:
         dias = {"7": 7, "30": 30, "90": 90}.get(periodo, 30)
@@ -97,37 +167,132 @@ def dre(request):
         data_inicio, data_fim = hoje - timedelta(days=30), hoje
 
     pagamentos_qs = Pagamento.objects.select_related("forma_pagamento").all()
-    saidas_qs = LancamentoCaixa.objects.select_related("categoria", "centro_custo").filter(tipo="saida")
+    saidas_qs = LancamentoCaixa.objects.select_related("categoria", "centro_custo").filter(tipo="saida", natureza="operacional")
+    if empresa:
+        pagamentos_qs = pagamentos_qs.filter(empresa=empresa)
+        saidas_qs = saidas_qs.filter(empresa=empresa)
     if data_inicio:
-        pagamentos_qs = pagamentos_qs.filter(data__date__gte=data_inicio)
-        saidas_qs = saidas_qs.filter(data__date__gte=data_inicio)
+        pagamentos_qs = pagamentos_qs.filter(data_competencia__gte=data_inicio)
+        saidas_qs = saidas_qs.filter(data_competencia__gte=data_inicio)
     if data_fim:
-        pagamentos_qs = pagamentos_qs.filter(data__date__lte=data_fim)
-        saidas_qs = saidas_qs.filter(data__date__lte=data_fim)
+        pagamentos_qs = pagamentos_qs.filter(data_competencia__lte=data_fim)
+        saidas_qs = saidas_qs.filter(data_competencia__lte=data_fim)
+    pagamentos_qs = _aplicar_filtros_pagamentos(pagamentos_qs)
+    saidas_qs = _aplicar_filtros_saidas(saidas_qs)
 
     receita_bruta = pagamentos_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     receita_cliente = pagamentos_qs.exclude(Q(forma_pagamento__codigo="garantia_fabricante") | Q(metodo="garantia_fabricante")).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     receita_garantia = pagamentos_qs.filter(Q(forma_pagamento__codigo="garantia_fabricante") | Q(metodo="garantia_fabricante")).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    impostos_estimados = pagamentos_qs.aggregate(total=Sum("impostos_estimados"))["total"] or Decimal("0.00")
+    taxas_recebimento = pagamentos_qs.aggregate(total=Sum("taxas_recebimento_estimadas"))["total"] or Decimal("0.00")
+    receita_liquida = receita_bruta - impostos_estimados - taxas_recebimento
     despesas_operacionais = saidas_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-    resultado_operacional = receita_bruta - despesas_operacionais
+    cmv, perdas_estoque, perdas_por_tipo = _custos_estoque_periodo(data_inicio, data_fim)
+    lucro_bruto = receita_liquida - cmv
+    resultado_operacional = lucro_bruto - perdas_estoque - despesas_operacionais
     margem = (resultado_operacional / receita_bruta * Decimal("100.00")) if receita_bruta > 0 else Decimal("0.00")
     despesas_por_centro = saidas_qs.values("centro_custo__nome").annotate(total=Sum("valor")).order_by("-total")[:10]
     despesas_por_categoria = saidas_qs.values("categoria__nome").annotate(total=Sum("valor")).order_by("-total")[:10]
     receitas_por_forma = pagamentos_qs.values("forma_pagamento__nome", "metodo").annotate(total=Sum("valor")).order_by("-total")[:10]
 
+    filtros_gerenciais_ativos = any(
+        [ponto_id, categoria_produto_id, categoria_financeira_id, centro_custo_id, motivo_estoque, campanha]
+    )
+    periodo_fechavel = bool(
+        data_inicio
+        and data_fim
+        and data_inicio.day == 1
+        and data_inicio.year == data_fim.year
+        and data_inicio.month == data_fim.month
+        and data_fim.day == monthrange(data_fim.year, data_fim.month)[1]
+        and not filtros_gerenciais_ativos
+    )
+    fechamentos_qs = DREFechamento.objects.select_related("fechado_por")
+    fechamentos_qs = (
+        fechamentos_qs.filter(empresa=empresa)
+        if empresa
+        else fechamentos_qs.filter(empresa__isnull=True)
+    )
+    fechamento_competencia = fechamentos_qs.filter(competencia=data_inicio).first() if periodo_fechavel else None
+
+    if request.method == "POST":
+        if not is_management_user(request.user):
+            messages.error(request, "Somente a gestao pode fechar uma competencia da DRE.")
+            return redirect("caixa:dre")
+        if not periodo_fechavel:
+            messages.error(request, "Selecione o primeiro e o ultimo dia de um unico mes para realizar o fechamento.")
+            return redirect("caixa:dre")
+        if fechamento_competencia:
+            messages.info(request, "Esta competencia ja esta fechada e permanece imutavel.")
+        else:
+            def _decimal_str(valor):
+                return str(valor or Decimal("0.00"))
+
+            DREFechamento.objects.create(
+                empresa=empresa,
+                competencia=data_inicio,
+                periodo_inicio=data_inicio,
+                periodo_fim=data_fim,
+                receita_bruta=receita_bruta,
+                receita_cliente=receita_cliente,
+                receita_garantia=receita_garantia,
+                impostos_estimados=impostos_estimados,
+                taxas_recebimento=taxas_recebimento,
+                cmv=cmv,
+                lucro_bruto=lucro_bruto,
+                perdas_estoque=perdas_estoque,
+                despesas_operacionais=despesas_operacionais,
+                resultado_operacional=resultado_operacional,
+                margem=margem,
+                fechado_por=request.user,
+                dados={
+                    "receita_liquida": _decimal_str(receita_liquida),
+                    "perdas_por_tipo": {chave: _decimal_str(valor) for chave, valor in perdas_por_tipo.items()},
+                    "despesas_por_centro": [
+                        {"nome": row["centro_custo__nome"] or "Sem centro de custo", "total": _decimal_str(row["total"])}
+                        for row in despesas_por_centro
+                    ],
+                    "despesas_por_categoria": [
+                        {"nome": row["categoria__nome"] or "Sem categoria", "total": _decimal_str(row["total"])}
+                        for row in despesas_por_categoria
+                    ],
+                    "receitas_por_forma": [
+                        {
+                            "nome": row["forma_pagamento__nome"] or row["metodo"] or "-",
+                            "total": _decimal_str(row["total"]),
+                        }
+                        for row in receitas_por_forma
+                    ],
+                },
+            )
+            messages.success(request, f"Competencia {data_inicio:%m/%Y} fechada com sucesso.")
+        return redirect(
+            f"{redirect('caixa:dre').url}?data_inicio={data_inicio.isoformat()}&data_fim={data_fim.isoformat()}"
+        )
+
     dias_periodo = ((data_fim or hoje) - (data_inicio or hoje)).days + 1
     inicio_anterior = (data_inicio or hoje) - timedelta(days=dias_periodo)
     fim_anterior = (data_inicio or hoje) - timedelta(days=1)
     pagamentos_anterior_qs = Pagamento.objects.select_related("forma_pagamento").all()
-    saidas_anterior_qs = LancamentoCaixa.objects.select_related("categoria", "centro_custo").filter(tipo="saida")
-    pagamentos_anterior_qs = pagamentos_anterior_qs.filter(data__date__gte=inicio_anterior, data__date__lte=fim_anterior)
-    saidas_anterior_qs = saidas_anterior_qs.filter(data__date__gte=inicio_anterior, data__date__lte=fim_anterior)
+    saidas_anterior_qs = LancamentoCaixa.objects.select_related("categoria", "centro_custo").filter(tipo="saida", natureza="operacional")
+    if empresa:
+        pagamentos_anterior_qs = pagamentos_anterior_qs.filter(empresa=empresa)
+        saidas_anterior_qs = saidas_anterior_qs.filter(empresa=empresa)
+    pagamentos_anterior_qs = pagamentos_anterior_qs.filter(data_competencia__gte=inicio_anterior, data_competencia__lte=fim_anterior)
+    saidas_anterior_qs = saidas_anterior_qs.filter(data_competencia__gte=inicio_anterior, data_competencia__lte=fim_anterior)
+    pagamentos_anterior_qs = _aplicar_filtros_pagamentos(pagamentos_anterior_qs)
+    saidas_anterior_qs = _aplicar_filtros_saidas(saidas_anterior_qs)
 
     receita_bruta_anterior = pagamentos_anterior_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     receita_cliente_anterior = pagamentos_anterior_qs.exclude(Q(forma_pagamento__codigo="garantia_fabricante") | Q(metodo="garantia_fabricante")).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     receita_garantia_anterior = pagamentos_anterior_qs.filter(Q(forma_pagamento__codigo="garantia_fabricante") | Q(metodo="garantia_fabricante")).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    impostos_estimados_anterior = pagamentos_anterior_qs.aggregate(total=Sum("impostos_estimados"))["total"] or Decimal("0.00")
+    taxas_recebimento_anterior = pagamentos_anterior_qs.aggregate(total=Sum("taxas_recebimento_estimadas"))["total"] or Decimal("0.00")
+    receita_liquida_anterior = receita_bruta_anterior - impostos_estimados_anterior - taxas_recebimento_anterior
     despesas_operacionais_anterior = saidas_anterior_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-    resultado_operacional_anterior = receita_bruta_anterior - despesas_operacionais_anterior
+    cmv_anterior, perdas_estoque_anterior, _ = _custos_estoque_periodo(inicio_anterior, fim_anterior)
+    lucro_bruto_anterior = receita_liquida_anterior - cmv_anterior
+    resultado_operacional_anterior = lucro_bruto_anterior - perdas_estoque_anterior - despesas_operacionais_anterior
     margem_anterior = (
         (resultado_operacional_anterior / receita_bruta_anterior) * Decimal("100.00")
         if receita_bruta_anterior > 0
@@ -137,7 +302,13 @@ def dre(request):
         "receita_bruta": _comparativo(receita_bruta, receita_bruta_anterior),
         "receita_cliente": _comparativo(receita_cliente, receita_cliente_anterior),
         "receita_garantia": _comparativo(receita_garantia, receita_garantia_anterior),
+        "impostos_estimados": _comparativo(impostos_estimados, impostos_estimados_anterior),
+        "taxas_recebimento": _comparativo(taxas_recebimento, taxas_recebimento_anterior),
+        "receita_liquida": _comparativo(receita_liquida, receita_liquida_anterior),
         "despesas_operacionais": _comparativo(despesas_operacionais, despesas_operacionais_anterior),
+        "cmv": _comparativo(cmv, cmv_anterior),
+        "lucro_bruto": _comparativo(lucro_bruto, lucro_bruto_anterior),
+        "perdas_estoque": _comparativo(perdas_estoque, perdas_estoque_anterior),
         "resultado_operacional": _comparativo(resultado_operacional, resultado_operacional_anterior),
         "margem": _comparativo(margem, margem_anterior),
     }
@@ -158,17 +329,26 @@ def dre(request):
     for _ in range(6):
         inicio_mes = mes_cursor
         fim_mes = date(mes_cursor.year, mes_cursor.month, monthrange(mes_cursor.year, mes_cursor.month)[1])
-        pagamentos_mes = Pagamento.objects.filter(data__date__gte=inicio_mes, data__date__lte=fim_mes)
-        saidas_mes = LancamentoCaixa.objects.filter(tipo="saida", data__date__gte=inicio_mes, data__date__lte=fim_mes)
+        pagamentos_mes = Pagamento.objects.filter(data_competencia__gte=inicio_mes, data_competencia__lte=fim_mes)
+        saidas_mes = LancamentoCaixa.objects.filter(tipo="saida", natureza="operacional", data_competencia__gte=inicio_mes, data_competencia__lte=fim_mes)
+        if empresa:
+            pagamentos_mes = pagamentos_mes.filter(empresa=empresa)
+            saidas_mes = saidas_mes.filter(empresa=empresa)
+        pagamentos_mes = _aplicar_filtros_pagamentos(pagamentos_mes)
+        saidas_mes = _aplicar_filtros_saidas(saidas_mes)
         receita_mes = pagamentos_mes.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+        impostos_mes = pagamentos_mes.aggregate(total=Sum("impostos_estimados"))["total"] or Decimal("0.00")
+        taxas_mes = pagamentos_mes.aggregate(total=Sum("taxas_recebimento_estimadas"))["total"] or Decimal("0.00")
         despesa_mes = saidas_mes.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-        resultado_mes = receita_mes - despesa_mes
+        cmv_mes, perdas_mes, _ = _custos_estoque_periodo(inicio_mes, fim_mes)
+        despesa_total_mes = despesa_mes + cmv_mes + perdas_mes + impostos_mes + taxas_mes
+        resultado_mes = receita_mes - despesa_total_mes
         margem_mes = ((resultado_mes / receita_mes) * Decimal("100.00")) if receita_mes else Decimal("0.00")
         dre_mensal.append(
             {
                 "competencia": inicio_mes,
                 "receita": receita_mes,
-                "despesa": despesa_mes,
+                "despesa": despesa_total_mes,
                 "resultado": resultado_mes,
                 "margem": margem_mes,
             }
@@ -187,10 +367,39 @@ def dre(request):
             "periodo": periodo,
             "data_inicio": data_inicio.isoformat() if data_inicio else "",
             "data_fim": data_fim.isoformat() if data_fim else "",
+            "ponto_filtro": ponto_id,
+            "categoria_produto_filtro": categoria_produto_id,
+            "categoria_financeira_filtro": categoria_financeira_id,
+            "centro_custo_filtro": centro_custo_id,
+            "motivo_estoque_filtro": motivo_estoque,
+            "campanha_filtro": campanha,
+            "pontos_operacionais": filtrar_catalogo_empresa(
+                PontoOperacional.objects.filter(ativo=True), empresa
+            ).order_by("codigo", "nome"),
+            "categorias_produto": filtrar_catalogo_empresa(
+                CategoriaProduto.objects.filter(ativo=True), empresa
+            ).order_by("nome"),
+            "categorias_financeiras_filtro": filtrar_catalogo_empresa(
+                CategoriaFinanceira.objects.filter(ativa=True), empresa
+            ).order_by("nome"),
+            "centros_custo_filtro": filtrar_catalogo_empresa(
+                CentroCusto.objects.filter(ativo=True), empresa
+            ).order_by("nome"),
+            "campanhas_estoque": SolicitacaoSaidaEstoque.objects.filter(
+                empresa=empresa
+            ).exclude(campanha="").values_list("campanha", flat=True).distinct().order_by("campanha"),
+            "filtros_gerenciais_ativos": filtros_gerenciais_ativos,
             "receita_bruta": receita_bruta,
             "receita_cliente": receita_cliente,
             "receita_garantia": receita_garantia,
+            "impostos_estimados": impostos_estimados,
+            "taxas_recebimento": taxas_recebimento,
+            "receita_liquida": receita_liquida,
             "despesas_operacionais": despesas_operacionais,
+            "cmv": cmv,
+            "lucro_bruto": lucro_bruto,
+            "perdas_estoque": perdas_estoque,
+            "perdas_por_tipo": perdas_por_tipo,
             "resultado_operacional": resultado_operacional,
             "margem": margem,
             "comparativos_resumo": comparativos_resumo,
@@ -203,6 +412,10 @@ def dre(request):
             "dre_mensal": dre_mensal,
             "max_dre_total": max_dre_total,
             "receitas_por_forma": receitas_por_forma,
+            "periodo_fechavel": periodo_fechavel,
+            "fechamento_competencia": fechamento_competencia,
+            "fechamentos_dre": fechamentos_qs[:12],
+            "pode_fechar_dre": is_management_user(request.user),
             "menu_app": "caixa",
             "menu_sub": "dre",
         },
@@ -211,10 +424,14 @@ def dre(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def fluxo_projetado(request):
+    empresa = getattr(request.user, "empresa", None)
+    filtro_empresa = {"empresa": empresa} if empresa else {"empresa__isnull": True}
     if request.method == "POST":
         form = DespesaRecorrenteForm(request.POST)
         if form.is_valid():
-            form.save()
+            despesa = form.save(commit=False)
+            despesa.empresa = empresa
+            despesa.save()
             messages.success(request, "Despesa recorrente salva.")
             return redirect("caixa:fluxo_projetado")
     else:
@@ -228,9 +445,14 @@ def fluxo_projetado(request):
         ultimo_dia = monthrange(ano, mes_num)[1]
         inicio_mes = date(ano, mes_num, 1)
         fim_mes = date(ano, mes_num, ultimo_dia)
-        entradas_previstas = ContaReceber.objects.filter(status__in=["aberta", "parcial", "vencida"], vencimento__gte=inicio_mes, vencimento__lte=fim_mes).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+        entradas_previstas = ContaReceber.objects.filter(
+            **filtro_empresa,
+            status__in=["aberta", "parcial", "vencida"],
+            vencimento__gte=inicio_mes,
+            vencimento__lte=fim_mes,
+        ).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
         despesas = Decimal("0.00")
-        for despesa in DespesaRecorrente.objects.filter(ativo=True):
+        for despesa in DespesaRecorrente.objects.filter(**filtro_empresa, ativo=True):
             if despesa.dia_vencimento <= ultimo_dia:
                 despesas += despesa.valor_mensal
         saldo_previsto = entradas_previstas - despesas
@@ -246,7 +468,7 @@ def fluxo_projetado(request):
     total_entradas_previstas = sum((m["entradas_previstas"] for m in meses), Decimal("0.00"))
     total_despesas_previstas = sum((m["despesas_previstas"] for m in meses), Decimal("0.00"))
     saldo_total_previsto = total_entradas_previstas - total_despesas_previstas
-    despesas_recorrentes = DespesaRecorrente.objects.select_related("ponto_operacional").all()
+    despesas_recorrentes = DespesaRecorrente.objects.select_related("ponto_operacional").filter(**filtro_empresa)
     despesas_ativas = despesas_recorrentes.filter(ativo=True)
 
     return render(
@@ -314,7 +536,9 @@ def relatorios(request):
         filtros_salvos = request.session.get(session_key) or {}
         if filtros_salvos:
             return redirect(f"{request.path}?{urlencode(filtros_salvos)}")
-    caixa = caixa_atual()
+    empresa = getattr(request.user, "empresa", None)
+    caixa = caixa_atual(empresa)
+    filtro_empresa = {"empresa": empresa} if empresa is not None else {"empresa__isnull": True}
     hoje = timezone.localdate()
     preset_periodo = (request.GET.get("preset") or "").strip()
     exportar = (request.GET.get("export") or "").strip().lower()
@@ -325,6 +549,10 @@ def relatorios(request):
     centro_custo_id = (request.GET.get("centro_custo") or "").strip()
     categoria_id = (request.GET.get("categoria") or "").strip()
     tipo_lancamento = (request.GET.get("tipo_lancamento") or "").strip()
+    regime_data = (request.GET.get("regime_data") or "movimento").strip().lower()
+    if regime_data not in {"movimento", "competencia"}:
+        regime_data = "movimento"
+    campo_data = "data_competencia" if regime_data == "competencia" else "data_movimento"
     considerar_todos_caixas = request.GET.get("todos_caixas") == "1"
 
     preset_inicio, preset_fim = _periodo_por_preset(preset_periodo, referencia=hoje)
@@ -334,25 +562,26 @@ def relatorios(request):
 
     data_inicio, data_fim = _parse_intervalo_datas(data_inicio_raw, data_fim_raw)
     pagamentos = (
-        Pagamento.objects.select_related("ordem_servico", "ordem_servico__tecnico_responsavel", "forma_pagamento")
+        Pagamento.objects.filter(**filtro_empresa)
+        .select_related("ordem_servico", "ordem_servico__tecnico_responsavel", "forma_pagamento")
         .prefetch_related(
             Prefetch(
                 "ordem_servico__linhas_trabalho",
                 queryset=LinhaTrabalho.objects.select_related("usuario").order_by("id"),
             )
         )
-        .order_by("-data", "-id")
+        .order_by(f"-{campo_data}", "-data", "-id")
     )
-    lancamentos = LancamentoCaixa.objects.select_related("categoria", "centro_custo").order_by("-data", "-id")
+    lancamentos = LancamentoCaixa.objects.filter(**filtro_empresa).select_related("categoria", "centro_custo").order_by(f"-{campo_data}", "-data", "-id")
     if caixa and not considerar_todos_caixas:
         pagamentos = pagamentos.filter(caixa=caixa)
         lancamentos = lancamentos.filter(caixa=caixa)
     if data_inicio:
-        pagamentos = pagamentos.filter(data__date__gte=data_inicio)
-        lancamentos = lancamentos.filter(data__date__gte=data_inicio)
+        pagamentos = pagamentos.filter(**{f"{campo_data}__gte": data_inicio})
+        lancamentos = lancamentos.filter(**{f"{campo_data}__gte": data_inicio})
     if data_fim:
-        pagamentos = pagamentos.filter(data__date__lte=data_fim)
-        lancamentos = lancamentos.filter(data__date__lte=data_fim)
+        pagamentos = pagamentos.filter(**{f"{campo_data}__lte": data_fim})
+        lancamentos = lancamentos.filter(**{f"{campo_data}__lte": data_fim})
     if forma_pagamento_id.isdigit():
         pagamentos = pagamentos.filter(forma_pagamento_id=int(forma_pagamento_id))
     if centro_custo_id.isdigit():
@@ -362,17 +591,31 @@ def relatorios(request):
     if tipo_lancamento in {"entrada", "saida"}:
         lancamentos = lancamentos.filter(tipo=tipo_lancamento)
 
+    movimentos_livro = MovimentoFinanceiro.objects.filter(**filtro_empresa).select_related(
+        "registrado_por", "estornado_por"
+    )
+    if caixa and not considerar_todos_caixas:
+        movimentos_livro = movimentos_livro.filter(caixa=caixa)
+    if data_inicio:
+        movimentos_livro = movimentos_livro.filter(**{f"{campo_data}__gte": data_inicio})
+    if data_fim:
+        movimentos_livro = movimentos_livro.filter(**{f"{campo_data}__lte": data_fim})
+    movimentos_livro = movimentos_livro.order_by(f"-{campo_data}", "-registrado_em", "-id")
+    total_livro_entradas = movimentos_livro.filter(tipo="entrada").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    total_livro_saidas = movimentos_livro.filter(tipo="saida").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    saldo_livro = total_livro_entradas - total_livro_saidas
+
     total_entradas_pagamentos = pagamentos.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-    total_entradas_lancamentos = lancamentos.filter(tipo="entrada").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-    total_saidas = lancamentos.filter(tipo="saida").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    total_entradas_lancamentos = lancamentos.filter(tipo="entrada", natureza="operacional").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    total_saidas = lancamentos.filter(tipo="saida", natureza="operacional").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     entradas_orfas_pagamento = pagamentos.filter(lancamento_caixa__isnull=True).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     total_entradas = total_entradas_lancamentos + entradas_orfas_pagamento
     saldo_base = caixa.saldo_inicial if caixa and not considerar_todos_caixas else Decimal("0.00")
     saldo = saldo_base + total_entradas - total_saidas
     pagamentos_por_forma = pagamentos.values("forma_pagamento__nome", "metodo").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
-    saidas_por_centro = lancamentos.filter(tipo="saida").values("centro_custo__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
-    saidas_por_categoria = lancamentos.filter(tipo="saida").values("categoria__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
-    caixas_relatorio = Caixa.objects.all()
+    saidas_por_centro = lancamentos.filter(tipo="saida", natureza="operacional").values("centro_custo__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
+    saidas_por_categoria = lancamentos.filter(tipo="saida", natureza="operacional").values("categoria__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
+    caixas_relatorio = Caixa.objects.filter(**filtro_empresa)
     if not considerar_todos_caixas and caixa:
         caixas_relatorio = caixas_relatorio.filter(id=caixa.id)
     if data_inicio:
@@ -415,12 +658,12 @@ def relatorios(request):
         periodo_anterior_fim = hoje - timedelta(days=1)
 
     pagamentos_anterior = (
-        Pagamento.objects.select_related("forma_pagamento")
-        .filter(data__date__gte=periodo_anterior_inicio, data__date__lte=periodo_anterior_fim)
+        Pagamento.objects.filter(**filtro_empresa).select_related("forma_pagamento")
+        .filter(**{f"{campo_data}__gte": periodo_anterior_inicio, f"{campo_data}__lte": periodo_anterior_fim})
     )
     lancamentos_anterior = (
-        LancamentoCaixa.objects.select_related("categoria", "centro_custo")
-        .filter(data__date__gte=periodo_anterior_inicio, data__date__lte=periodo_anterior_fim)
+        LancamentoCaixa.objects.filter(**filtro_empresa).select_related("categoria", "centro_custo")
+        .filter(**{f"{campo_data}__gte": periodo_anterior_inicio, f"{campo_data}__lte": periodo_anterior_fim})
     )
     if caixa and not considerar_todos_caixas:
         pagamentos_anterior = pagamentos_anterior.filter(caixa=caixa)
@@ -435,14 +678,14 @@ def relatorios(request):
         lancamentos_anterior = lancamentos_anterior.filter(tipo=tipo_lancamento)
 
     comparativo_categorias = _comparativo_agrupado(
-        lancamentos.filter(tipo="saida"),
-        lancamentos_anterior.filter(tipo="saida"),
+        lancamentos.filter(tipo="saida", natureza="operacional"),
+        lancamentos_anterior.filter(tipo="saida", natureza="operacional"),
         "categoria__nome",
         "Sem categoria",
     )
     comparativo_centros = _comparativo_agrupado(
-        lancamentos.filter(tipo="saida"),
-        lancamentos_anterior.filter(tipo="saida"),
+        lancamentos.filter(tipo="saida", natureza="operacional"),
+        lancamentos_anterior.filter(tipo="saida", natureza="operacional"),
         "centro_custo__nome",
         "Sem centro de custo",
     )
@@ -454,9 +697,26 @@ def relatorios(request):
     )
 
     if exportar in {"csv", "pdf"}:
-        if dataset_export == "lancamentos":
-            cabecalhos = ["Descricao", "Categoria", "Centro de custo", "Tipo", "Valor", "Data"]
-            linhas = [[l.descricao or "-", getattr(l.categoria, "nome", "") or "-", getattr(l.centro_custo, "nome", "") or "-", l.get_tipo_display(), _fmt_decimal(l.valor), l.data.strftime("%d/%m/%Y %H:%M") if l.data else "-"] for l in lancamentos]
+        if dataset_export == "livro":
+            cabecalhos = ["Origem", "Referencia", "Descricao", "Tipo", "Valor", "Competencia", "Movimentacao", "Registrado em", "Status"]
+            linhas = [
+                [
+                    m.get_origem_tipo_display(),
+                    m.origem_referencia or "-",
+                    m.descricao,
+                    m.get_tipo_display(),
+                    _fmt_decimal(m.valor),
+                    m.data_competencia.strftime("%d/%m/%Y"),
+                    m.data_movimento.strftime("%d/%m/%Y"),
+                    m.registrado_em.strftime("%d/%m/%Y %H:%M") if m.registrado_em else "-",
+                    m.get_status_display(),
+                ]
+                for m in movimentos_livro
+            ]
+            titulo = "Livro financeiro"
+        elif dataset_export == "lancamentos":
+            cabecalhos = ["Descricao", "Categoria", "Centro de custo", "Tipo", "Valor", "Competencia", "Movimentacao", "Registrado em"]
+            linhas = [[l.descricao or "-", getattr(l.categoria, "nome", "") or "-", getattr(l.centro_custo, "nome", "") or "-", l.get_tipo_display(), _fmt_decimal(l.valor), l.data_competencia.strftime("%d/%m/%Y"), l.data_movimento.strftime("%d/%m/%Y"), l.data.strftime("%d/%m/%Y %H:%M") if l.data else "-"] for l in lancamentos]
             titulo = "Relatorio de lancamentos"
         elif dataset_export == "resumo":
             cabecalhos = ["Indicador", "Valor"]
@@ -479,7 +739,7 @@ def relatorios(request):
                 linhas.append(["Forma", row["nome"], _fmt_decimal(row["atual_total"]), _fmt_decimal(row["anterior_total"]), _fmt_decimal(row["variacao"])])
             titulo = "Relatorio executivo"
         else:
-            cabecalhos = ["OS", "Atendente", "Tecnico responsavel", "Valor", "Forma", "Referencia", "Data"]
+            cabecalhos = ["OS", "Atendente", "Tecnico responsavel", "Valor", "Forma", "Referencia", "Competencia", "Movimentacao", "Registrado em"]
             linhas = [
                 [
                     getattr(p.ordem_servico, "numero_os", "") or "Avulso",
@@ -488,6 +748,8 @@ def relatorios(request):
                     _fmt_decimal(p.valor),
                     p.metodo_display,
                     p.referencia or "-",
+                    p.data_competencia.strftime("%d/%m/%Y"),
+                    p.data_movimento.strftime("%d/%m/%Y"),
                     p.data.strftime("%d/%m/%Y %H:%M") if p.data else "-",
                 ]
                 for p in pagamentos
@@ -500,8 +762,10 @@ def relatorios(request):
 
     pagamentos_page = _paginar_queryset(request, pagamentos, per_page=100, page_param="page_pagamentos")
     lancamentos_page = _paginar_queryset(request, lancamentos, per_page=100, page_param="page_lancamentos")
+    movimentos_livro_page = _paginar_queryset(request, movimentos_livro, per_page=100, page_param="page_livro")
     querystring_pagamentos = _querystring_sem_param(request, "page_pagamentos", "export", "dataset")
     querystring_lancamentos = _querystring_sem_param(request, "page_lancamentos", "export", "dataset")
+    querystring_livro = _querystring_sem_param(request, "page_livro", "export", "dataset")
     filtros_para_salvar = {
         "data_inicio": data_inicio_raw,
         "data_fim": data_fim_raw,
@@ -510,6 +774,7 @@ def relatorios(request):
         "centro_custo": centro_custo_id,
         "categoria": categoria_id,
         "tipo_lancamento": tipo_lancamento,
+        "regime_data": regime_data,
         "todos_caixas": "1" if considerar_todos_caixas else "",
     }
     filtros_para_salvar = {k: v for k, v in filtros_para_salvar.items() if v not in {"", None}}
@@ -527,6 +792,10 @@ def relatorios(request):
             "pagamentos_page": pagamentos_page,
             "lancamentos": lancamentos,
             "lancamentos_page": lancamentos_page,
+            "movimentos_livro_page": movimentos_livro_page,
+            "total_livro_entradas": total_livro_entradas,
+            "total_livro_saidas": total_livro_saidas,
+            "saldo_livro": saldo_livro,
             "total_entradas": total_entradas,
             "total_entradas_pagamentos": total_entradas_pagamentos,
             "entradas_orfas_pagamento": entradas_orfas_pagamento,
@@ -535,13 +804,20 @@ def relatorios(request):
             "data_inicio": data_inicio_raw,
             "data_fim": data_fim_raw,
             "preset_periodo": preset_periodo,
-            "formas_pagamento": FormaPagamento.objects.filter(ativa=True).order_by("nome"),
+            "formas_pagamento": filtrar_catalogo_empresa(
+                FormaPagamento.objects.filter(ativa=True), empresa
+            ).order_by("nome"),
             "forma_pagamento_filtro": forma_pagamento_id,
-            "categorias_financeiras": CategoriaFinanceira.objects.filter(tipo="saida", ativa=True).order_by("nome"),
+            "categorias_financeiras": filtrar_catalogo_empresa(
+                CategoriaFinanceira.objects.filter(tipo="saida", ativa=True), empresa
+            ).order_by("nome"),
             "categoria_filtro": categoria_id,
-            "centros_custo": CentroCusto.objects.filter(ativo=True).order_by("nome"),
+            "centros_custo": filtrar_catalogo_empresa(
+                CentroCusto.objects.filter(ativo=True), empresa
+            ).order_by("nome"),
             "centro_custo_filtro": centro_custo_id,
             "tipo_lancamento_filtro": tipo_lancamento,
+            "regime_data": regime_data,
             "pagamentos_por_forma": pagamentos_por_forma,
             "saidas_por_centro": saidas_por_centro,
             "saidas_por_categoria": saidas_por_categoria,
@@ -553,6 +829,7 @@ def relatorios(request):
             "diferencas_por_forma": diferencas_por_forma,
             "querystring_pagamentos": querystring_pagamentos,
             "querystring_lancamentos": querystring_lancamentos,
+            "querystring_livro": querystring_livro,
             "filtros_salvos_existem": bool(filtros_salvos),
             "menu_app": "caixa",
             "menu_sub": "relatorios",
@@ -568,6 +845,7 @@ def auditoria_operacional(request):
         message="Voce nao tem permissao para acessar a auditoria operacional.",
     )
     session_key = "caixa_auditoria_operacional_filtros"
+    empresa = getattr(request.user, "empresa", None)
     if request.GET.get("restaurar") == "1":
         filtros_salvos = request.session.get(session_key) or {}
         if filtros_salvos:
@@ -607,11 +885,11 @@ def auditoria_operacional(request):
         if action == "vincular_centro":
             lancamento_id = (request.POST.get("lancamento_id") or "").strip()
             centro_custo_id = (request.POST.get("centro_custo_id") or "").strip()
-            lancamento = LancamentoCaixa.objects.filter(id=lancamento_id, tipo="saida").first() if lancamento_id.isdigit() else None
+            lancamento = LancamentoCaixa.objects.filter(id=lancamento_id, empresa=empresa, tipo="saida").first() if lancamento_id.isdigit() else None
             if not lancamento:
                 messages.warning(request, "Lancamento nao encontrado.")
                 return _redirect_pos_post()
-            centro = CentroCusto.objects.filter(id=centro_custo_id, ativo=True).first() if centro_custo_id.isdigit() else None
+            centro = filtrar_catalogo_empresa(CentroCusto.objects.filter(ativo=True), empresa).filter(id=centro_custo_id).first() if centro_custo_id.isdigit() else None
             if not centro:
                 messages.warning(request, "Selecione um centro de custo valido.")
                 return _redirect_pos_post()
@@ -623,7 +901,7 @@ def auditoria_operacional(request):
         if action == "atualizar_status_garantia":
             auditoria_id = (request.POST.get("auditoria_id") or "").strip()
             novo_status = (request.POST.get("status_faturamento") or "").strip()
-            auditoria = AuditoriaGarantia.objects.filter(id=auditoria_id).first() if auditoria_id.isdigit() else None
+            auditoria = AuditoriaGarantia.objects.filter(id=auditoria_id, ordem_servico__empresa=empresa).first() if auditoria_id.isdigit() else None
             if not auditoria:
                 messages.warning(request, "Registro de garantia nao encontrado.")
                 return _redirect_pos_post()
@@ -636,17 +914,19 @@ def auditoria_operacional(request):
             return _redirect_pos_post()
 
     ordens_prontas_sem_recebimento = ContaReceber.objects.select_related("ordem_servico").filter(
+        empresa=empresa,
         tipo_origem="cliente_os",
         status__in=["aberta", "parcial", "vencida"],
         ordem_servico__status__in=["pronto_contactado", "pronto_contactar"],
     ).order_by("vencimento", "-id")
-    contas_vencidas = ContaReceber.objects.select_related("ordem_servico").filter(status="vencida").order_by("vencimento", "-valor_aberto")
-    caixas_com_diferenca = Caixa.objects.filter(aberto=False, data__gte=data_inicio).exclude(diferenca_fechamento=Decimal("0.00")).order_by("-data", "-id")
-    pagamentos_sem_talao = Pagamento.objects.select_related("ordem_servico").filter(data__date__gte=data_inicio).filter(Q(numero_talao__isnull=True) | Q(numero_talao="")).order_by("-data")
-    saidas_sem_centro = LancamentoCaixa.objects.filter(tipo="saida", data__date__gte=data_inicio, centro_custo__isnull=True).order_by("-data")
-    saidas_sem_categoria = LancamentoCaixa.objects.filter(tipo="saida", data__date__gte=data_inicio, categoria__isnull=True).order_by("-data")
-    garantias_pendentes_qs = AuditoriaGarantia.objects.select_related("ordem_servico", "fornecedor").filter(status_faturamento__in=["pendente", "enviado"]).order_by("-atualizado_em")
+    contas_vencidas = ContaReceber.objects.select_related("ordem_servico").filter(empresa=empresa, status="vencida").order_by("vencimento", "-valor_aberto")
+    caixas_com_diferenca = Caixa.objects.filter(empresa=empresa, aberto=False, data__gte=data_inicio).exclude(diferenca_fechamento=Decimal("0.00")).order_by("-data", "-id")
+    pagamentos_sem_talao = Pagamento.objects.select_related("ordem_servico").filter(empresa=empresa, data__date__gte=data_inicio).filter(Q(numero_talao__isnull=True) | Q(numero_talao="")).order_by("-data")
+    saidas_sem_centro = LancamentoCaixa.objects.filter(empresa=empresa, tipo="saida", data__date__gte=data_inicio, centro_custo__isnull=True).order_by("-data")
+    saidas_sem_categoria = LancamentoCaixa.objects.filter(empresa=empresa, tipo="saida", data__date__gte=data_inicio, categoria__isnull=True).order_by("-data")
+    garantias_pendentes_qs = AuditoriaGarantia.objects.select_related("ordem_servico", "fornecedor").filter(ordem_servico__empresa=empresa, status_faturamento__in=["pendente", "enviado"]).order_by("-atualizado_em")
     eventos_criticos = AuditoriaFinanceira.objects.select_related("usuario", "conta", "pagamento").filter(
+        Q(usuario__empresa=empresa) | Q(conta__empresa=empresa) | Q(pagamento__empresa=empresa),
         criado_em__date__gte=data_inicio,
         evento__in=[
             "pagamento_excluido",
@@ -696,7 +976,7 @@ def auditoria_operacional(request):
             "total_saidas_sem_categoria": saidas_sem_categoria.count(),
             "total_garantias_pendentes": garantias_pendentes_qs.count(),
             "total_eventos_criticos": eventos_criticos.count(),
-            "centros_custo_ativos": CentroCusto.objects.filter(ativo=True).order_by("nome"),
+            "centros_custo_ativos": filtrar_catalogo_empresa(CentroCusto.objects.filter(ativo=True), empresa).order_by("nome"),
             "querystring_auditoria": _querystring_sem_param(request),
             "filtros_salvos_existem": bool(request.session.get(session_key)),
             "menu_app": "caixa",
@@ -707,10 +987,11 @@ def auditoria_operacional(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def garantias_fabricante(request):
+    empresa = getattr(request.user, "empresa", None)
     if request.method == "POST":
         if request.POST.get("action") == "sincronizar":
             total_sync = 0
-            ordens_garantia = OrdemServico.objects.filter(tipo_reparo="Garantia", fechada=True).order_by("-id")
+            ordens_garantia = OrdemServico.objects.filter(empresa=empresa, tipo_reparo="Garantia", fechada=True).order_by("-id")
             for ordem in ordens_garantia:
                 auditoria = _upsert_auditoria_garantia_ordem(ordem)
                 if auditoria:
@@ -718,7 +999,7 @@ def garantias_fabricante(request):
             messages.success(request, f"Sincronizacao concluida. Garantias processadas: {total_sync}.")
             return redirect("caixa:garantias_fabricante")
 
-        auditoria = get_object_or_404(AuditoriaGarantia, id=request.POST.get("auditoria_id"))
+        auditoria = get_object_or_404(AuditoriaGarantia, id=request.POST.get("auditoria_id"), ordem_servico__empresa=empresa)
         valor_recebido_anterior = Decimal(auditoria.valor_recebido_fabricante or Decimal("0.00"))
         novo_status = (request.POST.get("status_faturamento") or "").strip()
         if novo_status in {"pendente", "enviado", "pago"}:
@@ -791,7 +1072,7 @@ def garantias_fabricante(request):
     prioridade = (request.GET.get("prioridade") or "").strip()
     garantias = (
         AuditoriaGarantia.objects.select_related("ordem_servico", "fornecedor", "marca", "conta_receber")
-        .all()
+        .filter(ordem_servico__empresa=empresa)
         .order_by("conta_receber__vencimento", "-criado_em", "-id")
     )
     if status_filtro:
@@ -869,7 +1150,7 @@ def garantias_fabricante(request):
         "enviado": garantias.filter(status_faturamento="enviado").aggregate(total=Sum("valor_previsto_fabricante"))["total"] or Decimal("0.00"),
         "pago": garantias.filter(status_faturamento="pago").aggregate(total=Sum("valor_previsto_fabricante"))["total"] or Decimal("0.00"),
     }
-    contas_garantia_abertas = ContaReceber.objects.filter(tipo_origem="garantia_fabricante", status__in=["aberta", "parcial", "vencida"])
+    contas_garantia_abertas = ContaReceber.objects.filter(empresa=empresa, tipo_origem="garantia_fabricante", status__in=["aberta", "parcial", "vencida"])
     resumo["contas_abertas"] = contas_garantia_abertas.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     resumo["vencidas"] = contas_garantia_abertas.filter(vencimento__lt=hoje_local).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     resumo["receber_hoje"] = contas_garantia_abertas.filter(vencimento=hoje_local).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
@@ -883,8 +1164,8 @@ def garantias_fabricante(request):
         "caixa/garantias_fabricante.html",
         {
             "garantias": garantias[:300],
-            "fornecedores": FornecedorGarantia.objects.filter(ativo=True).order_by("nome"),
-            "marcas": MarcaGarantia.objects.filter(ativo=True).order_by("nome"),
+            "fornecedores": filtrar_catalogo_empresa(FornecedorGarantia.objects.filter(ativo=True), empresa).order_by("nome"),
+            "marcas": filtrar_catalogo_empresa(MarcaGarantia.objects.filter(ativo=True), empresa).order_by("nome"),
             "status_filtro": status_filtro,
             "fornecedor_filtro": fornecedor_id,
             "marca_filtro": marca_id,

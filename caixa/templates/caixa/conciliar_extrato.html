@@ -1,0 +1,9 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container mt-4"><div class="card"><div class="card-header"><strong>Conciliar linha de extrato</strong></div><div class="card-body">
+  <p><strong>{{ linha.data_movimento|date:'d/m/Y' }} · {{ linha.descricao }}</strong></p><p>Valor do extrato: R$ {{ linha.valor|floatformat:2 }}</p>
+  {% if sugestoes %}<div class="alert alert-light border"><strong>Sugestões automáticas</strong><ul class="mb-0">{% for item in sugestoes %}<li>{{ item.score }}% · {{ item.movimento }}{% if item.motivos %} — {{ item.motivos|join:', ' }}{% endif %}</li>{% endfor %}</ul></div>{% endif %}
+  <form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Conciliar</button><a class="btn btn-outline-secondary" href="{% url 'caixa:tesouraria' %}">Cancelar</a></form>
+  <hr><form method="post">{% csrf_token %}<input type="hidden" name="ignorar" value="1"><div class="form-group"><label>Justificativa para ignorar</label><textarea name="justificativa" class="form-control" required></textarea></div><button class="btn btn-outline-danger">Ignorar justificadamente</button></form>
+</div></div></div>
+{% endblock %}

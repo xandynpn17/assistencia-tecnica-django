@@ -35,6 +35,10 @@ from .view_modules import (
     registrar_saida,
     relatorios,
     taloes,
+    tesouraria,
+    tratar_linha_extrato,
+    conciliar_extrato_grupo,
+    desfazer_conciliacao_bancaria,
 )
 
 __all__ = [
@@ -74,4 +78,8 @@ __all__ = [
     "registrar_saida",
     "relatorios",
     "taloes",
+    "tesouraria",
+    "tratar_linha_extrato",
+    "conciliar_extrato_grupo",
+    "desfazer_conciliacao_bancaria",
 ]

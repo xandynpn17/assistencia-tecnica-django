@@ -31,6 +31,13 @@
                         <option value="mes_anterior" {% if preset_periodo == 'mes_anterior' %}selected{% endif %}>Mês anterior</option>
                     </select>
                 </div>
+                <div class="col-md-2">
+                    <label>Critério da data</label>
+                    <select name="regime_data" class="form-control">
+                        <option value="movimento" {% if regime_data == 'movimento' %}selected{% endif %}>Caixa / movimentação</option>
+                        <option value="competencia" {% if regime_data == 'competencia' %}selected{% endif %}>Competência</option>
+                    </select>
+                </div>
                 <div class="col-md-3">
                     <label>Forma de pagamento</label>
                     <select name="forma_pagamento" class="form-control">
@@ -89,6 +96,8 @@
                     <a class="btn btn-sm btn-outline-dark" href="?{{ request.GET.urlencode }}&export=pdf&dataset=resumo">PDF resumo</a>
                     <a class="btn btn-sm btn-outline-primary" href="?{{ request.GET.urlencode }}&export=csv&dataset=executivo">CSV executivo</a>
                     <a class="btn btn-sm btn-outline-primary" href="?{{ request.GET.urlencode }}&export=pdf&dataset=executivo">PDF executivo</a>
+                    <a class="btn btn-sm btn-outline-dark" href="?{{ request.GET.urlencode }}&export=csv&dataset=livro">CSV livro financeiro</a>
+                    <a class="btn btn-sm btn-outline-dark" href="?{{ request.GET.urlencode }}&export=pdf&dataset=livro">PDF livro financeiro</a>
                 </div>
             </form>
         </div>
@@ -303,6 +312,40 @@
     </div>
 </div>
 
+    <div class="card mb-3 border-dark">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <strong>Livro financeiro imutável</strong>
+            <small class="text-muted">{{ movimentos_livro_page.paginator.count|default:0 }} movimento(s) · saldo líquido R$ {{ saldo_livro|floatformat:2 }}</small>
+        </div>
+        <div class="card-body p-0 table-responsive">
+            <table class="table table-sm table-hover text-nowrap mb-0">
+                <thead><tr><th>Movimentação</th><th>Competência</th><th>Origem</th><th>Descrição</th><th>Tipo</th><th class="text-right">Valor</th><th>Status</th><th>Registrado em</th></tr></thead>
+                <tbody>
+                    {% for m in movimentos_livro_page %}
+                    <tr>
+                        <td>{{ m.data_movimento|date:"d/m/Y" }}</td>
+                        <td>{{ m.data_competencia|date:"d/m/Y" }}</td>
+                        <td>{{ m.get_origem_tipo_display }}{% if m.origem_referencia %} · {{ m.origem_referencia }}{% endif %}</td>
+                        <td>{{ m.descricao }}</td>
+                        <td>{% if m.tipo == 'entrada' %}<span class="badge badge-success">Entrada</span>{% else %}<span class="badge badge-danger">Saída</span>{% endif %}</td>
+                        <td class="text-right">R$ {{ m.valor|floatformat:2 }}</td>
+                        <td>{% if m.status == 'estornado' %}<span class="badge badge-warning">Estornado</span>{% else %}<span class="badge badge-secondary">Confirmado</span>{% endif %}</td>
+                        <td>{{ m.registrado_em|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center text-muted">Nenhum movimento no período.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if movimentos_livro_page and movimentos_livro_page.paginator.num_pages > 1 %}
+        <div class="card-footer">
+            {% if movimentos_livro_page.has_previous %}<a class="btn btn-sm btn-outline-secondary" href="?{{ querystring_livro }}&page_livro={{ movimentos_livro_page.previous_page_number }}">Anterior</a>{% endif %}
+            {% if movimentos_livro_page.has_next %}<a class="btn btn-sm btn-outline-secondary" href="?{{ querystring_livro }}&page_livro={{ movimentos_livro_page.next_page_number }}">Próxima</a>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+
     {% if lancamentos or pagamentos %}
     <div class="card mb-3">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
@@ -318,7 +361,9 @@
                         <th>Técnico responsável</th>
                         <th class="text-right">Valor</th>
                         <th>Método</th>
-                        <th>Data</th>
+                        <th>Competência</th>
+                        <th>Movimentação</th>
+                        <th>Registrado em</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -329,6 +374,8 @@
                         <td>{% if p.ordem_servico and p.ordem_servico.tecnico_responsavel_valido %}{{ p.ordem_servico.tecnico_responsavel_valido.get_full_name|default:p.ordem_servico.tecnico_responsavel_valido.username }}{% else %}-{% endif %}</td>
                         <td class="text-right">R$ {{ p.valor|floatformat:2 }}</td>
                         <td>{{ p.metodo_display }}</td>
+                        <td>{{ p.data_competencia|date:"d/m/Y" }}</td>
+                        <td>{{ p.data_movimento|date:"d/m/Y" }}</td>
                         <td>{{ p.data|date:"d/m/Y H:i" }}</td>
                     </tr>
                     {% endfor %}
@@ -367,7 +414,9 @@
                         <th>Centro de custo</th>
                         <th class="text-right">Valor</th>
                         <th>Tipo</th>
-                        <th>Data</th>
+                        <th>Competência</th>
+                        <th>Movimentação</th>
+                        <th>Registrado em</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -384,6 +433,8 @@
                             <span class="badge badge-danger">Saída</span>
                             {% endif %}
                         </td>
+                        <td>{{ l.data_competencia|date:"d/m/Y" }}</td>
+                        <td>{{ l.data_movimento|date:"d/m/Y" }}</td>
                         <td>{{ l.data|date:"d/m/Y H:i" }}</td>
                     </tr>
                     {% endfor %}

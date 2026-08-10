@@ -14,6 +14,8 @@ from configuracoes.permissions import (
     require_sensitive_permission,
     role_required,
 )
+from configuracoes.services.tenant_guard import obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa
 
 from ..forms import ContaPagarEdicaoForm, ContaPagarForm, PagamentoContaPagarForm
 from ..models import CategoriaFinanceira, ContaPagar
@@ -36,10 +38,11 @@ from .helpers import (
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def contas_pagar(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     session_key = "caixa_contas_pagar_filtros"
-    _garantir_categorias_financeiras_padrao()
+    _garantir_categorias_financeiras_padrao(empresa)
     _atualizar_status_contas_pagar_abertas()
-    _garantir_formas_pagamento_padrao()
+    _garantir_formas_pagamento_padrao(empresa)
     hoje = timezone.localdate()
     status = (request.GET.get("status") or "").strip()
     busca = (request.GET.get("q") or "").strip()
@@ -81,7 +84,7 @@ def contas_pagar(request):
         vencimento_inicio_raw = vencimento_inicio.isoformat()
         vencimento_fim_raw = vencimento_fim.isoformat()
 
-    queryset = ContaPagar.objects.select_related("categoria", "centro_custo").all()
+    queryset = ContaPagar.objects.select_related("categoria", "centro_custo").filter(empresa=empresa)
     pendentes_qs = queryset.filter(status__in=["aberta", "parcial", "vencida"])
     pagar_hoje_qtd = pendentes_qs.filter(vencimento=hoje).count()
     pagar_vencidas_qtd = pendentes_qs.filter(vencimento__lt=hoje).count()
@@ -206,7 +209,10 @@ def contas_pagar(request):
     for conta in contas_page.object_list:
         conta.dias_atraso = max(0, (hoje - conta.vencimento).days) if conta.vencimento else 0
     querystring_paginacao = _querystring_sem_param(request, "page", "export")
-    categorias_despesa = CategoriaFinanceira.objects.filter(tipo="saida", ativa=True).order_by("nome")
+    categorias_despesa = filtrar_catalogo_empresa(
+        CategoriaFinanceira.objects.filter(tipo="saida", ativa=True),
+        empresa,
+    ).order_by("nome")
     filtros_para_salvar = {
         "q": busca,
         "status": status,
@@ -258,7 +264,7 @@ def contas_pagar(request):
             "limite_curto_prazo": hoje + timedelta(days=7),
             "querystring_paginacao": querystring_paginacao,
             "filtros_salvos_existem": bool(filtros_salvos),
-            "pagamento_rapido_form": PagamentoContaPagarForm(),
+            "pagamento_rapido_form": PagamentoContaPagarForm(empresa=empresa),
             "pode_criar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_criar_conta_pagar"),
             "pode_baixar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar"),
             "menu_app": "caixa",
@@ -269,13 +275,15 @@ def contas_pagar(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def criar_conta_pagar(request):
-    _garantir_categorias_financeiras_padrao()
-    _garantir_centros_custo_padrao()
+    empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_categorias_financeiras_padrao(empresa)
+    _garantir_centros_custo_padrao(empresa)
     require_sensitive_permission(request.user, "perm_caixa_criar_conta_pagar")
     if request.method == "POST":
-        form = ContaPagarForm(request.POST)
+        form = ContaPagarForm(request.POST, empresa=empresa)
         if form.is_valid():
             conta = form.save(commit=False)
+            conta.empresa = empresa
             conta.valor_pago = Decimal("0.00")
             conta.atualizar_status_automatico()
             conta.save()
@@ -283,7 +291,7 @@ def criar_conta_pagar(request):
             messages.success(request, "Conta a pagar criada.")
             return redirect("caixa:contas_pagar")
     else:
-        form = ContaPagarForm()
+        form = ContaPagarForm(empresa=empresa)
 
     return render(
         request,
@@ -301,10 +309,11 @@ def criar_conta_pagar(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def editar_conta_pagar(request, conta_id):
-    _garantir_categorias_financeiras_padrao()
-    _garantir_centros_custo_padrao()
+    empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_categorias_financeiras_padrao(empresa)
+    _garantir_centros_custo_padrao(empresa)
     require_sensitive_permission(request.user, "perm_caixa_editar_conta_pagar")
-    conta = get_object_or_404(ContaPagar.objects.select_related("categoria", "centro_custo"), id=conta_id)
+    conta = get_object_or_404(ContaPagar.objects.select_related("categoria", "centro_custo"), id=conta_id, empresa=empresa)
     if conta.status == "cancelada":
         messages.warning(request, "Contas canceladas nao podem ser editadas.")
         return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
@@ -315,6 +324,7 @@ def editar_conta_pagar(request, conta_id):
             request.POST,
             instance=conta,
             allow_financial_changes=not edicao_restrita,
+            empresa=empresa,
         )
         if form.is_valid():
             conta = form.save()
@@ -325,7 +335,7 @@ def editar_conta_pagar(request, conta_id):
                 messages.success(request, "Conta a pagar atualizada com sucesso.")
             return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
     else:
-        form = ContaPagarEdicaoForm(instance=conta, allow_financial_changes=not edicao_restrita)
+        form = ContaPagarEdicaoForm(instance=conta, allow_financial_changes=not edicao_restrita, empresa=empresa)
 
     return render(
         request,
@@ -346,9 +356,10 @@ def editar_conta_pagar(request, conta_id):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def detalhe_conta_pagar(request, conta_id):
-    _garantir_categorias_financeiras_padrao()
-    _garantir_formas_pagamento_padrao()
-    conta = get_object_or_404(ContaPagar.objects.select_related("categoria", "centro_custo"), id=conta_id)
+    empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_categorias_financeiras_padrao(empresa)
+    _garantir_formas_pagamento_padrao(empresa)
+    conta = get_object_or_404(ContaPagar.objects.select_related("categoria", "centro_custo"), id=conta_id, empresa=empresa)
     pagamentos = conta.pagamentos.select_related("forma_pagamento", "usuario")
     hoje = timezone.localdate()
     dias_atraso = max(0, (hoje - conta.vencimento).days) if conta.vencimento else 0
@@ -370,7 +381,7 @@ def detalhe_conta_pagar(request, conta_id):
                 messages.success(request, "Conta cancelada.")
             return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
 
-        form = PagamentoContaPagarForm(request.POST)
+        form = PagamentoContaPagarForm(request.POST, empresa=empresa)
         if form.is_valid():
             try:
                 require_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar")
@@ -388,8 +399,10 @@ def detalhe_conta_pagar(request, conta_id):
                 messages.error(request, "Valor maior que o saldo em aberto da conta.")
                 return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
 
-            caixa = caixa_atual()
-            if not caixa:
+            forma_pagamento = form.cleaned_data.get("forma_pagamento")
+            pagamento_bancario = bool(getattr(forma_pagamento, "conta_bancaria_liquidacao_id", None))
+            caixa = caixa_atual(getattr(request.user, "empresa", None))
+            if not caixa and not pagamento_bancario:
                 messages.error(request, "Abra o caixa antes de registrar pagamento de conta a pagar.")
                 return redirect("caixa:abrir_caixa")
 
@@ -405,7 +418,7 @@ def detalhe_conta_pagar(request, conta_id):
             messages.success(request, "Pagamento registrado com sucesso.")
             return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
     else:
-        form = PagamentoContaPagarForm(initial={"valor": conta.valor_aberto})
+        form = PagamentoContaPagarForm(initial={"valor": conta.valor_aberto}, empresa=empresa)
 
     return render(
         request,
@@ -426,11 +439,12 @@ def detalhe_conta_pagar(request, conta_id):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def aging_pagar(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     _atualizar_status_contas_pagar_abertas()
     hoje = timezone.localdate()
     contas = (
         ContaPagar.objects.select_related("categoria", "centro_custo")
-        .filter(status__in=["aberta", "parcial", "vencida"])
+        .filter(empresa=empresa, status__in=["aberta", "parcial", "vencida"])
         .order_by("vencimento", "-id")
     )
     bucket_defs = [

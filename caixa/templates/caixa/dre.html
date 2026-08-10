@@ -57,6 +57,52 @@
           <label>Data de fim</label>
           <input type="date" name="data_fim" value="{{ data_fim }}" class="form-control">
         </div>
+        <div class="col-md-3 mt-2">
+          <label>Ponto operacional</label>
+          <select name="ponto" class="form-control">
+            <option value="">Todos</option>
+            {% for item in pontos_operacionais %}<option value="{{ item.id }}" {% if ponto_filtro == item.id|stringformat:'s' %}selected{% endif %}>{{ item.codigo }} — {{ item.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3 mt-2">
+          <label>Categoria de produto</label>
+          <select name="categoria_produto" class="form-control">
+            <option value="">Todas</option>
+            {% for item in categorias_produto %}<option value="{{ item.id }}" {% if categoria_produto_filtro == item.id|stringformat:'s' %}selected{% endif %}>{{ item.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3 mt-2">
+          <label>Categoria financeira</label>
+          <select name="categoria_financeira" class="form-control">
+            <option value="">Todas</option>
+            {% for item in categorias_financeiras_filtro %}<option value="{{ item.id }}" {% if categoria_financeira_filtro == item.id|stringformat:'s' %}selected{% endif %}>{{ item.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3 mt-2">
+          <label>Centro de custo</label>
+          <select name="centro_custo" class="form-control">
+            <option value="">Todos</option>
+            {% for item in centros_custo_filtro %}<option value="{{ item.id }}" {% if centro_custo_filtro == item.id|stringformat:'s' %}selected{% endif %}>{{ item.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3 mt-2">
+          <label>Motivo de estoque</label>
+          <select name="motivo_estoque" class="form-control">
+            <option value="">Todos</option>
+            <option value="avaria" {% if motivo_estoque_filtro == 'avaria' %}selected{% endif %}>Avaria / quebra</option>
+            <option value="oferta" {% if motivo_estoque_filtro == 'oferta' %}selected{% endif %}>Oferta / brinde</option>
+            <option value="cedencia" {% if motivo_estoque_filtro == 'cedencia' %}selected{% endif %}>Cedência</option>
+            <option value="ajuste" {% if motivo_estoque_filtro == 'ajuste' %}selected{% endif %}>Ajuste negativo</option>
+            <option value="inventario" {% if motivo_estoque_filtro == 'inventario' %}selected{% endif %}>Inventário</option>
+          </select>
+        </div>
+        <div class="col-md-3 mt-2">
+          <label>Campanha</label>
+          <select name="campanha" class="form-control">
+            <option value="">Todas</option>
+            {% for item in campanhas_estoque %}<option value="{{ item }}" {% if campanha_filtro == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+          </select>
+        </div>
         <div class="col-md-2 d-flex" style="gap: 8px;">
           <button type="submit" class="btn btn-primary btn-block">Aplicar</button>
         </div>
@@ -69,6 +115,30 @@
 
   <div class="alert alert-light py-2">
     Comparativo com o periodo anterior ({{ periodo_anterior_inicio|date:"d/m/Y" }} ate {{ periodo_anterior_fim|date:"d/m/Y" }}).
+    {% if filtros_gerenciais_ativos %}<br><strong>Visão filtrada:</strong> o fechamento mensal fica disponível somente sem filtros gerenciais.{% endif %}
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center" style="gap: 12px;">
+      <div>
+        <strong>Fechamento mensal auditavel</strong>
+        {% if fechamento_competencia %}
+          <div class="text-success small">Competencia fechada em {{ fechamento_competencia.fechado_em|date:"d/m/Y H:i" }} por {{ fechamento_competencia.fechado_por.get_full_name|default:fechamento_competencia.fechado_por.username }}. Os valores abaixo permanecem disponiveis no historico.</div>
+        {% elif periodo_fechavel %}
+          <div class="text-muted small">O periodo corresponde a um mes completo e pode ser consolidado.</div>
+        {% else %}
+          <div class="text-muted small">Para fechar, filtre exatamente do primeiro ao ultimo dia de um unico mes.</div>
+        {% endif %}
+      </div>
+      {% if pode_fechar_dre and periodo_fechavel and not fechamento_competencia %}
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="data_inicio" value="{{ data_inicio }}">
+        <input type="hidden" name="data_fim" value="{{ data_fim }}">
+        <button type="submit" class="btn btn-success">Fechar competencia</button>
+      </form>
+      {% endif %}
+    </div>
   </div>
 
   <div class="row mb-3">
@@ -117,6 +187,12 @@
         <div class="card-body p-0">
           <table class="table mb-0">
             <tr><th>Receita bruta</th><td class="text-right">R$ {{ receita_bruta|floatformat:2 }}</td></tr>
+            <tr><th>(-) Impostos estimados</th><td class="text-right">R$ {{ impostos_estimados|floatformat:2 }}</td></tr>
+            <tr><th>(-) Taxas de recebimento</th><td class="text-right">R$ {{ taxas_recebimento|floatformat:2 }}</td></tr>
+            <tr><th>Receita liquida gerencial</th><td class="text-right"><strong>R$ {{ receita_liquida|floatformat:2 }}</strong></td></tr>
+            <tr><th>(-) CMV / custo dos itens vendidos</th><td class="text-right">R$ {{ cmv|floatformat:2 }}</td></tr>
+            <tr><th>Lucro bruto</th><td class="text-right"><strong>R$ {{ lucro_bruto|floatformat:2 }}</strong></td></tr>
+            <tr><th>(-) Perdas de estoque</th><td class="text-right">R$ {{ perdas_estoque|floatformat:2 }}</td></tr>
             <tr><th>Despesas operacionais</th><td class="text-right">R$ {{ despesas_operacionais|floatformat:2 }}</td></tr>
             <tr>
               <th>Resultado operacional</th>
@@ -150,6 +226,30 @@
                 <td class="text-right">R$ {{ comparativos_resumo.receita_bruta.variacao|floatformat:2 }}</td>
               </tr>
               <tr>
+                <td>Impostos estimados</td>
+                <td class="text-right">R$ {{ comparativos_resumo.impostos_estimados.atual|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.impostos_estimados.anterior|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.impostos_estimados.variacao|floatformat:2 }}</td>
+              </tr>
+              <tr>
+                <td>Taxas de recebimento</td>
+                <td class="text-right">R$ {{ comparativos_resumo.taxas_recebimento.atual|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.taxas_recebimento.anterior|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.taxas_recebimento.variacao|floatformat:2 }}</td>
+              </tr>
+              <tr>
+                <td>CMV</td>
+                <td class="text-right">R$ {{ comparativos_resumo.cmv.atual|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.cmv.anterior|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.cmv.variacao|floatformat:2 }}</td>
+              </tr>
+              <tr>
+                <td>Perdas de estoque</td>
+                <td class="text-right">R$ {{ comparativos_resumo.perdas_estoque.atual|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.perdas_estoque.anterior|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ comparativos_resumo.perdas_estoque.variacao|floatformat:2 }}</td>
+              </tr>
+              <tr>
                 <td>Despesas</td>
                 <td class="text-right">R$ {{ comparativos_resumo.despesas_operacionais.atual|floatformat:2 }}</td>
                 <td class="text-right">R$ {{ comparativos_resumo.despesas_operacionais.anterior|floatformat:2 }}</td>
@@ -175,6 +275,22 @@
   </div>
 
   <div class="row">
+    <div class="col-lg-6">
+      <div class="card mb-3">
+        <div class="card-header bg-white"><strong>Perdas de estoque por motivo</strong></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr><td>Avarias e quebras</td><td class="text-right">R$ {{ perdas_por_tipo.avaria|default:0|floatformat:2 }}</td></tr>
+              <tr><td>Ofertas / brindes</td><td class="text-right">R$ {{ perdas_por_tipo.oferta|default:0|floatformat:2 }}</td></tr>
+              <tr><td>Cedencias internas</td><td class="text-right">R$ {{ perdas_por_tipo.cedencia|default:0|floatformat:2 }}</td></tr>
+              <tr><td>Ajustes</td><td class="text-right">R$ {{ perdas_por_tipo.ajuste|default:0|floatformat:2 }}</td></tr>
+              <tr><td>Inventarios</td><td class="text-right">R$ {{ perdas_por_tipo.inventario|default:0|floatformat:2 }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     <div class="col-lg-6">
       <div class="card mb-3">
         <div class="card-header bg-white"><strong>Receitas por forma</strong></div>
@@ -316,6 +432,34 @@
         {% empty %}
         <div class="text-center text-muted">Sem série mensal disponível.</div>
         {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header bg-white"><strong>Historico de competencias fechadas</strong></div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Competencia</th><th>Fechado em</th><th>Responsavel</th><th class="text-right">Receita</th><th class="text-right">Encargos</th><th class="text-right">CMV</th><th class="text-right">Perdas</th><th class="text-right">Despesas</th><th class="text-right">Resultado</th></tr></thead>
+          <tbody>
+            {% for fechamento in fechamentos_dre %}
+            <tr>
+              <td><a href="?data_inicio={{ fechamento.periodo_inicio|date:'Y-m-d' }}&data_fim={{ fechamento.periodo_fim|date:'Y-m-d' }}">{{ fechamento.competencia|date:"m/Y" }}</a></td>
+              <td>{{ fechamento.fechado_em|date:"d/m/Y H:i" }}</td>
+              <td>{{ fechamento.fechado_por.get_full_name|default:fechamento.fechado_por.username }}</td>
+              <td class="text-right">R$ {{ fechamento.receita_bruta|floatformat:2 }}</td>
+              <td class="text-right">R$ {{ fechamento.impostos_estimados|add:fechamento.taxas_recebimento|floatformat:2 }}</td>
+              <td class="text-right">R$ {{ fechamento.cmv|floatformat:2 }}</td>
+              <td class="text-right">R$ {{ fechamento.perdas_estoque|floatformat:2 }}</td>
+              <td class="text-right">R$ {{ fechamento.despesas_operacionais|floatformat:2 }}</td>
+              <td class="text-right {% if fechamento.resultado_operacional < 0 %}text-danger{% else %}text-success{% endif %}">R$ {{ fechamento.resultado_operacional|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="9" class="text-center text-muted">Nenhuma competencia foi fechada.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
   </div>

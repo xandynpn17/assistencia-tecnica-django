@@ -86,6 +86,9 @@
           <a href="{% url 'caixa:relatorios' %}" class="btn btn-sm {% if menu_sub == 'relatorios' %}btn-dark{% else %}btn-outline-dark{% endif %}">
             Relat&oacute;rios
           </a>
+          <a href="{% url 'caixa:tesouraria' %}" class="btn btn-sm {% if menu_sub == 'tesouraria' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+            Bancos e concilia&ccedil;&atilde;o
+          </a>
           {% if user|has_perm_sensivel:'perm_caixa_ver_dre' %}
           <a href="{% url 'caixa:dre' %}" class="btn btn-sm {% if menu_sub == 'dre' %}btn-dark{% else %}btn-outline-dark{% endif %}">
             DRE

@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from configuracoes.models import FornecedorGarantia, MarcaGarantia
 from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, has_sensitive_permission, require_sensitive_permission, role_required
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, obter_empresa_ativa
 
 from ..forms import (
     BaixaContaReceberForm,
@@ -50,10 +51,11 @@ from .helpers import (
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def contas_receber(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     session_key = "caixa_contas_receber_filtros"
-    _garantir_categorias_financeiras_padrao()
+    _garantir_categorias_financeiras_padrao(empresa)
     _atualizar_status_contas_abertas()
-    _garantir_formas_pagamento_padrao()
+    _garantir_formas_pagamento_padrao(empresa)
     hoje = timezone.localdate()
     status = (request.GET.get("status") or "").strip()
     busca = (request.GET.get("q") or "").strip()
@@ -106,7 +108,7 @@ def contas_receber(request):
         "fornecedor_garantia",
         "marca_garantia",
         "regra_garantia",
-    ).all()
+    ).filter(empresa=empresa)
     pendentes_qs = queryset.filter(status__in=["aberta", "parcial", "vencida"])
     receber_hoje_qtd = pendentes_qs.filter(vencimento=hoje).count()
     receber_vencidas_qtd = pendentes_qs.filter(vencimento__lt=hoje).count()
@@ -296,9 +298,9 @@ def contas_receber(request):
             "marca_filtro": marca_id,
             "prioridade_filtro": prioridade,
             "aging_filtro": aging_filtro,
-            "categorias_financeiras": CategoriaFinanceira.objects.filter(ativa=True).order_by("nome"),
-            "fornecedores_garantia": FornecedorGarantia.objects.filter(ativo=True).order_by("nome"),
-            "marcas_garantia": MarcaGarantia.objects.filter(ativo=True).order_by("nome"),
+            "categorias_financeiras": filtrar_catalogo_empresa(CategoriaFinanceira.objects.filter(ativa=True), empresa).order_by("nome"),
+            "fornecedores_garantia": filtrar_catalogo_empresa(FornecedorGarantia.objects.filter(ativo=True), empresa).order_by("nome"),
+            "marcas_garantia": filtrar_catalogo_empresa(MarcaGarantia.objects.filter(ativo=True), empresa).order_by("nome"),
             "preset_vencimento": preset_vencimento,
             "prontas_filtro": prontas_filtro,
             "vencimento_inicio": vencimento_inicio.isoformat() if vencimento_inicio else vencimento_inicio_raw,
@@ -329,7 +331,7 @@ def contas_receber(request):
             "limite_curto_prazo": hoje + timedelta(days=7),
             "querystring_paginacao": querystring_paginacao,
             "filtros_salvos_existem": bool(filtros_salvos),
-            "baixa_rapida_form": BaixaContaReceberForm(),
+            "baixa_rapida_form": BaixaContaReceberForm(empresa=empresa),
             "pode_criar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_criar_conta_receber"),
             "pode_baixar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_baixar_conta_receber"),
             "pode_aplicar_desconto_caixa": has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"),
@@ -341,19 +343,22 @@ def contas_receber(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def criar_conta_receber(request):
-    _garantir_categorias_financeiras_padrao()
+    empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_categorias_financeiras_padrao(empresa)
     require_sensitive_permission(request.user, "perm_caixa_criar_conta_receber")
     if request.method == "POST":
-        form = ContaReceberForm(request.POST)
+        form = ContaReceberForm(request.POST, empresa=empresa)
         if form.is_valid():
-            conta = form.save()
+            conta = form.save(commit=False)
+            conta.empresa = empresa
+            conta.save()
             conta.tipo_origem = "cliente_os" if conta.ordem_servico_id else "avulso"
             conta.save(update_fields=["tipo_origem"])
             _log_financeiro("conta_receber_criada", request.user, conta=conta, valor=conta.valor_original)
             messages.success(request, "Conta a receber criada com sucesso.")
             return redirect("caixa:contas_receber")
     else:
-        form = ContaReceberForm()
+        form = ContaReceberForm(empresa=empresa)
 
     return render(
         request,
@@ -371,9 +376,10 @@ def criar_conta_receber(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def editar_conta_receber(request, conta_id):
-    _garantir_categorias_financeiras_padrao()
+    empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_categorias_financeiras_padrao(empresa)
     require_sensitive_permission(request.user, "perm_caixa_editar_conta_receber")
-    conta = get_object_or_404(ContaReceber, id=conta_id)
+    conta = get_object_or_404(ContaReceber, id=conta_id, empresa=empresa)
     if conta.status == "cancelada":
         messages.warning(request, "Contas canceladas nao podem ser editadas.")
         return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
@@ -390,6 +396,7 @@ def editar_conta_receber(request, conta_id):
             request.POST,
             instance=conta,
             allow_financial_changes=not edicao_restrita,
+            empresa=empresa,
         )
         if form.is_valid():
             conta = form.save(commit=False)
@@ -405,7 +412,7 @@ def editar_conta_receber(request, conta_id):
                 messages.success(request, "Conta a receber atualizada com sucesso.")
             return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
     else:
-        form = ContaReceberEdicaoForm(instance=conta, allow_financial_changes=not edicao_restrita)
+        form = ContaReceberEdicaoForm(instance=conta, allow_financial_changes=not edicao_restrita, empresa=empresa)
 
     return render(
         request,
@@ -426,7 +433,8 @@ def editar_conta_receber(request, conta_id):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def detalhe_conta_receber(request, conta_id):
-    _garantir_formas_pagamento_padrao()
+    empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_formas_pagamento_padrao(empresa)
     conta = get_object_or_404(
         ContaReceber.objects.select_related(
             "ordem_servico",
@@ -461,7 +469,7 @@ def detalhe_conta_receber(request, conta_id):
                 messages.success(request, "Conta cancelada.")
             return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
 
-        form = BaixaContaReceberForm(_payload_pagamento_normalizado(request))
+        form = BaixaContaReceberForm(_payload_pagamento_normalizado(request), empresa=empresa)
         if form.is_valid():
             try:
                 require_sensitive_permission(request.user, "perm_caixa_baixar_conta_receber")
@@ -472,7 +480,7 @@ def detalhe_conta_receber(request, conta_id):
                 messages.error(request, "Esta conta nao permite nova baixa.")
                 return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
 
-            caixa = caixa_atual()
+            caixa = caixa_atual(getattr(request.user, "empresa", None))
             if not caixa:
                 messages.error(request, "Abra o caixa antes de registrar baixa.")
                 return redirect("caixa:abrir_caixa")
@@ -520,7 +528,7 @@ def detalhe_conta_receber(request, conta_id):
             messages.success(request, "Baixa registrada com sucesso.")
             return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
     else:
-        form = BaixaContaReceberForm(initial={"valor": conta.valor_aberto})
+        form = BaixaContaReceberForm(initial={"valor": conta.valor_aberto}, empresa=empresa)
 
     return render(
         request,
@@ -544,6 +552,7 @@ def detalhe_conta_receber(request, conta_id):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def aging_receber(request):
+    empresa = obter_empresa_ativa(request, strict=False)
     _atualizar_status_contas_abertas()
     hoje = timezone.localdate()
     contas = (
@@ -553,7 +562,7 @@ def aging_receber(request):
             "fornecedor_garantia",
             "marca_garantia",
         )
-        .filter(status__in=["aberta", "parcial", "vencida"])
+        .filter(empresa=empresa, status__in=["aberta", "parcial", "vencida"])
         .order_by("vencimento", "-id")
     )
 
@@ -631,16 +640,17 @@ def aging_receber(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def categorias_financeiras(request):
-    _garantir_categorias_financeiras_padrao()
+    empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_categorias_financeiras_padrao(empresa)
     if request.method == "POST":
-        form = CategoriaFinanceiraForm(request.POST)
+        form = CategoriaFinanceiraForm(request.POST, empresa=empresa)
         if form.is_valid():
             form.save()
             messages.success(request, "Categoria financeira salva.")
             return redirect("caixa:categorias_financeiras")
     else:
-        form = CategoriaFinanceiraForm()
-    categorias = CategoriaFinanceira.objects.all()
+        form = CategoriaFinanceiraForm(empresa=empresa)
+    categorias = CategoriaFinanceira.objects.filter(empresa=empresa)
     total_categorias = categorias.count()
     total_categorias_ativas = categorias.filter(ativa=True).count()
     return render(
@@ -659,15 +669,17 @@ def categorias_financeiras(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def formas_pagamento(request):
+    empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_formas_pagamento_padrao(empresa)
     if request.method == "POST":
-        form = FormaPagamentoForm(request.POST)
+        form = FormaPagamentoForm(request.POST, empresa=empresa)
         if form.is_valid():
             form.save()
             messages.success(request, "Forma de pagamento salva.")
             return redirect("caixa:formas_pagamento")
     else:
-        form = FormaPagamentoForm()
-    formas = FormaPagamento.objects.all()
+        form = FormaPagamentoForm(empresa=empresa)
+    formas = filtrar_catalogo_empresa(FormaPagamento.objects.all(), empresa)
     total_formas = formas.count()
     total_formas_ativas = formas.filter(ativa=True).count()
     return render(
@@ -686,16 +698,17 @@ def formas_pagamento(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def centros_custo(request):
-    _garantir_centros_custo_padrao()
+    empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_centros_custo_padrao(empresa)
     if request.method == "POST":
-        form = CentroCustoForm(request.POST)
+        form = CentroCustoForm(request.POST, empresa=empresa)
         if form.is_valid():
             form.save()
             messages.success(request, "Centro de custo salvo.")
             return redirect("caixa:centros_custo")
     else:
-        form = CentroCustoForm()
-    centros = CentroCusto.objects.all()
+        form = CentroCustoForm(empresa=empresa)
+    centros = CentroCusto.objects.filter(empresa=empresa)
     total_centros = centros.count()
     total_centros_ativos = centros.filter(ativo=True).count()
     return render(
@@ -714,8 +727,9 @@ def centros_custo(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def custos_fixos(request):
-    _garantir_categorias_financeiras_padrao()
-    _garantir_centros_custo_padrao()
+    empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_categorias_financeiras_padrao(empresa)
+    _garantir_centros_custo_padrao(empresa)
     hoje = timezone.localdate()
     mes, ano, competencia, _ = _parse_mes_ano(request, referencia=hoje)
     base_url = request.path
@@ -723,19 +737,27 @@ def custos_fixos(request):
     item_edicao = None
     item_edicao_id = (request.GET.get("editar") or "").strip()
     if item_edicao_id.isdigit():
-        item_edicao = CustoFixoMensal.objects.filter(id=int(item_edicao_id)).first()
+        item_edicao_qs = CustoFixoMensal.objects.filter(id=int(item_edicao_id))
+        if empresa:
+            item_edicao_qs = item_edicao_qs.filter(empresa=empresa)
+        item_edicao = item_edicao_qs.first()
 
-    form = CustoFixoMensalForm(instance=item_edicao, initial={"competencia": competencia})
+    form = CustoFixoMensalForm(instance=item_edicao, initial={"competencia": competencia}, empresa=empresa)
 
     if request.method == "POST":
         action = (request.POST.get("action") or "salvar").strip()
         item_id = (request.POST.get("item_id") or "").strip()
 
         if action == "salvar":
-            item_instance = CustoFixoMensal.objects.filter(id=int(item_id)).first() if item_id.isdigit() else None
-            form = CustoFixoMensalForm(request.POST, instance=item_instance)
+            item_qs = CustoFixoMensal.objects.filter(id=int(item_id)) if item_id.isdigit() else CustoFixoMensal.objects.none()
+            if empresa:
+                item_qs = item_qs.filter(empresa=empresa)
+            item_instance = item_qs.first()
+            form = CustoFixoMensalForm(request.POST, instance=item_instance, empresa=empresa)
             if form.is_valid():
-                custo = form.save()
+                custo = form.save(commit=False)
+                custo.empresa = empresa
+                custo.save()
                 messages.success(request, "Custo fixo mensal salvo com sucesso.")
                 return redirect(f"{base_url}?mes={custo.competencia.month}&ano={custo.competencia.year}")
             messages.warning(request, "Revise os campos do custo fixo mensal.")
@@ -743,7 +765,10 @@ def custos_fixos(request):
             messages.warning(request, "Registro de custo fixo invalido.")
             return redirect(redirect_url)
         else:
-            custo = get_object_or_404(CustoFixoMensal, id=int(item_id))
+            custo_qs = CustoFixoMensal.objects.all()
+            if empresa:
+                custo_qs = custo_qs.filter(empresa=empresa)
+            custo = get_object_or_404(custo_qs, id=int(item_id))
             if action == "marcar_pago":
                 custo.valor_pago = custo.valor_previsto
                 custo.status = "pago"
@@ -779,7 +804,10 @@ def custos_fixos(request):
                 messages.success(request, "Custo fixo excluido.")
             return redirect(redirect_url)
 
-    custos_qs = CustoFixoMensal.objects.select_related("categoria_financeira", "centro_custo").filter(competencia=competencia).order_by("descricao", "id")
+    custos_qs = CustoFixoMensal.objects.select_related("categoria_financeira", "centro_custo").filter(competencia=competencia)
+    if empresa:
+        custos_qs = custos_qs.filter(empresa=empresa)
+    custos_qs = custos_qs.order_by("descricao", "id")
     custos_ativos = custos_qs.exclude(status="cancelado")
     total_previsto = custos_ativos.aggregate(total=Sum("valor_previsto"))["total"] or Decimal("0.00")
     total_pago = custos_ativos.aggregate(total=Sum("valor_pago"))["total"] or Decimal("0.00")
@@ -798,7 +826,10 @@ def custos_fixos(request):
         (11, "Novembro"),
         (12, "Dezembro"),
     ]
-    anos_db = set(CustoFixoMensal.objects.values_list("competencia__year", flat=True))
+    custos_anos_qs = CustoFixoMensal.objects.all()
+    if empresa:
+        custos_anos_qs = custos_anos_qs.filter(empresa=empresa)
+    anos_db = set(custos_anos_qs.values_list("competencia__year", flat=True))
     anos_disponiveis = sorted(anos_db.union({ano}), reverse=True) or [ano]
 
     return render(

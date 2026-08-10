@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Q
 from django.utils import timezone
 
 from caixa.models import Comissao, RegraComissaoTecnico
@@ -73,14 +74,22 @@ def _ordem_qualifica_finalizacao(ordem) -> bool:
 
 
 def _tipo_reparacao_comissionavel(ordem) -> bool:
-    return (getattr(ordem, "tipo_reparacao", "") or "").strip().lower() in TIPOS_REPARACAO_COMISSIONAVEIS
+    tipo_reparacao = (getattr(ordem, "tipo_reparacao", "") or "").strip().lower()
+    # Ordens legadas podem ter sido concluídas antes de este campo passar a ser
+    # obrigatório. A ausência não deve apagar a comissão já prevista; valores
+    # explicitamente não comissionáveis continuam bloqueados.
+    return not tipo_reparacao or tipo_reparacao in TIPOS_REPARACAO_COMISSIONAVEIS
 
 
 def _ordem_tem_item_aprovado(ordem) -> bool:
-    return ItemOrcamento.objects.filter(
+    if ItemOrcamento.objects.filter(
         orcamento__ordem_servico=ordem,
         status="aprovado",
-    ).exists()
+    ).exists():
+        return True
+    # Serviços lançados diretamente na OS também são fontes válidas de
+    # comissão, mesmo quando não nasceram de um orçamento.
+    return ordem.servicos_pecas.filter(tipo__in=["servico", "peca"]).exists()
 
 
 def ordem_qualifica_comissao_servico(ordem, config=None) -> bool:
@@ -352,7 +361,7 @@ def _regra_garantia_vigente(ordem):
             nome__iexact=(ordem.marca_equipamento or "").strip(),
             ativo=True,
             parceira_garantia=True,
-        ).first()
+        ).filter(Q(empresa=ordem.empresa) | Q(empresa__isnull=True)).first()
     if not marca:
         return None
     data_ref = ordem.data_abertura.date() if getattr(ordem, "data_abertura", None) else timezone.localdate()

@@ -13,6 +13,7 @@ from .dashboard import (
 )
 from .pagaveis import aging_pagar, contas_pagar, criar_conta_pagar, detalhe_conta_pagar, editar_conta_pagar
 from .taloes import imprimir_talao, taloes
+from .tesouraria import conciliar_extrato_grupo, desfazer_conciliacao_bancaria, tesouraria, tratar_linha_extrato
 from .recebiveis import (
     aging_receber,
     categorias_financeiras,
@@ -62,4 +63,8 @@ __all__ = [
     "registrar_saida",
     "relatorios",
     "taloes",
+    "tesouraria",
+    "tratar_linha_extrato",
+    "conciliar_extrato_grupo",
+    "desfazer_conciliacao_bancaria",
 ]

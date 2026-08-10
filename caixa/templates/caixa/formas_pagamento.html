@@ -94,7 +94,7 @@
         <div class="card-body table-responsive p-0">
           <table class="table table-hover mb-0">
             <thead>
-              <tr><th>Nome</th><th>C&oacute;digo</th><th>Tipo</th><th class="text-right">Taxa %</th><th class="text-center">Dias</th><th>Status</th></tr>
+              <tr><th>Nome</th><th>C&oacute;digo</th><th>Tipo</th><th>Conta de liquidação</th><th class="text-right">Taxa %</th><th class="text-center">Dias</th><th>Status</th></tr>
             </thead>
             <tbody>
             {% for f in formas %}
@@ -102,6 +102,7 @@
                 <td>{{ f.nome }}</td>
                 <td>{{ f.codigo }}</td>
                 <td>{{ f.get_tipo_display }}</td>
+                <td>{{ f.conta_bancaria_liquidacao.nome|default:"-" }}</td>
                 <td class="text-right">{{ f.taxa_percentual|floatformat:2 }}</td>
                 <td class="text-center">{{ f.dias_recebimento }}</td>
                 <td>

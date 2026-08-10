@@ -81,6 +81,24 @@
                             {% if form.valor.errors %}<small class="text-danger">{{ form.valor.errors|striptags }}</small>{% endif %}
                         </div>
 
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label for="{{ form.data_competencia.id_for_label }}"><strong>Competência</strong></label>
+                                {{ form.data_competencia|add_class:"form-control" }}
+                                {% if form.data_competencia.errors %}<small class="text-danger">{{ form.data_competencia.errors|striptags }}</small>{% endif %}
+                                <small class="text-muted">Mês/período ao qual a despesa pertence.</small>
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="{{ form.data_movimento.id_for_label }}"><strong>Movimentação</strong></label>
+                                {{ form.data_movimento|add_class:"form-control" }}
+                                {% if form.data_movimento.errors %}<small class="text-danger">{{ form.data_movimento.errors|striptags }}</small>{% endif %}
+                                <small class="text-muted">Dia em que ocorreu a saída financeira.</small>
+                            </div>
+                        </div>
+                        <div class="alert alert-light border py-2 small">
+                            Lançamentos retroativos exigem permissão específica; a data e hora reais do registro permanecem na auditoria.
+                        </div>
+
                         <div class="mb-2">
                             <label class="d-block mb-2"><strong>Valores rápidos</strong></label>
                             <div class="btn-group btn-group-sm flex-wrap" role="group">

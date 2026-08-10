@@ -678,6 +678,27 @@
                             </details>
                             {% endif %}
 
+                            <details class="pagamento-advanced" {% if form.data_competencia.errors or form.data_movimento.errors %}open{% endif %}>
+                                <summary><span>Datas contábeis e financeiras</span></summary>
+                                <div class="pagamento-advanced-body">
+                                    <div class="form-row">
+                                        <div class="form-group col-md-6">
+                                            <label for="{{ form.data_competencia.id_for_label }}"><strong>Competência</strong></label>
+                                            {{ form.data_competencia|add_class:"form-control" }}
+                                            {% if form.data_competencia.errors %}<small class="text-danger">{{ form.data_competencia.errors|striptags }}</small>{% endif %}
+                                            <small class="text-muted">Período econômico ao qual a receita pertence.</small>
+                                        </div>
+                                        <div class="form-group col-md-6">
+                                            <label for="{{ form.data_movimento.id_for_label }}"><strong>Movimentação</strong></label>
+                                            {{ form.data_movimento|add_class:"form-control" }}
+                                            {% if form.data_movimento.errors %}<small class="text-danger">{{ form.data_movimento.errors|striptags }}</small>{% endif %}
+                                            <small class="text-muted">Dia em que o dinheiro efetivamente entrou.</small>
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">O horário real de registro é preservado automaticamente na auditoria.</small>
+                                </div>
+                            </details>
+
                             <details class="pagamento-advanced" {% if form.observacao.errors %}open{% endif %}>
                                 <summary>
                                     <span>Mensagem adicional no tal&atilde;o</span>

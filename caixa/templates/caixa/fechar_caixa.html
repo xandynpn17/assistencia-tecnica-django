@@ -120,19 +120,21 @@
                     </div>
                     <div class="card-body">
                         <div class="alert alert-light">
-                            Saldo esperado para fecho: <strong>R$ {{ saldo|floatformat:2 }}</strong>. Use esse valor como refer&ecirc;ncia para a contagem f&iacute;sica.
+                            Dinheiro esperado para contagem: <strong>R$ {{ saldo|floatformat:2 }}</strong>.
+                            O saldo cont&aacute;bil total, incluindo meios eletr&ocirc;nicos, &eacute;
+                            <strong>R$ {{ saldo_contabil|floatformat:2 }}</strong>.
                         </div>
 
                         <div class="caixa-close-focus-grid">
                             <div class="caixa-close-focus-card">
-                                <div class="caixa-close-focus-label">Esperado</div>
+                                <div class="caixa-close-focus-label">Dinheiro esperado</div>
                                 <div class="caixa-close-focus-value">R$ {{ saldo|floatformat:2 }}</div>
-                                <div class="caixa-close-focus-note">Valor que o sistema apurou com entradas e sa&iacute;das do turno.</div>
+                                <div class="caixa-close-focus-note">Saldo inicial em esp&eacute;cie + recebimentos em dinheiro - sa&iacute;das do turno.</div>
                             </div>
                             <div class="caixa-close-focus-card">
                                 <div class="caixa-close-focus-label">Contado</div>
                                 <div class="caixa-close-focus-value">{% if valor_contado_fisico %}R$ {{ valor_contado_fisico }}{% else %}-{% endif %}</div>
-                                <div class="caixa-close-focus-note">Informe o valor real contado para liberar o encerramento.</div>
+                                <div class="caixa-close-focus-note">Informe somente o numer&aacute;rio realmente contado no caixa.</div>
                             </div>
                             <div class="caixa-close-focus-card">
                                 <div class="caixa-close-focus-label">Diferen&ccedil;a</div>
@@ -143,7 +145,7 @@
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="small text-muted mb-1 d-block">Saldo esperado</label>
+                                <label class="small text-muted mb-1 d-block">Dinheiro esperado</label>
                                 <div class="form-control bg-light" id="saldo-esperado" data-valor="{{ saldo }}">R$ {{ saldo|floatformat:2 }}</div>
                             </div>
                             <div class="col-md-6 mb-3">

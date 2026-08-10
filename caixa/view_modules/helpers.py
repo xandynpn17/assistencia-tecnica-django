@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from configuracoes.models import MarcaGarantia, RegraGarantiaMarca
 from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, has_role
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa
 from ordens.models import OrdemServico
 
 from ..models import (
@@ -28,9 +29,11 @@ from ..models import (
 )
 
 
-def _caixa_por_data(data_ref=None):
+def _caixa_por_data(data_ref=None, empresa=None):
     data_ref = data_ref or timezone.localdate()
-    return Caixa.objects.filter(data=data_ref).order_by("-id").first()
+    caixas = Caixa.objects.filter(data=data_ref)
+    caixas = caixas.filter(empresa=empresa) if empresa is not None else caixas.filter(empresa__isnull=True)
+    return caixas.order_by("-id").first()
 
 
 def _parse_intervalo_datas(raw_inicio, raw_fim):
@@ -293,11 +296,15 @@ def _log_financeiro(evento, usuario, conta=None, pagamento=None, valor=None, des
     )
 
 
-def _forma_pagamento_por_codigo(codigo):
-    return FormaPagamento.objects.filter(codigo=codigo, ativa=True).first()
+def _forma_pagamento_por_codigo(codigo, empresa=None):
+    formas = filtrar_catalogo_empresa(FormaPagamento.objects.filter(ativa=True), empresa)
+    if empresa:
+        forma = formas.filter(empresa=empresa, codigo=codigo).first()
+        return forma or formas.filter(empresa__isnull=True, codigo=codigo).first()
+    return formas.filter(codigo=codigo).first()
 
 
-def _garantir_formas_pagamento_padrao():
+def _garantir_formas_pagamento_padrao(empresa=None):
     defaults = [
         {"nome": "Dinheiro", "codigo": "dinheiro", "tipo": "avista", "taxa_percentual": Decimal("0.00"), "dias_recebimento": 0, "ativa": True},
         {"nome": "PIX", "codigo": "pix", "tipo": "avista", "taxa_percentual": Decimal("0.00"), "dias_recebimento": 0, "ativa": True},
@@ -308,10 +315,10 @@ def _garantir_formas_pagamento_padrao():
         {"nome": "Custo da Loja", "codigo": "loja", "tipo": "avista", "taxa_percentual": Decimal("0.00"), "dias_recebimento": 0, "ativa": True},
     ]
     for row in defaults:
-        FormaPagamento.objects.get_or_create(codigo=row["codigo"], defaults=row)
+        FormaPagamento.objects.get_or_create(empresa=empresa, codigo=row["codigo"], defaults=row)
 
 
-def _garantir_centros_custo_padrao():
+def _garantir_centros_custo_padrao(empresa=None):
     defaults = [
         {"nome": "Operacional", "tipo": "variavel", "ativo": True},
         {"nome": "Compras", "tipo": "variavel", "ativo": True},
@@ -320,10 +327,10 @@ def _garantir_centros_custo_padrao():
         {"nome": "Infraestrutura", "tipo": "fixo", "ativo": True},
     ]
     for row in defaults:
-        CentroCusto.objects.get_or_create(nome=row["nome"], defaults=row)
+        CentroCusto.objects.get_or_create(empresa=empresa, nome=row["nome"], defaults=row)
 
 
-def _garantir_categorias_financeiras_padrao():
+def _garantir_categorias_financeiras_padrao(empresa=None):
     defaults = [
         {"nome": "Cliente OS", "tipo": "receber", "ativa": True},
         {"nome": "Garantia Fabricante", "tipo": "receber", "ativa": True},
@@ -342,33 +349,38 @@ def _garantir_categorias_financeiras_padrao():
     ]
     for row in defaults:
         CategoriaFinanceira.objects.get_or_create(
+            empresa=empresa,
             nome=row["nome"],
             tipo=row["tipo"],
             defaults={"ativa": row["ativa"]},
         )
 
 
-def _forma_pagamento_padrao():
-    return FormaPagamento.objects.filter(ativa=True).order_by("nome").first()
+def _forma_pagamento_padrao(empresa=None):
+    return filtrar_catalogo_empresa(
+        FormaPagamento.objects.filter(ativa=True), empresa
+    ).order_by("nome").first()
 
 
-def _resolver_forma_pagamento_codigo_legacy(codigo):
+def _resolver_forma_pagamento_codigo_legacy(codigo, empresa=None):
     if not codigo:
-        return _forma_pagamento_padrao()
-    forma = _forma_pagamento_por_codigo(codigo)
+        return _forma_pagamento_padrao(empresa)
+    forma = _forma_pagamento_por_codigo(codigo, empresa)
     if forma:
         return forma
     mapeamento = {
         "credito": "cartao_credito",
         "debito": "cartao_debito",
     }
-    return _forma_pagamento_por_codigo(mapeamento.get(codigo, codigo))
+    return _forma_pagamento_por_codigo(mapeamento.get(codigo, codigo), empresa)
 
 
 def _payload_pagamento_normalizado(request):
     data = request.POST.copy()
     if not data.get("forma_pagamento"):
-        forma = _resolver_forma_pagamento_codigo_legacy(data.get("metodo"))
+        forma = _resolver_forma_pagamento_codigo_legacy(
+            data.get("metodo"), getattr(request.user, "empresa", None)
+        )
         if forma:
             data["forma_pagamento"] = str(forma.id)
     return data
@@ -517,7 +529,11 @@ def _dados_garantia_ordem(ordem):
     marca = None
     nome_marca = (ordem.marca_equipamento or "").strip()
     if nome_marca:
-        marca = MarcaGarantia.objects.filter(nome__iexact=nome_marca, ativo=True, parceira_garantia=True).first()
+        marca = MarcaGarantia.objects.filter(
+            nome__iexact=nome_marca,
+            ativo=True,
+            parceira_garantia=True,
+        ).filter(Q(empresa=ordem.empresa) | Q(empresa__isnull=True)).first()
     if not marca:
         return None
 
@@ -546,6 +562,7 @@ def _garantir_conta_garantia(ordem, dados_garantia=None, ignorar_pagamento_id=No
         return None
 
     categoria, _ = CategoriaFinanceira.objects.get_or_create(
+        empresa=ordem.empresa,
         nome="Garantia Fabricante",
         defaults={"tipo": "receber", "ativa": True},
     )
@@ -645,7 +662,11 @@ def _valor_garantia_sugerido(ordem):
     nome_marca = (ordem.marca_equipamento or "").strip()
     if not nome_marca:
         return None
-    marca = MarcaGarantia.objects.filter(nome__iexact=nome_marca, ativo=True, parceira_garantia=True).first()
+    marca = MarcaGarantia.objects.filter(
+        nome__iexact=nome_marca,
+        ativo=True,
+        parceira_garantia=True,
+    ).filter(Q(empresa=ordem.empresa) | Q(empresa__isnull=True)).first()
     if marca:
         data_ref = ordem.data_abertura.date() if ordem.data_abertura else timezone.localdate()
         regra = RegraGarantiaMarca.buscar_regra_vigente(marca, ordem.tipo_equipamento, data_ref=data_ref)

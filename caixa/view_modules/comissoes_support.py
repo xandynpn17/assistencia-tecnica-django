@@ -228,11 +228,18 @@ def _rotulo_criterio_desempenho(criterio):
 
 
 def _data_referencia_ordem(ordem, criterio="servicos_finalizados"):
+    def _data_local(valor):
+        if not valor:
+            return None
+        if hasattr(valor, "date"):
+            return timezone.localdate(valor) if timezone.is_aware(valor) else valor.date()
+        return valor
+
     criterio = _normalizar_criterio_desempenho(criterio)
     if criterio == "retirado_pago":
         data_pagamento = getattr(ordem, "data_pagamento_referencia", None)
         if data_pagamento:
-            return data_pagamento.date() if hasattr(data_pagamento, "date") else data_pagamento
+            return _data_local(data_pagamento)
         pagamento = (
             Pagamento.objects.filter(ordem_servico=ordem)
             .order_by("-data")
@@ -240,12 +247,12 @@ def _data_referencia_ordem(ordem, criterio="servicos_finalizados"):
             .first()
         )
         if pagamento:
-            return pagamento.date() if hasattr(pagamento, "date") else pagamento
+            return _data_local(pagamento)
 
     if ordem.data_conclusao:
-        return ordem.data_conclusao.date()
+        return _data_local(ordem.data_conclusao)
     if ordem.data_abertura:
-        return ordem.data_abertura.date()
+        return _data_local(ordem.data_abertura)
     return None
 
 

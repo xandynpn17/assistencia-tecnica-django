@@ -4,6 +4,7 @@ from calendar import monthrange
 from io import StringIO
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db.models import Sum
@@ -15,23 +16,31 @@ from caixa.models import (
     AuditoriaFinanceira,
     AuditoriaGarantia,
     Caixa,
+    ConciliacaoBancaria,
     CategoriaFinanceira,
     CentroCusto,
     Comissao,
     ComissaoLotePagamento,
     ComissaoItemOrcamento,
     ContaPagar,
+    ContaBancaria,
     ContaReceber,
     CustoFixoMensal,
+    DREFechamento,
+    DespesaRecorrente,
     FaixaPremioMeta,
     FormaPagamento,
     LancamentoCaixa,
+    LinhaExtratoBancario,
+    MovimentoFinanceiro,
+    MovimentoBancario,
     Pagamento,
     PagamentoContaPagar,
     PremioColaboradorCompetencia,
     RecebimentoConta,
     RegraComissaoTecnico,
     RegraPremioMeta,
+    TransferenciaTesouraria,
 )
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema, Empresa, FornecedorGarantia, MarcaGarantia, RegraGarantiaMarca
@@ -42,6 +51,15 @@ from caixa.services.comissao_status import ComissaoStatusError, aplicar_acao_com
 from caixa.services.comissoes import (
     cancelar_comissoes_por_ordem,
     processar_evento_servico_finalizado,
+)
+from caixa.services.livro_financeiro import estornar_movimento_financeiro
+from caixa.services.pagamentos import excluir_pagamento_com_justificativa
+from caixa.services.tesouraria import (
+    conciliar_grupo,
+    conciliar_linha,
+    desfazer_conciliacao,
+    importar_extrato_csv,
+    registrar_transferencia,
 )
 
 
@@ -250,7 +268,7 @@ class CaixaPermissoesTests(TestCase):
         response = self.client.get(reverse("caixa:dashboard_financeiro"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Saidas por categoria")
+        self.assertContains(response, "Saídas por categoria")
         self.assertEqual(response.context["despesas_marketing_periodo"], Decimal("150.00"))
         self.assertEqual(response.context["novos_clientes_periodo"], 2)
         self.assertEqual(response.context["cac_medio_periodo"], Decimal("75.00"))
@@ -914,7 +932,7 @@ class CaixaPermissoesTests(TestCase):
         response = self.client.post(
             reverse("caixa:fechar_caixa"),
             {
-                "valor_contado_fisico": "80.00",
+                "valor_contado_fisico": "0.00",
                 "justificativa_diferenca": "",
                 "conferencia_pix_teste": "80.00",
             },
@@ -925,6 +943,72 @@ class CaixaPermissoesTests(TestCase):
         self.assertFalse(caixa.aberto)
         self.assertEqual(len(caixa.conferencia_formas_pagamento), 1)
         self.assertEqual(caixa.conferencia_formas_pagamento[0]["codigo"], "pix_teste")
+
+    def test_fechar_caixa_separa_pagamento_misto_e_confere_somente_dinheiro_fisico(self):
+        caixa = Caixa.objects.filter(aberto=True).first()
+        caixa.saldo_inicial = Decimal("50.00")
+        caixa.save(update_fields=["saldo_inicial"])
+        forma_pix = FormaPagamento.objects.create(nome="PIX misto fecho", codigo="pix_misto_fecho", tipo="avista")
+        forma_dinheiro, _ = FormaPagamento.objects.get_or_create(
+            codigo="dinheiro",
+            defaults={"nome": "Dinheiro", "tipo": "avista", "ativa": True},
+        )
+        Pagamento.objects.create(
+            caixa=caixa,
+            ordem_servico=self.ordem,
+            valor=Decimal("120.00"),
+            forma_pagamento=forma_pix,
+            metodo="pix_misto_fecho",
+            formas_pagamento_compostas=[
+                {
+                    "forma_id": forma_pix.id,
+                    "forma_codigo": forma_pix.codigo,
+                    "forma_nome": forma_pix.nome,
+                    "valor": "100.00",
+                    "referencia": "PIX-100",
+                },
+                {
+                    "forma_id": forma_dinheiro.id,
+                    "forma_codigo": forma_dinheiro.codigo,
+                    "forma_nome": forma_dinheiro.nome,
+                    "valor": "20.00",
+                    "referencia": "DIN-20",
+                },
+            ],
+        )
+        LancamentoCaixa.objects.create(
+            caixa=caixa,
+            descricao="Saida em especie",
+            tipo="saida",
+            valor=Decimal("10.00"),
+            usuario=self.atendente,
+        )
+
+        self.client.force_login(self.atendente)
+        response_get = self.client.get(reverse("caixa:fechar_caixa"))
+
+        self.assertEqual(response_get.context["saldo"], Decimal("60.00"))
+        self.assertEqual(response_get.context["saldo_contabil"], Decimal("160.00"))
+        apurado = {item["codigo"]: item["apurado"] for item in response_get.context["conferencia_formas"]}
+        self.assertEqual(apurado["pix_misto_fecho"], Decimal("100.00"))
+        self.assertEqual(apurado["dinheiro"], Decimal("20.00"))
+
+        response_post = self.client.post(
+            reverse("caixa:fechar_caixa"),
+            {
+                "valor_contado_fisico": "60.00",
+                "justificativa_diferenca": "",
+                "conferencia_pix_misto_fecho": "100.00",
+                "conferencia_dinheiro": "20.00",
+            },
+        )
+
+        self.assertEqual(response_post.status_code, 302)
+        caixa.refresh_from_db()
+        self.assertFalse(caixa.aberto)
+        self.assertEqual(caixa.saldo_final, Decimal("160.00"))
+        self.assertEqual(caixa.valor_contado_fisico, Decimal("60.00"))
+        self.assertEqual(caixa.diferenca_fechamento, Decimal("0.00"))
 
     def test_detalhe_caixa_exibe_conferencia_salva(self):
         caixa = Caixa.objects.filter(aberto=True).first()
@@ -4057,8 +4141,11 @@ class CaixaPermissoesTests(TestCase):
         self.assertFalse(Pagamento.objects.filter(referencia="GAR-ZERO").exists())
 
     def test_conta_garantia_fabricante_fica_identificada_com_marca_fornecedor_e_empresa(self):
-        self.client.force_login(self.atendente)
         empresa = Empresa.objects.create(nome="Empresa Garantia")
+        self.atendente.empresa = empresa
+        self.atendente.save(update_fields=["empresa"])
+        Caixa.objects.create(empresa=empresa, aberto=True, saldo_inicial=0)
+        self.client.force_login(self.atendente)
         fornecedor = FornecedorGarantia.objects.create(nome="Fabricante Conta Nome")
         marca = MarcaGarantia.objects.create(
             nome="Marca Conta Nome",
@@ -4894,6 +4981,27 @@ class CaixaPermissoesTests(TestCase):
             tipo="saida",
             usuario=self.gerente,
         )
+        produto_cmv = Produto.objects.create(
+            nome="Peca contabilizada no DRE",
+            tipo_item="produto",
+            custo_unitario=Decimal("20.00"),
+            preco_final=Decimal("50.00"),
+            preco=Decimal("50.00"),
+        )
+        MovimentacaoEstoque.objects.create(
+            produto=produto_cmv,
+            tipo="venda",
+            quantidade=-1,
+            valor_unitario_custo=Decimal("20.00"),
+            valor_total_custo=Decimal("20.00"),
+        )
+        MovimentacaoEstoque.objects.create(
+            produto=produto_cmv,
+            tipo="oferta",
+            quantidade=-1,
+            valor_unitario_custo=Decimal("5.00"),
+            valor_total_custo=Decimal("5.00"),
+        )
 
         hoje = timezone.localdate().isoformat()
         response = self.client.get(reverse("caixa:dre"), {"data_inicio": hoje, "data_fim": hoje})
@@ -4901,6 +5009,140 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(response.context["receita_bruta"], Decimal("100.00"))
         self.assertEqual(response.context["receita_cliente"], Decimal("80.00"))
         self.assertEqual(response.context["receita_garantia"], Decimal("20.00"))
+        self.assertEqual(response.context["cmv"], Decimal("20.00"))
+        self.assertEqual(response.context["perdas_estoque"], Decimal("5.00"))
+        self.assertEqual(response.context["lucro_bruto"], Decimal("80.00"))
+        self.assertEqual(response.context["resultado_operacional"], Decimal("45.00"))
+
+
+class CaixaMultiempresaTests(TestCase):
+    def setUp(self):
+        self.empresa_a = Empresa.objects.create(nome="Empresa Caixa A")
+        self.empresa_b = Empresa.objects.create(nome="Empresa Caixa B")
+        self.gerente_a = get_user_model().objects.create_user(
+            username="gerente_caixa_empresa_a",
+            password="senha-forte-123",
+            tipo_usuario="gerente",
+            empresa=self.empresa_a,
+        )
+        self.gerente_b = get_user_model().objects.create_user(
+            username="gerente_caixa_empresa_b",
+            password="senha-forte-123",
+            tipo_usuario="gerente",
+            empresa=self.empresa_b,
+        )
+
+    def test_empresas_podem_ter_caixa_aberto_no_mesmo_dia(self):
+        caixa_a = Caixa.objects.create(empresa=self.empresa_a, aberto=True, saldo_inicial=Decimal("10.00"))
+        caixa_b = Caixa.objects.create(empresa=self.empresa_b, aberto=True, saldo_inicial=Decimal("20.00"))
+
+        self.assertNotEqual(caixa_a.id, caixa_b.id)
+        self.assertEqual(Caixa.objects.filter(aberto=True).count(), 2)
+
+    def test_dashboard_financeiro_isola_valores_por_empresa(self):
+        caixa_a = Caixa.objects.create(empresa=self.empresa_a, aberto=True, saldo_inicial=Decimal("0.00"))
+        caixa_b = Caixa.objects.create(empresa=self.empresa_b, aberto=True, saldo_inicial=Decimal("0.00"))
+        Pagamento.objects.create(empresa=self.empresa_a, caixa=caixa_a, valor=Decimal("100.00"), metodo="pix")
+        Pagamento.objects.create(empresa=self.empresa_b, caixa=caixa_b, valor=Decimal("900.00"), metodo="pix")
+        self.client.force_login(self.gerente_a)
+
+        response = self.client.get(reverse("caixa:dashboard_financeiro"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_entradas"], Decimal("100.00"))
+        self.assertNotContains(response, "900,00")
+
+    def test_detalhe_caixa_de_outra_empresa_retorna_404(self):
+        caixa_a = Caixa.objects.create(empresa=self.empresa_a, aberto=False, saldo_inicial=Decimal("0.00"))
+        caixa_b = Caixa.objects.create(empresa=self.empresa_b, aberto=False, saldo_inicial=Decimal("0.00"))
+        self.client.force_login(self.gerente_a)
+
+        self.assertEqual(self.client.get(reverse("caixa:detalhe_caixa", args=[caixa_a.id])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("caixa:detalhe_caixa", args=[caixa_b.id])).status_code, 404)
+
+    def test_fluxo_projetado_isola_recebimentos_e_despesas_por_empresa(self):
+        vencimento = timezone.localdate() + timedelta(days=5)
+        ContaReceber.objects.create(
+            empresa=self.empresa_a,
+            descricao="Receber A",
+            valor_original=Decimal("100.00"),
+            valor_aberto=Decimal("100.00"),
+            vencimento=vencimento,
+            status="aberta",
+        )
+        ContaReceber.objects.create(
+            empresa=self.empresa_b,
+            descricao="Receber B",
+            valor_original=Decimal("900.00"),
+            valor_aberto=Decimal("900.00"),
+            vencimento=vencimento,
+            status="aberta",
+        )
+        DespesaRecorrente.objects.create(empresa=self.empresa_a, nome="Aluguel A", valor_mensal=Decimal("30.00"))
+        DespesaRecorrente.objects.create(empresa=self.empresa_b, nome="Aluguel B", valor_mensal=Decimal("300.00"))
+        self.client.force_login(self.gerente_a)
+
+        response = self.client.get(reverse("caixa:fluxo_projetado"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_entradas_previstas"], Decimal("100.00"))
+        self.assertEqual(response.context["total_despesas_previstas"], Decimal("180.00"))
+        self.assertContains(response, "Aluguel A")
+        self.assertNotContains(response, "Aluguel B")
+
+    def test_dre_desconta_e_congela_impostos_e_taxas_do_pagamento(self):
+        self.empresa_a.regime_tributario = "simples"
+        self.empresa_a.modo_tributario = "basico"
+        self.empresa_a.aliquota_comercio = Decimal("6.00")
+        self.empresa_a.save(update_fields=["regime_tributario", "modo_tributario", "aliquota_comercio"])
+        caixa = Caixa.objects.create(empresa=self.empresa_a, aberto=True, saldo_inicial=Decimal("0.00"))
+        forma = FormaPagamento.objects.create(
+            nome="Cartao DRE snapshot",
+            codigo="cartao-dre-snapshot",
+            taxa_percentual=Decimal("2.00"),
+        )
+        pagamento = Pagamento.objects.create(
+            empresa=self.empresa_a,
+            caixa=caixa,
+            forma_pagamento=forma,
+            valor=Decimal("100.00"),
+            metodo=forma.codigo,
+        )
+        pagamento.refresh_from_db()
+        self.assertEqual(pagamento.impostos_estimados, Decimal("6.00"))
+        self.assertEqual(pagamento.taxas_recebimento_estimadas, Decimal("2.00"))
+
+        self.client.force_login(self.gerente_a)
+        hoje = timezone.localdate()
+        inicio = hoje.replace(day=1)
+        fim = hoje.replace(day=monthrange(hoje.year, hoje.month)[1])
+        response = self.client.get(
+            reverse("caixa:dre"),
+            {"data_inicio": inicio.isoformat(), "data_fim": fim.isoformat()},
+        )
+        self.assertEqual(response.context["impostos_estimados"], Decimal("6.00"))
+        self.assertEqual(response.context["taxas_recebimento"], Decimal("2.00"))
+        self.assertEqual(response.context["receita_liquida"], Decimal("92.00"))
+        self.assertEqual(response.context["resultado_operacional"], Decimal("92.00"))
+
+        self.client.post(
+            reverse("caixa:dre"),
+            {"data_inicio": inicio.isoformat(), "data_fim": fim.isoformat()},
+        )
+        fechamento = DREFechamento.objects.get(empresa=self.empresa_a, competencia=inicio)
+        self.assertEqual(fechamento.impostos_estimados, Decimal("6.00"))
+        self.assertEqual(fechamento.taxas_recebimento, Decimal("2.00"))
+        self.assertEqual(fechamento.resultado_operacional, Decimal("92.00"))
+
+        forma.taxa_percentual = Decimal("9.00")
+        forma.save(update_fields=["taxa_percentual"])
+        self.empresa_a.aliquota_comercio = Decimal("12.00")
+        self.empresa_a.save(update_fields=["aliquota_comercio"])
+        pagamento.refresh_from_db()
+        fechamento.refresh_from_db()
+        self.assertEqual(pagamento.impostos_estimados, Decimal("6.00"))
+        self.assertEqual(pagamento.taxas_recebimento_estimadas, Decimal("2.00"))
+        self.assertEqual(fechamento.resultado_operacional, Decimal("92.00"))
 
 
 class PagamentoComDescontoTests(TestCase):
@@ -5296,6 +5538,36 @@ class ComissaoGarantiaServicoTests(TestCase):
         self.assertContains(response, "Comparativo por centro de custo")
         self.assertContains(response, "DRE")
 
+    def test_fechamento_dre_mensal_e_unico_e_imutavel(self):
+        self.client.force_login(self.gerente)
+        caixa = Caixa.objects.filter(aberto=True).first()
+        Pagamento.objects.create(caixa=caixa, valor=Decimal("100.00"), metodo="pix")
+        hoje = timezone.localdate()
+        inicio = hoje.replace(day=1)
+        fim = hoje.replace(day=monthrange(hoje.year, hoje.month)[1])
+
+        response = self.client.post(
+            reverse("caixa:dre"),
+            {"data_inicio": inicio.isoformat(), "data_fim": fim.isoformat()},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        fechamento = DREFechamento.objects.get(competencia=inicio)
+        self.assertEqual(fechamento.receita_bruta, Decimal("100.00"))
+        Pagamento.objects.create(caixa=caixa, valor=Decimal("50.00"), metodo="dinheiro")
+        self.client.post(
+            reverse("caixa:dre"),
+            {"data_inicio": inicio.isoformat(), "data_fim": fim.isoformat()},
+        )
+        self.assertEqual(DREFechamento.objects.filter(competencia=inicio).count(), 1)
+        fechamento.refresh_from_db()
+        self.assertEqual(fechamento.receita_bruta, Decimal("100.00"))
+        fechamento.resultado_operacional = Decimal("999.00")
+        with self.assertRaises(ValidationError):
+            fechamento.save()
+        with self.assertRaises(ValidationError):
+            fechamento.delete()
+
     def test_aging_receber_exibe_faixas_detalhadas(self):
         self.client.force_login(self.gerente)
         ContaReceber.objects.create(
@@ -5566,4 +5838,337 @@ class ComissaoGarantiaServicoTests(TestCase):
         self.assertEqual(response_desempenho.context["total_comissao_servicos_relatorio"], Decimal("20.00"))
         self.assertEqual(response_desempenho.context["total_comissao_pecas_relatorio"], Decimal("9.60"))
         self.assertEqual(response_desempenho.context["total_comissao_relatorio"], Decimal("29.60"))
+
+
+class LivroFinanceiroFaseUmTests(TestCase):
+    def setUp(self):
+        self.empresa = Empresa.objects.create(nome="Empresa Livro", cnpj="11.222.333/0001-81")
+        self.gerente = get_user_model().objects.create_user(
+            username="gerente_livro",
+            password="senha-forte-123",
+            tipo_usuario="gerente",
+            empresa=self.empresa,
+        )
+        self.atendente = get_user_model().objects.create_user(
+            username="atendente_livro",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+            empresa=self.empresa,
+        )
+        self.caixa = Caixa.objects.create(empresa=self.empresa, saldo_inicial=Decimal("0.00"))
+        self.categoria = CategoriaFinanceira.objects.create(
+            empresa=self.empresa,
+            nome="Despesas gerais livro",
+            tipo="saida",
+        )
+        self.centro = CentroCusto.objects.create(
+            empresa=self.empresa,
+            nome="Operação livro",
+            tipo="variavel",
+        )
+
+    def test_pagamento_e_lancamento_manual_geram_livro_idempotente(self):
+        pagamento = Pagamento.objects.create(
+            empresa=self.empresa,
+            caixa=self.caixa,
+            valor=Decimal("125.00"),
+            metodo="pix",
+        )
+        pagamento.observacao = "Atualização sem novo movimento"
+        pagamento.save(update_fields=["observacao"])
+        LancamentoCaixa.objects.create(
+            empresa=self.empresa,
+            caixa=self.caixa,
+            descricao="Material de consumo",
+            categoria=self.categoria,
+            centro_custo=self.centro,
+            valor=Decimal("25.00"),
+            tipo="saida",
+            usuario=self.gerente,
+        )
+
+        self.assertEqual(MovimentoFinanceiro.objects.filter(empresa=self.empresa).count(), 2)
+        self.assertEqual(
+            MovimentoFinanceiro.objects.get(chave_idempotencia=f"pagamento:{pagamento.id}").valor,
+            Decimal("125.00"),
+        )
+
+    def test_estorno_preserva_original_e_cria_contramovimento(self):
+        pagamento = Pagamento.objects.create(
+            empresa=self.empresa,
+            caixa=self.caixa,
+            valor=Decimal("80.00"),
+            metodo="dinheiro",
+        )
+        original = MovimentoFinanceiro.objects.get(chave_idempotencia=f"pagamento:{pagamento.id}")
+        estorno = estornar_movimento_financeiro(
+            movimento=original,
+            motivo="Pagamento lançado em duplicidade",
+            usuario=self.gerente,
+        )
+        original.refresh_from_db()
+
+        self.assertEqual(original.status, "estornado")
+        self.assertEqual(estorno.tipo, "saida")
+        self.assertEqual(estorno.valor, original.valor)
+        self.assertEqual(estorno.estorno_de, original)
+        with self.assertRaises(ValidationError):
+            original.delete()
+        with self.assertRaises(ValidationError):
+            original.valor = Decimal("81.00")
+            original.save()
+
+    def test_exclusao_pagamento_estorna_livro_sem_apagar_historico(self):
+        pagamento = Pagamento.objects.create(
+            empresa=self.empresa,
+            caixa=self.caixa,
+            valor=Decimal("40.00"),
+            metodo="pix",
+        )
+        pagamento_id = pagamento.id
+        excluir_pagamento_com_justificativa(
+            pagamento=pagamento,
+            usuario=self.gerente,
+            justificativa="Pagamento registrado no cliente incorreto",
+        )
+
+        self.assertFalse(Pagamento.objects.filter(pk=pagamento_id).exists())
+        movimentos = MovimentoFinanceiro.objects.filter(empresa=self.empresa).order_by("id")
+        self.assertEqual(movimentos.count(), 2)
+        self.assertEqual(sum((m.valor if m.tipo == "entrada" else -m.valor for m in movimentos), Decimal("0.00")), Decimal("0.00"))
+
+    def test_data_retroativa_exige_permissao_especifica(self):
+        ontem = timezone.localdate() - timedelta(days=1)
+        payload = {
+            "descricao": "Despesa retroativa",
+            "categoria": self.categoria.id,
+            "centro_custo": self.centro.id,
+            "valor": "30.00",
+            "data_competencia": ontem.isoformat(),
+            "data_movimento": ontem.isoformat(),
+        }
+        self.client.force_login(self.atendente)
+        resposta_negada = self.client.post(reverse("caixa:registrar_saida"), payload)
+        self.assertEqual(resposta_negada.status_code, 200)
+        self.assertFalse(LancamentoCaixa.objects.filter(descricao="Despesa retroativa").exists())
+
+        self.atendente.perm_caixa_lancamento_retroativo = True
+        self.atendente.save(update_fields=["perm_caixa_lancamento_retroativo"])
+        resposta_permitida = self.client.post(reverse("caixa:registrar_saida"), payload)
+        self.assertEqual(resposta_permitida.status_code, 302)
+        saida = LancamentoCaixa.objects.get(descricao="Despesa retroativa")
+        self.assertEqual(saida.data_competencia, ontem)
+        self.assertEqual(saida.data_movimento, ontem)
+        self.assertEqual(MovimentoFinanceiro.objects.get(origem_tipo="lancamento_caixa", origem_id=saida.id).registrado_por, self.atendente)
+
+    def test_relatorio_alterna_caixa_e_competencia(self):
+        hoje = timezone.localdate()
+        competencia = hoje - timedelta(days=40)
+        Pagamento.objects.create(
+            empresa=self.empresa,
+            caixa=self.caixa,
+            valor=Decimal("90.00"),
+            metodo="pix",
+            data_competencia=competencia,
+            data_movimento=hoje,
+        )
+        self.client.force_login(self.gerente)
+        parametros = {
+            "data_inicio": hoje.isoformat(),
+            "data_fim": hoje.isoformat(),
+            "todos_caixas": "1",
+        }
+        resposta_caixa = self.client.get(reverse("caixa:relatorios"), {**parametros, "regime_data": "movimento"})
+        resposta_competencia = self.client.get(reverse("caixa:relatorios"), {**parametros, "regime_data": "competencia"})
+
+        self.assertEqual(resposta_caixa.status_code, 200)
+        self.assertEqual(resposta_caixa.context["pagamentos"].count(), 1)
+        self.assertEqual(resposta_caixa.context["saldo_livro"], Decimal("90.00"))
+        self.assertEqual(resposta_competencia.context["pagamentos"].count(), 0)
+        self.assertEqual(resposta_competencia.context["saldo_livro"], Decimal("0.00"))
+
+
+class TesourariaFaseDoisTests(TestCase):
+    def setUp(self):
+        self.empresa = Empresa.objects.create(nome="Empresa Banco", cnpj="22.333.444/0001-06")
+        self.usuario = get_user_model().objects.create_user(username="gerente_banco", password="senha-forte-123", tipo_usuario="gerente", empresa=self.empresa)
+        self.caixa = Caixa.objects.create(empresa=self.empresa, saldo_inicial=Decimal("100.00"))
+        self.conta_a = ContaBancaria.objects.create(empresa=self.empresa, nome="Principal", banco_nome="Banco A", numero="100-1", saldo_inicial=Decimal("50.00"))
+        self.conta_b = ContaBancaria.objects.create(empresa=self.empresa, nome="Reserva", banco_nome="Banco B", numero="200-2")
+
+    def test_pagamento_vinculado_a_forma_gera_movimento_bancario(self):
+        forma = FormaPagamento.objects.create(empresa=self.empresa, nome="PIX Banco", codigo="pix-banco", conta_bancaria_liquidacao=self.conta_a)
+        pagamento = Pagamento.objects.create(empresa=self.empresa, caixa=self.caixa, valor=Decimal("75.00"), forma_pagamento=forma, metodo="pix")
+        movimento = MovimentoBancario.objects.get(origem_tipo="pagamento", origem_id=pagamento.id)
+        self.assertEqual(movimento.conta, self.conta_a)
+        self.assertEqual(self.conta_a.saldo_atual, Decimal("125.00"))
+        pagamento.save(update_fields=["observacao"])
+        self.assertEqual(MovimentoBancario.objects.filter(origem_tipo="pagamento", origem_id=pagamento.id).count(), 1)
+
+    def test_pagamento_conta_pagar_bancario_gera_saida_conciliavel_sem_reduzir_dinheiro(self):
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa, nome="PIX fornecedores", codigo="pix-fornecedores",
+            conta_bancaria_liquidacao=self.conta_a,
+        )
+        conta = ContaPagar.objects.create(
+            empresa=self.empresa, fornecedor="Fornecedor XML", descricao="Compra de mercadorias",
+            valor_total=Decimal("80.00"), vencimento=timezone.localdate(),
+        )
+        self.caixa.aberto = False
+        self.caixa.save(update_fields=["aberto"])
+        self.client.force_login(self.usuario)
+        resposta = self.client.post(
+            reverse("caixa:detalhe_conta_pagar", args=[conta.id]),
+            {"valor": "80.00", "forma_pagamento": forma.id, "referencia": "PIX-123", "observacao": "Quitação"},
+        )
+        self.assertEqual(resposta.status_code, 302)
+        pagamento = PagamentoContaPagar.objects.get(conta=conta)
+        self.assertIsNone(pagamento.caixa_id)
+        movimento = MovimentoBancario.objects.get(origem_tipo="conta_pagar", origem_id=pagamento.id)
+        self.assertEqual(movimento.tipo, "saida")
+        self.assertEqual(movimento.valor, Decimal("80.00"))
+        self.assertEqual(movimento.conta, self.conta_a)
+        self.assertTrue(MovimentoFinanceiro.objects.filter(origem_tipo="conta_pagar", origem_id=pagamento.id).exists())
+        self.assertFalse(LancamentoCaixa.objects.filter(descricao=f"Pagamento conta a pagar #{conta.id}").exists())
+
+    def test_detalhe_conta_pagar_nao_vaza_entre_empresas(self):
+        outra_empresa = Empresa.objects.create(nome="Empresa externa", cnpj="33.444.555/0001-70")
+        conta = ContaPagar.objects.create(
+            empresa=outra_empresa, fornecedor="Outro", descricao="Conta externa",
+            valor_total=Decimal("10.00"), vencimento=timezone.localdate(),
+        )
+        self.client.force_login(self.usuario)
+        self.assertEqual(self.client.get(reverse("caixa:detalhe_conta_pagar", args=[conta.id])).status_code, 404)
+
+    def test_cartao_agenda_liquidacao_liquida_sem_antecipar_saldo_realizado(self):
+        forma = FormaPagamento.objects.create(empresa=self.empresa, nome="Cartão Banco", codigo="cartao-banco", conta_bancaria_liquidacao=self.conta_a, taxa_percentual=Decimal("2.00"), dias_recebimento=30)
+        pagamento = Pagamento.objects.create(empresa=self.empresa, caixa=self.caixa, valor=Decimal("100.00"), forma_pagamento=forma, metodo="cartao")
+        movimento = MovimentoBancario.objects.get(origem_tipo="pagamento", origem_id=pagamento.id)
+        self.assertEqual(movimento.valor, Decimal("98.00"))
+        self.assertEqual(movimento.data_movimento, timezone.localdate() + timedelta(days=30))
+        self.assertEqual(self.conta_a.saldo_atual, Decimal("50.00"))
+        self.assertEqual(self.conta_a.saldo_projetado, Decimal("148.00"))
+
+    def test_transferencia_banco_banco_e_caixa_banco_nao_gera_receita_despesa(self):
+        registrar_transferencia(empresa=self.empresa, valor=Decimal("20.00"), data_movimento=timezone.localdate(), chave="transf-bancos-1", usuario=self.usuario, conta_origem=self.conta_a, conta_destino=self.conta_b)
+        registrar_transferencia(empresa=self.empresa, valor=Decimal("30.00"), data_movimento=timezone.localdate(), chave="transf-caixa-1", usuario=self.usuario, caixa_origem=self.caixa, conta_destino=self.conta_a)
+        self.assertEqual(TransferenciaTesouraria.objects.count(), 2)
+        self.assertEqual(MovimentoFinanceiro.objects.count(), 0)
+        lancamento = LancamentoCaixa.objects.get(natureza="transferencia")
+        self.assertEqual(lancamento.tipo, "saida")
+        self.assertEqual(self.conta_a.saldo_atual, Decimal("60.00"))
+        self.assertEqual(self.conta_b.saldo_atual, Decimal("20.00"))
+
+    def test_importacao_e_conciliacao_sao_idempotentes(self):
+        movimento = MovimentoBancario.objects.create(empresa=self.empresa, conta=self.conta_a, tipo="entrada", origem_tipo="manual", descricao="Crédito teste", valor=Decimal("100.00"), data_movimento=timezone.localdate(), chave_idempotencia="credito-100")
+        csv_data = f"data;descricao;valor;identificador\n{timezone.localdate():%d/%m/%Y};Crédito teste;100,00;linha-001\n".encode()
+        self.assertEqual(len(importar_extrato_csv(conta=self.conta_a, conteudo=csv_data, usuario=self.usuario)), 1)
+        self.assertEqual(len(importar_extrato_csv(conta=self.conta_a, conteudo=csv_data, usuario=self.usuario)), 0)
+        linha = LinhaExtratoBancario.objects.get(identificador_externo="linha-001")
+        conciliar_linha(linha=linha, movimento=movimento, usuario=self.usuario)
+        linha.refresh_from_db()
+        self.assertEqual(linha.status, "conciliado")
+        with self.assertRaises(ValidationError):
+            conciliar_linha(linha=linha, movimento=movimento, usuario=self.usuario)
+
+    def test_conciliacao_agrupada_um_para_muitos(self):
+        linha = LinhaExtratoBancario.objects.create(
+            empresa=self.empresa,
+            conta=self.conta_a,
+            identificador_externo="grupo-1",
+            data_movimento=timezone.localdate(),
+            descricao="Recebimentos agrupados",
+            valor=Decimal("100.00"),
+        )
+        movimentos = [
+            MovimentoBancario.objects.create(
+                empresa=self.empresa, conta=self.conta_a, tipo="entrada", origem_tipo="manual",
+                descricao="Parcela A", valor=Decimal("40.00"), data_movimento=timezone.localdate(),
+                chave_idempotencia="grupo-mov-a",
+            ),
+            MovimentoBancario.objects.create(
+                empresa=self.empresa, conta=self.conta_a, tipo="entrada", origem_tipo="manual",
+                descricao="Parcela B", valor=Decimal("60.00"), data_movimento=timezone.localdate(),
+                chave_idempotencia="grupo-mov-b",
+            ),
+        ]
+        conciliacao = conciliar_grupo(linhas=[linha], movimentos=movimentos, usuario=self.usuario)
+        linha.refresh_from_db()
+        self.assertEqual(conciliacao.status, "conciliado")
+        self.assertEqual(conciliacao.total_extrato, Decimal("100.00"))
+        self.assertEqual(conciliacao.itens_movimento.count(), 2)
+        self.assertIsNone(linha.movimento)
+
+    def test_conciliacao_agrupada_muitos_para_um(self):
+        linhas = [
+            LinhaExtratoBancario.objects.create(
+                empresa=self.empresa, conta=self.conta_a, identificador_externo=f"grupo-linha-{indice}",
+                data_movimento=timezone.localdate(), descricao=f"Linha {indice}", valor=valor,
+            )
+            for indice, valor in enumerate((Decimal("35.00"), Decimal("65.00")), start=1)
+        ]
+        movimento = MovimentoBancario.objects.create(
+            empresa=self.empresa, conta=self.conta_a, tipo="entrada", origem_tipo="manual",
+            descricao="Lote único", valor=Decimal("100.00"), data_movimento=timezone.localdate(),
+            chave_idempotencia="grupo-mov-unico",
+        )
+        conciliacao = conciliar_grupo(linhas=linhas, movimentos=[movimento], usuario=self.usuario)
+        self.assertEqual(conciliacao.itens_extrato.count(), 2)
+        self.assertFalse(LinhaExtratoBancario.objects.filter(pk__in=[item.pk for item in linhas], status="pendente").exists())
+        self.assertTrue(all(item.movimento_id == movimento.id for item in LinhaExtratoBancario.objects.filter(pk__in=[item.pk for item in linhas])))
+
+    def test_divergencia_exige_justificativa_e_desfazimento_preserva_auditoria(self):
+        linha = LinhaExtratoBancario.objects.create(
+            empresa=self.empresa, conta=self.conta_a, identificador_externo="grupo-divergente",
+            data_movimento=timezone.localdate(), descricao="Crédito com diferença", valor=Decimal("101.00"),
+        )
+        movimento = MovimentoBancario.objects.create(
+            empresa=self.empresa, conta=self.conta_a, tipo="entrada", origem_tipo="manual",
+            descricao="Crédito sistema", valor=Decimal("100.00"), data_movimento=timezone.localdate(),
+            chave_idempotencia="grupo-divergente-mov",
+        )
+        with self.assertRaises(ValidationError):
+            conciliar_grupo(linhas=[linha], movimentos=[movimento], usuario=self.usuario)
+        conciliacao = conciliar_grupo(
+            linhas=[linha], movimentos=[movimento], usuario=self.usuario, justificativa="Tarifa bancária não lançada"
+        )
+        self.assertEqual(conciliacao.status, "divergente")
+        self.assertEqual(conciliacao.diferenca, Decimal("1.00"))
+        desfazer_conciliacao(conciliacao=conciliacao, usuario=self.usuario, motivo="Correspondência incorreta")
+        conciliacao.refresh_from_db()
+        linha.refresh_from_db()
+        self.assertEqual(conciliacao.status, "desfeito")
+        self.assertEqual(conciliacao.itens_extrato.count(), 1)
+        self.assertEqual(conciliacao.itens_movimento.count(), 1)
+        self.assertEqual(linha.status, "pendente")
+        nova = conciliar_grupo(
+            linhas=[linha], movimentos=[movimento], usuario=self.usuario, justificativa="Diferença confirmada"
+        )
+        self.assertNotEqual(nova.pk, conciliacao.pk)
+
+    def test_conciliacao_agrupada_bloqueia_empresa_conta_e_reuso_ativos(self):
+        outra_empresa = Empresa.objects.create(nome="Outra Empresa", cnpj="11.222.333/0001-81")
+        outra_conta = ContaBancaria.objects.create(empresa=outra_empresa, nome="Outra", banco_nome="Banco", numero="3")
+        linha = LinhaExtratoBancario.objects.create(
+            empresa=self.empresa, conta=self.conta_a, identificador_externo="grupo-isolado",
+            data_movimento=timezone.localdate(), descricao="Linha", valor=Decimal("10.00"),
+        )
+        movimento_outra = MovimentoBancario.objects.create(
+            empresa=outra_empresa, conta=outra_conta, tipo="entrada", origem_tipo="manual", descricao="Outro",
+            valor=Decimal("10.00"), data_movimento=timezone.localdate(), chave_idempotencia="outro-mov",
+        )
+        with self.assertRaises(ValidationError):
+            conciliar_grupo(linhas=[linha], movimentos=[movimento_outra], usuario=self.usuario)
+
+        movimento = MovimentoBancario.objects.create(
+            empresa=self.empresa, conta=self.conta_a, tipo="entrada", origem_tipo="manual", descricao="Correto",
+            valor=Decimal("10.00"), data_movimento=timezone.localdate(), chave_idempotencia="correto-mov",
+        )
+        conciliar_grupo(linhas=[linha], movimentos=[movimento], usuario=self.usuario)
+        nova_linha = LinhaExtratoBancario.objects.create(
+            empresa=self.empresa, conta=self.conta_a, identificador_externo="grupo-reuso",
+            data_movimento=timezone.localdate(), descricao="Nova linha", valor=Decimal("10.00"),
+        )
+        with self.assertRaises(ValidationError):
+            conciliar_grupo(linhas=[nova_linha], movimentos=[movimento], usuario=self.usuario)
 

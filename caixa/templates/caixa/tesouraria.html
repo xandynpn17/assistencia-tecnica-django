@@ -1,0 +1,43 @@
+{% extends 'core/base.html' %}
+{% load widget_tweaks %}
+{% block content %}
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
+  <div class="d-flex justify-content-between align-items-center mb-3"><h3>Tesouraria e conciliação</h3><a class="btn btn-outline-secondary" href="{% url 'caixa:relatorios' %}">Relatórios</a></div>
+  <div class="row">
+    <div class="col-lg-4">
+      <div class="card mb-3"><div class="card-header"><strong>Nova conta bancária</strong></div><div class="card-body">
+        <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="conta">{{ conta_form.as_p }}<button class="btn btn-primary">Cadastrar conta</button></form>
+      </div></div>
+      <div class="card mb-3"><div class="card-header"><strong>Importar extrato CSV</strong></div><div class="card-body">
+        <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="acao" value="extrato">{{ extrato_form.as_p }}<button class="btn btn-outline-primary">Importar sem duplicar</button></form>
+      </div></div>
+    </div>
+    <div class="col-lg-8">
+      <div class="card mb-3"><div class="card-header"><strong>Transferência de tesouraria</strong></div><div class="card-body">
+        <div class="alert alert-info py-2">Informe uma única origem e um único destino. Transferências movimentam saldos, mas não são receita nem despesa.</div>
+        <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="transferencia">{{ transferencia_form.as_p }}<button class="btn btn-success">Registrar transferência</button></form>
+      </div></div>
+      <div class="card mb-3"><div class="card-header"><strong>Capital inicial ou injeção de recursos</strong></div><div class="card-body">
+        <div class="alert alert-light border py-2">Registre capital social, AFAC ou empréstimo de sócio. O valor aumenta o saldo bancário/caixa, mas não é receita operacional. As datas podem ser retroativas mediante permissão.</div>
+        <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="aporte">{{ aporte_form.as_p }}<button class="btn btn-success">Registrar aporte</button></form>
+      </div></div>
+      <div class="row">
+        {% for conta in contas %}<div class="col-md-6"><div class="card mb-3"><div class="card-body"><strong>{{ conta.nome }}</strong><div class="text-muted">{{ conta.banco_nome }} · ag. {{ conta.agencia|default:'-' }} · {{ conta.numero }}</div><h4 class="mt-2 mb-0">R$ {{ conta.saldo_atual|floatformat:2 }}</h4><small class="text-muted">Projetado: R$ {{ conta.saldo_projetado|floatformat:2 }}</small></div></div></div>{% empty %}<div class="col-12"><div class="alert alert-light border">Nenhuma conta cadastrada.</div></div>{% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="card mb-3"><div class="card-header"><strong>Histórico de capital e aportes</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Data</th><th>Tipo</th><th>Aportante</th><th>Destino</th><th>Documento</th><th>Valor</th></tr></thead><tbody>
+    {% for a in aportes %}<tr><td>{{ a.data_movimento|date:'d/m/Y' }}</td><td>{{ a.get_tipo_display }}</td><td>{{ a.aportante|default:'-' }}</td><td>{{ a.conta_bancaria|default:a.caixa }}</td><td>{{ a.documento_referencia|default:'-' }}</td><td>R$ {{ a.valor|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Nenhum aporte registrado.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+  <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><strong>Linhas de extrato</strong><a class="btn btn-sm btn-primary" href="{% url 'caixa:conciliar_extrato_grupo' %}">Conciliação agrupada</a></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Data</th><th>Conta</th><th>Descrição</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>
+    {% for linha in linhas_extrato %}<tr><td>{{ linha.data_movimento|date:'d/m/Y' }}</td><td>{{ linha.conta.nome }}</td><td>{{ linha.descricao }}</td><td>R$ {{ linha.valor|floatformat:2 }}</td><td>{{ linha.get_status_display }}</td><td>{% if linha.status == 'pendente' %}<a class="btn btn-sm btn-outline-primary" href="{% url 'caixa:tratar_linha_extrato' linha.id %}">Conciliar</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Nenhum extrato importado.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+  <div class="card mb-3"><div class="card-header"><strong>Histórico de conciliações</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>#</th><th>Conta</th><th>Extrato</th><th>Sistema</th><th>Diferença</th><th>Status</th><th>Auditoria</th></tr></thead><tbody>
+    {% for c in conciliacoes %}<tr><td>{{ c.id }}</td><td>{{ c.conta.nome }}</td><td>R$ {{ c.total_extrato|floatformat:2 }}</td><td>R$ {{ c.total_movimentos|floatformat:2 }}</td><td>R$ {{ c.diferenca|floatformat:2 }}</td><td>{{ c.get_status_display }}</td><td>{% if c.status != 'desfeito' %}<form method="post" action="{% url 'caixa:desfazer_conciliacao_bancaria' c.id %}" class="d-flex gap-1">{% csrf_token %}<input class="form-control form-control-sm" name="motivo_desfazimento" required placeholder="Motivo para desfazer"><button class="btn btn-sm btn-outline-danger">Desfazer</button></form>{% else %}<small>{{ c.motivo_desfazimento }}</small>{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">Nenhuma conciliação registrada.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+  <div class="card"><div class="card-header"><strong>Movimentos bancários imutáveis</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Data</th><th>Conta</th><th>Descrição</th><th>Tipo</th><th>Valor</th><th>Origem</th></tr></thead><tbody>
+    {% for m in movimentos %}<tr><td>{{ m.data_movimento|date:'d/m/Y' }}</td><td>{{ m.conta.nome }}</td><td>{{ m.descricao }}</td><td>{{ m.get_tipo_display }}</td><td>R$ {{ m.valor|floatformat:2 }}</td><td>{{ m.get_origem_tipo_display }}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Nenhum movimento bancário.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+</div>
+{% endblock %}
