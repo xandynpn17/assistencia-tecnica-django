@@ -636,6 +636,30 @@ class ImpressaoOrcamentoPdfTests(TestCase):
         self.assertTrue(factory_mock.called)
         self.assertIn(1, self._pdf_page_counts(response.content))
 
+    def test_imprimir_orcamento_exibe_observacoes_e_detalhes_sem_status_interno(self):
+        self.orcamento.descricao = "Observação geral para o cliente."
+        self.orcamento.save(update_fields=["descricao"])
+        item = self.orcamento.itens.first()
+        item.descricao = "Detalhe técnico do serviço."
+        item.status = "pendente"
+        item.save(update_fields=["descricao", "status"])
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("orcamentos.views.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("orcamentos:imprimir_orcamento", args=[self.orcamento.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Detalhes e observações do orçamento", texto_unificado)
+        self.assertIn("Observação geral para o cliente.", texto_unificado)
+        self.assertIn("Detalhe técnico do serviço.", texto_unificado)
+        self.assertNotIn("Status: Pendente", texto_unificado)
+        self.assertIn("R$ 100,00", texto_unificado)
+
     def test_imprimir_orcamento_preview_aplica_layout_documentos(self):
         observado = {}
 

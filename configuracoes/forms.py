@@ -25,6 +25,7 @@ from .models import (
     User,
 )
 from django.contrib.auth.models import Group
+from core.formatters import formatar_telefone_br as _formatar_telefone_br
 from .services.capabilities import aplicar_preset, listar_presets
 from .services.documentos import formatar_cnpj, normalizar_cnpj, somente_digitos, validar_cnpj_alfanumerico
 from .services.integracoes import listar_eventos_comunicacao
@@ -47,15 +48,6 @@ def _formatar_cep(valor):
     if len(digitos) != 8:
         return valor
     return f"{digitos[:5]}-{digitos[5:]}"
-
-
-def _formatar_telefone_br(valor):
-    digitos = _somente_digitos(valor)[:11]
-    if len(digitos) == 10:
-        return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
-    if len(digitos) < 10:
-        return digitos
-    return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
 
 
 class EmpresaForm(forms.ModelForm):
@@ -765,6 +757,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'pdf_os_exibir_manutencao_preventiva',
             'pdf_os_exibir_termos',
             'pdf_os_exibir_assinaturas',
+            'pdf_relatorio_modo_resumido',
             'pdf_relatorio_exibir_nome_cliente',
             'pdf_relatorio_exibir_telefone_cliente',
             'pdf_relatorio_exibir_documento_cliente',
@@ -899,6 +892,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["pdf_os_exibir_manutencao_preventiva"].help_text = "Exibe o prazo sugerido de manutenção preventiva, quando preenchido."
         self.fields["pdf_os_exibir_termos"].help_text = "Desative apenas se a OS padrão usar folha separada de termos."
         self.fields["pdf_os_exibir_assinaturas"].help_text = "Controla o bloco de assinatura da OS padrão, digital e física."
+        self.fields["pdf_relatorio_modo_resumido"].help_text = "Recomendado: mostra apenas identificação, defeito, peritagem, laudo, peças e serviços, sem valores ou controles internos."
         self.fields["pdf_relatorio_exibir_nome_cliente"].help_text = "Mantém o nome do cliente no laudo técnico."
         self.fields["pdf_relatorio_exibir_telefone_cliente"].help_text = "Mantém o telefone do cliente no laudo técnico."
         self.fields["pdf_relatorio_exibir_documento_cliente"].help_text = "Exibe CPF/CNPJ no relatório quando o documento precisa sair com amarração formal."

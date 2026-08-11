@@ -1300,6 +1300,10 @@ class ConfiguracaoSistema(models.Model):
         default=True,
         verbose_name="Relatório: exibir nome do cliente",
     )
+    pdf_relatorio_modo_resumido = models.BooleanField(
+        default=True,
+        verbose_name="Relatório: usar versão resumida para o cliente",
+    )
     pdf_relatorio_exibir_telefone_cliente = models.BooleanField(
         default=True,
         verbose_name="Relatório: exibir telefone do cliente",

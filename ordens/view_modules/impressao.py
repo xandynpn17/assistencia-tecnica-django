@@ -35,6 +35,7 @@ from core.pdf_preview import (
     bool_like,
     float_or_default,
 )
+from core.formatters import formatar_moeda_br, formatar_telefone_br
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
 from core.pdf_theme import get_document_profile, get_document_theme, resolve_layout_preset
 
@@ -122,6 +123,8 @@ def _quebrar_tokens_longos(valor, tamanho_bloco=18):
 
     def _split_token(match):
         token = match.group(0)
+        if "@" in token and len(token) <= 64:
+            return token
         if len(token) <= tamanho_bloco:
             return token
         partes = [token[i : i + tamanho_bloco] for i in range(0, len(token), tamanho_bloco)]
@@ -178,39 +181,36 @@ def _draw_etiquetas_corte(
     altura_etiqueta,
     texto_os,
     texto_cliente,
+    texto_equipamento,
     fonts,
     tema_docs,
 ):
-    largura_etiqueta = 3.2 * cm
-    area_util = width_total
-    quantidade = max(1, int(area_util // largura_etiqueta))
-    if quantidade == 1:
-        espaco_etiqueta = 0
-        largura_etiqueta = area_util
-    else:
-        espaco_etiqueta = (area_util - (quantidade * largura_etiqueta)) / (quantidade - 1)
-        while espaco_etiqueta < 0 and quantidade > 1:
-            quantidade -= 1
-            espaco_etiqueta = (area_util - (quantidade * largura_etiqueta)) / (quantidade - 1) if quantidade > 1 else 0
+    quantidade = 4
+    margem_lateral = 0.35 * cm
+    espaco_etiqueta = 0.18 * cm
+    area_util = width_total - (2 * margem_lateral)
+    largura_etiqueta = (area_util - ((quantidade - 1) * espaco_etiqueta)) / quantidade
+    x_inicio = margem_lateral
 
-    largura_ocupada = (quantidade * largura_etiqueta) + ((quantidade - 1) * espaco_etiqueta)
-    x_inicio = max(0, (area_util - largura_ocupada) / 2.0)
-
-    texto_os_final = _encurtar_canvas_texto(canv, texto_os, largura_etiqueta - (0.22 * cm), fonts["bold"], 8.9)
-    texto_cliente_final = _encurtar_canvas_texto(canv, texto_cliente, largura_etiqueta - (0.22 * cm), fonts["regular"], 5.0)
+    largura_texto = largura_etiqueta - (0.30 * cm)
+    texto_os_final = _encurtar_canvas_texto(canv, f"OS {texto_os}", largura_texto, fonts["bold"], 8.2)
+    texto_cliente_final = _encurtar_canvas_texto(canv, texto_cliente, largura_texto, fonts["regular"], 6.0)
+    texto_equipamento_final = _encurtar_canvas_texto(canv, texto_equipamento, largura_texto, fonts["regular"], 5.5)
     y_etiqueta = y_corte - (altura_etiqueta / 2.0)
 
     for idx in range(quantidade):
         x = x_inicio + (idx * (largura_etiqueta + espaco_etiqueta))
         canv.setFillColor(colors.white)
         canv.setStrokeColor(tema_docs["section_line"])
-        canv.setLineWidth(0.9)
-        canv.roundRect(x, y_etiqueta, largura_etiqueta, altura_etiqueta, 1.8, stroke=1, fill=1)
+        canv.setLineWidth(0.8)
+        canv.roundRect(x, y_etiqueta, largura_etiqueta, altura_etiqueta, 2.4, stroke=1, fill=1)
         canv.setFillColor(tema_docs["meta_color"])
-        canv.setFont(fonts["bold"], 8.9)
-        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.54 * cm, texto_os_final)
-        canv.setFont(fonts["regular"], 5.0)
-        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.19 * cm, texto_cliente_final)
+        canv.setFont(fonts["bold"], 8.2)
+        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.72 * cm, texto_os_final)
+        canv.setFont(fonts["regular"], 6.0)
+        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.40 * cm, texto_cliente_final)
+        canv.setFont(fonts["regular"], 5.5)
+        canv.drawCentredString(x + (largura_etiqueta / 2.0), y_etiqueta + 0.13 * cm, texto_equipamento_final)
         canv.setLineWidth(1)
 
 
@@ -370,6 +370,7 @@ def _config_layout_para_request(request):
         "pdf_os_exibir_manutencao_preventiva",
         "pdf_os_exibir_termos",
         "pdf_os_exibir_assinaturas",
+        "pdf_relatorio_modo_resumido",
         "pdf_relatorio_exibir_nome_cliente",
         "pdf_relatorio_exibir_telefone_cliente",
         "pdf_relatorio_exibir_documento_cliente",
@@ -912,7 +913,7 @@ def imprimir_ordem_servico_impressao(request, pk):
             allowOrphans=0,
         )
     )
-    altura_etiqueta_corte = 0.90 * cm
+    altura_etiqueta_corte = 1.10 * cm
     faixa_corte = (altura_etiqueta_corte + 0.24 * cm) if layout_cfg.get("exibir_etiqueta_corte", True) else 0.36 * cm
     # A etiqueta fica centralizada na linha de corte; reservar a faixa inteira
     # em cada via evita que tabelas/assinaturas invadam a area de recorte.
@@ -937,6 +938,12 @@ def imprimir_ordem_servico_impressao(request, pk):
             else:
                 cliente_curto = "Cliente"
 
+            equipamento_partes = [
+                (ordem.get_tipo_equipamento_display() or "").strip(),
+                (ordem.modelo_equipamento or "").strip(),
+            ]
+            equipamento_curto = " - ".join(parte for parte in equipamento_partes if parte) or "Equipamento"
+
             _draw_etiquetas_corte(
                 canv,
                 width_total=width,
@@ -944,6 +951,7 @@ def imprimir_ordem_servico_impressao(request, pk):
                 altura_etiqueta=altura_etiqueta_corte,
                 texto_os=ordem.numero_os or "-",
                 texto_cliente=cliente_curto,
+                texto_equipamento=equipamento_curto,
                 fonts=fonts,
                 tema_docs=tema_docs,
             )
@@ -981,14 +989,20 @@ def imprimir_ordem_servico_impressao(request, pk):
         altura_frame_via,
         id="bottom",
     )
-    template = PageTemplate(id="main", frames=[frame_top, frame_bottom], onPage=_draw_cut)
-    doc.addPageTemplates([template])
+    template = PageTemplate(id="main", frames=[frame_top, frame_bottom], onPageEnd=_draw_cut)
+    frame_termos_completos = Frame(
+        margin,
+        margin,
+        frame_width,
+        height - (2 * margin),
+        id="terms_full",
+    )
+    template_termos_completos = PageTemplate(id="terms_full", frames=[frame_termos_completos])
+    doc.addPageTemplates([template, template_termos_completos])
 
     def _limitar_texto(valor, limite):
         texto = " ".join(_quebrar_tokens_longos(valor).split())
-        if len(texto) <= limite:
-            return texto
-        return texto[: max(1, limite - 3)].rstrip() + "..."
+        return texto
 
     def _altura_total_flowables(flowables, largura_max, altura_max):
         total = 0.0
@@ -1013,7 +1027,7 @@ def imprimir_ordem_servico_impressao(request, pk):
             if empresa.cnpj:
                 meta_partes.append(f"CNPJ: {empresa.cnpj}")
             if empresa.telefone:
-                meta_partes.append(f"Tel: {empresa.telefone}")
+                meta_partes.append(f"Tel: {formatar_telefone_br(empresa.telefone)}")
             empresa_meta_linha = " | ".join(meta_partes)
             if empresa.endereco:
                 empresa_endereco_linha = empresa.endereco
@@ -1305,7 +1319,7 @@ def imprimir_ordem_servico_impressao(request, pk):
             if getattr(config, "pdf_os_exibir_nome_cliente", True):
                 dados_cliente.append(("Nome", _limitar_texto(ordem.cliente.nome or "-", cfg["max_cliente"])))
             if getattr(config, "pdf_os_exibir_telefone_cliente", True):
-                dados_cliente.append(("Telefone", ordem.cliente.telefone or "-"))
+                dados_cliente.append(("Telefone", formatar_telefone_br(ordem.cliente.telefone)))
             if getattr(config, "pdf_os_exibir_documento_cliente", True):
                 dados_cliente.append(("Documento", ordem.cliente.get_documento_formatado() or ordem.cliente.documento or "-"))
             if getattr(config, "pdf_os_exibir_email_cliente", True):
@@ -1492,47 +1506,6 @@ def imprimir_ordem_servico_impressao(request, pk):
                     )
                 )
 
-            data_entrega_manual = _formatar_data(ordem.data_assinatura_saida)
-            if data_entrega_manual == "-":
-                data_entrega_manual = "____/____/______"
-            col_w = frame_width / 3.0
-            assin = Table(
-                [
-                    [
-                        Paragraph("", style_tiny),
-                        Paragraph(f"Data abertura {_formatar_data(ordem.data_abertura)}", style_tiny),
-                        Paragraph(f"Data entrega {data_entrega_manual}", style_tiny),
-                    ],
-                    [
-                        Paragraph("Atendente:", style_assin_label),
-                        Paragraph("Cliente (abertura):", style_assin_label),
-                        Paragraph("Cliente (entrega):", style_assin_label),
-                    ],
-                    [
-                        Paragraph("__________________________", style_small),
-                        Paragraph("__________________________", style_small),
-                        Paragraph("__________________________", style_small),
-                    ],
-                ],
-                colWidths=[col_w, col_w, col_w],
-            )
-            assin.setStyle(
-                TableStyle(
-                    [
-                        ("TOPPADDING", (0, 0), (-1, -1), max(1.9, 3.4 + cfg["pad_v_delta"])),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), max(1.9, 3.4 + cfg["pad_v_delta"])),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                        ("TOPPADDING", (0, 1), (-1, 1), max(2.2, 3.9 + cfg["pad_v_delta"])),
-                        ("BOTTOMPADDING", (0, 1), (-1, 1), max(2.2, 3.9 + cfg["pad_v_delta"])),
-                        ("LEFTPADDING", (0, 1), (-1, 1), 6),
-                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                        ("VALIGN", (0, 1), (-1, 1), "MIDDLE"),
-                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                        ("ALIGN", (1, 0), (2, 0), "CENTER"),
-                    ]
-                )
-            )
-
             bloco_base = [
                 head_box,
                 Spacer(1, cfg["gap_top"]),
@@ -1540,17 +1513,15 @@ def imprimir_ordem_servico_impressao(request, pk):
                 Spacer(1, cfg["gap_summary"]),
                 *bloco_info,
             ]
-            altura_sem_gap_assin = _altura_total_flowables(bloco_base + [assin], frame_width, altura_frame_via)
-            # Deixa um respiro visual no rodapé da meia-página da frente.
-            alvo_assinatura_frente = altura_frame_via - 0.95 * cm
-            if altura_sem_gap_assin >= alvo_assinatura_frente:
-                gap_assinatura = 0.0
-            else:
-                gap_assinatura = max(cfg["gap_assin"], alvo_assinatura_frente - altura_sem_gap_assin)
-            gap_assinatura = max(0.0, gap_assinatura)
-            if getattr(config, "pdf_os_exibir_assinaturas", True):
-                return bloco_base + [Spacer(1, gap_assinatura), assin]
-            return bloco_base
+            texto_rodape_via = (
+                "Via do cliente - consulte os termos completos no verso."
+                if rotulo == "ORIGINAL"
+                else "Via da assistência - concordância e assinaturas no verso."
+            )
+            rodape_via = Paragraph(texto_rodape_via, style_tiny)
+            altura_conteudo = _altura_total_flowables(bloco_base + [rodape_via], frame_width, altura_frame_via)
+            gap_rodape = max(0.06 * cm, altura_frame_via - altura_conteudo - (0.36 * cm))
+            return bloco_base + [Spacer(1, gap_rodape), rodape_via]
 
         for idx in range(len(densidades)):
             bloco = _montar(idx)
@@ -1558,12 +1529,18 @@ def imprimir_ordem_servico_impressao(request, pk):
                 return bloco
         return _montar(len(densidades) - 1)
 
-    def _bloco_termos(rotulo):
-        style_small_termos = styles["PrintSmall"]
+    def _bloco_termos(rotulo, *, incluir_assinaturas=False, compacto=False):
+        style_small_termos = ParagraphStyle(
+            f"PrintTermsText{rotulo}{'Compact' if compacto else ''}",
+            parent=styles["PrintSmall"],
+            fontSize=7.2 if compacto else styles["PrintSmall"].fontSize,
+            leading=8.2 if compacto else styles["PrintSmall"].leading,
+        )
         style_label_termos = ParagraphStyle(
             f"PrintTermsLabel{rotulo}",
             parent=styles["PrintLabel"],
-            leading=max(styles["PrintLabel"].leading + 0.7, styles["PrintLabel"].fontSize + 2.1),
+            fontSize=7.2 if compacto else styles["PrintLabel"].fontSize,
+            leading=8.1 if compacto else max(styles["PrintLabel"].leading + 0.7, styles["PrintLabel"].fontSize + 2.1),
             spaceBefore=0.3,
             spaceAfter=0.3,
         )
@@ -1585,52 +1562,100 @@ def imprimir_ordem_servico_impressao(request, pk):
         )
         bloco = [titulo, Spacer(1, 0.07 * cm), barra, Spacer(1, 0.08 * cm)]
         assinatura_verso = []
-        if getattr(config, "pdf_os_exibir_assinaturas", True):
+        if incluir_assinaturas and getattr(config, "pdf_os_exibir_assinaturas", True):
+            data_entrega = _formatar_data(ordem.data_assinatura_saida)
+            if data_entrega == "-":
+                data_entrega = "____/____/______"
+            largura_assinatura = frame_width / 2.0
+            tabela_assinaturas = Table(
+                [
+                    [
+                        Paragraph(f"Abertura: {_formatar_data(ordem.data_abertura)}", style_small_termos),
+                        Paragraph(f"Entrega: {data_entrega}", style_small_termos),
+                    ],
+                    [
+                        Paragraph("Assinatura do cliente na abertura", style_label_termos),
+                        Paragraph("Assinatura do cliente na entrega", style_label_termos),
+                    ],
+                    [
+                        Paragraph("________________________________________", style_small_termos),
+                        Paragraph("________________________________________", style_small_termos),
+                    ],
+                ],
+                colWidths=[largura_assinatura, largura_assinatura],
+            )
+            tabela_assinaturas.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                        ("TOPPADDING", (0, 0), (-1, -1), 1 if compacto else 2),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 1 if compacto else 2),
+                    ]
+                )
+            )
             assinatura_verso = [
-                Spacer(1, max(0.10 * cm, layout_cfg["verso_gap_declaracao_cm"] * cm)),
-                Paragraph("Declaro que li e concordo com os termos e condições acima.", style_small_termos),
-                Spacer(1, max(0.10 * cm, layout_cfg["verso_gap_assinatura_cm"] * cm)),
-                Paragraph("Assinatura do Cliente (termos):", style_label_termos),
-                Paragraph("____________________________________________________________", style_small_termos),
+                Spacer(1, 0.07 * cm if compacto else max(0.10 * cm, layout_cfg["verso_gap_declaracao_cm"] * cm)),
+                Paragraph(
+                    "Declaro que li, compreendi e concordo com os termos e condições acima, "
+                    "referentes à abertura e à entrega desta Ordem de Serviço.",
+                    style_small_termos,
+                ),
+                Spacer(1, 0.07 * cm if compacto else max(0.10 * cm, layout_cfg["verso_gap_assinatura_cm"] * cm)),
+                tabela_assinaturas,
             ]
         itens_termos = _split_termos(termos_os) or ["-"]
-        reserva_assinatura = _altura_total_flowables(assinatura_verso, frame_width, altura_frame_via) if assinatura_verso else 0.0
-        limite_bloco = altura_frame_via - 0.22 * cm - reserva_assinatura
-        corpo = []
-        for idx_item, item in enumerate(itens_termos):
-            candidato = corpo + [Paragraph(_limitar_texto(item, 220), styles["PrintSmall"], bulletText=BULLET_MARK)]
-            altura_candidato = _altura_total_flowables(bloco + candidato, frame_width, altura_frame_via)
-            if altura_candidato <= limite_bloco:
-                corpo = candidato
-                continue
-            if not corpo:
-                corpo = [Paragraph(_limitar_texto(item, 220), styles["PrintSmall"], bulletText=BULLET_MARK)]
-            restantes = len(itens_termos) - idx_item
-            if restantes > 0:
-                corpo.append(Paragraph(f"... ({restantes} itens adicionais)", styles["PrintSmall"]))
-            break
-        if not corpo:
-            corpo = [Paragraph("-", styles["PrintSmall"], bulletText=BULLET_MARK)]
-        bloco.extend(corpo)
+        bloco.extend(
+            Paragraph(_quebrar_tokens_longos(item), style_small_termos, bulletText=BULLET_MARK)
+            for item in itens_termos
+        )
         bloco.extend(assinatura_verso)
         return bloco
 
     limite_half_h = max(1.0 * cm, altura_frame_via - 0.18 * cm)
     story = [
-        KeepInFrame(frame_width, limite_half_h, _bloco_via("ORIGINAL"), mode="truncate"),
+        KeepInFrame(frame_width, limite_half_h, _bloco_via("ORIGINAL"), mode="shrink"),
         FrameBreak(),
-        KeepInFrame(frame_width, limite_half_h, _bloco_via("DUPLICADO"), mode="truncate"),
+        KeepInFrame(frame_width, limite_half_h, _bloco_via("DUPLICADO"), mode="shrink"),
     ]
     if getattr(config, "pdf_os_exibir_termos", True):
-        story.extend(
-            [
-                NextPageTemplate("main"),
-                PageBreak(),
-                KeepInFrame(frame_width, limite_half_h, _bloco_termos("ORIGINAL"), mode="truncate"),
-                FrameBreak(),
-                KeepInFrame(frame_width, limite_half_h, _bloco_termos("DUPLICADO"), mode="truncate"),
-            ]
-        )
+        termos_original = _bloco_termos("ORIGINAL", incluir_assinaturas=False)
+        # A via assinada reserva mais espaço no rodapé e usa uma tipografia
+        # ligeiramente mais compacta para nunca disputar área com a paginação.
+        termos_duplicado = _bloco_termos("DUPLICADO", incluir_assinaturas=True, compacto=True)
+        limite_seguro_verso = limite_half_h - (0.80 * cm)
+        original_cabe = _altura_total_flowables(termos_original, frame_width, limite_half_h) <= limite_seguro_verso
+        duplicado_cabe = _altura_total_flowables(termos_duplicado, frame_width, limite_half_h) <= limite_seguro_verso
+        if not (original_cabe and duplicado_cabe):
+            termos_original = _bloco_termos("ORIGINAL", incluir_assinaturas=False, compacto=True)
+            termos_duplicado = _bloco_termos("DUPLICADO", incluir_assinaturas=True, compacto=True)
+            original_cabe = _altura_total_flowables(termos_original, frame_width, limite_half_h) <= limite_seguro_verso
+            duplicado_cabe = _altura_total_flowables(termos_duplicado, frame_width, limite_half_h) <= limite_seguro_verso
+
+        if original_cabe and duplicado_cabe:
+            story.extend(
+                [
+                    NextPageTemplate("main"),
+                    PageBreak(),
+                    KeepInFrame(frame_width, limite_half_h, termos_original, mode="shrink"),
+                    FrameBreak(),
+                    KeepInFrame(frame_width, limite_half_h, termos_duplicado, mode="shrink"),
+                ]
+            )
+        else:
+            # Textos personalizados muito longos seguem em páginas próprias.
+            # Assim o documento preserva integralmente o conteúdo contratual.
+            story.extend(
+                [
+                    NextPageTemplate("terms_full"),
+                    PageBreak(),
+                    *_bloco_termos("ORIGINAL - ANEXO", incluir_assinaturas=False),
+                    PageBreak(),
+                    *_bloco_termos("DUPLICADO - ANEXO", incluir_assinaturas=True),
+                ]
+            )
 
     doc.build(story, canvasmaker=make_numbered_canvas(_draw_footer))
     return _aplicar_xframe_preview(request, response)
@@ -1644,6 +1669,7 @@ def imprimir_relatorio_tecnico(request, pk):
     layout_preset = resolve_layout_preset(config)
     tema_docs = _tema_layout_documentos(config)
     layout_docs = _perfil_layout_documentos(config)
+    modo_resumido = getattr(config, "pdf_relatorio_modo_resumido", True)
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="relatorio_tecnico_{ordem.numero_os}.pdf"'
     doc = SimpleDocTemplate(
@@ -1791,7 +1817,7 @@ def imprimir_relatorio_tecnico(request, pk):
     if empresa and empresa.nome:
         header_right.insert(1, Paragraph(f"<b>Empresa:</b> {empresa.nome}", styles["RtMeta"]))
     if empresa and empresa.telefone:
-        header_right.append(Paragraph(f"<b>Telefone:</b> {empresa.telefone}", styles["RtMeta"]))
+        header_right.append(Paragraph(f"<b>Telefone:</b> {formatar_telefone_br(empresa.telefone)}", styles["RtMeta"]))
     logo_col = layout_docs["rt_logo_col_cm"] * cm
     header = Table([[logo, header_right]], colWidths=[logo_col, usable_w - logo_col])
     header.setStyle(
@@ -1808,13 +1834,11 @@ def imprimir_relatorio_tecnico(request, pk):
     )
 
     story = [header, Spacer(1, layout_docs["rt_header_gap_cm"] * cm)]
-    if layout_preset == "executivo":
+    if layout_preset == "executivo" and not modo_resumido:
         story.extend([_hero_summary(), Spacer(1, layout_docs["rt_block_gap_cm"] * cm)])
-    if layout_preset == "executivo":
-        story.extend([_executive_conclusion(), Spacer(1, layout_docs["rt_block_gap_cm"] * cm)])
     titulo_cliente_rt = "Dados do Cliente"
     titulo_equip_rt = "Dados do Equipamento"
-    titulo_diag_rt = "Diagnostico e Relatorio"
+    titulo_diag_rt = "Diagnóstico e relatório técnico"
     if layout_preset == "executivo":
         titulo_cliente_rt = "Resumo do Cliente"
         titulo_equip_rt = "Resumo do Equipamento"
@@ -1823,14 +1847,14 @@ def imprimir_relatorio_tecnico(request, pk):
     if getattr(config, "pdf_relatorio_exibir_nome_cliente", True):
         cliente_rows.append([Paragraph("Nome", styles["RtLabel"]), Paragraph(ordem.cliente.nome or "-", styles["RtValue"])])
     if getattr(config, "pdf_relatorio_exibir_telefone_cliente", True):
-        cliente_rows.append([Paragraph("Telefone", styles["RtLabel"]), Paragraph(ordem.cliente.telefone or "-", styles["RtValue"])])
-    if getattr(config, "pdf_relatorio_exibir_documento_cliente", True):
+        cliente_rows.append([Paragraph("Telefone", styles["RtLabel"]), Paragraph(formatar_telefone_br(ordem.cliente.telefone), styles["RtValue"])])
+    if not modo_resumido and getattr(config, "pdf_relatorio_exibir_documento_cliente", True):
         cliente_rows.append(
             [Paragraph("Documento", styles["RtLabel"]), Paragraph(ordem.cliente.get_documento_formatado() or ordem.cliente.documento or "-", styles["RtValue"])]
         )
-    if getattr(config, "pdf_relatorio_exibir_email_cliente", True):
+    if not modo_resumido and getattr(config, "pdf_relatorio_exibir_email_cliente", True):
         cliente_rows.append([Paragraph("E-mail", styles["RtLabel"]), Paragraph(ordem.cliente.email or "-", styles["RtValue"])])
-    if getattr(config, "pdf_relatorio_exibir_origem_cliente", False):
+    if not modo_resumido and getattr(config, "pdf_relatorio_exibir_origem_cliente", False):
         cliente_rows.append([Paragraph("Origem do Cliente", styles["RtLabel"]), Paragraph(ordem.cliente.origem_cliente_exibicao or "-", styles["RtValue"])])
     if not cliente_rows:
         cliente_rows.append([Paragraph("Dados", styles["RtLabel"]), Paragraph("-", styles["RtValue"])])
@@ -1844,13 +1868,13 @@ def imprimir_relatorio_tecnico(request, pk):
         equipamento_rows.append([Paragraph("Modelo", styles["RtLabel"]), Paragraph(ordem.modelo_equipamento or "-", styles["RtValue"])])
     if getattr(config, "pdf_relatorio_exibir_numero_serie", True):
         equipamento_rows.append([Paragraph("Número de Série", styles["RtLabel"]), Paragraph(ordem.numero_serie_equipamento or "-", styles["RtValue"])])
-    if getattr(config, "pdf_relatorio_exibir_local_armazenamento", False):
+    if not modo_resumido and getattr(config, "pdf_relatorio_exibir_local_armazenamento", False):
         equipamento_rows.append([Paragraph("Local de Armazenamento", styles["RtLabel"]), Paragraph(ordem.local_armazenamento or "-", styles["RtValue"])])
     if getattr(config, "pdf_relatorio_exibir_defeito", True):
         equipamento_rows.append([Paragraph("Defeito", styles["RtLabel"]), Paragraph(ordem.defeito or "-", styles["RtValue"])])
-    if getattr(config, "pdf_relatorio_exibir_tipo_reparacao", True):
+    if not modo_resumido and getattr(config, "pdf_relatorio_exibir_tipo_reparacao", True):
         equipamento_rows.append([Paragraph("Tipo de Reparação", styles["RtLabel"]), Paragraph(ordem.get_tipo_reparacao_display() or "-", styles["RtValue"])])
-    if getattr(config, "pdf_relatorio_exibir_datas_movimento", True):
+    if not modo_resumido and getattr(config, "pdf_relatorio_exibir_datas_movimento", True):
         equipamento_rows.extend(
             [
                 [Paragraph("Data de Entrada", styles["RtLabel"]), Paragraph(_formatar_data_hora(ordem.assinatura_entrada_registrada_em), styles["RtValue"])],
@@ -1859,9 +1883,9 @@ def imprimir_relatorio_tecnico(request, pk):
         )
     if getattr(config, "pdf_relatorio_exibir_peritagem", True):
         equipamento_rows.append([Paragraph("Peritagem", styles["RtLabel"]), Paragraph(ordem.peritagem or "-", styles["RtValue"])])
-    if getattr(config, "pdf_relatorio_exibir_acessorios", True):
+    if not modo_resumido and getattr(config, "pdf_relatorio_exibir_acessorios", True):
         equipamento_rows.append([Paragraph("Acessórios", styles["RtLabel"]), Paragraph(ordem.acessorios or "-", styles["RtValue"])])
-    if getattr(config, "pdf_relatorio_exibir_responsaveis", True):
+    if not modo_resumido and getattr(config, "pdf_relatorio_exibir_responsaveis", True):
         equipamento_rows.extend(
             [
                 [Paragraph("Atendente", styles["RtLabel"]), Paragraph(str(ordem.atendente_abertura or "-"), styles["RtValue"])],
@@ -1890,26 +1914,35 @@ def imprimir_relatorio_tecnico(request, pk):
     )
     itens = list(ServicoPeca.objects.filter(ordem=ordem))
     if itens and getattr(config, "pdf_relatorio_exibir_servicos_pecas", True):
-        story.append(_title_bar("Serviços e Peças"))
-        linhas = [
-            [
+        story.append(_title_bar("Peças utilizadas e serviços realizados"))
+        if modo_resumido:
+            linhas = [[
                 Paragraph("<b>Tipo</b>", styles["RtLabel"]),
                 Paragraph("<b>Descrição</b>", styles["RtLabel"]),
-                Paragraph("<b>Qtd</b>", styles["RtLabel"]),
+                Paragraph("<b>Qtd.</b>", styles["RtLabel"]),
+            ]]
+        else:
+            linhas = [[
+                Paragraph("<b>Tipo</b>", styles["RtLabel"]),
+                Paragraph("<b>Descrição</b>", styles["RtLabel"]),
+                Paragraph("<b>Qtd.</b>", styles["RtLabel"]),
                 Paragraph("<b>Unit.</b>", styles["RtLabel"]),
                 Paragraph("<b>Total</b>", styles["RtLabel"]),
-            ]
-        ]
+            ]]
         for item in itens:
-            linhas.append(
-                [
-                    Paragraph(item.get_tipo_display(), styles["RtValue"]),
-                    Paragraph(item.nome, styles["RtValue"]),
-                    Paragraph(str(item.quantidade), styles["RtValue"]),
-                    Paragraph(f"R$ {item.valor_unitario:.2f}", styles["RtValue"]),
-                    Paragraph(f"R$ {item.total():.2f}", styles["RtValue"]),
-                ]
-            )
+            linha_item = [
+                Paragraph(item.get_tipo_display(), styles["RtValue"]),
+                Paragraph(item.nome, styles["RtValue"]),
+                Paragraph(str(item.quantidade), styles["RtValue"]),
+            ]
+            if not modo_resumido:
+                linha_item.extend(
+                    [
+                        Paragraph(formatar_moeda_br(item.valor_unitario), styles["RtValue"]),
+                        Paragraph(formatar_moeda_br(item.total()), styles["RtValue"]),
+                    ]
+                )
+            linhas.append(linha_item)
         max_desc = max((len((item.nome or "").strip()) for item in itens), default=0)
         tipo_w = max(1.9 * cm, min(2.5 * cm, usable_w * 0.16))
         qtd_w = max(1.2 * cm, min(1.6 * cm, usable_w * 0.10))
@@ -1925,11 +1958,20 @@ def imprimir_relatorio_tecnico(request, pk):
             unit_w = max(1.8 * cm, unit_w - (deficit * 0.55))
             total_w = max(1.8 * cm, total_w - (deficit * 0.45))
             desc_w = usable_w - (tipo_w + qtd_w + unit_w + total_w)
-        tabela_itens = Table(
-            linhas,
-            colWidths=[tipo_w, desc_w, qtd_w, unit_w, total_w],
-            repeatRows=1,
-        )
+        if modo_resumido:
+            tabela_itens = Table(
+                linhas,
+                colWidths=[tipo_w, usable_w - tipo_w - qtd_w, qtd_w],
+                repeatRows=1,
+            )
+            coluna_alinhamento_final = 2
+        else:
+            tabela_itens = Table(
+                linhas,
+                colWidths=[tipo_w, desc_w, qtd_w, unit_w, total_w],
+                repeatRows=1,
+            )
+            coluna_alinhamento_final = 4
         tabela_itens.setStyle(
             TableStyle(
                 [
@@ -1938,7 +1980,7 @@ def imprimir_relatorio_tecnico(request, pk):
                     ("BOX", (0, 0), (-1, -1), 0.5, tema_docs["section_line"]),
                     ("INNERGRID", (0, 0), (-1, -1), 0.25, tema_docs["section_line"]),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("ALIGN", (2, 0), (4, -1), "RIGHT"),
+                    ("ALIGN", (2, 0), (coluna_alinhamento_final, -1), "RIGHT"),
                     ("LEFTPADDING", (0, 0), (-1, -1), layout_docs["rt_cell_pad_h"] - 1),
                     ("RIGHTPADDING", (0, 0), (-1, -1), layout_docs["rt_cell_pad_h"] - 1),
                     ("TOPPADDING", (0, 0), (-1, -1), layout_docs["rt_cell_pad_v"]),
@@ -1946,28 +1988,30 @@ def imprimir_relatorio_tecnico(request, pk):
                 ]
             )
         )
-        totais_relatorio = Table(
-            [
-                [Paragraph("Itens executados", styles["RtTotalLabel"]), Paragraph(str(len(itens)), styles["RtTotalValue"])],
-                [Paragraph("Total de serviços e peças", styles["RtTotalLabel"]), Paragraph(f"R$ {sum(item.total() for item in itens):.2f}", styles["RtTotalValue"])],
-            ],
-            colWidths=[usable_w - 5.2 * cm, 5.2 * cm],
-        )
-        totais_relatorio.setStyle(
-            TableStyle(
+        story.extend([tabela_itens, Spacer(1, 0.18 * cm)])
+        if not modo_resumido:
+            totais_relatorio = Table(
                 [
-                    ("BOX", (0, 0), (-1, -1), 0.6, tema_docs["section_line"]),
-                    ("INNERGRID", (0, 0), (-1, -1), 0.25, tema_docs["section_line"]),
-                    ("ROWBACKGROUNDS", (0, 0), (-1, -1), [tema_docs["row_alt"], tema_docs["table_bg"]]),
-                    ("ALIGN", (0, 0), (0, -1), "RIGHT"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("TOPPADDING", (0, 0), (-1, -1), 5),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ]
+                    [Paragraph("Itens executados", styles["RtTotalLabel"]), Paragraph(str(len(itens)), styles["RtTotalValue"])],
+                    [Paragraph("Total de serviços e peças", styles["RtTotalLabel"]), Paragraph(formatar_moeda_br(sum(item.total() for item in itens)), styles["RtTotalValue"])],
+                ],
+                colWidths=[usable_w - 5.2 * cm, 5.2 * cm],
             )
-        )
-        story.extend([tabela_itens, Spacer(1, 0.18 * cm), KeepTogether([totais_relatorio]), Spacer(1, 0.35 * cm)])
+            totais_relatorio.setStyle(
+                TableStyle(
+                    [
+                        ("BOX", (0, 0), (-1, -1), 0.6, tema_docs["section_line"]),
+                        ("INNERGRID", (0, 0), (-1, -1), 0.25, tema_docs["section_line"]),
+                        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [tema_docs["row_alt"], tema_docs["table_bg"]]),
+                        ("ALIGN", (0, 0), (0, -1), "RIGHT"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                        ("TOPPADDING", (0, 0), (-1, -1), 5),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ]
+                )
+            )
+            story.extend([KeepTogether([totais_relatorio]), Spacer(1, 0.35 * cm)])
 
     arquivos_relatorio = list(ordem.arquivos.filter(incluir_relatorio=True).order_by("-criado_em"))
     fotos_total = sum(1 for arquivo in ordem.arquivos.all() if arquivo.eh_imagem)
@@ -2007,21 +2051,24 @@ def imprimir_relatorio_tecnico(request, pk):
             )
             story.extend([tabela_fotos, Spacer(1, 0.3 * cm)])
 
-    assinatura_entrada_relatorio_img = _image_from_upload(ordem.assinatura_entrada_arquivo, 6.2 * cm, 2.2 * cm)
-    assinatura_saida_relatorio_img = _image_from_upload(ordem.assinatura_saida_imagem, 6.2 * cm, 2.2 * cm)
-    story.extend(
-        [
-            _title_bar("Assinaturas do Cliente (Recepção e Entrega)"),
-            _info_table(
-                [
-                    [Paragraph("Entrada do equipamento", styles["RtLabel"]), Paragraph(_formatar_data_hora(ordem.assinatura_entrada_registrada_em), styles["RtValue"])],
-                    [Paragraph("Saída do equipamento", styles["RtLabel"]), Paragraph(_formatar_data_hora(ordem.data_assinatura_saida), styles["RtValue"])],
-                ]
-            ),
-            Spacer(1, 0.12 * cm),
-        ]
-    )
-    if assinatura_entrada_relatorio_img or assinatura_saida_relatorio_img:
+    assinatura_entrada_relatorio_img = None
+    assinatura_saida_relatorio_img = None
+    if not modo_resumido:
+        assinatura_entrada_relatorio_img = _image_from_upload(ordem.assinatura_entrada_arquivo, 6.2 * cm, 2.2 * cm)
+        assinatura_saida_relatorio_img = _image_from_upload(ordem.assinatura_saida_imagem, 6.2 * cm, 2.2 * cm)
+        story.extend(
+            [
+                _title_bar("Assinaturas do Cliente (Recepção e Entrega)"),
+                _info_table(
+                    [
+                        [Paragraph("Entrada do equipamento", styles["RtLabel"]), Paragraph(_formatar_data_hora(ordem.assinatura_entrada_registrada_em), styles["RtValue"])],
+                        [Paragraph("Saída do equipamento", styles["RtLabel"]), Paragraph(_formatar_data_hora(ordem.data_assinatura_saida), styles["RtValue"])],
+                    ]
+                ),
+                Spacer(1, 0.12 * cm),
+            ]
+        )
+    if not modo_resumido and (assinatura_entrada_relatorio_img or assinatura_saida_relatorio_img):
         tabela_assinaturas_rt = Table(
             [
                 [

@@ -3239,17 +3239,26 @@ class ImpressaoPdfHeadersTests(TestCase):
         self.assertTrue(response.content.startswith(b"%PDF"))
         self.assertIsNone(response.get("X-Frame-Options"))
 
-    def test_imprimir_ordem_servico_impressao_limita_em_duas_paginas(self):
+    def test_imprimir_ordem_servico_impressao_preserva_termos_longos_em_anexo(self):
         config = ConfiguracaoSistema.get_configuracao()
-        config.termos_ordem_servico = "Termo contratual muito longo. " * 600
+        config.termos_ordem_servico = "MARCADOR_INICIO " + ("termo contratual muito longo " * 300) + "MARCADOR_FIM."
         config.save(update_fields=["termos_ordem_servico"])
+        textos_pdf = []
 
-        response = self.client.get(reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]))
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id]))
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.content.startswith(b"%PDF"))
         counts = self._pdf_page_counts(response.content)
         self.assertTrue(counts)
-        self.assertLessEqual(max(counts), 2)
+        self.assertGreaterEqual(max(counts), 3)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertGreaterEqual(texto_unificado.count("MARCADOR_INICIO"), 2)
+        self.assertGreaterEqual(texto_unificado.count("MARCADOR_FIM"), 2)
 
     def test_imprimir_ordem_servico_impressao_inclui_peritagem(self):
         OrdemServico.objects.filter(pk=self.ordem.pk).update(peritagem="Carcaca com marcas e tampa solta.")
@@ -3382,9 +3391,38 @@ class ImpressaoPdfHeadersTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         texto_unificado = "\n".join(textos_pdf)
-        self.assertIn("Declaro que li e concordo com os termos e condições acima.", texto_unificado)
-        self.assertIn("Assinatura do Cliente (termos):", texto_unificado)
+        self.assertIn("Declaro que li, compreendi e concordo com os termos e condições acima", texto_unificado)
+        self.assertEqual(texto_unificado.count("Assinatura do cliente na abertura"), 1)
+        self.assertEqual(texto_unificado.count("Assinatura do cliente na entrega"), 1)
+        self.assertNotIn("Atendente:", texto_unificado)
         self.assertIn("Primeira regra.", texto_unificado)
+
+    def test_imprimir_relatorio_tecnico_resumido_oculta_valores_e_assinaturas_do_cliente(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.pdf_relatorio_modo_resumido = True
+        config.save(update_fields=["pdf_relatorio_modo_resumido"])
+        ServicoPeca.objects.create(
+            ordem=self.ordem,
+            tipo="peca",
+            nome="Display frontal",
+            quantidade=1,
+            valor_unitario=Decimal("120.00"),
+        )
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Display frontal", texto_unificado)
+        self.assertIn("Peças utilizadas e serviços realizados", texto_unificado)
+        self.assertNotIn("R$ 120,00", texto_unificado)
+        self.assertNotIn("Assinaturas do Cliente", texto_unificado)
 
     def test_imprimir_ordem_servico_impressao_reserva_faixa_para_etiqueta(self):
         frames = []
@@ -3566,13 +3604,14 @@ class ImpressaoPdfUtilsTests(TestCase):
             altura_etiqueta=0.90 * cm,
             texto_os="OS-4700",
             texto_cliente="Cliente Teste",
+            texto_equipamento="Celular - Modelo X",
             fonts=fonts,
             tema_docs=tema_docs,
         )
 
-        textos_os = [texto for _x, _y, texto, size in canv.textos if size == 8.9]
-        self.assertTrue(textos_os)
-        self.assertTrue(all(texto == "OS-4700" for texto in textos_os))
+        textos_os = [texto for _x, _y, texto, size in canv.textos if size == 8.2]
+        self.assertEqual(len(textos_os), 4)
+        self.assertTrue(all(texto == "OS OS-4700" for texto in textos_os))
 
 
 class AgendamentoOrdemServicoTests(TestCase):

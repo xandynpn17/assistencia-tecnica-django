@@ -7,6 +7,7 @@ from datetime import timedelta
 import random
 import re
 import string
+from xml.sax.saxutils import escape
 
 from .models import Orcamento, ItemOrcamento
 from .services import FluxoOrcamentoService
@@ -31,6 +32,7 @@ from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_
 from core.pdf_preview import apply_document_preview_overrides, apply_preview_xframe_headers
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
 from core.pdf_theme import get_document_profile, get_document_theme, resolve_layout_preset
+from core.formatters import formatar_moeda_br, formatar_telefone_br
 from ordens.services.os_policy_service import OSAccessPolicyService
 from ordens.services.tecnicos import usuarios_tecnicos_qs
 
@@ -675,7 +677,7 @@ def imprimir_orcamento(request, pk):
             ],
             [
                 Paragraph("TOTAL FINAL", styles["OrcHeroLabel"]),
-                Paragraph(f"R$ {orcamento.valor_total:.2f}", styles["OrcHeroValue"]),
+                Paragraph(formatar_moeda_br(orcamento.valor_total), styles["OrcHeroValue"]),
             ],
             [
                 Paragraph("VALIDADE", styles["OrcHeroLabel"]),
@@ -715,19 +717,19 @@ def imprimir_orcamento(request, pk):
             [
                 [
                     Paragraph("<b>Investimento em Serviços</b>", styles["OrcLabel"]),
-                    Paragraph(f"R$ {total_servicos:.2f}", styles["OrcValue"]),
+                    Paragraph(formatar_moeda_br(total_servicos), styles["OrcValue"]),
                 ],
                 [
                     Paragraph("<b>Investimento em Peças</b>", styles["OrcLabel"]),
-                    Paragraph(f"R$ {total_pecas:.2f}", styles["OrcValue"]),
+                    Paragraph(formatar_moeda_br(total_pecas), styles["OrcValue"]),
                 ],
                 [
                     Paragraph("<b>Economia com Desconto</b>", styles["OrcLabel"]),
-                    Paragraph(f"R$ {orcamento.desconto_calculado():.2f}", styles["OrcValue"]),
+                    Paragraph(formatar_moeda_br(orcamento.desconto_calculado()), styles["OrcValue"]),
                 ],
                 [
-                    Paragraph("<b>Total Final Aprovacao</b>", styles["OrcLabel"]),
-                    Paragraph(f"R$ {orcamento.total():.2f}", styles["OrcHeroValue"]),
+                    Paragraph("<b>Total final para aprovação</b>", styles["OrcLabel"]),
+                    Paragraph(formatar_moeda_br(orcamento.total()), styles["OrcHeroValue"]),
                 ],
             ],
             colWidths=[usable_w - 4.6 * cm, 4.6 * cm],
@@ -764,12 +766,12 @@ def imprimir_orcamento(request, pk):
         Paragraph(f"<b>Validade:</b> {data_validade}", styles["OrcMeta"]),
         Paragraph(f"<b>Status:</b> {orcamento.get_status_display()}", styles["OrcMeta"]),
         Paragraph(f"<b>Tipo da OS:</b> {ordem.tipo_reparo or '-'}", styles["OrcMeta"]),
-        Paragraph(f"<b>Total final:</b> R$ {orcamento.valor_total:.2f}", styles["OrcMeta"]),
+        Paragraph(f"<b>Total final:</b> {formatar_moeda_br(orcamento.valor_total)}", styles["OrcMeta"]),
     ]
     if empresa and empresa.nome:
         header_right.insert(1, Paragraph(f"<b>Empresa:</b> {empresa.nome}", styles["OrcMeta"]))
     if empresa and empresa.telefone:
-        header_right.append(Paragraph(f"<b>Telefone:</b> {empresa.telefone}", styles["OrcMeta"]))
+        header_right.append(Paragraph(f"<b>Telefone:</b> {formatar_telefone_br(empresa.telefone)}", styles["OrcMeta"]))
     logo_col = layout_docs["orc_logo_col_cm"] * cm
     header = Table([[logo, header_right]], colWidths=[logo_col, usable_w - logo_col])
     header.setStyle(TableStyle([
@@ -798,7 +800,7 @@ def imprimir_orcamento(request, pk):
     if getattr(config, "pdf_orcamento_exibir_nome_cliente", True):
         cliente_rows.append([Paragraph("Nome", styles["OrcLabel"]), Paragraph(orcamento.cliente.nome or "-", styles["OrcValue"])])
     if getattr(config, "pdf_orcamento_exibir_telefone_cliente", True):
-        cliente_rows.append([Paragraph("Telefone", styles["OrcLabel"]), Paragraph(orcamento.cliente.telefone or "-", styles["OrcValue"])])
+        cliente_rows.append([Paragraph("Telefone", styles["OrcLabel"]), Paragraph(formatar_telefone_br(orcamento.cliente.telefone), styles["OrcValue"])])
     if getattr(config, "pdf_orcamento_exibir_documento_cliente", True):
         cliente_rows.append(
             [Paragraph("Documento", styles["OrcLabel"]), Paragraph(orcamento.cliente.get_documento_formatado() or orcamento.cliente.documento or "-", styles["OrcValue"])]
@@ -834,9 +836,21 @@ def imprimir_orcamento(request, pk):
             Spacer(1, layout_docs["orc_block_gap_cm"] * cm),
             _section_block(titulo_equipamento, equipamento_rows),
             Spacer(1, layout_docs["orc_block_gap_cm"] * cm),
-            _section(titulo_itens),
         ]
     )
+    if (orcamento.descricao or "").strip():
+        story.extend(
+            [
+                KeepTogether(
+                    [
+                        _section("Detalhes e observações do orçamento"),
+                        Paragraph(escape(orcamento.descricao.strip()).replace("\n", "<br/>"), styles["OrcText"]),
+                    ]
+                ),
+                Spacer(1, layout_docs["orc_block_gap_cm"] * cm),
+            ]
+        )
+    story.append(_section(titulo_itens))
 
     linhas = [[
         Paragraph("<b>Item</b>", styles["OrcLabel"]),
@@ -845,17 +859,18 @@ def imprimir_orcamento(request, pk):
         Paragraph("<b>Total</b>", styles["OrcLabel"]),
     ]]
     for idx_item, item in enumerate(orcamento.itens.all(), start=1):
-        descricao_item = f"{item.nome} ({item.get_tipo_item_display()})"
+        descricao_item = f"{escape(item.nome)} ({escape(item.get_tipo_item_display())})"
         desconto_item = item.desconto_calculado()
         detalhes_item = [descricao_item]
+        if (item.descricao or "").strip():
+            detalhes_item.append(escape(item.descricao.strip()).replace("\n", "<br/>"))
         if desconto_item > Decimal("0.00"):
-            detalhes_item.append(f"Desconto no item: R$ {desconto_item:.2f}")
-        detalhes_item.append(f"Status: {item.get_status_display()}")
+            detalhes_item.append(f"Desconto no item: {formatar_moeda_br(desconto_item)}")
         linhas.append([
             Paragraph("<br/>".join(detalhes_item), styles["OrcValue"]),
             Paragraph(str(item.quantidade), styles["OrcValue"]),
-            Paragraph(f"R$ {item.valor_unitario:.2f}", styles["OrcValue"]),
-            Paragraph(f"R$ {item.total():.2f}", styles["OrcValue"]),
+            Paragraph(formatar_moeda_br(item.valor_unitario), styles["OrcValue"]),
+            Paragraph(formatar_moeda_br(item.total()), styles["OrcValue"]),
         ])
     max_desc_len = max((len((item.nome or "").strip()) for item in orcamento.itens.all()), default=0)
     qtd_w = max(1.6 * cm, min(2.0 * cm, layout_docs["orc_item_qtd_cm"] * cm))
@@ -892,9 +907,9 @@ def imprimir_orcamento(request, pk):
     ]))
     totais = Table(
         [
-            [Paragraph("Subtotal", styles["OrcTotalLabel"]), Paragraph(f"R$ {orcamento.subtotal_itens():.2f}", styles["OrcTotalValue"])],
-            [Paragraph("Desconto", styles["OrcTotalLabel"]), Paragraph(f"R$ {orcamento.desconto_calculado():.2f}", styles["OrcTotalValue"])],
-            [Paragraph("Total Final", styles["OrcTotalLabel"]), Paragraph(f"R$ {orcamento.total():.2f}", styles["OrcTotalValue"])],
+            [Paragraph("Subtotal", styles["OrcTotalLabel"]), Paragraph(formatar_moeda_br(orcamento.subtotal_itens()), styles["OrcTotalValue"])],
+            [Paragraph("Desconto", styles["OrcTotalLabel"]), Paragraph(formatar_moeda_br(orcamento.desconto_calculado()), styles["OrcTotalValue"])],
+            [Paragraph("Total Final", styles["OrcTotalLabel"]), Paragraph(formatar_moeda_br(orcamento.total()), styles["OrcTotalValue"])],
         ],
         colWidths=[usable_w - (layout_docs["orc_total_col_cm"] * cm), layout_docs["orc_total_col_cm"] * cm],
     )
@@ -932,11 +947,11 @@ def imprimir_orcamento(request, pk):
         bloco_aprovacao = Table(
             [
                 [
-                    Paragraph(f"Data da aprovacao: ____/____/______  (Validade: {data_validade})", styles["OrcText"]),
+                    Paragraph(f"Data da aprovação: ____/____/______  (Validade: {data_validade})", styles["OrcText"]),
                     Paragraph("Assinatura do Cliente: ______________________________", styles["OrcText"]),
                 ],
                 [
-                    Paragraph("Nome legivel do cliente: ______________________________", styles["OrcText"]),
+                    Paragraph("Nome legível do cliente: ______________________________", styles["OrcText"]),
                     Paragraph("Assinatura da Assistencia: ______________________________", styles["OrcText"]),
                 ],
             ],
