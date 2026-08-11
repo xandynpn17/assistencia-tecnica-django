@@ -15,7 +15,8 @@
 - Confirmar que não existem assinaturas na frente.
 - Confirmar quatro etiquetas legíveis, com OS, cliente e equipamento.
 - Confirmar os termos completos no verso do ORIGINAL e do DUPLICADO.
-- Confirmar que somente o DUPLICADO possui concordância e assinaturas de abertura e entrega.
+- Confirmar que ORIGINAL e DUPLICADO possuem concordância e assinaturas de abertura e entrega no verso.
+- Confirmar que existe um espaço confortável entre o fim dos termos e a área de assinatura.
 - Imprimir frente e verso, cortar na linha central e validar a orientação física das vias.
 
 ## Relatório Técnico

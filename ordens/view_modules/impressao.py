@@ -1514,7 +1514,7 @@ def imprimir_ordem_servico_impressao(request, pk):
                 *bloco_info,
             ]
             texto_rodape_via = (
-                "Via do cliente - consulte os termos completos no verso."
+                "Via do cliente - termos, concordância e assinaturas no verso."
                 if rotulo == "ORIGINAL"
                 else "Via da assistência - concordância e assinaturas no verso."
             )
@@ -1597,13 +1597,13 @@ def imprimir_ordem_servico_impressao(request, pk):
                 )
             )
             assinatura_verso = [
-                Spacer(1, 0.07 * cm if compacto else max(0.10 * cm, layout_cfg["verso_gap_declaracao_cm"] * cm)),
+                Spacer(1, max(0.45 * cm, layout_cfg["verso_gap_declaracao_cm"] * cm)),
                 Paragraph(
                     "Declaro que li, compreendi e concordo com os termos e condições acima, "
                     "referentes à abertura e à entrega desta Ordem de Serviço.",
                     style_small_termos,
                 ),
-                Spacer(1, 0.07 * cm if compacto else max(0.10 * cm, layout_cfg["verso_gap_assinatura_cm"] * cm)),
+                Spacer(1, max(0.30 * cm, layout_cfg["verso_gap_assinatura_cm"] * cm)),
                 tabela_assinaturas,
             ]
         itens_termos = _split_termos(termos_os) or ["-"]
@@ -1621,15 +1621,15 @@ def imprimir_ordem_servico_impressao(request, pk):
         KeepInFrame(frame_width, limite_half_h, _bloco_via("DUPLICADO"), mode="shrink"),
     ]
     if getattr(config, "pdf_os_exibir_termos", True):
-        termos_original = _bloco_termos("ORIGINAL", incluir_assinaturas=False)
-        # A via assinada reserva mais espaço no rodapé e usa uma tipografia
-        # ligeiramente mais compacta para nunca disputar área com a paginação.
+        # As duas vias possuem campos de assinatura no verso. A tipografia
+        # compacta preserva um respiro claro entre os termos e as assinaturas.
+        termos_original = _bloco_termos("ORIGINAL", incluir_assinaturas=True, compacto=True)
         termos_duplicado = _bloco_termos("DUPLICADO", incluir_assinaturas=True, compacto=True)
         limite_seguro_verso = limite_half_h - (0.80 * cm)
         original_cabe = _altura_total_flowables(termos_original, frame_width, limite_half_h) <= limite_seguro_verso
         duplicado_cabe = _altura_total_flowables(termos_duplicado, frame_width, limite_half_h) <= limite_seguro_verso
         if not (original_cabe and duplicado_cabe):
-            termos_original = _bloco_termos("ORIGINAL", incluir_assinaturas=False, compacto=True)
+            termos_original = _bloco_termos("ORIGINAL", incluir_assinaturas=True, compacto=True)
             termos_duplicado = _bloco_termos("DUPLICADO", incluir_assinaturas=True, compacto=True)
             original_cabe = _altura_total_flowables(termos_original, frame_width, limite_half_h) <= limite_seguro_verso
             duplicado_cabe = _altura_total_flowables(termos_duplicado, frame_width, limite_half_h) <= limite_seguro_verso
@@ -1651,7 +1651,7 @@ def imprimir_ordem_servico_impressao(request, pk):
                 [
                     NextPageTemplate("terms_full"),
                     PageBreak(),
-                    *_bloco_termos("ORIGINAL - ANEXO", incluir_assinaturas=False),
+                    *_bloco_termos("ORIGINAL - ANEXO", incluir_assinaturas=True),
                     PageBreak(),
                     *_bloco_termos("DUPLICADO - ANEXO", incluir_assinaturas=True),
                 ]

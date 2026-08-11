@@ -11,9 +11,9 @@ Padronizar os documentos entregues ao cliente e os documentos internos, com leit
 - A Ordem de Serviço impressa terá os dados completos no ORIGINAL e no DUPLICADO.
 - O cliente leva o ORIGINAL.
 - A empresa guarda o DUPLICADO assinado.
-- A assinatura não será repetida na frente nem na via do cliente.
-- O verso do ORIGINAL apresentará os termos completos para consulta do cliente.
-- O verso do DUPLICADO apresentará os mesmos termos e uma declaração única de concordância, com os campos de assinatura de abertura e de entrega.
+- As assinaturas não serão exibidas na frente.
+- O verso do ORIGINAL apresentará os termos completos, a declaração de concordância e os campos de assinatura de abertura e entrega.
+- O verso do DUPLICADO apresentará o mesmo conteúdo e os mesmos campos de assinatura.
 - Nenhum termo contratual poderá ser cortado silenciosamente.
 - O QR Code ficará fora do escopo enquanto o sistema operar somente na rede local.
 
@@ -24,7 +24,8 @@ Padronizar os documentos entregues ao cliente e os documentos internos, com leit
 - Remover assinaturas da frente das duas vias.
 - Manter os dados da OS nas duas vias, identificando claramente ORIGINAL e DUPLICADO.
 - Imprimir termos completos no verso das duas vias.
-- Concentrar a declaração de concordância e as assinaturas somente no verso do DUPLICADO.
+- Exibir a declaração de concordância e as assinaturas de abertura e entrega no verso das duas vias.
+- Reservar espaçamento visual claro entre o fim dos termos, a declaração e os campos de assinatura.
 - Permitir continuação paginada quando um texto personalizado não couber, sem truncamento.
 - Rever espaçamentos, tamanhos mínimos de fonte e indicação de corte.
 
@@ -65,7 +66,7 @@ Padronizar os documentos entregues ao cliente e os documentos internos, com leit
 ## Critérios de aceite
 
 - ORIGINAL e DUPLICADO contêm os mesmos dados essenciais da OS.
-- Só o DUPLICADO contém campos de assinatura.
+- ORIGINAL e DUPLICADO contêm campos de assinatura somente no verso.
 - Os termos completos podem ser recuperados do PDF, mesmo quando extensos.
 - Etiquetas permanecem legíveis após impressão e recorte.
 - O RT não expõe informações internas ou excesso de dados por padrão.

@@ -3392,8 +3392,8 @@ class ImpressaoPdfHeadersTests(TestCase):
         self.assertEqual(response.status_code, 200)
         texto_unificado = "\n".join(textos_pdf)
         self.assertIn("Declaro que li, compreendi e concordo com os termos e condições acima", texto_unificado)
-        self.assertEqual(texto_unificado.count("Assinatura do cliente na abertura"), 1)
-        self.assertEqual(texto_unificado.count("Assinatura do cliente na entrega"), 1)
+        self.assertEqual(texto_unificado.count("Assinatura do cliente na abertura"), 2)
+        self.assertEqual(texto_unificado.count("Assinatura do cliente na entrega"), 2)
         self.assertNotIn("Atendente:", texto_unificado)
         self.assertIn("Primeira regra.", texto_unificado)
 
