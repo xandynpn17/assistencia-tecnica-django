@@ -8,13 +8,13 @@ from django.urls import reverse
 
 from caixa.models import (
     AporteCapital, CartaoCorporativo, CategoriaFinanceira, CentroCusto, ContaBancaria,
-    MovimentoBancario, MovimentoSocio,
+    LancamentoCaixa, MovimentoBancario, MovimentoSocio,
 )
 from caixa.services.cartoes_corporativos import pagar_fatura_cartao, registrar_compra_cartao
 from caixa.services.contabilidade import ativar_plano_contas, criar_plano_contas_gerencial
 from caixa.services.tesouraria import (
     conciliar_linha, criar_movimento_de_linha_extrato, fechar_periodo_bancario, importar_extrato_arquivo, registrar_aporte_capital,
-    registrar_movimento_bancario, registrar_movimento_socio,
+    movimentos_bancarios_disponiveis, registrar_movimento_bancario, registrar_movimento_socio,
 )
 from configuracoes.models import Empresa
 
@@ -95,6 +95,35 @@ class TesourariaAvancadaTests(TestCase):
         linha.refresh_from_db()
         self.assertEqual(linha.status, "conciliado")
         self.assertEqual(movimento.tipo, "saida")
+        self.assertEqual(
+            MovimentoBancario.objects.filter(origem_tipo="lancamento_caixa", origem_id=movimento.origem_id).count(),
+            1,
+        )
+        self.assertFalse(movimentos_bancarios_disponiveis().filter(pk=movimento.pk).exists())
+
+    def test_movimento_ja_conciliado_nao_reaparece_e_post_antigo_nao_gera_500(self):
+        self.client.force_login(self.usuario)
+        linha = importar_extrato_arquivo(
+            conta=self.banco,
+            conteudo=b"data;descricao;valor;identificador\n2026-06-11;PIX venda;65,00;PIX65\n",
+            nome_arquivo="pix.csv", usuario=self.usuario,
+        )[0]
+        lancamento = LancamentoCaixa.objects.create(
+            empresa=self.empresa, conta_bancaria=self.banco, descricao="Venda de estoque via PIX",
+            valor=Decimal("65.00"), tipo="entrada", data_competencia=linha.data_movimento,
+            data_movimento=linha.data_movimento, usuario=self.usuario,
+        )
+        movimento = MovimentoBancario.objects.get(chave_idempotencia=f"lancamento_caixa:{lancamento.pk}")
+        conciliar_linha(linha=linha, movimento=movimento, usuario=self.usuario)
+
+        self.assertFalse(movimentos_bancarios_disponiveis().filter(pk=movimento.pk).exists())
+        resposta = self.client.post(
+            reverse("caixa:tratar_linha_extrato", args=[linha.pk]),
+            {"movimento": movimento.pk, "justificativa": ""},
+        )
+        self.assertEqual(resposta.status_code, 200)
+        linha.refresh_from_db()
+        self.assertEqual(linha.status, "conciliado")
 
     def test_devolucao_de_afac_reduz_principal_sem_receita_operacional(self):
         aporte = registrar_aporte_capital(

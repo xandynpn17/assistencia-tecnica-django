@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Exists, OuterRef, Sum
 from django.utils import timezone
 
 
@@ -44,6 +44,60 @@ def registrar_movimento_bancario(*, conta, tipo, origem_tipo, origem_id, descric
     if not criado and (movimento.conta_id != conta.id or movimento.tipo != tipo or movimento.valor != valor):
         raise ValidationError("A chave idempotente bancária já existe com dados diferentes.")
     return movimento
+
+
+def movimentos_bancarios_disponiveis(queryset=None):
+    """Retorna somente movimentos ativos que ainda não pertencem a conciliação ativa."""
+    from caixa.models import ConciliacaoBancariaMovimento, MovimentoBancario
+
+    queryset = queryset if queryset is not None else MovimentoBancario.objects.all()
+    conciliacao_ativa = ConciliacaoBancariaMovimento.objects.filter(
+        movimento_id=OuterRef("pk"),
+        conciliacao__status__in=["conciliado", "divergente"],
+    )
+    return queryset.filter(status="ativo").annotate(
+        possui_conciliacao_ativa=Exists(conciliacao_ativa)
+    ).filter(possui_conciliacao_ativa=False)
+
+
+@transaction.atomic
+def neutralizar_movimento_bancario(*, movimento, usuario, motivo, chave, origem_id=None):
+    """Preserva o movimento e cria uma contrapartida que não pode ser conciliada novamente."""
+    from caixa.models import ConciliacaoBancariaMovimento, MovimentoBancario
+
+    motivo = (motivo or "").strip()
+    if len(motivo) < 12:
+        raise ValidationError("Informe uma justificativa com pelo menos 12 caracteres.")
+    original = MovimentoBancario.objects.select_for_update().select_related("conta").get(pk=movimento.pk)
+    if original.status != "ativo":
+        raise ValidationError("Este movimento bancário já foi neutralizado.")
+    if ConciliacaoBancariaMovimento.objects.filter(
+        movimento=original, conciliacao__status__in=["conciliado", "divergente"]
+    ).exists():
+        raise ValidationError("Desfaça primeiro a conciliação ativa deste movimento.")
+    inverso = registrar_movimento_bancario(
+        conta=original.conta,
+        tipo="saida" if original.tipo == "entrada" else "entrada",
+        origem_tipo="manual",
+        origem_id=origem_id or original.pk,
+        descricao=f"Contrapartida: {original.descricao}"[:255],
+        valor=original.valor,
+        data_movimento=original.data_movimento,
+        chave=chave,
+        usuario=usuario,
+        metadados={"motivo": motivo, "movimento_original_id": original.pk},
+    )
+    agora = timezone.now()
+    MovimentoBancario.objects.filter(pk=original.pk).update(
+        status="neutralizado", neutralizado_em=agora, neutralizado_por=usuario,
+        motivo_neutralizacao=motivo,
+    )
+    MovimentoBancario.objects.filter(pk=inverso.pk).update(
+        status="neutralizado", neutralizado_em=agora, neutralizado_por=usuario,
+        motivo_neutralizacao=motivo, neutralizacao_de=original,
+    )
+    inverso.refresh_from_db()
+    return inverso
 
 
 def registrar_pagamento_bancario(pagamento):
@@ -85,21 +139,13 @@ def estornar_pagamento_bancario(*, pagamento, usuario, motivo):
     from caixa.models import MovimentoBancario
 
     estornos = []
-    for movimento in MovimentoBancario.objects.filter(origem_tipo="pagamento", origem_id=pagamento.pk):
-        estornos.append(
-            registrar_movimento_bancario(
-                conta=movimento.conta,
-                tipo="saida" if movimento.tipo == "entrada" else "entrada",
-                origem_tipo="manual",
-                origem_id=pagamento.pk,
-                descricao=f"Estorno: {movimento.descricao}",
-                valor=movimento.valor,
-                data_movimento=timezone.localdate(),
-                chave=f"estorno:{movimento.chave_idempotencia}",
-                usuario=usuario,
-                metadados={"motivo": motivo, "movimento_original_id": movimento.pk},
-            )
-        )
+    for movimento in MovimentoBancario.objects.filter(
+        origem_tipo="pagamento", origem_id=pagamento.pk, status="ativo"
+    ):
+        estornos.append(neutralizar_movimento_bancario(
+            movimento=movimento, usuario=usuario, motivo=motivo,
+            chave=f"estorno:{movimento.chave_idempotencia}", origem_id=pagamento.pk,
+        ))
     return estornos
 
 
@@ -415,7 +461,7 @@ def importar_extrato_arquivo(*, conta, conteudo, nome_arquivo="", usuario=None):
 def criar_movimento_de_linha_extrato(
     *, linha, classificacao, descricao, usuario, categoria=None, centro_custo=None,
 ):
-    from caixa.models import LancamentoCaixa, LinhaExtratoBancario
+    from caixa.models import LancamentoCaixa, LinhaExtratoBancario, MovimentoBancario
     from caixa.services.contabilidade import registrar_evento_contabil_se_configurado
 
     linha = LinhaExtratoBancario.objects.select_for_update().select_related("conta").get(pk=linha.pk)
@@ -430,17 +476,19 @@ def criar_movimento_de_linha_extrato(
     if not credito and classificacao not in {"despesa_operacional", "tarifa", "juros"}:
         raise ValidationError("Uma saída no extrato deve ser classificada como despesa, tarifa ou juros.")
     valor = abs(Decimal(linha.valor))
-    movimento = registrar_movimento_bancario(
-        conta=linha.conta, tipo="entrada" if credito else "saida", origem_tipo="manual",
-        origem_id=linha.pk, descricao=(descricao or linha.descricao)[:255], valor=valor,
-        data_movimento=linha.data_movimento, chave=f"linha-extrato:{linha.pk}:movimento",
-        usuario=usuario, metadados={"classificacao": classificacao, "linha_extrato_id": linha.pk},
-    )
     lancamento = LancamentoCaixa.objects.create(
         empresa=linha.empresa, conta_bancaria=linha.conta, descricao=(descricao or linha.descricao)[:200],
         categoria=categoria, centro_custo=centro_custo, valor=valor,
         tipo="entrada" if credito else "saida", natureza="operacional",
         data_competencia=linha.data_movimento, data_movimento=linha.data_movimento, usuario=usuario,
+    )
+    movimento = MovimentoBancario.objects.get(chave_idempotencia=f"lancamento_caixa:{lancamento.pk}")
+    MovimentoBancario.objects.filter(pk=movimento.pk).update(
+        metadados={
+            **(movimento.metadados or {}),
+            "classificacao": classificacao,
+            "linha_extrato_id": linha.pk,
+        }
     )
     registrar_evento_contabil_se_configurado(
         empresa=linha.empresa, evento="receita_avulsa" if credito else "despesa_paga",
@@ -550,6 +598,8 @@ def conciliar_grupo(
         raise ValidationError("Todos os itens da conciliação devem pertencer à mesma empresa e conta bancária.")
     if any(item.status != "pendente" for item in linhas_bloqueadas):
         raise ValidationError("Uma das linhas de extrato já foi tratada.")
+    if any(item.status != "ativo" for item in movimentos_bloqueados):
+        raise ValidationError("Um dos movimentos selecionados foi neutralizado e não pode ser conciliado.")
 
     status_ativos = ["conciliado", "divergente"]
     if ConciliacaoBancariaLinha.objects.filter(
@@ -665,11 +715,9 @@ def sugerir_correspondencias(*, linha, limite=10):
     """Ordena candidatos por valor, data e semelhança de documento/contraparte."""
     from caixa.models import MovimentoBancario
 
-    candidatos = MovimentoBancario.objects.filter(
+    candidatos = movimentos_bancarios_disponiveis(MovimentoBancario.objects.filter(
         empresa=linha.empresa, conta=linha.conta
-    ).exclude(
-        historico_conciliacoes__conciliacao__status__in=["conciliado", "divergente"]
-    )
+    ))
     descricao_extrato = _texto_normalizado(linha.descricao)
     resultados = []
     for movimento in candidatos[:500]:

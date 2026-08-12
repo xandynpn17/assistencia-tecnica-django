@@ -17,7 +17,13 @@ from caixa.models import (
     MovimentoBancario,
     MovimentoFinanceiro,
 )
-from caixa.services.saneamento_lancamentos import corrigir_lancamento_manual
+from caixa.services.saneamento_lancamentos import (
+    cancelar_lancamento_manual,
+    corrigir_lancamento_manual,
+    listar_duplicidades_importacao_extrato,
+    neutralizar_duplicidade_importacao_extrato,
+)
+from caixa.services.tesouraria import conciliar_linha, registrar_movimento_bancario
 from configuracoes.models import Empresa
 
 
@@ -249,3 +255,85 @@ class SaneamentoLancamentosRetroativosTests(TestCase):
         self.assertEqual(outra_conta.saldo_atual, Decimal("185.00"))
         self.assertEqual(MovimentoBancario.objects.filter(origem_id=segunda.pk, origem_tipo="manual").count(), 2)
         self.assertNotEqual(primeira.pk, segunda.pk)
+
+    def test_edita_descricao_e_valor_com_estorno_do_valor_anterior(self):
+        lancamento = self._lancamento_incorreto(valor="30.00")
+        corrigir_lancamento_manual(
+            lancamento=lancamento, forma_pagamento=self.pix, conta_bancaria=self.conta,
+            caixa_destino=None, categoria=self.categoria, centro_custo=self.centro,
+            data_competencia=self.ontem, data_movimento=self.ontem,
+            descricao="Despesa corrigida", valor=Decimal("22.50"),
+            motivo="Corre\u00e7\u00e3o do documento e do valor efetivamente pago.", usuario=self.usuario,
+        )
+        lancamento.refresh_from_db()
+        self.assertEqual(lancamento.descricao, "Despesa corrigida")
+        self.assertEqual(lancamento.valor, Decimal("22.50"))
+        self.assertEqual(self.conta.saldo_atual, Decimal("477.50"))
+
+    def test_cancelamento_preserva_historico_e_remove_efeito_financeiro(self):
+        lancamento = LancamentoCaixa.objects.create(
+            empresa=self.empresa, conta_bancaria=self.conta, forma_pagamento=self.pix,
+            categoria=self.categoria, centro_custo=self.centro, descricao="Despesa duplicada",
+            valor=Decimal("18.00"), tipo="saida", data_competencia=self.ontem,
+            data_movimento=self.ontem, usuario=self.usuario,
+        )
+        self.assertEqual(self.conta.saldo_atual, Decimal("482.00"))
+        correcao = cancelar_lancamento_manual(
+            lancamento=lancamento, motivo="Lan\u00e7amento inserido duas vezes por engano.", usuario=self.usuario,
+        )
+        self.assertEqual(correcao.tipo, "cancelamento")
+        self.assertFalse(LancamentoCaixa.objects.filter(pk=lancamento.pk).exists())
+        cancelado = LancamentoCaixa.todos.get(pk=lancamento.pk)
+        self.assertEqual(cancelado.status, "cancelado")
+        self.assertEqual(self.conta.saldo_atual, Decimal("500.00"))
+        self.assertEqual(
+            MovimentoBancario.objects.filter(chave_idempotencia=f"lancamento_caixa:{lancamento.pk}").get().status,
+            "neutralizado",
+        )
+
+    def test_identifica_e_neutraliza_somente_duplicidade_do_fluxo_antigo(self):
+        from caixa.models import LinhaExtratoBancario
+
+        linha = LinhaExtratoBancario.objects.create(
+            empresa=self.empresa, conta=self.conta, identificador_externo="DUP-1",
+            data_movimento=self.ontem, descricao="Tarifa antiga", valor=Decimal("-12.00"),
+        )
+        original = registrar_movimento_bancario(
+            conta=self.conta, tipo="saida", origem_tipo="manual", origem_id=linha.pk,
+            descricao="Tarifa antiga", valor=Decimal("12.00"), data_movimento=self.ontem,
+            chave=f"linha-extrato:{linha.pk}:movimento", usuario=self.usuario,
+        )
+        lancamento = LancamentoCaixa.objects.create(
+            empresa=self.empresa, conta_bancaria=self.conta, forma_pagamento=self.pix,
+            categoria=self.categoria, centro_custo=self.centro, descricao="Tarifa antiga",
+            valor=Decimal("12.00"), tipo="saida", data_competencia=self.ontem,
+            data_movimento=self.ontem, usuario=self.usuario,
+        )
+        duplicado = MovimentoBancario.objects.get(chave_idempotencia=f"lancamento_caixa:{lancamento.pk}")
+        conciliar_linha(linha=linha, movimento=original, usuario=self.usuario)
+        pares = listar_duplicidades_importacao_extrato(self.empresa)
+        self.assertEqual([item["duplicado"].pk for item in pares], [duplicado.pk])
+        neutralizar_duplicidade_importacao_extrato(
+            movimento=duplicado, usuario=self.usuario,
+            motivo="Duplicidade comprovada gerada pelo fluxo antigo.",
+        )
+        duplicado.refresh_from_db()
+        self.assertEqual(duplicado.status, "neutralizado")
+        self.assertEqual(listar_duplicidades_importacao_extrato(self.empresa), [])
+
+    def test_cancela_movimento_que_ja_havia_sido_corrigido(self):
+        lancamento = self._lancamento_incorreto(valor="14.00")
+        primeira = corrigir_lancamento_manual(
+            lancamento=lancamento, forma_pagamento=self.pix, conta_bancaria=self.conta,
+            caixa_destino=None, categoria=self.categoria, centro_custo=self.centro,
+            data_competencia=self.ontem, data_movimento=self.ontem,
+            motivo="A despesa ocorreu no banco e não no caixa de hoje.", usuario=self.usuario,
+        )
+        cancelar_lancamento_manual(
+            lancamento=lancamento, motivo="O lançamento corrigido também estava duplicado.", usuario=self.usuario,
+        )
+        primeira.movimento_bancario_corrigido.refresh_from_db()
+        primeira.movimento_financeiro_corrigido.refresh_from_db()
+        self.assertEqual(primeira.movimento_bancario_corrigido.status, "neutralizado")
+        self.assertEqual(primeira.movimento_financeiro_corrigido.status, "estornado")
+        self.assertEqual(self.conta.saldo_atual, Decimal("500.00"))

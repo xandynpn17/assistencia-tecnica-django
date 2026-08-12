@@ -386,7 +386,13 @@ class RecebimentoConta(models.Model):
         return f"Recebimento {self.valor} - Conta #{self.conta_id}"
 
 
+class LancamentoCaixaAtivoManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(status="ativo")
+
+
 class LancamentoCaixa(models.Model):
+    STATUS = [("ativo", "Ativo"), ("cancelado", "Cancelado")]
     NATUREZAS = [
         ("operacional", "Operacional"),
         ("transferencia", "Transferência de tesouraria"),
@@ -461,6 +467,19 @@ class LancamentoCaixa(models.Model):
     data_movimento = models.DateField(default=timezone.localdate, db_index=True)
     data = models.DateTimeField(auto_now_add=True)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    status = models.CharField(max_length=12, choices=STATUS, default="ativo", db_index=True)
+    cancelado_em = models.DateTimeField(null=True, blank=True)
+    cancelado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lancamentos_caixa_cancelados",
+    )
+    motivo_cancelamento = models.TextField(blank=True)
+
+    objects = LancamentoCaixaAtivoManager()
+    todos = models.Manager()
 
     def __str__(self):
         return f"{self.tipo} - R${self.valor}"
@@ -633,6 +652,7 @@ class ContaBancaria(models.Model):
 
 class MovimentoBancario(models.Model):
     TIPOS = [("entrada", "Entrada"), ("saida", "Saída")]
+    STATUS = [("ativo", "Ativo"), ("neutralizado", "Neutralizado por contrapartida")]
     ORIGENS = [("pagamento", "Pagamento"), ("conta_pagar", "Pagamento de conta a pagar"), ("conciliacao_diferenca", "Diferença de conciliação"), ("aporte_capital", "Aporte de capital"), ("transferencia", "Transferência"), ("lancamento_caixa", "Lançamento financeiro"), ("manual", "Manual")]
     empresa = models.ForeignKey("configuracoes.Empresa", on_delete=models.PROTECT, related_name="movimentos_bancarios")
     conta = models.ForeignKey(ContaBancaria, on_delete=models.PROTECT, related_name="movimentos")
@@ -646,6 +666,23 @@ class MovimentoBancario(models.Model):
     registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     chave_idempotencia = models.CharField(max_length=180, unique=True)
     metadados = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=14, choices=STATUS, default="ativo", db_index=True)
+    neutralizado_em = models.DateTimeField(null=True, blank=True)
+    neutralizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentos_bancarios_neutralizados",
+    )
+    motivo_neutralizacao = models.TextField(blank=True)
+    neutralizacao_de = models.OneToOneField(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="movimento_neutralizador",
+    )
 
     class Meta:
         ordering = ["-data_movimento", "-id"]
@@ -1799,6 +1836,8 @@ class PlanoContasVersao(models.Model):
 
 
 class CorrecaoLancamentoCaixa(models.Model):
+    TIPOS = [("edicao", "Edição"), ("cancelamento", "Cancelamento")]
+
     empresa = models.ForeignKey(
         "configuracoes.Empresa",
         on_delete=models.PROTECT,
@@ -1809,6 +1848,7 @@ class CorrecaoLancamentoCaixa(models.Model):
         on_delete=models.PROTECT,
         related_name="correcoes_auditadas",
     )
+    tipo = models.CharField(max_length=15, choices=TIPOS, default="edicao", db_index=True)
     dados_anteriores = models.JSONField(default=dict)
     dados_corrigidos = models.JSONField(default=dict)
     motivo = models.TextField()

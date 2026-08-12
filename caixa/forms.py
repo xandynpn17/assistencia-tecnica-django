@@ -195,10 +195,10 @@ class ConciliarExtratoForm(forms.Form):
     def __init__(self, *args, **kwargs):
         linha, empresa = kwargs.pop("linha"), kwargs.pop("empresa")
         super().__init__(*args, **kwargs)
-        self.fields["movimento"].queryset = MovimentoBancario.objects.filter(
-            empresa=empresa, conta=linha.conta
-        ).exclude(
-            historico_conciliacoes__conciliacao__status__in=["conciliado", "divergente"]
+        from caixa.services.tesouraria import movimentos_bancarios_disponiveis
+
+        self.fields["movimento"].queryset = movimentos_bancarios_disponiveis(
+            MovimentoBancario.objects.filter(empresa=empresa, conta=linha.conta)
         ).order_by("-data_movimento", "-id")
         def rotulo_movimento(movimento):
             valor_assinado = movimento.valor if movimento.tipo == "entrada" else -movimento.valor
@@ -252,10 +252,10 @@ class ConciliacaoBancariaGrupoForm(forms.Form):
             self.fields["linhas"].queryset = LinhaExtratoBancario.objects.filter(
                 empresa=empresa, conta_id=conta_id, status="pendente"
             ).order_by("data_movimento", "id")
-            self.fields["movimentos"].queryset = MovimentoBancario.objects.filter(
-                empresa=empresa, conta_id=conta_id
-            ).exclude(
-                historico_conciliacoes__conciliacao__status__in=["conciliado", "divergente"]
+            from caixa.services.tesouraria import movimentos_bancarios_disponiveis
+
+            self.fields["movimentos"].queryset = movimentos_bancarios_disponiveis(
+                MovimentoBancario.objects.filter(empresa=empresa, conta_id=conta_id)
             ).order_by("data_movimento", "id")
 
     def clean(self):
@@ -504,6 +504,8 @@ class LancamentoCaixaForm(forms.ModelForm):
 
 
 class CorrecaoLancamentoCaixaForm(forms.Form):
+    descricao = forms.CharField(max_length=200, label="Descrição correta")
+    valor = forms.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"), label="Valor correto")
     forma_pagamento = forms.ModelChoiceField(queryset=FormaPagamento.objects.none(), label="Meio de pagamento correto")
     conta_bancaria = forms.ModelChoiceField(
         queryset=ContaBancaria.objects.none(), required=False, label="Conta bancária correta"
@@ -543,6 +545,8 @@ class CorrecaoLancamentoCaixaForm(forms.Form):
         if not self.is_bound:
             self.initial.update(
                 {
+                    "descricao": lancamento.descricao,
+                    "valor": lancamento.valor,
                     "forma_pagamento": lancamento.forma_pagamento_id,
                     "conta_bancaria": lancamento.conta_bancaria_id,
                     "categoria": lancamento.categoria_id,

@@ -23,12 +23,12 @@
   <div class="row">
     <div class="col-xl-7 mb-3">
       <div class="card shadow-sm border-0">
-        <div class="card-header bg-white"><strong>Lançamentos com vínculo inconsistente</strong></div>
+        <div class="card-header bg-white d-flex justify-content-between"><strong>{% if exibir_todos %}Lançamentos manuais ativos{% else %}Lançamentos com vínculo inconsistente{% endif %}</strong><a href="{% if exibir_todos %}{% url 'caixa:saneamento_lancamentos' %}{% else %}?exibir=todos{% endif %}" class="btn btn-sm btn-outline-secondary">{% if exibir_todos %}Mostrar somente inconsistentes{% else %}Editar/cancelar outros lançamentos{% endif %}</a></div>
         <div class="table-responsive">
           <table class="table table-sm table-hover mb-0">
             <thead><tr><th>#</th><th>Movimento</th><th>Caixa vinculado</th><th>Descrição</th><th>Tipo</th><th class="text-right">Valor</th><th></th></tr></thead>
             <tbody>
-              {% for item in inconsistentes %}
+              {% for item in lancamentos %}
               <tr class="{% if lancamento_selecionado.id == item.id %}table-warning{% endif %}">
                 <td>{{ item.id }}</td>
                 <td>{{ item.data_movimento|date:'d/m/Y' }}</td>
@@ -39,7 +39,7 @@
                 <td><a class="btn btn-sm btn-outline-primary" href="?lancamento={{ item.id }}">Corrigir</a></td>
               </tr>
               {% empty %}
-              <tr><td colspan="7" class="text-center text-success py-4">Nenhum lançamento manual inconsistente encontrado.</td></tr>
+              <tr><td colspan="7" class="text-center text-success py-4">Nenhum lançamento manual ativo encontrado.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -57,7 +57,7 @@
             vinculado a {% if lancamento_selecionado.caixa %}caixa {{ lancamento_selecionado.caixa.data|date:'d/m/Y' }}{% elif lancamento_selecionado.conta_bancaria %}{{ lancamento_selecionado.conta_bancaria.nome }}{% else %}nenhuma origem{% endif %}.
           </div>
           <form method="post">
-            {% csrf_token %}<input type="hidden" name="lancamento_id" value="{{ lancamento_selecionado.id }}">
+            {% csrf_token %}<input type="hidden" name="acao" value="corrigir"><input type="hidden" name="lancamento_id" value="{{ lancamento_selecionado.id }}">{% if exibir_todos %}<input type="hidden" name="exibir" value="todos">{% endif %}
             {{ form.non_field_errors }}
             {% for field in form %}
             <div class="form-group">
@@ -69,6 +69,12 @@
             {% endfor %}
             <button class="btn btn-primary btn-block">Confirmar correção auditada</button>
           </form>
+          <hr>
+          <form method="post" onsubmit="return confirm('Cancelar este lançamento? O registro será preservado no histórico e seu efeito financeiro será estornado.');">
+            {% csrf_token %}<input type="hidden" name="acao" value="cancelar"><input type="hidden" name="lancamento_id" value="{{ lancamento_selecionado.id }}">
+            <div class="form-group"><label><strong>Justificativa para cancelamento</strong></label><textarea class="form-control" name="motivo_cancelamento" minlength="12" rows="2" required></textarea><small class="form-text text-muted">O lançamento não é apagado: fica cancelado e auditável.</small></div>
+            <button class="btn btn-outline-danger btn-block">Cancelar lançamento com auditoria</button>
+          </form>
           {% else %}
           <p class="text-muted mb-0">Selecione um lançamento pendente.</p>
           {% endif %}
@@ -77,20 +83,22 @@
     </div>
   </div>
 
+  {% if duplicidades_extrato %}<div class="card shadow-sm border-warning mb-3"><div class="card-header bg-warning"><strong>Duplicidades comprovadas do fluxo antigo de extrato</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Data</th><th>Conta</th><th>Descrição</th><th>Valor</th><th>Ação</th></tr></thead><tbody>{% for par in duplicidades_extrato %}<tr><td>{{ par.duplicado.data_movimento|date:'d/m/Y' }}</td><td>{{ par.duplicado.conta.nome }}</td><td>{{ par.duplicado.descricao }}</td><td>R$ {{ par.duplicado.valor|floatformat:2 }}</td><td><form method="post" class="d-flex">{% csrf_token %}<input type="hidden" name="acao" value="neutralizar_duplicidade"><input type="hidden" name="movimento_id" value="{{ par.duplicado.id }}"><input class="form-control form-control-sm mr-1" name="motivo" minlength="12" required value="Duplicidade criada pelo fluxo antigo de importação de extrato"><button class="btn btn-sm btn-warning">Neutralizar</button></form></td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
+
   <div class="card shadow-sm border-0">
     <div class="card-header bg-white"><strong>Histórico de correções</strong></div>
     <div class="table-responsive">
       <table class="table table-sm mb-0">
-        <thead><tr><th>Quando</th><th>Lançamento</th><th>Usuário</th><th>Motivo</th><th>Origem anterior</th><th>Origem corrigida</th></tr></thead>
+        <thead><tr><th>Quando</th><th>Tipo</th><th>Lançamento</th><th>Usuário</th><th>Motivo</th><th>Origem anterior</th><th>Origem corrigida</th></tr></thead>
         <tbody>
           {% for item in historico %}
           <tr>
-            <td>{{ item.corrigido_em|date:'d/m/Y H:i' }}</td><td>#{{ item.lancamento_id }}</td>
+            <td>{{ item.corrigido_em|date:'d/m/Y H:i' }}</td><td>{{ item.get_tipo_display }}</td><td>#{{ item.lancamento_id }}</td>
             <td>{{ item.corrigido_por }}</td><td>{{ item.motivo }}</td>
             <td>{% if item.dados_anteriores.conta_bancaria_id %}Banco #{{ item.dados_anteriores.conta_bancaria_id }}{% else %}Caixa #{{ item.dados_anteriores.caixa_id|default:'-' }}{% endif %}</td>
             <td>{% if item.dados_corrigidos.conta_bancaria_id %}Banco #{{ item.dados_corrigidos.conta_bancaria_id }}{% else %}Caixa #{{ item.dados_corrigidos.caixa_id|default:'-' }}{% endif %}</td>
           </tr>
-          {% empty %}<tr><td colspan="6" class="text-center text-muted">Nenhuma correção realizada.</td></tr>{% endfor %}
+          {% empty %}<tr><td colspan="7" class="text-center text-muted">Nenhuma correção realizada.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>

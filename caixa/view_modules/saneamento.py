@@ -7,8 +7,13 @@ from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, require_sensitive_p
 from configuracoes.services.tenant_guard import obter_empresa_ativa
 
 from ..forms import CorrecaoLancamentoCaixaForm
-from ..models import CorrecaoLancamentoCaixa, LancamentoCaixa
-from ..services.saneamento_lancamentos import corrigir_lancamento_manual
+from ..models import CorrecaoLancamentoCaixa, LancamentoCaixa, MovimentoBancario
+from ..services.saneamento_lancamentos import (
+    cancelar_lancamento_manual,
+    corrigir_lancamento_manual,
+    listar_duplicidades_importacao_extrato,
+    neutralizar_duplicidade_importacao_extrato,
+)
 
 
 def _lancamentos_manuais(empresa):
@@ -33,8 +38,22 @@ def saneamento_lancamentos(request):
         | (Q(caixa__isnull=False) & ~Q(data_movimento=F("caixa__data")))
     ).order_by("-data_movimento", "-id")
 
+    exibir_todos = request.GET.get("exibir") == "todos" or request.POST.get("exibir") == "todos"
+    listagem = manuais.order_by("-data_movimento", "-id") if exibir_todos else inconsistentes
+    acao = request.POST.get("acao") if request.method == "POST" else ""
+    if acao == "neutralizar_duplicidade":
+        movimento = get_object_or_404(MovimentoBancario, pk=request.POST.get("movimento_id"), empresa=empresa)
+        try:
+            neutralizar_duplicidade_importacao_extrato(
+                movimento=movimento, usuario=request.user, motivo=request.POST.get("motivo")
+            )
+            messages.success(request, "Duplicidade neutralizada com contrapartida e auditoria preservada.")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        return redirect("caixa:saneamento_lancamentos")
+
     lancamento_id = request.POST.get("lancamento_id") if request.method == "POST" else request.GET.get("lancamento")
-    lancamento = get_object_or_404(manuais, pk=lancamento_id) if lancamento_id else inconsistentes.first()
+    lancamento = get_object_or_404(manuais, pk=lancamento_id) if lancamento_id else listagem.first()
     form = None
     if lancamento:
         form = CorrecaoLancamentoCaixaForm(
@@ -42,7 +61,16 @@ def saneamento_lancamentos(request):
             empresa=empresa,
             lancamento=lancamento,
         )
-        if request.method == "POST" and form.is_valid():
+        if request.method == "POST" and acao == "cancelar":
+            try:
+                correcao = cancelar_lancamento_manual(
+                    lancamento=lancamento, motivo=request.POST.get("motivo_cancelamento"), usuario=request.user
+                )
+                messages.success(request, f"Lançamento #{lancamento.pk} cancelado com auditoria #{correcao.pk}.")
+                return redirect("caixa:saneamento_lancamentos")
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+        elif request.method == "POST" and acao == "corrigir" and form.is_valid():
             try:
                 correcao = corrigir_lancamento_manual(
                     lancamento=lancamento,
@@ -55,6 +83,8 @@ def saneamento_lancamentos(request):
                     data_movimento=form.cleaned_data["data_movimento"],
                     motivo=form.cleaned_data["motivo"],
                     usuario=request.user,
+                    descricao=form.cleaned_data["descricao"],
+                    valor=form.cleaned_data["valor"],
                 )
                 messages.success(
                     request,
@@ -72,7 +102,10 @@ def saneamento_lancamentos(request):
         "caixa/saneamento_lancamentos.html",
         {
             "inconsistentes": inconsistentes[:100],
+            "lancamentos": listagem[:100],
             "quantidade_inconsistentes": inconsistentes.count(),
+            "exibir_todos": exibir_todos,
+            "duplicidades_extrato": listar_duplicidades_importacao_extrato(empresa),
             "lancamento_selecionado": lancamento,
             "form": form,
             "historico": historico,
