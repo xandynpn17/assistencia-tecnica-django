@@ -385,7 +385,7 @@
                         <td>{{ p.data_competencia|date:"d/m/Y" }}</td>
                         <td>{{ p.data_movimento|date:"d/m/Y" }}</td>
                         <td>{{ p.data|date:"d/m/Y H:i" }}</td>
-                        <td>{% if user|has_perm_sensivel:'perm_caixa_excluir_pagamento' %}<a class="btn btn-sm btn-outline-danger" href="{% url 'caixa:excluir_pagamento' p.id %}">Cancelar e refazer</a>{% else %}-{% endif %}</td>
+                        <td>{% if user|has_perm_sensivel:'perm_caixa_excluir_pagamento' %}<a class="btn btn-sm btn-outline-danger" href="{% url 'caixa:excluir_pagamento' p.id %}?next={{ request.get_full_path|urlencode }}">Estornar/refazer</a>{% else %}-{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

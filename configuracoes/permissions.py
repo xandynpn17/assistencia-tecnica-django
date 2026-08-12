@@ -64,7 +64,7 @@ SENSITIVE_PERMISSION_MESSAGES = {
     "perm_caixa_cancelar_conta_pagar": "Você não tem permissão para cancelar contas a pagar.",
     "perm_caixa_editar_conta_pagar": "Você não tem permissão para editar contas a pagar.",
     "perm_caixa_aplicar_desconto": "Você não tem permissão para aplicar desconto no caixa.",
-    "perm_caixa_excluir_pagamento": "Você não tem permissão para excluir pagamentos.",
+    "perm_caixa_excluir_pagamento": "Você não tem permissão para estornar pagamentos.",
     "perm_caixa_ver_dre": "Você não tem permissão para acessar o DRE.",
     "perm_caixa_gerir_comissoes": "Você não tem permissão para gerir comissões.",
     "perm_caixa_lancamento_retroativo": "Você não tem permissão para registrar datas financeiras retroativas.",

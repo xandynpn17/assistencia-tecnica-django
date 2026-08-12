@@ -576,7 +576,7 @@ class UserForm(forms.ModelForm):
         self.fields["perm_caixa_cancelar_conta_pagar"].label = "Cancelar conta a pagar"
         self.fields["perm_caixa_editar_conta_pagar"].label = "Editar conta a pagar"
         self.fields["perm_caixa_aplicar_desconto"].label = "Aplicar desconto no caixa"
-        self.fields["perm_caixa_excluir_pagamento"].label = "Excluir pagamento"
+        self.fields["perm_caixa_excluir_pagamento"].label = "Estornar pagamento"
         self.fields["perm_caixa_ver_dre"].label = "Ver DRE"
         self.fields["perm_caixa_gerir_comissoes"].label = "Gerir comissoes"
         self.fields["perm_caixa_ver_auditoria"].label = "Ver auditoria operacional"

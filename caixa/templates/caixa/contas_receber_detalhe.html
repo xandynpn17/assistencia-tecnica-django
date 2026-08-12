@@ -152,6 +152,7 @@
                 <th class="text-right">Juros</th>
                 <th>Referencia</th>
                 <th>Usuario</th>
+                <th class="text-right">Acao</th>
               </tr>
             </thead>
             <tbody>
@@ -163,9 +164,14 @@
                 <td class="text-right">R$ {{ r.juros|floatformat:2 }}</td>
                 <td>{{ r.referencia|default:"-" }}</td>
                 <td>{{ r.usuario.username|default:"-" }}</td>
+                <td class="text-right">
+                  {% if r.pagamento and pode_estornar_pagamento %}
+                  <a class="btn btn-sm btn-outline-danger" href="{% url 'caixa:excluir_pagamento' r.pagamento.id %}?next={{ request.get_full_path|urlencode }}">Estornar</a>
+                  {% else %}-{% endif %}
+                </td>
               </tr>
               {% empty %}
-              <tr><td colspan="6" class="text-center">Sem recebimentos.</td></tr>
+              <tr><td colspan="7" class="text-center">Sem recebimentos.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -217,15 +223,19 @@
 
       <div class="card mt-3">
         <div class="card-body">
-          <form method="post" onsubmit="return window.AppMessages.confirmSync('Deseja cancelar esta conta?');">
+          <form method="post" onsubmit="return window.AppMessages.confirmSync('Deseja cancelar esta cobranca? O registro permanecera na auditoria.');">
             {% csrf_token %}
             <input type="hidden" name="action" value="cancelar">
+            <div class="form-group">
+              <label for="id_motivo_cancelamento"><strong>Justificativa do cancelamento</strong></label>
+              <textarea id="id_motivo_cancelamento" name="motivo_cancelamento" class="form-control" rows="2" minlength="12" {% if not recebimentos and pode_cancelar_conta_receber %}required{% endif %} placeholder="Explique por que esta cobranca nao deve permanecer ativa."></textarea>
+            </div>
             <button type="submit" class="btn btn-outline-danger btn-block" {% if recebimentos or not pode_cancelar_conta_receber %}disabled{% endif %}>
-              Cancelar conta
+              Cancelar cobranca
             </button>
           </form>
           {% if recebimentos %}
-          <small class="text-muted d-block mt-2">Conta com recebimentos vinculados nao pode ser cancelada.</small>
+          <small class="text-muted d-block mt-2">Estorne primeiro os recebimentos acima; depois a cobranca podera ser cancelada.</small>
           {% endif %}
           {% if not recebimentos and not pode_cancelar_conta_receber %}
           <small class="text-muted d-block mt-2">Bloqueado para este usuario.</small>

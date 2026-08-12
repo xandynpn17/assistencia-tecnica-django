@@ -116,7 +116,7 @@ PERMISSION_LABELS = {
     "perm_caixa_cancelar_conta_pagar": "Cancelar conta a pagar",
     "perm_caixa_editar_conta_pagar": "Editar conta a pagar",
     "perm_caixa_aplicar_desconto": "Aplicar desconto no caixa",
-    "perm_caixa_excluir_pagamento": "Excluir pagamento",
+    "perm_caixa_excluir_pagamento": "Estornar pagamento",
     "perm_caixa_ver_dre": "Ver DRE/faturamento",
     "perm_caixa_gerir_comissoes": "Gerir comissões da equipe",
     "perm_caixa_ver_auditoria": "Ver auditoria operacional do caixa",

@@ -509,6 +509,7 @@
                 <th class="text-right">Valor</th>
                 <th>Forma</th>
                 <th>Data</th>
+                <th class="text-right">A&ccedil;&atilde;o</th>
               </tr>
             </thead>
             <tbody>
@@ -518,9 +519,10 @@
                 <td class="text-right">R$ {{ p.valor|floatformat:2 }}</td>
                 <td>{{ p.metodo_display }}</td>
                 <td>{{ p.data|date:"d/m/Y H:i" }}</td>
+                <td class="text-right">{% if pode_estornar_pagamento %}<a class="btn btn-xs btn-outline-danger" href="{% url 'caixa:excluir_pagamento' p.id %}?next={{ request.get_full_path|urlencode }}">Estornar</a>{% else %}-{% endif %}</td>
               </tr>
               {% empty %}
-              <tr><td colspan="4" class="text-center">Nenhum pagamento.</td></tr>
+              <tr><td colspan="5" class="text-center">Nenhum pagamento.</td></tr>
               {% endfor %}
             </tbody>
           </table>

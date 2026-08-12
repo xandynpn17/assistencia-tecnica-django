@@ -113,7 +113,7 @@
                         <td class="text-right">
                             <a href="{% url 'caixa:imprimir_talao' p.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">2&ordf; via</a>
                             {% if user|has_perm_sensivel:'perm_caixa_excluir_pagamento' %}
-                            <a href="{% url 'caixa:excluir_pagamento' p.id %}" class="btn btn-sm btn-outline-danger">Excluir</a>
+                            <a href="{% url 'caixa:excluir_pagamento' p.id %}?next={{ request.get_full_path|urlencode }}" class="btn btn-sm btn-outline-danger">Estornar</a>
                             {% endif %}
                         </td>
                     </tr>

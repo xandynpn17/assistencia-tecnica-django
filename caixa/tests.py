@@ -713,7 +713,10 @@ class CaixaPermissoesTests(TestCase):
         self.client.force_login(self.financeiro_extra)
         response = self.client.post(
             reverse("caixa:detalhe_conta_receber", args=[conta.id]),
-            {"action": "cancelar"},
+            {
+                "action": "cancelar",
+                "motivo_cancelamento": "Cobranca criada em duplicidade.",
+            },
         )
         self.assertEqual(response.status_code, 302)
         conta.refresh_from_db()
@@ -823,11 +826,37 @@ class CaixaPermissoesTests(TestCase):
         self.client.force_login(self.gerente)
         response = self.client.post(
             reverse("caixa:detalhe_conta_receber", args=[conta.id]),
-            {"action": "cancelar"},
+            {
+                "action": "cancelar",
+                "motivo_cancelamento": "Cobranca criada em duplicidade.",
+            },
         )
         self.assertEqual(response.status_code, 302)
         conta.refresh_from_db()
         self.assertEqual(conta.status, "cancelada")
+        auditoria = AuditoriaFinanceira.objects.get(evento="conta_receber_cancelada", conta=conta)
+        self.assertIn("duplicidade", auditoria.descricao)
+
+    def test_gerente_nao_cancela_conta_receber_sem_justificativa(self):
+        conta = ContaReceber.objects.create(
+            ordem_servico=self.ordem,
+            descricao="Conta sem justificativa",
+            cliente_nome=self.cliente.nome,
+            valor_original="100.00",
+            valor_aberto="100.00",
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        self.client.force_login(self.gerente)
+
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_receber", args=[conta.id]),
+            {"action": "cancelar", "motivo_cancelamento": ""},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.status, "aberta")
 
     def test_conta_receber_com_recebimentos_nao_pode_ser_cancelada(self):
         conta = ContaReceber.objects.create(
@@ -4037,6 +4066,8 @@ class CaixaPermissoesTests(TestCase):
         pagamento = Pagamento.objects.get(referencia="EXC-001")
         conta = ContaReceber.objects.get(ordem_servico=self.ordem, tipo_origem="cliente_os")
         self.assertEqual(conta.status, "paga")
+        detalhe_conta = self.client.get(reverse("caixa:detalhe_conta_receber", args=[conta.id]))
+        self.assertContains(detalhe_conta, "Estornar")
 
         response_sem_justificativa = self.client.post(
             reverse("caixa:excluir_pagamento", args=[pagamento.id]),
@@ -4047,9 +4078,13 @@ class CaixaPermissoesTests(TestCase):
 
         response_excluir = self.client.post(
             reverse("caixa:excluir_pagamento", args=[pagamento.id]),
-            {"justificativa": "Pagamento lanÃ§ado em duplicidade no balcÃ£o."},
+            {
+                "justificativa": "Pagamento lanÃ§ado em duplicidade no balcÃ£o.",
+                "next": reverse("caixa:detalhe_conta_receber", args=[conta.id]),
+            },
         )
         self.assertEqual(response_excluir.status_code, 302)
+        self.assertEqual(response_excluir.url, reverse("caixa:detalhe_conta_receber", args=[conta.id]))
         self.assertFalse(Pagamento.objects.filter(id=pagamento.id).exists())
         conta.refresh_from_db()
         self.assertEqual(conta.status, "aberta")

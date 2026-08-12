@@ -108,6 +108,7 @@
               <th>Forma</th>
               <th class="text-right">Valor</th>
               <th>Data</th>
+              <th class="text-right">Ação</th>
             </tr>
           </thead>
           <tbody>
@@ -117,9 +118,10 @@
               <td>{{ pagamento.metodo_display }}</td>
               <td class="text-right">R$ {{ pagamento.valor|floatformat:2 }}</td>
               <td>{{ pagamento.data|date:"d/m/Y H:i" }}</td>
+              <td class="text-right">{% if pode_estornar_pagamento %}<a class="btn btn-sm btn-outline-danger" href="{% url 'caixa:excluir_pagamento' pagamento.id %}?next={{ request.get_full_path|urlencode }}">Estornar</a>{% else %}-{% endif %}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum pagamento vinculado a este caixa.</td></tr>
+            <tr><td colspan="5" class="text-center text-muted py-3">Nenhum pagamento vinculado a este caixa.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -139,6 +141,7 @@
               <th>Categoria</th>
               <th class="text-right">Valor</th>
               <th>Data</th>
+              <th class="text-right">Ação</th>
             </tr>
           </thead>
           <tbody>
@@ -148,9 +151,16 @@
               <td>{{ lancamento.categoria.nome|default:"-" }}</td>
               <td class="text-right">R$ {{ lancamento.valor|floatformat:2 }}</td>
               <td>{{ lancamento.data|date:"d/m/Y H:i" }}</td>
+              <td class="text-right">
+                {% if lancamento.pagamento_id and pode_estornar_pagamento %}
+                <a class="btn btn-sm btn-outline-danger" href="{% url 'caixa:excluir_pagamento' lancamento.pagamento_id %}?next={{ request.get_full_path|urlencode }}">Estornar</a>
+                {% elif pode_corrigir_lancamentos %}
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'caixa:saneamento_lancamentos' %}?exibir=todos&amp;lancamento={{ lancamento.id }}">Editar/cancelar</a>
+                {% else %}-{% endif %}
+              </td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum lançamento vinculado a este caixa.</td></tr>
+            <tr><td colspan="5" class="text-center text-muted py-3">Nenhum lançamento vinculado a este caixa.</td></tr>
             {% endfor %}
           </tbody>
         </table>

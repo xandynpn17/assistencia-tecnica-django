@@ -183,7 +183,7 @@ def gerar_numero_talao_pagamento(*, pagamento, configuracao_sistema_model=None):
 def excluir_pagamento_com_justificativa(*, pagamento, usuario, justificativa):
     justificativa = (justificativa or "").strip()
     if not justificativa:
-        raise ValueError("Informe a justificativa para excluir o pagamento.")
+        raise ValueError("Informe o motivo para estornar o pagamento.")
 
     from caixa.models import RecebimentoConta
     from estoque.models import VendaRapidaEstoque

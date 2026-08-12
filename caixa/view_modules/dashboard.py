@@ -11,6 +11,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, F, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 
 from configuracoes.models import ConfiguracaoSistema, MarcaGarantia, RegraGarantiaMarca
@@ -825,6 +826,8 @@ def _dashboard_caixa_context(request, menu_sub):
         "pode_ver_dre": has_sensitive_permission(request.user, "perm_caixa_ver_dre"),
         "pode_gerir_comissoes": has_sensitive_permission(request.user, "perm_caixa_gerir_comissoes"),
         "pode_ver_auditoria": has_sensitive_permission(request.user, "perm_caixa_ver_auditoria"),
+        "pode_estornar_pagamento": has_sensitive_permission(request.user, "perm_caixa_excluir_pagamento"),
+        "pode_corrigir_lancamentos": has_sensitive_permission(request.user, "perm_caixa_corrigir_lancamentos"),
         "menu_app": "caixa",
         "menu_sub": menu_sub,
     }
@@ -872,6 +875,8 @@ def detalhe_caixa(request, caixa_id):
             "saldo_apurado": resumo_caixa["saldo"],
             "conferencia_formas": conferencia_formas,
             "eventos_caixa": eventos_caixa,
+            "pode_estornar_pagamento": has_sensitive_permission(request.user, "perm_caixa_excluir_pagamento"),
+            "pode_corrigir_lancamentos": has_sensitive_permission(request.user, "perm_caixa_corrigir_lancamentos"),
             "menu_app": "caixa",
             "menu_sub": "dashboard_financeiro",
         },
@@ -1368,19 +1373,26 @@ def excluir_pagamento(request, pagamento_id):
     require_sensitive_permission(
         request.user,
         "perm_caixa_excluir_pagamento",
-        message="Voce nao tem permissao para excluir pagamentos.",
+        message="Voce nao tem permissao para estornar pagamentos.",
     )
     empresa = getattr(request.user, "empresa", None)
     pagamentos = Pagamento.objects.select_related("ordem_servico", "forma_pagamento")
     pagamentos = pagamentos.filter(empresa=empresa) if empresa is not None else pagamentos.filter(empresa__isnull=True)
     pagamento = get_object_or_404(pagamentos, id=pagamento_id)
     config_sistema = ConfiguracaoSistema.get_configuracao()
+    proxima_url = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    if not url_has_allowed_host_and_scheme(
+        proxima_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        proxima_url = ""
     if request.method == "POST":
         justificativa = (request.POST.get("justificativa") or "").strip()
         confirmar_exclusao = (request.POST.get("confirmar_exclusao_pagamento") or "").strip() == "1"
         minimo = int(config_sistema.antifraude_motivo_minimo_caracteres or 12)
         if not justificativa:
-            messages.error(request, "Informe a justificativa para excluir o pagamento.")
+            messages.error(request, "Informe o motivo para estornar o pagamento.")
         elif len(justificativa) < minimo:
             messages.error(request, f"A justificativa precisa ter pelo menos {minimo} caracteres.")
         elif bool(config_sistema.antifraude_exigir_dupla_confirmacao_exclusao_pagamento) and not confirmar_exclusao:
@@ -1397,11 +1409,14 @@ def excluir_pagamento(request, pagamento_id):
                     "pagamento_excluido",
                     request.user,
                     valor=pagamento.valor,
-                    descricao=f"Pagamento {pagamento_info} excluido. Justificativa: {justificativa}",
+                    descricao=f"Pagamento {pagamento_info} estornado. Justificativa: {justificativa}",
                 )
-                messages.success(request, "Pagamento excluido com sucesso.")
-                return redirect("caixa:taloes")
-            except ValueError as exc:
+                messages.success(
+                    request,
+                    "Pagamento estornado. A entrada foi retirada dos totais e o histórico de auditoria foi preservado.",
+                )
+                return redirect(proxima_url or reverse("caixa:taloes"))
+            except (ValueError, ValidationError) as exc:
                 logger.warning(
                     "caixa_excluir_pagamento_bloqueado",
                     extra={
@@ -1419,6 +1434,7 @@ def excluir_pagamento(request, pagamento_id):
         "caixa/excluir_pagamento.html",
         {
             "pagamento": pagamento,
+            "proxima_url": proxima_url,
             "antifraude_config": config_sistema,
             "menu_app": "caixa",
             "menu_sub": "taloes",

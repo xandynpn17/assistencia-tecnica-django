@@ -447,6 +447,7 @@ def detalhe_conta_receber(request, conta_id):
             "auditoria_garantia_vinculada",
         ),
         id=conta_id,
+        empresa=empresa,
     )
     recebimentos = conta.recebimentos.select_related("usuario", "pagamento")
     valor_quitado = max(Decimal("0.00"), (conta.valor_original or Decimal("0.00")) - (conta.valor_aberto or Decimal("0.00")))
@@ -462,13 +463,22 @@ def detalhe_conta_receber(request, conta_id):
             except PermissionDenied as exc:
                 messages.error(request, str(exc) or "Permissao insuficiente.")
                 return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
+            motivo_cancelamento = (request.POST.get("motivo_cancelamento") or "").strip()
             if recebimentos.exists():
                 messages.error(request, "Nao e permitido cancelar conta com recebimentos vinculados.")
+            elif len(motivo_cancelamento) < 12:
+                messages.error(request, "Informe uma justificativa com pelo menos 12 caracteres para cancelar a cobranca.")
             else:
                 conta.status = "cancelada"
                 conta.save(update_fields=["status", "atualizado_em"])
-                _log_financeiro("conta_receber_cancelada", request.user, conta=conta, valor=conta.valor_original)
-                messages.success(request, "Conta cancelada.")
+                _log_financeiro(
+                    "conta_receber_cancelada",
+                    request.user,
+                    conta=conta,
+                    valor=conta.valor_original,
+                    descricao=f"Cobranca cancelada. Justificativa: {motivo_cancelamento}",
+                )
+                messages.success(request, "Cobranca cancelada e preservada no historico de auditoria.")
             return redirect("caixa:detalhe_conta_receber", conta_id=conta.id)
 
         form = BaixaContaReceberForm(_payload_pagamento_normalizado(request), empresa=empresa)
@@ -546,6 +556,7 @@ def detalhe_conta_receber(request, conta_id):
             "pode_cancelar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_cancelar_conta_receber"),
             "pode_editar_conta_receber": has_sensitive_permission(request.user, "perm_caixa_editar_conta_receber"),
             "pode_aplicar_desconto_caixa": has_sensitive_permission(request.user, "perm_caixa_aplicar_desconto"),
+            "pode_estornar_pagamento": has_sensitive_permission(request.user, "perm_caixa_excluir_pagamento"),
             "menu_app": "caixa",
             "menu_sub": "contas_receber",
         },

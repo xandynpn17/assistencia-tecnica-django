@@ -430,7 +430,7 @@
       <div class="card-header"><h3 class="card-title">Pagamentos recentes</h3></div>
       <div class="card-body table-responsive p-0">
         <table class="table table-hover table-sm mb-0">
-          <thead><tr><th>OS</th><th class="text-right">Valor</th><th>Forma</th><th>Data</th></tr></thead>
+          <thead><tr><th>OS</th><th class="text-right">Valor</th><th>Forma</th><th>Data</th><th class="text-right">A&ccedil;&atilde;o</th></tr></thead>
           <tbody>
             {% for p in pagamentos_recentes %}
             <tr>
@@ -438,9 +438,10 @@
               <td class="text-right">R$ {{ p.valor|floatformat:2 }}</td>
               <td>{{ p.metodo_display }}</td>
               <td>{{ p.data|date:"d/m/Y H:i" }}</td>
+              <td class="text-right">{% if pode_estornar_pagamento %}<a class="btn btn-xs btn-outline-danger" href="{% url 'caixa:excluir_pagamento' p.id %}?next={{ request.get_full_path|urlencode }}">Estornar</a>{% else %}-{% endif %}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="text-center">Nenhum pagamento.</td></tr>
+            <tr><td colspan="5" class="text-center">Nenhum pagamento.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -452,7 +453,7 @@
       <div class="card-header"><h3 class="card-title">Lançamentos recentes</h3></div>
       <div class="card-body table-responsive p-0">
         <table class="table table-hover table-sm mb-0">
-          <thead><tr><th>Descrição</th><th>Tipo</th><th class="text-right">Valor</th><th>Data</th></tr></thead>
+          <thead><tr><th>Descrição</th><th>Tipo</th><th class="text-right">Valor</th><th>Data</th><th class="text-right">Ação</th></tr></thead>
           <tbody>
             {% for l in lancamentos_recentes %}
             <tr>
@@ -460,9 +461,16 @@
               <td>{% if l.tipo == 'entrada' %}<span class="badge badge-success">Entrada</span>{% else %}<span class="badge badge-danger">Saída</span>{% endif %}</td>
               <td class="text-right">R$ {{ l.valor|floatformat:2 }}</td>
               <td>{{ l.data|date:"d/m/Y H:i" }}</td>
+              <td class="text-right">
+                {% if l.pagamento_id and pode_estornar_pagamento %}
+                <a class="btn btn-xs btn-outline-danger" href="{% url 'caixa:excluir_pagamento' l.pagamento_id %}?next={{ request.get_full_path|urlencode }}">Estornar</a>
+                {% elif pode_corrigir_lancamentos %}
+                <a class="btn btn-xs btn-outline-primary" href="{% url 'caixa:saneamento_lancamentos' %}?exibir=todos&amp;lancamento={{ l.id }}">Editar/cancelar</a>
+                {% else %}-{% endif %}
+              </td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="text-center">Nenhum lançamento.</td></tr>
+            <tr><td colspan="5" class="text-center">Nenhum lançamento.</td></tr>
             {% endfor %}
           </tbody>
         </table>
