@@ -25,6 +25,7 @@ urlpatterns = [
     path("contas-pagar/aging/", views.aging_pagar, name="aging_pagar"),
     path("cartoes-corporativos/", views.cartoes_corporativos, name="cartoes_corporativos"),
     path("contabilidade-gerencial/", views.contabilidade_gerencial, name="contabilidade_gerencial"),
+    path("saneamento-lancamentos/", views.saneamento_lancamentos, name="saneamento_lancamentos"),
     path("categorias-financeiras/", views.categorias_financeiras, name="categorias_financeiras"),
     path("formas-pagamento/", views.formas_pagamento, name="formas_pagamento"),
     path("centros-custo/", views.centros_custo, name="centros_custo"),

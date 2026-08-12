@@ -5939,11 +5939,26 @@ class LivroFinanceiroFaseUmTests(TestCase):
 
     def test_data_retroativa_exige_permissao_especifica(self):
         ontem = timezone.localdate() - timedelta(days=1)
+        conta = ContaBancaria.objects.create(
+            empresa=self.empresa,
+            nome="Conta retroativa livro",
+            banco_nome="Banco Teste",
+            numero="RETRO-1",
+            data_saldo_inicial=ontem,
+        )
+        pix = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            nome="PIX retroativo livro",
+            codigo="pix-retroativo-livro",
+        )
         payload = {
             "descricao": "Despesa retroativa",
             "categoria": self.categoria.id,
             "centro_custo": self.centro.id,
             "valor": "30.00",
+            "forma_pagamento": pix.id,
+            "conta_bancaria": conta.id,
+            "caixa": "",
             "data_competencia": ontem.isoformat(),
             "data_movimento": ontem.isoformat(),
         }

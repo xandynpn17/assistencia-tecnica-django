@@ -14,6 +14,7 @@ from .dashboard import (
 from .pagaveis import aging_pagar, contas_pagar, criar_conta_pagar, detalhe_conta_pagar, editar_conta_pagar
 from .cartoes_corporativos import cartoes_corporativos
 from .contabilidade import contabilidade_gerencial
+from .saneamento import saneamento_lancamentos
 from .taloes import imprimir_talao, taloes
 from .tesouraria import conciliar_extrato_grupo, desfazer_conciliacao_bancaria, tesouraria, tratar_linha_extrato
 from .recebiveis import (
@@ -66,6 +67,7 @@ __all__ = [
     "registrar_pagamento",
     "registrar_saida",
     "relatorios",
+    "saneamento_lancamentos",
     "taloes",
     "tesouraria",
     "tratar_linha_extrato",

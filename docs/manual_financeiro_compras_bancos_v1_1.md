@@ -1,6 +1,6 @@
 # Manual operacional — compras, custos, caixa, bancos e contabilidade gerencial
 
-Versão 1.1.0 — 12/08/2026
+Versão 1.1.1 — 12/08/2026
 
 ## Regra central
 
@@ -36,6 +36,18 @@ Em **Bancos e conciliação**, importe OFX/CSV. Cada arquivo recebe hash e lote;
 
 O mês só fecha sem linhas pendentes e quando saldo do sistema e extrato são iguais. Após o fechamento, movimentos naquela data ficam bloqueados; correções exigem reabertura com permissão e motivo.
 
+## Correção de lançamentos retroativos
+
+Em **Caixa > Corrigir lançamentos**, o sistema lista entradas e saídas manuais cuja data do movimento não corresponde ao caixa físico vinculado. Selecione o item, informe a data real, meio de pagamento, banco ou caixa histórico, categoria, centro de custo e justificativa.
+
+- correção para banco retira o valor do caixa indevido e gera o movimento na conta correta;
+- correção para dinheiro exige que exista um caixa na mesma data;
+- caixa histórico fechado tem saldo contábil e diferença recalculados, sem alterar o valor contado original;
+- movimentos anteriores recebem contrapartida e permanecem na auditoria;
+- período bancário fechado precisa ser reaberto antes da correção.
+
+Novas saídas retroativas em dinheiro não podem mais ser vinculadas ao caixa atualmente aberto quando as datas forem diferentes.
+
 ## Capital e sócios
 
 Capital social, AFAC e empréstimo de sócio aumentam caixa/banco, mas não receita. Devolução, amortização e redução de capital reduzem principal sem virar despesa. Juros são classificados separadamente. O sistema impede devolver mais que o saldo do aporte.
@@ -56,6 +68,7 @@ Crie a estrutura inicial em **Contabilidade gerencial**, revise-a com o contador
 - registrar compra parcelada e pagar fatura;
 - importar o mesmo extrato duas vezes;
 - conciliar e fechar um mês com diferença zero;
+- corrigir uma saída retroativa ligada ao caixa atual e confirmar que ela passou para o banco ou caixa histórico;
 - registrar AFAC e devolução parcial;
 - testar permissões sensíveis;
 - confirmar que PDFs do cliente não mostram custos;

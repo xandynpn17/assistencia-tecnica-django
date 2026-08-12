@@ -101,6 +101,7 @@
             Fluxo
           </a>
           {% if user|has_perm_sensivel:'perm_caixa_administrar_plano_contas' %}<a href="{% url 'caixa:contabilidade_gerencial' %}" class="btn btn-sm {% if menu_sub == 'contabilidade_gerencial' %}btn-dark{% else %}btn-outline-dark{% endif %}">Contabilidade gerencial</a>{% endif %}
+          {% if user|has_perm_sensivel:'perm_caixa_corrigir_lancamentos' %}<a href="{% url 'caixa:saneamento_lancamentos' %}" class="btn btn-sm {% if menu_sub == 'saneamento_lancamentos' %}btn-warning{% else %}btn-outline-warning{% endif %}">Corrigir lançamentos</a>{% endif %}
         </div>
       </section>
 

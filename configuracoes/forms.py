@@ -414,6 +414,7 @@ class UserForm(forms.ModelForm):
             'perm_caixa_fechar_banco',
             'perm_caixa_gerir_capital',
             'perm_caixa_administrar_plano_contas',
+            'perm_caixa_corrigir_lancamentos',
             'perm_estoque_cadastro_produto',
             'perm_estoque_excluir_produto',
             'perm_estoque_ajuste_manual',
@@ -528,6 +529,7 @@ class UserForm(forms.ModelForm):
             "perm_caixa_fechar_banco",
             "perm_caixa_gerir_capital",
             "perm_caixa_administrar_plano_contas",
+            "perm_caixa_corrigir_lancamentos",
             "perm_estoque_cadastro_produto",
             "perm_estoque_excluir_produto",
             "perm_estoque_ajuste_manual",
@@ -585,6 +587,7 @@ class UserForm(forms.ModelForm):
         self.fields["perm_caixa_fechar_banco"].label = "Fechar e reabrir período bancário"
         self.fields["perm_caixa_gerir_capital"].label = "Gerir capital e movimentos de sócios"
         self.fields["perm_caixa_administrar_plano_contas"].label = "Administrar plano de contas e lotes contábeis"
+        self.fields["perm_caixa_corrigir_lancamentos"].label = "Corrigir lançamentos financeiros com auditoria"
         self.fields["perm_estoque_cadastro_produto"].label = "Cadastrar e editar produtos"
         self.fields["perm_estoque_excluir_produto"].label = "Excluir produtos"
         self.fields["perm_estoque_ajuste_manual"].label = "Registrar ajuste manual"

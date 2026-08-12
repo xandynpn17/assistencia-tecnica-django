@@ -489,12 +489,95 @@ class LancamentoCaixaForm(forms.ModelForm):
                 self.add_error("caixa", "Pagamento em dinheiro exige um caixa aberto.")
             if conta:
                 self.add_error("conta_bancaria", "Pagamento em dinheiro não deve movimentar conta bancária.")
+            if caixa and cleaned_data.get("data_movimento") and caixa.data != cleaned_data["data_movimento"]:
+                self.add_error(
+                    "data_movimento",
+                    "Uma saída em dinheiro deve pertencer ao caixa da mesma data. "
+                    "Para data retroativa, use a rotina de saneamento ou selecione a conta bancária correta.",
+                )
         else:
             if not conta:
                 self.add_error("conta_bancaria", "Selecione a conta usada nesta saída.")
             if caixa:
                 self.add_error("caixa", "Saídas bancárias não devem ser vinculadas ao caixa físico.")
         return cleaned_data
+
+
+class CorrecaoLancamentoCaixaForm(forms.Form):
+    forma_pagamento = forms.ModelChoiceField(queryset=FormaPagamento.objects.none(), label="Meio de pagamento correto")
+    conta_bancaria = forms.ModelChoiceField(
+        queryset=ContaBancaria.objects.none(), required=False, label="Conta bancária correta"
+    )
+    categoria = forms.ModelChoiceField(
+        queryset=CategoriaFinanceira.objects.none(), required=False, label="Categoria correta"
+    )
+    centro_custo = forms.ModelChoiceField(
+        queryset=CentroCusto.objects.none(), required=False, label="Centro de custo correto"
+    )
+    data_competencia = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="Competência correta")
+    data_movimento = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="Data real do movimento")
+    motivo = forms.CharField(
+        min_length=12,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        label="Motivo da correção",
+        help_text="Explique por que o lançamento foi vinculado à origem ou data incorreta.",
+    )
+
+    def __init__(self, *args, empresa, lancamento, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.empresa = empresa
+        self.lancamento = lancamento
+        self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(
+            Q(empresa=empresa) | Q(empresa__isnull=True), ativa=True
+        ).order_by("nome")
+        self.fields["conta_bancaria"].queryset = ContaBancaria.objects.filter(
+            empresa=empresa, ativa=True
+        ).order_by("nome")
+        tipo_categoria = "saida" if lancamento.tipo == "saida" else "entrada"
+        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+            Q(empresa=empresa) | Q(empresa__isnull=True), tipo__in=[tipo_categoria, "receber"], ativa=True
+        ).order_by("nome")
+        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(
+            Q(empresa=empresa) | Q(empresa__isnull=True), ativo=True
+        ).order_by("nome")
+        if not self.is_bound:
+            self.initial.update(
+                {
+                    "forma_pagamento": lancamento.forma_pagamento_id,
+                    "conta_bancaria": lancamento.conta_bancaria_id,
+                    "categoria": lancamento.categoria_id,
+                    "centro_custo": lancamento.centro_custo_id,
+                    "data_competencia": lancamento.data_competencia,
+                    "data_movimento": lancamento.data_movimento,
+                }
+            )
+
+    def clean(self):
+        dados = super().clean()
+        forma = dados.get("forma_pagamento")
+        conta = dados.get("conta_bancaria")
+        movimento = dados.get("data_movimento")
+        if movimento and movimento > timezone.localdate():
+            self.add_error("data_movimento", "A data do movimento não pode estar no futuro.")
+        codigo = (getattr(forma, "codigo", "") or "").lower()
+        dinheiro = codigo == "dinheiro" or codigo.startswith("dinheiro-")
+        if dinheiro:
+            if conta:
+                self.add_error("conta_bancaria", "Movimento em dinheiro não utiliza conta bancária.")
+            caixa_historico = Caixa.objects.filter(empresa=self.empresa, data=movimento).first() if movimento else None
+            if not caixa_historico:
+                self.add_error(
+                    "data_movimento",
+                    "Não existe caixa físico nessa data. Não é seguro criar um caixa histórico artificial; "
+                    "confirme se o pagamento ocorreu por banco.",
+                )
+            dados["caixa_destino"] = caixa_historico
+            dados["conta_bancaria"] = None
+        else:
+            if forma and not conta:
+                self.add_error("conta_bancaria", "Selecione a conta bancária utilizada.")
+            dados["caixa_destino"] = None
+        return dados
 
 
 class ContaReceberForm(forms.ModelForm):

@@ -41,6 +41,7 @@ SENSITIVE_PERMISSION_MESSAGES = {
     "perm_caixa_conciliar_banco": "Você não tem permissão para conciliar movimentos bancários.",
     "perm_caixa_fechar_banco": "Você não tem permissão para fechar ou reabrir períodos bancários.",
     "perm_caixa_gerir_capital": "Você não tem permissão para movimentar capital e recursos de sócios.",
+    "perm_caixa_corrigir_lancamentos": "Você não tem permissão para corrigir lançamentos financeiros.",
     "perm_os_editar_numero_serie": "Você não tem permissão para editar o número de série desta OS.",
     "perm_os_editar_observacoes_internas": "Você não tem permissão para editar as observações internas desta OS.",
     "perm_os_editar_local_armazenamento": "Você não tem permissão para editar o local de armazenamento desta OS.",

@@ -1,0 +1,99 @@
+{% extends 'core/base.html' %}
+{% load widget_tweaks %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h3 mb-1">Saneamento de lançamentos retroativos</h1>
+      <p class="text-muted mb-0">Corrige a origem financeira sem apagar o registro original ou perder a auditoria.</p>
+    </div>
+    <span class="badge badge-{% if quantidade_inconsistentes %}warning{% else %}success{% endif %} p-2">
+      {{ quantidade_inconsistentes }} pendente{{ quantidade_inconsistentes|pluralize }}
+    </span>
+  </div>
+
+  <div class="alert alert-info">
+    <strong>Como usar:</strong> selecione um lançamento, confirme a data real e indique se ele ocorreu em dinheiro ou pela conta bancária.
+    Correções em período bancário fechado exigem reabertura prévia. Caixa histórico fechado tem o saldo e a diferença recalculados, mantendo o valor contado originalmente.
+  </div>
+
+  <div class="row">
+    <div class="col-xl-7 mb-3">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white"><strong>Lançamentos com vínculo inconsistente</strong></div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead><tr><th>#</th><th>Movimento</th><th>Caixa vinculado</th><th>Descrição</th><th>Tipo</th><th class="text-right">Valor</th><th></th></tr></thead>
+            <tbody>
+              {% for item in inconsistentes %}
+              <tr class="{% if lancamento_selecionado.id == item.id %}table-warning{% endif %}">
+                <td>{{ item.id }}</td>
+                <td>{{ item.data_movimento|date:'d/m/Y' }}</td>
+                <td>{% if item.caixa %}{{ item.caixa.data|date:'d/m/Y' }}{% elif item.conta_bancaria %}{{ item.conta_bancaria.nome }}{% else %}Sem origem{% endif %}</td>
+                <td>{{ item.descricao }}</td>
+                <td>{{ item.get_tipo_display }}</td>
+                <td class="text-right">R$ {{ item.valor|floatformat:2 }}</td>
+                <td><a class="btn btn-sm btn-outline-primary" href="?lancamento={{ item.id }}">Corrigir</a></td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="7" class="text-center text-success py-4">Nenhum lançamento manual inconsistente encontrado.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-5 mb-3">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white"><strong>{% if lancamento_selecionado %}Corrigir lançamento #{{ lancamento_selecionado.id }}{% else %}Correção{% endif %}</strong></div>
+        <div class="card-body">
+          {% if form %}
+          <div class="small text-muted mb-3">
+            Registro atual: movimento {{ lancamento_selecionado.data_movimento|date:'d/m/Y' }},
+            vinculado a {% if lancamento_selecionado.caixa %}caixa {{ lancamento_selecionado.caixa.data|date:'d/m/Y' }}{% elif lancamento_selecionado.conta_bancaria %}{{ lancamento_selecionado.conta_bancaria.nome }}{% else %}nenhuma origem{% endif %}.
+          </div>
+          <form method="post">
+            {% csrf_token %}<input type="hidden" name="lancamento_id" value="{{ lancamento_selecionado.id }}">
+            {{ form.non_field_errors }}
+            {% for field in form %}
+            <div class="form-group">
+              <label for="{{ field.id_for_label }}"><strong>{{ field.label }}</strong></label>
+              {{ field|add_class:'form-control' }}
+              {% if field.help_text %}<small class="form-text text-muted">{{ field.help_text }}</small>{% endif %}
+              {% for error in field.errors %}<small class="text-danger d-block">{{ error }}</small>{% endfor %}
+            </div>
+            {% endfor %}
+            <button class="btn btn-primary btn-block">Confirmar correção auditada</button>
+          </form>
+          {% else %}
+          <p class="text-muted mb-0">Selecione um lançamento pendente.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-white"><strong>Histórico de correções</strong></div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Quando</th><th>Lançamento</th><th>Usuário</th><th>Motivo</th><th>Origem anterior</th><th>Origem corrigida</th></tr></thead>
+        <tbody>
+          {% for item in historico %}
+          <tr>
+            <td>{{ item.corrigido_em|date:'d/m/Y H:i' }}</td><td>#{{ item.lancamento_id }}</td>
+            <td>{{ item.corrigido_por }}</td><td>{{ item.motivo }}</td>
+            <td>{% if item.dados_anteriores.conta_bancaria_id %}Banco #{{ item.dados_anteriores.conta_bancaria_id }}{% else %}Caixa #{{ item.dados_anteriores.caixa_id|default:'-' }}{% endif %}</td>
+            <td>{% if item.dados_corrigidos.conta_bancaria_id %}Banco #{{ item.dados_corrigidos.conta_bancaria_id }}{% else %}Caixa #{{ item.dados_corrigidos.caixa_id|default:'-' }}{% endif %}</td>
+          </tr>
+          {% empty %}<tr><td colspan="6" class="text-center text-muted">Nenhuma correção realizada.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

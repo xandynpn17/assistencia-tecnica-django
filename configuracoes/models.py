@@ -556,6 +556,7 @@ class User(AbstractUser):
     perm_caixa_fechar_banco = models.BooleanField(default=False)
     perm_caixa_gerir_capital = models.BooleanField(default=False)
     perm_caixa_administrar_plano_contas = models.BooleanField(default=False)
+    perm_caixa_corrigir_lancamentos = models.BooleanField(default=False)
     perm_estoque_cadastro_produto = models.BooleanField(default=False)
     perm_estoque_excluir_produto = models.BooleanField(default=False)
     perm_estoque_ajuste_manual = models.BooleanField(default=False)

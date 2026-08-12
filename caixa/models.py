@@ -1798,6 +1798,67 @@ class PlanoContasVersao(models.Model):
         constraints = [models.UniqueConstraint(fields=["empresa", "codigo"], name="plano_contas_empresa_codigo_unico")]
 
 
+class CorrecaoLancamentoCaixa(models.Model):
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        related_name="correcoes_lancamentos_caixa",
+    )
+    lancamento = models.ForeignKey(
+        LancamentoCaixa,
+        on_delete=models.PROTECT,
+        related_name="correcoes_auditadas",
+    )
+    dados_anteriores = models.JSONField(default=dict)
+    dados_corrigidos = models.JSONField(default=dict)
+    motivo = models.TextField()
+    corrigido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="correcoes_lancamentos_caixa",
+    )
+    corrigido_em = models.DateTimeField(auto_now_add=True, db_index=True)
+    movimento_financeiro_estorno = models.ForeignKey(
+        "MovimentoFinanceiro",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="correcoes_como_estorno",
+    )
+    movimento_financeiro_corrigido = models.ForeignKey(
+        "MovimentoFinanceiro",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="correcoes_como_movimento_novo",
+    )
+    movimento_bancario_estorno = models.ForeignKey(
+        "MovimentoBancario",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="correcoes_como_estorno",
+    )
+    movimento_bancario_corrigido = models.ForeignKey(
+        "MovimentoBancario",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="correcoes_como_movimento_novo",
+    )
+
+    class Meta:
+        ordering = ["-corrigido_em", "-id"]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("A correção auditada é imutável.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Correções auditadas não podem ser excluídas.")
+
+
 class ContaContabil(models.Model):
     TIPOS = [("ativo", "Ativo"), ("passivo", "Passivo"), ("patrimonio", "Patrimônio líquido"), ("receita", "Receita"), ("despesa", "Despesa")]
     plano = models.ForeignKey(PlanoContasVersao, on_delete=models.PROTECT, related_name="contas")
