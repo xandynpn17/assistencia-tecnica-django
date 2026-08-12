@@ -4662,6 +4662,7 @@ class CaixaPermissoesTests(TestCase):
         response = self.client.get(reverse("caixa:relatorios"), {"data_inicio": hoje, "data_fim": hoje})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["total_entradas_pagamentos"], Decimal("30.00"))
+        self.assertEqual(response.context["total_entradas"], Decimal("30.00"))
 
     def test_relatorios_exibe_diferencas_por_forma(self):
         self.client.force_login(self.gerente)
@@ -4917,6 +4918,7 @@ class CaixaPermissoesTests(TestCase):
         LancamentoCaixa.objects.create(
             caixa=caixa,
             descricao="Compra operacional",
+            forma_pagamento=forma_pix,
             centro_custo=centro_operacional,
             valor=Decimal("15.00"),
             tipo="saida",
@@ -4925,6 +4927,7 @@ class CaixaPermissoesTests(TestCase):
         LancamentoCaixa.objects.create(
             caixa=caixa,
             descricao="Campanha",
+            forma_pagamento=forma_cartao,
             centro_custo=centro_marketing,
             valor=Decimal("25.00"),
             tipo="saida",
@@ -4944,6 +4947,8 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(response.context["lancamentos"].count(), 1)
         self.assertEqual(response.context["pagamentos"].first().forma_pagamento_id, forma_pix.id)
         self.assertEqual(response.context["lancamentos"].first().centro_custo_id, centro_operacional.id)
+        self.assertEqual(response.context["total_entradas"], Decimal("40.00"))
+        self.assertEqual(response.context["total_saidas"], Decimal("15.00"))
 
     def test_dre_intervalo_customizado_separa_cliente_garantia_e_despesa(self):
         self.client.force_login(self.gerente)
@@ -6045,6 +6050,17 @@ class TesourariaFaseDoisTests(TestCase):
         self.assertEqual(movimento.conta, self.conta_a)
         self.assertTrue(MovimentoFinanceiro.objects.filter(origem_tipo="conta_pagar", origem_id=pagamento.id).exists())
         self.assertFalse(LancamentoCaixa.objects.filter(descricao=f"Pagamento conta a pagar #{conta.id}").exists())
+        relatorio = self.client.get(
+            reverse("caixa:relatorios"),
+            {
+                "data_inicio": timezone.localdate().isoformat(),
+                "data_fim": timezone.localdate().isoformat(),
+                "todos_caixas": "1",
+            },
+        )
+        self.assertEqual(relatorio.status_code, 200)
+        self.assertEqual(relatorio.context["total_saidas"], Decimal("80.00"))
+        self.assertEqual(relatorio.context["pagamentos_contas_bancarios"].count(), 1)
 
     def test_detalhe_conta_pagar_nao_vaza_entre_empresas(self):
         outra_empresa = Empresa.objects.create(nome="Empresa externa", cnpj="33.444.555/0001-70")

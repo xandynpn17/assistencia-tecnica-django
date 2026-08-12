@@ -10,12 +10,12 @@ from django.utils import timezone
 
 from configuracoes.models import FornecedorGarantia, MarcaGarantia
 from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, is_management_user, require_sensitive_permission, role_required
-from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, obter_empresa_ativa
+from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, filtrar_catalogo_empresa_preferencial, obter_empresa_ativa
 from ordens.models import CustoOrdemServico, LinhaTrabalho, OrdemServico
 from estoque.models import CategoriaProduto, MovimentacaoEstoque, PontoOperacional, SolicitacaoSaidaEstoque
 
 from ..forms import DespesaRecorrenteForm
-from ..models import AuditoriaFinanceira, AuditoriaGarantia, Caixa, CategoriaFinanceira, CentroCusto, CompraCartaoCorporativo, ContaPagar, ContaReceber, DREFechamento, DespesaRecorrente, FormaPagamento, LancamentoCaixa, MovimentoFinanceiro, Pagamento, RecebimentoConta
+from ..models import AuditoriaFinanceira, AuditoriaGarantia, Caixa, CategoriaFinanceira, CentroCusto, CompraCartaoCorporativo, ContaPagar, ContaReceber, DREFechamento, DespesaRecorrente, FormaPagamento, LancamentoCaixa, MovimentoFinanceiro, Pagamento, PagamentoContaPagar, RecebimentoConta
 from .common import caixa_atual
 from .helpers import (
     _atualizar_status_contas_abertas,
@@ -600,45 +600,54 @@ def fluxo_projetado(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def relatorios(request):
-    def _comparativo_agrupado(qs_atual, qs_anterior, campo, fallback):
-        atual_map = {
+    def _mapa_agrupado(queryset, campo, fallback):
+        return {
             (row[campo] or fallback): {
                 "total": row["total"] or Decimal("0.00"),
                 "quantidade": row["quantidade"] or 0,
             }
-            for row in qs_atual.values(campo).annotate(total=Sum("valor"), quantidade=Count("id")).order_by()
+            for row in queryset.values(campo).annotate(
+                total=Sum("valor"), quantidade=Count("id")
+            ).order_by()
         }
-        anterior_map = {
-            (row[campo] or fallback): {
-                "total": row["total"] or Decimal("0.00"),
-                "quantidade": row["quantidade"] or 0,
-            }
-            for row in qs_anterior.values(campo).annotate(total=Sum("valor"), quantidade=Count("id")).order_by()
-        }
-        chaves = set(atual_map) | set(anterior_map)
+
+    def _combinar_mapas(*mapas):
+        combinado = {}
+        for mapa in mapas:
+            for nome, valores in mapa.items():
+                destino = combinado.setdefault(
+                    nome, {"total": Decimal("0.00"), "quantidade": 0}
+                )
+                destino["total"] += valores["total"]
+                destino["quantidade"] += valores["quantidade"]
+        return combinado
+
+    def _comparativo_mapas(atual_map, anterior_map):
         linhas = []
-        for nome in chaves:
+        for nome in set(atual_map) | set(anterior_map):
             atual = atual_map.get(nome, {"total": Decimal("0.00"), "quantidade": 0})
             anterior = anterior_map.get(nome, {"total": Decimal("0.00"), "quantidade": 0})
             variacao = atual["total"] - anterior["total"]
             percentual = Decimal("0.00")
             if anterior["total"]:
                 percentual = (variacao / anterior["total"]) * Decimal("100.00")
-            linhas.append(
-                {
-                    "nome": nome,
-                    "atual_total": atual["total"],
-                    "atual_quantidade": atual["quantidade"],
-                    "anterior_total": anterior["total"],
-                    "anterior_quantidade": anterior["quantidade"],
-                    "variacao": variacao,
-                    "percentual": percentual,
-                }
-            )
+            linhas.append({
+                "nome": nome, "atual_total": atual["total"],
+                "atual_quantidade": atual["quantidade"],
+                "anterior_total": anterior["total"],
+                "anterior_quantidade": anterior["quantidade"],
+                "variacao": variacao, "percentual": percentual,
+            })
         return sorted(
             linhas,
             key=lambda row: (abs(row["variacao"]), max(row["atual_total"], row["anterior_total"])),
             reverse=True,
+        )[:8]
+
+    def _comparativo_agrupado(qs_atual, qs_anterior, campo, fallback):
+        return _comparativo_mapas(
+            _mapa_agrupado(qs_atual, campo, fallback),
+            _mapa_agrupado(qs_anterior, campo, fallback),
         )[:8]
 
     session_key = "caixa_relatorios_filtros"
@@ -664,6 +673,7 @@ def relatorios(request):
         regime_data = "movimento"
     campo_data = "data_competencia" if regime_data == "competencia" else "data_movimento"
     considerar_todos_caixas = request.GET.get("todos_caixas") == "1"
+    historico_completo = request.GET.get("historico") == "1"
 
     preset_inicio, preset_fim = _periodo_por_preset(preset_periodo, referencia=hoje)
     if preset_inicio and preset_fim:
@@ -682,25 +692,52 @@ def relatorios(request):
         )
         .order_by(f"-{campo_data}", "-data", "-id")
     )
-    lancamentos = LancamentoCaixa.objects.filter(**filtro_empresa).select_related("categoria", "centro_custo").order_by(f"-{campo_data}", "-data", "-id")
+    lancamentos = LancamentoCaixa.objects.filter(
+        **filtro_empresa, pagamento__isnull=True
+    ).select_related(
+        "categoria", "centro_custo", "forma_pagamento", "conta_bancaria", "pagamento_conta_pagar"
+    ).order_by(f"-{campo_data}", "-data", "-id")
+    pagamentos_contas_bancarios = PagamentoContaPagar.objects.filter(
+        **filtro_empresa, status="confirmado", conta_bancaria__isnull=False
+    ).select_related(
+        "conta", "conta__categoria", "conta__centro_custo", "forma_pagamento", "conta_bancaria"
+    ).order_by(f"-{campo_data}", "-data", "-id")
     restringir_caixa_atual = caixa and not considerar_todos_caixas and not (data_inicio or data_fim)
     if restringir_caixa_atual:
         pagamentos = pagamentos.filter(caixa=caixa)
         lancamentos = lancamentos.filter(caixa=caixa)
+        pagamentos_contas_bancarios = pagamentos_contas_bancarios.none()
     if data_inicio:
         pagamentos = pagamentos.filter(**{f"{campo_data}__gte": data_inicio})
         lancamentos = lancamentos.filter(**{f"{campo_data}__gte": data_inicio})
+        pagamentos_contas_bancarios = pagamentos_contas_bancarios.filter(**{f"{campo_data}__gte": data_inicio})
     if data_fim:
         pagamentos = pagamentos.filter(**{f"{campo_data}__lte": data_fim})
         lancamentos = lancamentos.filter(**{f"{campo_data}__lte": data_fim})
+        pagamentos_contas_bancarios = pagamentos_contas_bancarios.filter(**{f"{campo_data}__lte": data_fim})
     if forma_pagamento_id.isdigit():
         pagamentos = pagamentos.filter(forma_pagamento_id=int(forma_pagamento_id))
+        lancamentos = lancamentos.filter(
+            Q(forma_pagamento_id=int(forma_pagamento_id))
+            | Q(pagamento_conta_pagar__forma_pagamento_id=int(forma_pagamento_id))
+        )
+        pagamentos_contas_bancarios = pagamentos_contas_bancarios.filter(
+            forma_pagamento_id=int(forma_pagamento_id)
+        )
     if centro_custo_id.isdigit():
         lancamentos = lancamentos.filter(centro_custo_id=int(centro_custo_id))
+        pagamentos_contas_bancarios = pagamentos_contas_bancarios.filter(
+            conta__centro_custo_id=int(centro_custo_id)
+        )
     if categoria_id.isdigit():
         lancamentos = lancamentos.filter(categoria_id=int(categoria_id))
+        pagamentos_contas_bancarios = pagamentos_contas_bancarios.filter(
+            conta__categoria_id=int(categoria_id)
+        )
     if tipo_lancamento in {"entrada", "saida"}:
         lancamentos = lancamentos.filter(tipo=tipo_lancamento)
+        if tipo_lancamento == "entrada":
+            pagamentos_contas_bancarios = pagamentos_contas_bancarios.none()
 
     movimentos_livro = MovimentoFinanceiro.objects.filter(**filtro_empresa).select_related(
         "registrado_por", "estornado_por"
@@ -715,17 +752,45 @@ def relatorios(request):
     total_livro_entradas = movimentos_livro.filter(tipo="entrada").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     total_livro_saidas = movimentos_livro.filter(tipo="saida").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     saldo_livro = total_livro_entradas - total_livro_saidas
+    movimentos_livro_exibicao = movimentos_livro
+    if not historico_completo:
+        movimentos_livro_exibicao = movimentos_livro.filter(status="confirmado").exclude(origem_tipo="estorno")
 
     total_entradas_pagamentos = pagamentos.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     total_entradas_lancamentos = lancamentos.filter(tipo="entrada", natureza="operacional").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-    total_saidas = lancamentos.filter(tipo="saida", natureza="operacional").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    total_saidas_lancamentos = lancamentos.filter(
+        tipo="saida", natureza="operacional"
+    ).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    total_saidas_contas_bancarias = pagamentos_contas_bancarios.aggregate(
+        total=Sum("valor")
+    )["total"] or Decimal("0.00")
+    total_saidas = total_saidas_lancamentos + total_saidas_contas_bancarias
     entradas_orfas_pagamento = pagamentos.filter(lancamento_caixa__isnull=True).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-    total_entradas = total_entradas_lancamentos + entradas_orfas_pagamento
+    total_entradas = total_entradas_lancamentos + total_entradas_pagamentos
     saldo_base = caixa.saldo_inicial if restringir_caixa_atual else Decimal("0.00")
     saldo = saldo_base + total_entradas - total_saidas
     pagamentos_por_forma = pagamentos.values("forma_pagamento__nome", "metodo").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
-    saidas_por_centro = lancamentos.filter(tipo="saida", natureza="operacional").values("centro_custo__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
-    saidas_por_categoria = lancamentos.filter(tipo="saida", natureza="operacional").values("categoria__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
+    saidas_lancamentos = lancamentos.filter(tipo="saida", natureza="operacional")
+    mapa_centros_atual = _combinar_mapas(
+        _mapa_agrupado(saidas_lancamentos, "centro_custo__nome", "Sem centro de custo"),
+        _mapa_agrupado(pagamentos_contas_bancarios, "conta__centro_custo__nome", "Sem centro de custo"),
+    )
+    mapa_categorias_atual = _combinar_mapas(
+        _mapa_agrupado(saidas_lancamentos, "categoria__nome", "Sem categoria"),
+        _mapa_agrupado(pagamentos_contas_bancarios, "conta__categoria__nome", "Sem categoria"),
+    )
+    saidas_por_centro = [
+        {"centro_custo__nome": nome, **valores}
+        for nome, valores in sorted(
+            mapa_centros_atual.items(), key=lambda item: item[1]["total"], reverse=True
+        )[:10]
+    ]
+    saidas_por_categoria = [
+        {"categoria__nome": nome, **valores}
+        for nome, valores in sorted(
+            mapa_categorias_atual.items(), key=lambda item: item[1]["total"], reverse=True
+        )[:10]
+    ]
     caixas_relatorio = Caixa.objects.filter(**filtro_empresa)
     if restringir_caixa_atual:
         caixas_relatorio = caixas_relatorio.filter(id=caixa.id)
@@ -773,32 +838,72 @@ def relatorios(request):
         .filter(**{f"{campo_data}__gte": periodo_anterior_inicio, f"{campo_data}__lte": periodo_anterior_fim})
     )
     lancamentos_anterior = (
-        LancamentoCaixa.objects.filter(**filtro_empresa).select_related("categoria", "centro_custo")
+        LancamentoCaixa.objects.filter(
+            **filtro_empresa, pagamento__isnull=True
+        ).select_related("categoria", "centro_custo", "forma_pagamento", "pagamento_conta_pagar")
         .filter(**{f"{campo_data}__gte": periodo_anterior_inicio, f"{campo_data}__lte": periodo_anterior_fim})
     )
-    if caixa and not considerar_todos_caixas:
+    pagamentos_contas_bancarios_anterior = PagamentoContaPagar.objects.filter(
+        **filtro_empresa,
+        status="confirmado",
+        conta_bancaria__isnull=False,
+        **{
+            f"{campo_data}__gte": periodo_anterior_inicio,
+            f"{campo_data}__lte": periodo_anterior_fim,
+        },
+    )
+    if restringir_caixa_atual:
         pagamentos_anterior = pagamentos_anterior.filter(caixa=caixa)
         lancamentos_anterior = lancamentos_anterior.filter(caixa=caixa)
+        pagamentos_contas_bancarios_anterior = pagamentos_contas_bancarios_anterior.none()
     if forma_pagamento_id.isdigit():
         pagamentos_anterior = pagamentos_anterior.filter(forma_pagamento_id=int(forma_pagamento_id))
+        lancamentos_anterior = lancamentos_anterior.filter(
+            Q(forma_pagamento_id=int(forma_pagamento_id))
+            | Q(pagamento_conta_pagar__forma_pagamento_id=int(forma_pagamento_id))
+        )
+        pagamentos_contas_bancarios_anterior = pagamentos_contas_bancarios_anterior.filter(
+            forma_pagamento_id=int(forma_pagamento_id)
+        )
     if centro_custo_id.isdigit():
         lancamentos_anterior = lancamentos_anterior.filter(centro_custo_id=int(centro_custo_id))
+        pagamentos_contas_bancarios_anterior = pagamentos_contas_bancarios_anterior.filter(
+            conta__centro_custo_id=int(centro_custo_id)
+        )
     if categoria_id.isdigit():
         lancamentos_anterior = lancamentos_anterior.filter(categoria_id=int(categoria_id))
+        pagamentos_contas_bancarios_anterior = pagamentos_contas_bancarios_anterior.filter(
+            conta__categoria_id=int(categoria_id)
+        )
     if tipo_lancamento in {"entrada", "saida"}:
         lancamentos_anterior = lancamentos_anterior.filter(tipo=tipo_lancamento)
+        if tipo_lancamento == "entrada":
+            pagamentos_contas_bancarios_anterior = pagamentos_contas_bancarios_anterior.none()
 
-    comparativo_categorias = _comparativo_agrupado(
-        lancamentos.filter(tipo="saida", natureza="operacional"),
-        lancamentos_anterior.filter(tipo="saida", natureza="operacional"),
-        "categoria__nome",
-        "Sem categoria",
+    saidas_lancamentos_anterior = lancamentos_anterior.filter(tipo="saida", natureza="operacional")
+    comparativo_categorias = _comparativo_mapas(
+        mapa_categorias_atual,
+        _combinar_mapas(
+            _mapa_agrupado(saidas_lancamentos_anterior, "categoria__nome", "Sem categoria"),
+            _mapa_agrupado(
+                pagamentos_contas_bancarios_anterior,
+                "conta__categoria__nome",
+                "Sem categoria",
+            ),
+        ),
     )
-    comparativo_centros = _comparativo_agrupado(
-        lancamentos.filter(tipo="saida", natureza="operacional"),
-        lancamentos_anterior.filter(tipo="saida", natureza="operacional"),
-        "centro_custo__nome",
-        "Sem centro de custo",
+    comparativo_centros = _comparativo_mapas(
+        mapa_centros_atual,
+        _combinar_mapas(
+            _mapa_agrupado(
+                saidas_lancamentos_anterior, "centro_custo__nome", "Sem centro de custo"
+            ),
+            _mapa_agrupado(
+                pagamentos_contas_bancarios_anterior,
+                "conta__centro_custo__nome",
+                "Sem centro de custo",
+            ),
+        ),
     )
     comparativo_formas = _comparativo_agrupado(
         pagamentos,
@@ -836,11 +941,11 @@ def relatorios(request):
         empresa=empresa, estornado_em__isnull=True, item_orcamento__isnull=True,
         servico_peca__isnull=True, produto_estoque__isnull=True,
     ).count()
-    movimentos_sem_conciliacao = MovimentoBancario.objects.filter(
-        **filtro_empresa
-    ).exclude(
-        historico_conciliacoes__conciliacao__status__in={"conciliado", "divergente"}
-    ).distinct().count()
+    from caixa.services.tesouraria import movimentos_bancarios_disponiveis
+
+    movimentos_sem_conciliacao = movimentos_bancarios_disponiveis(
+        MovimentoBancario.objects.filter(**filtro_empresa)
+    ).count()
     contas_sem_fechamento = ContaBancaria.objects.filter(empresa=empresa, ativa=True).exclude(
         fechamentos__status="fechado", fechamentos__periodo_fim__gte=hoje.replace(day=1) - timedelta(days=1)
     ).count()
@@ -860,12 +965,24 @@ def relatorios(request):
                     m.registrado_em.strftime("%d/%m/%Y %H:%M") if m.registrado_em else "-",
                     m.get_status_display(),
                 ]
-                for m in movimentos_livro
+                for m in movimentos_livro_exibicao
             ]
             titulo = "Livro financeiro"
         elif dataset_export == "lancamentos":
             cabecalhos = ["Descricao", "Categoria", "Centro de custo", "Tipo", "Valor", "Competencia", "Movimentacao", "Registrado em"]
             linhas = [[l.descricao or "-", getattr(l.categoria, "nome", "") or "-", getattr(l.centro_custo, "nome", "") or "-", l.get_tipo_display(), _fmt_decimal(l.valor), l.data_competencia.strftime("%d/%m/%Y"), l.data_movimento.strftime("%d/%m/%Y"), l.data.strftime("%d/%m/%Y %H:%M") if l.data else "-"] for l in lancamentos]
+            linhas.extend([
+                [
+                    f"Pagamento conta a pagar #{p.conta_id}: {p.conta.descricao}",
+                    getattr(p.conta.categoria, "nome", "") or "-",
+                    getattr(p.conta.centro_custo, "nome", "") or "-",
+                    "Saída bancária", _fmt_decimal(p.valor),
+                    p.data_competencia.strftime("%d/%m/%Y"),
+                    p.data_movimento.strftime("%d/%m/%Y"),
+                    p.data.strftime("%d/%m/%Y %H:%M") if p.data else "-",
+                ]
+                for p in pagamentos_contas_bancarios
+            ])
             titulo = "Relatorio de lancamentos"
         elif dataset_export == "resumo":
             cabecalhos = ["Indicador", "Valor"]
@@ -911,9 +1028,15 @@ def relatorios(request):
 
     pagamentos_page = _paginar_queryset(request, pagamentos, per_page=100, page_param="page_pagamentos")
     lancamentos_page = _paginar_queryset(request, lancamentos, per_page=100, page_param="page_lancamentos")
-    movimentos_livro_page = _paginar_queryset(request, movimentos_livro, per_page=100, page_param="page_livro")
+    pagamentos_contas_bancarios_page = _paginar_queryset(
+        request, pagamentos_contas_bancarios, per_page=100, page_param="page_contas_bancarias"
+    )
+    movimentos_livro_page = _paginar_queryset(request, movimentos_livro_exibicao, per_page=100, page_param="page_livro")
     querystring_pagamentos = _querystring_sem_param(request, "page_pagamentos", "export", "dataset")
     querystring_lancamentos = _querystring_sem_param(request, "page_lancamentos", "export", "dataset")
+    querystring_contas_bancarias = _querystring_sem_param(
+        request, "page_contas_bancarias", "export", "dataset"
+    )
     querystring_livro = _querystring_sem_param(request, "page_livro", "export", "dataset")
     filtros_para_salvar = {
         "data_inicio": data_inicio_raw,
@@ -925,6 +1048,7 @@ def relatorios(request):
         "tipo_lancamento": tipo_lancamento,
         "regime_data": regime_data,
         "todos_caixas": "1" if considerar_todos_caixas else "",
+        "historico": "1" if historico_completo else "",
     }
     filtros_para_salvar = {k: v for k, v in filtros_para_salvar.items() if v not in {"", None}}
     if filtros_para_salvar:
@@ -937,10 +1061,13 @@ def relatorios(request):
         {
             "caixa": caixa,
             "considerar_todos_caixas": considerar_todos_caixas,
+            "historico_completo": historico_completo,
             "pagamentos": pagamentos,
             "pagamentos_page": pagamentos_page,
             "lancamentos": lancamentos,
             "lancamentos_page": lancamentos_page,
+            "pagamentos_contas_bancarios": pagamentos_contas_bancarios,
+            "pagamentos_contas_bancarios_page": pagamentos_contas_bancarios_page,
             "movimentos_livro_page": movimentos_livro_page,
             "total_livro_entradas": total_livro_entradas,
             "total_livro_saidas": total_livro_saidas,
@@ -953,16 +1080,17 @@ def relatorios(request):
             "data_inicio": data_inicio_raw,
             "data_fim": data_fim_raw,
             "preset_periodo": preset_periodo,
-            "formas_pagamento": filtrar_catalogo_empresa(
-                FormaPagamento.objects.filter(ativa=True), empresa
+            "formas_pagamento": filtrar_catalogo_empresa_preferencial(
+                FormaPagamento.objects.filter(ativa=True), empresa, identidade=("codigo",)
             ).order_by("nome"),
             "forma_pagamento_filtro": forma_pagamento_id,
-            "categorias_financeiras": filtrar_catalogo_empresa(
-                CategoriaFinanceira.objects.filter(tipo="saida", ativa=True), empresa
+            "categorias_financeiras": filtrar_catalogo_empresa_preferencial(
+                CategoriaFinanceira.objects.filter(tipo="saida", ativa=True), empresa,
+                identidade=("nome", "tipo"),
             ).order_by("nome"),
             "categoria_filtro": categoria_id,
-            "centros_custo": filtrar_catalogo_empresa(
-                CentroCusto.objects.filter(ativo=True), empresa
+            "centros_custo": filtrar_catalogo_empresa_preferencial(
+                CentroCusto.objects.filter(ativo=True), empresa, identidade=("nome",)
             ).order_by("nome"),
             "centro_custo_filtro": centro_custo_id,
             "tipo_lancamento_filtro": tipo_lancamento,
@@ -983,6 +1111,7 @@ def relatorios(request):
             "contas_sem_fechamento": contas_sem_fechamento,
             "querystring_pagamentos": querystring_pagamentos,
             "querystring_lancamentos": querystring_lancamentos,
+            "querystring_contas_bancarias": querystring_contas_bancarias,
             "querystring_livro": querystring_livro,
             "filtros_salvos_existem": bool(filtros_salvos),
             "menu_app": "caixa",

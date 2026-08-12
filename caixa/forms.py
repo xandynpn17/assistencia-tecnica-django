@@ -529,18 +529,21 @@ class CorrecaoLancamentoCaixaForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.empresa = empresa
         self.lancamento = lancamento
-        self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(
-            Q(empresa=empresa) | Q(empresa__isnull=True), ativa=True
+        from configuracoes.services.tenant_guard import filtrar_catalogo_empresa_preferencial
+
+        self.fields["forma_pagamento"].queryset = filtrar_catalogo_empresa_preferencial(
+            FormaPagamento.objects.filter(ativa=True), empresa, identidade=("codigo",)
         ).order_by("nome")
         self.fields["conta_bancaria"].queryset = ContaBancaria.objects.filter(
             empresa=empresa, ativa=True
         ).order_by("nome")
         tipo_categoria = "saida" if lancamento.tipo == "saida" else "entrada"
-        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
-            Q(empresa=empresa) | Q(empresa__isnull=True), tipo__in=[tipo_categoria, "receber"], ativa=True
+        self.fields["categoria"].queryset = filtrar_catalogo_empresa_preferencial(
+            CategoriaFinanceira.objects.filter(tipo__in=[tipo_categoria, "receber"], ativa=True),
+            empresa, identidade=("nome", "tipo"),
         ).order_by("nome")
-        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(
-            Q(empresa=empresa) | Q(empresa__isnull=True), ativo=True
+        self.fields["centro_custo"].queryset = filtrar_catalogo_empresa_preferencial(
+            CentroCusto.objects.filter(ativo=True), empresa, identidade=("nome",)
         ).order_by("nome")
         if not self.is_bound:
             self.initial.update(

@@ -35,8 +35,8 @@ def _snapshot(lancamento):
     }
 
 
-def _validar_lancamento_manual(lancamento):
-    if lancamento.pagamento_id or lancamento.pagamento_conta_pagar_id:
+def _validar_lancamento_manual(lancamento, *, permitir_pagamento_conta_pagar=False):
+    if lancamento.pagamento_id or (lancamento.pagamento_conta_pagar_id and not permitir_pagamento_conta_pagar):
         raise ValidationError("Use o estorno do recebimento ou pagamento vinculado; este item não é manual.")
     if lancamento.natureza != "operacional":
         raise ValidationError("Apenas entradas e saídas operacionais manuais podem ser saneadas nesta tela.")
@@ -276,14 +276,16 @@ def corrigir_lancamento_manual(
 
 
 @transaction.atomic
-def cancelar_lancamento_manual(*, lancamento, motivo, usuario):
+def cancelar_lancamento_manual(*, lancamento, motivo, usuario, permitir_pagamento_conta_pagar=False):
     motivo = (motivo or "").strip()
     if len(motivo) < 12:
         raise ValidationError("Informe um motivo de cancelamento com pelo menos 12 caracteres.")
     lancamento = LancamentoCaixa.todos.select_for_update().get(pk=lancamento.pk)
     if lancamento.status != "ativo":
         raise ValidationError("Este lançamento já foi cancelado.")
-    _validar_lancamento_manual(lancamento)
+    _validar_lancamento_manual(
+        lancamento, permitir_pagamento_conta_pagar=permitir_pagamento_conta_pagar
+    )
 
     anterior = _snapshot(lancamento)
     corrigido = {**anterior, "status": "cancelado"}

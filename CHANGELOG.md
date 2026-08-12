@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.1.3 - 2026-08-12
+
+Saneamento financeiro auditado e endurecimento do fluxo de caixa e conciliacao.
+
+### Principais entregas
+- reset protegido de saidas previamente conferidas, sem exclusao fisica do historico;
+- estornos retroativos neutralizados na data original, sem afetar o caixa atual;
+- relatorios sem duplicidade entre pagamentos e lancamentos, com filtros e totais consistentes;
+- pagamentos de contas pelo banco incluidos nas saidas e agrupamentos gerenciais;
+- conciliacao guiada por natureza economica, incluindo contas a pagar, transferencias, aportes, liquidacoes e recebimentos existentes;
+- PIX vinculado a conta bancaria e historico preparado para conciliacao sem nova receita;
+- catalogos globais/empresa sem opcoes repetidas;
+- testes de regressao para reset, estorno, relatorios e conciliacao de receita existente.
+
 ## v1.0.0 - 2026-08-02
 
 Primeira versao oficial padronizada do ABGest para uso local e em rede interna, com numero de release centralizado no codigo.

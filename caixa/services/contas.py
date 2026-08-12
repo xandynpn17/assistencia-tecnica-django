@@ -165,7 +165,8 @@ def estornar_pagamento_conta_pagar(*, pagamento, usuario, motivo):
 
     from caixa.models import MovimentoBancario, MovimentoFinanceiro, PagamentoContaPagar
     from caixa.services.livro_financeiro import estornar_movimento_financeiro
-    from caixa.services.tesouraria import registrar_movimento_bancario
+    from caixa.services.saneamento_lancamentos import cancelar_lancamento_manual
+    from caixa.services.tesouraria import neutralizar_movimento_bancario
 
     motivo = (motivo or "").strip()
     if not motivo:
@@ -191,35 +192,18 @@ def estornar_pagamento_conta_pagar(*, pagamento, usuario, motivo):
             origem_id=pagamento.pk,
         ).first()
         if movimento_banco:
-            registrar_movimento_bancario(
-                conta=pagamento.conta_bancaria,
-                tipo="entrada",
-                origem_tipo="conta_pagar",
-                origem_id=pagamento.pk,
-                descricao=f"Estorno pagamento conta a pagar #{pagamento.conta_id}",
-                valor=pagamento.valor,
-                data_movimento=timezone.localdate(),
+            neutralizar_movimento_bancario(
+                movimento=movimento_banco,
+                motivo=motivo,
                 chave=f"conta-pagar:{pagamento.pk}:estorno",
                 usuario=usuario,
-                metadados={"estorno_de": movimento_banco.pk, "motivo": motivo},
+                origem_id=pagamento.pk,
             )
     elif hasattr(pagamento, "lancamento_caixa"):
         lancamento = pagamento.lancamento_caixa
-        from caixa.models import LancamentoCaixa
-
-        LancamentoCaixa.objects.create(
-            empresa=pagamento.empresa,
-            caixa=pagamento.caixa,
-            forma_pagamento=pagamento.forma_pagamento,
-            descricao=f"Estorno: {lancamento.descricao}"[:200],
-            categoria=pagamento.conta.categoria,
-            centro_custo=pagamento.conta.centro_custo,
-            valor=pagamento.valor,
-            tipo="entrada",
-            natureza="operacional",
-            data_competencia=pagamento.data_competencia,
-            data_movimento=timezone.localdate(),
-            usuario=usuario,
+        cancelar_lancamento_manual(
+            lancamento=lancamento, motivo=motivo, usuario=usuario,
+            permitir_pagamento_conta_pagar=True,
         )
 
     conta = pagamento.conta

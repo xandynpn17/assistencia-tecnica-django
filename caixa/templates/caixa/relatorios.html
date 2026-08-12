@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load permission_tags %}
 
 {% block content %}
 <div class="container-fluid mt-3">
@@ -98,6 +99,12 @@
                     <a class="btn btn-sm btn-outline-primary" href="?{{ request.GET.urlencode }}&export=pdf&dataset=executivo">PDF executivo</a>
                     <a class="btn btn-sm btn-outline-dark" href="?{{ request.GET.urlencode }}&export=csv&dataset=livro">CSV livro financeiro</a>
                     <a class="btn btn-sm btn-outline-dark" href="?{{ request.GET.urlencode }}&export=pdf&dataset=livro">PDF livro financeiro</a>
+                </div>
+                <div class="col-md-3 mt-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="historico" value="1" id="historico" {% if historico_completo %}checked{% endif %}>
+                        <label class="form-check-label" for="historico">Mostrar estornos e registros cancelados</label>
+                    </div>
                 </div>
             </form>
         </div>
@@ -315,7 +322,7 @@
     <div class="card mb-3 border-dark">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
             <strong>Livro financeiro imutável</strong>
-            <small class="text-muted">{{ movimentos_livro_page.paginator.count|default:0 }} movimento(s) · saldo líquido R$ {{ saldo_livro|floatformat:2 }}</small>
+            <small class="text-muted">{{ movimentos_livro_page.paginator.count|default:0 }} exibido(s) · saldo auditado R$ {{ saldo_livro|floatformat:2 }}</small>
         </div>
         <div class="card-body p-0 table-responsive">
             <table class="table table-sm table-hover text-nowrap mb-0">
@@ -346,7 +353,7 @@
         {% endif %}
     </div>
 
-    {% if lancamentos or pagamentos %}
+    {% if lancamentos or pagamentos or pagamentos_contas_bancarios %}
     <div class="card mb-3">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
             <strong>Pagamentos</strong>
@@ -364,6 +371,7 @@
                         <th>Competência</th>
                         <th>Movimentação</th>
                         <th>Registrado em</th>
+                        <th>Ação</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -377,6 +385,7 @@
                         <td>{{ p.data_competencia|date:"d/m/Y" }}</td>
                         <td>{{ p.data_movimento|date:"d/m/Y" }}</td>
                         <td>{{ p.data|date:"d/m/Y H:i" }}</td>
+                        <td>{% if user|has_perm_sensivel:'perm_caixa_excluir_pagamento' %}<a class="btn btn-sm btn-outline-danger" href="{% url 'caixa:excluir_pagamento' p.id %}">Cancelar e refazer</a>{% else %}-{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -400,6 +409,41 @@
         {% endif %}
     </div>
 
+    {% if pagamentos_contas_bancarios %}
+    <div class="card mb-3">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <strong>Pagamentos de contas pelo banco</strong>
+            <small class="text-muted">{{ pagamentos_contas_bancarios_page.paginator.count|default:0 }} registro(s) incluido(s) nas saidas totais</small>
+        </div>
+        <div class="card-body p-0 table-responsive">
+            <table class="table table-hover text-nowrap mb-0">
+                <thead><tr><th>Conta/descricao</th><th>Categoria</th><th>Centro de custo</th><th>Banco</th><th>Forma</th><th class="text-right">Valor</th><th>Competencia</th><th>Movimentacao</th><th>Acao</th></tr></thead>
+                <tbody>
+                    {% for p in pagamentos_contas_bancarios_page %}
+                    <tr>
+                        <td>#{{ p.conta_id }} - {{ p.conta.descricao }}</td>
+                        <td>{{ p.conta.categoria.nome|default:"-" }}</td>
+                        <td>{{ p.conta.centro_custo.nome|default:"-" }}</td>
+                        <td>{{ p.conta_bancaria.nome|default:"-" }}</td>
+                        <td>{{ p.forma_pagamento.nome|default:"-" }}</td>
+                        <td class="text-right">R$ {{ p.valor|floatformat:2 }}</td>
+                        <td>{{ p.data_competencia|date:"d/m/Y" }}</td>
+                        <td>{{ p.data_movimento|date:"d/m/Y" }}</td>
+                        <td><a class="btn btn-sm btn-outline-primary" href="{% url 'caixa:detalhe_conta_pagar' p.conta_id %}">Ver/estornar</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if pagamentos_contas_bancarios_page.paginator.num_pages > 1 %}
+        <div class="card-footer">
+            {% if pagamentos_contas_bancarios_page.has_previous %}<a class="btn btn-sm btn-outline-secondary" href="?{{ querystring_contas_bancarias }}&page_contas_bancarias={{ pagamentos_contas_bancarios_page.previous_page_number }}">Anterior</a>{% endif %}
+            {% if pagamentos_contas_bancarios_page.has_next %}<a class="btn btn-sm btn-outline-secondary" href="?{{ querystring_contas_bancarias }}&page_contas_bancarias={{ pagamentos_contas_bancarios_page.next_page_number }}">Proxima</a>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="card">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
             <strong>Lançamentos</strong>
@@ -417,6 +461,7 @@
                         <th>Competência</th>
                         <th>Movimentação</th>
                         <th>Registrado em</th>
+                        <th>Ação</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -436,6 +481,7 @@
                         <td>{{ l.data_competencia|date:"d/m/Y" }}</td>
                         <td>{{ l.data_movimento|date:"d/m/Y" }}</td>
                         <td>{{ l.data|date:"d/m/Y H:i" }}</td>
+                        <td>{% if l.pagamento_conta_pagar %}<a class="btn btn-sm btn-outline-primary" href="{% url 'caixa:detalhe_conta_pagar' l.pagamento_conta_pagar.conta_id %}">Estornar pagamento</a>{% elif user|has_perm_sensivel:'perm_caixa_corrigir_lancamentos' %}<a class="btn btn-sm btn-outline-primary" href="{% url 'caixa:saneamento_lancamentos' %}?exibir=todos&lancamento={{ l.id }}">Editar/cancelar</a>{% else %}-{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

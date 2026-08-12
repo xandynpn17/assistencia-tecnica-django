@@ -23,6 +23,7 @@
 - `checklist_homologacao_estoque.md`: roteiro de homologacao manual por perfil do estoque (Fase E7).
 - `manual_financeiro_compras_bancos_v1_1.md`: compras da OS, contas a pagar, cartões corporativos, bancos, sócios, saneamento retroativo e contabilidade gerencial da versão 1.1.1.
 - `notas_versao_1_1_2_conciliacao.md`: correções de duplicidade, conciliação, edição/cancelamento auditado e datas retroativas.
+- `notas_versao_1_1_3_saneamento_financeiro.md`: saneamento auditado da base, relatorios sem duplicidade, conciliacao guiada e tratamento correto de PIX e saidas bancarias.
 - `manual_estoque_fiscal_caixa.md`: manual operacional após as melhorias de estoque, XML, tributação, preço, caixa e conciliação.
 - `manual_caixa_fiscal_dfe.md`: configuração segura do certificado A1, consulta oficial de NF-e destinadas por NSU e importação para conferência no estoque.
 - `checklist_homologacao_configuracoes.md`: roteiro de homologacao manual por perfil da app configuracoes.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q, QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet
 
 from configuracoes.models import Empresa, SetupInicialSistema
 
@@ -40,3 +40,26 @@ def filtrar_catalogo_empresa(queryset: QuerySet, empresa: Empresa | None, *, cam
     if empresa is None:
         return queryset
     return queryset.filter(Q(**{campo: empresa}) | Q(**{f"{campo}__isnull": True}))
+
+
+def filtrar_catalogo_empresa_preferencial(
+    queryset: QuerySet,
+    empresa: Empresa | None,
+    *,
+    campo: str = "empresa",
+    identidade=("nome",),
+) -> QuerySet:
+    """Inclui padrões globais somente quando a empresa não possui equivalente próprio."""
+    if empresa is None:
+        return queryset
+    modelo = queryset.model
+    equivalentes = modelo.objects.filter(**{campo: empresa})
+    for nome_campo in identidade:
+        equivalentes = equivalentes.filter(**{nome_campo: OuterRef(nome_campo)})
+    return queryset.filter(
+        Q(**{campo: empresa}) | Q(**{f"{campo}__isnull": True})
+    ).annotate(
+        _possui_equivalente_empresa=Exists(equivalentes)
+    ).filter(
+        Q(**{campo: empresa}) | Q(_possui_equivalente_empresa=False)
+    )

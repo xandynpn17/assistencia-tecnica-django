@@ -460,22 +460,123 @@ def importar_extrato_arquivo(*, conta, conteudo, nome_arquivo="", usuario=None):
 @transaction.atomic
 def criar_movimento_de_linha_extrato(
     *, linha, classificacao, descricao, usuario, categoria=None, centro_custo=None,
+    conta_relacionada=None, conta_pagar=None, forma_pagamento=None, aportante="",
+    pagamento=None,
 ):
-    from caixa.models import LancamentoCaixa, LinhaExtratoBancario, MovimentoBancario
+    from caixa.models import LancamentoCaixa, LinhaExtratoBancario, MovimentoBancario, PagamentoContaPagar
     from caixa.services.contabilidade import registrar_evento_contabil_se_configurado
+    from caixa.services.livro_financeiro import registrar_movimento_financeiro
 
     linha = LinhaExtratoBancario.objects.select_for_update().select_related("conta").get(pk=linha.pk)
     if linha.status != "pendente":
         raise ValidationError("A linha já foi tratada.")
-    classificacoes = {"despesa_operacional", "receita_operacional", "tarifa", "juros", "rendimento"}
+    classificacoes = {
+        "despesa_operacional", "receita_operacional", "tarifa", "juros", "rendimento",
+        "pagamento_conta_pagar", "transferencia_entre_contas", "aporte_socio",
+        "recebimento_registrado", "liquidacao_cartao",
+    }
     if classificacao not in classificacoes:
         raise ValidationError("Classificação de movimento inválida.")
     credito = linha.valor > 0
-    if credito and classificacao not in {"receita_operacional", "rendimento"}:
-        raise ValidationError("Uma entrada no extrato deve ser classificada como receita ou rendimento.")
-    if not credito and classificacao not in {"despesa_operacional", "tarifa", "juros"}:
-        raise ValidationError("Uma saída no extrato deve ser classificada como despesa, tarifa ou juros.")
+    if credito and classificacao not in {
+        "receita_operacional", "rendimento", "transferencia_entre_contas", "aporte_socio",
+        "recebimento_registrado", "liquidacao_cartao"
+    }:
+        raise ValidationError("A classificação escolhida não é compatível com uma entrada bancária.")
+    if not credito and classificacao not in {
+        "despesa_operacional", "tarifa", "juros", "pagamento_conta_pagar", "transferencia_entre_contas"
+    }:
+        raise ValidationError("A classificação escolhida não é compatível com uma saída bancária.")
     valor = abs(Decimal(linha.valor))
+
+    if classificacao == "transferencia_entre_contas":
+        if not conta_relacionada or conta_relacionada.empresa_id != linha.empresa_id:
+            raise ValidationError("Selecione a outra conta bancária da transferência.")
+        if conta_relacionada.pk == linha.conta_id:
+            raise ValidationError("A conta relacionada deve ser diferente da conta do extrato.")
+        transferencia = registrar_transferencia(
+            empresa=linha.empresa, valor=valor, data_movimento=linha.data_movimento,
+            chave=f"linha-extrato:{linha.pk}:transferencia", usuario=usuario,
+            conta_origem=conta_relacionada if credito else linha.conta,
+            conta_destino=linha.conta if credito else conta_relacionada,
+            descricao=(descricao or linha.descricao)[:255],
+        )
+        sufixo = "destino" if credito else "origem"
+        return MovimentoBancario.objects.get(chave_idempotencia=f"transferencia:{transferencia.pk}:{sufixo}")
+
+    if classificacao == "aporte_socio":
+        aporte = registrar_aporte_capital(
+            empresa=linha.empresa, tipo="adiantamento_socio", descricao=(descricao or linha.descricao)[:255],
+            valor=valor, data_competencia=linha.data_movimento, data_movimento=linha.data_movimento,
+            chave=f"linha-extrato:{linha.pk}:aporte", usuario=usuario,
+            aportante=(aportante or "Sócio não informado")[:120], conta_bancaria=linha.conta, caixa=None,
+        )
+        return aporte.movimento_bancario
+
+    if classificacao == "liquidacao_cartao":
+        return registrar_movimento_bancario(
+            conta=linha.conta, tipo="entrada", origem_tipo="manual", origem_id=linha.pk,
+            descricao=(descricao or linha.descricao)[:255], valor=valor,
+            data_movimento=linha.data_movimento, chave=f"linha-extrato:{linha.pk}:liquidacao-cartao",
+            usuario=usuario, metadados={
+                "classificacao": classificacao, "linha_extrato_id": linha.pk,
+                "observacao": "Liquidação de venda já registrada; não reconhece nova receita.",
+            },
+        )
+
+    if classificacao == "recebimento_registrado":
+        if not pagamento or pagamento.empresa_id != linha.empresa_id:
+            raise ValidationError("Selecione o recebimento já registrado correspondente.")
+        if Decimal(pagamento.valor or 0) != valor:
+            raise ValidationError("O recebimento selecionado deve ter o mesmo valor do crédito no extrato.")
+        if MovimentoBancario.objects.filter(
+            empresa=linha.empresa, origem_tipo="pagamento", origem_id=pagamento.pk, status="ativo"
+        ).exists():
+            raise ValidationError("Esse recebimento já possui um movimento bancário ativo; concilie o movimento existente.")
+        return registrar_movimento_bancario(
+            conta=linha.conta, tipo="entrada", origem_tipo="pagamento", origem_id=pagamento.pk,
+            descricao=f"Recebimento {pagamento.numero_talao or pagamento.pk} - {descricao or linha.descricao}"[:255],
+            valor=valor, data_movimento=linha.data_movimento,
+            chave=f"linha-extrato:{linha.pk}:recebimento:{pagamento.pk}", usuario=usuario,
+            metadados={
+                "linha_extrato_id": linha.pk, "pagamento_id": pagamento.pk,
+                "observacao": "Movimento bancário vinculado a receita já registrada.",
+            },
+        )
+
+    if classificacao == "pagamento_conta_pagar":
+        if not conta_pagar or conta_pagar.empresa_id != linha.empresa_id:
+            raise ValidationError("Selecione a conta a pagar correspondente.")
+        saldo_aberto = Decimal(conta_pagar.valor_total or 0) - Decimal(conta_pagar.valor_pago or 0)
+        if valor > saldo_aberto:
+            raise ValidationError(f"O débito de R$ {valor:.2f} supera o saldo da conta a pagar de R$ {saldo_aberto:.2f}.")
+        pagamento = PagamentoContaPagar.objects.create(
+            empresa=linha.empresa, conta=conta_pagar, conta_bancaria=linha.conta,
+            forma_pagamento=forma_pagamento, valor=valor,
+            data_competencia=conta_pagar.data_competencia,
+            data_movimento=linha.data_movimento, referencia=linha.identificador_externo,
+            observacao=(descricao or linha.descricao)[:500], usuario=usuario,
+            chave_idempotencia=f"linha-extrato:{linha.pk}:conta-pagar",
+        )
+        conta_pagar.valor_pago = Decimal(conta_pagar.valor_pago or 0) + valor
+        conta_pagar.atualizar_status_automatico()
+        conta_pagar.save(update_fields=["valor_pago", "status", "atualizado_em"])
+        movimento = registrar_movimento_bancario(
+            conta=linha.conta, tipo="saida", origem_tipo="conta_pagar", origem_id=pagamento.pk,
+            descricao=f"Pagamento conta a pagar #{conta_pagar.pk}: {conta_pagar.descricao}"[:255],
+            valor=valor, data_movimento=linha.data_movimento,
+            chave=f"conta-pagar:{pagamento.pk}", usuario=usuario,
+            metadados={"conta_pagar_id": conta_pagar.pk, "linha_extrato_id": linha.pk},
+        )
+        registrar_movimento_financeiro(
+            empresa=linha.empresa, caixa=None, origem_tipo="conta_pagar", origem_id=pagamento.pk,
+            origem_referencia=str(conta_pagar.pk), tipo="saida", valor=valor,
+            descricao=movimento.descricao, data_competencia=conta_pagar.data_competencia,
+            data_movimento=linha.data_movimento, chave_idempotencia=f"conta_pagar:{pagamento.pk}",
+            usuario=usuario, metadados={"conta_bancaria_id": linha.conta_id, "linha_extrato_id": linha.pk},
+        )
+        return movimento
+
     lancamento = LancamentoCaixa.objects.create(
         empresa=linha.empresa, conta_bancaria=linha.conta, descricao=(descricao or linha.descricao)[:200],
         categoria=categoria, centro_custo=centro_custo, valor=valor,

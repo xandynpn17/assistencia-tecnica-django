@@ -302,10 +302,16 @@ VERSION:102
                 estorno_de__origem_id=pagamento.id,
             ).exists()
         )
-        self.assertEqual(
-            MovimentoBancario.objects.filter(origem_tipo="conta_pagar", origem_id=pagamento.id).count(),
-            2,
+        movimento_original = MovimentoBancario.objects.get(
+            origem_tipo="conta_pagar", origem_id=pagamento.id
         )
+        movimento_inverso = movimento_original.movimento_neutralizador
+        self.assertEqual(movimento_original.status, "neutralizado")
+        self.assertEqual(movimento_inverso.status, "neutralizado")
+        self.assertEqual(movimento_inverso.tipo, "entrada")
+        self.assertEqual(movimento_inverso.valor, Decimal("80.00"))
+        self.assertEqual(movimento_inverso.data_movimento, ontem)
+        self.assertEqual(movimento_inverso.neutralizacao_de_id, movimento_original.id)
 
     def test_custo_os_nao_pode_ultrapassar_obrigacao_vinculada(self):
         cliente = Cliente.objects.create(
