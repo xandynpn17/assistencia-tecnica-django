@@ -463,6 +463,15 @@
         Nenhum lançamento ou pagamento encontrado para o período.
     </div>
     {% endif %}
+    <div class="card mt-4 mb-3"><div class="card-header"><strong>Qualidade dos dados financeiros</strong></div><div class="card-body"><div class="row text-center">
+        <div class="col-md-3"><h4>{{ pecas_sem_custo }}</h4><small>peças aprovadas sem custo estimado</small></div>
+        <div class="col-md-3"><h4>{{ custos_sem_vinculo }}</h4><small>custos internos sem item/produto vinculado</small></div>
+        <div class="col-md-3"><h4>{{ movimentos_sem_conciliacao }}</h4><small>movimentos bancários sem conciliação</small></div>
+        <div class="col-md-3"><h4>{{ contas_sem_fechamento }}</h4><small>contas sem fechamento recente</small></div>
+    </div></div></div>
+    <div class="card mb-3"><div class="card-header"><strong>Rentabilidade gerencial por OS no período</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>OS</th><th>Técnico</th><th>Receita</th><th>Custo real</th><th>Custo pendente</th><th>Impostos/taxas</th><th>Comissões</th><th>Margem</th></tr></thead><tbody>
+        {% for r in rentabilidade_os %}<tr><td><a href="{{ r.ordem.get_absolute_url }}">{{ r.ordem.numero_os }}</a></td><td>{{ r.ordem.tecnico_responsavel|default:'-' }}</td><td>R$ {{ r.receita|floatformat:2 }}</td><td>R$ {{ r.custo_real|floatformat:2 }}</td><td>R$ {{ r.custo_estimado|floatformat:2 }}</td><td>R$ {{ r.impostos|add:r.taxas|floatformat:2 }}</td><td>R$ {{ r.comissoes|floatformat:2 }}</td><td class="{% if r.margem < 0 %}text-danger{% else %}text-success{% endif %}"><strong>R$ {{ r.margem|floatformat:2 }}</strong></td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Nenhuma OS recebida no período.</td></tr>{% endfor %}
+    </tbody></table></div></div>
 </div>
 {% endblock %}
 

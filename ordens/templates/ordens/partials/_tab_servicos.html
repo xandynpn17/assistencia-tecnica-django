@@ -374,6 +374,7 @@
                     </div>
                     <div class="form-group"><label>Fornecedor</label>{{ custo_os_form.fornecedor_nome }}</div>
                     <div class="form-group"><label>Saída financeira vinculada (opcional)</label>{{ custo_os_form.lancamento_caixa }}<small class="form-text text-muted">Ao selecionar uma saída, escolha a origem “Despesa paga”. Isso evita contar o mesmo custo duas vezes na DRE.</small></div>
+                    <div class="form-group"><label>Conta a pagar vinculada (opcional)</label>{{ custo_os_form.conta_pagar }}<small class="form-text text-muted">Use para compras ainda não pagas ou parceladas. Não selecione simultaneamente uma saída financeira.</small></div>
                     <div class="form-group"><label>Observação interna</label>{{ custo_os_form.observacao_interna }}</div>
                     <div class="alert alert-info py-2 mb-0 small">Registrar um custo não cria pagamento automaticamente. Se houve compra, registre também a conta a pagar ou a saída pela conta financeira correta.</div>
                 </div>

@@ -4,6 +4,13 @@
   <p><strong>{{ linha.data_movimento|date:'d/m/Y' }} · {{ linha.descricao }}</strong></p><p>Valor do extrato: R$ {{ linha.valor|floatformat:2 }}</p>
   {% if sugestoes %}<div class="alert alert-light border"><strong>Sugestões automáticas</strong><ul class="mb-0">{% for item in sugestoes %}<li>{{ item.score }}% · {{ item.movimento }}{% if item.motivos %} — {{ item.motivos|join:', ' }}{% endif %}</li>{% endfor %}</ul></div>{% endif %}
   <form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Conciliar</button><a class="btn btn-outline-secondary" href="{% url 'caixa:tesouraria' %}">Cancelar</a></form>
+  <hr><h6>Criar movimento a partir desta linha</h6><p class="small text-muted">Use apenas quando o fato ainda não existe no sistema. A criação exige classificação humana e concilia automaticamente.</p>
+  <form method="post">{% csrf_token %}<input type="hidden" name="criar_movimento" value="1">
+    <div class="form-group"><label>Classificação</label><select name="classificacao" class="form-control" required>{% if linha.valor > 0 %}<option value="receita_operacional">Receita operacional avulsa</option><option value="rendimento">Rendimento bancário</option>{% else %}<option value="despesa_operacional">Despesa operacional</option><option value="tarifa">Tarifa bancária</option><option value="juros">Juros bancários</option>{% endif %}</select></div>
+    <div class="form-group"><label>Descrição confirmada</label><input name="descricao_movimento" value="{{ linha.descricao }}" class="form-control" required></div>
+    <div class="form-row"><div class="form-group col-md-6"><label>Categoria</label><select name="categoria" class="form-control"><option value="">Sem categoria</option>{% for categoria in categorias %}<option value="{{ categoria.id }}">{{ categoria.nome }}</option>{% endfor %}</select></div><div class="form-group col-md-6"><label>Centro de custo</label><select name="centro_custo" class="form-control"><option value="">Sem centro</option>{% for centro in centros_custo %}<option value="{{ centro.id }}">{{ centro.nome }}</option>{% endfor %}</select></div></div>
+    <button class="btn btn-warning">Criar e conciliar</button>
+  </form>
   <hr><form method="post">{% csrf_token %}<input type="hidden" name="ignorar" value="1"><div class="form-group"><label>Justificativa para ignorar</label><textarea name="justificativa" class="form-control" required></textarea></div><button class="btn btn-outline-danger">Ignorar justificadamente</button></form>
 </div></div></div>
 {% endblock %}

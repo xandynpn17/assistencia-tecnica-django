@@ -62,6 +62,8 @@
               <p class="mb-2"><strong>Categoria:</strong> {{ conta.categoria.nome|default:"-" }}</p>
               <p class="mb-2"><strong>Centro de custo:</strong> {{ conta.centro_custo.nome|default:"-" }}</p>
               <p class="mb-0"><strong>Vencimento:</strong> {{ conta.vencimento|date:"d/m/Y" }}</p>
+              <p class="mb-0 mt-2"><strong>Emissão / competência:</strong> {{ conta.data_emissao|date:"d/m/Y" }} / {{ conta.data_competencia|date:"d/m/Y" }}</p>
+              <p class="mb-0 mt-2"><strong>Documento:</strong> {{ conta.documento_referencia|default:"-" }}</p>
               <p class="mb-0 mt-2"><strong>Dias em atraso:</strong> {% if dias_atraso > 0 %}{{ dias_atraso }} dia{{ dias_atraso|pluralize }}{% else %}Sem atraso{% endif %}</p>
             </div>
             <div class="col-md-4">
@@ -92,23 +94,27 @@
             <thead>
               <tr>
                 <th>Data</th>
+                <th>Movimento</th>
                 <th class="text-right">Valor</th>
                 <th>Forma</th>
                 <th>Referência</th>
                 <th>Usuário</th>
+                <th>Status/ação</th>
               </tr>
             </thead>
             <tbody>
               {% for p in pagamentos %}
               <tr>
                 <td>{{ p.data|date:"d/m/Y H:i" }}</td>
+                <td>{{ p.data_movimento|date:"d/m/Y" }}<br><small>{{ p.conta_bancaria.nome|default:p.caixa }}</small></td>
                 <td class="text-right">R$ {{ p.valor|floatformat:2 }}</td>
                 <td>{{ p.forma_pagamento.nome|default:"-" }}</td>
                 <td>{{ p.referencia|default:"-" }}</td>
                 <td>{{ p.usuario.username|default:"-" }}</td>
+                <td>{% if p.status == 'estornado' %}<span class="badge badge-secondary">Estornado</span>{% else %}<form method="post" class="d-flex" style="gap:4px;">{% csrf_token %}<input type="hidden" name="action" value="estornar_pagamento"><input type="hidden" name="pagamento_id" value="{{ p.id }}"><input name="motivo_estorno" class="form-control form-control-sm" required placeholder="Motivo"><button class="btn btn-sm btn-outline-danger">Estornar</button></form>{% endif %}</td>
               </tr>
               {% empty %}
-              <tr><td colspan="5" class="text-center">Sem pagamentos.</td></tr>
+              <tr><td colspan="7" class="text-center">Sem pagamentos.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -129,7 +135,7 @@
             Voce nao tem permissao para registrar pagamentos em contas a pagar.
           </div>
           {% else %}
-          <form method="post">
+          <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="action" value="pagar">
             {% for field in form %}

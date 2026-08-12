@@ -385,6 +385,9 @@ class UserForm(forms.ModelForm):
             'perm_os_excluir_servico_peca',
             'perm_os_concluir',
             'perm_os_reabrir',
+            'perm_os_ver_custos',
+            'perm_os_registrar_custo',
+            'perm_os_estornar_custo',
             'perm_orcamento_editar',
             'perm_orcamento_aprovar_item',
             'perm_orcamento_recusar_item',
@@ -405,6 +408,12 @@ class UserForm(forms.ModelForm):
             'perm_caixa_gerir_comissoes',
             'perm_caixa_ver_auditoria',
             'perm_caixa_lancamento_retroativo',
+            'perm_caixa_gerir_cartoes_corporativos',
+            'perm_caixa_importar_extrato',
+            'perm_caixa_conciliar_banco',
+            'perm_caixa_fechar_banco',
+            'perm_caixa_gerir_capital',
+            'perm_caixa_administrar_plano_contas',
             'perm_estoque_cadastro_produto',
             'perm_estoque_excluir_produto',
             'perm_estoque_ajuste_manual',
@@ -490,6 +499,9 @@ class UserForm(forms.ModelForm):
             "perm_os_excluir_servico_peca",
             "perm_os_concluir",
             "perm_os_reabrir",
+            "perm_os_ver_custos",
+            "perm_os_registrar_custo",
+            "perm_os_estornar_custo",
             "perm_orcamento_editar",
             "perm_orcamento_aprovar_item",
             "perm_orcamento_recusar_item",
@@ -510,6 +522,12 @@ class UserForm(forms.ModelForm):
             "perm_caixa_gerir_comissoes",
             "perm_caixa_ver_auditoria",
             "perm_caixa_lancamento_retroativo",
+            "perm_caixa_gerir_cartoes_corporativos",
+            "perm_caixa_importar_extrato",
+            "perm_caixa_conciliar_banco",
+            "perm_caixa_fechar_banco",
+            "perm_caixa_gerir_capital",
+            "perm_caixa_administrar_plano_contas",
             "perm_estoque_cadastro_produto",
             "perm_estoque_excluir_produto",
             "perm_estoque_ajuste_manual",
@@ -538,6 +556,9 @@ class UserForm(forms.ModelForm):
         self.fields["perm_os_excluir_servico_peca"].label = "Excluir servico ou peca da OS"
         self.fields["perm_os_concluir"].label = "Concluir e fechar OS"
         self.fields["perm_os_reabrir"].label = "Reabrir OS fechada"
+        self.fields["perm_os_ver_custos"].label = "Visualizar custos e margem da OS"
+        self.fields["perm_os_registrar_custo"].label = "Registrar e confirmar custos da OS"
+        self.fields["perm_os_estornar_custo"].label = "Estornar custos da OS"
         self.fields["perm_orcamento_editar"].label = "Criar e editar orcamento"
         self.fields["perm_orcamento_aprovar_item"].label = "Aprovar item de orcamento"
         self.fields["perm_orcamento_recusar_item"].label = "Recusar item de orcamento"
@@ -558,6 +579,12 @@ class UserForm(forms.ModelForm):
         self.fields["perm_caixa_gerir_comissoes"].label = "Gerir comissoes"
         self.fields["perm_caixa_ver_auditoria"].label = "Ver auditoria operacional"
         self.fields["perm_caixa_lancamento_retroativo"].label = "Registrar datas financeiras retroativas"
+        self.fields["perm_caixa_gerir_cartoes_corporativos"].label = "Gerir cartões corporativos"
+        self.fields["perm_caixa_importar_extrato"].label = "Importar extratos bancários"
+        self.fields["perm_caixa_conciliar_banco"].label = "Conciliar e desfazer conciliação bancária"
+        self.fields["perm_caixa_fechar_banco"].label = "Fechar e reabrir período bancário"
+        self.fields["perm_caixa_gerir_capital"].label = "Gerir capital e movimentos de sócios"
+        self.fields["perm_caixa_administrar_plano_contas"].label = "Administrar plano de contas e lotes contábeis"
         self.fields["perm_estoque_cadastro_produto"].label = "Cadastrar e editar produtos"
         self.fields["perm_estoque_excluir_produto"].label = "Excluir produtos"
         self.fields["perm_estoque_ajuste_manual"].label = "Registrar ajuste manual"

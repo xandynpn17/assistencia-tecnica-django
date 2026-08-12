@@ -77,6 +77,9 @@
           <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm {% if menu_sub == 'contas_pagar' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
             Contas a pagar
           </a>
+          <a href="{% url 'caixa:cartoes_corporativos' %}" class="btn btn-sm {% if menu_sub == 'cartoes_corporativos' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Cart&otilde;es da empresa
+          </a>
           <a href="{% url 'caixa:aging_receber' %}" class="btn btn-sm {% if menu_sub == 'aging_receber' %}btn-outline-secondary{% else %}btn-outline-secondary{% endif %}">
             Aging receber
           </a>
@@ -97,6 +100,7 @@
           <a href="{% url 'caixa:fluxo_projetado' %}" class="btn btn-sm {% if menu_sub == 'fluxo_projetado' %}btn-dark{% else %}btn-outline-dark{% endif %}">
             Fluxo
           </a>
+          {% if user|has_perm_sensivel:'perm_caixa_administrar_plano_contas' %}<a href="{% url 'caixa:contabilidade_gerencial' %}" class="btn btn-sm {% if menu_sub == 'contabilidade_gerencial' %}btn-dark{% else %}btn-outline-dark{% endif %}">Contabilidade gerencial</a>{% endif %}
         </div>
       </section>
 

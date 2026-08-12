@@ -196,6 +196,8 @@
             <tr><th>Lucro bruto</th><td class="text-right"><strong>R$ {{ lucro_bruto|floatformat:2 }}</strong></td></tr>
             <tr><th>(-) Perdas de estoque</th><td class="text-right">R$ {{ perdas_estoque|floatformat:2 }}</td></tr>
             <tr><th>Despesas operacionais</th><td class="text-right">R$ {{ despesas_operacionais|floatformat:2 }}</td></tr>
+            <tr class="text-muted"><td class="pl-4">Lançamentos diretos</td><td class="text-right">R$ {{ despesas_lancamentos|floatformat:2 }}</td></tr>
+            <tr class="text-muted"><td class="pl-4">Obrigações por competência</td><td class="text-right">R$ {{ despesas_obrigacoes|floatformat:2 }}</td></tr>
             <tr>
               <th>Resultado operacional</th>
               <td class="text-right {% if resultado_operacional < 0 %}text-danger{% else %}text-success{% endif %}">

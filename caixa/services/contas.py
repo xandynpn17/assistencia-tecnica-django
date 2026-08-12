@@ -1,4 +1,5 @@
 from decimal import Decimal
+from uuid import uuid4
 
 from django.db import transaction
 
@@ -64,7 +65,6 @@ def processar_baixa_conta_receber(
 def processar_pagamento_conta_pagar(
     *,
     conta,
-    caixa,
     usuario,
     valor,
     pagamento_form,
@@ -81,11 +81,14 @@ def processar_pagamento_conta_pagar(
         pagamento = pagamento_form.save(commit=False)
         pagamento.conta = conta
         pagamento.usuario = usuario
-        pagamento.caixa = caixa
+        pagamento.empresa = conta.empresa
+        if not pagamento.chave_idempotencia:
+            pagamento.chave_idempotencia = f"conta-pagar:{conta.pk}:{uuid4().hex}"
         pagamento.save()
 
         forma = pagamento.forma_pagamento
-        conta_bancaria = getattr(forma, "conta_bancaria_liquidacao", None)
+        conta_bancaria = pagamento.conta_bancaria
+        caixa = pagamento.caixa
         if conta_bancaria and conta_bancaria.empresa_id != conta.empresa_id:
             raise ValidationError("A conta bancária da forma de pagamento pertence a outra empresa.")
         if not conta_bancaria and caixa is None:
@@ -96,7 +99,7 @@ def processar_pagamento_conta_pagar(
         conta.save(update_fields=["valor_pago", "status", "atualizado_em"])
 
         descricao = f"Pagamento conta a pagar #{conta.id}"
-        data_movimento = timezone.localdate()
+        data_movimento = pagamento.data_movimento
         if conta_bancaria:
             registrar_movimento_bancario(
                 conta=conta_bancaria,
@@ -119,7 +122,7 @@ def processar_pagamento_conta_pagar(
                 tipo="saida",
                 valor=valor,
                 descricao=descricao,
-                data_competencia=data_movimento,
+                data_competencia=pagamento.data_competencia,
                 data_movimento=data_movimento,
                 chave_idempotencia=f"conta_pagar:{pagamento.pk}",
                 usuario=usuario,
@@ -127,14 +130,105 @@ def processar_pagamento_conta_pagar(
             )
         else:
             LancamentoCaixa.objects.create(
+                empresa=conta.empresa,
                 caixa=caixa,
+                pagamento_conta_pagar=pagamento,
+                forma_pagamento=forma,
                 descricao=descricao,
                 categoria=conta.categoria,
                 centro_custo=conta.centro_custo,
                 valor=valor,
                 tipo="saida",
+                natureza="operacional",
+                data_competencia=pagamento.data_competencia,
+                data_movimento=pagamento.data_movimento,
                 usuario=usuario,
             )
+        from caixa.services.contabilidade import registrar_evento_contabil_se_configurado
+        registrar_evento_contabil_se_configurado(
+            empresa=conta.empresa, evento="pagamento_fornecedor",
+            origem_tipo="pagamento_conta_pagar", origem_id=pagamento.pk,
+            competencia=pagamento.data_competencia, valor=pagamento.valor,
+            historico=f"Pagamento de {conta.descricao}",
+            documento_referencia=pagamento.referencia, centro_custo=conta.centro_custo,
+            chave=f"pagamento-conta-pagar:{pagamento.pk}:contabil", usuario=usuario,
+        )
 
     log_financeiro_cb("conta_pagar_baixa_manual", usuario, valor=valor, descricao=f"Conta pagar #{conta.id}")
+    return pagamento
+
+
+@transaction.atomic
+def estornar_pagamento_conta_pagar(*, pagamento, usuario, motivo):
+    from django.core.exceptions import ValidationError
+    from django.utils import timezone
+
+    from caixa.models import MovimentoBancario, MovimentoFinanceiro, PagamentoContaPagar
+    from caixa.services.livro_financeiro import estornar_movimento_financeiro
+    from caixa.services.tesouraria import registrar_movimento_bancario
+
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise ValidationError("Informe o motivo do estorno.")
+    pagamento = PagamentoContaPagar.objects.select_for_update().get(pk=pagamento.pk)
+    if pagamento.status == "estornado":
+        raise ValidationError("Este pagamento já foi estornado.")
+
+    movimento_livro = MovimentoFinanceiro.objects.filter(
+        origem_tipo="conta_pagar",
+        origem_id=pagamento.pk,
+        status="confirmado",
+    ).first()
+    if movimento_livro:
+        estornar_movimento_financeiro(
+            movimento=movimento_livro,
+            motivo=motivo,
+            usuario=usuario,
+        )
+    if pagamento.conta_bancaria_id:
+        movimento_banco = MovimentoBancario.objects.filter(
+            origem_tipo="conta_pagar",
+            origem_id=pagamento.pk,
+        ).first()
+        if movimento_banco:
+            registrar_movimento_bancario(
+                conta=pagamento.conta_bancaria,
+                tipo="entrada",
+                origem_tipo="conta_pagar",
+                origem_id=pagamento.pk,
+                descricao=f"Estorno pagamento conta a pagar #{pagamento.conta_id}",
+                valor=pagamento.valor,
+                data_movimento=timezone.localdate(),
+                chave=f"conta-pagar:{pagamento.pk}:estorno",
+                usuario=usuario,
+                metadados={"estorno_de": movimento_banco.pk, "motivo": motivo},
+            )
+    elif hasattr(pagamento, "lancamento_caixa"):
+        lancamento = pagamento.lancamento_caixa
+        from caixa.models import LancamentoCaixa
+
+        LancamentoCaixa.objects.create(
+            empresa=pagamento.empresa,
+            caixa=pagamento.caixa,
+            forma_pagamento=pagamento.forma_pagamento,
+            descricao=f"Estorno: {lancamento.descricao}"[:200],
+            categoria=pagamento.conta.categoria,
+            centro_custo=pagamento.conta.centro_custo,
+            valor=pagamento.valor,
+            tipo="entrada",
+            natureza="operacional",
+            data_competencia=pagamento.data_competencia,
+            data_movimento=timezone.localdate(),
+            usuario=usuario,
+        )
+
+    conta = pagamento.conta
+    conta.valor_pago = max(Decimal("0.00"), Decimal(conta.valor_pago or 0) - Decimal(pagamento.valor))
+    conta.atualizar_status_automatico()
+    conta.save(update_fields=["valor_pago", "status", "atualizado_em"])
+    pagamento.status = "estornado"
+    pagamento.estornado_em = timezone.now()
+    pagamento.estornado_por = usuario
+    pagamento.motivo_estorno = motivo
+    pagamento.save(update_fields=["status", "estornado_em", "estornado_por", "motivo_estorno"])
     return pagamento

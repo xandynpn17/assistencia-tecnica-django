@@ -1,4 +1,6 @@
 ﻿from decimal import Decimal, InvalidOperation
+from uuid import uuid4
+
 from . import fluxo_support as _support
 from .common import (
     registrar_pendente_cliente_envio_orcamento,
@@ -6,11 +8,13 @@ from .common import (
     registrar_recusado_contactado,
 )
 from ..services.anexos import EXTENSOES_IMAGEM, MAX_FOTOS_POR_OS, preparar_arquivo_anexo
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.utils.dateparse import parse_date
 from configuracoes.permissions import has_sensitive_permission, is_management_user, require_sensitive_permission
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 from ..services import FechamentoOSService, ResumoOperacionalService
+from ..services.compras_os import estornar_recebimento_pedido_os, receber_pedido_os
 
 # Reexporta nomes compartilhados, incluindo helpers internos.
 globals().update({name: getattr(_support, name) for name in dir(_support) if not name.startswith("__")})
@@ -72,7 +76,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             "ponto_operacional_reserva",
             "tecnico_responsavel",
         )
-        context["pode_ver_custos_os"] = is_management_user(self.request.user)
+        context["pode_ver_custos_os"] = has_sensitive_permission(self.request.user, "perm_os_ver_custos")
         if context["pode_ver_custos_os"]:
             context["custo_os_form"] = CustoOrdemServicoForm(ordem=ordem)
             context["custos_os"] = ordem.custos_internos.select_related(
@@ -204,8 +208,36 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 }
             )
         context["modelos_mensagem_payload"] = modelos_payload
-        context["pedidos_compra"] = ordem.pedidos_compra.prefetch_related("linhas", "fotos").all()
+        context["pedidos_compra"] = (
+            ordem.pedidos_compra.select_related(
+                "item_orcamento", "produto_estoque", "conta_pagar"
+            ).prefetch_related(
+                "linhas", "fotos", "recebimentos", "recebimentos__produto_estoque",
+                "recebimentos__conta_pagar", "recebimentos__recebido_por",
+            ).all()
+        )
         context["pedido_status_choices"] = PedidoCompra.STATUS_CHOICES
+        context["hoje_iso"] = timezone.localdate().isoformat()
+        if context["pode_ver_custos_os"]:
+            from caixa.models import ContaPagar
+            from estoque.models import PontoOperacional, Produto, UbicacaoEstoque
+
+            empresa = ordem.empresa
+            context["produtos_pedido"] = Produto.objects.filter(
+                empresa=empresa, ativo=True
+            ).select_related("ponto_operacional", "ubicacao_padrao").order_by("nome")
+            context["contas_pagar_pedido"] = ContaPagar.objects.filter(
+                empresa=empresa, status__in={"aberta", "parcial", "vencida"}
+            ).order_by("vencimento", "descricao")
+            context["pontos_pedido"] = PontoOperacional.objects.filter(
+                empresa=empresa, ativo=True
+            ).order_by("codigo")
+            context["ubicacoes_pedido"] = UbicacaoEstoque.objects.filter(
+                ponto_operacional__empresa=empresa, ativo=True
+            ).select_related("ponto_operacional").order_by("ponto_operacional__codigo", "codigo")
+            context["itens_orcamento_pedido"] = context["orcamento"].itens.filter(
+                tipo_item="peca"
+            ).order_by("nome", "id")
         context["arquivos_os"] = ordem.arquivos.select_related("enviado_por").all()
         fotos_count = sum(1 for a in context["arquivos_os"] if a.eh_imagem)
         context["fotos_count"] = fotos_count
@@ -389,8 +421,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
         # Custos internos: nunca são enviados aos documentos do cliente.
         elif form_type == "custo_os":
-            if not is_management_user(request.user):
-                raise PermissionDenied("Você não tem permissão para visualizar ou registrar custos da OS.")
+            require_sensitive_permission(request.user, "perm_os_registrar_custo")
             if self.object.fechada:
                 messages.error(request, "Reabra a OS antes de incluir um novo custo interno.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
@@ -415,8 +446,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
         elif form_type == "estornar_custo_os":
-            if not is_management_user(request.user):
-                raise PermissionDenied("Você não tem permissão para estornar custos da OS.")
+            require_sensitive_permission(request.user, "perm_os_estornar_custo")
             custo = get_object_or_404(
                 CustoOrdemServico,
                 id=request.POST.get("custo_id"),
@@ -754,14 +784,67 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             if status_inicial not in status_validos:
                 status_inicial = "contactar"
 
-            pedido = PedidoCompra.objects.create(
+            item_orcamento = produto_estoque = conta_pagar = None
+            quantidade_solicitada = Decimal("1.000")
+            custo_estimado_unitario = None
+            data_prevista = None
+            if has_sensitive_permission(request.user, "perm_os_registrar_custo"):
+                from caixa.models import ContaPagar
+                from estoque.models import Produto
+                from orcamentos.models import ItemOrcamento
+
+                item_id = (request.POST.get("item_orcamento") or "").strip()
+                produto_id = (request.POST.get("produto_estoque") or "").strip()
+                conta_id = (request.POST.get("conta_pagar") or "").strip()
+                try:
+                    quantidade_solicitada = Decimal(
+                        (request.POST.get("quantidade_solicitada") or "1").replace(",", ".")
+                    )
+                    custo_raw = (request.POST.get("custo_estimado_unitario") or "").replace(",", ".")
+                    custo_estimado_unitario = Decimal(custo_raw) if custo_raw else None
+                except (InvalidOperation, ValueError):
+                    messages.error(request, "Quantidade ou custo estimado inválido.")
+                    return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
+                data_prevista = parse_date(request.POST.get("data_prevista") or "")
+                if item_id:
+                    item_orcamento = get_object_or_404(
+                        ItemOrcamento, pk=item_id, orcamento__ordem_servico=self.object
+                    )
+                if produto_id:
+                    produto_estoque = get_object_or_404(
+                        Produto, pk=produto_id, empresa=self.object.empresa
+                    )
+                if conta_id:
+                    conta_pagar = get_object_or_404(
+                        ContaPagar, pk=conta_id, empresa=self.object.empresa
+                    )
+
+            pedido = PedidoCompra(
                 ordem=self.object,
+                empresa=self.object.empresa,
+                item_orcamento=item_orcamento,
+                produto_estoque=produto_estoque,
+                conta_pagar=conta_pagar,
                 titulo=titulo,
                 tipo_peca=tipo_peca,
                 descricao=descricao,
+                fornecedor_nome=(request.POST.get("fornecedor_nome") or "").strip() if has_sensitive_permission(request.user, "perm_os_registrar_custo") else "",
+                documento_referencia=(request.POST.get("documento_referencia") or "").strip() if has_sensitive_permission(request.user, "perm_os_registrar_custo") else "",
+                quantidade_solicitada=quantidade_solicitada,
+                custo_estimado_unitario=custo_estimado_unitario,
+                data_prevista=data_prevista,
                 status=status_inicial,
                 criado_por=request.user,
             )
+            try:
+                pedido.full_clean()
+                pedido.save()
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+                return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
+            if pedido.item_orcamento_id:
+                pedido.item_orcamento.situacao_aquisicao = "solicitado"
+                pedido.item_orcamento.save(update_fields=["situacao_aquisicao"])
             for foto in request.FILES.getlist("fotos"):
                 PedidoCompraFoto.objects.create(
                     pedido=pedido,
@@ -795,6 +878,75 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 dados_extras={"pedido_id": pedido.id, "status": status_inicial},
             )
             messages.success(request, "Pedido de compra criado.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
+
+        elif form_type == "pedido_compra_receber":
+            require_sensitive_permission(request.user, "perm_os_registrar_custo")
+            from caixa.models import ContaPagar
+            from estoque.models import PontoOperacional, Produto, UbicacaoEstoque
+
+            pedido = get_object_or_404(
+                PedidoCompra, pk=request.POST.get("pedido_id"), ordem=self.object,
+                empresa=self.object.empresa,
+            )
+            produto = Produto.objects.filter(
+                pk=request.POST.get("produto_estoque"), empresa=self.object.empresa
+            ).first()
+            conta_pagar = ContaPagar.objects.filter(
+                pk=request.POST.get("conta_pagar"), empresa=self.object.empresa
+            ).first()
+            ponto = PontoOperacional.objects.filter(
+                pk=request.POST.get("ponto_operacional"), empresa=self.object.empresa, ativo=True
+            ).first()
+            ubicacao = UbicacaoEstoque.objects.filter(
+                pk=request.POST.get("ubicacao"), ponto_operacional=ponto, ativo=True
+            ).first() if ponto else None
+            try:
+                recebimento = receber_pedido_os(
+                    pedido=pedido,
+                    quantidade=(request.POST.get("quantidade") or "0").replace(",", "."),
+                    custo_unitario=(request.POST.get("custo_unitario") or "0").replace(",", "."),
+                    destino=request.POST.get("destino") or "uso_os",
+                    usuario=request.user,
+                    chave_idempotencia=f"web-pedido-{pedido.pk}-{uuid4().hex}",
+                    data_competencia=parse_date(request.POST.get("data_competencia") or ""),
+                    documento_referencia=request.POST.get("documento_referencia") or "",
+                    conta_pagar=conta_pagar,
+                    produto_estoque=produto,
+                    ponto_operacional=ponto,
+                    ubicacao=ubicacao,
+                )
+            except (ValidationError, ValueError, InvalidOperation) as exc:
+                mensagem = "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+                messages.error(request, mensagem)
+            else:
+                messages.success(
+                    request,
+                    f"Recebimento #{recebimento.pk} registrado; custo interno e destino atualizados.",
+                )
+            return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
+
+        elif form_type == "pedido_compra_recebimento_estornar":
+            require_sensitive_permission(request.user, "perm_os_estornar_custo")
+            from ..models import RecebimentoPedidoCompra
+
+            recebimento = get_object_or_404(
+                RecebimentoPedidoCompra,
+                pk=request.POST.get("recebimento_id"),
+                pedido__ordem=self.object,
+                empresa=self.object.empresa,
+            )
+            try:
+                estornar_recebimento_pedido_os(
+                    recebimento=recebimento,
+                    usuario=request.user,
+                    motivo=request.POST.get("motivo_estorno") or "",
+                )
+            except (ValidationError, ValueError) as exc:
+                mensagem = "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+                messages.error(request, mensagem)
+            else:
+                messages.success(request, "Recebimento estornado com contrapartidas auditáveis.")
             return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
 
         elif form_type == "pedido_compra_linha":

@@ -12,6 +12,8 @@ from .dashboard import (
     registrar_saida,
 )
 from .pagaveis import aging_pagar, contas_pagar, criar_conta_pagar, detalhe_conta_pagar, editar_conta_pagar
+from .cartoes_corporativos import cartoes_corporativos
+from .contabilidade import contabilidade_gerencial
 from .taloes import imprimir_talao, taloes
 from .tesouraria import conciliar_extrato_grupo, desfazer_conciliacao_bancaria, tesouraria, tratar_linha_extrato
 from .recebiveis import (
@@ -39,6 +41,8 @@ __all__ = [
     "comissoes_pendencias",
     "comissoes_tecnicos",
     "contas_pagar",
+    "cartoes_corporativos",
+    "contabilidade_gerencial",
     "contas_receber",
     "criar_conta_pagar",
     "criar_conta_receber",

@@ -13,9 +13,12 @@ from caixa.models import (
     CategoriaFinanceira,
     CentroCusto,
     ContaBancaria,
+    ContaPagar,
     FormaPagamento,
     LancamentoCaixa,
     MovimentoBancario,
+    MovimentoFinanceiro,
+    PagamentoContaPagar,
 )
 from configuracoes.models import Empresa
 from caixa.services.tesouraria import importar_extrato_arquivo, registrar_aporte_capital
@@ -239,3 +242,179 @@ VERSION:102
         self.assertEqual(response.context["custos_os_vinculados"], Decimal("40.00"))
         self.assertEqual(response.context["despesas_operacionais"], Decimal("0.00"))
         self.assertEqual(response.context["cmv"], Decimal("45.00"))
+
+    def test_pagamento_fornecedor_bancario_retroativo_e_estorno_preservam_auditoria(self):
+        ontem = timezone.localdate() - timedelta(days=1)
+        conta_pagar = ContaPagar.objects.create(
+            empresa=self.empresa,
+            fornecedor="Fornecedor de componentes",
+            descricao="Compra para reparo",
+            categoria=self.categoria,
+            centro_custo=self.centro,
+            data_emissao=ontem,
+            data_competencia=ontem,
+            valor_total=Decimal("80.00"),
+            vencimento=ontem,
+        )
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_pagar", args=[conta_pagar.id]),
+            {
+                "action": "pagar",
+                "valor": "80.00",
+                "forma_pagamento": self.pix.id,
+                "caixa": "",
+                "conta_bancaria": self.conta.id,
+                "data_competencia": ontem.isoformat(),
+                "data_movimento": ontem.isoformat(),
+                "referencia": "PIX-FORN-001",
+                "observacao": "Pagamento retroativo",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        pagamento = PagamentoContaPagar.objects.get(conta=conta_pagar)
+        conta_pagar.refresh_from_db()
+        self.assertEqual(conta_pagar.status, "paga")
+        self.assertEqual(pagamento.data_movimento, ontem)
+        self.assertEqual(pagamento.conta_bancaria, self.conta)
+        self.assertIsNone(pagamento.caixa_id)
+        self.assertEqual(
+            MovimentoBancario.objects.get(origem_tipo="conta_pagar", origem_id=pagamento.id).data_movimento,
+            ontem,
+        )
+
+        response = self.client.post(
+            reverse("caixa:detalhe_conta_pagar", args=[conta_pagar.id]),
+            {
+                "action": "estornar_pagamento",
+                "pagamento_id": pagamento.id,
+                "motivo_estorno": "Pagamento registrado na conta errada",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        pagamento.refresh_from_db()
+        conta_pagar.refresh_from_db()
+        self.assertEqual(pagamento.status, "estornado")
+        self.assertEqual(conta_pagar.valor_pago, Decimal("0.00"))
+        self.assertEqual(conta_pagar.status, "vencida")
+        self.assertTrue(
+            MovimentoFinanceiro.objects.filter(
+                estorno_de__origem_tipo="conta_pagar",
+                estorno_de__origem_id=pagamento.id,
+            ).exists()
+        )
+        self.assertEqual(
+            MovimentoBancario.objects.filter(origem_tipo="conta_pagar", origem_id=pagamento.id).count(),
+            2,
+        )
+
+    def test_custo_os_nao_pode_ultrapassar_obrigacao_vinculada(self):
+        cliente = Cliente.objects.create(
+            empresa=self.empresa,
+            nome="Cliente Rateio",
+            documento="39053344705",
+            telefone="11999990000",
+            estado="SP",
+        )
+        ordem = OrdemServico.objects.create(
+            empresa=self.empresa,
+            cliente=cliente,
+            tipo_equipamento="outros",
+            marca_equipamento="Marca",
+            modelo_equipamento="Modelo",
+            defeito="Defeito",
+            tipo_reparo="Fora de Garantia",
+        )
+        obrigacao = ContaPagar.objects.create(
+            empresa=self.empresa,
+            fornecedor="Fornecedor Rateio",
+            descricao="Componentes",
+            categoria=self.categoria,
+            centro_custo=self.centro,
+            valor_total=Decimal("50.00"),
+            vencimento=timezone.localdate(),
+        )
+        CustoOrdemServico.objects.create(
+            empresa=self.empresa,
+            ordem=ordem,
+            conta_pagar=obrigacao,
+            tipo="componente",
+            origem="compra_especifica",
+            descricao="Componente A",
+            quantidade=1,
+            custo_unitario=Decimal("40.00"),
+            data_competencia=obrigacao.data_competencia,
+        )
+        excedente = CustoOrdemServico(
+            empresa=self.empresa,
+            ordem=ordem,
+            conta_pagar=obrigacao,
+            tipo="componente",
+            origem="compra_especifica",
+            descricao="Componente B",
+            quantidade=1,
+            custo_unitario=Decimal("20.00"),
+            data_competencia=obrigacao.data_competencia,
+        )
+        with self.assertRaises(ValidationError):
+            excedente.full_clean()
+
+    def test_dre_reconhece_obrigacao_na_competencia_sem_duplicar_custo_da_os(self):
+        hoje = timezone.localdate()
+        cliente = Cliente.objects.create(
+            empresa=self.empresa,
+            nome="Cliente Competência",
+            documento="11144477735",
+            telefone="11988887777",
+            estado="SP",
+        )
+        ordem = OrdemServico.objects.create(
+            empresa=self.empresa,
+            cliente=cliente,
+            tipo_equipamento="outros",
+            marca_equipamento="Marca",
+            modelo_equipamento="Modelo",
+            defeito="Defeito",
+            tipo_reparo="Fora de Garantia",
+        )
+        obrigacao_os = ContaPagar.objects.create(
+            empresa=self.empresa,
+            fornecedor="Fornecedor OS",
+            descricao="Peça específica",
+            categoria=self.categoria,
+            centro_custo=self.centro,
+            data_competencia=hoje,
+            valor_total=Decimal("40.00"),
+            vencimento=hoje + timedelta(days=10),
+        )
+        CustoOrdemServico.objects.create(
+            empresa=self.empresa,
+            ordem=ordem,
+            conta_pagar=obrigacao_os,
+            origem="compra_especifica",
+            tipo="peca",
+            descricao="Peça específica",
+            quantidade=1,
+            custo_unitario=Decimal("40.00"),
+            data_competencia=hoje,
+        )
+        ContaPagar.objects.create(
+            empresa=self.empresa,
+            fornecedor="Contabilidade",
+            descricao="Honorários mensais",
+            categoria=self.categoria,
+            centro_custo=self.centro,
+            data_competencia=hoje,
+            valor_total=Decimal("100.00"),
+            vencimento=hoje + timedelta(days=10),
+        )
+
+        response = self.client.get(
+            reverse("caixa:dre"),
+            {"data_inicio": hoje.isoformat(), "data_fim": hoje.isoformat()},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["custos_diretos_os"], Decimal("40.00"))
+        self.assertEqual(response.context["obrigacoes_operacionais"], Decimal("140.00"))
+        self.assertEqual(response.context["despesas_obrigacoes"], Decimal("100.00"))
+        self.assertEqual(response.context["despesas_operacionais"], Decimal("100.00"))
+        self.assertEqual(response.context["cmv"], Decimal("40.00"))

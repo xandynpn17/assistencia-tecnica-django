@@ -539,7 +539,7 @@
 </div>
 
 <div class="modal fade" id="modalAssinaturaSaida" tabindex="-1" role="dialog" aria-labelledby="modalAssinaturaSaidaLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
+    <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalAssinaturaSaidaLabel">Registrar assinatura de saída</h5>
@@ -675,6 +675,42 @@
                             {% endfor %}
                         </select>
                     </div>
+                    {% if pode_ver_custos_os %}
+                    <hr>
+                    <p class="small text-muted mb-2"><i class="fas fa-lock mr-1"></i>Dados internos — não aparecem nos documentos do cliente.</p>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="pedido_item_orcamento">Peça do orçamento</label>
+                            <select name="item_orcamento" id="pedido_item_orcamento" class="form-control">
+                                <option value="">Sem vínculo</option>
+                                {% for item in itens_orcamento_pedido %}<option value="{{ item.id }}">{{ item.nome }} ({{ item.quantidade }} un.)</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="pedido_produto_estoque">Produto cadastrado</label>
+                            <select name="produto_estoque" id="pedido_produto_estoque" class="form-control">
+                                <option value="">Item avulso / ainda não cadastrado</option>
+                                {% for produto in produtos_pedido %}<option value="{{ produto.id }}">{{ produto.nome }}{% if produto.sku %} — {{ produto.sku }}{% endif %}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4"><label>Quantidade solicitada</label><input type="number" name="quantidade_solicitada" class="form-control" value="1" min="0.001" step="0.001" required></div>
+                        <div class="form-group col-md-4"><label>Custo estimado unitário</label><input type="number" name="custo_estimado_unitario" class="form-control" min="0" step="0.01"></div>
+                        <div class="form-group col-md-4"><label>Previsão</label><input type="date" name="data_prevista" class="form-control"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6"><label>Fornecedor</label><input type="text" name="fornecedor_nome" class="form-control" maxlength="160"></div>
+                        <div class="form-group col-md-6"><label>Documento / cotação</label><input type="text" name="documento_referencia" class="form-control" maxlength="100"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Conta a pagar vinculada</label>
+                        <select name="conta_pagar" class="form-control">
+                            <option value="">Sem obrigação vinculada</option>
+                            {% for conta in contas_pagar_pedido %}<option value="{{ conta.id }}">{{ conta.descricao }} — vence {{ conta.vencimento|date:"d/m/Y" }} — R$ {{ conta.valor_aberto|floatformat:2 }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
                     <div class="form-group mb-0">
                         <label for="pedido_fotos">Fotos</label>
                         <input type="file" name="fotos" id="pedido_fotos" class="form-control-file" accept="image/*" multiple>

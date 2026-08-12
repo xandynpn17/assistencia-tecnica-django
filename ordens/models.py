@@ -651,6 +651,14 @@ class CustoOrdemServico(models.Model):
         related_name="custos_ordens_servico",
         help_text="Saída financeira que pagou este custo, quando aplicável.",
     )
+    conta_pagar = models.ForeignKey(
+        "caixa.ContaPagar",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="custos_ordens_servico",
+        help_text="Obrigação que originou este custo, quando aplicável.",
+    )
     ordem = models.ForeignKey(
         OrdemServico,
         on_delete=models.CASCADE,
@@ -762,6 +770,18 @@ class CustoOrdemServico(models.Model):
                 errors["lancamento_caixa"] = "O total alocado ultrapassa o valor da saída financeira."
         elif self.origem == "despesa_paga":
             errors["lancamento_caixa"] = "Selecione a saída financeira correspondente."
+        if self.conta_pagar_id:
+            if self.conta_pagar.empresa_id != self.empresa_id:
+                errors["conta_pagar"] = "A conta a pagar pertence a outra empresa."
+            if self.data_competencia != self.conta_pagar.data_competencia:
+                errors["data_competencia"] = "A competência deve ser igual à da obrigação vinculada."
+            if self.lancamento_caixa_id:
+                errors["lancamento_caixa"] = "Vincule o custo à obrigação ou à saída, nunca aos dois caminhos."
+            alocado = self.conta_pagar.custos_ordens_servico.filter(
+                estornado_em__isnull=True
+            ).exclude(pk=self.pk).aggregate(total=models.Sum(models.F("quantidade") * models.F("custo_unitario")))["total"] or Decimal("0.00")
+            if alocado + self.total > Decimal(self.conta_pagar.valor_total or 0):
+                errors["conta_pagar"] = "O total de custos alocados ultrapassa o valor da obrigação."
         if errors:
             raise ValidationError(errors)
 
@@ -857,6 +877,7 @@ class PedidoCompra(models.Model):
         ("pendente_marca", "Pendente marca"),
         ("pendente_cliente", "Pendente cliente"),
         ("pre_pagamento", "Pre-pagamento"),
+        ("recepcionado_parcial", "Recepcionado parcialmente"),
         ("recepcionado", "Recepcionado"),
         ("transito", "Trânsito"),
         ("fechado", "Fechado"),
@@ -867,10 +888,31 @@ class PedidoCompra(models.Model):
         related_name="pedidos_compra",
         on_delete=models.CASCADE,
     )
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="pedidos_compra_os",
+    )
+    item_orcamento = models.ForeignKey(
+        "orcamentos.ItemOrcamento", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="pedidos_compra",
+    )
+    produto_estoque = models.ForeignKey(
+        "estoque.Produto", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="pedidos_compra_os",
+    )
+    conta_pagar = models.ForeignKey(
+        "caixa.ContaPagar", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="pedidos_compra_os",
+    )
     numero_oc = models.CharField(max_length=20, unique=True, null=True, blank=True)
     titulo = models.CharField(max_length=120)
     tipo_peca = models.CharField(max_length=120, blank=True)
     descricao = models.TextField(blank=True)
+    fornecedor_nome = models.CharField(max_length=160, blank=True)
+    documento_referencia = models.CharField(max_length=100, blank=True)
+    quantidade_solicitada = models.DecimalField(max_digits=12, decimal_places=3, default=1)
+    custo_estimado_unitario = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    data_prevista = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="contactar")
     criado_em = models.DateTimeField(auto_now_add=True)
     criado_por = models.ForeignKey(
@@ -885,6 +927,8 @@ class PedidoCompra(models.Model):
         ordering = ["-criado_em", "-id"]
 
     def save(self, *args, **kwargs):
+        if not self.empresa_id:
+            self.empresa_id = self.ordem.empresa_id
         novo = self.pk is None
         super().save(*args, **kwargs)
         if novo and not self.numero_oc:
@@ -893,6 +937,96 @@ class PedidoCompra(models.Model):
 
     def __str__(self):
         return f"{self.numero_oc or f'Pedido {self.id}'} - {self.ordem.numero_os}"
+
+    @property
+    def quantidade_recebida(self):
+        return self.recebimentos.filter(estornado_em__isnull=True).aggregate(
+            total=models.Sum("quantidade")
+        )["total"] or Decimal("0.000")
+
+    @property
+    def quantidade_pendente(self):
+        return max(Decimal("0.000"), Decimal(self.quantidade_solicitada or 0) - self.quantidade_recebida)
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.empresa_id and self.ordem_id and self.empresa_id != self.ordem.empresa_id:
+            errors["empresa"] = "A empresa do pedido deve ser a mesma da OS."
+        if self.item_orcamento_id and self.item_orcamento.orcamento.ordem_servico_id != self.ordem_id:
+            errors["item_orcamento"] = "O item do orçamento não pertence à OS."
+        if self.produto_estoque_id and self.produto_estoque.empresa_id not in {None, self.empresa_id}:
+            errors["produto_estoque"] = "O produto pertence a outra empresa."
+        if self.conta_pagar_id and self.conta_pagar.empresa_id != self.empresa_id:
+            errors["conta_pagar"] = "A obrigação pertence a outra empresa."
+        if Decimal(self.quantidade_solicitada or 0) <= 0:
+            errors["quantidade_solicitada"] = "A quantidade solicitada deve ser positiva."
+        if self.custo_estimado_unitario is not None and Decimal(self.custo_estimado_unitario) < 0:
+            errors["custo_estimado_unitario"] = "O custo estimado não pode ser negativo."
+        if errors:
+            raise ValidationError(errors)
+
+
+class RecebimentoPedidoCompra(models.Model):
+    DESTINOS = [("uso_os", "Uso direto na OS"), ("estoque", "Entrada no estoque")]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="recebimentos_pedidos_os"
+    )
+    pedido = models.ForeignKey(PedidoCompra, on_delete=models.PROTECT, related_name="recebimentos")
+    quantidade = models.DecimalField(max_digits=12, decimal_places=3)
+    custo_unitario = models.DecimalField(max_digits=14, decimal_places=2)
+    destino = models.CharField(max_length=12, choices=DESTINOS)
+    data_competencia = models.DateField(default=timezone.localdate, db_index=True)
+    documento_referencia = models.CharField(max_length=100, blank=True)
+    produto_estoque = models.ForeignKey(
+        "estoque.Produto", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="recebimentos_pedidos_os",
+    )
+    movimentacao_estoque = models.OneToOneField(
+        "estoque.MovimentacaoEstoque", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="recebimento_pedido_os",
+    )
+    custo_os = models.OneToOneField(
+        CustoOrdemServico, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="recebimento_pedido",
+    )
+    conta_pagar = models.ForeignKey(
+        "caixa.ContaPagar", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="recebimentos_pedidos_os",
+    )
+    chave_idempotencia = models.CharField(max_length=160, unique=True)
+    recebido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="recebimentos_pedidos_os",
+    )
+    recebido_em = models.DateTimeField(auto_now_add=True)
+    estornado_em = models.DateTimeField(null=True, blank=True)
+    estornado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="recebimentos_pedidos_os_estornados",
+    )
+    motivo_estorno = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-recebido_em", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(quantidade__gt=0), name="receb_pedido_os_qtd_positiva"),
+            models.CheckConstraint(condition=Q(custo_unitario__gte=0), name="receb_pedido_os_custo_nao_negativo"),
+        ]
+
+    @property
+    def total(self):
+        return (Decimal(self.quantidade or 0) * Decimal(self.custo_unitario or 0)).quantize(Decimal("0.01"))
+
+    def clean(self):
+        super().clean()
+        if self.pedido_id and self.empresa_id != self.pedido.empresa_id:
+            raise ValidationError("O recebimento e o pedido pertencem a empresas diferentes.")
+        if self.destino == "estoque" and not self.produto_estoque_id:
+            raise ValidationError({"produto_estoque": "Entrada no estoque exige um produto cadastrado."})
+        if self.destino == "uso_os" and self.movimentacao_estoque_id:
+            raise ValidationError("Uso direto na OS não deve criar entrada de estoque.")
 
 
 class PedidoCompraLinha(models.Model):

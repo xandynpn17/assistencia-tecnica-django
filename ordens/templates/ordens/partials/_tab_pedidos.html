@@ -1,87 +1,83 @@
-<!-- Pedidos -->
+<!-- Pedidos e recebimentos internos -->
 <div class="tab-pane fade {% if active_tab == 'pedidos' %}show active{% endif %}" id="pedidos">
     <div class="card-modern">
         <div class="card-modern-header d-flex justify-content-between align-items-center">
-            <span class="os-tab-header-title">Pedidos</span>
+            <span class="os-tab-header-title">Compras da OS</span>
             {% if not ordem.fechada %}
             <button class="btn btn-sm btn-light" data-toggle="modal" data-target="#modalAdicionarPedido">
                 <i class="fas fa-plus mr-1"></i>Novo pedido
             </button>
-            {% else %}
-            <span class="text-light"><i class="fas fa-lock mr-1"></i>OS fechada</span>
-            {% endif %}
+            {% else %}<span class="text-light"><i class="fas fa-lock mr-1"></i>OS fechada</span>{% endif %}
         </div>
         <div class="card-modern-body">
-            {% if pedidos_compra %}
-                {% for pedido in pedidos_compra %}
-                <div class="border rounded p-2 mb-2">
-                    <div class="d-flex justify-content-between align-items-start flex-wrap" style="gap: 10px;">
-                        <div>
-                            <h6 class="mb-1">{{ pedido.numero_oc|default:"OC sem numero" }} - {{ pedido.titulo }}</h6>
-                            <div class="small text-muted">
-                                Status atual: <strong>{{ pedido.get_status_display }}</strong> |
-                                Criado em {{ pedido.criado_em|date:"d/m/Y H:i" }}
-                            </div>
-                            {% if pedido.tipo_peca %}
-                            <div class="small"><strong>Tipo de peça:</strong> {{ pedido.tipo_peca }}</div>
-                            {% endif %}
-                            {% if pedido.descricao %}
-                            <div class="small mt-1">{{ pedido.descricao }}</div>
-                            {% endif %}
-                        </div>
-                        {% if pedido.fotos.all %}
-                        <div class="d-flex flex-wrap justify-content-end" style="gap:6px;">
-                            {% for foto in pedido.fotos.all %}
-                            <a href="{{ foto.imagem.url }}" target="_blank">
-                                <img src="{{ foto.imagem.url }}" alt="Foto pedido" style="width:64px;height:64px;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
-                            </a>
-                            {% endfor %}
+            <p class="small text-muted">A compra pode ser recebida diretamente como custo da OS ou entrar no estoque. Custos e documentos financeiros são internos e não aparecem para o cliente.</p>
+            {% for pedido in pedidos_compra %}
+            <div class="border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-start flex-wrap" style="gap:10px">
+                    <div>
+                        <h6 class="mb-1">{{ pedido.numero_oc|default:"OC sem número" }} — {{ pedido.titulo }}</h6>
+                        <div class="small text-muted">{{ pedido.get_status_display }} · criado em {{ pedido.criado_em|date:"d/m/Y H:i" }}</div>
+                        {% if pedido.tipo_peca %}<div class="small"><strong>Tipo:</strong> {{ pedido.tipo_peca }}</div>{% endif %}
+                        {% if pedido.descricao %}<div class="small mt-1">{{ pedido.descricao }}</div>{% endif %}
+                        {% if pode_ver_custos_os %}
+                        <div class="small mt-2 p-2 bg-light rounded">
+                            <strong>Controle interno:</strong> solicitado {{ pedido.quantidade_solicitada|floatformat:3 }},
+                            recebido {{ pedido.quantidade_recebida|floatformat:3 }}, pendente {{ pedido.quantidade_pendente|floatformat:3 }}.
+                            {% if pedido.custo_estimado_unitario != None %} Custo estimado: R$ {{ pedido.custo_estimado_unitario|floatformat:2 }}/un.{% endif %}
+                            {% if pedido.fornecedor_nome %}<br>Fornecedor: {{ pedido.fornecedor_nome }}.{% endif %}
+                            {% if pedido.documento_referencia %} Documento: {{ pedido.documento_referencia }}.{% endif %}
+                            {% if pedido.data_prevista %} Previsão: {{ pedido.data_prevista|date:"d/m/Y" }}.{% endif %}
+                            {% if pedido.item_orcamento %}<br>Peça orçada: {{ pedido.item_orcamento.nome }}.{% endif %}
+                            {% if pedido.produto_estoque %} Produto: {{ pedido.produto_estoque.nome }}.{% endif %}
+                            {% if pedido.conta_pagar %}<br>Obrigação: {{ pedido.conta_pagar.descricao }} (R$ {{ pedido.conta_pagar.valor_aberto|floatformat:2 }} em aberto).{% endif %}
                         </div>
                         {% endif %}
                     </div>
-
-                    <div class="mt-2">
-                        <h6 class="mb-2">Linhas do pedido</h6>
-                        <div class="list-group mb-2">
-                            {% for linha in pedido.linhas.all %}
-                            <div class="list-group-item py-2">
-                                <span class="badge badge-primary">{{ linha.get_status_display }}</span>
-                                <small class="float-right">{{ linha.criado_em|date:"d/m/Y H:i" }}{% if linha.usuario %} - {{ linha.usuario.username }}{% endif %}</small>
-                                <div class="small mt-1">{{ linha.descricao|default:"-" }}</div>
-                            </div>
-                            {% empty %}
-                            <div class="list-group-item text-muted">Sem atualizações.</div>
-                            {% endfor %}
-                        </div>
-
-                        {% if not ordem.fechada %}
-                        <form method="post" class="border rounded p-2 bg-light">
-                            {% csrf_token %}
-                            <input type="hidden" name="form_type" value="pedido_compra_linha">
-                            <input type="hidden" name="pedido_id" value="{{ pedido.id }}">
-                            <div class="form-row">
-                                <div class="col-md-4">
-                                    <label>Status</label>
-                                    <select name="status" class="form-control form-control-sm" required>
-                                        {% for value, label in pedido_status_choices %}
-                                        <option value="{{ value }}" {% if pedido.status == value %}selected{% endif %}>{{ label }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-8">
-                                    <label>Observação</label>
-                                    <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Detalhe da atualização">
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-sm btn-primary mt-2">Adicionar linha</button>
-                        </form>
-                        {% endif %}
-                    </div>
+                    {% if pedido.fotos.all %}<div class="d-flex flex-wrap" style="gap:6px">{% for foto in pedido.fotos.all %}<a href="{{ foto.imagem.url }}" target="_blank"><img src="{{ foto.imagem.url }}" alt="Foto" style="width:64px;height:64px;object-fit:cover;border:1px solid #ddd;border-radius:6px"></a>{% endfor %}</div>{% endif %}
                 </div>
-                {% endfor %}
-            {% else %}
-            <p class="text-muted mb-0">Nenhum pedido de compra criado para esta OS.</p>
-            {% endif %}
+
+                {% if pode_ver_custos_os and pedido.recebimentos.all %}
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm table-bordered mb-2">
+                        <thead><tr><th>Recebimento</th><th>Destino</th><th class="text-right">Qtd.</th><th class="text-right">Custo</th><th>Competência</th><th>Situação</th></tr></thead>
+                        <tbody>{% for recebimento in pedido.recebimentos.all %}
+                        <tr>
+                            <td>#{{ recebimento.id }} · {{ recebimento.recebido_em|date:"d/m/Y H:i" }}{% if recebimento.documento_referencia %}<br><small>{{ recebimento.documento_referencia }}</small>{% endif %}</td>
+                            <td>{{ recebimento.get_destino_display }}{% if recebimento.produto_estoque %}<br><small>{{ recebimento.produto_estoque.nome }}</small>{% endif %}</td>
+                            <td class="text-right">{{ recebimento.quantidade|floatformat:3 }}</td>
+                            <td class="text-right">R$ {{ recebimento.total|floatformat:2 }}</td>
+                            <td>{{ recebimento.data_competencia|date:"d/m/Y" }}</td>
+                            <td>{% if recebimento.estornado_em %}<span class="badge badge-secondary">Estornado</span><br><small>{{ recebimento.motivo_estorno }}</small>{% else %}<span class="badge badge-success">Ativo</span>{% if not ordem.fechada %}<form method="post" class="mt-1">{% csrf_token %}<input type="hidden" name="form_type" value="pedido_compra_recebimento_estornar"><input type="hidden" name="recebimento_id" value="{{ recebimento.id }}"><input type="text" name="motivo_estorno" class="form-control form-control-sm mb-1" placeholder="Motivo obrigatório" required><button class="btn btn-sm btn-outline-danger">Estornar</button></form>{% endif %}{% endif %}</td>
+                        </tr>{% endfor %}</tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                {% if pode_ver_custos_os and not ordem.fechada and pedido.quantidade_pendente > 0 %}
+                <form method="post" class="border rounded p-2 mt-3 bg-light">
+                    {% csrf_token %}<input type="hidden" name="form_type" value="pedido_compra_receber"><input type="hidden" name="pedido_id" value="{{ pedido.id }}">
+                    <h6 class="mb-2">Registrar recebimento</h6>
+                    <div class="form-row">
+                        <div class="form-group col-md-2"><label>Quantidade</label><input type="number" name="quantidade" class="form-control form-control-sm" value="{{ pedido.quantidade_pendente|stringformat:'.3f' }}" min="0.001" step="0.001" required></div>
+                        <div class="form-group col-md-2"><label>Custo unitário</label><input type="number" name="custo_unitario" class="form-control form-control-sm" value="{% if pedido.custo_estimado_unitario != None %}{{ pedido.custo_estimado_unitario|stringformat:'.2f' }}{% else %}0.00{% endif %}" min="0" step="0.01" required></div>
+                        <div class="form-group col-md-3"><label>Destino</label><select name="destino" class="form-control form-control-sm"><option value="uso_os">Uso direto na OS</option><option value="estoque">Entrada no estoque</option></select></div>
+                        <div class="form-group col-md-2"><label>Competência</label><input type="date" name="data_competencia" value="{{ hoje_iso }}" class="form-control form-control-sm" required></div>
+                        <div class="form-group col-md-3"><label>Documento</label><input type="text" name="documento_referencia" value="{{ pedido.documento_referencia }}" class="form-control form-control-sm"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4"><label>Produto</label><select name="produto_estoque" class="form-control form-control-sm"><option value="">Item avulso</option>{% for produto in produtos_pedido %}<option value="{{ produto.id }}" {% if pedido.produto_estoque_id == produto.id %}selected{% endif %}>{{ produto.nome }}{% if produto.sku %} — {{ produto.sku }}{% endif %}</option>{% endfor %}</select></div>
+                        <div class="form-group col-md-4"><label>Conta a pagar</label><select name="conta_pagar" class="form-control form-control-sm"><option value="">Sem vínculo</option>{% for conta in contas_pagar_pedido %}<option value="{{ conta.id }}" {% if pedido.conta_pagar_id == conta.id %}selected{% endif %}>{{ conta.descricao }} — {{ conta.get_natureza_economica_display }}</option>{% endfor %}</select></div>
+                        <div class="form-group col-md-2"><label>Ponto (se estoque)</label><select name="ponto_operacional" class="form-control form-control-sm"><option value="">Selecione</option>{% for ponto in pontos_pedido %}<option value="{{ ponto.id }}">{{ ponto }}</option>{% endfor %}</select></div>
+                        <div class="form-group col-md-2"><label>Localização</label><select name="ubicacao" class="form-control form-control-sm"><option value="">Selecione</option>{% for local in ubicacoes_pedido %}<option value="{{ local.id }}">{{ local }}</option>{% endfor %}</select></div>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-box-open mr-1"></i>Confirmar recebimento</button>
+                </form>
+                {% endif %}
+
+                <div class="mt-3"><h6 class="mb-2">Histórico</h6><div class="list-group mb-2">{% for linha in pedido.linhas.all %}<div class="list-group-item py-2"><span class="badge badge-primary">{{ linha.get_status_display }}</span><small class="float-right">{{ linha.criado_em|date:"d/m/Y H:i" }}{% if linha.usuario %} · {{ linha.usuario.username }}{% endif %}</small><div class="small mt-1">{{ linha.descricao|default:"-" }}</div></div>{% empty %}<div class="list-group-item text-muted">Sem atualizações.</div>{% endfor %}</div></div>
+                {% if not ordem.fechada %}<form method="post" class="border rounded p-2 bg-light">{% csrf_token %}<input type="hidden" name="form_type" value="pedido_compra_linha"><input type="hidden" name="pedido_id" value="{{ pedido.id }}"><div class="form-row"><div class="col-md-4"><label>Status</label><select name="status" class="form-control form-control-sm" required>{% for value, label in pedido_status_choices %}<option value="{{ value }}" {% if pedido.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div><div class="col-md-8"><label>Observação</label><input type="text" name="descricao" class="form-control form-control-sm" placeholder="Detalhe da atualização"></div></div><button type="submit" class="btn btn-sm btn-primary mt-2">Adicionar linha</button></form>{% endif %}
+            </div>
+            {% empty %}<p class="text-muted mb-0">Nenhum pedido de compra criado para esta OS.</p>{% endfor %}
         </div>
     </div>
 </div>

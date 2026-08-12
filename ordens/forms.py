@@ -370,6 +370,12 @@ class CustoOrdemServicoForm(forms.ModelForm):
         self.fields["lancamento_caixa"].label_from_instance = lambda item: (
             f"{item.data_competencia:%d/%m/%Y} · {item.descricao} · R$ {item.valor:.2f}"
         )
+        self.fields["conta_pagar"].queryset = self.fields["conta_pagar"].queryset.filter(
+            empresa=empresa,
+        ).exclude(status="cancelada").order_by("-data_competencia", "-id")
+        self.fields["conta_pagar"].label_from_instance = lambda item: (
+            f"{item.data_competencia:%d/%m/%Y} · {item.descricao} · R$ {item.valor_total:.2f}"
+        )
 
     def clean(self):
         cleaned = super().clean()
@@ -400,6 +406,7 @@ class CustoOrdemServicoForm(forms.ModelForm):
             "item_orcamento",
             "produto_estoque",
             "lancamento_caixa",
+            "conta_pagar",
             "fornecedor_nome",
             "documento_referencia",
             "observacao_interna",
@@ -416,6 +423,7 @@ class CustoOrdemServicoForm(forms.ModelForm):
             "item_orcamento": forms.Select(attrs={"class": "form-control"}),
             "produto_estoque": forms.Select(attrs={"class": "form-control"}),
             "lancamento_caixa": forms.Select(attrs={"class": "form-control"}),
+            "conta_pagar": forms.Select(attrs={"class": "form-control"}),
             "fornecedor_nome": forms.TextInput(attrs={"class": "form-control"}),
             "documento_referencia": forms.TextInput(attrs={"class": "form-control"}),
             "observacao_interna": forms.Textarea(attrs={"class": "form-control", "rows": 2}),

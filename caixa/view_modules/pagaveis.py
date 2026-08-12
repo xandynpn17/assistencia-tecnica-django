@@ -3,7 +3,7 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -18,8 +18,8 @@ from configuracoes.services.tenant_guard import obter_empresa_ativa
 from configuracoes.services.tenant_guard import filtrar_catalogo_empresa
 
 from ..forms import ContaPagarEdicaoForm, ContaPagarForm, PagamentoContaPagarForm
-from ..models import CategoriaFinanceira, ContaPagar
-from ..services.contas import processar_pagamento_conta_pagar
+from ..models import CategoriaFinanceira, ContaPagar, PagamentoContaPagar
+from ..services.contas import estornar_pagamento_conta_pagar, processar_pagamento_conta_pagar
 from .common import caixa_atual
 from .helpers import (
     _atualizar_status_contas_pagar_abertas,
@@ -280,13 +280,22 @@ def criar_conta_pagar(request):
     _garantir_centros_custo_padrao(empresa)
     require_sensitive_permission(request.user, "perm_caixa_criar_conta_pagar")
     if request.method == "POST":
-        form = ContaPagarForm(request.POST, empresa=empresa)
+        form = ContaPagarForm(request.POST, request.FILES, empresa=empresa)
         if form.is_valid():
             conta = form.save(commit=False)
             conta.empresa = empresa
             conta.valor_pago = Decimal("0.00")
             conta.atualizar_status_automatico()
             conta.save()
+            from ..services.contabilidade import registrar_evento_contabil_se_configurado
+            registrar_evento_contabil_se_configurado(
+                empresa=empresa,
+                evento="obrigacao_estoque" if conta.natureza_economica == "estoque" else "obrigacao_despesa",
+                origem_tipo="conta_pagar", origem_id=conta.pk, competencia=conta.data_competencia,
+                valor=conta.valor_total, historico=conta.descricao,
+                documento_referencia=conta.documento_referencia,
+                centro_custo=conta.centro_custo, chave=f"conta-pagar:{conta.pk}:obrigacao", usuario=request.user,
+            )
             _log_financeiro("conta_pagar_criada", request.user, valor=conta.valor_total, descricao=f"Conta pagar #{conta.id}")
             messages.success(request, "Conta a pagar criada.")
             return redirect("caixa:contas_pagar")
@@ -322,6 +331,7 @@ def editar_conta_pagar(request, conta_id):
     if request.method == "POST":
         form = ContaPagarEdicaoForm(
             request.POST,
+            request.FILES,
             instance=conta,
             allow_financial_changes=not edicao_restrita,
             empresa=empresa,
@@ -366,6 +376,24 @@ def detalhe_conta_pagar(request, conta_id):
 
     if request.method == "POST":
         action = (request.POST.get("action") or "pagar").strip()
+        if action == "estornar_pagamento":
+            try:
+                require_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar")
+                pagamento = get_object_or_404(
+                    PagamentoContaPagar,
+                    id=request.POST.get("pagamento_id"),
+                    conta=conta,
+                    empresa=empresa,
+                )
+                estornar_pagamento_conta_pagar(
+                    pagamento=pagamento,
+                    usuario=request.user,
+                    motivo=request.POST.get("motivo_estorno"),
+                )
+                messages.success(request, "Pagamento estornado com histórico preservado.")
+            except (PermissionDenied, ValidationError) as exc:
+                messages.error(request, str(exc) or "Não foi possível estornar o pagamento.")
+            return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
         if action == "cancelar":
             try:
                 require_sensitive_permission(request.user, "perm_caixa_cancelar_conta_pagar")
@@ -374,6 +402,8 @@ def detalhe_conta_pagar(request, conta_id):
                 return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
             if pagamentos.exists():
                 messages.error(request, "Nao e permitido cancelar/excluir conta com pagamentos vinculados.")
+            elif conta.custos_ordens_servico.filter(estornado_em__isnull=True).exists():
+                messages.error(request, "Estorne ou desvincule os custos de OS antes de cancelar esta obrigação.")
             else:
                 conta.status = "cancelada"
                 conta.save(update_fields=["status", "atualizado_em"])
@@ -381,7 +411,7 @@ def detalhe_conta_pagar(request, conta_id):
                 messages.success(request, "Conta cancelada.")
             return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
 
-        form = PagamentoContaPagarForm(request.POST, empresa=empresa)
+        form = PagamentoContaPagarForm(request.POST, request.FILES, empresa=empresa, conta=conta)
         if form.is_valid():
             try:
                 require_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar")
@@ -389,6 +419,12 @@ def detalhe_conta_pagar(request, conta_id):
                 messages.error(request, str(exc) or "Permissao insuficiente.")
                 return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
             valor_pg = form.cleaned_data["valor"]
+            if form.cleaned_data["data_movimento"] != timezone.localdate():
+                try:
+                    require_sensitive_permission(request.user, "perm_caixa_lancamento_retroativo")
+                except PermissionDenied as exc:
+                    messages.error(request, str(exc) or "Você não pode registrar pagamento retroativo.")
+                    return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
             if valor_pg <= 0:
                 messages.error(request, "Valor de pagamento invalido.")
                 return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
@@ -399,16 +435,8 @@ def detalhe_conta_pagar(request, conta_id):
                 messages.error(request, "Valor maior que o saldo em aberto da conta.")
                 return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
 
-            forma_pagamento = form.cleaned_data.get("forma_pagamento")
-            pagamento_bancario = bool(getattr(forma_pagamento, "conta_bancaria_liquidacao_id", None))
-            caixa = caixa_atual(getattr(request.user, "empresa", None))
-            if not caixa and not pagamento_bancario:
-                messages.error(request, "Abra o caixa antes de registrar pagamento de conta a pagar.")
-                return redirect("caixa:abrir_caixa")
-
             processar_pagamento_conta_pagar(
                 conta=conta,
-                caixa=caixa,
                 usuario=request.user,
                 valor=valor_pg,
                 pagamento_form=form,
@@ -417,8 +445,15 @@ def detalhe_conta_pagar(request, conta_id):
 
             messages.success(request, "Pagamento registrado com sucesso.")
             return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
+        if (
+            "forma_pagamento" not in request.POST
+            and not form.fields["caixa"].queryset.exists()
+            and not form.fields["conta_bancaria"].queryset.exists()
+        ):
+            messages.error(request, "Abra o caixa antes de registrar pagamento em dinheiro.")
+            return redirect("caixa:abrir_caixa")
     else:
-        form = PagamentoContaPagarForm(initial={"valor": conta.valor_aberto}, empresa=empresa)
+        form = PagamentoContaPagarForm(empresa=empresa, conta=conta)
 
     return render(
         request,

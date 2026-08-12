@@ -15,6 +15,8 @@ class OSAccessPolicyService:
         "finalizar_caixa",
         "pedido_compra",
         "pedido_compra_linha",
+        "pedido_compra_receber",
+        "pedido_compra_recebimento_estornar",
         "alerta",
         "orcamento",
         "orcamento_item",

@@ -22,7 +22,7 @@
         Esta conta ja possui pagamentos. Campos financeiros ficam bloqueados para preservar o historico.
       </div>
       {% endif %}
-      <form method="post">
+      <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         {% for field in form %}
         <div class="mb-2">

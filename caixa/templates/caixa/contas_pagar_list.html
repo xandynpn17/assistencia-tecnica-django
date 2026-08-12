@@ -401,7 +401,7 @@
 <div class="modal fade" id="modalPagamentoRapido" tabindex="-1" role="dialog" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
     <div class="modal-content">
-      <form method="post" id="form-pagamento-rapido">
+      <form method="post" enctype="multipart/form-data" id="form-pagamento-rapido">
         {% csrf_token %}
         <input type="hidden" name="action" value="pagar">
         <div class="modal-header">
@@ -429,6 +429,10 @@
               <label for="{{ pagamento_rapido_form.forma_pagamento.id_for_label }}">Forma de pagamento</label>
               {{ pagamento_rapido_form.forma_pagamento|add_class:"form-control"|attr:"id:id_pagamento_rapido_forma" }}
             </div>
+            <div class="col-md-6 mb-2"><label>Caixa físico</label>{{ pagamento_rapido_form.caixa|add_class:"form-control" }}</div>
+            <div class="col-md-6 mb-2"><label>Conta bancária</label>{{ pagamento_rapido_form.conta_bancaria|add_class:"form-control" }}</div>
+            <div class="col-md-6 mb-2"><label>Competência</label>{{ pagamento_rapido_form.data_competencia|add_class:"form-control" }}</div>
+            <div class="col-md-6 mb-2"><label>Data do pagamento</label>{{ pagamento_rapido_form.data_movimento|add_class:"form-control" }}</div>
             <div class="col-md-6 mb-2">
               <label for="{{ pagamento_rapido_form.referencia.id_for_label }}">Referência</label>
               {{ pagamento_rapido_form.referencia|add_class:"form-control"|attr:"id:id_pagamento_rapido_referencia" }}
@@ -437,6 +441,7 @@
               <label for="{{ pagamento_rapido_form.observacao.id_for_label }}">Observação</label>
               {{ pagamento_rapido_form.observacao|add_class:"form-control"|attr:"rows:2"|attr:"id:id_pagamento_rapido_observacao" }}
             </div>
+            <div class="col-md-6 mb-2"><label>Comprovante</label>{{ pagamento_rapido_form.comprovante|add_class:"form-control" }}</div>
           </div>
         </div>
         <div class="modal-footer">

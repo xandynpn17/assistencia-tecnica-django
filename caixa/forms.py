@@ -8,11 +8,13 @@ from django.utils import timezone
 from .models import (
     Caixa,
     AporteCapital,
+    CartaoCorporativo,
     CategoriaFinanceira,
     CentroCusto,
     ComissaoItemOrcamento,
     ComissaoTecnico,
     ContaPagar,
+    CompraCartaoCorporativo,
     ContaBancaria,
     ContaReceber,
     CustoFixoMensal,
@@ -22,13 +24,66 @@ from .models import (
     LancamentoCaixa,
     LinhaExtratoBancario,
     MovimentoBancario,
+    MovimentoSocio,
     Pagamento,
     PagamentoContaPagar,
+    PagamentoFaturaCartao,
     TransferenciaTesouraria,
     PremioColaboradorCompetencia,
     RegraComissaoTecnico,
     RegraPremioMeta,
 )
+
+
+class CartaoCorporativoForm(forms.ModelForm):
+    class Meta:
+        model = CartaoCorporativo
+        fields = ["nome", "emissor", "final", "responsavel", "limite", "dia_fechamento", "dia_vencimento", "conta_pagamento_padrao", "ativo"]
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        if not self.instance.empresa_id:
+            self.instance.empresa = empresa
+        self.fields["conta_pagamento_padrao"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
+
+
+class CompraCartaoCorporativoForm(forms.ModelForm):
+    class Meta:
+        model = CompraCartaoCorporativo
+        fields = ["cartao", "data_compra", "data_competencia", "fornecedor", "descricao", "valor_total", "quantidade_parcelas", "categoria", "centro_custo", "ordem_servico", "documento_referencia", "comprovante"]
+        widgets = {"data_compra": forms.DateInput(attrs={"type": "date"}), "data_competencia": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        if not self.instance.empresa_id:
+            self.instance.empresa = empresa
+        from ordens.models import OrdemServico
+        self.fields["cartao"].queryset = CartaoCorporativo.objects.filter(empresa=empresa, ativo=True)
+        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(empresa=empresa, tipo="saida", ativa=True)
+        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(empresa=empresa, ativo=True)
+        self.fields["ordem_servico"].queryset = OrdemServico.objects.filter(empresa=empresa, fechada=False).order_by("-data_abertura")
+        if not self.is_bound:
+            hoje = timezone.localdate()
+            self.fields["data_compra"].initial = hoje
+            self.fields["data_competencia"].initial = hoje
+
+
+class PagamentoFaturaCartaoForm(forms.ModelForm):
+    class Meta:
+        model = PagamentoFaturaCartao
+        fields = ["conta_bancaria", "data_movimento", "valor", "referencia", "comprovante"]
+        widgets = {"data_movimento": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        fatura = kwargs.pop("fatura", None)
+        super().__init__(*args, **kwargs)
+        self.fields["conta_bancaria"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
+        if not self.is_bound:
+            self.fields["data_movimento"].initial = timezone.localdate()
+            self.fields["valor"].initial = getattr(fatura, "saldo_aberto", None)
 
 
 class ContaBancariaForm(forms.ModelForm):
@@ -85,12 +140,47 @@ class AporteCapitalForm(forms.ModelForm):
         return dados
 
 
+class MovimentoSocioForm(forms.ModelForm):
+    class Meta:
+        model = MovimentoSocio
+        fields = ["aporte_origem", "tipo", "descricao", "valor", "data_competencia", "data_movimento", "conta_bancaria", "caixa", "documento_referencia", "comprovante"]
+        widgets = {
+            "data_competencia": forms.DateInput(attrs={"type": "date"}),
+            "data_movimento": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        if not self.instance.empresa_id:
+            self.instance.empresa = empresa
+        self.fields["aporte_origem"].queryset = AporteCapital.objects.filter(empresa=empresa)
+        self.fields["conta_bancaria"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
+        self.fields["caixa"].queryset = Caixa.objects.filter(empresa=empresa, aberto=True)
+        if not self.is_bound:
+            hoje = timezone.localdate()
+            self.fields["data_competencia"].initial = hoje
+            self.fields["data_movimento"].initial = hoje
+
+
 class ImportarExtratoForm(forms.Form):
     conta = forms.ModelChoiceField(queryset=ContaBancaria.objects.none())
     arquivo = forms.FileField(
         help_text="OFX do banco ou CSV com colunas data, descricao, valor e identificador opcional.",
         widget=forms.ClearableFileInput(attrs={"accept": ".ofx,.csv,text/csv,application/x-ofx"}),
     )
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        self.fields["conta"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
+
+
+class FechamentoBancarioForm(forms.Form):
+    conta = forms.ModelChoiceField(queryset=ContaBancaria.objects.none())
+    periodo_inicio = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    periodo_fim = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    saldo_extrato = forms.DecimalField(max_digits=14, decimal_places=2)
 
     def __init__(self, *args, **kwargs):
         empresa = kwargs.pop("empresa")
@@ -662,17 +752,38 @@ class ContaPagarForm(forms.ModelForm):
         if empresa:
             categorias = categorias.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
             centros = centros.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        from configuracoes.models import FornecedorGarantia
+        self.fields["fornecedor_cadastro"].queryset = FornecedorGarantia.objects.filter(
+            Q(empresa=empresa) | Q(empresa__isnull=True), ativo=True
+        ).order_by("nome")
         self.fields["categoria"].queryset = categorias.order_by("nome")
         self.fields["categoria"].required = True
         self.fields["centro_custo"].queryset = centros.order_by("nome")
         self.fields["categoria"].label = "Categoria"
         self.fields["centro_custo"].label = "Centro de custo"
+        self.fields["data_emissao"].required = False
+        self.fields["data_competencia"].required = False
+        self.fields["natureza_economica"].required = False
+
+    def clean(self):
+        dados = super().clean()
+        hoje = timezone.localdate()
+        dados["data_emissao"] = dados.get("data_emissao") or hoje
+        dados["data_competencia"] = dados.get("data_competencia") or dados["data_emissao"]
+        dados["natureza_economica"] = dados.get("natureza_economica") or "despesa_operacional"
+        return dados
 
     class Meta:
         model = ContaPagar
-        fields = ["fornecedor", "descricao", "categoria", "valor_total", "vencimento", "centro_custo"]
+        fields = [
+            "fornecedor_cadastro", "fornecedor", "descricao", "natureza_economica", "documento_referencia", "categoria", "centro_custo",
+            "data_emissao", "data_competencia", "valor_total", "vencimento", "observacao", "comprovante",
+        ]
         widgets = {
+            "data_emissao": forms.DateInput(attrs={"type": "date"}),
+            "data_competencia": forms.DateInput(attrs={"type": "date"}),
             "vencimento": forms.DateInput(attrs={"type": "date"}),
+            "observacao": forms.Textarea(attrs={"rows": 3}),
         }
 
 
@@ -689,20 +800,40 @@ class ContaPagarEdicaoForm(forms.ModelForm):
         if empresa:
             categorias = categorias.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
             centros = centros.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        from configuracoes.models import FornecedorGarantia
+        self.fields["fornecedor_cadastro"].queryset = FornecedorGarantia.objects.filter(
+            Q(empresa=empresa) | Q(empresa__isnull=True), ativo=True
+        ).order_by("nome")
         self.fields["categoria"].queryset = categorias.order_by("nome")
         self.fields["categoria"].required = True
         self.fields["centro_custo"].queryset = centros.order_by("nome")
         self.fields["categoria"].label = "Categoria"
         self.fields["centro_custo"].label = "Centro de custo"
+        self.fields["data_emissao"].required = False
+        self.fields["data_competencia"].required = False
+        self.fields["natureza_economica"].required = False
         if not allow_financial_changes:
             self.fields["valor_total"].disabled = True
             self.fields["valor_total"].help_text = "Bloqueado porque a conta ja possui pagamentos."
 
+    def clean(self):
+        dados = super().clean()
+        dados["data_emissao"] = dados.get("data_emissao") or self.instance.data_emissao or timezone.localdate()
+        dados["data_competencia"] = dados.get("data_competencia") or self.instance.data_competencia or dados["data_emissao"]
+        dados["natureza_economica"] = dados.get("natureza_economica") or self.instance.natureza_economica or "despesa_operacional"
+        return dados
+
     class Meta:
         model = ContaPagar
-        fields = ["fornecedor", "descricao", "categoria", "valor_total", "vencimento", "centro_custo"]
+        fields = [
+            "fornecedor_cadastro", "fornecedor", "descricao", "natureza_economica", "documento_referencia", "categoria", "centro_custo",
+            "data_emissao", "data_competencia", "valor_total", "vencimento", "observacao", "comprovante",
+        ]
         widgets = {
+            "data_emissao": forms.DateInput(attrs={"type": "date"}),
+            "data_competencia": forms.DateInput(attrs={"type": "date"}),
             "vencimento": forms.DateInput(attrs={"type": "date"}),
+            "observacao": forms.Textarea(attrs={"rows": 3}),
         }
 
     def save(self, commit=True):
@@ -718,14 +849,69 @@ class ContaPagarEdicaoForm(forms.ModelForm):
 class PagamentoContaPagarForm(forms.ModelForm):
     class Meta:
         model = PagamentoContaPagar
-        fields = ["valor", "forma_pagamento", "referencia", "observacao"]
+        fields = [
+            "valor", "forma_pagamento", "caixa", "conta_bancaria", "data_competencia",
+            "data_movimento", "referencia", "observacao", "comprovante",
+        ]
+        widgets = {
+            "data_competencia": forms.DateInput(attrs={"type": "date"}),
+            "data_movimento": forms.DateInput(attrs={"type": "date"}),
+            "observacao": forms.Textarea(attrs={"rows": 3}),
+        }
 
     def __init__(self, *args, **kwargs):
         empresa = kwargs.pop("empresa", None)
+        conta = kwargs.pop("conta", None)
+        self.conta_origem = conta
         super().__init__(*args, **kwargs)
         formas = FormaPagamento.objects.filter(ativa=True)
         if empresa:
             formas = formas.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
         self.fields["forma_pagamento"].queryset = formas.order_by("nome")
+        self.fields["data_competencia"].required = False
+        self.fields["data_movimento"].required = False
+        self.fields["conta_bancaria"].queryset = ContaBancaria.objects.filter(
+            empresa=empresa, ativa=True
+        ).order_by("nome") if empresa else ContaBancaria.objects.none()
+        self.fields["caixa"].queryset = Caixa.objects.filter(
+            empresa=empresa, aberto=True
+        ).order_by("-data", "-id") if empresa else Caixa.objects.none()
+        if not self.is_bound:
+            hoje = timezone.localdate()
+            self.fields["data_competencia"].initial = getattr(conta, "data_competencia", hoje)
+            self.fields["data_movimento"].initial = hoje
+            self.fields["valor"].initial = getattr(conta, "valor_aberto", None)
+
+    def clean(self):
+        dados = super().clean()
+        hoje = timezone.localdate()
+        dados["data_competencia"] = dados.get("data_competencia") or getattr(self.conta_origem, "data_competencia", hoje)
+        dados["data_movimento"] = dados.get("data_movimento") or hoje
+        forma = dados.get("forma_pagamento")
+        caixa = dados.get("caixa")
+        conta_bancaria = dados.get("conta_bancaria")
+        if not forma and "forma_pagamento" not in self.data:
+            forma = self.fields["forma_pagamento"].queryset.filter(codigo="dinheiro").first()
+            caixa = caixa or self.fields["caixa"].queryset.first()
+            dados["forma_pagamento"] = forma
+            dados["caixa"] = caixa
+        if forma and "conta_bancaria" not in self.data and not caixa:
+            configurada = getattr(forma, "conta_bancaria_liquidacao", None)
+            if configurada in self.fields["conta_bancaria"].queryset:
+                conta_bancaria = configurada
+                dados["conta_bancaria"] = configurada
+        codigo = (getattr(forma, "codigo", "") or "").lower()
+        dinheiro = codigo == "dinheiro" or codigo.startswith("dinheiro-")
+        if dinheiro:
+            if not caixa:
+                self.add_error("caixa", "Pagamento em dinheiro exige um caixa aberto.")
+            if conta_bancaria:
+                self.add_error("conta_bancaria", "Dinheiro não deve movimentar conta bancária.")
+        else:
+            if not conta_bancaria:
+                self.add_error("conta_bancaria", "Selecione a conta usada no pagamento.")
+            if caixa:
+                self.add_error("caixa", "Pagamento bancário não deve usar caixa físico.")
+        return dados
 
 

@@ -32,6 +32,15 @@ CAIXA_ROLES = CAIXA_OPERATIONAL_ROLES
 PERFORMANCE_VIEW_ROLES = RoleSpec({"adm", "gerente", "atendente", "tecnico"}, capability="acesso_caixa_financeiro_extra")
 
 SENSITIVE_PERMISSION_MESSAGES = {
+    "perm_caixa_administrar_plano_contas": "Você não tem permissão para administrar o plano de contas.",
+    "perm_os_ver_custos": "Você não tem permissão para visualizar custos e margem da OS.",
+    "perm_os_registrar_custo": "Você não tem permissão para registrar custos da OS.",
+    "perm_os_estornar_custo": "Você não tem permissão para estornar custos da OS.",
+    "perm_caixa_gerir_cartoes_corporativos": "Você não tem permissão para gerir cartões corporativos.",
+    "perm_caixa_importar_extrato": "Você não tem permissão para importar extratos bancários.",
+    "perm_caixa_conciliar_banco": "Você não tem permissão para conciliar movimentos bancários.",
+    "perm_caixa_fechar_banco": "Você não tem permissão para fechar ou reabrir períodos bancários.",
+    "perm_caixa_gerir_capital": "Você não tem permissão para movimentar capital e recursos de sócios.",
     "perm_os_editar_numero_serie": "Você não tem permissão para editar o número de série desta OS.",
     "perm_os_editar_observacoes_internas": "Você não tem permissão para editar as observações internas desta OS.",
     "perm_os_editar_local_armazenamento": "Você não tem permissão para editar o local de armazenamento desta OS.",

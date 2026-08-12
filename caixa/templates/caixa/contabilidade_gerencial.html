@@ -1,0 +1,15 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid mt-3">{% include 'caixa/_subnav_caixa.html' %}
+  <h3>Contabilidade gerencial</h3>
+  <div class="alert alert-warning"><strong>Não substitui a escrituração oficial.</strong> O plano deve ser revisado com o contador. A ativação só afeta novos eventos e mantém origem, documento, competência e estorno por contrapartida.</div>
+  <form method="post" class="mb-3">{% csrf_token %}<input type="hidden" name="acao" value="criar_plano"><button class="btn btn-primary">Criar estrutura gerencial inicial</button></form>
+  {% for plano in planos %}<div class="card mb-3"><div class="card-header d-flex justify-content-between"><strong>{{ plano.codigo }} — {{ plano.descricao }}</strong><span class="badge {% if plano.ativo %}badge-success{% else %}badge-secondary{% endif %}">{% if plano.ativo %}Ativo{% else %}Rascunho{% endif %}</span></div><div class="card-body">
+    <p>{{ plano.contas.count }} contas · {{ plano.mapeamentos.count }} eventos mapeados. {% if plano.validado_contador %}<br><small>{{ plano.observacao_validacao }}</small>{% endif %}</p>
+    {% if not plano.ativo %}<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="ativar_plano"><input type="hidden" name="plano_id" value="{{ plano.id }}"><label>Registro da validação do contador</label><textarea name="observacao_validacao" class="form-control mb-2" required placeholder="Nome, data e observações da validação"></textarea><button class="btn btn-success">Confirmar validação e ativar</button></form>{% endif %}
+  </div></div>{% empty %}<div class="alert alert-light border">Nenhum plano configurado.</div>{% endfor %}
+  <div class="card"><div class="card-header"><strong>Lotes por partidas dobradas</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Competência</th><th>Evento/origem</th><th>Histórico</th><th>Partidas</th><th>Débitos</th><th>Créditos</th><th>Status</th><th>Auditoria</th></tr></thead><tbody>
+    {% for lote in lotes %}<tr><td>{{ lote.competencia|date:'d/m/Y' }}</td><td>{{ lote.evento }}<br><small>{{ lote.origem_tipo }} #{{ lote.origem_id }}</small></td><td>{{ lote.historico }}</td><td>{% for p in lote.partidas.all %}<small>{{ p.conta_debito.codigo }} D / {{ p.conta_credito.codigo }} C — R$ {{ p.valor|floatformat:2 }}</small><br>{% endfor %}</td><td>R$ {{ lote.total_debitos|floatformat:2 }}</td><td>R$ {{ lote.total_creditos|floatformat:2 }}</td><td>{{ lote.get_status_display }}</td><td>{% if lote.status == 'contabilizado' %}<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="estornar_lote"><input type="hidden" name="lote_id" value="{{ lote.id }}"><input name="motivo" required class="form-control form-control-sm mb-1" placeholder="Motivo"><button class="btn btn-sm btn-outline-danger">Estornar</button></form>{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Ainda não há lotes. Eles surgirão nos novos eventos após a ativação.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+</div>
+{% endblock %}

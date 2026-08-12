@@ -15,7 +15,7 @@ from ordens.models import CustoOrdemServico, LinhaTrabalho, OrdemServico
 from estoque.models import CategoriaProduto, MovimentacaoEstoque, PontoOperacional, SolicitacaoSaidaEstoque
 
 from ..forms import DespesaRecorrenteForm
-from ..models import AuditoriaFinanceira, AuditoriaGarantia, Caixa, CategoriaFinanceira, CentroCusto, ContaReceber, DREFechamento, DespesaRecorrente, FormaPagamento, LancamentoCaixa, MovimentoFinanceiro, Pagamento, RecebimentoConta
+from ..models import AuditoriaFinanceira, AuditoriaGarantia, Caixa, CategoriaFinanceira, CentroCusto, CompraCartaoCorporativo, ContaPagar, ContaReceber, DREFechamento, DespesaRecorrente, FormaPagamento, LancamentoCaixa, MovimentoFinanceiro, Pagamento, RecebimentoConta
 from .common import caixa_atual
 from .helpers import (
     _atualizar_status_contas_abertas,
@@ -180,10 +180,43 @@ def dre(request):
             output_field=DecimalField(max_digits=20, decimal_places=2),
         )
         total = custos.aggregate(total=Sum(total_linha))["total"] or Decimal("0.00")
-        vinculado = custos.filter(lancamento_caixa__isnull=False).aggregate(
+        vinculado_saida = custos.filter(lancamento_caixa__isnull=False).aggregate(
             total=Sum(total_linha)
         )["total"] or Decimal("0.00")
-        return total, vinculado
+        vinculado_obrigacao = custos.filter(conta_pagar__isnull=False).aggregate(
+            total=Sum(total_linha)
+        )["total"] or Decimal("0.00")
+        return total, vinculado_saida, vinculado_obrigacao
+
+    def _obrigacoes_periodo(inicio, fim):
+        obrigacoes = ContaPagar.objects.filter(
+            data_competencia__gte=inicio,
+            data_competencia__lte=fim,
+            natureza_economica="despesa_operacional",
+        ).exclude(status="cancelada")
+        if empresa:
+            obrigacoes = obrigacoes.filter(empresa=empresa)
+        else:
+            obrigacoes = obrigacoes.filter(empresa__isnull=True)
+        if categoria_financeira_id.isdigit():
+            obrigacoes = obrigacoes.filter(categoria_id=int(categoria_financeira_id))
+        if centro_custo_id.isdigit():
+            obrigacoes = obrigacoes.filter(centro_custo_id=int(centro_custo_id))
+        return obrigacoes.aggregate(total=Sum("valor_total"))["total"] or Decimal("0.00")
+
+    def _compras_cartao_periodo(inicio, fim):
+        compras = CompraCartaoCorporativo.objects.filter(
+            data_competencia__gte=inicio,
+            data_competencia__lte=fim,
+            estornada_em__isnull=True,
+            custo_os__isnull=True,
+        )
+        compras = compras.filter(empresa=empresa) if empresa else compras.filter(empresa__isnull=True)
+        if categoria_financeira_id.isdigit():
+            compras = compras.filter(categoria_id=int(categoria_financeira_id))
+        if centro_custo_id.isdigit():
+            compras = compras.filter(centro_custo_id=int(centro_custo_id))
+        return compras.aggregate(total=Sum("valor_total"))["total"] or Decimal("0.00")
 
     data_inicio, data_fim = _parse_intervalo_datas(data_inicio_raw, data_fim_raw)
     if not data_inicio and not data_fim:
@@ -199,7 +232,9 @@ def dre(request):
         data_inicio, data_fim = hoje - timedelta(days=30), hoje
 
     pagamentos_qs = Pagamento.objects.select_related("forma_pagamento").all()
-    saidas_qs = LancamentoCaixa.objects.select_related("categoria", "centro_custo").filter(tipo="saida", natureza="operacional")
+    saidas_qs = LancamentoCaixa.objects.select_related("categoria", "centro_custo").filter(
+        tipo="saida", natureza="operacional", pagamento_conta_pagar__isnull=True
+    )
     if empresa:
         pagamentos_qs = pagamentos_qs.filter(empresa=empresa)
         saidas_qs = saidas_qs.filter(empresa=empresa)
@@ -220,11 +255,15 @@ def dre(request):
     receita_liquida = receita_bruta - impostos_estimados - taxas_recebimento
     despesas_operacionais_brutas = saidas_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     cmv_estoque, perdas_estoque, perdas_por_tipo = _custos_estoque_periodo(data_inicio, data_fim)
-    custos_diretos_os, custos_os_vinculados = _custos_diretos_os_periodo(data_inicio, data_fim)
-    despesas_operacionais = max(
+    custos_diretos_os, custos_os_vinculados, custos_os_obrigacoes = _custos_diretos_os_periodo(data_inicio, data_fim)
+    obrigacoes_operacionais = _obrigacoes_periodo(data_inicio, data_fim)
+    compras_cartao_operacionais = _compras_cartao_periodo(data_inicio, data_fim)
+    despesas_lancamentos = max(
         Decimal("0.00"),
         despesas_operacionais_brutas - custos_os_vinculados,
     )
+    despesas_obrigacoes = max(Decimal("0.00"), obrigacoes_operacionais - custos_os_obrigacoes)
+    despesas_operacionais = despesas_lancamentos + despesas_obrigacoes + compras_cartao_operacionais
     cmv = cmv_estoque + custos_diretos_os
     lucro_bruto = receita_liquida - cmv
     resultado_operacional = lucro_bruto - perdas_estoque - despesas_operacionais
@@ -312,7 +351,9 @@ def dre(request):
     inicio_anterior = (data_inicio or hoje) - timedelta(days=dias_periodo)
     fim_anterior = (data_inicio or hoje) - timedelta(days=1)
     pagamentos_anterior_qs = Pagamento.objects.select_related("forma_pagamento").all()
-    saidas_anterior_qs = LancamentoCaixa.objects.select_related("categoria", "centro_custo").filter(tipo="saida", natureza="operacional")
+    saidas_anterior_qs = LancamentoCaixa.objects.select_related("categoria", "centro_custo").filter(
+        tipo="saida", natureza="operacional", pagamento_conta_pagar__isnull=True
+    )
     if empresa:
         pagamentos_anterior_qs = pagamentos_anterior_qs.filter(empresa=empresa)
         saidas_anterior_qs = saidas_anterior_qs.filter(empresa=empresa)
@@ -329,13 +370,19 @@ def dre(request):
     receita_liquida_anterior = receita_bruta_anterior - impostos_estimados_anterior - taxas_recebimento_anterior
     despesas_operacionais_anterior_brutas = saidas_anterior_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     cmv_estoque_anterior, perdas_estoque_anterior, _ = _custos_estoque_periodo(inicio_anterior, fim_anterior)
-    custos_diretos_os_anterior, custos_os_vinculados_anterior = _custos_diretos_os_periodo(
+    custos_diretos_os_anterior, custos_os_vinculados_anterior, custos_os_obrigacoes_anterior = _custos_diretos_os_periodo(
         inicio_anterior, fim_anterior
     )
-    despesas_operacionais_anterior = max(
+    obrigacoes_anterior = _obrigacoes_periodo(inicio_anterior, fim_anterior)
+    compras_cartao_anterior = _compras_cartao_periodo(inicio_anterior, fim_anterior)
+    despesas_lancamentos_anterior = max(
         Decimal("0.00"),
         despesas_operacionais_anterior_brutas - custos_os_vinculados_anterior,
     )
+    despesas_obrigacoes_anterior = max(
+        Decimal("0.00"), obrigacoes_anterior - custos_os_obrigacoes_anterior
+    )
+    despesas_operacionais_anterior = despesas_lancamentos_anterior + despesas_obrigacoes_anterior + compras_cartao_anterior
     cmv_anterior = cmv_estoque_anterior + custos_diretos_os_anterior
     lucro_bruto_anterior = receita_liquida_anterior - cmv_anterior
     resultado_operacional_anterior = lucro_bruto_anterior - perdas_estoque_anterior - despesas_operacionais_anterior
@@ -376,7 +423,10 @@ def dre(request):
         inicio_mes = mes_cursor
         fim_mes = date(mes_cursor.year, mes_cursor.month, monthrange(mes_cursor.year, mes_cursor.month)[1])
         pagamentos_mes = Pagamento.objects.filter(data_competencia__gte=inicio_mes, data_competencia__lte=fim_mes)
-        saidas_mes = LancamentoCaixa.objects.filter(tipo="saida", natureza="operacional", data_competencia__gte=inicio_mes, data_competencia__lte=fim_mes)
+        saidas_mes = LancamentoCaixa.objects.filter(
+            tipo="saida", natureza="operacional", pagamento_conta_pagar__isnull=True,
+            data_competencia__gte=inicio_mes, data_competencia__lte=fim_mes,
+        )
         if empresa:
             pagamentos_mes = pagamentos_mes.filter(empresa=empresa)
             saidas_mes = saidas_mes.filter(empresa=empresa)
@@ -387,8 +437,12 @@ def dre(request):
         taxas_mes = pagamentos_mes.aggregate(total=Sum("taxas_recebimento_estimadas"))["total"] or Decimal("0.00")
         despesa_mes_bruta = saidas_mes.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
         cmv_estoque_mes, perdas_mes, _ = _custos_estoque_periodo(inicio_mes, fim_mes)
-        custos_diretos_mes, custos_vinculados_mes = _custos_diretos_os_periodo(inicio_mes, fim_mes)
-        despesa_mes = max(Decimal("0.00"), despesa_mes_bruta - custos_vinculados_mes)
+        custos_diretos_mes, custos_vinculados_mes, custos_obrigacoes_mes = _custos_diretos_os_periodo(inicio_mes, fim_mes)
+        obrigacoes_mes = _obrigacoes_periodo(inicio_mes, fim_mes)
+        compras_cartao_mes = _compras_cartao_periodo(inicio_mes, fim_mes)
+        despesa_mes = max(Decimal("0.00"), despesa_mes_bruta - custos_vinculados_mes) + max(
+            Decimal("0.00"), obrigacoes_mes - custos_obrigacoes_mes
+        ) + compras_cartao_mes
         cmv_mes = cmv_estoque_mes + custos_diretos_mes
         despesa_total_mes = despesa_mes + cmv_mes + perdas_mes + impostos_mes + taxas_mes
         resultado_mes = receita_mes - despesa_total_mes
@@ -449,6 +503,10 @@ def dre(request):
             "cmv_estoque": cmv_estoque,
             "custos_diretos_os": custos_diretos_os,
             "custos_os_vinculados": custos_os_vinculados,
+            "custos_os_obrigacoes": custos_os_obrigacoes,
+            "obrigacoes_operacionais": obrigacoes_operacionais,
+            "despesas_lancamentos": despesas_lancamentos,
+            "despesas_obrigacoes": despesas_obrigacoes,
             "lucro_bruto": lucro_bruto,
             "perdas_estoque": perdas_estoque,
             "perdas_por_tipo": perdas_por_tipo,
@@ -476,7 +534,7 @@ def dre(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def fluxo_projetado(request):
-    empresa = getattr(request.user, "empresa", None)
+    empresa = obter_empresa_ativa(request, strict=False)
     filtro_empresa = {"empresa": empresa} if empresa else {"empresa__isnull": True}
     if request.method == "POST":
         form = DespesaRecorrenteForm(request.POST)
@@ -588,7 +646,7 @@ def relatorios(request):
         filtros_salvos = request.session.get(session_key) or {}
         if filtros_salvos:
             return redirect(f"{request.path}?{urlencode(filtros_salvos)}")
-    empresa = getattr(request.user, "empresa", None)
+    empresa = obter_empresa_ativa(request, strict=False)
     caixa = caixa_atual(empresa)
     filtro_empresa = {"empresa": empresa} if empresa is not None else {"empresa__isnull": True}
     hoje = timezone.localdate()
@@ -749,6 +807,44 @@ def relatorios(request):
         "Sem forma",
     )
 
+    # Rentabilidade gerencial e qualidade dos vínculos no mesmo recorte selecionado.
+    ordens_ids = list(pagamentos.exclude(ordem_servico__isnull=True).values_list("ordem_servico_id", flat=True).distinct())
+    rentabilidade_os = []
+    for ordem in OrdemServico.objects.filter(pk__in=ordens_ids, empresa=empresa).select_related("tecnico_responsavel")[:100]:
+        recebimentos = pagamentos.filter(ordem_servico=ordem)
+        receita = recebimentos.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+        impostos = recebimentos.aggregate(total=Sum("impostos_estimados"))["total"] or Decimal("0.00")
+        taxas = recebimentos.aggregate(total=Sum("taxas_recebimento_estimadas"))["total"] or Decimal("0.00")
+        custo_real = ordem.custo_real_financeiro()
+        custo_estimado = ordem.custo_estimado_pendente_financeiro()
+        comissoes = ordem.comissoes.exclude(status="cancelada").aggregate(total=Sum("valor_comissao"))["total"] or Decimal("0.00")
+        margem = receita - impostos - taxas - custo_real - comissoes
+        rentabilidade_os.append({
+            "ordem": ordem, "receita": receita, "custo_real": custo_real,
+            "custo_estimado": custo_estimado, "impostos": impostos, "taxas": taxas,
+            "comissoes": comissoes, "margem": margem,
+        })
+    rentabilidade_os.sort(key=lambda item: item["margem"])
+
+    from caixa.models import ContaBancaria, MovimentoBancario
+    from orcamentos.models import ItemOrcamento
+    pecas_sem_custo = ItemOrcamento.objects.filter(
+        orcamento__empresa=empresa, tipo_item="peca", status="aprovado",
+        custo_estimado_unitario__isnull=True,
+    ).exclude(situacao_aquisicao="cancelado").count()
+    custos_sem_vinculo = CustoOrdemServico.objects.filter(
+        empresa=empresa, estornado_em__isnull=True, item_orcamento__isnull=True,
+        servico_peca__isnull=True, produto_estoque__isnull=True,
+    ).count()
+    movimentos_sem_conciliacao = MovimentoBancario.objects.filter(
+        **filtro_empresa
+    ).exclude(
+        historico_conciliacoes__conciliacao__status__in={"conciliado", "divergente"}
+    ).distinct().count()
+    contas_sem_fechamento = ContaBancaria.objects.filter(empresa=empresa, ativa=True).exclude(
+        fechamentos__status="fechado", fechamentos__periodo_fim__gte=hoje.replace(day=1) - timedelta(days=1)
+    ).count()
+
     if exportar in {"csv", "pdf"}:
         if dataset_export == "livro":
             cabecalhos = ["Origem", "Referencia", "Descricao", "Tipo", "Valor", "Competencia", "Movimentacao", "Registrado em", "Status"]
@@ -880,6 +976,11 @@ def relatorios(request):
             "periodo_anterior_inicio": periodo_anterior_inicio,
             "periodo_anterior_fim": periodo_anterior_fim,
             "diferencas_por_forma": diferencas_por_forma,
+            "rentabilidade_os": rentabilidade_os,
+            "pecas_sem_custo": pecas_sem_custo,
+            "custos_sem_vinculo": custos_sem_vinculo,
+            "movimentos_sem_conciliacao": max(0, movimentos_sem_conciliacao),
+            "contas_sem_fechamento": contas_sem_fechamento,
             "querystring_pagamentos": querystring_pagamentos,
             "querystring_lancamentos": querystring_lancamentos,
             "querystring_livro": querystring_livro,
@@ -898,7 +999,7 @@ def auditoria_operacional(request):
         message="Voce nao tem permissao para acessar a auditoria operacional.",
     )
     session_key = "caixa_auditoria_operacional_filtros"
-    empresa = getattr(request.user, "empresa", None)
+    empresa = obter_empresa_ativa(request, strict=False)
     if request.GET.get("restaurar") == "1":
         filtros_salvos = request.session.get(session_key) or {}
         if filtros_salvos:
@@ -1040,7 +1141,7 @@ def auditoria_operacional(request):
 
 @role_required(CAIXA_FINANCIAL_ROLES)
 def garantias_fabricante(request):
-    empresa = getattr(request.user, "empresa", None)
+    empresa = obter_empresa_ativa(request, strict=False)
     if request.method == "POST":
         if request.POST.get("action") == "sincronizar":
             total_sync = 0

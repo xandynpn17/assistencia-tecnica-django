@@ -115,11 +115,29 @@ class FechamentoOSResultado:
 
 class FechamentoOSService:
     @staticmethod
+    def _validar_custos_pecas_manuais(ordem):
+        pendentes = []
+        for item in ordem.servicos_pecas.filter(tipo="peca", produto_estoque__isnull=True).select_related("item_orcamento"):
+            custos = ordem.custos_internos.filter(estornado_em__isnull=True)
+            if item.item_orcamento_id:
+                confirmado = custos.filter(item_orcamento_id=item.item_orcamento_id).exists()
+            else:
+                confirmado = custos.filter(servico_peca=item).exists()
+            if not confirmado:
+                pendentes.append(item.nome)
+        if pendentes:
+            amostra = ", ".join(pendentes[:5])
+            raise ValueError(
+                f"Confirme o custo real (inclusive R$ 0,00 quando legítimo) das peças manuais antes de fechar: {amostra}."
+            )
+
+    @staticmethod
     def alternar_fechamento(ordem, usuario=None):
         with transaction.atomic():
             fechando = not ordem.fechada
             itens_migrados = 0
             if fechando:
+                FechamentoOSService._validar_custos_pecas_manuais(ordem)
                 resultado_migracao = FluxoOrcamentoService.migrar_itens_aprovados_da_ordem(
                     ordem,
                     usuario=usuario,
@@ -174,6 +192,7 @@ class FechamentoOSService:
     @staticmethod
     def finalizar_para_caixa(ordem, usuario=None):
         with transaction.atomic():
+            FechamentoOSService._validar_custos_pecas_manuais(ordem)
             resultado_migracao = FluxoOrcamentoService.migrar_itens_aprovados_da_ordem(
                 ordem,
                 usuario=usuario,

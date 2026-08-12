@@ -542,8 +542,9 @@ def _dashboard_caixa_context(request, menu_sub):
     ]
     pagamentos_conta_pagar_periodo = PagamentoContaPagar.objects.filter(
         conta__empresa=empresa,
-        data__date__gte=data_inicio,
-        data__date__lte=data_fim,
+        status="confirmado",
+        data_movimento__gte=data_inicio,
+        data_movimento__lte=data_fim,
     )
     categorias_saida_resumo = [
         {

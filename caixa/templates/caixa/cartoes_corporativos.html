@@ -1,0 +1,18 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
+  <h3>Cartões corporativos</h3>
+  <div class="alert alert-info">A compra reconhece a despesa na competência informada, mas não reduz o banco. A saída bancária acontece uma única vez ao pagar a fatura.</div>
+  <div class="row">
+    <div class="col-lg-4"><div class="card mb-3"><div class="card-header"><strong>Cadastrar cartão</strong></div><div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="acao" value="cartao">{{ cartao_form.as_p }}<button class="btn btn-primary">Cadastrar</button></form></div></div></div>
+    <div class="col-lg-8"><div class="card mb-3"><div class="card-header"><strong>Registrar compra</strong></div><div class="card-body"><form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="acao" value="compra">{{ compra_form.as_p }}<button class="btn btn-success">Registrar sem movimentar banco</button></form></div></div></div>
+  </div>
+  <div class="card mb-3"><div class="card-header"><strong>Faturas</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Cartão</th><th>Competência</th><th>Fechamento</th><th>Vencimento</th><th>Calculado</th><th>Pago</th><th>Saldo</th><th>Pagamento bancário</th></tr></thead><tbody>
+    {% for fatura in faturas %}<tr><td>{{ fatura.cartao }}</td><td>{{ fatura.competencia|date:'m/Y' }}</td><td>{{ fatura.data_fechamento|date:'d/m/Y' }}</td><td>{{ fatura.vencimento|date:'d/m/Y' }}</td><td>R$ {{ fatura.total_calculado|floatformat:2 }}</td><td>R$ {{ fatura.total_pago|floatformat:2 }}</td><td>R$ {{ fatura.saldo_aberto|floatformat:2 }}</td><td>{% if fatura.saldo_aberto > 0 %}<form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="acao" value="pagar_fatura"><input type="hidden" name="fatura_id" value="{{ fatura.id }}">{{ fatura.pagamento_form.as_p }}<button class="btn btn-sm btn-success">Pagar fatura</button></form>{% else %}<span class="badge badge-success">Quitada</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Nenhuma fatura.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+  <div class="card"><div class="card-header"><strong>Compras</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Data</th><th>Cartão</th><th>Fornecedor</th><th>Descrição</th><th>Parcelas</th><th>OS</th><th>Valor</th><th>Situação</th></tr></thead><tbody>
+    {% for compra in compras %}<tr><td>{{ compra.data_compra|date:'d/m/Y' }}</td><td>{{ compra.cartao }}</td><td>{{ compra.fornecedor }}</td><td>{{ compra.descricao }}</td><td>{{ compra.quantidade_parcelas }}</td><td>{{ compra.ordem_servico.numero_os|default:'-' }}</td><td>R$ {{ compra.valor_total|floatformat:2 }}</td><td>{% if compra.estornada_em %}<span class="badge badge-secondary">Estornada</span>{% else %}<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="estornar_compra"><input type="hidden" name="compra_id" value="{{ compra.id }}"><input class="form-control form-control-sm mb-1" name="motivo" required placeholder="Motivo"><button class="btn btn-sm btn-outline-danger">Estornar</button></form>{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Nenhuma compra.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+</div>
+{% endblock %}

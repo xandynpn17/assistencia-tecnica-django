@@ -22,6 +22,14 @@
         <div class="alert alert-light border py-2">Registre capital social, AFAC ou empréstimo de sócio. O valor aumenta o saldo bancário/caixa, mas não é receita operacional. Contas bancárias aceitam data retroativa; dinheiro deve ser lançado no caixa aberto da mesma data para preservar a conferência.</div>
         <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="aporte">{{ aporte_form.as_p }}<button class="btn btn-success">Registrar aporte</button></form>
       </div></div>
+      <div class="card mb-3"><div class="card-header"><strong>Devolução, amortização ou retirada de sócio</strong></div><div class="card-body">
+        <div class="alert alert-light border py-2">O principal reduz o saldo do aporte e não afeta o resultado operacional. Juros são classificados separadamente como despesa.</div>
+        <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="acao" value="movimento_socio">{{ movimento_socio_form.as_p }}<button class="btn btn-warning">Registrar saída aprovada</button></form>
+      </div></div>
+      <div class="card mb-3"><div class="card-header"><strong>Fechamento bancário</strong></div><div class="card-body">
+        <div class="alert alert-light border py-2">O período só fecha se não houver linhas pendentes e o saldo do sistema for igual ao saldo final informado pelo banco.</div>
+        <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="fechar_periodo">{{ fechamento_form.as_p }}<button class="btn btn-dark">Fechar período</button></form>
+      </div></div>
       <div class="row">
         {% for conta in contas %}<div class="col-md-6"><div class="card mb-3"><div class="card-body"><strong>{{ conta.nome }}</strong><div class="text-muted">{{ conta.banco_nome }} · ag. {{ conta.agencia|default:'-' }} · {{ conta.numero }}</div><h4 class="mt-2 mb-0">R$ {{ conta.saldo_atual|floatformat:2 }}</h4><small class="text-muted">Projetado: R$ {{ conta.saldo_projetado|floatformat:2 }}</small></div></div></div>{% empty %}<div class="col-12"><div class="alert alert-light border">Nenhuma conta cadastrada.</div></div>{% endfor %}
       </div>
@@ -38,6 +46,15 @@
   </tbody></table></div></div>
   <div class="card"><div class="card-header"><strong>Movimentos bancários imutáveis</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Data</th><th>Conta</th><th>Descrição</th><th>Tipo</th><th>Valor</th><th>Origem</th></tr></thead><tbody>
     {% for m in movimentos %}<tr><td>{{ m.data_movimento|date:'d/m/Y' }}</td><td>{{ m.conta.nome }}</td><td>{{ m.descricao }}</td><td>{{ m.get_tipo_display }}</td><td>R$ {{ m.valor|floatformat:2 }}</td><td>{{ m.get_origem_tipo_display }}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Nenhum movimento bancário.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+  <div class="card mb-3"><div class="card-header"><strong>Movimentos de sócios</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Data</th><th>Aportante</th><th>Tipo</th><th>Origem</th><th>Documento</th><th>Valor</th></tr></thead><tbody>
+    {% for m in movimentos_socios %}<tr><td>{{ m.data_movimento|date:'d/m/Y' }}</td><td>{{ m.aporte_origem.aportante|default:'-' }}</td><td>{{ m.get_tipo_display }}</td><td>{{ m.conta_bancaria|default:m.caixa }}</td><td>{{ m.documento_referencia|default:'-' }}</td><td>R$ {{ m.valor|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Nenhum movimento de sócio.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+  <div class="card mt-3 mb-3"><div class="card-header"><strong>Lotes de extrato importados</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Arquivo</th><th>Conta</th><th>Período</th><th>Linhas</th><th>Hash</th><th>Importado em</th></tr></thead><tbody>
+    {% for lote in importacoes_extrato %}<tr><td>{{ lote.nome_arquivo }}</td><td>{{ lote.conta.nome }}</td><td>{{ lote.periodo_inicio|date:'d/m/Y' }} a {{ lote.periodo_fim|date:'d/m/Y' }}</td><td>{{ lote.quantidade_linhas }}</td><td><code>{{ lote.hash_arquivo|slice:':12' }}…</code></td><td>{{ lote.importado_em|date:'d/m/Y H:i' }}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Nenhum lote importado.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+  <div class="card mb-3"><div class="card-header"><strong>Fechamentos bancários</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Conta</th><th>Período</th><th>Sistema</th><th>Extrato</th><th>Diferença</th><th>Status</th><th>Auditoria</th></tr></thead><tbody>
+    {% for f in fechamentos_bancarios %}<tr><td>{{ f.conta.nome }}</td><td>{{ f.periodo_inicio|date:'d/m/Y' }} a {{ f.periodo_fim|date:'d/m/Y' }}</td><td>R$ {{ f.saldo_sistema|floatformat:2 }}</td><td>R$ {{ f.saldo_extrato|floatformat:2 }}</td><td>R$ {{ f.diferenca|floatformat:2 }}</td><td>{{ f.get_status_display }}</td><td>{% if f.status == 'fechado' %}<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="reabrir_periodo"><input type="hidden" name="fechamento_id" value="{{ f.id }}"><input name="motivo_reabertura" class="form-control form-control-sm mb-1" required placeholder="Motivo"><button class="btn btn-sm btn-outline-danger">Reabrir</button></form>{% else %}<small>{{ f.motivo_reabertura }}</small>{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">Nenhum período fechado.</td></tr>{% endfor %}
   </tbody></table></div></div>
 </div>
 {% endblock %}

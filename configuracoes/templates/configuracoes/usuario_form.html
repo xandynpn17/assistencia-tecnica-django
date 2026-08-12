@@ -229,6 +229,9 @@
             <small>Permite reabrir OS fechada.</small>
             {{ form.perm_os_reabrir.errors }}
           </div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_os_ver_custos }} {{ form.perm_os_ver_custos.label }}</label><small>Exibe custos internos e margem, nunca em documentos do cliente.</small></div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_os_registrar_custo }} {{ form.perm_os_registrar_custo.label }}</label><small>Confirma compras, recebimentos e custos reais.</small></div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_os_estornar_custo }} {{ form.perm_os_estornar_custo.label }}</label><small>Permite estornos auditáveis de custos.</small></div>
         </div>
 
         <div class="text-muted small mt-3 mb-2">Orçamentos</div>
@@ -267,6 +270,12 @@
             <small>Permite informar competência ou movimentação em data anterior, sem alterar o registro de auditoria.</small>
             {{ form.perm_caixa_lancamento_retroativo.errors }}
           </div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_caixa_gerir_cartoes_corporativos }} {{ form.perm_caixa_gerir_cartoes_corporativos.label }}</label></div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_caixa_importar_extrato }} {{ form.perm_caixa_importar_extrato.label }}</label></div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_caixa_conciliar_banco }} {{ form.perm_caixa_conciliar_banco.label }}</label></div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_caixa_fechar_banco }} {{ form.perm_caixa_fechar_banco.label }}</label></div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_caixa_gerir_capital }} {{ form.perm_caixa_gerir_capital.label }}</label></div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_caixa_administrar_plano_contas }} {{ form.perm_caixa_administrar_plano_contas.label }}</label></div>
         </div>
 
         <div class="text-muted small mt-3 mb-2">Estoque critico</div>

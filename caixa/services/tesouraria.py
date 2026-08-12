@@ -9,13 +9,21 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 
 def registrar_movimento_bancario(*, conta, tipo, origem_tipo, origem_id, descricao, valor, data_movimento, chave, usuario=None, metadados=None):
-    from caixa.models import MovimentoBancario
+    from caixa.models import FechamentoBancario, MovimentoBancario
 
     valor = Decimal(valor or 0)
+    if FechamentoBancario.objects.filter(
+        conta=conta,
+        status="fechado",
+        periodo_inicio__lte=data_movimento,
+        periodo_fim__gte=data_movimento,
+    ).exists():
+        raise ValidationError("O período bancário está fechado; reabra-o antes de registrar movimentos nesta data.")
     if valor <= 0:
         raise ValidationError("O movimento bancário deve ter valor positivo.")
     movimento, criado = MovimentoBancario.objects.get_or_create(
@@ -171,7 +179,91 @@ def registrar_aporte_capital(
         )
         AporteCapital.objects.filter(pk=aporte.pk).update(lancamento_caixa=lancamento)
     aporte.refresh_from_db()
+    from caixa.services.contabilidade import registrar_evento_contabil_se_configurado
+    registrar_evento_contabil_se_configurado(
+        empresa=empresa, evento="emprestimo_socio" if tipo == "emprestimo_socio" else "aporte_capital",
+        origem_tipo="aporte_capital", origem_id=aporte.pk, competencia=data_competencia,
+        valor=valor, historico=aporte.descricao, documento_referencia=aporte.documento_referencia,
+        chave=f"aporte-capital:{aporte.pk}:contabil", usuario=usuario,
+    )
     return aporte
+
+
+@transaction.atomic
+def registrar_movimento_socio(
+    *, aporte, tipo, descricao, valor, data_competencia, data_movimento,
+    conta_bancaria, caixa, documento_referencia, comprovante, chave, usuario,
+):
+    from caixa.models import LancamentoCaixa, MovimentoSocio
+    from caixa.services.livro_financeiro import registrar_movimento_financeiro
+
+    valor = Decimal(valor or 0).quantize(Decimal("0.01"))
+    if valor <= 0 or data_movimento > timezone.localdate():
+        raise ValidationError("Informe valor positivo e data de movimento não futura.")
+    if bool(conta_bancaria) == bool(caixa):
+        raise ValidationError("Informe exatamente uma origem: banco ou caixa.")
+    compatibilidade = {
+        "devolucao_afac": "adiantamento_socio",
+        "amortizacao_emprestimo": "emprestimo_socio",
+        "retirada_capital": "capital_social",
+    }
+    if tipo in compatibilidade and aporte.tipo != compatibilidade[tipo]:
+        raise ValidationError("O tipo do movimento não é compatível com o aporte selecionado.")
+    if tipo != "juros_emprestimo":
+        devolvido = aporte.movimentos_saida.exclude(tipo="juros_emprestimo").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+        if valor > Decimal(aporte.valor) - devolvido:
+            raise ValidationError("O movimento supera o saldo principal disponível deste aporte.")
+    movimento_socio = MovimentoSocio(
+        empresa=aporte.empresa, aporte_origem=aporte, tipo=tipo, descricao=descricao,
+        valor=valor, data_competencia=data_competencia, data_movimento=data_movimento,
+        conta_bancaria=conta_bancaria, caixa=caixa, documento_referencia=documento_referencia,
+        comprovante=comprovante, chave_idempotencia=chave, registrado_por=usuario,
+        aprovado_por=usuario,
+    )
+    movimento_socio.full_clean()
+    movimento_socio.save()
+    natureza = movimento_socio.natureza_resultado
+    if conta_bancaria:
+        banco = registrar_movimento_bancario(
+            conta=conta_bancaria, tipo="saida", origem_tipo="manual", origem_id=movimento_socio.pk,
+            descricao=descricao, valor=valor, data_movimento=data_movimento,
+            chave=f"movimento-socio:{movimento_socio.pk}:banco", usuario=usuario,
+            metadados={"tipo_interno": "movimento_socio", "tipo": tipo, "aporte_id": aporte.pk},
+        )
+        MovimentoSocio.objects.filter(pk=movimento_socio.pk).update(movimento_bancario=banco)
+        if natureza == "operacional":
+            lancamento = LancamentoCaixa.objects.create(
+                empresa=aporte.empresa, conta_bancaria=conta_bancaria, descricao=descricao,
+                valor=valor, tipo="saida", natureza="operacional", data_competencia=data_competencia,
+                data_movimento=data_movimento, usuario=usuario,
+            )
+            MovimentoSocio.objects.filter(pk=movimento_socio.pk).update(lancamento_caixa=lancamento)
+    else:
+        lancamento = LancamentoCaixa.objects.create(
+            empresa=aporte.empresa, caixa=caixa, descricao=descricao, valor=valor, tipo="saida",
+            natureza=natureza, data_competencia=data_competencia, data_movimento=data_movimento, usuario=usuario,
+        )
+        MovimentoSocio.objects.filter(pk=movimento_socio.pk).update(lancamento_caixa=lancamento)
+    registrar_movimento_financeiro(
+        empresa=aporte.empresa, caixa=caixa, origem_tipo="ajuste", origem_id=movimento_socio.pk,
+        origem_referencia=documento_referencia, tipo="saida", natureza=natureza, valor=valor,
+        descricao=descricao, data_competencia=data_competencia, data_movimento=data_movimento,
+        chave_idempotencia=f"movimento_socio:{movimento_socio.pk}", usuario=usuario,
+        metadados={"tipo": tipo, "aporte_id": aporte.pk, "conta_bancaria_id": getattr(conta_bancaria, "pk", None)},
+    )
+    movimento_socio.refresh_from_db()
+    from caixa.services.contabilidade import registrar_evento_contabil_se_configurado
+    evento_contabil = {
+        "amortizacao_emprestimo": "amortizacao_emprestimo_socio",
+        "juros_emprestimo": "juros_socio",
+    }.get(tipo, "devolucao_capital")
+    registrar_evento_contabil_se_configurado(
+        empresa=aporte.empresa, evento=evento_contabil, origem_tipo="movimento_socio",
+        origem_id=movimento_socio.pk, competencia=data_competencia, valor=valor,
+        historico=descricao, documento_referencia=documento_referencia,
+        chave=f"movimento-socio:{movimento_socio.pk}:contabil", usuario=usuario,
+    )
+    return movimento_socio
 
 
 def _parse_data(valor):
@@ -277,15 +369,137 @@ def importar_extrato_ofx(*, conta, conteudo, usuario=None):
     return criadas
 
 
+@transaction.atomic
 def importar_extrato_arquivo(*, conta, conteudo, nome_arquivo="", usuario=None):
+    from caixa.models import ImportacaoExtratoBancario
+
+    bytes_arquivo = conteudo if isinstance(conteudo, bytes) else str(conteudo).encode("utf-8")
+    hash_arquivo = hashlib.sha256(bytes_arquivo).hexdigest()
+    lote, criado = ImportacaoExtratoBancario.objects.get_or_create(
+        conta=conta,
+        hash_arquivo=hash_arquivo,
+        defaults={
+            "empresa": conta.empresa,
+            "nome_arquivo": (nome_arquivo or "extrato")[:255],
+            "importado_por": usuario,
+        },
+    )
+    if not criado:
+        return []
     nome = (nome_arquivo or "").lower()
     amostra = conteudo[:1000] if isinstance(conteudo, bytes) else str(conteudo)[:1000]
     if isinstance(amostra, bytes):
         amostra = amostra.decode("latin-1", errors="ignore")
     parece_ofx = nome.endswith(".ofx") or "<OFX>" in amostra.upper() or "<STMTTRN>" in amostra.upper()
     if parece_ofx:
-        return importar_extrato_ofx(conta=conta, conteudo=conteudo, usuario=usuario)
-    return importar_extrato_csv(conta=conta, conteudo=conteudo, usuario=usuario)
+        criadas = importar_extrato_ofx(conta=conta, conteudo=conteudo, usuario=usuario)
+        saldo_match = re.search(r"<BALAMT>\s*([^<\r\n]+)", amostra, flags=re.IGNORECASE)
+        if saldo_match:
+            try:
+                lote.saldo_final_informado = Decimal(saldo_match.group(1).replace(",", "."))
+            except Exception:
+                pass
+    else:
+        criadas = importar_extrato_csv(conta=conta, conteudo=conteudo, usuario=usuario)
+    if criadas:
+        datas = [linha.data_movimento for linha in criadas]
+        lote.periodo_inicio, lote.periodo_fim = min(datas), max(datas)
+        lote.quantidade_linhas = len(criadas)
+        lote.save(update_fields=["periodo_inicio", "periodo_fim", "quantidade_linhas", "saldo_final_informado"])
+        LinhaExtratoBancario = type(criadas[0])
+        LinhaExtratoBancario.objects.filter(pk__in=[linha.pk for linha in criadas]).update(importacao=lote)
+    return criadas
+
+
+@transaction.atomic
+def criar_movimento_de_linha_extrato(
+    *, linha, classificacao, descricao, usuario, categoria=None, centro_custo=None,
+):
+    from caixa.models import LancamentoCaixa, LinhaExtratoBancario
+    from caixa.services.contabilidade import registrar_evento_contabil_se_configurado
+
+    linha = LinhaExtratoBancario.objects.select_for_update().select_related("conta").get(pk=linha.pk)
+    if linha.status != "pendente":
+        raise ValidationError("A linha já foi tratada.")
+    classificacoes = {"despesa_operacional", "receita_operacional", "tarifa", "juros", "rendimento"}
+    if classificacao not in classificacoes:
+        raise ValidationError("Classificação de movimento inválida.")
+    credito = linha.valor > 0
+    if credito and classificacao not in {"receita_operacional", "rendimento"}:
+        raise ValidationError("Uma entrada no extrato deve ser classificada como receita ou rendimento.")
+    if not credito and classificacao not in {"despesa_operacional", "tarifa", "juros"}:
+        raise ValidationError("Uma saída no extrato deve ser classificada como despesa, tarifa ou juros.")
+    valor = abs(Decimal(linha.valor))
+    movimento = registrar_movimento_bancario(
+        conta=linha.conta, tipo="entrada" if credito else "saida", origem_tipo="manual",
+        origem_id=linha.pk, descricao=(descricao or linha.descricao)[:255], valor=valor,
+        data_movimento=linha.data_movimento, chave=f"linha-extrato:{linha.pk}:movimento",
+        usuario=usuario, metadados={"classificacao": classificacao, "linha_extrato_id": linha.pk},
+    )
+    lancamento = LancamentoCaixa.objects.create(
+        empresa=linha.empresa, conta_bancaria=linha.conta, descricao=(descricao or linha.descricao)[:200],
+        categoria=categoria, centro_custo=centro_custo, valor=valor,
+        tipo="entrada" if credito else "saida", natureza="operacional",
+        data_competencia=linha.data_movimento, data_movimento=linha.data_movimento, usuario=usuario,
+    )
+    registrar_evento_contabil_se_configurado(
+        empresa=linha.empresa, evento="receita_avulsa" if credito else "despesa_paga",
+        origem_tipo="linha_extrato", origem_id=linha.pk, competencia=linha.data_movimento,
+        valor=valor, historico=lancamento.descricao, centro_custo=centro_custo,
+        chave=f"linha-extrato:{linha.pk}:contabil", usuario=usuario,
+    )
+    return movimento
+
+
+@transaction.atomic
+def fechar_periodo_bancario(*, conta, periodo_inicio, periodo_fim, saldo_extrato, usuario):
+    from caixa.models import FechamentoBancario, ImportacaoExtratoBancario, LinhaExtratoBancario, MovimentoBancario
+
+    if periodo_inicio > periodo_fim:
+        raise ValidationError("O início não pode ser posterior ao fim do período.")
+    if periodo_fim < conta.data_saldo_inicial:
+        raise ValidationError("O período termina antes da data do saldo inicial da conta.")
+    if not ImportacaoExtratoBancario.objects.filter(
+        conta=conta, periodo_inicio__lte=periodo_fim, periodo_fim__gte=periodo_inicio
+    ).exists():
+        raise ValidationError("Importe ao menos um extrato que cubra o período antes do fechamento.")
+    if FechamentoBancario.objects.filter(conta=conta, status="fechado", periodo_inicio__lte=periodo_fim, periodo_fim__gte=periodo_inicio).exists():
+        raise ValidationError("Já existe fechamento bancário ativo sobrepondo este período.")
+    pendentes = LinhaExtratoBancario.objects.filter(
+        conta=conta, data_movimento__range=(periodo_inicio, periodo_fim), status="pendente"
+    ).count()
+    if pendentes:
+        raise ValidationError(f"Existem {pendentes} linha(s) de extrato pendente(s) no período.")
+    movimentos = MovimentoBancario.objects.filter(conta=conta, data_movimento__lte=periodo_fim)
+    entradas = movimentos.filter(tipo="entrada").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    saidas = movimentos.filter(tipo="saida").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    saldo_sistema = Decimal(conta.saldo_inicial or 0) + entradas - saidas
+    saldo_extrato = Decimal(saldo_extrato).quantize(Decimal("0.01"))
+    diferenca = saldo_extrato - saldo_sistema
+    if diferenca != Decimal("0.00"):
+        raise ValidationError(f"O período só pode ser fechado com diferença zero. Diferença atual: R$ {diferenca:.2f}.")
+    return FechamentoBancario.objects.create(
+        empresa=conta.empresa, conta=conta, periodo_inicio=periodo_inicio, periodo_fim=periodo_fim,
+        saldo_sistema=saldo_sistema, saldo_extrato=saldo_extrato, diferenca=diferenca, fechado_por=usuario,
+    )
+
+
+@transaction.atomic
+def reabrir_periodo_bancario(*, fechamento, usuario, motivo):
+    from caixa.models import FechamentoBancario
+
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise ValidationError("Informe o motivo da reabertura.")
+    fechamento = FechamentoBancario.objects.select_for_update().get(pk=fechamento.pk)
+    if fechamento.status != "fechado":
+        raise ValidationError("O período já está reaberto.")
+    fechamento.status = "reaberto"
+    fechamento.reaberto_por = usuario
+    fechamento.reaberto_em = timezone.now()
+    fechamento.motivo_reabertura = motivo
+    fechamento.save(update_fields=["status", "reaberto_por", "reaberto_em", "motivo_reabertura"])
+    return fechamento
 
 
 @transaction.atomic

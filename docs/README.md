@@ -21,6 +21,7 @@
 - `ownership_modulos.md`: ownership tecnico atual por app e ponto oficial de manutencao.
 - `checklist_homologacao_manual.md`: validacoes manuais de operacao.
 - `checklist_homologacao_estoque.md`: roteiro de homologacao manual por perfil do estoque (Fase E7).
+- `manual_financeiro_compras_bancos_v1_1.md`: compras da OS, contas a pagar, cartões corporativos, bancos, sócios e contabilidade gerencial da versão 1.1.0.
 - `manual_estoque_fiscal_caixa.md`: manual operacional após as melhorias de estoque, XML, tributação, preço, caixa e conciliação.
 - `manual_caixa_fiscal_dfe.md`: configuração segura do certificado A1, consulta oficial de NF-e destinadas por NSU e importação para conferência no estoque.
 - `checklist_homologacao_configuracoes.md`: roteiro de homologacao manual por perfil da app configuracoes.

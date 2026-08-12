@@ -1,7 +1,23 @@
 # Plano de continuidade — financeiro, custos, bancos e contabilidade gerencial
 
-Data: 11/08/2026  
-Estado: planejado, ainda não implementado  
+## Estado de execução — 12/08/2026
+
+Implementação técnica concluída na versão 1.1.0:
+
+- contas a pagar com competência, origem explícita, comprovante, idempotência e estorno;
+- vínculo entre obrigação, custo da OS, compra, recebimento e estoque;
+- cartões corporativos, faturas e pagamento bancário sem duplicidade;
+- lotes de extrato e fechamento/reabertura bancária auditável;
+- aportes, devoluções, amortizações, retiradas e juros de sócios;
+- permissões granulares, rentabilidade por OS e painel de qualidade;
+- plano de contas versionado e partidas dobradas opcionais após validação do contador.
+
+Portões externos: executar migrations no computador definitivo, configurar permissões, homologar saldos/documentos e validar o plano de contas com o contador. Emissão fiscal permanece em standby.
+
+Data-base do plano: 11/08/2026
+
+Estado: implementado tecnicamente; pendente apenas de homologação operacional e contábil externa
+
 Dependência: entrega `e9e7d0f` aplicada e validada
 
 ## 1. Objetivo
