@@ -33,6 +33,8 @@ Evoluções posteriores, fora desta entrega:
 
 Esses itens posteriores não impedem os fluxos entregues, mas são necessários antes de tratar o sistema como escrituração contábil formal.
 
+O roteiro detalhado dessas evoluções está documentado em `docs/plano_continuidade_financeira_contabil.md`.
+
 ## 1. Objetivo
 
 Corrigir a apuração de margem das Ordens de Serviço, permitir custos internos e peças avulsas sem distorcer o valor apresentado ao cliente, vincular corretamente despesas ao meio de pagamento e à conta financeira e profissionalizar o acompanhamento bancário e a conciliação.
