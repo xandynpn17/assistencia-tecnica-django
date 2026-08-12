@@ -83,6 +83,13 @@ class ItemOrcamento(models.Model):
         ('aprovado', 'Aprovado'),
         ('recusado', 'Recusado'),
     ]
+    SITUACAO_AQUISICAO_CHOICES = [
+        ("nao_necessario", "Não necessário"),
+        ("a_comprar", "A comprar"),
+        ("solicitado", "Solicitado"),
+        ("recebido", "Recebido"),
+        ("cancelado", "Cancelado"),
+    ]
 
     orcamento = models.ForeignKey(Orcamento, on_delete=models.CASCADE, related_name='itens')
     ean = models.CharField(max_length=50, blank=True, null=True)
@@ -104,9 +111,33 @@ class ItemOrcamento(models.Model):
         limit_choices_to=Q(is_active=True) & (Q(tipo_usuario="tecnico") | Q(atua_como_tecnico=True)),
     )
     comissionavel = models.BooleanField(default=True)
+    custo_estimado_unitario = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    fornecedor_estimado = models.CharField(max_length=160, blank=True)
+    referencia_cotacao = models.CharField(max_length=100, blank=True)
+    situacao_aquisicao = models.CharField(
+        max_length=20,
+        choices=SITUACAO_AQUISICAO_CHOICES,
+        default="nao_necessario",
+    )
 
     def subtotal(self):
         return self.valor_unitario * self.quantidade
+
+    def custo_estimado_total(self):
+        if self.custo_estimado_unitario is None:
+            return None
+        return self.custo_estimado_unitario * self.quantidade
+
+    def margem_estimada(self):
+        custo = self.custo_estimado_total()
+        if custo is None:
+            return None
+        return self.total() - custo
 
     def desconto_calculado(self):
         subtotal = Decimal(self.subtotal() or 0)

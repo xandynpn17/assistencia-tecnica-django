@@ -11,16 +11,16 @@
     </div>
 
     {% if not caixa %}
-        <div class="alert alert-danger">
-            Nenhum caixa aberto. <a href="{% url 'caixa:abrir_caixa' %}">Abra um caixa</a> primeiro.
+        <div class="alert alert-warning">
+            Nenhum caixa físico está aberto. Saídas bancárias continuam disponíveis; para pagar em dinheiro, <a href="{% url 'caixa:abrir_caixa' %}">abra o caixa</a>.
         </div>
-    {% else %}
+    {% endif %}
         <div class="row mb-3">
             <div class="col-md-4">
                 <div class="small-box bg-warning">
                     <div class="inner">
                         <h4>R$ {{ saldo|floatformat:2 }}</h4>
-                        <p>Saldo atual</p>
+                        <p>Saldo atual do caixa físico</p>
                     </div>
                     <div class="icon"><i class="fas fa-wallet"></i></div>
                 </div>
@@ -82,6 +82,26 @@
                         </div>
 
                         <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label for="{{ form.forma_pagamento.id_for_label }}"><strong>Meio de pagamento</strong></label>
+                                {{ form.forma_pagamento|add_class:"form-control"|attr:"id:id_forma_saida" }}
+                                {% if form.forma_pagamento.errors %}<small class="text-danger">{{ form.forma_pagamento.errors|striptags }}</small>{% endif %}
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label for="{{ form.caixa.id_for_label }}"><strong>Caixa físico</strong></label>
+                                {{ form.caixa|add_class:"form-control"|attr:"id:id_caixa_saida" }}
+                                {% if form.caixa.errors %}<small class="text-danger">{{ form.caixa.errors|striptags }}</small>{% endif %}
+                                <small class="text-muted">Use somente para dinheiro.</small>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label for="{{ form.conta_bancaria.id_for_label }}"><strong>Conta bancária</strong></label>
+                                {{ form.conta_bancaria|add_class:"form-control"|attr:"id:id_conta_saida" }}
+                                {% if form.conta_bancaria.errors %}<small class="text-danger">{{ form.conta_bancaria.errors|striptags }}</small>{% endif %}
+                                <small class="text-muted">Obrigatória para PIX, transferência, débito e outros meios bancários.</small>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
                             <div class="form-group col-md-6">
                                 <label for="{{ form.data_competencia.id_for_label }}"><strong>Competência</strong></label>
                                 {{ form.data_competencia|add_class:"form-control" }}
@@ -129,8 +149,9 @@
                         <table class="table table-sm table-hover mb-0">
                             <thead>
                                 <tr>
-                                    <th>Data</th>
+                                    <th>Movimento</th>
                                     <th>Descrição</th>
+                                    <th>Meio/origem</th>
                                     <th>Categoria</th>
                                     <th>Centro</th>
                                     <th class="text-right">Valor</th>
@@ -139,15 +160,16 @@
                             <tbody>
                                 {% for saida in saidas_recentes %}
                                 <tr>
-                                    <td>{{ saida.data|date:"d/m H:i" }}</td>
+                                    <td>{{ saida.data_movimento|date:"d/m/Y" }}</td>
                                     <td>{{ saida.descricao|default:"-" }}</td>
+                                    <td>{{ saida.forma_pagamento.nome|default:"Legado" }}<br><small>{% if saida.conta_bancaria %}{{ saida.conta_bancaria.nome }}{% elif saida.caixa %}Caixa {{ saida.caixa.data|date:"d/m/Y" }}{% else %}-{% endif %}</small></td>
                                     <td>{{ saida.categoria_display }}</td>
                                     <td>{{ saida.centro_custo.nome|default:"-" }}</td>
                                     <td class="text-right text-danger">R$ {{ saida.valor|floatformat:2 }}</td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted">Nenhuma saída registrada neste caixa.</td>
+                                    <td colspan="6" class="text-center text-muted">Nenhuma saída registrada.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -156,7 +178,6 @@
                 </div>
             </div>
         </div>
-    {% endif %}
 </div>
 {% endblock %}
 
@@ -166,8 +187,29 @@ document.addEventListener("DOMContentLoaded", function () {
     const valorInput = document.getElementById("id_valor_saida");
     const categoriaInput = document.getElementById("id_categoria_saida");
     const centroInput = document.getElementById("id_centro_saida");
+    const formaInput = document.getElementById("id_forma_saida");
+    const caixaInput = document.getElementById("id_caixa_saida");
+    const contaInput = document.getElementById("id_conta_saida");
     const formSaida = document.getElementById("form-saida");
     const btnSalvar = document.getElementById("btn-salvar-saida");
+
+    function ajustarOrigemFinanceira() {
+        if (!formaInput) return;
+        const texto = formaInput.options[formaInput.selectedIndex]
+            ? formaInput.options[formaInput.selectedIndex].text.toLowerCase()
+            : "";
+        const dinheiro = texto.includes("dinheiro");
+        if (caixaInput) {
+            caixaInput.disabled = !dinheiro;
+            if (!dinheiro) caixaInput.value = "";
+        }
+        if (contaInput) {
+            contaInput.disabled = dinheiro;
+            if (dinheiro) contaInput.value = "";
+        }
+    }
+    if (formaInput) formaInput.addEventListener("change", ajustarOrigemFinanceira);
+    ajustarOrigemFinanceira();
 
     document.querySelectorAll(".js-valor-rapido").forEach(function (botao) {
         botao.addEventListener("click", function () {

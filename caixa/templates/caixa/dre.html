@@ -191,6 +191,8 @@
             <tr><th>(-) Taxas de recebimento</th><td class="text-right">R$ {{ taxas_recebimento|floatformat:2 }}</td></tr>
             <tr><th>Receita liquida gerencial</th><td class="text-right"><strong>R$ {{ receita_liquida|floatformat:2 }}</strong></td></tr>
             <tr><th>(-) CMV / custo dos itens vendidos</th><td class="text-right">R$ {{ cmv|floatformat:2 }}</td></tr>
+            <tr class="text-muted"><td class="pl-4">Peças baixadas do estoque</td><td class="text-right">R$ {{ cmv_estoque|floatformat:2 }}</td></tr>
+            <tr class="text-muted"><td class="pl-4">Custos diretos internos das OS</td><td class="text-right">R$ {{ custos_diretos_os|floatformat:2 }}</td></tr>
             <tr><th>Lucro bruto</th><td class="text-right"><strong>R$ {{ lucro_bruto|floatformat:2 }}</strong></td></tr>
             <tr><th>(-) Perdas de estoque</th><td class="text-right">R$ {{ perdas_estoque|floatformat:2 }}</td></tr>
             <tr><th>Despesas operacionais</th><td class="text-right">R$ {{ despesas_operacionais|floatformat:2 }}</td></tr>

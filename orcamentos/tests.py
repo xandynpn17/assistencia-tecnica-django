@@ -660,6 +660,27 @@ class ImpressaoOrcamentoPdfTests(TestCase):
         self.assertNotIn("Status: Pendente", texto_unificado)
         self.assertIn("R$ 100,00", texto_unificado)
 
+    def test_imprimir_orcamento_nunca_exibe_custos_ou_fornecedor_internos(self):
+        item = self.orcamento.itens.first()
+        item.custo_estimado_unitario = Decimal("73.45")
+        item.fornecedor_estimado = "FORNECEDOR INTERNO SIGILOSO"
+        item.referencia_cotacao = "COTACAO-SECRETA-987"
+        item.save(update_fields=["custo_estimado_unitario", "fornecedor_estimado", "referencia_cotacao"])
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("orcamentos.views.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(reverse("orcamentos:imprimir_orcamento", args=[self.orcamento.id]))
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertNotIn("73,45", texto_unificado)
+        self.assertNotIn("FORNECEDOR INTERNO SIGILOSO", texto_unificado)
+        self.assertNotIn("COTACAO-SECRETA-987", texto_unificado)
+
     def test_imprimir_orcamento_preview_aplica_layout_documentos(self):
         observado = {}
 

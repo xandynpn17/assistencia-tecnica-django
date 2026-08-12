@@ -4,14 +4,14 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.db.models import Count, F, Prefetch, Q, Sum
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Prefetch, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from configuracoes.models import FornecedorGarantia, MarcaGarantia
 from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, is_management_user, require_sensitive_permission, role_required
 from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, obter_empresa_ativa
-from ordens.models import LinhaTrabalho, OrdemServico
+from ordens.models import CustoOrdemServico, LinhaTrabalho, OrdemServico
 from estoque.models import CategoriaProduto, MovimentacaoEstoque, PontoOperacional, SolicitacaoSaidaEstoque
 
 from ..forms import DespesaRecorrenteForm
@@ -153,6 +153,38 @@ def dre(request):
         if centro_custo_id.isdigit():
             queryset = queryset.filter(solicitacao_saida__centro_custo_id=int(centro_custo_id))
         return queryset
+
+    def _custos_diretos_os_periodo(inicio, fim):
+        custos = CustoOrdemServico.objects.filter(
+            estornado_em__isnull=True,
+            data_competencia__gte=inicio,
+            data_competencia__lte=fim,
+        ).exclude(origem="estoque")
+        if empresa:
+            custos = custos.filter(empresa=empresa)
+        else:
+            custos = custos.filter(empresa__isnull=True)
+        if ponto_id.isdigit():
+            custos = custos.filter(
+                Q(produto_estoque__ponto_operacional_id=int(ponto_id))
+                | Q(servico_peca__ponto_operacional_reserva_id=int(ponto_id))
+            )
+        if categoria_produto_id.isdigit():
+            custos = custos.filter(produto_estoque__categoria_config_id=int(categoria_produto_id))
+        if categoria_financeira_id.isdigit():
+            custos = custos.filter(lancamento_caixa__categoria_id=int(categoria_financeira_id))
+        if centro_custo_id.isdigit():
+            custos = custos.filter(lancamento_caixa__centro_custo_id=int(centro_custo_id))
+        total_linha = ExpressionWrapper(
+            F("quantidade") * F("custo_unitario"),
+            output_field=DecimalField(max_digits=20, decimal_places=2),
+        )
+        total = custos.aggregate(total=Sum(total_linha))["total"] or Decimal("0.00")
+        vinculado = custos.filter(lancamento_caixa__isnull=False).aggregate(
+            total=Sum(total_linha)
+        )["total"] or Decimal("0.00")
+        return total, vinculado
+
     data_inicio, data_fim = _parse_intervalo_datas(data_inicio_raw, data_fim_raw)
     if not data_inicio and not data_fim:
         dias = {"7": 7, "30": 30, "90": 90}.get(periodo, 30)
@@ -186,8 +218,14 @@ def dre(request):
     impostos_estimados = pagamentos_qs.aggregate(total=Sum("impostos_estimados"))["total"] or Decimal("0.00")
     taxas_recebimento = pagamentos_qs.aggregate(total=Sum("taxas_recebimento_estimadas"))["total"] or Decimal("0.00")
     receita_liquida = receita_bruta - impostos_estimados - taxas_recebimento
-    despesas_operacionais = saidas_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-    cmv, perdas_estoque, perdas_por_tipo = _custos_estoque_periodo(data_inicio, data_fim)
+    despesas_operacionais_brutas = saidas_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    cmv_estoque, perdas_estoque, perdas_por_tipo = _custos_estoque_periodo(data_inicio, data_fim)
+    custos_diretos_os, custos_os_vinculados = _custos_diretos_os_periodo(data_inicio, data_fim)
+    despesas_operacionais = max(
+        Decimal("0.00"),
+        despesas_operacionais_brutas - custos_os_vinculados,
+    )
+    cmv = cmv_estoque + custos_diretos_os
     lucro_bruto = receita_liquida - cmv
     resultado_operacional = lucro_bruto - perdas_estoque - despesas_operacionais
     margem = (resultado_operacional / receita_bruta * Decimal("100.00")) if receita_bruta > 0 else Decimal("0.00")
@@ -289,8 +327,16 @@ def dre(request):
     impostos_estimados_anterior = pagamentos_anterior_qs.aggregate(total=Sum("impostos_estimados"))["total"] or Decimal("0.00")
     taxas_recebimento_anterior = pagamentos_anterior_qs.aggregate(total=Sum("taxas_recebimento_estimadas"))["total"] or Decimal("0.00")
     receita_liquida_anterior = receita_bruta_anterior - impostos_estimados_anterior - taxas_recebimento_anterior
-    despesas_operacionais_anterior = saidas_anterior_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-    cmv_anterior, perdas_estoque_anterior, _ = _custos_estoque_periodo(inicio_anterior, fim_anterior)
+    despesas_operacionais_anterior_brutas = saidas_anterior_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    cmv_estoque_anterior, perdas_estoque_anterior, _ = _custos_estoque_periodo(inicio_anterior, fim_anterior)
+    custos_diretos_os_anterior, custos_os_vinculados_anterior = _custos_diretos_os_periodo(
+        inicio_anterior, fim_anterior
+    )
+    despesas_operacionais_anterior = max(
+        Decimal("0.00"),
+        despesas_operacionais_anterior_brutas - custos_os_vinculados_anterior,
+    )
+    cmv_anterior = cmv_estoque_anterior + custos_diretos_os_anterior
     lucro_bruto_anterior = receita_liquida_anterior - cmv_anterior
     resultado_operacional_anterior = lucro_bruto_anterior - perdas_estoque_anterior - despesas_operacionais_anterior
     margem_anterior = (
@@ -339,8 +385,11 @@ def dre(request):
         receita_mes = pagamentos_mes.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
         impostos_mes = pagamentos_mes.aggregate(total=Sum("impostos_estimados"))["total"] or Decimal("0.00")
         taxas_mes = pagamentos_mes.aggregate(total=Sum("taxas_recebimento_estimadas"))["total"] or Decimal("0.00")
-        despesa_mes = saidas_mes.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-        cmv_mes, perdas_mes, _ = _custos_estoque_periodo(inicio_mes, fim_mes)
+        despesa_mes_bruta = saidas_mes.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+        cmv_estoque_mes, perdas_mes, _ = _custos_estoque_periodo(inicio_mes, fim_mes)
+        custos_diretos_mes, custos_vinculados_mes = _custos_diretos_os_periodo(inicio_mes, fim_mes)
+        despesa_mes = max(Decimal("0.00"), despesa_mes_bruta - custos_vinculados_mes)
+        cmv_mes = cmv_estoque_mes + custos_diretos_mes
         despesa_total_mes = despesa_mes + cmv_mes + perdas_mes + impostos_mes + taxas_mes
         resultado_mes = receita_mes - despesa_total_mes
         margem_mes = ((resultado_mes / receita_mes) * Decimal("100.00")) if receita_mes else Decimal("0.00")
@@ -397,6 +446,9 @@ def dre(request):
             "receita_liquida": receita_liquida,
             "despesas_operacionais": despesas_operacionais,
             "cmv": cmv,
+            "cmv_estoque": cmv_estoque,
+            "custos_diretos_os": custos_diretos_os,
+            "custos_os_vinculados": custos_os_vinculados,
             "lucro_bruto": lucro_bruto,
             "perdas_estoque": perdas_estoque,
             "perdas_por_tipo": perdas_por_tipo,
@@ -573,7 +625,8 @@ def relatorios(request):
         .order_by(f"-{campo_data}", "-data", "-id")
     )
     lancamentos = LancamentoCaixa.objects.filter(**filtro_empresa).select_related("categoria", "centro_custo").order_by(f"-{campo_data}", "-data", "-id")
-    if caixa and not considerar_todos_caixas:
+    restringir_caixa_atual = caixa and not considerar_todos_caixas and not (data_inicio or data_fim)
+    if restringir_caixa_atual:
         pagamentos = pagamentos.filter(caixa=caixa)
         lancamentos = lancamentos.filter(caixa=caixa)
     if data_inicio:
@@ -594,7 +647,7 @@ def relatorios(request):
     movimentos_livro = MovimentoFinanceiro.objects.filter(**filtro_empresa).select_related(
         "registrado_por", "estornado_por"
     )
-    if caixa and not considerar_todos_caixas:
+    if restringir_caixa_atual:
         movimentos_livro = movimentos_livro.filter(caixa=caixa)
     if data_inicio:
         movimentos_livro = movimentos_livro.filter(**{f"{campo_data}__gte": data_inicio})
@@ -610,13 +663,13 @@ def relatorios(request):
     total_saidas = lancamentos.filter(tipo="saida", natureza="operacional").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     entradas_orfas_pagamento = pagamentos.filter(lancamento_caixa__isnull=True).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     total_entradas = total_entradas_lancamentos + entradas_orfas_pagamento
-    saldo_base = caixa.saldo_inicial if caixa and not considerar_todos_caixas else Decimal("0.00")
+    saldo_base = caixa.saldo_inicial if restringir_caixa_atual else Decimal("0.00")
     saldo = saldo_base + total_entradas - total_saidas
     pagamentos_por_forma = pagamentos.values("forma_pagamento__nome", "metodo").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
     saidas_por_centro = lancamentos.filter(tipo="saida", natureza="operacional").values("centro_custo__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
     saidas_por_categoria = lancamentos.filter(tipo="saida", natureza="operacional").values("categoria__nome").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
     caixas_relatorio = Caixa.objects.filter(**filtro_empresa)
-    if not considerar_todos_caixas and caixa:
+    if restringir_caixa_atual:
         caixas_relatorio = caixas_relatorio.filter(id=caixa.id)
     if data_inicio:
         caixas_relatorio = caixas_relatorio.filter(data__gte=data_inicio)

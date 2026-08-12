@@ -428,8 +428,16 @@ def toggle_fechamento_os(request, pk):
         )
         if fechando:
             total_autorizado = _total_autorizado_para_fechamento(ordem)
+            if total_autorizado <= Decimal("0.00") and ordem.resultado_financeiro == "cobravel":
+                ordem.resultado_financeiro = "sem_reparo"
+                ordem.motivo_sem_cobranca = ordem.motivo_sem_cobranca or "OS concluída sem valor a cobrar."
+                ordem.save(update_fields=["resultado_financeiro", "motivo_sem_cobranca"])
             total_pago = _total_pago_ordem(ordem)
-            saldo_faltante = max(Decimal("0.00"), total_autorizado - total_pago)
+            saldo_faltante = (
+                max(Decimal("0.00"), total_autorizado - total_pago)
+                if ordem.resultado_financeiro == "cobravel"
+                else Decimal("0.00")
+            )
             if saldo_faltante > Decimal("0.00") and not confirmar_financeiro:
                 messages.warning(
                     request,
@@ -458,7 +466,12 @@ def toggle_fechamento_os(request, pk):
                     criado_por=request.user,
                 )
 
-        if ordem.fechada and request.GET.get("ir_caixa") == "1" and resultado.total_os > Decimal("0.00"):
+        if (
+            ordem.fechada
+            and ordem.resultado_financeiro == "cobravel"
+            and request.GET.get("ir_caixa") == "1"
+            and resultado.total_os > Decimal("0.00")
+        ):
             messages.success(request, "Ordem fechada. Redirecionando para registro de pagamento no Caixa.")
             return redirect(f"{reverse('caixa:registrar_pagamento')}?os={ordem.id}&valor={resultado.total_os:.2f}")
         _log_os(

@@ -114,6 +114,11 @@
                             <th>Status</th>
                             <th>Tipo</th>
                             <th>Origem</th>
+                            {% if pode_ver_custos_os %}
+                            <th class="table-info">Custo estimado</th>
+                            <th class="table-info">Margem estimada</th>
+                            <th class="table-info">Aquisição</th>
+                            {% endif %}
                             <th>Responsável</th>
                             <th>Ações</th>
                         </tr>
@@ -141,6 +146,11 @@
                             </td>
                             <td>{{ item.get_tipo_item_display|default:"Serviço" }}</td>
                             <td>{{ item.origem }}</td>
+                            {% if pode_ver_custos_os %}
+                            <td class="table-info">{% if item.custo_estimado_unitario is not None %}R$ {{ item.custo_estimado_total|floatformat:2 }}{% else %}<span class="text-danger">Não informado</span>{% endif %}</td>
+                            <td class="table-info">{% if item.margem_estimada is not None %}R$ {{ item.margem_estimada|floatformat:2 }}{% else %}-{% endif %}</td>
+                            <td class="table-info">{{ item.get_situacao_aquisicao_display }}</td>
+                            {% endif %}
                             <td>{{ item.tecnico_responsavel.username|default:"-" }}</td>
                             <td class="text-center">
                                 {% if not ordem.fechada and pode_editar_orcamento %}
@@ -166,7 +176,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="14" class="text-center text-muted">Nenhum item adicionado</td>
+                            <td colspan="{% if pode_ver_custos_os %}17{% else %}14{% endif %}" class="text-center text-muted">Nenhum item adicionado</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -322,6 +332,33 @@ if (checkAll) {
                             </select>
                         </div>
                     </div>
+                    {% if pode_ver_custos_os %}
+                    <div class="alert alert-info py-2 mt-2 mb-2">
+                        <strong>Formação interna de preço.</strong> Os campos abaixo nunca aparecem no orçamento ou em documentos do cliente.
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <label for="id_custo_estimado_unitario2">Custo estimado unitário</label>
+                            <input type="number" step="0.01" min="0" name="custo_estimado_unitario" id="id_custo_estimado_unitario2" class="form-control">
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <label for="id_fornecedor_estimado2">Fornecedor/cotação</label>
+                            <input type="text" name="fornecedor_estimado" id="id_fornecedor_estimado2" class="form-control">
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <label for="id_referencia_cotacao2">Referência</label>
+                            <input type="text" name="referencia_cotacao" id="id_referencia_cotacao2" class="form-control">
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <label for="id_situacao_aquisicao2">Aquisição</label>
+                            <select name="situacao_aquisicao" id="id_situacao_aquisicao2" class="form-control">
+                                {% for codigo, rotulo in item_form.fields.situacao_aquisicao.choices %}
+                                <option value="{{ codigo }}">{{ rotulo }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
 
                 <div class="modal-footer">
@@ -353,6 +390,14 @@ function editarItem(id) {
             document.querySelector('#modalAdicionarItem2 select[name="tipo_item"]').value = data.tipo_item || '';
             document.querySelector('#modalAdicionarItem2 input[name="origem"]').value = data.origem || 'manual';
             document.querySelector('#modalAdicionarItem2 select[name="tecnico_responsavel"]').value = data.tecnico_responsavel || '';
+            const custoEstimado = document.getElementById('id_custo_estimado_unitario2');
+            const fornecedorEstimado = document.getElementById('id_fornecedor_estimado2');
+            const referenciaCotacao = document.getElementById('id_referencia_cotacao2');
+            const situacaoAquisicao = document.getElementById('id_situacao_aquisicao2');
+            if (custoEstimado) custoEstimado.value = data.custo_estimado_unitario || '';
+            if (fornecedorEstimado) fornecedorEstimado.value = data.fornecedor_estimado || '';
+            if (referenciaCotacao) referenciaCotacao.value = data.referencia_cotacao || '';
+            if (situacaoAquisicao) situacaoAquisicao.value = data.situacao_aquisicao || 'nao_necessario';
             atualizarOrigemBadge(data.origem || 'manual');
 
             if (formItemOrcamento) {

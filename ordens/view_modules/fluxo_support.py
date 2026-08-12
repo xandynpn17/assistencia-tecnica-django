@@ -24,9 +24,10 @@ from configuracoes.permissions import ORDER_CREATION_ROLES, ORDER_ROLES, RoleReq
 from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, filtrar_queryset_empresa, obter_empresa_ativa
 from orcamentos.forms import ItemOrcamentoForm, OrcamentoForm
 from orcamentos.models import Orcamento
-from ..forms import LinhaTrabalhoForm, OrdemSerieForm, OrdemServicoForm, ServicoPecaForm
+from ..forms import CustoOrdemServicoForm, LinhaTrabalhoForm, OrdemSerieForm, OrdemServicoForm, ServicoPecaForm
 from ..models import (
     LinhaTrabalho,
+    CustoOrdemServico,
     OrdemAlerta,
     OrdemArquivo,
     OrdemServico,

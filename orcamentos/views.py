@@ -27,7 +27,7 @@ from configuracoes.models import ConfiguracaoSistema, Empresa
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from estoque.services import cancelar_reserva
 from caixa.services.comissoes import cancelar_comissoes_por_item
-from configuracoes.permissions import ORDER_ROLES, require_sensitive_permission, role_required
+from configuracoes.permissions import ORDER_ROLES, is_management_user, require_sensitive_permission, role_required
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 from core.pdf_preview import apply_document_preview_overrides, apply_preview_xframe_headers
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
@@ -108,6 +108,30 @@ def _validar_desconto_item(desconto_valor, desconto_percentual):
     if desconto_valor > Decimal("0.00") and desconto_percentual > Decimal("0.00"):
         return "Use desconto por valor ou por percentual no item, nunca os dois ao mesmo tempo."
     return ""
+
+
+def _dados_custo_estimado(request):
+    if not is_management_user(request.user):
+        return {}, ""
+    bruto = (request.POST.get("custo_estimado_unitario") or "").strip().replace(",", ".")
+    custo = None
+    if bruto:
+        try:
+            custo = Decimal(bruto)
+        except InvalidOperation:
+            return {}, "Custo estimado inválido."
+        if custo < Decimal("0.00"):
+            return {}, "O custo estimado não pode ser negativo."
+    situacao = (request.POST.get("situacao_aquisicao") or "nao_necessario").strip()
+    situacoes_validas = {codigo for codigo, _ in ItemOrcamento.SITUACAO_AQUISICAO_CHOICES}
+    if situacao not in situacoes_validas:
+        situacao = "nao_necessario"
+    return {
+        "custo_estimado_unitario": custo,
+        "fornecedor_estimado": (request.POST.get("fornecedor_estimado") or "").strip(),
+        "referencia_cotacao": (request.POST.get("referencia_cotacao") or "").strip(),
+        "situacao_aquisicao": situacao,
+    }, ""
 
 
 def _payload_tem_desconto_orcamento(payload):
@@ -309,6 +333,11 @@ def adicionar_item(request, orcamento_id):
             messages.error(request, "Selecione obrigatoriamente o tipo do item: Serviço ou Peça.")
             return _redirect_orcamento_na_os(orcamento.ordem_servico, open_modal="adicionar_item")
 
+        dados_custo, erro_custo = _dados_custo_estimado(request)
+        if erro_custo:
+            messages.error(request, erro_custo)
+            return _redirect_orcamento_na_os(orcamento.ordem_servico, open_modal="adicionar_item")
+
         item = ItemOrcamento.objects.create(
             orcamento=orcamento,
             ean=(produto.ean if produto else ean),
@@ -322,6 +351,7 @@ def adicionar_item(request, orcamento_id):
             origem=origem,
             tecnico_responsavel=tecnico,
             comissionavel=_item_comissionavel_ajustado(orcamento.ordem_servico, tipo_item, request.POST),
+            **dados_custo,
         )
 
         # Produto identificado por EAN/nome gera pre-reserva automatica para evitar venda duplicada.
@@ -416,12 +446,18 @@ def editar_item(request, item_id):
             item.tecnico_responsavel = usuarios_tecnicos_qs(empresa=item.orcamento.ordem_servico.empresa).filter(id=tecnico_id).first()
         else:
             item.tecnico_responsavel = None
+        dados_custo, erro_custo = _dados_custo_estimado(request)
+        if erro_custo:
+            messages.error(request, erro_custo)
+            return _redirect_orcamento_na_os(item.orcamento.ordem_servico)
+        for campo, valor in dados_custo.items():
+            setattr(item, campo, valor)
         item.save()
         messages.success(request, "Item do orçamento da OS atualizado com sucesso!")
         return _redirect_orcamento_na_os(item.orcamento.ordem_servico)
     # JSON para modal
     from django.http import JsonResponse
-    return JsonResponse({
+    payload = {
         "id": item.id,
         "ean": item.ean or "",
         "nome": item.nome,
@@ -434,7 +470,17 @@ def editar_item(request, item_id):
         "origem": item.origem,
         "tecnico_responsavel": item.tecnico_responsavel_id,
         "comissionavel": item.comissionavel,
-    })
+    }
+    if is_management_user(request.user):
+        payload.update({
+            "custo_estimado_unitario": (
+                str(item.custo_estimado_unitario) if item.custo_estimado_unitario is not None else ""
+            ),
+            "fornecedor_estimado": item.fornecedor_estimado,
+            "referencia_cotacao": item.referencia_cotacao,
+            "situacao_aquisicao": item.situacao_aquisicao,
+        })
+    return JsonResponse(payload)
 
 @role_required(ORDER_ROLES)
 def excluir_item(request, item_id):

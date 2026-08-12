@@ -145,6 +145,8 @@ def contas_receber(request):
     receber_criticas_total = receber_criticas_qs.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
     if status:
         queryset = queryset.filter(status=status)
+    else:
+        queryset = queryset.exclude(status="cancelada")
     if tipo_origem in {"cliente_os", "garantia_fabricante", "avulso"}:
         queryset = queryset.filter(tipo_origem=tipo_origem)
     if categoria_id.isdigit():

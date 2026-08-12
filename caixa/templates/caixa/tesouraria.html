@@ -19,7 +19,7 @@
         <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="transferencia">{{ transferencia_form.as_p }}<button class="btn btn-success">Registrar transferência</button></form>
       </div></div>
       <div class="card mb-3"><div class="card-header"><strong>Capital inicial ou injeção de recursos</strong></div><div class="card-body">
-        <div class="alert alert-light border py-2">Registre capital social, AFAC ou empréstimo de sócio. O valor aumenta o saldo bancário/caixa, mas não é receita operacional. As datas podem ser retroativas mediante permissão.</div>
+        <div class="alert alert-light border py-2">Registre capital social, AFAC ou empréstimo de sócio. O valor aumenta o saldo bancário/caixa, mas não é receita operacional. Contas bancárias aceitam data retroativa; dinheiro deve ser lançado no caixa aberto da mesma data para preservar a conferência.</div>
         <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="aporte">{{ aporte_form.as_p }}<button class="btn btn-success">Registrar aporte</button></form>
       </div></div>
       <div class="row">

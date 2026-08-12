@@ -404,7 +404,27 @@ class LancamentoCaixa(models.Model):
         ("saida", "Saída"),
     ]
 
-    caixa = models.ForeignKey(Caixa, on_delete=models.CASCADE, related_name="lancamentos")
+    caixa = models.ForeignKey(
+        Caixa,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lancamentos",
+    )
+    conta_bancaria = models.ForeignKey(
+        "ContaBancaria",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="lancamentos_financeiros",
+    )
+    forma_pagamento = models.ForeignKey(
+        "FormaPagamento",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="lancamentos_saida",
+    )
     pagamento = models.OneToOneField(
         "Pagamento",
         on_delete=models.SET_NULL,
@@ -440,7 +460,11 @@ class LancamentoCaixa(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.empresa_id:
-            self.empresa_id = getattr(self.usuario, "empresa_id", None) or getattr(self.caixa, "empresa_id", None)
+            self.empresa_id = (
+                getattr(self.usuario, "empresa_id", None)
+                or getattr(self.caixa, "empresa_id", None)
+                or getattr(self.conta_bancaria, "empresa_id", None)
+            )
         return super().save(*args, **kwargs)
 
     @property
@@ -602,7 +626,7 @@ class ContaBancaria(models.Model):
 
 class MovimentoBancario(models.Model):
     TIPOS = [("entrada", "Entrada"), ("saida", "Saída")]
-    ORIGENS = [("pagamento", "Pagamento"), ("conta_pagar", "Pagamento de conta a pagar"), ("conciliacao_diferenca", "Diferença de conciliação"), ("aporte_capital", "Aporte de capital"), ("transferencia", "Transferência"), ("manual", "Manual")]
+    ORIGENS = [("pagamento", "Pagamento"), ("conta_pagar", "Pagamento de conta a pagar"), ("conciliacao_diferenca", "Diferença de conciliação"), ("aporte_capital", "Aporte de capital"), ("transferencia", "Transferência"), ("lancamento_caixa", "Lançamento financeiro"), ("manual", "Manual")]
     empresa = models.ForeignKey("configuracoes.Empresa", on_delete=models.PROTECT, related_name="movimentos_bancarios")
     conta = models.ForeignKey(ContaBancaria, on_delete=models.PROTECT, related_name="movimentos")
     tipo = models.CharField(max_length=10, choices=TIPOS)
@@ -702,6 +726,13 @@ class AporteCapital(models.Model):
         destino = self.conta_bancaria or self.caixa
         if destino and destino.empresa_id != self.empresa_id:
             raise ValidationError("O destino do aporte não pertence à empresa.")
+        if self.caixa_id and self.data_movimento and self.caixa.data != self.data_movimento:
+            raise ValidationError(
+                "Aporte em dinheiro deve usar o caixa da mesma data do movimento. "
+                "Para aporte retroativo, prefira a conta bancária correspondente."
+            )
+        if self.caixa_id and not self.caixa.aberto:
+            raise ValidationError("Não é permitido alterar um caixa físico já fechado.")
 
     def save(self, *args, **kwargs):
         if self.pk:

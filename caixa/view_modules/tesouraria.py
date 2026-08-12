@@ -9,7 +9,7 @@ from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, has_sensitive_permi
 
 from ..forms import AporteCapitalForm, ConciliacaoBancariaGrupoForm, ConciliarExtratoForm, ContaBancariaForm, ImportarExtratoForm, TransferenciaTesourariaForm
 from ..models import AporteCapital, ConciliacaoBancaria, ContaBancaria, LinhaExtratoBancario, MovimentoBancario, TransferenciaTesouraria
-from ..services.tesouraria import conciliar_grupo, conciliar_linha, desfazer_conciliacao, ignorar_linha, importar_extrato_csv, registrar_aporte_capital, registrar_transferencia, sugerir_correspondencias
+from ..services.tesouraria import conciliar_grupo, conciliar_linha, desfazer_conciliacao, ignorar_linha, importar_extrato_arquivo, registrar_aporte_capital, registrar_transferencia, sugerir_correspondencias
 
 
 @role_required(CAIXA_FINANCIAL_ROLES)
@@ -67,7 +67,13 @@ def tesouraria(request):
                 aporte_form.add_error(None, exc)
     if acao == "extrato" and extrato_form.is_valid():
         try:
-            criadas = importar_extrato_csv(conta=extrato_form.cleaned_data["conta"], conteudo=extrato_form.cleaned_data["arquivo"].read(), usuario=request.user)
+            arquivo = extrato_form.cleaned_data["arquivo"]
+            criadas = importar_extrato_arquivo(
+                conta=extrato_form.cleaned_data["conta"],
+                conteudo=arquivo.read(),
+                nome_arquivo=arquivo.name,
+                usuario=request.user,
+            )
             messages.success(request, f"Extrato importado: {len(criadas)} linha(s) nova(s).")
             return redirect("caixa:tesouraria")
         except ValidationError as exc:

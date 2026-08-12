@@ -302,7 +302,7 @@
                 {% endif %}
               </ul>
             </div>
-            {% if ordem.fechada %}
+            {% if ordem.fechada and ordem.resultado_financeiro == 'cobravel' and total_os > 0 %}
             <a href="{% url 'caixa:registrar_pagamento' %}?os={{ ordem.id }}&valor={{ total_os|floatformat:2 }}"
                class="btn btn-success btn-sm">
                 <i class="fas fa-cash-register mr-1"></i> Registrar no Caixa

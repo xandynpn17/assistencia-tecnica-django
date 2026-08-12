@@ -6,7 +6,15 @@ from configuracoes.models import MarcaGarantia, TipoEquipamentoConfig
 from orcamentos.models import Orcamento
 from ordens.services.tecnicos import usuarios_tecnicos_qs
 
-from .models import GuiaExpedicaoItem, GuiaExpedicaoParceiro, LinhaTrabalho, NotificacaoCliente, OrdemServico, ServicoPeca
+from .models import (
+    CustoOrdemServico,
+    GuiaExpedicaoItem,
+    GuiaExpedicaoParceiro,
+    LinhaTrabalho,
+    NotificacaoCliente,
+    OrdemServico,
+    ServicoPeca,
+)
 
 
 class OrdemServicoForm(forms.ModelForm):
@@ -336,6 +344,81 @@ class ServicoPecaForm(forms.ModelForm):
         }
         labels = {
             "valor_unitario": "Valor unitário (R$)",
+        }
+
+
+class CustoOrdemServicoForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        self.ordem = kwargs.pop("ordem")
+        super().__init__(*args, **kwargs)
+        empresa = self.ordem.empresa
+        self.fields["servico_peca"].queryset = self.ordem.servicos_pecas.order_by("nome", "id")
+        self.fields["item_orcamento"].queryset = self.fields["item_orcamento"].queryset.filter(
+            orcamento__ordem_servico=self.ordem
+        ).order_by("nome", "id")
+        produtos = Produto.objects.filter(ativo=True)
+        if empresa:
+            produtos = produtos.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+        else:
+            produtos = produtos.filter(empresa__isnull=True)
+        self.fields["produto_estoque"].queryset = produtos.order_by("nome", "id")
+        self.fields["lancamento_caixa"].queryset = self.fields["lancamento_caixa"].queryset.filter(
+            empresa=empresa,
+            tipo="saida",
+            natureza="operacional",
+        ).order_by("-data_competencia", "-id")
+        self.fields["lancamento_caixa"].label_from_instance = lambda item: (
+            f"{item.data_competencia:%d/%m/%Y} · {item.descricao} · R$ {item.valor:.2f}"
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        servico_peca = cleaned.get("servico_peca")
+        item_orcamento = cleaned.get("item_orcamento")
+        produto = cleaned.get("produto_estoque")
+        if servico_peca and servico_peca.ordem_id != self.ordem.id:
+            self.add_error("servico_peca", "O item comercial não pertence a esta OS.")
+        if item_orcamento and item_orcamento.orcamento.ordem_servico_id != self.ordem.id:
+            self.add_error("item_orcamento", "O item do orçamento não pertence a esta OS.")
+        if produto:
+            empresa_produto = getattr(produto, "empresa_id", None)
+            if empresa_produto and empresa_produto != self.ordem.empresa_id:
+                self.add_error("produto_estoque", "O produto pertence a outra empresa.")
+        return cleaned
+
+    class Meta:
+        model = CustoOrdemServico
+        fields = [
+            "tipo",
+            "origem",
+            "descricao",
+            "quantidade",
+            "unidade",
+            "custo_unitario",
+            "data_competencia",
+            "servico_peca",
+            "item_orcamento",
+            "produto_estoque",
+            "lancamento_caixa",
+            "fornecedor_nome",
+            "documento_referencia",
+            "observacao_interna",
+        ]
+        widgets = {
+            "tipo": forms.Select(attrs={"class": "form-control"}),
+            "origem": forms.Select(attrs={"class": "form-control"}),
+            "descricao": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: teclas utilizadas"}),
+            "quantidade": forms.NumberInput(attrs={"class": "form-control", "step": "0.001", "min": "0.001"}),
+            "unidade": forms.TextInput(attrs={"class": "form-control", "placeholder": "UN"}),
+            "custo_unitario": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
+            "data_competencia": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "servico_peca": forms.Select(attrs={"class": "form-control"}),
+            "item_orcamento": forms.Select(attrs={"class": "form-control"}),
+            "produto_estoque": forms.Select(attrs={"class": "form-control"}),
+            "lancamento_caixa": forms.Select(attrs={"class": "form-control"}),
+            "fornecedor_nome": forms.TextInput(attrs={"class": "form-control"}),
+            "documento_referencia": forms.TextInput(attrs={"class": "form-control"}),
+            "observacao_interna": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
         }
 
 

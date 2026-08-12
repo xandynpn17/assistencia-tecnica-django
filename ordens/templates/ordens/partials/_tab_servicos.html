@@ -79,6 +79,81 @@
                 </div>
             </div>
 
+            <div class="border rounded p-2 mb-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap">
+                    <div>
+                        <small class="text-muted">Resultado financeiro</small>
+                        <div><strong>{{ ordem.get_resultado_financeiro_display }}</strong></div>
+                        {% if ordem.motivo_sem_cobranca %}<div class="small text-muted">{{ ordem.motivo_sem_cobranca }}</div>{% endif %}
+                    </div>
+                    {% if not ordem.fechada and pode_concluir_os %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-toggle="modal" data-target="#modalResultadoFinanceiro">
+                        Alterar
+                    </button>
+                    {% endif %}
+                </div>
+                {% if ordem.resultado_financeiro != 'cobravel' %}
+                <div class="alert alert-info py-2 mt-2 mb-0 small">Esta OS será concluída sem gerar cobrança ou conta a receber.</div>
+                {% endif %}
+            </div>
+
+            {% if pode_ver_custos_os %}
+            <div class="card border-info mb-3">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap">
+                    <div>
+                        <strong><i class="fas fa-chart-line mr-1"></i>Custos e margem — uso interno</strong>
+                        <div class="small text-muted">Informações restritas. Não aparecem em documentos ou telas do cliente.</div>
+                    </div>
+                    {% if not ordem.fechada %}
+                    <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#modalAdicionarCustoOS">
+                        <i class="fas fa-plus mr-1"></i>Adicionar custo/insumo
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="card-body py-2">
+                    <div class="row mb-2">
+                        <div class="col-md-3 mb-2 mb-md-0"><div class="border rounded p-2"><small class="text-muted">Custo real</small><div><strong>R$ {{ custo_real_os|floatformat:2 }}</strong></div></div></div>
+                        <div class="col-md-3 mb-2 mb-md-0"><div class="border rounded p-2"><small class="text-muted">Estimado pendente</small><div><strong>R$ {{ custo_estimado_pendente_os|floatformat:2 }}</strong></div></div></div>
+                        <div class="col-md-3 mb-2 mb-md-0"><div class="border rounded p-2"><small class="text-muted">Custo gerencial</small><div><strong>R$ {{ custo_total_gerencial_os|floatformat:2 }}</strong></div></div></div>
+                        <div class="col-md-3"><div class="border rounded p-2"><small class="text-muted">Margem bruta provisória</small><div><strong>R$ {{ lucro_bruto_gerencial_os|floatformat:2 }}</strong></div></div></div>
+                    </div>
+                    {% if custo_estimado_pendente_os %}
+                    <div class="alert alert-warning py-2 small">Há custo estimado ainda sem confirmação de custo real.</div>
+                    {% endif %}
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead><tr><th>Competência</th><th>Descrição</th><th>Tipo/origem</th><th>Vínculo</th><th class="text-right">Total</th><th>Status</th><th></th></tr></thead>
+                            <tbody>
+                            {% for custo in custos_os %}
+                            <tr class="{% if custo.estornado %}text-muted{% endif %}">
+                                <td>{{ custo.data_competencia|date:"d/m/Y" }}</td>
+                                <td>{{ custo.descricao }}<br><small>{{ custo.quantidade|floatformat:3 }} {{ custo.unidade }} × R$ {{ custo.custo_unitario|floatformat:2 }}</small></td>
+                                <td>{{ custo.get_tipo_display }}<br><small>{{ custo.get_origem_display }}</small></td>
+                                <td>{% if custo.item_orcamento %}Orçamento: {{ custo.item_orcamento.nome }}{% elif custo.servico_peca %}OS: {{ custo.servico_peca.nome }}{% elif custo.produto_estoque %}Estoque: {{ custo.produto_estoque.nome }}{% else %}-{% endif %}{% if custo.lancamento_caixa %}<br><small>Saída #{{ custo.lancamento_caixa_id }}</small>{% endif %}</td>
+                                <td class="text-right">R$ {{ custo.total|floatformat:2 }}</td>
+                                <td>{% if custo.estornado %}<span class="badge badge-secondary">Estornado</span>{% else %}<span class="badge badge-success">Ativo</span>{% endif %}</td>
+                                <td class="text-right">
+                                    {% if not custo.estornado %}
+                                    <form method="post" class="d-flex" style="gap:4px;" onsubmit="return window.AppMessages.confirmSync('Estornar este custo interno?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="form_type" value="estornar_custo_os">
+                                        <input type="hidden" name="custo_id" value="{{ custo.id }}">
+                                        <input type="text" name="motivo_estorno" class="form-control form-control-sm" required placeholder="Motivo">
+                                        <button class="btn btn-sm btn-outline-danger" title="Estornar"><i class="fas fa-undo"></i></button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted">Nenhum custo interno registrado.</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="border rounded p-2 mb-2 bg-light small">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="mb-0"><i class="fas fa-boxes mr-1"></i>Reservas automáticas da OS</h6>
@@ -234,6 +309,83 @@
         </div>
     </div>
 </div>
+
+{% if not ordem.fechada and pode_concluir_os %}
+<div class="modal fade" id="modalResultadoFinanceiro" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Resultado financeiro da OS</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="resultado_financeiro">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Tratamento</label>
+                        <select name="resultado_financeiro" class="form-control" required>
+                            {% for codigo, rotulo in resultado_financeiro_choices %}
+                            <option value="{{ codigo }}" {% if ordem.resultado_financeiro == codigo %}selected{% endif %}>{{ rotulo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Motivo da não cobrança</label>
+                        <textarea name="motivo_sem_cobranca" class="form-control" rows="3">{{ ordem.motivo_sem_cobranca }}</textarea>
+                        <small class="text-muted">Obrigatório para qualquer opção diferente de “Cobrável”.</small>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button><button class="btn btn-primary">Salvar</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if pode_ver_custos_os and not ordem.fechada %}
+<div class="modal fade" id="modalAdicionarCustoOS" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0">Adicionar custo ou insumo interno</h5>
+                    <small class="text-muted">Este registro nunca será exibido ao cliente.</small>
+                </div>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="custo_os">
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group col-md-4"><label>Tipo</label>{{ custo_os_form.tipo }}</div>
+                        <div class="form-group col-md-4"><label>Origem</label>{{ custo_os_form.origem }}</div>
+                        <div class="form-group col-md-4"><label>Competência</label>{{ custo_os_form.data_competencia }}</div>
+                    </div>
+                    <div class="form-group"><label>Descrição</label>{{ custo_os_form.descricao }}</div>
+                    <div class="form-row">
+                        <div class="form-group col-md-3"><label>Quantidade</label>{{ custo_os_form.quantidade }}</div>
+                        <div class="form-group col-md-3"><label>Unidade</label>{{ custo_os_form.unidade }}</div>
+                        <div class="form-group col-md-3"><label>Custo unitário</label>{{ custo_os_form.custo_unitario }}</div>
+                        <div class="form-group col-md-3"><label>Documento</label>{{ custo_os_form.documento_referencia }}</div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4"><label>Item comercial da OS</label>{{ custo_os_form.servico_peca }}</div>
+                        <div class="form-group col-md-4"><label>Item do orçamento</label>{{ custo_os_form.item_orcamento }}</div>
+                        <div class="form-group col-md-4"><label>Produto de estoque</label>{{ custo_os_form.produto_estoque }}</div>
+                    </div>
+                    <div class="form-group"><label>Fornecedor</label>{{ custo_os_form.fornecedor_nome }}</div>
+                    <div class="form-group"><label>Saída financeira vinculada (opcional)</label>{{ custo_os_form.lancamento_caixa }}<small class="form-text text-muted">Ao selecionar uma saída, escolha a origem “Despesa paga”. Isso evita contar o mesmo custo duas vezes na DRE.</small></div>
+                    <div class="form-group"><label>Observação interna</label>{{ custo_os_form.observacao_interna }}</div>
+                    <div class="alert alert-info py-2 mb-0 small">Registrar um custo não cria pagamento automaticamente. Se houve compra, registre também a conta a pagar ou a saída pela conta financeira correta.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-info">Salvar custo interno</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {% for talao in taloes_os %}
 <div class="modal fade" id="modalTalao{{ talao.id }}" tabindex="-1" role="dialog" aria-hidden="true">

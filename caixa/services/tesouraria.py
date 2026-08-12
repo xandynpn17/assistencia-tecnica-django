@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import io
+import re
 import unicodedata
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta
@@ -206,6 +207,85 @@ def importar_extrato_csv(*, conta, conteudo, usuario=None):
         if criada:
             criadas.append(linha)
     return criadas
+
+
+def _campo_ofx(bloco, tag):
+    match = re.search(rf"<{tag}>\s*([^<\r\n]+)", bloco, flags=re.IGNORECASE)
+    return (match.group(1) if match else "").strip()
+
+
+def _parse_data_ofx(valor):
+    digits = re.sub(r"\D", "", valor or "")
+    if len(digits) < 8:
+        raise ValidationError(f"Data inválida no OFX: {valor}")
+    try:
+        return datetime.strptime(digits[:8], "%Y%m%d").date()
+    except ValueError as exc:
+        raise ValidationError(f"Data inválida no OFX: {valor}") from exc
+
+
+@transaction.atomic
+def importar_extrato_ofx(*, conta, conteudo, usuario=None):
+    from caixa.models import LinhaExtratoBancario
+
+    if isinstance(conteudo, bytes):
+        try:
+            texto = conteudo.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            texto = conteudo.decode("latin-1")
+    else:
+        texto = str(conteudo)
+    blocos = re.findall(
+        r"<STMTTRN>(.*?)(?=<STMTTRN>|</BANKTRANLIST>|</STMTTRN>|$)",
+        texto,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not blocos:
+        raise ValidationError("O arquivo OFX não contém movimentações bancárias reconhecíveis.")
+
+    criadas = []
+    ocorrencias = {}
+    for numero, bloco in enumerate(blocos, start=1):
+        data = _parse_data_ofx(_campo_ofx(bloco, "DTPOSTED"))
+        valor_bruto = _campo_ofx(bloco, "TRNAMT").replace(",", ".")
+        try:
+            valor = Decimal(valor_bruto)
+        except Exception as exc:
+            raise ValidationError(f"Valor inválido na movimentação {numero} do OFX.") from exc
+        nome = _campo_ofx(bloco, "NAME")
+        memo = _campo_ofx(bloco, "MEMO")
+        descricao = " · ".join(parte for parte in (nome, memo) if parte) or "Movimentação bancária"
+        identificador = _campo_ofx(bloco, "FITID")
+        if not identificador:
+            chave_base = f"{data}|{descricao}|{valor}"
+            ocorrencias[chave_base] = ocorrencias.get(chave_base, 0) + 1
+            identificador = hashlib.sha256(
+                f"{chave_base}|{ocorrencias[chave_base]}".encode("utf-8")
+            ).hexdigest()
+        linha, criada = LinhaExtratoBancario.objects.get_or_create(
+            conta=conta,
+            identificador_externo=identificador[:180],
+            defaults={
+                "empresa": conta.empresa,
+                "data_movimento": data,
+                "descricao": descricao[:255],
+                "valor": valor,
+            },
+        )
+        if criada:
+            criadas.append(linha)
+    return criadas
+
+
+def importar_extrato_arquivo(*, conta, conteudo, nome_arquivo="", usuario=None):
+    nome = (nome_arquivo or "").lower()
+    amostra = conteudo[:1000] if isinstance(conteudo, bytes) else str(conteudo)[:1000]
+    if isinstance(amostra, bytes):
+        amostra = amostra.decode("latin-1", errors="ignore")
+    parece_ofx = nome.endswith(".ofx") or "<OFX>" in amostra.upper() or "<STMTTRN>" in amostra.upper()
+    if parece_ofx:
+        return importar_extrato_ofx(conta=conta, conteudo=conteudo, usuario=usuario)
+    return importar_extrato_csv(conta=conta, conteudo=conteudo, usuario=usuario)
 
 
 @transaction.atomic

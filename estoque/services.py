@@ -1829,6 +1829,76 @@ def remover_item_cesto_venda_rapida(venda, *, cesto_codigo):
     return resumir_cesto_venda_rapida(venda.cesto_codigo)
 
 
+def _registrar_custo_estoque_ordem(
+    *, ordem, movimento, servico_peca_id=None, usuario=None
+):
+    """Registra o CMV interno da OS sem misturá-lo aos itens exibidos ao cliente."""
+    if not ordem or not movimento or not ordem.empresa_id:
+        return None
+
+    from ordens.models import CustoOrdemServico, ServicoPeca
+
+    servico_peca = None
+    if servico_peca_id:
+        servico_peca = ServicoPeca.objects.filter(
+            pk=servico_peca_id,
+            ordem=ordem,
+        ).first()
+    custo_unitario = Decimal(movimento.valor_unitario_custo or 0).quantize(Decimal("0.01"))
+    quantidade = Decimal(abs(movimento.quantidade or 0))
+    defaults = {
+        "empresa": ordem.empresa,
+        "ordem": ordem,
+        "servico_peca": servico_peca,
+        "item_orcamento": getattr(servico_peca, "item_orcamento", None),
+        "produto_estoque": movimento.produto,
+        "tipo": "peca",
+        "origem": "estoque",
+        "descricao": (getattr(servico_peca, "nome", "") or movimento.produto.nome)[:180],
+        "quantidade": quantidade,
+        "unidade": "UN",
+        "custo_unitario": custo_unitario,
+        "data_competencia": timezone.localdate(movimento.criado_em),
+        "documento_referencia": str(ordem.numero_os)[:100],
+        "observacao_interna": "Custo gerado automaticamente pela baixa de estoque.",
+        "criado_por": usuario,
+    }
+    custo, criada = CustoOrdemServico.objects.get_or_create(
+        movimentacao_estoque=movimento,
+        defaults=defaults,
+    )
+    if criada:
+        custo.full_clean()
+    return custo
+
+
+def _estornar_custo_movimentacao_os(movimento, *, usuario=None, motivo=""):
+    if not movimento:
+        return False
+
+    from ordens.models import CustoOrdemServico
+
+    custos = list(
+        CustoOrdemServico.objects.filter(
+            movimentacao_estoque=movimento,
+            estornado_em__isnull=True,
+        )
+    )
+    if not custos:
+        return False
+    CustoOrdemServico.objects.filter(pk__in=[custo.pk for custo in custos]).update(
+        estornado_em=timezone.now(),
+        estornado_por=usuario,
+        motivo_estorno=(motivo or "Movimentação de estoque estornada").strip(),
+    )
+    servicos_ids = [custo.servico_peca_id for custo in custos if custo.servico_peca_id]
+    if servicos_ids:
+        from ordens.models import ServicoPeca
+
+        ServicoPeca.objects.filter(pk__in=servicos_ids).update(estoque_consumido_em=None)
+    return True
+
+
 @transaction.atomic
 def converter_reserva(reserva, usuario=None, motivo="Conversao de reserva"):
     if reserva.status != "ativa":
@@ -1838,7 +1908,8 @@ def converter_reserva(reserva, usuario=None, motivo="Conversao de reserva"):
     if not reserva.ponto_operacional:
         raise ValueError("Reserva sem ponto operacional definido.")
 
-    registrar_movimentacao_estoque(
+    item_os_id = _extrair_item_os_do_motivo(reserva.motivo_status)
+    movimento = registrar_movimentacao_estoque(
         produto=reserva.produto,
         tipo="consumo_os" if reserva.ordem_servico_id else "reserva",
         quantidade=reserva.quantidade,
@@ -1850,6 +1921,13 @@ def converter_reserva(reserva, usuario=None, motivo="Conversao de reserva"):
         origem_tipo="reserva",
         origem_referencia=reserva.codigo_reserva,
     )
+    if reserva.ordem_servico_id:
+        _registrar_custo_estoque_ordem(
+            ordem=reserva.ordem_servico,
+            movimento=movimento,
+            servico_peca_id=item_os_id,
+            usuario=usuario,
+        )
     reserva.status = "convertida"
     reserva.convertida_em = timezone.now()
     reserva.motivo_status = motivo
@@ -1864,6 +1942,9 @@ def cancelar_reserva(reserva, usuario=None, motivo="Cancelada manualmente"):
     if reserva.status == "convertida":
         if not reserva.ponto_operacional:
             raise ValueError("Reserva convertida sem ponto operacional.")
+        movimento_original = MovimentacaoEstoque.objects.filter(
+            chave_idempotencia=f"reserva:{reserva.pk}:conversao"
+        ).first()
         registrar_movimentacao_estoque(
             produto=reserva.produto,
             tipo="devolucao_reserva",
@@ -1875,6 +1956,15 @@ def cancelar_reserva(reserva, usuario=None, motivo="Cancelada manualmente"):
             chave_idempotencia=f"reserva:{reserva.pk}:cancelamento",
             origem_tipo="reserva",
             origem_referencia=reserva.codigo_reserva,
+            valor_unitario_custo=(
+                movimento_original.valor_unitario_custo if movimento_original else None
+            ),
+            movimento_estornado=movimento_original,
+        )
+        _estornar_custo_movimentacao_os(
+            movimento_original,
+            usuario=usuario,
+            motivo=motivo,
         )
     reserva.status = "cancelada"
     reserva.cancelada_em = timezone.now()
@@ -1940,6 +2030,7 @@ def consumir_itens_estoque_ordem(ordem, usuario=None):
         ReservaEstoque.objects.filter(
             ordem_servico=ordem,
             motivo_status__startswith=RESERVA_AUTO_OS_PREFIX,
+            status__in=("ativa", "convertida"),
         ).values_list("motivo_status", flat=True)
     )
     reservas_auto_item_ids = {
@@ -1961,7 +2052,13 @@ def consumir_itens_estoque_ordem(ordem, usuario=None):
             raise ValueError(f"O item '{item.nome}' nao possui ponto operacional para baixa de estoque.")
         if not ubicacao:
             raise ValueError(f"O item '{item.nome}' nao possui ubicacao valida para baixa de estoque.")
-        registrar_movimentacao_estoque(
+        ciclo = (
+            MovimentacaoEstoque.objects.filter(
+                chave_idempotencia__startswith=f"os-item:{item.pk}:consumo:"
+            ).count()
+            + 1
+        )
+        movimento = registrar_movimentacao_estoque(
             produto=produto,
             tipo="consumo_os",
             quantidade=item.quantidade,
@@ -1969,9 +2066,15 @@ def consumir_itens_estoque_ordem(ordem, usuario=None):
             origem_ubicacao=ubicacao,
             observacao=f"Consumo automatico na OS {ordem.numero_os} - item {item.id}",
             usuario=usuario,
-            chave_idempotencia=f"os-item:{item.pk}:consumo",
+            chave_idempotencia=f"os-item:{item.pk}:consumo:{ciclo}",
             origem_tipo="ordem_servico",
             origem_referencia=str(ordem.numero_os),
+        )
+        _registrar_custo_estoque_ordem(
+            ordem=ordem,
+            movimento=movimento,
+            servico_peca_id=item.pk,
+            usuario=usuario,
         )
         item.estoque_consumido_em = timezone.now()
         item.save(update_fields=["estoque_consumido_em"])
@@ -2009,6 +2112,20 @@ def devolver_itens_estoque_ordem(ordem, usuario=None):
             continue
         if not ubicacao:
             continue
+        from ordens.models import CustoOrdemServico
+
+        custo_ativo = (
+            CustoOrdemServico.objects.filter(
+                servico_peca=item,
+                origem="estoque",
+                estornado_em__isnull=True,
+                movimentacao_estoque__isnull=False,
+            )
+            .select_related("movimentacao_estoque")
+            .order_by("-id")
+            .first()
+        )
+        movimento_original = custo_ativo.movimentacao_estoque if custo_ativo else None
         registrar_movimentacao_estoque(
             produto=produto,
             tipo="devolucao_reserva",
@@ -2020,6 +2137,15 @@ def devolver_itens_estoque_ordem(ordem, usuario=None):
             chave_idempotencia=f"os-item:{item.pk}:devolucao:{item.estoque_consumido_em.isoformat()}",
             origem_tipo="ordem_servico",
             origem_referencia=str(ordem.numero_os),
+            valor_unitario_custo=(
+                movimento_original.valor_unitario_custo if movimento_original else None
+            ),
+            movimento_estornado=movimento_original,
+        )
+        _estornar_custo_movimentacao_os(
+            movimento_original,
+            usuario=usuario,
+            motivo=f"OS {ordem.numero_os} reaberta; peça devolvida ao estoque",
         )
         item.estoque_consumido_em = None
         item.save(update_fields=["estoque_consumido_em"])

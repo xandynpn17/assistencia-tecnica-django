@@ -30,7 +30,12 @@ class ItemOrcamentoForm(forms.ModelForm):
     """
     class Meta:
         model = ItemOrcamento
-        fields = ['ean', 'nome', 'descricao', 'valor_unitario', 'desconto_valor', 'desconto_percentual', 'quantidade', 'tipo_item', 'origem', 'tecnico_responsavel', 'comissionavel']
+        fields = [
+            'ean', 'nome', 'descricao', 'valor_unitario', 'desconto_valor',
+            'desconto_percentual', 'quantidade', 'tipo_item', 'origem',
+            'tecnico_responsavel', 'comissionavel', 'custo_estimado_unitario',
+            'fornecedor_estimado', 'referencia_cotacao', 'situacao_aquisicao',
+        ]
         widgets = {
             'ean': forms.TextInput(attrs={
                 'placeholder': 'Código EAN ou serviço',
@@ -71,6 +76,15 @@ class ItemOrcamentoForm(forms.ModelForm):
             'origem': forms.Select(attrs={'class': 'form-control'}),
             'tecnico_responsavel': forms.Select(attrs={'class': 'form-control'}),
             'comissionavel': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'custo_estimado_unitario': forms.NumberInput(attrs={
+                'placeholder': 'R$ 0,00',
+                'step': '0.01',
+                'min': '0',
+                'class': 'form-control',
+            }),
+            'fornecedor_estimado': forms.TextInput(attrs={'class': 'form-control'}),
+            'referencia_cotacao': forms.TextInput(attrs={'class': 'form-control'}),
+            'situacao_aquisicao': forms.Select(attrs={'class': 'form-control'}),
         }
 
     def __init__(self, *args, **kwargs):

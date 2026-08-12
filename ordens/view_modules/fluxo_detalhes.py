@@ -72,6 +72,22 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             "ponto_operacional_reserva",
             "tecnico_responsavel",
         )
+        context["pode_ver_custos_os"] = is_management_user(self.request.user)
+        if context["pode_ver_custos_os"]:
+            context["custo_os_form"] = CustoOrdemServicoForm(ordem=ordem)
+            context["custos_os"] = ordem.custos_internos.select_related(
+                "servico_peca",
+                "item_orcamento",
+                "produto_estoque",
+                "movimentacao_estoque",
+                "lancamento_caixa",
+                "criado_por",
+                "estornado_por",
+            )
+            context["custo_real_os"] = ordem.custo_real_financeiro()
+            context["custo_estimado_pendente_os"] = ordem.custo_estimado_pendente_financeiro()
+            context["custo_total_gerencial_os"] = ordem.custo_total_financeiro()
+            context["lucro_bruto_gerencial_os"] = ordem.lucro_bruto_financeiro()
         from estoque.models import ReservaEstoque
 
         context["reservas_auto_os"] = list(
@@ -93,6 +109,8 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         total_pago = sum((p.valor for p in pagamentos_os), Decimal("0.00"))
         total_desconto = sum((p.desconto or Decimal("0.00") for p in pagamentos_os), Decimal("0.00"))
         saldo_financeiro = max(Decimal("0.00"), context["total_os"] - total_pago - total_desconto)
+        if ordem.resultado_financeiro != "cobravel":
+            saldo_financeiro = Decimal("0.00")
         referencias_pagamento = [ref for ref in pagamentos_os.values_list("referencia", flat=True) if ref]
 
         context["pagamentos_os"] = pagamentos_os
@@ -100,9 +118,12 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["total_desconto_os"] = total_desconto
         context["saldo_financeiro_os"] = saldo_financeiro
         context["os_pago"] = (
+            ordem.resultado_financeiro != "cobravel"
+            or
             context["total_os"] <= Decimal("0.00")
             or total_pago + total_desconto >= context["total_os"]
         )
+        context["resultado_financeiro_choices"] = OrdemServico.RESULTADO_FINANCEIRO_CHOICES
         context["referencias_pagamento"] = referencias_pagamento
         resumo_operacional = ResumoOperacionalService.construir(
             ordem,
@@ -335,6 +356,92 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             elif OrdemServico.normalizar_status_os(request.POST.get("status")) == "concluida":
                 messages.error(request, "O status Concluída só pode ser definido ao fechar a ordem.")
             return redirect(f"{self.object.get_absolute_url()}?tab=linhas")
+
+        elif form_type == "resultado_financeiro":
+            require_sensitive_permission(
+                request.user,
+                "perm_os_concluir",
+                message="Você não tem permissão para alterar o resultado financeiro da OS.",
+            )
+            resultado = (request.POST.get("resultado_financeiro") or "").strip()
+            motivo = (request.POST.get("motivo_sem_cobranca") or "").strip()
+            resultados_validos = {codigo for codigo, _ in OrdemServico.RESULTADO_FINANCEIRO_CHOICES}
+            if resultado not in resultados_validos:
+                messages.error(request, "Resultado financeiro inválido.")
+            elif resultado != "cobravel" and not motivo:
+                messages.error(request, "Informe o motivo da conclusão sem cobrança.")
+            else:
+                self.object.resultado_financeiro = resultado
+                self.object.motivo_sem_cobranca = "" if resultado == "cobravel" else motivo
+                self.object.save(update_fields=["resultado_financeiro", "motivo_sem_cobranca"])
+                from ordens.services.fechamento_os import garantir_conta_receber_os
+
+                garantir_conta_receber_os(self.object)
+                _log_os(
+                    self.object,
+                    "edicao_critica",
+                    f"Resultado financeiro alterado para {self.object.get_resultado_financeiro_display()}.",
+                    usuario=request.user,
+                    dados_extras={"resultado_financeiro": resultado, "motivo": motivo},
+                )
+                messages.success(request, "Resultado financeiro atualizado.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+
+        # Custos internos: nunca são enviados aos documentos do cliente.
+        elif form_type == "custo_os":
+            if not is_management_user(request.user):
+                raise PermissionDenied("Você não tem permissão para visualizar ou registrar custos da OS.")
+            if self.object.fechada:
+                messages.error(request, "Reabra a OS antes de incluir um novo custo interno.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+            custo_form = CustoOrdemServicoForm(request.POST, ordem=self.object)
+            if custo_form.is_valid():
+                custo = custo_form.save(commit=False)
+                custo.empresa = self.object.empresa
+                custo.ordem = self.object
+                custo.criado_por = request.user
+                custo.full_clean()
+                custo.save()
+                _log_os(
+                    self.object,
+                    "edicao_critica",
+                    f"Custo interno registrado: {custo.descricao}.",
+                    usuario=request.user,
+                    dados_extras={"custo_os_id": custo.id, "total": str(custo.total)},
+                )
+                messages.success(request, "Custo interno registrado. Esse valor não aparece para o cliente.")
+            else:
+                messages.error(request, "Revise os dados do custo interno.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
+
+        elif form_type == "estornar_custo_os":
+            if not is_management_user(request.user):
+                raise PermissionDenied("Você não tem permissão para estornar custos da OS.")
+            custo = get_object_or_404(
+                CustoOrdemServico,
+                id=request.POST.get("custo_id"),
+                ordem=self.object,
+                empresa=self.object.empresa,
+            )
+            motivo = (request.POST.get("motivo_estorno") or "").strip()
+            if not motivo:
+                messages.error(request, "Informe o motivo do estorno.")
+            elif custo.estornado_em:
+                messages.info(request, "Esse custo já estava estornado.")
+            else:
+                custo.estornado_em = timezone.now()
+                custo.estornado_por = request.user
+                custo.motivo_estorno = motivo
+                custo.save(update_fields=["estornado_em", "estornado_por", "motivo_estorno"])
+                _log_os(
+                    self.object,
+                    "edicao_critica",
+                    f"Custo interno estornado: {custo.descricao}.",
+                    usuario=request.user,
+                    dados_extras={"custo_os_id": custo.id, "motivo": motivo},
+                )
+                messages.success(request, "Custo interno estornado com auditoria preservada.")
+            return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
         # Serviços & Peças
         elif form_type == "servico_peca":

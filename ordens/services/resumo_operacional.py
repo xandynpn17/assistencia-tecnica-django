@@ -43,6 +43,9 @@ class ResumoOperacionalService:
             )
         saldo_financeiro = saldo_financeiro if saldo_financeiro is not None else max(Decimal("0.00"), total_os - total_pago)
         os_pago = os_pago if os_pago is not None else (total_os <= Decimal("0.00") or total_pago >= total_os)
+        if ordem.resultado_financeiro != "cobravel":
+            saldo_financeiro = Decimal("0.00")
+            os_pago = True
 
         if ordem.data_abertura:
             dias_aberta = max((timezone.localdate() - ordem.data_abertura.date()).days, 0)
@@ -66,7 +69,10 @@ class ResumoOperacionalService:
         policy = FluxoOSPolicyService.obter_policy(ordem.status)
         proxima_acao = policy.proxima_acao
 
-        if ordem.fechada and saldo_financeiro > 0:
+        if ordem.fechada and ordem.resultado_financeiro != "cobravel":
+            fluxo_label = f"Concluída sem cobrança · {ordem.get_resultado_financeiro_display()}"
+            fluxo_tone = "info"
+        elif ordem.fechada and saldo_financeiro > 0:
             fluxo_label = "Concluída aguardando pagamento"
             fluxo_tone = "warning"
         elif ordem.fechada and os_pago:

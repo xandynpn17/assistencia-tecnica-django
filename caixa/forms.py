@@ -73,7 +73,10 @@ class AporteCapitalForm(forms.ModelForm):
             self.fields["data_movimento"].initial = hoje
         self.fields["conta_bancaria"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
         self.fields["caixa"].queryset = Caixa.objects.filter(empresa=empresa, aberto=True)
-        self.fields["conta_bancaria"].help_text = "Informe conta bancária ou caixa, nunca os dois."
+        self.fields["conta_bancaria"].help_text = (
+            "Informe conta bancária ou caixa, nunca os dois. Conta bancária aceita data retroativa."
+        )
+        self.fields["caixa"].help_text = "Dinheiro só pode ser lançado no caixa aberto da mesma data."
 
     def clean(self):
         dados = super().clean()
@@ -84,7 +87,10 @@ class AporteCapitalForm(forms.ModelForm):
 
 class ImportarExtratoForm(forms.Form):
     conta = forms.ModelChoiceField(queryset=ContaBancaria.objects.none())
-    arquivo = forms.FileField(help_text="CSV com colunas data, descricao, valor e identificador opcional.")
+    arquivo = forms.FileField(
+        help_text="OFX do banco ou CSV com colunas data, descricao, valor e identificador opcional.",
+        widget=forms.ClearableFileInput(attrs={"accept": ".ofx,.csv,text/csv,application/x-ofx"}),
+    )
 
     def __init__(self, *args, **kwargs):
         empresa = kwargs.pop("empresa")
@@ -241,7 +247,8 @@ class PagamentoForm(forms.ModelForm):
         self.fields["ordem_servico"].queryset = (
             ordens.filter(empresa=empresa) if empresa is not None else ordens.filter(empresa__isnull=True)
         )
-        self.fields["forma_pagamento"].required = True
+        self.fields["forma_pagamento"].required = False
+        self.fields["forma_pagamento"].widget.attrs["required"] = True
         formas = FormaPagamento.objects.filter(ativa=True)
         if empresa:
             formas = formas.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
@@ -328,8 +335,28 @@ class LancamentoCaixaForm(forms.ModelForm):
         self.fields["categoria"].queryset = categorias.order_by("nome")
         self.fields["categoria"].required = True
         self.fields["centro_custo"].queryset = centros.order_by("nome")
+        formas = FormaPagamento.objects.filter(ativa=True)
+        contas = ContaBancaria.objects.filter(ativa=True)
+        caixas = Caixa.objects.filter(aberto=True)
+        if empresa:
+            formas = formas.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
+            contas = contas.filter(empresa=empresa)
+            caixas = caixas.filter(empresa=empresa)
+        else:
+            formas = formas.filter(empresa__isnull=True)
+            contas = contas.filter(empresa__isnull=True)
+            caixas = caixas.filter(empresa__isnull=True)
+        self.fields["forma_pagamento"].queryset = formas.order_by("nome")
+        self.fields["conta_bancaria"].queryset = contas.order_by("nome")
+        self.fields["caixa"].queryset = caixas.order_by("-data", "-id")
         self.fields["categoria"].label = "Categoria"
         self.fields["centro_custo"].required = True
+        # O navegador exige a escolha. O backend aceita apenas payloads legados
+        # sem a chave e os converte explicitamente para Dinheiro/caixa aberto.
+        self.fields["forma_pagamento"].required = False
+        self.fields["forma_pagamento"].widget.attrs["required"] = True
+        self.fields["conta_bancaria"].required = False
+        self.fields["caixa"].required = False
         self.fields["descricao"].label = "Descricao"
         self.fields["centro_custo"].label = "Centro de custo"
         self.fields["valor"].label = "Valor"
@@ -340,16 +367,43 @@ class LancamentoCaixaForm(forms.ModelForm):
 
     class Meta:
         model = LancamentoCaixa
-        fields = ["descricao", "categoria", "centro_custo", "valor", "data_competencia", "data_movimento"]
+        fields = [
+            "descricao", "categoria", "centro_custo", "valor", "forma_pagamento",
+            "caixa", "conta_bancaria", "data_competencia", "data_movimento",
+        ]
         widgets = {
             "data_competencia": forms.DateInput(attrs={"type": "date"}),
             "data_movimento": forms.DateInput(attrs={"type": "date"}),
+            "forma_pagamento": forms.Select(attrs={"class": "form-control"}),
+            "caixa": forms.Select(attrs={"class": "form-control"}),
+            "conta_bancaria": forms.Select(attrs={"class": "form-control"}),
         }
 
     def clean(self):
         cleaned_data = super().clean()
         cleaned_data["data_competencia"] = cleaned_data.get("data_competencia") or timezone.localdate()
         cleaned_data["data_movimento"] = cleaned_data.get("data_movimento") or timezone.localdate()
+        forma = cleaned_data.get("forma_pagamento")
+        caixa = cleaned_data.get("caixa")
+        conta = cleaned_data.get("conta_bancaria")
+        if not forma and "forma_pagamento" not in self.data:
+            forma = self.fields["forma_pagamento"].queryset.filter(codigo="dinheiro").first()
+            caixa = caixa or self.fields["caixa"].queryset.first()
+            cleaned_data["forma_pagamento"] = forma
+            cleaned_data["caixa"] = caixa
+        elif not forma:
+            self.add_error("forma_pagamento", "Selecione o meio de pagamento da saída.")
+        codigo = (getattr(forma, "codigo", "") or "").lower()
+        if codigo == "dinheiro" or codigo.startswith("dinheiro-"):
+            if not caixa:
+                self.add_error("caixa", "Pagamento em dinheiro exige um caixa aberto.")
+            if conta:
+                self.add_error("conta_bancaria", "Pagamento em dinheiro não deve movimentar conta bancária.")
+        else:
+            if not conta:
+                self.add_error("conta_bancaria", "Selecione a conta usada nesta saída.")
+            if caixa:
+                self.add_error("caixa", "Saídas bancárias não devem ser vinculadas ao caixa físico.")
         return cleaned_data
 
 

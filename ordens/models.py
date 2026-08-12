@@ -1,7 +1,9 @@
 ﻿import random
 import string
 import uuid
+from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -69,6 +71,15 @@ class OrdemServico(models.Model):
         ('devolucao', 'Devolução sem reparação'),
         ('pronto_contactado', 'Pronto contactado'),
         ('concluida', 'Concluída'),
+    ]
+
+    RESULTADO_FINANCEIRO_CHOICES = [
+        ("cobravel", "Cobrável"),
+        ("cortesia", "Cortesia"),
+        ("garantia_servico", "Garantia de serviço"),
+        ("sem_reparo", "Sem reparo"),
+        ("cancelada", "Cancelada"),
+        ("uso_interno", "Uso interno"),
     ]
 
     TIPO_REPARO_CHOICES = [
@@ -150,6 +161,13 @@ class OrdemServico(models.Model):
         help_text="Intervalo sugerido para manutenção preventiva futura.",
     )
     notas_internas = models.TextField(blank=True)
+    resultado_financeiro = models.CharField(
+        max_length=24,
+        choices=RESULTADO_FINANCEIRO_CHOICES,
+        default="cobravel",
+        db_index=True,
+    )
+    motivo_sem_cobranca = models.TextField(blank=True)
 
     # ===========================
     # RELATÓRIO TÉCNICO
@@ -415,16 +433,36 @@ class OrdemServico(models.Model):
         return sum((item.total() for item in self.servicos_pecas.all()), 0)
 
     def custo_pecas_financeiro(self):
-        # Estrutura preparada para custo real:
-        # se no futuro ServicoPeca/Estoque tiver custo_unitario, passa a usar esse valor.
-        total = 0
-        for item in self.servicos_pecas.all():
-            if item.tipo != "peca":
+        return self.custo_total_financeiro()
+
+    def custo_real_financeiro(self):
+        return sum(
+            (custo.total for custo in self.custos_internos.filter(estornado_em__isnull=True)),
+            Decimal("0.00"),
+        )
+
+    def custo_estimado_pendente_financeiro(self):
+        total = Decimal("0.00")
+        custos_reais_por_item = set(
+            self.custos_internos.filter(
+                estornado_em__isnull=True,
+                item_orcamento__isnull=False,
+            ).values_list("item_orcamento_id", flat=True)
+        )
+        for item in self.servicos_pecas.select_related("item_orcamento"):
+            item_orcamento = item.item_orcamento
+            if not item_orcamento or item_orcamento.pk in custos_reais_por_item:
                 continue
-            custo_unitario = getattr(item, "custo_unitario", None)
-            if custo_unitario is not None:
-                total += (custo_unitario * item.quantidade)
+            custo_estimado = item_orcamento.custo_estimado_unitario
+            if custo_estimado is not None:
+                total += Decimal(custo_estimado) * Decimal(item.quantidade or 0)
         return total
+
+    def custo_total_financeiro(self):
+        return self.custo_real_financeiro() + self.custo_estimado_pendente_financeiro()
+
+    def possui_custo_estimado_pendente(self):
+        return self.custo_estimado_pendente_financeiro() > Decimal("0.00")
 
     def total_comissoes_financeiro(self):
         from django.apps import apps
@@ -454,7 +492,7 @@ class OrdemServico(models.Model):
         return total_os + total_itens
 
     def lucro_bruto_financeiro(self):
-        return self.receita_total_financeira() - self.custo_pecas_financeiro()
+        return self.receita_total_financeira() - self.custo_total_financeiro()
 
     def lucro_liquido_financeiro(self):
         return self.lucro_bruto_financeiro() - self.total_comissoes_financeiro()
@@ -573,6 +611,162 @@ class ServicoPeca(models.Model):
         atuais.append(numero)
         self.numeros_taloes = ", ".join(atuais)
         return True
+
+
+class CustoOrdemServico(models.Model):
+    TIPO_CHOICES = [
+        ("peca", "Peça"),
+        ("componente", "Componente"),
+        ("insumo", "Insumo"),
+        ("consumivel", "Consumível"),
+        ("terceiro", "Serviço de terceiro"),
+        ("frete", "Frete"),
+        ("outro", "Outro"),
+    ]
+    ORIGEM_CHOICES = [
+        ("estoque", "Estoque"),
+        ("compra_especifica", "Compra específica"),
+        ("despesa_paga", "Despesa paga"),
+        ("manual", "Insumo/material já disponível"),
+        ("ajuste", "Ajuste autorizado"),
+    ]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        related_name="custos_ordens_servico",
+    )
+    movimentacao_estoque = models.OneToOneField(
+        "estoque.MovimentacaoEstoque",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="custo_ordem_servico",
+    )
+    lancamento_caixa = models.ForeignKey(
+        "caixa.LancamentoCaixa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="custos_ordens_servico",
+        help_text="Saída financeira que pagou este custo, quando aplicável.",
+    )
+    ordem = models.ForeignKey(
+        OrdemServico,
+        on_delete=models.CASCADE,
+        related_name="custos_internos",
+    )
+    servico_peca = models.ForeignKey(
+        ServicoPeca,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="custos_internos",
+    )
+    item_orcamento = models.ForeignKey(
+        "orcamentos.ItemOrcamento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="custos_reais",
+    )
+    produto_estoque = models.ForeignKey(
+        "estoque.Produto",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="custos_ordens_servico",
+    )
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="insumo")
+    origem = models.CharField(max_length=24, choices=ORIGEM_CHOICES, default="manual")
+    descricao = models.CharField(max_length=180)
+    quantidade = models.DecimalField(max_digits=12, decimal_places=3, default=1)
+    unidade = models.CharField(max_length=12, default="UN")
+    custo_unitario = models.DecimalField(max_digits=14, decimal_places=2)
+    data_competencia = models.DateField(default=timezone.localdate, db_index=True)
+    fornecedor_nome = models.CharField(max_length=160, blank=True)
+    documento_referencia = models.CharField(max_length=100, blank=True)
+    observacao_interna = models.TextField(blank=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="custos_os_criados",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    estornado_em = models.DateTimeField(null=True, blank=True)
+    estornado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="custos_os_estornados",
+    )
+    motivo_estorno = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-data_competencia", "-id"]
+        indexes = [models.Index(fields=["empresa", "ordem", "data_competencia"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(quantidade__gt=0),
+                name="custo_os_quantidade_positiva",
+            ),
+            models.CheckConstraint(
+                condition=Q(custo_unitario__gte=0),
+                name="custo_os_unitario_nao_negativo",
+            ),
+        ]
+
+    @property
+    def total(self):
+        return (Decimal(self.quantidade or 0) * Decimal(self.custo_unitario or 0)).quantize(
+            Decimal("0.01")
+        )
+
+    @property
+    def estornado(self):
+        return bool(self.estornado_em)
+
+    def clean(self):
+        errors = {}
+        if self.ordem_id and self.empresa_id != self.ordem.empresa_id:
+            errors["empresa"] = "A empresa do custo deve ser a mesma empresa da OS."
+        if self.servico_peca_id and self.servico_peca.ordem_id != self.ordem_id:
+            errors["servico_peca"] = "O item comercial não pertence a esta OS."
+        if self.item_orcamento_id and self.item_orcamento.orcamento.ordem_servico_id != self.ordem_id:
+            errors["item_orcamento"] = "O item do orçamento não pertence a esta OS."
+        if self.produto_estoque_id:
+            empresa_produto = getattr(self.produto_estoque, "empresa_id", None)
+            if empresa_produto and empresa_produto != self.empresa_id:
+                errors["produto_estoque"] = "O produto de estoque pertence a outra empresa."
+        if self.movimentacao_estoque_id:
+            if self.origem != "estoque":
+                errors["origem"] = "Custos vinculados a uma movimentação devem ter origem em estoque."
+            if self.produto_estoque_id != self.movimentacao_estoque.produto_id:
+                errors["movimentacao_estoque"] = "A movimentação não pertence ao produto informado."
+        if self.lancamento_caixa_id:
+            if self.lancamento_caixa.empresa_id != self.empresa_id:
+                errors["lancamento_caixa"] = "A saída financeira pertence a outra empresa."
+            elif self.lancamento_caixa.tipo != "saida" or self.lancamento_caixa.natureza != "operacional":
+                errors["lancamento_caixa"] = "Vincule somente uma saída operacional."
+            elif self.data_competencia != self.lancamento_caixa.data_competencia:
+                errors["data_competencia"] = "A competência deve ser igual à da saída vinculada."
+            if self.origem != "despesa_paga":
+                errors["origem"] = "Use a origem 'Despesa paga' ao vincular uma saída financeira."
+            alocado = self.lancamento_caixa.custos_ordens_servico.filter(
+                estornado_em__isnull=True
+            ).exclude(pk=self.pk).aggregate(total=models.Sum(models.F("quantidade") * models.F("custo_unitario")))["total"] or Decimal("0.00")
+            if alocado + self.total > Decimal(self.lancamento_caixa.valor or 0):
+                errors["lancamento_caixa"] = "O total alocado ultrapassa o valor da saída financeira."
+        elif self.origem == "despesa_paga":
+            errors["lancamento_caixa"] = "Selecione a saída financeira correspondente."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.ordem.numero_os} · {self.descricao} · R$ {self.total:.2f}"
 
 
 class NotificacaoCliente(models.Model):

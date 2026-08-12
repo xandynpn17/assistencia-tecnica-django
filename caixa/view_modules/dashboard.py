@@ -1429,16 +1429,17 @@ def excluir_pagamento(request, pagamento_id):
 def registrar_saida(request):
     empresa = getattr(request.user, "empresa", None)
     caixa = caixa_atual(empresa)
-    if not caixa:
-        return redirect("caixa:abrir_caixa")
+    _garantir_formas_pagamento_padrao(empresa)
     _garantir_categorias_financeiras_padrao(empresa)
     _garantir_centros_custo_padrao(empresa)
-    saldo_atual = _resumo_movimento_caixa(caixa)["saldo"]
+    saldo_atual = _resumo_movimento_caixa(caixa)["saldo"] if caixa else Decimal("0.00")
     hoje = timezone.localdate()
-    saidas_qs = LancamentoCaixa.objects.filter(caixa=caixa, tipo="saida").select_related("categoria", "centro_custo", "usuario")
-    saidas_recentes = saidas_qs.order_by("-data", "-id")[:15]
-    total_saidas_hoje = saidas_qs.filter(data__date=hoje).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-    quantidade_saidas_hoje = saidas_qs.filter(data__date=hoje).count()
+    saidas_qs = LancamentoCaixa.objects.filter(empresa=empresa, tipo="saida").select_related(
+        "categoria", "centro_custo", "usuario", "forma_pagamento", "conta_bancaria", "caixa"
+    )
+    saidas_recentes = saidas_qs.order_by("-data_movimento", "-data", "-id")[:15]
+    total_saidas_hoje = saidas_qs.filter(data_movimento=hoje).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+    quantidade_saidas_hoje = saidas_qs.filter(data_movimento=hoje).count()
 
     if request.method == "POST":
         form = LancamentoCaixaForm(request.POST, empresa=empresa)
@@ -1459,9 +1460,9 @@ def registrar_saida(request):
                     },
                 )
             saida = form.save(commit=False)
-            saida.caixa = caixa
             saida.tipo = "saida"
             saida.usuario = request.user
+            saida.empresa = empresa
             saida.save()
             _log_financeiro("saida_registrada", request.user, valor=saida.valor, descricao=saida.descricao)
             return _redirect_pos_operacao(request, "caixa:registrar_saida")

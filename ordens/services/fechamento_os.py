@@ -55,12 +55,14 @@ def garantir_conta_receber_os(ordem, ignorar_pagamento_id=None):
         .first()
     )
 
-    if total_os <= Decimal("0.00"):
+    nao_cobravel = ordem.resultado_financeiro != "cobravel"
+    if total_os <= Decimal("0.00") or nao_cobravel:
         if conta:
             conta.empresa = ordem.empresa
-            conta.valor_original = Decimal("0.00")
+            if total_os <= Decimal("0.00"):
+                conta.valor_original = Decimal("0.00")
             conta.valor_aberto = Decimal("0.00")
-            conta.status = "paga"
+            conta.status = "cancelada"
             conta.save(update_fields=["empresa", "valor_original", "valor_aberto", "status", "atualizado_em"])
         return conta
 
