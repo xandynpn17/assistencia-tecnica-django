@@ -10,7 +10,8 @@ from clientes.models import Cliente
 from configuracoes.models import Empresa
 from estoque.models import PontoOperacional, Produto, UbicacaoEstoque
 from orcamentos.models import ItemOrcamento, Orcamento
-from ordens.models import CustoOrdemServico, OrdemServico, PedidoCompra
+from ordens.models import CustoOrdemServico, OrdemServico, PedidoCompra, ServicoPeca
+from orcamentos.services import FluxoOrcamentoService
 from ordens.services.compras_os import receber_pedido_os, estornar_recebimento_pedido_os
 from ordens.services.fechamento_os import FechamentoOSService
 
@@ -114,8 +115,6 @@ class RecebimentoPedidoCompraOSTests(TestCase):
         self.assertEqual(produto.quantidade, 0)
 
     def test_fechamento_bloqueia_peca_manual_sem_custo_confirmado(self):
-        from ordens.models import ServicoPeca
-
         item_servico = ServicoPeca.objects.create(
             ordem=self.ordem, item_orcamento=self.item, tipo="peca", nome="Teclas",
             quantidade=1, valor_unitario=Decimal("80.00"),
@@ -133,3 +132,52 @@ class RecebimentoPedidoCompraOSTests(TestCase):
         self.ordem.save(update_fields=["relatorio_tecnico", "tipo_reparacao"])
         resultado = FechamentoOSService.finalizar_para_caixa(self.ordem, usuario=self.usuario)
         self.assertTrue(resultado.fechando)
+
+    def test_migracao_repara_vinculo_estoque_ausente_por_ean(self):
+        ponto = PontoOperacional.objects.create(
+            empresa=self.empresa,
+            codigo="LOJA",
+            nome="Loja",
+        )
+        produto = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Teclas em estoque",
+            ean="7909569284421",
+            tipo_item="peca",
+            quantidade=1,
+            custo_unitario=Decimal("55.00"),
+            custo_medio=Decimal("95.00"),
+            preco=Decimal("130.00"),
+            preco_final=Decimal("130.00"),
+            ponto_operacional=ponto,
+        )
+        self.item.ean = produto.ean
+        self.item.origem = "estoque"
+        self.item.status = "aprovado"
+        self.item.save(update_fields=["ean", "origem", "status"])
+        servico = ServicoPeca.objects.create(
+            ordem=self.ordem,
+            item_orcamento=self.item,
+            tipo="peca",
+            nome=produto.nome,
+            quantidade=1,
+            valor_unitario=Decimal("130.00"),
+        )
+
+        FluxoOrcamentoService.migrar_itens_aprovados_da_ordem(
+            self.ordem,
+            usuario=self.usuario,
+            criar_historico=False,
+        )
+
+        servico.refresh_from_db()
+        self.assertEqual(servico.produto_estoque_id, produto.id)
+        self.assertEqual(servico.ponto_operacional_reserva_id, ponto.id)
+        FechamentoOSService._validar_custos_pecas_manuais(self.ordem)
+
+    def test_fechamento_valida_peca_manual_depois_de_migrar_orcamento(self):
+        self.item.status = "aprovado"
+        self.item.save(update_fields=["status"])
+
+        with self.assertRaisesMessage(ValueError, "Confirme o custo real"):
+            FechamentoOSService.alternar_fechamento(self.ordem, usuario=self.usuario)

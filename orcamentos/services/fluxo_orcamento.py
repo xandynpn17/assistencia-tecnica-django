@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.db import transaction
 
 from caixa.services.comissoes import cancelar_comissoes_por_item, processar_evento_servico_finalizado
+from estoque.models import Produto, ReservaEstoque
 from ordens.models import LinhaTrabalho, ServicoPeca
 
 from ..models import ItemOrcamento
@@ -27,6 +28,42 @@ class MigracaoOrcamentoResultado:
 
 
 class FluxoOrcamentoService:
+    @staticmethod
+    def _produto_estoque_do_item(item, ordem):
+        """Resolve com seguranca o produto de um item marcado como estoque."""
+        if item.origem != "estoque":
+            return None
+        ean = "".join(ch for ch in (item.ean or "") if ch.isdigit())
+        if not ean:
+            return None
+        return Produto.objects.filter(
+            empresa_id=ordem.empresa_id,
+            ativo=True,
+            permite_os=True,
+            ean=ean,
+        ).first()
+
+    @staticmethod
+    def _ponto_estoque_do_item(item, produto):
+        if not produto:
+            return None
+        reserva = (
+            ReservaEstoque.objects.filter(
+                item_orcamento=item,
+                produto=produto,
+                status__in=("ativa", "convertida"),
+            )
+            .select_related("ponto_operacional")
+            .order_by("-id")
+            .first()
+        )
+        if reserva and reserva.ponto_operacional.ativo:
+            return reserva.ponto_operacional
+        ponto = produto.ponto_operacional
+        if ponto and ponto.ativo and ponto.empresa_id == produto.empresa_id:
+            return ponto
+        return None
+
     @staticmethod
     def aceitar_itens(orcamento, itens_ids, usuario=None):
         ordem = orcamento.ordem_servico
@@ -202,6 +239,8 @@ class FluxoOrcamentoService:
                     itens_nao_aprovados += 1
                     continue
                 itens_aprovados += 1
+                produto_estoque = cls._produto_estoque_do_item(item, ordem)
+                ponto_estoque = cls._ponto_estoque_do_item(item, produto_estoque)
                 defaults = {
                     "nome": item.nome,
                     "descricao": item.descricao,
@@ -209,10 +248,12 @@ class FluxoOrcamentoService:
                     "quantidade": int(item.quantidade or 1) or 1,
                     "tipo": cls._tipo_item_resolvido(item),
                     "tecnico_responsavel": item.tecnico_responsavel or ordem.tecnico_responsavel,
+                    "produto_estoque": produto_estoque,
+                    "ponto_operacional_reserva": ponto_estoque,
                 }
                 if copiar_comissionavel:
                     defaults["comissionavel"] = item.comissionavel
-                _, created = ServicoPeca.objects.get_or_create(
+                servico_peca, created = ServicoPeca.objects.get_or_create(
                     ordem=ordem,
                     item_orcamento=item,
                     defaults=defaults,
@@ -220,6 +261,15 @@ class FluxoOrcamentoService:
                 if created:
                     total_migrados += 1
                 else:
+                    campos_atualizados = []
+                    if produto_estoque and not servico_peca.produto_estoque_id:
+                        servico_peca.produto_estoque = produto_estoque
+                        campos_atualizados.append("produto_estoque")
+                    if ponto_estoque and not servico_peca.ponto_operacional_reserva_id:
+                        servico_peca.ponto_operacional_reserva = ponto_estoque
+                        campos_atualizados.append("ponto_operacional_reserva")
+                    if campos_atualizados:
+                        servico_peca.save(update_fields=campos_atualizados)
                     itens_ja_migrados += 1
 
             if criar_historico and total_migrados:

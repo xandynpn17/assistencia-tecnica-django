@@ -44,11 +44,11 @@ def _codigo_reserva():
             return codigo
 
 
-def _detectar_produto_estoque(ean, nome):
+def _detectar_produto_estoque(ean, nome, empresa=None):
     ean_limpo = "".join(ch for ch in (ean or "") if ch.isdigit())
     if not ean_limpo:
         return None
-    return Produto.objects.filter(ativo=True, ean=ean_limpo).first()
+    return Produto.objects.filter(empresa=empresa, ativo=True, permite_os=True, ean=ean_limpo).first()
 
 
 def _garantir_ordem_editavel(request, ordem, form_type):
@@ -326,7 +326,11 @@ def adicionar_item(request, orcamento_id):
         if tecnico_id:
             tecnico = usuarios_tecnicos_qs(empresa=orcamento.ordem_servico.empresa).filter(id=tecnico_id).first()
 
-        produto = _detectar_produto_estoque(ean=ean, nome=nome)
+        produto = _detectar_produto_estoque(
+            ean=ean,
+            nome=nome,
+            empresa=orcamento.ordem_servico.empresa,
+        )
         origem = "estoque" if produto else "manual"
         tipo_item = (request.POST.get("tipo_item") or "").strip()
         if tipo_item not in {"servico", "peca"}:
@@ -433,7 +437,11 @@ def editar_item(request, item_id):
                 return bloqueio
         item.desconto_valor = desconto_valor
         item.desconto_percentual = desconto_percentual
-        produto = _detectar_produto_estoque(item.ean, item.nome)
+        produto = _detectar_produto_estoque(
+            item.ean,
+            item.nome,
+            empresa=item.orcamento.ordem_servico.empresa,
+        )
         item.origem = "estoque" if produto else "manual"
         tipo_item = (request.POST.get("tipo_item") or "").strip()
         if tipo_item in {"servico", "peca"}:

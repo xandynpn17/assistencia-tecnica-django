@@ -137,7 +137,6 @@ class FechamentoOSService:
             fechando = not ordem.fechada
             itens_migrados = 0
             if fechando:
-                FechamentoOSService._validar_custos_pecas_manuais(ordem)
                 resultado_migracao = FluxoOrcamentoService.migrar_itens_aprovados_da_ordem(
                     ordem,
                     usuario=usuario,
@@ -146,6 +145,7 @@ class FechamentoOSService:
                     copiar_comissionavel=False,
                 )
                 itens_migrados = resultado_migracao.total_migrados
+                FechamentoOSService._validar_custos_pecas_manuais(ordem)
 
             ordem.atualizar_status_fechamento(fechar=fechando, usuario=usuario)
             acao = "Ordem fechada" if ordem.fechada else "Ordem reaberta"
@@ -192,7 +192,6 @@ class FechamentoOSService:
     @staticmethod
     def finalizar_para_caixa(ordem, usuario=None):
         with transaction.atomic():
-            FechamentoOSService._validar_custos_pecas_manuais(ordem)
             resultado_migracao = FluxoOrcamentoService.migrar_itens_aprovados_da_ordem(
                 ordem,
                 usuario=usuario,
@@ -200,6 +199,7 @@ class FechamentoOSService:
                 usar_valor_liquido=False,
                 copiar_comissionavel=False,
             )
+            FechamentoOSService._validar_custos_pecas_manuais(ordem)
             ordem.transicionar_status(
                 "concluida",
                 usuario=usuario,
