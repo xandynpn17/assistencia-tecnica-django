@@ -15,6 +15,7 @@ from caixa.services.contabilidade import ativar_plano_contas, criar_plano_contas
 from caixa.services.tesouraria import (
     conciliar_linha, criar_movimento_de_linha_extrato, fechar_periodo_bancario, importar_extrato_arquivo, registrar_aporte_capital,
     movimentos_bancarios_disponiveis, registrar_movimento_bancario, registrar_movimento_socio,
+    sugerir_correspondencias,
 )
 from configuracoes.models import Empresa
 
@@ -124,6 +125,75 @@ class TesourariaAvancadaTests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         linha.refresh_from_db()
         self.assertEqual(linha.status, "conciliado")
+
+    def test_criar_movimento_pelo_extrato_valida_vazios_sem_erro_500(self):
+        self.client.force_login(self.usuario)
+        linha = importar_extrato_arquivo(
+            conta=self.banco,
+            conteudo=b"data;descricao;valor;identificador\n2026-07-18;Compra no debito VEMKITEM;-103,22;VEMKITEM-1\n",
+            nome_arquivo="vemkitem.csv", usuario=self.usuario,
+        )[0]
+        rota = reverse("caixa:tratar_linha_extrato", args=[linha.pk])
+        resposta = self.client.post(rota, {
+            "criar_movimento": "1",
+            "classificacao": "despesa_operacional",
+            "descricao_movimento": "Compra de utensílios da loja",
+            "categoria": "",
+            "centro_custo": "",
+            "conta_relacionada": "",
+            "conta_pagar": "",
+            "forma_pagamento": "",
+            "pagamento": "",
+            "aportante": "",
+        })
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, "Selecione a categoria financeira deste movimento.")
+        linha.refresh_from_db()
+        self.assertEqual(linha.status, "pendente")
+
+        resposta = self.client.post(rota, {
+            "criar_movimento": "1",
+            "classificacao": "despesa_operacional",
+            "descricao_movimento": "Compra de utensílios da loja",
+            "categoria": str(self.categoria.pk),
+            "centro_custo": "",
+            "conta_relacionada": "",
+            "conta_pagar": "",
+            "forma_pagamento": "",
+            "pagamento": "",
+            "aportante": "",
+        })
+        self.assertEqual(resposta.status_code, 302)
+        linha.refresh_from_db()
+        self.assertEqual(linha.status, "conciliado")
+        self.assertEqual(linha.movimento.tipo, "saida")
+        self.assertEqual(linha.movimento.valor, Decimal("103.22"))
+
+    def test_sugestoes_e_selecao_nao_misturam_entrada_com_saida(self):
+        self.client.force_login(self.usuario)
+        linha = importar_extrato_arquivo(
+            conta=self.banco,
+            conteudo=b"data;descricao;valor;identificador\n2026-07-20;Compra fornecedor;-80,00;SAIDA-80\n",
+            nome_arquivo="saida.csv", usuario=self.usuario,
+        )[0]
+        saida = registrar_movimento_bancario(
+            conta=self.banco, tipo="saida", origem_tipo="manual", origem_id=1,
+            descricao="Compra fornecedor", valor=Decimal("80.00"), data_movimento=linha.data_movimento,
+            chave="sugestao-saida-80", usuario=self.usuario,
+        )
+        entrada = registrar_movimento_bancario(
+            conta=self.banco, tipo="entrada", origem_tipo="manual", origem_id=2,
+            descricao="Compra fornecedor", valor=Decimal("80.00"), data_movimento=linha.data_movimento,
+            chave="sugestao-entrada-80", usuario=self.usuario,
+        )
+        sugestoes = sugerir_correspondencias(linha=linha)
+        self.assertEqual([item["movimento"].pk for item in sugestoes], [saida.pk])
+        resposta = self.client.get(reverse("caixa:tratar_linha_extrato", args=[linha.pk]))
+        self.assertContains(resposta, f'value="{saida.pk}"')
+        self.assertNotContains(resposta, f'value="{entrada.pk}"')
+        self.assertContains(resposta, "Já está no sistema")
+        self.assertContains(resposta, "Ainda não foi lançado")
+        self.assertContains(resposta, "Não é da empresa")
 
     def test_devolucao_de_afac_reduz_principal_sem_receita_operacional(self):
         aporte = registrar_aporte_capital(

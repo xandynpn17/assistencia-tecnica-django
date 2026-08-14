@@ -1,18 +1,21 @@
-from datetime import timedelta
+import logging
 from uuid import uuid4
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, has_sensitive_permission, require_sensitive_permission, role_required
 from configuracoes.services.tenant_guard import obter_empresa_ativa
 
-from ..forms import AporteCapitalForm, ConciliacaoBancariaGrupoForm, ConciliarExtratoForm, ContaBancariaForm, FechamentoBancarioForm, ImportarExtratoForm, MovimentoSocioForm, TransferenciaTesourariaForm
-from ..models import AporteCapital, CategoriaFinanceira, CentroCusto, ConciliacaoBancaria, ContaBancaria, ContaPagar, FechamentoBancario, FormaPagamento, ImportacaoExtratoBancario, LinhaExtratoBancario, MovimentoBancario, MovimentoSocio, Pagamento, TransferenciaTesouraria
+from ..forms import AporteCapitalForm, ConciliacaoBancariaGrupoForm, ConciliarExtratoForm, ContaBancariaForm, CriarMovimentoExtratoForm, FechamentoBancarioForm, ImportarExtratoForm, MovimentoSocioForm, TransferenciaTesourariaForm
+from ..models import AporteCapital, ConciliacaoBancaria, ContaBancaria, FechamentoBancario, ImportacaoExtratoBancario, LinhaExtratoBancario, MovimentoBancario, MovimentoSocio, TransferenciaTesouraria
 from ..services.tesouraria import conciliar_grupo, conciliar_linha, criar_movimento_de_linha_extrato, desfazer_conciliacao, fechar_periodo_bancario, ignorar_linha, importar_extrato_arquivo, movimentos_bancarios_disponiveis, reabrir_periodo_bancario, registrar_aporte_capital, registrar_movimento_socio, registrar_transferencia, sugerir_correspondencias
+
+
+logger = logging.getLogger(__name__)
 
 
 @role_required(CAIXA_FINANCIAL_ROLES)
@@ -165,69 +168,56 @@ def tratar_linha_extrato(request, linha_id):
             valor=valor_esperado, data_movimento=linha.data_movimento,
         )
     )
-    pagamentos_com_movimento = MovimentoBancario.objects.filter(
-        empresa=empresa, origem_tipo="pagamento", status="ativo"
-    ).values_list("origem_id", flat=True)
-    recebimentos_compativeis = Pagamento.objects.filter(
+    possui_correspondencia_exata = correspondencias_exatas.exists()
+    acao_criar = request.method == "POST" and request.POST.get("criar_movimento") == "1"
+    acao_ignorar = request.method == "POST" and request.POST.get("ignorar") == "1"
+    acao_conciliar = request.method == "POST" and not acao_criar and not acao_ignorar
+
+    form_criar = CriarMovimentoExtratoForm(
+        request.POST if acao_criar else None,
+        linha=linha,
         empresa=empresa,
-        valor=valor_esperado,
-        data_movimento__gte=linha.data_movimento - timedelta(days=7),
-        data_movimento__lte=linha.data_movimento + timedelta(days=7),
-    ).exclude(pk__in=pagamentos_com_movimento).select_related(
-        "ordem_servico", "forma_pagamento"
-    ).order_by("-data_movimento", "-id")[:30]
-    if request.method == "POST" and request.POST.get("criar_movimento") == "1":
+        possui_correspondencia_exata=possui_correspondencia_exata,
+    )
+    if acao_criar and form_criar.is_valid():
         try:
-            classificacao = request.POST.get("classificacao")
-            if classificacao == "movimento_nao_empresarial":
-                ignorar_linha(
-                    linha=linha, usuario=request.user,
-                    justificativa=request.POST.get("justificativa_classificacao"),
+            dados = form_criar.cleaned_data
+            with transaction.atomic():
+                movimento = criar_movimento_de_linha_extrato(
+                    linha=linha,
+                    classificacao=dados["classificacao"],
+                    descricao=dados["descricao_movimento"],
+                    categoria=dados.get("categoria"),
+                    centro_custo=dados.get("centro_custo"),
+                    conta_relacionada=dados.get("conta_relacionada"),
+                    conta_pagar=dados.get("conta_pagar"),
+                    forma_pagamento=dados.get("forma_pagamento"),
+                    pagamento=dados.get("pagamento"),
+                    aportante=dados.get("aportante") or "",
+                    usuario=request.user,
                 )
-                messages.success(request, "Movimento não empresarial ignorado com justificativa e auditoria.")
-                return redirect("caixa:tesouraria")
-            if correspondencias_exatas.exists() and request.POST.get("confirmar_novo_movimento") != "1":
-                raise ValidationError(
-                    "Já existe movimento disponível com o mesmo valor e data. "
-                    "Concilie-o ou confirme expressamente que este é outro fato."
-                )
-            movimento = criar_movimento_de_linha_extrato(
-                linha=linha, classificacao=classificacao,
-                descricao=request.POST.get("descricao_movimento") or linha.descricao,
-                categoria=CategoriaFinanceira.objects.filter(pk=request.POST.get("categoria"), empresa=empresa).first(),
-                centro_custo=CentroCusto.objects.filter(pk=request.POST.get("centro_custo"), empresa=empresa).first(),
-                conta_relacionada=ContaBancaria.objects.filter(
-                    pk=request.POST.get("conta_relacionada"), empresa=empresa, ativa=True
-                ).first(),
-                conta_pagar=ContaPagar.objects.filter(
-                    pk=request.POST.get("conta_pagar"), empresa=empresa
-                ).exclude(status__in=["paga", "cancelada"]).first(),
-                forma_pagamento=FormaPagamento.objects.filter(
-                    pk=request.POST.get("forma_pagamento"), empresa=empresa, ativa=True
-                ).first(),
-                pagamento=Pagamento.objects.filter(
-                    pk=request.POST.get("pagamento"), empresa=empresa
-                ).first(),
-                aportante=request.POST.get("aportante") or "",
-                usuario=request.user,
-            )
-            conciliar_linha(linha=linha, movimento=movimento, usuario=request.user)
+                conciliar_linha(linha=linha, movimento=movimento, usuario=request.user)
             messages.success(request, "Movimento criado com confirmação humana e linha conciliada.")
             return redirect("caixa:tesouraria")
         except (ValidationError, IntegrityError) as exc:
-            texto = "; ".join(exc.messages) if isinstance(exc, ValidationError) else (
+            form_criar.add_error(None, exc if isinstance(exc, ValidationError) else (
                 "A conciliação foi alterada por outra operação. Atualize a tela e tente novamente."
+            ))
+        except Exception:
+            logger.exception("Falha inesperada ao criar movimento a partir da linha de extrato %s", linha.pk)
+            form_criar.add_error(
+                None,
+                "Não foi possível criar o movimento. Nenhum dado foi gravado; revise os campos e tente novamente.",
             )
-            messages.error(request, texto)
-    if request.method == "POST" and request.POST.get("ignorar") == "1":
+    if acao_ignorar:
         try:
             ignorar_linha(linha=linha, usuario=request.user, justificativa=request.POST.get("justificativa"))
             messages.success(request, "Linha ignorada com justificativa.")
             return redirect("caixa:tesouraria")
         except ValidationError as exc:
             messages.error(request, str(exc))
-    form = ConciliarExtratoForm(request.POST or None, linha=linha, empresa=empresa)
-    if request.method == "POST" and form.is_valid():
+    form = ConciliarExtratoForm(request.POST if acao_conciliar else None, linha=linha, empresa=empresa)
+    if acao_conciliar and form.is_valid():
         try:
             resultado = conciliar_linha(linha=linha, movimento=form.cleaned_data["movimento"], usuario=request.user, justificativa=form.cleaned_data["justificativa"])
             messages.success(request, f"Linha tratada como {resultado.get_status_display().lower()}.")
@@ -237,16 +227,10 @@ def tratar_linha_extrato(request, linha_id):
                 "A conciliação foi alterada por outra operação. Atualize a tela e tente novamente."
             ))
     return render(request, "caixa/conciliar_extrato.html", {
-        "linha": linha, "form": form, "sugestoes": sugerir_correspondencias(linha=linha, limite=5),
-        "possui_correspondencia_exata": correspondencias_exatas.exists(),
-        "categorias": CategoriaFinanceira.objects.filter(
-            empresa=empresa, tipo="entrada" if linha.valor > 0 else "saida", ativa=True
-        ),
-        "centros_custo": CentroCusto.objects.filter(empresa=empresa, ativo=True),
-        "contas_relacionadas": ContaBancaria.objects.filter(empresa=empresa, ativa=True).exclude(pk=linha.conta_id),
-        "contas_pagar": ContaPagar.objects.filter(empresa=empresa).exclude(status__in=["paga", "cancelada"]),
-        "formas_pagamento_bancarias": FormaPagamento.objects.filter(empresa=empresa, ativa=True).exclude(codigo="dinheiro"),
-        "recebimentos_compativeis": recebimentos_compativeis,
+        "linha": linha, "valor_esperado": valor_esperado, "form": form, "form_criar": form_criar,
+        "sugestoes": sugerir_correspondencias(linha=linha, limite=5),
+        "possui_correspondencia_exata": possui_correspondencia_exata,
+        "painel_inicial": "novo" if form_criar.is_bound else ("ignorar" if acao_ignorar else "existente"),
         "menu_app": "caixa", "menu_sub": "tesouraria",
     })
 

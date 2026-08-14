@@ -487,6 +487,19 @@ def criar_movimento_de_linha_extrato(
         "despesa_operacional", "tarifa", "juros", "pagamento_conta_pagar", "transferencia_entre_contas"
     }:
         raise ValidationError("A classificação escolhida não é compatível com uma saída bancária.")
+    if classificacao in {
+        "despesa_operacional", "receita_operacional", "tarifa", "juros", "rendimento",
+    } and not categoria:
+        raise ValidationError("Selecione a categoria financeira deste movimento.")
+    if categoria and (
+        categoria.empresa_id != linha.empresa_id
+        or categoria.tipo != ("entrada" if credito else "saida")
+    ):
+        raise ValidationError("A categoria selecionada não é compatível com a empresa e o tipo do movimento.")
+    if centro_custo and centro_custo.empresa_id != linha.empresa_id:
+        raise ValidationError("O centro de custo selecionado não pertence à empresa ativa.")
+    if forma_pagamento and forma_pagamento.empresa_id != linha.empresa_id:
+        raise ValidationError("A forma de pagamento selecionada não pertence à empresa ativa.")
     valor = abs(Decimal(linha.valor))
 
     if classificacao == "transferencia_entre_contas":
@@ -817,7 +830,9 @@ def sugerir_correspondencias(*, linha, limite=10):
     from caixa.models import MovimentoBancario
 
     candidatos = movimentos_bancarios_disponiveis(MovimentoBancario.objects.filter(
-        empresa=linha.empresa, conta=linha.conta
+        empresa=linha.empresa,
+        conta=linha.conta,
+        tipo="entrada" if linha.valor > 0 else "saida",
     ))
     descricao_extrato = _texto_normalizado(linha.descricao)
     resultados = []
@@ -827,6 +842,8 @@ def sugerir_correspondencias(*, linha, limite=10):
         diferenca_dias = abs((linha.data_movimento - movimento.data_movimento).days)
         similaridade = SequenceMatcher(None, descricao_extrato, _texto_normalizado(movimento.descricao)).ratio()
         score = min(100, max(0, 100 - min(60, int(diferenca_valor * 10)) - min(25, diferenca_dias * 2) + int(similaridade * 20)))
+        if score < 40:
+            continue
         motivos = []
         if diferenca_valor == 0:
             motivos.append("valor exato")
@@ -878,8 +895,8 @@ def ignorar_linha(*, linha, usuario, justificativa):
     from caixa.models import LinhaExtratoBancario
 
     justificativa = (justificativa or "").strip()
-    if not justificativa:
-        raise ValidationError("Informe a justificativa para ignorar a linha.")
+    if len(justificativa) < 12:
+        raise ValidationError("Informe uma justificativa com pelo menos 12 caracteres.")
     linha = LinhaExtratoBancario.objects.select_for_update().get(pk=linha.pk)
     if linha.status != "pendente":
         raise ValidationError("Esta linha de extrato já foi tratada.")

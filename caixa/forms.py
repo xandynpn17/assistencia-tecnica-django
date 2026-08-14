@@ -1,4 +1,5 @@
 ﻿from decimal import Decimal
+from datetime import timedelta
 from uuid import uuid4
 
 from django import forms
@@ -189,8 +190,16 @@ class FechamentoBancarioForm(forms.Form):
 
 
 class ConciliarExtratoForm(forms.Form):
-    movimento = forms.ModelChoiceField(queryset=MovimentoBancario.objects.none())
-    justificativa = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}))
+    movimento = forms.ModelChoiceField(
+        queryset=MovimentoBancario.objects.none(),
+        label="Movimento já registrado",
+        empty_label="Selecione um movimento compatível",
+    )
+    justificativa = forms.CharField(
+        required=False,
+        label="Observação da conciliação",
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
 
     def __init__(self, *args, **kwargs):
         linha, empresa = kwargs.pop("linha"), kwargs.pop("empresa")
@@ -198,7 +207,11 @@ class ConciliarExtratoForm(forms.Form):
         from caixa.services.tesouraria import movimentos_bancarios_disponiveis
 
         self.fields["movimento"].queryset = movimentos_bancarios_disponiveis(
-            MovimentoBancario.objects.filter(empresa=empresa, conta=linha.conta)
+            MovimentoBancario.objects.filter(
+                empresa=empresa,
+                conta=linha.conta,
+                tipo="entrada" if linha.valor > 0 else "saida",
+            )
         ).order_by("-data_movimento", "-id")
         def rotulo_movimento(movimento):
             valor_assinado = movimento.valor if movimento.tipo == "entrada" else -movimento.valor
@@ -206,6 +219,129 @@ class ConciliarExtratoForm(forms.Form):
             dias = abs((movimento.data_movimento - linha.data_movimento).days)
             return f"{exato}{movimento} · diferença de data: {dias} dia(s)"
         self.fields["movimento"].label_from_instance = rotulo_movimento
+        self.fields["movimento"].widget.attrs.setdefault("class", "form-control")
+        self.fields["justificativa"].widget.attrs.setdefault("class", "form-control")
+
+
+class CriarMovimentoExtratoForm(forms.Form):
+    classificacao = forms.ChoiceField(label="Natureza do movimento")
+    descricao_movimento = forms.CharField(max_length=255, label="Descrição confirmada")
+    categoria = forms.ModelChoiceField(
+        queryset=CategoriaFinanceira.objects.none(), required=False,
+        label="Categoria", empty_label="Selecione a categoria",
+    )
+    centro_custo = forms.ModelChoiceField(
+        queryset=CentroCusto.objects.none(), required=False,
+        label="Centro de custo", empty_label="Sem centro de custo",
+    )
+    conta_relacionada = forms.ModelChoiceField(
+        queryset=ContaBancaria.objects.none(), required=False,
+        label="Outra conta da transferência", empty_label="Selecione a outra conta",
+    )
+    conta_pagar = forms.ModelChoiceField(
+        queryset=ContaPagar.objects.none(), required=False,
+        label="Conta a pagar correspondente", empty_label="Selecione a conta a pagar",
+    )
+    forma_pagamento = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(), required=False,
+        label="Meio usado no pagamento", empty_label="Não informado",
+    )
+    pagamento = forms.ModelChoiceField(
+        queryset=Pagamento.objects.none(), required=False,
+        label="Recebimento já registrado", empty_label="Selecione o recebimento",
+    )
+    aportante = forms.CharField(required=False, max_length=120, label="Sócio/aportante")
+    confirmar_novo_movimento = forms.BooleanField(
+        required=False,
+        label="Confirmo que este é um novo movimento, não uma duplicidade",
+    )
+
+    CLASSIFICACOES_ENTRADA = [
+        ("receita_operacional", "Nova receita operacional"),
+        ("recebimento_registrado", "Recebimento já registrado (ex.: PIX)"),
+        ("liquidacao_cartao", "Liquidação agrupada de cartão já registrada"),
+        ("aporte_socio", "Capital, AFAC ou empréstimo de sócio"),
+        ("transferencia_entre_contas", "Transferência entre contas da empresa"),
+        ("rendimento", "Rendimento bancário"),
+    ]
+    CLASSIFICACOES_SAIDA = [
+        ("despesa_operacional", "Nova despesa operacional"),
+        ("pagamento_conta_pagar", "Pagamento de conta a pagar já cadastrada"),
+        ("transferencia_entre_contas", "Transferência entre contas da empresa"),
+        ("tarifa", "Tarifa bancária"),
+        ("juros", "Juros bancários"),
+    ]
+
+    def __init__(self, *args, **kwargs):
+        linha = kwargs.pop("linha")
+        empresa = kwargs.pop("empresa")
+        possui_correspondencia_exata = kwargs.pop("possui_correspondencia_exata", False)
+        super().__init__(*args, **kwargs)
+        self.linha = linha
+        self.possui_correspondencia_exata = possui_correspondencia_exata
+        entrada = linha.valor > 0
+        self.fields["classificacao"].choices = (
+            self.CLASSIFICACOES_ENTRADA if entrada else self.CLASSIFICACOES_SAIDA
+        )
+        self.fields["descricao_movimento"].initial = linha.descricao
+        self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
+            empresa=empresa, tipo="entrada" if entrada else "saida", ativa=True
+        ).order_by("nome")
+        self.fields["centro_custo"].queryset = CentroCusto.objects.filter(
+            empresa=empresa, ativo=True
+        ).order_by("nome")
+        self.fields["conta_relacionada"].queryset = ContaBancaria.objects.filter(
+            empresa=empresa, ativa=True
+        ).exclude(pk=linha.conta_id).order_by("nome")
+        self.fields["conta_pagar"].queryset = ContaPagar.objects.filter(
+            empresa=empresa
+        ).exclude(status__in=["paga", "cancelada"]).order_by("vencimento", "id")
+        self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(
+            empresa=empresa, ativa=True
+        ).exclude(codigo="dinheiro").order_by("nome")
+
+        pagamentos_com_movimento = MovimentoBancario.objects.filter(
+            empresa=empresa, origem_tipo="pagamento", status="ativo"
+        ).values_list("origem_id", flat=True)
+        if entrada:
+            self.fields["pagamento"].queryset = Pagamento.objects.filter(
+                empresa=empresa,
+                valor=abs(linha.valor),
+                data_movimento__gte=linha.data_movimento - timedelta(days=7),
+                data_movimento__lte=linha.data_movimento + timedelta(days=7),
+            ).exclude(pk__in=pagamentos_com_movimento).select_related(
+                "ordem_servico", "forma_pagamento"
+            ).order_by("-data_movimento", "-id")
+        if not possui_correspondencia_exata:
+            self.fields["confirmar_novo_movimento"].widget = forms.HiddenInput()
+
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            elif not isinstance(field.widget, forms.HiddenInput):
+                field.widget.attrs.setdefault("class", "form-control")
+
+    def clean(self):
+        dados = super().clean()
+        classificacao = dados.get("classificacao")
+        if classificacao in {
+            "despesa_operacional", "receita_operacional", "tarifa", "juros", "rendimento",
+        } and not dados.get("categoria"):
+            self.add_error("categoria", "Selecione a categoria financeira deste movimento.")
+        if classificacao == "transferencia_entre_contas" and not dados.get("conta_relacionada"):
+            self.add_error("conta_relacionada", "Selecione a outra conta da transferência.")
+        if classificacao == "pagamento_conta_pagar" and not dados.get("conta_pagar"):
+            self.add_error("conta_pagar", "Selecione a conta a pagar correspondente.")
+        if classificacao == "recebimento_registrado" and not dados.get("pagamento"):
+            self.add_error("pagamento", "Selecione o recebimento já registrado.")
+        if classificacao == "aporte_socio" and not (dados.get("aportante") or "").strip():
+            self.add_error("aportante", "Informe o sócio ou aportante.")
+        if self.possui_correspondencia_exata and not dados.get("confirmar_novo_movimento"):
+            self.add_error(
+                "confirmar_novo_movimento",
+                "Confirme que não se trata do movimento já existente ou use a opção de conciliação.",
+            )
+        return dados
 
 
 class ConciliacaoBancariaGrupoForm(forms.Form):

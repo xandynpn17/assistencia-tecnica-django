@@ -1,21 +1,99 @@
 {% extends 'core/base.html' %}
 {% block content %}
-<div class="container mt-4"><div class="card"><div class="card-header"><strong>Conciliar linha de extrato</strong></div><div class="card-body">
-  <p><strong>{{ linha.data_movimento|date:'d/m/Y' }} · {{ linha.descricao }}</strong></p><p>Valor do extrato: R$ {{ linha.valor|floatformat:2 }}</p>
-  {% if sugestoes %}<div class="alert alert-light border"><strong>Sugestões automáticas</strong><ul class="mb-0">{% for item in sugestoes %}<li>{{ item.score }}% · {{ item.movimento }}{% if item.motivos %} — {{ item.motivos|join:', ' }}{% endif %}</li>{% endfor %}</ul></div>{% endif %}
-  <form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Conciliar</button><a class="btn btn-outline-secondary" href="{% url 'caixa:tesouraria' %}">Cancelar</a></form>
-  <hr><h6>Criar movimento a partir desta linha</h6><p class="small text-muted">Use apenas quando o fato ainda não existe no sistema. A criação exige classificação humana e concilia automaticamente.</p>
-  <form method="post">{% csrf_token %}<input type="hidden" name="criar_movimento" value="1">
-    <div class="form-group"><label>Natureza do movimento</label><select name="classificacao" class="form-control" required>{% if linha.valor > 0 %}<option value="receita_operacional">Receita operacional ainda não registrada</option><option value="recebimento_registrado">Vincular a recebimento já registrado (ex.: PIX)</option><option value="liquidacao_cartao">Liquidação agrupada de cartão já registrado</option><option value="aporte_socio">Capital, AFAC ou empréstimo de sócio</option><option value="transferencia_entre_contas">Transferência entre contas da empresa</option><option value="rendimento">Rendimento bancário</option><option value="movimento_nao_empresarial">Movimento não empresarial / ignorar</option>{% else %}<option value="despesa_operacional">Nova despesa operacional</option><option value="pagamento_conta_pagar">Pagamento de conta a pagar já cadastrada</option><option value="transferencia_entre_contas">Transferência entre contas da empresa</option><option value="tarifa">Tarifa bancária</option><option value="juros">Juros bancários</option><option value="movimento_nao_empresarial">Movimento não empresarial / ignorar</option>{% endif %}</select><small class="form-text text-muted">Escolha a natureza econômica antes de criar. Transferência, aporte e recebimento já registrado não geram nova receita ou despesa operacional.</small></div>
-    <div class="form-group"><label>Descrição confirmada</label><input name="descricao_movimento" value="{{ linha.descricao }}" class="form-control" required></div>
-    <div class="form-row"><div class="form-group col-md-6"><label>Categoria</label><select name="categoria" class="form-control"><option value="">Sem categoria</option>{% for categoria in categorias %}<option value="{{ categoria.id }}">{{ categoria.nome }}</option>{% endfor %}</select></div><div class="form-group col-md-6"><label>Centro de custo</label><select name="centro_custo" class="form-control"><option value="">Sem centro</option>{% for centro in centros_custo %}<option value="{{ centro.id }}">{{ centro.nome }}</option>{% endfor %}</select></div></div>
-    <div class="form-row"><div class="form-group col-md-6"><label>Outra conta da transferência</label><select name="conta_relacionada" class="form-control"><option value="">Não se aplica</option>{% for conta in contas_relacionadas %}<option value="{{ conta.id }}">{{ conta }}</option>{% endfor %}</select></div><div class="form-group col-md-6"><label>Conta a pagar correspondente</label><select name="conta_pagar" class="form-control"><option value="">Não se aplica</option>{% for conta in contas_pagar %}<option value="{{ conta.id }}">#{{ conta.id }} · {{ conta.descricao }} · saldo R$ {{ conta.valor_aberto|floatformat:2 }}</option>{% endfor %}</select></div></div>
-    {% if linha.valor > 0 %}<div class="form-group"><label>Recebimento já registrado com o mesmo valor</label><select name="pagamento" class="form-control"><option value="">Não se aplica</option>{% for pagamento in recebimentos_compativeis %}<option value="{{ pagamento.id }}">{{ pagamento.data_movimento|date:"d/m/Y" }} · R$ {{ pagamento.valor|floatformat:2 }} · {{ pagamento.metodo_display }} · {{ pagamento.ordem_servico|default:"Avulso" }}</option>{% endfor %}</select><small class="form-text text-muted">Use com “Vincular a recebimento já registrado”. São mostrados recebimentos de mesmo valor, até sete dias antes ou depois, ainda sem movimento bancário.</small></div>{% endif %}
-    <div class="form-row"><div class="form-group col-md-6"><label>Meio usado no pagamento bancário</label><select name="forma_pagamento" class="form-control"><option value="">Não se aplica</option>{% for forma in formas_pagamento_bancarias %}<option value="{{ forma.id }}">{{ forma.nome }}</option>{% endfor %}</select></div><div class="form-group col-md-6"><label>Sócio/aportante</label><input name="aportante" class="form-control" placeholder="Somente para capital/aporte"></div></div>
-    <div class="form-group"><label>Justificativa para ignorar</label><input name="justificativa_classificacao" class="form-control" minlength="12" placeholder="Obrigatória para movimento não empresarial"></div>
-    {% if possui_correspondencia_exata %}<div class="alert alert-warning py-2"><strong>Atenção:</strong> existe um movimento disponível com a mesma data e valor. Prefira conciliá-lo acima. Se for realmente outro fato, marque a confirmação.<div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="confirmar_novo_movimento" value="1" id="confirmarNovo"><label class="form-check-label" for="confirmarNovo">Confirmo que este é um novo movimento, não uma duplicidade</label></div></div>{% endif %}
-    <button class="btn btn-warning">Criar e conciliar</button>
-  </form>
-  <hr><form method="post">{% csrf_token %}<input type="hidden" name="ignorar" value="1"><div class="form-group"><label>Justificativa para ignorar</label><textarea name="justificativa" class="form-control" required></textarea></div><button class="btn btn-outline-danger">Ignorar justificadamente</button></form>
-</div></div></div>
+<style>
+  .conciliacao-resumo { border-left: 4px solid #2f6fed; }
+  .conciliacao-opcao { border: 1px solid #dfe5ec; border-radius: .5rem; background: #fff; }
+  .conciliacao-opcao.ativa { border-color: #2f6fed; box-shadow: 0 0 0 2px rgba(47,111,237,.08); }
+  .conciliacao-opcao .card-header { background: #f8fafc; }
+  .conciliacao-seletor .btn { white-space: normal; min-height: 54px; }
+  .campo-condicional[hidden] { display: none !important; }
+  .errorlist { color: #b42318; list-style: none; padding-left: 0; margin: .25rem 0 0; font-size: .875rem; }
+  .movimento-sugestao { display: flex; gap: .75rem; align-items: center; justify-content: space-between; }
+  @media (max-width: 767px) { .movimento-sugestao { align-items: flex-start; flex-direction: column; } }
+</style>
+
+<div class="container mt-4 mb-5">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <div>
+      <h4 class="mb-1">Conferir linha do extrato</h4>
+      <p class="text-muted mb-0">Escolha uma das três formas de justificar este lançamento.</p>
+    </div>
+    <a class="btn btn-outline-secondary mt-2 mt-md-0" href="{% url 'caixa:tesouraria' %}">Voltar à tesouraria</a>
+  </div>
+
+  <div class="card conciliacao-resumo mb-4"><div class="card-body py-3"><div class="row align-items-center">
+    <div class="col-md-8"><div class="small text-muted">{{ linha.data_movimento|date:'d/m/Y' }} · {{ linha.conta }}</div><strong>{{ linha.descricao }}</strong></div>
+    <div class="col-md-4 text-md-right mt-2 mt-md-0">{% if linha.valor > 0 %}<span class="badge badge-success">Entrada</span>{% else %}<span class="badge badge-danger">Saída</span>{% endif %}<div class="h5 mb-0 mt-1">R$ {{ valor_esperado|floatformat:2 }}</div></div>
+  </div></div></div>
+
+  <div class="row conciliacao-seletor mb-3" role="tablist">
+    <div class="col-md-4 mb-2"><button type="button" class="btn btn-outline-primary btn-block" data-painel="existente"><strong>1. Já está no sistema</strong><br><small>Apenas vincular</small></button></div>
+    <div class="col-md-4 mb-2"><button type="button" class="btn btn-outline-primary btn-block" data-painel="novo"><strong>2. Ainda não foi lançado</strong><br><small>Criar e conciliar</small></button></div>
+    <div class="col-md-4 mb-2"><button type="button" class="btn btn-outline-danger btn-block" data-painel="ignorar"><strong>3. Não é da empresa</strong><br><small>Ignorar com justificativa</small></button></div>
+  </div>
+
+  <section class="card conciliacao-opcao mb-3" data-conteudo-painel="existente">
+    <div class="card-header"><strong>Vincular a um movimento já registrado</strong></div>
+    <div class="card-body">
+      <p class="text-muted">Use quando a venda, pagamento, despesa ou outra operação já existe no sistema. O extrato apenas comprova o movimento.</p>
+      {% if sugestoes %}
+        <div class="alert alert-light border"><strong>Sugestões compatíveis</strong><p class="small text-muted mb-2">Mostramos somente movimentos do mesmo sentido (entrada ou saída) com compatibilidade mínima.</p><ul class="list-unstyled mb-0">
+          {% for item in sugestoes %}<li class="movimento-sugestao py-2{% if not forloop.last %} border-bottom{% endif %}"><span><strong>{{ item.score }}%</strong> · {{ item.movimento }}{% if item.motivos %}<br><small class="text-muted">{{ item.motivos|join:', ' }}</small>{% endif %}</span><button type="button" class="btn btn-sm btn-outline-primary usar-sugestao" data-movimento="{{ item.movimento.id }}">Selecionar</button></li>{% endfor %}
+        </ul></div>
+      {% else %}<div class="alert alert-secondary">Nenhuma sugestão segura foi encontrada. Você ainda pode escolher outro movimento compatível abaixo ou criar um novo.</div>{% endif %}
+      <form method="post" novalidate>{% csrf_token %}{{ form.non_field_errors }}
+        <div class="form-group"><label for="{{ form.movimento.id_for_label }}">{{ form.movimento.label }}</label>{{ form.movimento }}{{ form.movimento.errors }}</div>
+        <div class="form-group"><label for="{{ form.justificativa.id_for_label }}">{{ form.justificativa.label }}</label>{{ form.justificativa }}{{ form.justificativa.errors }}<small class="form-text text-muted">Opcional quando os valores coincidem; útil para deixar uma observação de auditoria.</small></div>
+        <button class="btn btn-primary">Conciliar com o movimento selecionado</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="card conciliacao-opcao mb-3" data-conteudo-painel="novo" hidden>
+    <div class="card-header"><strong>Criar um movimento a partir do extrato</strong></div>
+    <div class="card-body">
+      <p class="text-muted">Use somente quando o fato ainda não existe no sistema. A natureza escolhida define quais informações precisam ser preenchidas.</p>
+      <form method="post" novalidate id="formCriarMovimento">{% csrf_token %}<input type="hidden" name="criar_movimento" value="1">{{ form_criar.non_field_errors }}
+        <div class="form-group"><label for="{{ form_criar.classificacao.id_for_label }}">{{ form_criar.classificacao.label }}</label>{{ form_criar.classificacao }}{{ form_criar.classificacao.errors }}<small class="form-text text-muted">Transferência, aporte e recebimento já registrado não criam uma nova receita ou despesa operacional.</small></div>
+        <div class="form-group"><label for="{{ form_criar.descricao_movimento.id_for_label }}">{{ form_criar.descricao_movimento.label }}</label>{{ form_criar.descricao_movimento }}{{ form_criar.descricao_movimento.errors }}</div>
+        <div class="form-row campo-condicional" data-naturezas="despesa_operacional receita_operacional tarifa juros rendimento">
+          <div class="form-group col-md-6"><label for="{{ form_criar.categoria.id_for_label }}">{{ form_criar.categoria.label }}</label>{{ form_criar.categoria }}{{ form_criar.categoria.errors }}<small class="form-text text-muted">Obrigatória para manter relatórios financeiros corretos.</small></div>
+          <div class="form-group col-md-6"><label for="{{ form_criar.centro_custo.id_for_label }}">{{ form_criar.centro_custo.label }}</label>{{ form_criar.centro_custo }}{{ form_criar.centro_custo.errors }}</div>
+        </div>
+        <div class="form-group campo-condicional" data-naturezas="transferencia_entre_contas"><label for="{{ form_criar.conta_relacionada.id_for_label }}">{{ form_criar.conta_relacionada.label }}</label>{{ form_criar.conta_relacionada }}{{ form_criar.conta_relacionada.errors }}</div>
+        <div class="form-row campo-condicional" data-naturezas="pagamento_conta_pagar"><div class="form-group col-md-7"><label for="{{ form_criar.conta_pagar.id_for_label }}">{{ form_criar.conta_pagar.label }}</label>{{ form_criar.conta_pagar }}{{ form_criar.conta_pagar.errors }}</div><div class="form-group col-md-5"><label for="{{ form_criar.forma_pagamento.id_for_label }}">{{ form_criar.forma_pagamento.label }}</label>{{ form_criar.forma_pagamento }}{{ form_criar.forma_pagamento.errors }}</div></div>
+        <div class="form-group campo-condicional" data-naturezas="recebimento_registrado"><label for="{{ form_criar.pagamento.id_for_label }}">{{ form_criar.pagamento.label }}</label>{{ form_criar.pagamento }}{{ form_criar.pagamento.errors }}<small class="form-text text-muted">A lista considera mesmo valor e até sete dias de diferença, sem outro movimento bancário ativo.</small></div>
+        <div class="form-group campo-condicional" data-naturezas="aporte_socio"><label for="{{ form_criar.aportante.id_for_label }}">{{ form_criar.aportante.label }}</label>{{ form_criar.aportante }}{{ form_criar.aportante.errors }}</div>
+        {% if possui_correspondencia_exata %}<div class="alert alert-warning"><strong>Possível duplicidade:</strong> já existe um movimento disponível com a mesma data e valor. Prefira vinculá-lo na primeira opção.<div class="form-check mt-2">{{ form_criar.confirmar_novo_movimento }}<label class="form-check-label" for="{{ form_criar.confirmar_novo_movimento.id_for_label }}">{{ form_criar.confirmar_novo_movimento.label }}</label>{{ form_criar.confirmar_novo_movimento.errors }}</div></div>{% else %}{{ form_criar.confirmar_novo_movimento }}{% endif %}
+        <button class="btn btn-warning">Criar movimento e conciliar</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="card conciliacao-opcao mb-3" data-conteudo-painel="ignorar" hidden>
+    <div class="card-header"><strong>Ignorar como movimento não empresarial</strong></div>
+    <div class="card-body">
+      <div class="alert alert-danger"><strong>Atenção:</strong> esta opção não cria receita nem despesa. Use somente para uma linha informativa ou um movimento que comprovadamente não pertence à empresa.</div>
+      <form method="post">{% csrf_token %}<input type="hidden" name="ignorar" value="1"><div class="form-group"><label for="justificativaIgnorar">Justificativa</label><textarea id="justificativaIgnorar" name="justificativa" class="form-control" rows="3" minlength="12" required>{{ request.POST.justificativa }}</textarea><small class="form-text text-muted">Informe pelo menos 12 caracteres. A decisão fica registrada para auditoria.</small></div><button class="btn btn-outline-danger">Ignorar justificadamente</button></form>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var inicial = '{{ painel_inicial|escapejs }}';
+  var botoes = document.querySelectorAll('[data-painel]');
+  var paineis = document.querySelectorAll('[data-conteudo-painel]');
+  function abrir(nome) {
+    paineis.forEach(function (painel) { var ativo = painel.getAttribute('data-conteudo-painel') === nome; painel.hidden = !ativo; painel.classList.toggle('ativa', ativo); });
+    botoes.forEach(function (botao) { var ativo = botao.getAttribute('data-painel') === nome; botao.classList.toggle('btn-primary', ativo && nome !== 'ignorar'); botao.classList.toggle('btn-danger', ativo && nome === 'ignorar'); botao.classList.toggle('btn-outline-primary', !ativo && nome !== 'ignorar'); botao.classList.toggle('btn-outline-danger', !ativo && nome === 'ignorar'); });
+  }
+  botoes.forEach(function (botao) { botao.addEventListener('click', function () { abrir(this.getAttribute('data-painel')); }); });
+  abrir(inicial || 'existente');
+  var seletorNatureza = document.getElementById('{{ form_criar.classificacao.id_for_label }}');
+  function atualizarCampos() { if (!seletorNatureza) return; document.querySelectorAll('.campo-condicional').forEach(function (campo) { campo.hidden = campo.getAttribute('data-naturezas').split(' ').indexOf(seletorNatureza.value) === -1; }); }
+  if (seletorNatureza) { seletorNatureza.addEventListener('change', atualizarCampos); atualizarCampos(); }
+  document.querySelectorAll('.usar-sugestao').forEach(function (botao) { botao.addEventListener('click', function () { var seletor = document.getElementById('{{ form.movimento.id_for_label }}'); if (seletor) { seletor.value = this.getAttribute('data-movimento'); seletor.focus(); } abrir('existente'); }); });
+})();
+</script>
 {% endblock %}
