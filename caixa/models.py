@@ -181,6 +181,15 @@ class FormaPagamento(models.Model):
         ("avista", "à vista"),
         ("aprazo", "A prazo"),
     ]
+    MODALIDADE_CHOICES = [
+        ("", "Não se aplica"),
+        ("dinheiro", "Dinheiro"),
+        ("pix", "PIX"),
+        ("debito", "Cartão de débito"),
+        ("credito", "Cartão de crédito"),
+        ("transferencia", "Transferência"),
+        ("outro", "Outro"),
+    ]
 
     empresa = models.ForeignKey(
         "configuracoes.Empresa",
@@ -196,9 +205,18 @@ class FormaPagamento(models.Model):
         blank=True,
         related_name="formas_pagamento",
     )
+    maquininha = models.ForeignKey(
+        "MaquininhaPagamento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="formas_pagamento",
+    )
     nome = models.CharField(max_length=60)
     codigo = models.SlugField(max_length=40)
     tipo = models.CharField(max_length=10, choices=TIPO_CHOICES, default="avista")
+    modalidade = models.CharField(max_length=20, choices=MODALIDADE_CHOICES, blank=True, default="")
+    parcelas_padrao = models.PositiveSmallIntegerField(default=1)
     taxa_percentual = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     dias_recebimento = models.PositiveIntegerField(default=0)
     ativa = models.BooleanField(default=True)
@@ -231,12 +249,175 @@ class FormaPagamento(models.Model):
     def __str__(self):
         return self.nome
 
+    def clean(self):
+        super().clean()
+        if self.maquininha_id and self.empresa_id not in {None, self.maquininha.empresa_id}:
+            raise ValidationError({"maquininha": "A maquininha pertence a outra empresa."})
+        if self.conta_bancaria_liquidacao_id and self.empresa_id not in {
+            None,
+            self.conta_bancaria_liquidacao.empresa_id,
+        }:
+            raise ValidationError({"conta_bancaria_liquidacao": "A conta de liquidação pertence a outra empresa."})
+
+    def obter_condicao_vigente(self, *, data_referencia=None, parcelas=None):
+        """Retorna a condição versionada da maquininha ou a taxa legada da forma."""
+        data_referencia = data_referencia or timezone.localdate()
+        parcelas = max(1, int(parcelas or self.parcelas_padrao or 1))
+        if self.maquininha_id and self.modalidade:
+            condicao = self.maquininha.taxas.filter(
+                modalidade=self.modalidade,
+                ativo=True,
+                parcelas_de__lte=parcelas,
+                parcelas_ate__gte=parcelas,
+                vigencia_inicio__lte=data_referencia,
+            ).filter(Q(vigencia_fim__isnull=True) | Q(vigencia_fim__gte=data_referencia)).order_by(
+                "-vigencia_inicio", "-id"
+            ).first()
+            if condicao:
+                return {
+                    "taxa_percentual": Decimal(condicao.taxa_percentual or 0),
+                    "taxa_fixa": Decimal(condicao.taxa_fixa or 0),
+                    "dias_recebimento": int(condicao.dias_recebimento or 0),
+                    "fonte": "maquininha",
+                    "condicao_id": condicao.pk,
+                }
+        return {
+            "taxa_percentual": Decimal(self.taxa_percentual or 0),
+            "taxa_fixa": Decimal("0.00"),
+            "dias_recebimento": int(self.dias_recebimento or 0),
+            "fonte": "forma_pagamento",
+            "condicao_id": None,
+        }
+
+
+class AdquirentePagamento(models.Model):
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="adquirentes_pagamento"
+    )
+    nome = models.CharField(max_length=100)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+        constraints = [
+            models.UniqueConstraint(fields=["empresa", "nome"], name="cx_adquirente_empresa_nome_unico")
+        ]
+
+    def __str__(self):
+        return self.nome
+
+
+class MaquininhaPagamento(models.Model):
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="maquininhas_pagamento"
+    )
+    adquirente = models.ForeignKey(AdquirentePagamento, on_delete=models.PROTECT, related_name="maquininhas")
+    nome = models.CharField(max_length=100)
+    conta_bancaria_liquidacao = models.ForeignKey(
+        "ContaBancaria", on_delete=models.SET_NULL, null=True, blank=True, related_name="maquininhas_pagamento"
+    )
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["adquirente__nome", "nome"]
+        constraints = [
+            models.UniqueConstraint(fields=["empresa", "nome"], name="cx_maquininha_empresa_nome_unico")
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.adquirente_id and self.adquirente.empresa_id != self.empresa_id:
+            raise ValidationError("A adquirente e a maquininha pertencem a empresas diferentes.")
+        if self.conta_bancaria_liquidacao_id and self.conta_bancaria_liquidacao.empresa_id != self.empresa_id:
+            raise ValidationError("A conta de liquidação pertence a outra empresa.")
+
+    def __str__(self):
+        return f"{self.nome} · {self.adquirente.nome}"
+
+
+class TaxaMaquininha(models.Model):
+    MODALIDADE_CHOICES = [("pix", "PIX"), ("debito", "Débito"), ("credito", "Crédito")]
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="taxas_maquininhas"
+    )
+    maquininha = models.ForeignKey(MaquininhaPagamento, on_delete=models.CASCADE, related_name="taxas")
+    modalidade = models.CharField(max_length=12, choices=MODALIDADE_CHOICES)
+    parcelas_de = models.PositiveSmallIntegerField(default=1)
+    parcelas_ate = models.PositiveSmallIntegerField(default=1)
+    taxa_percentual = models.DecimalField(max_digits=7, decimal_places=3, default=0)
+    taxa_fixa = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    dias_recebimento = models.PositiveSmallIntegerField(default=0)
+    vigencia_inicio = models.DateField(default=timezone.localdate, db_index=True)
+    vigencia_fim = models.DateField(null=True, blank=True, db_index=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["maquininha__nome", "modalidade", "parcelas_de", "-vigencia_inicio"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["maquininha", "modalidade", "parcelas_de", "parcelas_ate", "vigencia_inicio"],
+                name="cx_taxa_maq_faixa_vigencia_unica",
+            ),
+            models.CheckConstraint(condition=Q(parcelas_de__gte=1), name="cx_taxa_maq_parc_de_gte1"),
+            models.CheckConstraint(condition=Q(parcelas_ate__gte=1), name="cx_taxa_maq_parc_ate_gte1"),
+            models.CheckConstraint(condition=Q(taxa_percentual__gte=0), name="cx_taxa_maq_pct_gte0"),
+            models.CheckConstraint(condition=Q(taxa_fixa__gte=0), name="cx_taxa_maq_fixa_gte0"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.maquininha_id and self.maquininha.empresa_id != self.empresa_id:
+            raise ValidationError("A taxa e a maquininha pertencem a empresas diferentes.")
+        if self.parcelas_de > self.parcelas_ate:
+            raise ValidationError({"parcelas_ate": "A parcela final deve ser maior ou igual à inicial."})
+        if self.modalidade in {"pix", "debito"} and (self.parcelas_de != 1 or self.parcelas_ate != 1):
+            raise ValidationError("PIX e débito devem utilizar uma parcela.")
+        if self.vigencia_fim and self.vigencia_fim < self.vigencia_inicio:
+            raise ValidationError({"vigencia_fim": "O fim da vigência não pode ser anterior ao início."})
+        if self.maquininha_id and self.modalidade and self.vigencia_inicio:
+            sobrepostas = TaxaMaquininha.objects.filter(
+                maquininha_id=self.maquininha_id,
+                modalidade=self.modalidade,
+                ativo=True,
+                parcelas_de__lte=self.parcelas_ate,
+                parcelas_ate__gte=self.parcelas_de,
+            ).exclude(pk=self.pk).filter(
+                Q(vigencia_fim__isnull=True) | Q(vigencia_fim__gte=self.vigencia_inicio)
+            )
+            if self.vigencia_fim:
+                sobrepostas = sobrepostas.filter(vigencia_inicio__lte=self.vigencia_fim)
+            if self.ativo and sobrepostas.exists():
+                raise ValidationError(
+                    "Já existe uma taxa ativa com parcelas e vigência sobrepostas para esta maquininha. "
+                    "Encerre a condição anterior antes de cadastrar a nova."
+                )
+
+    def __str__(self):
+        faixa = str(self.parcelas_de) if self.parcelas_de == self.parcelas_ate else f"{self.parcelas_de}-{self.parcelas_ate}"
+        return f"{self.maquininha.nome} · {self.get_modalidade_display()} {faixa}x · {self.taxa_percentual}%"
+
 
 class CategoriaFinanceira(models.Model):
     TIPOS = [
         ("entrada", "Entrada"),
         ("saida", "Saída"),
         ("receber", "Contas a Receber"),
+    ]
+    CLASSIFICACAO_DESPESA_CHOICES = [
+        ("nao_aplicavel", "Não se aplica"),
+        ("fixa", "Fixa"),
+        ("variavel", "Variável"),
+        ("semivariavel", "Semivariável"),
+    ]
+    TRATAMENTO_RATEIO_CHOICES = [
+        ("nao_ratear", "Não incluir no rateio"),
+        ("estrutura_geral", "Estrutura geral da empresa"),
+        ("somente_produtos", "Somente produtos"),
+        ("somente_servicos", "Somente serviços"),
+        ("canal_venda", "Taxa de canal/maquininha"),
+        ("estoque_cmv", "Compra de estoque/CMV"),
+        ("tributo", "Tributo sobre vendas"),
+        ("investimento", "Investimento/imobilizado"),
     ]
     empresa = models.ForeignKey(
         "configuracoes.Empresa",
@@ -247,6 +428,17 @@ class CategoriaFinanceira(models.Model):
     )
     nome = models.CharField(max_length=80)
     tipo = models.CharField(max_length=10, choices=TIPOS, default="receber")
+    classificacao_despesa = models.CharField(
+        max_length=20,
+        choices=CLASSIFICACAO_DESPESA_CHOICES,
+        default="nao_aplicavel",
+    )
+    tratamento_rateio = models.CharField(
+        max_length=24,
+        choices=TRATAMENTO_RATEIO_CHOICES,
+        default="nao_ratear",
+        db_index=True,
+    )
     ativa = models.BooleanField(default=True)
 
     class Meta:
@@ -1564,7 +1756,9 @@ class CustoFixoMensal(models.Model):
             is_servico=False,
             incluir_rateio_custo_fixo=True,
         )
-        for produto in produtos_rateio:
+        if self.empresa_id:
+            produtos_rateio = produtos_rateio.filter(empresa_id=self.empresa_id)
+        for produto in produtos_rateio.iterator(chunk_size=200):
             produto.save(_skip_rateio_refresh=True)
 
     def save(self, *args, **kwargs):

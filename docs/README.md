@@ -26,6 +26,7 @@
 - `notas_versao_1_1_3_saneamento_financeiro.md`: saneamento auditado da base, relatorios sem duplicidade, conciliacao guiada e tratamento correto de PIX e saidas bancarias.
 - `manual_estoque_fiscal_caixa.md`: manual operacional após as melhorias de estoque, XML, tributação, preço, caixa e conciliação.
 - `manual_caixa_fiscal_dfe.md`: configuração segura do certificado A1, consulta oficial de NF-e destinadas por NSU e importação para conferência no estoque.
+- `manual_rateio_precificacao_canais_custos_os.md`: operação do rateio automático por despesas reais, maquininhas, preços por canal e custos previstos/realizados da OS.
 - `checklist_homologacao_configuracoes.md`: roteiro de homologacao manual por perfil da app configuracoes.
 - `checklist_migracao_postgresql.md`: guia de validacao da futura migracao de banco.
 - `backup_restore_local.md`: procedimento operacional de backup/restore local com PostgreSQL e media.

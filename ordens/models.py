@@ -437,15 +437,43 @@ class OrdemServico(models.Model):
 
     def custo_real_financeiro(self):
         return sum(
-            (custo.total for custo in self.custos_internos.filter(estornado_em__isnull=True)),
+            (
+                custo.total
+                for custo in self.custos_internos.filter(
+                    estornado_em__isnull=True,
+                    estado="realizado",
+                )
+            ),
             Decimal("0.00"),
         )
 
     def custo_estimado_pendente_financeiro(self):
         total = Decimal("0.00")
+        realizados_servico = set(
+            self.custos_internos.filter(
+                estornado_em__isnull=True,
+                estado="realizado",
+                servico_peca__isnull=False,
+            ).values_list("servico_peca_id", flat=True)
+        )
+        realizados_orcamento = set(
+            self.custos_internos.filter(
+                estornado_em__isnull=True,
+                estado="realizado",
+                item_orcamento__isnull=False,
+            ).values_list("item_orcamento_id", flat=True)
+        )
+        previstos = self.custos_internos.filter(estornado_em__isnull=True, estado="previsto")
+        for custo in previstos:
+            if custo.servico_peca_id and custo.servico_peca_id in realizados_servico:
+                continue
+            if custo.item_orcamento_id and custo.item_orcamento_id in realizados_orcamento:
+                continue
+            total += custo.total
         custos_reais_por_item = set(
             self.custos_internos.filter(
                 estornado_em__isnull=True,
+                estado__in=["previsto", "realizado"],
                 item_orcamento__isnull=False,
             ).values_list("item_orcamento_id", flat=True)
         )
@@ -554,6 +582,12 @@ class LinhaTrabalho(models.Model):
         # ==============================
 
 class ServicoPeca(models.Model):
+    SITUACAO_CUSTO_CHOICES = [
+        ("nao_informado", "Não informado"),
+        ("previsto_final", "Custo final previsto"),
+        ("fornecido_cliente", "Fornecida pelo cliente"),
+        ("sem_custo", "Sem custo para a empresa"),
+    ]
     ordem = models.ForeignKey("OrdemServico", on_delete=models.CASCADE, related_name="servicos_pecas")
     produto_estoque = models.ForeignKey(
         "estoque.Produto",
@@ -581,6 +615,13 @@ class ServicoPeca(models.Model):
     descricao = models.TextField(blank=True, null=True)
     quantidade = models.PositiveIntegerField(default=1)
     valor_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    custo_previsto_final = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    situacao_custo = models.CharField(
+        max_length=24,
+        choices=SITUACAO_CUSTO_CHOICES,
+        default="nao_informado",
+    )
+    custo_previsto_observacao = models.CharField(max_length=180, blank=True)
     garantia_dias = models.PositiveIntegerField(null=True, blank=True)
     tecnico_responsavel = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -629,6 +670,10 @@ class CustoOrdemServico(models.Model):
         ("despesa_paga", "Despesa paga"),
         ("manual", "Insumo/material já disponível"),
         ("ajuste", "Ajuste autorizado"),
+    ]
+    ESTADO_CHOICES = [
+        ("previsto", "Previsto"),
+        ("realizado", "Realizado"),
     ]
 
     empresa = models.ForeignKey(
@@ -687,6 +732,7 @@ class CustoOrdemServico(models.Model):
     )
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="insumo")
     origem = models.CharField(max_length=24, choices=ORIGEM_CHOICES, default="manual")
+    estado = models.CharField(max_length=12, choices=ESTADO_CHOICES, default="realizado", db_index=True)
     descricao = models.CharField(max_length=180)
     quantidade = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     unidade = models.CharField(max_length=12, default="UN")

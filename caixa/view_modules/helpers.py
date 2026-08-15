@@ -332,27 +332,31 @@ def _garantir_centros_custo_padrao(empresa=None):
 
 def _garantir_categorias_financeiras_padrao(empresa=None):
     defaults = [
-        {"nome": "Cliente OS", "tipo": "receber", "ativa": True},
-        {"nome": "Garantia Fabricante", "tipo": "receber", "ativa": True},
-        {"nome": "Recebimento Avulso", "tipo": "receber", "ativa": True},
-        {"nome": "Marketing e Aquisicao", "tipo": "saida", "ativa": True},
-        {"nome": "Aluguel e Infraestrutura", "tipo": "saida", "ativa": True},
-        {"nome": "Utilidades e Consumo", "tipo": "saida", "ativa": True},
-        {"nome": "Impostos e Taxas", "tipo": "saida", "ativa": True},
-        {"nome": "Tecnologia e Sistemas", "tipo": "saida", "ativa": True},
-        {"nome": "Servicos de Terceiros", "tipo": "saida", "ativa": True},
-        {"nome": "Compras e Insumos", "tipo": "saida", "ativa": True},
-        {"nome": "Fretes e Logistica", "tipo": "saida", "ativa": True},
-        {"nome": "Pessoal e Beneficios", "tipo": "saida", "ativa": True},
-        {"nome": "Comissoes e Premiacao", "tipo": "saida", "ativa": True},
-        {"nome": "Despesas Gerais", "tipo": "saida", "ativa": True},
+        {"nome": "Cliente OS", "tipo": "receber", "classificacao_despesa": "nao_aplicavel", "tratamento_rateio": "nao_ratear", "ativa": True},
+        {"nome": "Garantia Fabricante", "tipo": "receber", "classificacao_despesa": "nao_aplicavel", "tratamento_rateio": "nao_ratear", "ativa": True},
+        {"nome": "Recebimento Avulso", "tipo": "receber", "classificacao_despesa": "nao_aplicavel", "tratamento_rateio": "nao_ratear", "ativa": True},
+        {"nome": "Marketing e Aquisicao", "tipo": "saida", "classificacao_despesa": "variavel", "tratamento_rateio": "estrutura_geral", "ativa": True},
+        {"nome": "Aluguel e Infraestrutura", "tipo": "saida", "classificacao_despesa": "fixa", "tratamento_rateio": "estrutura_geral", "ativa": True},
+        {"nome": "Utilidades e Consumo", "tipo": "saida", "classificacao_despesa": "semivariavel", "tratamento_rateio": "estrutura_geral", "ativa": True},
+        {"nome": "Impostos e Taxas", "tipo": "saida", "classificacao_despesa": "variavel", "tratamento_rateio": "tributo", "ativa": True},
+        {"nome": "Tecnologia e Sistemas", "tipo": "saida", "classificacao_despesa": "fixa", "tratamento_rateio": "estrutura_geral", "ativa": True},
+        {"nome": "Servicos de Terceiros", "tipo": "saida", "classificacao_despesa": "variavel", "tratamento_rateio": "estrutura_geral", "ativa": True},
+        {"nome": "Compras e Insumos", "tipo": "saida", "classificacao_despesa": "variavel", "tratamento_rateio": "estoque_cmv", "ativa": True},
+        {"nome": "Fretes e Logistica", "tipo": "saida", "classificacao_despesa": "variavel", "tratamento_rateio": "somente_produtos", "ativa": True},
+        {"nome": "Pessoal e Beneficios", "tipo": "saida", "classificacao_despesa": "fixa", "tratamento_rateio": "estrutura_geral", "ativa": True},
+        {"nome": "Comissoes e Premiacao", "tipo": "saida", "classificacao_despesa": "variavel", "tratamento_rateio": "canal_venda", "ativa": True},
+        {"nome": "Despesas Gerais", "tipo": "saida", "classificacao_despesa": "semivariavel", "tratamento_rateio": "estrutura_geral", "ativa": True},
     ]
     for row in defaults:
         CategoriaFinanceira.objects.get_or_create(
             empresa=empresa,
             nome=row["nome"],
             tipo=row["tipo"],
-            defaults={"ativa": row["ativa"]},
+            defaults={
+                "ativa": row["ativa"],
+                "classificacao_despesa": row["classificacao_despesa"],
+                "tratamento_rateio": row["tratamento_rateio"],
+            },
         )
 
 

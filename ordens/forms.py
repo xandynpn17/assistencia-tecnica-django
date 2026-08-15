@@ -1,5 +1,6 @@
 ﻿from django import forms
 from django.db.models import Q
+from decimal import Decimal
 from configuracoes.models import ParceiroExpedicao
 from estoque.models import PontoOperacional, Produto
 from configuracoes.models import MarcaGarantia, TipoEquipamentoConfig
@@ -283,6 +284,10 @@ class ServicoPecaForm(forms.ModelForm):
             pontos_reserva = pontos_reserva.filter(empresa__isnull=True)
         self.fields["ponto_operacional_reserva"].queryset = pontos_reserva.order_by("codigo")
         self.fields["ponto_operacional_reserva"].required = False
+        # Estes campos são condicionais: ficam obrigatórios apenas para peça
+        # avulsa com custo previsto, conforme a validação em ``clean``.
+        self.fields["custo_previsto_final"].required = False
+        self.fields["situacao_custo"].required = False
 
     def clean(self):
         cleaned = super().clean()
@@ -320,17 +325,41 @@ class ServicoPecaForm(forms.ModelForm):
             if tipo == "peca":
                 cleaned["ponto_operacional_reserva"] = None
 
+        custo_previsto = Decimal(str(cleaned.get("custo_previsto_final") or 0))
+        situacao_custo = cleaned.get("situacao_custo") or "nao_informado"
+        if tipo != "peca":
+            cleaned["custo_previsto_final"] = Decimal("0.00")
+            cleaned["situacao_custo"] = "nao_informado"
+            cleaned["custo_previsto_observacao"] = ""
+        elif produto:
+            cleaned["custo_previsto_final"] = Decimal("0.00")
+            cleaned["situacao_custo"] = "nao_informado"
+        elif situacao_custo == "previsto_final" and custo_previsto <= 0:
+            self.add_error("custo_previsto_final", "Informe o custo final previsto da peça.")
+        elif situacao_custo in {"fornecido_cliente", "sem_custo"}:
+            cleaned["custo_previsto_final"] = Decimal("0.00")
+        elif (cleaned.get("valor_unitario") or 0) > 0 and situacao_custo == "nao_informado":
+            self.add_error("situacao_custo", "Informe o custo previsto ou justifique por que a peça não tem custo.")
+
         return cleaned
 
     class Meta:
         model = ServicoPeca
-        fields = ["tipo", "nome", "descricao", "quantidade", "valor_unitario", "garantia_dias", "tecnico_responsavel", "ponto_operacional_reserva", "comissionavel", "numeros_taloes"]
+        fields = [
+            "tipo", "nome", "descricao", "quantidade", "valor_unitario",
+            "custo_previsto_final", "situacao_custo", "custo_previsto_observacao",
+            "garantia_dias", "tecnico_responsavel", "ponto_operacional_reserva",
+            "comissionavel", "numeros_taloes",
+        ]
         widgets = {
             "tipo": forms.Select(attrs={"class": "form-control"}),
             "nome": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nome do serviço/peça"}),
             "descricao": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "Descrição opcional"}),
             "quantidade": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
             "valor_unitario": forms.NumberInput(attrs={"class": "form-control", "step": 0.01, "placeholder": "0,00"}),
+            "custo_previsto_final": forms.NumberInput(attrs={"class": "form-control", "step": 0.01, "min": 0, "placeholder": "Custo interno final"}),
+            "situacao_custo": forms.Select(attrs={"class": "form-control"}),
+            "custo_previsto_observacao": forms.TextInput(attrs={"class": "form-control", "placeholder": "Fornecedor/cotação ou justificativa interna"}),
             "garantia_dias": forms.NumberInput(attrs={"class": "form-control", "min": 0, "placeholder": "Dias de garantia"}),
             "tecnico_responsavel": forms.Select(attrs={"class": "form-control"}),
             "ponto_operacional_reserva": forms.Select(attrs={"class": "form-control"}),
@@ -344,6 +373,12 @@ class ServicoPecaForm(forms.ModelForm):
         }
         labels = {
             "valor_unitario": "Valor unitário (R$)",
+            "custo_previsto_final": "Custo interno final da peça (R$)",
+            "situacao_custo": "Situação do custo interno",
+            "custo_previsto_observacao": "Referência interna do custo",
+        }
+        help_texts = {
+            "custo_previsto_final": "Informe o custo total que a empresa espera pagar por este item, independentemente da quantidade comercial exibida ao cliente.",
         }
 
 
@@ -397,6 +432,7 @@ class CustoOrdemServicoForm(forms.ModelForm):
         fields = [
             "tipo",
             "origem",
+            "estado",
             "descricao",
             "quantidade",
             "unidade",
@@ -414,6 +450,7 @@ class CustoOrdemServicoForm(forms.ModelForm):
         widgets = {
             "tipo": forms.Select(attrs={"class": "form-control"}),
             "origem": forms.Select(attrs={"class": "form-control"}),
+            "estado": forms.Select(attrs={"class": "form-control"}),
             "descricao": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: teclas utilizadas"}),
             "quantidade": forms.NumberInput(attrs={"class": "form-control", "step": "0.001", "min": "0.001"}),
             "unidade": forms.TextInput(attrs={"class": "form-control", "placeholder": "UN"}),

@@ -272,6 +272,7 @@ class Produto(models.Model):
     modo_preco = models.CharField(max_length=10, choices=MODO_PRECO_CHOICES, default="avancado")
 
     custo_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    custo_adicional_manual = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     custo_operacional = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     custo_frete = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     custo_impostos = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
@@ -279,6 +280,7 @@ class Produto(models.Model):
     custo_marketplace = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     custo_cac = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     custo_rateio_fixo = models.DecimalField(max_digits=10, decimal_places=2, default=0, editable=False)
+    taxa_rateio_estrutura = models.DecimalField(max_digits=7, decimal_places=3, default=0, editable=False)
     competencia_rateio = models.DateField(null=True, blank=True, editable=False)
     custo_medio = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     margem_lucro = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0)])
@@ -294,6 +296,7 @@ class Produto(models.Model):
     pis = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
     cofins = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
     taxa_cartao = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    usar_taxa_canal_automatica = models.BooleanField(default=True)
     tipo_item = models.CharField(max_length=20, choices=TIPO_ITEM_CHOICES, default="produto")
     regra_tributaria = models.ForeignKey(
         "fiscal.RegraTributaria", on_delete=models.SET_NULL, null=True, blank=True, related_name="produtos"
@@ -321,7 +324,7 @@ class Produto(models.Model):
     controla_lote = models.BooleanField(default=False)
     controla_serie = models.BooleanField(default=False)
     previsao_venda_mensal = models.PositiveIntegerField(default=0)
-    incluir_rateio_custo_fixo = models.BooleanField(default=False)
+    incluir_rateio_custo_fixo = models.BooleanField(default=True)
     ativo = models.BooleanField(default=True)
     data_entrada = models.DateField(default=timezone.now, blank=True)
     is_servico = models.BooleanField(default=False, verbose_name="E um servico")
@@ -417,9 +420,7 @@ class Produto(models.Model):
             + Decimal(str(self.custo_marketplace or 0))
             + Decimal(str(self.custo_cac or 0))
         )
-        if custos_detalhados > 0:
-            return custos_detalhados
-        return max(Decimal("0.00"), Decimal(str(self.custo_operacional or 0)) - Decimal(str(self.custo_rateio_fixo or 0)))
+        return Decimal(str(self.custo_adicional_manual or 0)) + custos_detalhados
 
     def preco_referencia_rateio(self):
         preco = Decimal(str(self.preco_final or 0))
@@ -524,6 +525,11 @@ class Produto(models.Model):
                 "preco_minimo",
                 "preco_final",
                 "preco",
+                "taxa_cartao",
+                "taxa_rateio_estrutura",
+                "custo_operacional",
+                "custo_rateio_fixo",
+                "competencia_rateio",
                 "precificacao_versao",
                 "precificacao_atualizada_em",
                 "precificacao_snapshot",
@@ -547,7 +553,13 @@ class Produto(models.Model):
     @property
     def lucro_estimado(self):
         preco = Decimal(str(self.preco_final or 0))
-        return preco - Decimal(str(self.custo_total or 0)) - self.valor_impostos - self.valor_taxa_cartao
+        return (
+            preco
+            - Decimal(str(self.custo_total or 0))
+            - self.valor_impostos
+            - self.valor_taxa_cartao
+            - self.valor_rateio_estrutura
+        )
 
     @property
     def margem_real_percentual(self):
@@ -566,8 +578,18 @@ class Produto(models.Model):
         return Decimal(str(self.preco_final or 0)) * taxa
 
     @property
+    def valor_rateio_estrutura(self):
+        taxa = Decimal(str(self.taxa_rateio_estrutura or 0)) / Decimal("100")
+        return Decimal(str(self.preco_final or 0)) * taxa
+
+    @property
     def lucro_cartao(self):
-        return self.valor_recebido_cartao - Decimal(str(self.custo_total or 0)) - self.valor_impostos
+        return (
+            self.valor_recebido_cartao
+            - Decimal(str(self.custo_total or 0))
+            - self.valor_impostos
+            - self.valor_rateio_estrutura
+        )
 
     @property
     def venda_abaixo_margem_minima(self):
@@ -581,7 +603,7 @@ class Produto(models.Model):
     def preco_sugerido_sem_margem(self):
         divisor = Decimal("1") - (self._aliquota_percentual() / Decimal("100")) - (
             Decimal(str(self.taxa_cartao or 0)) / Decimal("100")
-        )
+        ) - (Decimal(str(self.taxa_rateio_estrutura or 0)) / Decimal("100"))
         return self.custo_total if divisor <= 0 else Decimal(str(self.custo_total or 0)) / divisor
 
     @property

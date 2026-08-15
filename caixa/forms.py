@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import (
+    AdquirentePagamento,
     Caixa,
     AporteCapital,
     CartaoCorporativo,
@@ -24,12 +25,14 @@ from .models import (
     FormaPagamento,
     LancamentoCaixa,
     LinhaExtratoBancario,
+    MaquininhaPagamento,
     MovimentoBancario,
     MovimentoSocio,
     Pagamento,
     PagamentoContaPagar,
     PagamentoFaturaCartao,
     TransferenciaTesouraria,
+    TaxaMaquininha,
     PremioColaboradorCompetencia,
     RegraComissaoTecnico,
     RegraPremioMeta,
@@ -832,7 +835,7 @@ class BaixaContaReceberForm(forms.Form):
 class CategoriaFinanceiraForm(forms.ModelForm):
     class Meta:
         model = CategoriaFinanceira
-        fields = ["nome", "tipo", "ativa"]
+        fields = ["nome", "tipo", "classificacao_despesa", "tratamento_rateio", "ativa"]
 
     def __init__(self, *args, **kwargs):
         empresa = kwargs.pop("empresa", None)
@@ -960,10 +963,71 @@ class FormaPagamentoForm(forms.ModelForm):
         if empresa and not self.instance.empresa_id:
             self.instance.empresa = empresa
         self.fields["conta_bancaria_liquidacao"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True) if empresa else ContaBancaria.objects.none()
+        self.fields["maquininha"].queryset = MaquininhaPagamento.objects.filter(empresa=empresa, ativo=True) if empresa else MaquininhaPagamento.objects.none()
+
+    def clean(self):
+        dados = super().clean()
+        maquininha = dados.get("maquininha")
+        modalidade = dados.get("modalidade") or ""
+        parcelas = dados.get("parcelas_padrao") or 1
+        if maquininha and modalidade not in {"pix", "debito", "credito"}:
+            self.add_error("modalidade", "Selecione PIX, débito ou crédito para usar uma maquininha.")
+        if modalidade in {"pix", "debito"} and parcelas != 1:
+            self.add_error("parcelas_padrao", "PIX e débito devem usar uma parcela.")
+        return dados
 
     class Meta:
         model = FormaPagamento
-        fields = ["nome", "codigo", "tipo", "taxa_percentual", "dias_recebimento", "conta_bancaria_liquidacao", "ativa"]
+        fields = [
+            "nome", "codigo", "tipo", "modalidade", "parcelas_padrao", "maquininha",
+            "taxa_percentual", "dias_recebimento", "conta_bancaria_liquidacao", "ativa",
+        ]
+
+
+class AdquirentePagamentoForm(forms.ModelForm):
+    class Meta:
+        model = AdquirentePagamento
+        fields = ["nome", "ativo"]
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        if not self.instance.empresa_id:
+            self.instance.empresa = empresa
+
+
+class MaquininhaPagamentoForm(forms.ModelForm):
+    class Meta:
+        model = MaquininhaPagamento
+        fields = ["adquirente", "nome", "conta_bancaria_liquidacao", "ativo"]
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        if not self.instance.empresa_id:
+            self.instance.empresa = empresa
+        self.fields["adquirente"].queryset = AdquirentePagamento.objects.filter(empresa=empresa, ativo=True)
+        self.fields["conta_bancaria_liquidacao"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
+
+
+class TaxaMaquininhaForm(forms.ModelForm):
+    class Meta:
+        model = TaxaMaquininha
+        fields = [
+            "maquininha", "modalidade", "parcelas_de", "parcelas_ate", "taxa_percentual",
+            "taxa_fixa", "dias_recebimento", "vigencia_inicio", "vigencia_fim", "ativo",
+        ]
+        widgets = {
+            "vigencia_inicio": forms.DateInput(attrs={"type": "date"}),
+            "vigencia_fim": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop("empresa")
+        super().__init__(*args, **kwargs)
+        if not self.instance.empresa_id:
+            self.instance.empresa = empresa
+        self.fields["maquininha"].queryset = MaquininhaPagamento.objects.filter(empresa=empresa, ativo=True)
 
 
 class ContaPagarForm(forms.ModelForm):

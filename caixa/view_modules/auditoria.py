@@ -157,6 +157,7 @@ def dre(request):
     def _custos_diretos_os_periodo(inicio, fim):
         custos = CustoOrdemServico.objects.filter(
             estornado_em__isnull=True,
+            estado="realizado",
             data_competencia__gte=inicio,
             data_competencia__lte=fim,
         ).exclude(origem="estoque")

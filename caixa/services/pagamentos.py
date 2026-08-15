@@ -98,8 +98,15 @@ def calcular_snapshot_encargos_pagamento(pagamento):
         for item in composicao:
             forma = formas.get(item.get("forma_id"))
             valor_parcela = Decimal(str(item.get("valor") or 0))
-            taxa_percentual = Decimal(str(getattr(forma, "taxa_percentual", 0) or 0))
-            taxa_valor = (valor_parcela * taxa_percentual / Decimal("100")).quantize(Decimal("0.01"))
+            condicao = forma.obter_condicao_vigente(
+                data_referencia=data_referencia,
+                parcelas=item.get("parcelas") or 1,
+            ) if forma else {"taxa_percentual": 0, "taxa_fixa": 0, "fonte": "sem_forma", "condicao_id": None}
+            taxa_percentual = Decimal(str(condicao["taxa_percentual"] or 0))
+            taxa_fixa = Decimal(str(condicao["taxa_fixa"] or 0))
+            taxa_valor = (
+                (valor_parcela * taxa_percentual / Decimal("100")) + taxa_fixa
+            ).quantize(Decimal("0.01"))
             taxas += taxa_valor
             taxas_detalhe.append(
                 {
@@ -107,20 +114,31 @@ def calcular_snapshot_encargos_pagamento(pagamento):
                     "forma_nome": getattr(forma, "nome", None) or item.get("forma_nome") or "-",
                     "valor": str(valor_parcela),
                     "taxa_percentual": str(taxa_percentual),
+                    "taxa_fixa": str(taxa_fixa),
                     "taxa_valor": str(taxa_valor),
+                    "taxa_fonte": condicao["fonte"],
+                    "condicao_id": condicao["condicao_id"],
                 }
             )
     else:
         forma = pagamento.forma_pagamento
-        taxa_percentual = Decimal(str(getattr(forma, "taxa_percentual", 0) or 0))
-        taxas = (valor * taxa_percentual / Decimal("100")).quantize(Decimal("0.01"))
+        condicao = forma.obter_condicao_vigente(
+            data_referencia=data_referencia,
+            parcelas=getattr(forma, "parcelas_padrao", 1),
+        ) if forma else {"taxa_percentual": 0, "taxa_fixa": 0, "fonte": "sem_forma", "condicao_id": None}
+        taxa_percentual = Decimal(str(condicao["taxa_percentual"] or 0))
+        taxa_fixa = Decimal(str(condicao["taxa_fixa"] or 0))
+        taxas = ((valor * taxa_percentual / Decimal("100")) + taxa_fixa).quantize(Decimal("0.01"))
         taxas_detalhe.append(
             {
                 "forma_id": getattr(forma, "id", None),
                 "forma_nome": getattr(forma, "nome", None) or pagamento.metodo or "-",
                 "valor": str(valor),
                 "taxa_percentual": str(taxa_percentual),
+                "taxa_fixa": str(taxa_fixa),
                 "taxa_valor": str(taxas),
+                "taxa_fonte": condicao["fonte"],
+                "condicao_id": condicao["condicao_id"],
             }
         )
     return {

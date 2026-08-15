@@ -1,0 +1,124 @@
+{% extends 'core/base.html' %}
+{% load widget_tweaks %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
+
+  <div class="d-flex justify-content-between align-items-start flex-wrap mb-3" style="gap:12px;">
+    <div>
+      <h3 class="mb-1">Canais, maquininhas e rateio automático</h3>
+      <p class="text-muted mb-0">As despesas classificadas alimentam o custo estrutural; cada maquininha mantém suas próprias taxas e vigências.</p>
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-lg-4 mb-3">
+      <div class="card h-100 border-0 shadow-sm"><div class="card-body">
+        <div class="text-muted small text-uppercase">Rateio estrutural de produtos</div>
+        <div class="display-4">{{ rateio_produtos.taxa_aplicada|floatformat:2 }}%</div>
+        <div class="small">Base: {{ rateio_produtos.inicio|date:'m/Y' }} a {{ rateio_produtos.fim|date:'m/Y' }}</div>
+        <div class="small text-muted">R$ {{ rateio_produtos.despesas_alocadas|floatformat:2 }} sobre R$ {{ rateio_produtos.receita_escopo|floatformat:2 }} de receita de produtos.</div>
+        {% for alerta in rateio_produtos.alertas %}<div class="alert alert-warning py-1 px-2 mt-2 mb-0 small">{{ alerta }}</div>{% endfor %}
+      </div></div>
+    </div>
+    <div class="col-lg-4 mb-3">
+      <div class="card h-100 border-0 shadow-sm"><div class="card-body">
+        <div class="text-muted small text-uppercase">Taxa média de recebimento</div>
+        <div class="display-4">{{ taxa_referencia.taxa_percentual|floatformat:2 }}%</div>
+        <div class="small text-muted">Fonte: {{ taxa_referencia.fonte }}</div>
+      </div></div>
+    </div>
+    <div class="col-lg-4 mb-3">
+      <div class="card h-100 border-0 shadow-sm"><div class="card-body">
+        <div class="text-muted small text-uppercase">Configuração ativa</div>
+        <div class="display-4">{{ maquininhas|length }}</div>
+        <div class="small text-muted">maquininhas e {{ taxas|length }} condições de taxa cadastradas.</div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-4 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white"><strong>1. Adquirente</strong></div>
+        <div class="card-body">
+          <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="adquirente">
+            {% if adquirente_edicao %}<input type="hidden" name="adquirente_id" value="{{ adquirente_edicao.id }}">{% endif %}
+            {% for field in adquirente_form %}<div class="form-group"><label>{{ field.label }}</label>{{ field|add_class:'form-control' }}{{ field.errors }}</div>{% endfor %}
+            <button class="btn btn-primary" type="submit">Salvar adquirente</button>
+            {% if adquirente_edicao %}<a class="btn btn-outline-secondary" href="{% url 'caixa:canais_venda' %}">Cancelar</a>{% endif %}
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white"><strong>2. Maquininha</strong></div>
+        <div class="card-body">
+          <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="maquininha">
+            {% if maquininha_edicao %}<input type="hidden" name="maquininha_id" value="{{ maquininha_edicao.id }}">{% endif %}
+            {% for field in maquininha_form %}<div class="form-group"><label>{{ field.label }}</label>{{ field|add_class:'form-control' }}{{ field.errors }}</div>{% endfor %}
+            <button class="btn btn-primary" type="submit">Salvar maquininha</button>
+            {% if maquininha_edicao %}<a class="btn btn-outline-secondary" href="{% url 'caixa:canais_venda' %}">Cancelar</a>{% endif %}
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white"><strong>3. Taxa por modalidade</strong></div>
+        <div class="card-body">
+          <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="taxa">
+            {% if taxa_edicao %}<input type="hidden" name="taxa_id" value="{{ taxa_edicao.id }}">{% endif %}
+            {% for field in taxa_form %}<div class="form-group"><label>{{ field.label }}</label>{{ field|add_class:'form-control' }}{% if field.help_text %}<small class="form-text text-muted">{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>{% endfor %}
+            <button class="btn btn-primary" type="submit">Salvar condição</button>
+            {% if taxa_edicao %}<a class="btn btn-outline-secondary" href="{% url 'caixa:canais_venda' %}">Cancelar</a>{% endif %}
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white"><strong>Equipamentos de recebimento</strong></div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr><th>Adquirente</th><th>Maquininha/canal</th><th>Conta de liquidação</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {% for maquininha in maquininhas %}
+          <tr>
+            <td>{{ maquininha.adquirente.nome }} <a class="small" href="?editar_adquirente={{ maquininha.adquirente.id }}">editar</a></td>
+            <td>{{ maquininha.nome }}</td>
+            <td>{{ maquininha.conta_bancaria_liquidacao.nome|default:'-' }}</td>
+            <td>{% if maquininha.ativo %}<span class="badge badge-success">Ativa</span>{% else %}<span class="badge badge-secondary">Inativa</span>{% endif %}</td>
+            <td><a class="btn btn-sm btn-outline-primary" href="?editar_maquininha={{ maquininha.id }}">Editar</a></td>
+          </tr>
+          {% empty %}<tr><td colspan="5" class="text-center text-muted py-3">Nenhuma maquininha cadastrada.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white"><strong>Tabela vigente e histórica</strong></div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr><th>Adquirente</th><th>Maquininha</th><th>Modalidade</th><th>Parcelas</th><th>Taxa</th><th>Fixa</th><th>Prazo</th><th>Vigência</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {% for taxa in taxas %}
+          <tr>
+            <td>{{ taxa.maquininha.adquirente.nome }}</td><td>{{ taxa.maquininha.nome }}</td><td>{{ taxa.get_modalidade_display }}</td>
+            <td>{% if taxa.parcelas_de == taxa.parcelas_ate %}{{ taxa.parcelas_de }}x{% else %}{{ taxa.parcelas_de }}–{{ taxa.parcelas_ate }}x{% endif %}</td>
+            <td>{{ taxa.taxa_percentual|floatformat:3 }}%</td><td>R$ {{ taxa.taxa_fixa|floatformat:2 }}</td><td>D+{{ taxa.dias_recebimento }}</td>
+            <td>{{ taxa.vigencia_inicio|date:'d/m/Y' }} – {{ taxa.vigencia_fim|date:'d/m/Y'|default:'aberta' }}</td>
+            <td>{% if taxa.ativo %}<span class="badge badge-success">Ativa</span>{% else %}<span class="badge badge-secondary">Inativa</span>{% endif %}</td>
+            <td><a class="btn btn-sm btn-outline-primary" href="?editar_taxa={{ taxa.id }}">Editar/encerrar</a></td>
+          </tr>
+          {% empty %}<tr><td colspan="10" class="text-center text-muted py-4">Cadastre uma adquirente, uma maquininha e depois as taxas.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

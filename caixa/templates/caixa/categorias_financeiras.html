@@ -32,10 +32,11 @@
   <div class="row">
     <div class="col-md-4">
       <div class="card shadow-sm border-0">
-        <div class="card-header bg-white"><strong>Nova categoria</strong></div>
+        <div class="card-header bg-white"><strong>{% if categoria_edicao %}Editar categoria{% else %}Nova categoria{% endif %}</strong></div>
         <div class="card-body">
           <form method="post">
             {% csrf_token %}
+            {% if categoria_edicao %}<input type="hidden" name="categoria_id" value="{{ categoria_edicao.id }}">{% endif %}
             {% for field in form %}
             <div class="mb-2">
               <label for="{{ field.id_for_label }}">{{ field.label }}</label>
@@ -44,6 +45,7 @@
             </div>
             {% endfor %}
             <button class="btn btn-primary" type="submit">Salvar</button>
+            {% if categoria_edicao %}<a class="btn btn-outline-secondary" href="{% url 'caixa:categorias_financeiras' %}">Cancelar</a>{% endif %}
           </form>
         </div>
       </div>
@@ -53,12 +55,14 @@
         <div class="card-header bg-white"><strong>Categorias cadastradas</strong></div>
         <div class="card-body table-responsive p-0">
           <table class="table table-sm table-hover mb-0">
-            <thead><tr><th>Nome</th><th>Tipo</th><th>Status</th></tr></thead>
+            <thead><tr><th>Nome</th><th>Tipo</th><th>Comportamento</th><th>Tratamento no preço</th><th>Status</th><th></th></tr></thead>
             <tbody>
             {% for c in categorias %}
             <tr>
               <td>{{ c.nome }}</td>
               <td>{{ c.get_tipo_display }}</td>
+              <td>{{ c.get_classificacao_despesa_display }}</td>
+              <td>{{ c.get_tratamento_rateio_display }}</td>
               <td>
                 {% if c.ativa %}
                 <span class="badge badge-success">Ativa</span>
@@ -66,9 +70,10 @@
                 <span class="badge badge-secondary">Inativa</span>
                 {% endif %}
               </td>
+              <td><a class="btn btn-sm btn-outline-primary" href="?editar={{ c.id }}">Editar</a></td>
             </tr>
             {% empty %}
-            <tr><td colspan="3" class="text-center text-muted">Sem categorias cadastradas.</td></tr>
+            <tr><td colspan="6" class="text-center text-muted">Sem categorias cadastradas.</td></tr>
             {% endfor %}
             </tbody>
           </table>

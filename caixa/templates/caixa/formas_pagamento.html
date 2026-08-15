@@ -69,10 +69,11 @@
   <div class="row">
     <div class="col-md-4">
       <div class="card shadow-sm border-0">
-        <div class="card-header bg-white"><strong>Nova forma</strong></div>
+        <div class="card-header bg-white"><strong>{% if forma_edicao %}Editar forma{% else %}Nova forma{% endif %}</strong></div>
         <div class="card-body">
           <form method="post">
             {% csrf_token %}
+            {% if forma_edicao %}<input type="hidden" name="forma_id" value="{{ forma_edicao.id }}">{% endif %}
             {% for field in form %}
             <div class="mb-2">
               <label for="{{ field.id_for_label }}">{{ field.label }}</label>
@@ -81,6 +82,7 @@
             </div>
             {% endfor %}
             <button type="submit" class="btn btn-primary">Salvar</button>
+            {% if forma_edicao %}<a class="btn btn-outline-secondary" href="{% url 'caixa:formas_pagamento' %}">Cancelar</a>{% endif %}
           </form>
         </div>
       </div>
@@ -94,14 +96,14 @@
         <div class="card-body table-responsive p-0">
           <table class="table table-hover mb-0">
             <thead>
-              <tr><th>Nome</th><th>C&oacute;digo</th><th>Tipo</th><th>Conta de liquidação</th><th class="text-right">Taxa %</th><th class="text-center">Dias</th><th>Status</th></tr>
+              <tr><th>Nome</th><th>Tipo/canal</th><th>Maquininha</th><th>Conta de liquidação</th><th class="text-right">Taxa %</th><th class="text-center">Dias</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
             {% for f in formas %}
               <tr>
                 <td>{{ f.nome }}</td>
-                <td>{{ f.codigo }}</td>
-                <td>{{ f.get_tipo_display }}</td>
+                <td>{{ f.get_tipo_display }} · {{ f.get_modalidade_display }}</td>
+                <td>{{ f.maquininha|default:"-" }}</td>
                 <td>{{ f.conta_bancaria_liquidacao.nome|default:"-" }}</td>
                 <td class="text-right">{{ f.taxa_percentual|floatformat:2 }}</td>
                 <td class="text-center">{{ f.dias_recebimento }}</td>
@@ -112,9 +114,10 @@
                   <span class="badge badge-secondary">Inativa</span>
                   {% endif %}
                 </td>
+                <td>{% if f.empresa_id == empresa_ativa.id %}<a class="btn btn-sm btn-outline-primary" href="?editar={{ f.id }}">Editar</a>{% endif %}</td>
               </tr>
             {% empty %}
-              <tr><td colspan="6" class="text-center">Nenhuma forma cadastrada.</td></tr>
+              <tr><td colspan="8" class="text-center">Nenhuma forma cadastrada.</td></tr>
             {% endfor %}
             </tbody>
           </table>

@@ -490,6 +490,30 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                             item.comissionavel = True
                         item.save()
 
+                        if (
+                            item.tipo == "peca"
+                            and not item.produto_estoque_id
+                            and item.situacao_custo == "previsto_final"
+                            and item.custo_previsto_final > 0
+                        ):
+                            CustoOrdemServico.objects.create(
+                                empresa=self.object.empresa,
+                                ordem=self.object,
+                                servico_peca=item,
+                                tipo="peca",
+                                origem="compra_especifica",
+                                estado="previsto",
+                                descricao=f"Custo final previsto · {item.nome}"[:180],
+                                # O usuário informa o custo final total da peça,
+                                # não um custo unitário a ser multiplicado novamente.
+                                quantidade=1,
+                                unidade="UN",
+                                custo_unitario=item.custo_previsto_final,
+                                data_competencia=timezone.localdate(),
+                                observacao_interna=item.custo_previsto_observacao,
+                                criado_por=request.user,
+                            )
+
                         if item.tipo == "peca" and item.produto_estoque:
                             produto = item.produto_estoque
                             ponto = item.ponto_operacional_reserva or getattr(produto, "ponto_operacional", None)

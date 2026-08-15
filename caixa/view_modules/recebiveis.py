@@ -13,6 +13,7 @@ from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, has_sensitive_permi
 from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, obter_empresa_ativa
 
 from ..forms import (
+    AdquirentePagamentoForm,
     BaixaContaReceberForm,
     CategoriaFinanceiraForm,
     CentroCustoForm,
@@ -20,15 +21,21 @@ from ..forms import (
     ContaReceberForm,
     CustoFixoMensalForm,
     FormaPagamentoForm,
+    MaquininhaPagamentoForm,
+    TaxaMaquininhaForm,
 )
 from ..models import (
+    AdquirentePagamento,
     CategoriaFinanceira,
     CentroCusto,
     ContaReceber,
     CustoFixoMensal,
     FormaPagamento,
+    MaquininhaPagamento,
+    TaxaMaquininha,
 )
 from ..services.contas import processar_baixa_conta_receber
+from ..services.precificacao_automatica import calcular_rateio_estrutura, calcular_taxa_canal_referencia
 from caixa.services.comissoes import processar_evento_retirada_cliente
 from .common import caixa_atual
 from .helpers import (
@@ -655,14 +662,18 @@ def aging_receber(request):
 def categorias_financeiras(request):
     empresa = obter_empresa_ativa(request, strict=False)
     _garantir_categorias_financeiras_padrao(empresa)
+    editar_id = (request.POST.get("categoria_id") or request.GET.get("editar") or "").strip()
+    categoria_edicao = CategoriaFinanceira.objects.filter(
+        pk=int(editar_id), empresa=empresa
+    ).first() if editar_id.isdigit() else None
     if request.method == "POST":
-        form = CategoriaFinanceiraForm(request.POST, empresa=empresa)
+        form = CategoriaFinanceiraForm(request.POST, instance=categoria_edicao, empresa=empresa)
         if form.is_valid():
             form.save()
             messages.success(request, "Categoria financeira salva.")
             return redirect("caixa:categorias_financeiras")
     else:
-        form = CategoriaFinanceiraForm(empresa=empresa)
+        form = CategoriaFinanceiraForm(instance=categoria_edicao, empresa=empresa)
     categorias = CategoriaFinanceira.objects.filter(empresa=empresa)
     total_categorias = categorias.count()
     total_categorias_ativas = categorias.filter(ativa=True).count()
@@ -674,6 +685,7 @@ def categorias_financeiras(request):
             "categorias": categorias,
             "total_categorias": total_categorias,
             "total_categorias_ativas": total_categorias_ativas,
+            "categoria_edicao": categoria_edicao,
             "menu_app": "caixa",
             "menu_sub": "categorias_financeiras",
         },
@@ -684,14 +696,18 @@ def categorias_financeiras(request):
 def formas_pagamento(request):
     empresa = obter_empresa_ativa(request, strict=False)
     _garantir_formas_pagamento_padrao(empresa)
+    editar_id = (request.POST.get("forma_id") or request.GET.get("editar") or "").strip()
+    forma_edicao = FormaPagamento.objects.filter(
+        pk=int(editar_id), empresa=empresa
+    ).first() if editar_id.isdigit() else None
     if request.method == "POST":
-        form = FormaPagamentoForm(request.POST, empresa=empresa)
+        form = FormaPagamentoForm(request.POST, instance=forma_edicao, empresa=empresa)
         if form.is_valid():
             form.save()
             messages.success(request, "Forma de pagamento salva.")
             return redirect("caixa:formas_pagamento")
     else:
-        form = FormaPagamentoForm(empresa=empresa)
+        form = FormaPagamentoForm(instance=forma_edicao, empresa=empresa)
     formas = filtrar_catalogo_empresa(FormaPagamento.objects.all(), empresa)
     total_formas = formas.count()
     total_formas_ativas = formas.filter(ativa=True).count()
@@ -703,10 +719,63 @@ def formas_pagamento(request):
             "formas": formas,
             "total_formas": total_formas,
             "total_formas_ativas": total_formas_ativas,
+            "forma_edicao": forma_edicao,
+            "empresa_ativa": empresa,
             "menu_app": "caixa",
             "menu_sub": "formas_pagamento",
         },
     )
+
+
+@role_required(CAIXA_FINANCIAL_ROLES)
+def canais_venda(request):
+    empresa = obter_empresa_ativa(request, strict=True)
+    adquirente_id = (request.POST.get("adquirente_id") or request.GET.get("editar_adquirente") or "").strip()
+    maquininha_id = (request.POST.get("maquininha_id") or request.GET.get("editar_maquininha") or "").strip()
+    taxa_id = (request.POST.get("taxa_id") or request.GET.get("editar_taxa") or "").strip()
+    adquirente_edicao = AdquirentePagamento.objects.filter(pk=int(adquirente_id), empresa=empresa).first() if adquirente_id.isdigit() else None
+    maquininha_edicao = MaquininhaPagamento.objects.filter(pk=int(maquininha_id), empresa=empresa).first() if maquininha_id.isdigit() else None
+    taxa_edicao = TaxaMaquininha.objects.filter(pk=int(taxa_id), empresa=empresa).first() if taxa_id.isdigit() else None
+    adquirente_form = AdquirentePagamentoForm(instance=adquirente_edicao, empresa=empresa, prefix="adquirente")
+    maquininha_form = MaquininhaPagamentoForm(instance=maquininha_edicao, empresa=empresa, prefix="maquininha")
+    taxa_form = TaxaMaquininhaForm(instance=taxa_edicao, empresa=empresa, prefix="taxa")
+
+    if request.method == "POST":
+        acao = request.POST.get("acao")
+        if acao == "adquirente":
+            adquirente_form = AdquirentePagamentoForm(request.POST, instance=adquirente_edicao, empresa=empresa, prefix="adquirente")
+            form_ativo = adquirente_form
+        elif acao == "maquininha":
+            maquininha_form = MaquininhaPagamentoForm(request.POST, instance=maquininha_edicao, empresa=empresa, prefix="maquininha")
+            form_ativo = maquininha_form
+        else:
+            taxa_form = TaxaMaquininhaForm(request.POST, instance=taxa_edicao, empresa=empresa, prefix="taxa")
+            form_ativo = taxa_form
+        if form_ativo.is_valid():
+            form_ativo.save()
+            messages.success(request, "Configuração do canal de venda salva.")
+            return redirect("caixa:canais_venda")
+        messages.error(request, "Revise os dados do canal de venda.")
+
+    return render(request, "caixa/canais_venda.html", {
+        "adquirente_form": adquirente_form,
+        "maquininha_form": maquininha_form,
+        "taxa_form": taxa_form,
+        "adquirente_edicao": adquirente_edicao,
+        "maquininha_edicao": maquininha_edicao,
+        "taxa_edicao": taxa_edicao,
+        "adquirentes": AdquirentePagamento.objects.filter(empresa=empresa).prefetch_related("maquininhas"),
+        "maquininhas": MaquininhaPagamento.objects.filter(empresa=empresa).select_related(
+            "adquirente", "conta_bancaria_liquidacao"
+        ),
+        "taxas": TaxaMaquininha.objects.filter(empresa=empresa).select_related(
+            "maquininha", "maquininha__adquirente"
+        )[:200],
+        "rateio_produtos": calcular_rateio_estrutura(empresa=empresa, escopo="produtos"),
+        "taxa_referencia": calcular_taxa_canal_referencia(empresa=empresa),
+        "menu_app": "caixa",
+        "menu_sub": "canais_venda",
+    })
 
 
 @role_required(CAIXA_FINANCIAL_ROLES)

@@ -28,6 +28,7 @@ urlpatterns = [
     path("saneamento-lancamentos/", views.saneamento_lancamentos, name="saneamento_lancamentos"),
     path("categorias-financeiras/", views.categorias_financeiras, name="categorias_financeiras"),
     path("formas-pagamento/", views.formas_pagamento, name="formas_pagamento"),
+    path("canais-venda/", views.canais_venda, name="canais_venda"),
     path("centros-custo/", views.centros_custo, name="centros_custo"),
     path("custos-fixos/", views.custos_fixos, name="custos_fixos"),
     path("taloes/", views.taloes, name="taloes"),

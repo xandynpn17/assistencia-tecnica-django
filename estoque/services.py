@@ -43,7 +43,18 @@ def normalizar_saldos_produto(produto):
     if not produto or not produto.ponto_operacional or not produto.quantidade:
         return
     if produto.saldos_por_ponto.exists():
-        if produto.ubicacao_padrao_id and not produto.saldos_por_ubicacao.filter(ubicacao_id=produto.ubicacao_padrao_id).exists():
+        # A localizacao padrao e apenas uma preferencia operacional. Alterar essa
+        # preferencia nao pode copiar novamente todo o saldo do ponto para outra
+        # localizacao. A inicializacao legada so e segura quando o ponto ainda nao
+        # possui qualquer saldo por localizacao.
+        possui_saldo_no_ponto = produto.saldos_por_ubicacao.filter(
+            ponto_operacional_id=produto.ponto_operacional_id
+        ).exists()
+        if (
+            produto.ubicacao_padrao_id
+            and not possui_saldo_no_ponto
+            and not produto.saldos_por_ubicacao.filter(ubicacao_id=produto.ubicacao_padrao_id).exists()
+        ):
             saldo_ponto = (
                 produto.saldos_por_ponto.filter(ponto_operacional_id=produto.ponto_operacional_id)
                 .values_list("quantidade", flat=True)
@@ -840,6 +851,100 @@ def reconciliar_totais_produto(apenas_ativos=True):
         produto.save(update_fields=["quantidade"])
         reconciliados += 1
     return reconciliados
+
+
+def planejar_reconciliacao_ubicacoes_por_camadas(*, apenas_ativos=True, empresa=None, aplicar=False):
+    """Reconstrói localizações somente quando as camadas fecham com o saldo do ponto.
+
+    As camadas de custo são derivadas das entradas/baixas e, por isso, são uma
+    fonte mais segura do que a localização padrão editável. Pontos sem camadas
+    suficientes ficam pendentes para inventário físico e nunca são adivinhados.
+    """
+    saldos = SaldoEstoquePonto.objects.select_related("produto", "ponto_operacional").filter(
+        produto__tipo_item__in=["produto", "peca", "consumivel", "fabricado"]
+    )
+    if apenas_ativos:
+        saldos = saldos.filter(produto__ativo=True)
+    if empresa is not None:
+        saldos = saldos.filter(produto__empresa=empresa)
+
+    candidatos = []
+    pendentes = []
+    for saldo_ponto in saldos:
+        camadas = {
+            row["ubicacao_id"]: int(row["total"] or 0)
+            for row in EstoqueCamadaCusto.objects.filter(
+                produto_id=saldo_ponto.produto_id,
+                ponto_operacional_id=saldo_ponto.ponto_operacional_id,
+            ).values("ubicacao_id").annotate(total=Sum("quantidade_saldo"))
+            if row["ubicacao_id"] is not None and int(row["total"] or 0) != 0
+        }
+        total_camadas = sum(camadas.values())
+        quantidade_ponto = int(saldo_ponto.quantidade or 0)
+        atuais = {
+            row.ubicacao_id: int(row.quantidade or 0)
+            for row in SaldoEstoqueUbicacao.objects.filter(
+                produto_id=saldo_ponto.produto_id,
+                ponto_operacional_id=saldo_ponto.ponto_operacional_id,
+            )
+        }
+        if atuais == camadas:
+            continue
+        if total_camadas != quantidade_ponto:
+            pendentes.append({
+                "produto_id": saldo_ponto.produto_id,
+                "produto": saldo_ponto.produto.nome,
+                "ponto": saldo_ponto.ponto_operacional.codigo,
+                "quantidade_ponto": quantidade_ponto,
+                "quantidade_camadas": total_camadas,
+                "motivo": "camadas_nao_fecham_com_ponto",
+            })
+            continue
+        candidato = {
+            "produto_id": saldo_ponto.produto_id,
+            "produto": saldo_ponto.produto.nome,
+            "ponto_id": saldo_ponto.ponto_operacional_id,
+            "ponto": saldo_ponto.ponto_operacional.codigo,
+            "antes": atuais,
+            "depois": camadas,
+        }
+        candidatos.append(candidato)
+        if not aplicar:
+            continue
+        with transaction.atomic():
+            SaldoEstoquePonto.objects.select_for_update().get(pk=saldo_ponto.pk)
+            existentes = {
+                row.ubicacao_id: row
+                for row in SaldoEstoqueUbicacao.objects.select_for_update().filter(
+                    produto_id=saldo_ponto.produto_id,
+                    ponto_operacional_id=saldo_ponto.ponto_operacional_id,
+                )
+            }
+            for ubicacao_id, row in existentes.items():
+                nova_quantidade = camadas.get(ubicacao_id, 0)
+                if row.quantidade != nova_quantidade:
+                    row.quantidade = nova_quantidade
+                    row.save(update_fields=["quantidade"])
+            for ubicacao_id, quantidade in camadas.items():
+                if ubicacao_id not in existentes:
+                    SaldoEstoqueUbicacao.objects.create(
+                        produto_id=saldo_ponto.produto_id,
+                        ponto_operacional_id=saldo_ponto.ponto_operacional_id,
+                        ubicacao_id=ubicacao_id,
+                        quantidade=quantidade,
+                    )
+
+    if aplicar:
+        ExecucaoAuditoriaEstoque.objects.create(
+            empresa=empresa,
+            status="divergencia" if pendentes else "ok",
+            origem="manual",
+            apenas_ativos=apenas_ativos,
+            total_divergencias=len(pendentes),
+            resumo={"localizacoes_reconciliadas": len(candidatos), "pendentes_inventario": len(pendentes)},
+            detalhes={"reconciliadas": candidatos[:100], "pendentes": pendentes[:100]},
+        )
+    return {"candidatos": candidatos, "pendentes": pendentes, "aplicado": bool(aplicar)}
 
 
 def ajustar_saldo(produto, ponto_operacional, delta, allow_negative=False):

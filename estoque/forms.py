@@ -165,6 +165,7 @@ class ProdutoForm(forms.ModelForm):
             "bonus_venda",
             "servicos_compativeis",
             "custo_unitario",
+            "custo_adicional_manual",
             "custo_operacional",
             "custo_frete",
             "custo_impostos",
@@ -176,6 +177,7 @@ class ProdutoForm(forms.ModelForm):
             "custo_medio",
             "margem_lucro",
             "margem_minima",
+            "usar_taxa_canal_automatica",
             "taxa_cartao",
             "usar_aliquota_manual",
             "aliquota_manual",
@@ -227,6 +229,7 @@ class ProdutoForm(forms.ModelForm):
             "bonus_venda": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": 0}),
             "servicos_compativeis": forms.SelectMultiple(attrs={"class": "form-control", "size": 5}),
             "custo_unitario": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "custo_adicional_manual": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "custo_operacional": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "custo_frete": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "custo_impostos": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
@@ -238,6 +241,7 @@ class ProdutoForm(forms.ModelForm):
             "custo_medio": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "margem_lucro": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "margem_minima": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "usar_taxa_canal_automatica": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "taxa_cartao": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "usar_aliquota_manual": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "aliquota_manual": forms.NumberInput(attrs={"class": "form-control", "step": "0.001"}),
@@ -301,8 +305,9 @@ class ProdutoForm(forms.ModelForm):
         self.fields["modo_preco"].label = "Modo de preco"
         self.fields["modo_preco"].help_text = "Simples aplica margem sobre o custo e acrescenta automaticamente taxas e tributos. Avancado calcula uma margem-alvo sobre a receita."
         self.fields["modelos_compativeis"].help_text = "Ajuda na busca comercial e tecnica. Informe modelos separados por virgula, ex.: A10, A20, SM-G998B."
-        self.fields["custo_unitario"].label = "Último custo de compra (R$)"
-        self.fields["custo_operacional"].label = "Custo adicional manual (R$)"
+        self.fields["custo_unitario"].label = "Custo final da última compra (R$)"
+        self.fields["custo_adicional_manual"].label = "Custo adicional manual (R$)"
+        self.fields["custo_operacional"].label = "Custo operacional calculado (R$)"
         self.fields["custo_frete"].label = "Frete de compra (R$)"
         self.fields["custo_impostos"].label = "Impostos variaveis da venda (R$)"
         self.fields["custo_comissao"].label = "Comissao de venda (R$)"
@@ -315,16 +320,19 @@ class ProdutoForm(forms.ModelForm):
         self.fields["margem_lucro"].label = "Margem lucro (%)"
         self.fields["margem_minima"].label = "Margem minima (%)"
         self.fields["taxa_cartao"].label = "Taxa cartao (%)"
+        self.fields["usar_taxa_canal_automatica"].label = "Usar taxa média automática dos canais"
         self.fields["aliquota_manual"].label = "Aliquota total manual (%)"
         self.fields["icms"].label = "ICMS venda (%)"
         self.fields["ipi"].label = "IPI venda (%)"
         self.fields["pis"].label = "PIS venda (%)"
         self.fields["cofins"].label = "COFINS venda (%)"
         self.fields["pis_cofins"].label = "PIS/COFINS (%)"
-        self.fields["custo_unitario"].help_text = "Custo unitário da compra mais recente; é a base de referência para a precificação. Não confundir com o custo médio ponderado usado nas baixas PMP."
+        self.fields["custo_unitario"].help_text = "Custo final de aquisição da compra mais recente, já com despesas rateadas da nota. É a referência de reposição para o preço."
         self.fields["custo_frete"].help_text = "Parcela do frete de aquisicao que compoe o custo de compra desta unidade."
         self.fields["custo_impostos"].help_text = "Use para custo monetario da venda por unidade. Ex.: imposto nao recuperavel, taxa fiscal ou despesa similar."
-        self.fields["custo_operacional"].help_text = "Reserva para custo adicional em R$ quando voce nao quiser detalhar frete, venda, CAC ou comissao separadamente."
+        self.fields["custo_adicional_manual"].help_text = "Valor extra que não está detalhado nos demais campos; será somado, sem substituir os detalhes."
+        self.fields["custo_operacional"].disabled = True
+        self.fields["custo_operacional"].help_text = "Soma automática do adicional manual com frete, custos de venda, CAC e comissão."
         self.fields["custo_comissao"].help_text = "Valor monetario estimado de comissao por unidade vendida, quando a politica for fixa em R$."
         self.fields["bonus_venda"].help_text = "Valor extra pago ao vendedor por unidade vendida neste item. Ex.: pelicula com bonus fixo de R$ 1,00 por unidade."
         self.fields["custo_marketplace"].help_text = "Custo monetario variavel por unidade vendida em marketplace ou canal parceiro."
@@ -332,11 +340,15 @@ class ProdutoForm(forms.ModelForm):
         self.fields["margem_lucro"].help_text = "Percentual alvo de margem usado para calcular o preco sugerido."
         self.fields["margem_minima"].help_text = "Percentual minimo aceitavel antes de o sistema sinalizar preco apertado."
         self.fields["taxa_cartao"].help_text = "Percentual medio do canal principal de recebimento no cartao."
+        self.fields["usar_taxa_canal_automatica"].help_text = (
+            "Calcula a taxa ponderada pelo histórico de recebimentos ou pelas tabelas ativas das maquininhas."
+        )
         self.fields["aliquota_manual"].help_text = "Use quando preferir informar uma aliquota consolidada em vez de separar os tributos."
         numeric_optional_fields = [
             "percentual_comissao_peca",
             "bonus_venda",
             "custo_unitario",
+            "custo_adicional_manual",
             "custo_operacional",
             "custo_frete",
             "custo_impostos",
@@ -403,7 +415,13 @@ class ProdutoForm(forms.ModelForm):
             self.fields["data_entrada"].initial = timezone.now().date()
             self.fields["quantidade"].initial = 0
             self.fields["previsao_venda_mensal"].initial = 0
-        self.fields["quantidade"].widget.attrs.update({"readonly": "readonly"})
+        # Estoque fisico deve mudar exclusivamente por entradas, inventarios e
+        # movimentacoes. ``readonly`` protege apenas a interface e ainda aceita
+        # um POST adulterado; ``disabled`` faz o Django preservar o valor atual.
+        self.fields["quantidade"].disabled = True
+        self.fields["quantidade"].help_text = (
+            "Saldo calculado pelo historico. Use entradas, inventario ou movimentacoes para alterar."
+        )
 
         categoria_atual = (getattr(self.instance, "categoria", "") or "").strip()
         if categoria_atual and not getattr(self.instance, "categoria_config_id", None):
@@ -502,8 +520,8 @@ class ProdutoForm(forms.ModelForm):
 
         incluir_rateio = bool(cleaned.get("incluir_rateio_custo_fixo"))
         previsao_venda_mensal = int(cleaned.get("previsao_venda_mensal") or 0)
-        if incluir_rateio and tipo_item != "servico" and previsao_venda_mensal <= 0:
-            self.add_error("previsao_venda_mensal", "Informe uma previsao mensal maior que zero para usar o rateio.")
+        # O rateio estrutural novo usa despesas e receitas históricas encerradas;
+        # a previsão permanece apenas como apoio gerencial e não é obrigatória.
 
         if tipo_item == "servico":
             quantidade = int(cleaned.get("quantidade") or 0)
@@ -544,35 +562,51 @@ class ProdutoForm(forms.ModelForm):
                 if existente:
                     cleaned["ubicacao_padrao"] = existente
 
-        if not self.instance.pk:
-            cleaned["quantidade"] = 0
+        cleaned["quantidade"] = int(self.instance.quantidade or 0) if self.instance.pk else 0
 
         custo_unit = Decimal(str(cleaned.get("custo_unitario") or 0))
-        custo_oper = Decimal(str(cleaned.get("custo_operacional") or 0))
+        custo_oper = Decimal(str(cleaned.get("custo_adicional_manual") or 0))
         custo_frete = Decimal(str(cleaned.get("custo_frete") or 0))
         custo_impostos = Decimal(str(cleaned.get("custo_impostos") or 0))
         custo_comissao = Decimal(str(cleaned.get("custo_comissao") or 0))
         custo_marketplace = Decimal(str(cleaned.get("custo_marketplace") or 0))
         custo_cac = Decimal(str(cleaned.get("custo_cac") or 0))
         custo_rateio_fixo = Decimal("0.00")
-        if tipo_item != "servico":
-            produto_rateio = self.instance if getattr(self.instance, "pk", None) else Produto(tipo_item=tipo_item)
-            produto_rateio.pk = getattr(self.instance, "pk", None)
-            produto_rateio.tipo_item = tipo_item
-            produto_rateio.is_servico = tipo_item == "servico"
-            produto_rateio.incluir_rateio_custo_fixo = incluir_rateio
-            produto_rateio.previsao_venda_mensal = previsao_venda_mensal
-            custo_rateio_fixo = Decimal(
-                produto_rateio.calcular_rateio_custo_fixo_unitario(
-                    previsao_override=previsao_venda_mensal,
-                    incluir_override=incluir_rateio,
-                )
+        taxa_estrutura = Decimal("0.00")
+        if tipo_item != "servico" and incluir_rateio and self.empresa:
+            from caixa.services.precificacao_automatica import calcular_rateio_estrutura
+
+            rateio_memoria = calcular_rateio_estrutura(
+                empresa=self.empresa,
+                escopo="produtos",
             )
+            taxa_estrutura = rateio_memoria["taxa_aplicada"]
+            if rateio_memoria["receita_escopo"] <= 0 and previsao_venda_mensal > 0:
+                produto_rateio = self.instance if getattr(self.instance, "pk", None) else Produto(
+                    empresa=self.empresa, tipo_item=tipo_item
+                )
+                produto_rateio.pk = getattr(self.instance, "pk", None)
+                produto_rateio.tipo_item = tipo_item
+                produto_rateio.is_servico = False
+                produto_rateio.incluir_rateio_custo_fixo = True
+                produto_rateio.previsao_venda_mensal = previsao_venda_mensal
+                custo_rateio_fixo = produto_rateio.calcular_rateio_custo_fixo_unitario(
+                    previsao_override=previsao_venda_mensal,
+                    incluir_override=True,
+                )
+        taxa_canal = Decimal(str(cleaned.get("taxa_cartao") or 0))
+        if cleaned.get("usar_taxa_canal_automatica") and self.empresa:
+            from caixa.services.precificacao_automatica import calcular_taxa_canal_referencia
+
+            canal_memoria = calcular_taxa_canal_referencia(empresa=self.empresa)
+            if canal_memoria["fonte"] != "sem_dados":
+                taxa_canal = canal_memoria["taxa_percentual"]
+                cleaned["taxa_cartao"] = taxa_canal
         preco_final = Decimal(str(cleaned.get("preco_final") or 0))
         permitir_abaixo = bool(cleaned.get("permitir_preco_abaixo_minimo"))
 
         custo_oper_detalhado = custo_frete + custo_impostos + custo_comissao + custo_marketplace + custo_cac + custo_rateio_fixo
-        custo_base = custo_unit + (custo_oper_detalhado if custo_oper_detalhado > 0 else custo_oper)
+        custo_base = custo_unit + custo_oper + custo_oper_detalhado
         produto_fiscal = Produto(
             empresa=self.empresa,
             tipo_item=tipo_item or "produto",
@@ -602,8 +636,9 @@ class ProdutoForm(forms.ModelForm):
             custo_base=custo_base,
             margem_alvo=cleaned.get("margem_lucro"),
             margem_minima=cleaned.get("margem_minima"),
-            taxa_cartao=cleaned.get("taxa_cartao"),
+            taxa_cartao=taxa_canal,
             aliquota=aliquota,
+            taxa_estrutura=taxa_estrutura,
             modo_preco=cleaned.get("modo_preco") or "simples",
         )["preco_minimo"]
 

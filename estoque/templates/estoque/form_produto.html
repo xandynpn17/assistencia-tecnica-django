@@ -788,34 +788,32 @@
                         </div>
                         <div class="row mt-2 campo-compacto">
                             <div class="col-md-3">
+                                {{ form.custo_adicional_manual.label_tag }}{{ form.custo_adicional_manual }}
+                                {% if form.custo_adicional_manual.help_text %}<small class="text-muted d-block">{{ form.custo_adicional_manual.help_text }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-3">
                                 {{ form.custo_operacional.label_tag }}{{ form.custo_operacional }}
                                 {% if form.custo_operacional.help_text %}<small class="text-muted d-block">{{ form.custo_operacional.help_text }}</small>{% endif %}
                             </div>
-                            <div class="col-md-3">
-                                {{ form.previsao_venda_mensal.label_tag }}{{ form.previsao_venda_mensal }}
-                                {% if form.previsao_venda_mensal.help_text %}<small class="text-muted d-block">{{ form.previsao_venda_mensal.help_text }}</small>{% endif %}
-                            </div>
                             <div class="col-md-3 form-check mt-4">{{ form.incluir_rateio_custo_fixo }} {{ form.incluir_rateio_custo_fixo.label_tag }}</div>
                             <div class="col-md-3">
-                                <label for="id_custo_rateio_fixo_ui">Rateio fixo unitario</label>
+                                <label for="id_custo_rateio_fixo_ui">Taxa estrutural automática</label>
                                 <input
                                     id="id_custo_rateio_fixo_ui"
                                     class="form-control"
                                     readonly
-                                    data-total-fixos="{{ rateio_context.total_fixos|floatformat:2 }}"
-                                    data-total-base-rateio="{{ rateio_context.total_base_rateio|floatformat:2 }}"
-                                    data-criterio-rateio="{{ rateio_context.criterio_rateio }}"
+                                    value="{{ produto.taxa_rateio_estrutura|default:0|floatformat:3 }}%"
                                 >
                             </div>
                         </div>
                         <div class="row mt-1">
                             <div class="col-md-8">
                                 <small class="text-muted" id="hint-custo-operacional">
-                                    Se informar custos detalhados, o custo adicional manual deixa de ser a referencia principal.
+                                    O adicional manual e os custos detalhados são somados. Não repita o mesmo custo em dois campos.
                                 </small>
                             </div>
                             <div class="col-md-4 text-muted small">
-                                Competencia {{ rateio_context.competencia|date:"m/Y" }} • Criterio {{ rateio_context.criterio_rateio_display }}
+                                Calculada com despesas classificadas e receitas dos últimos meses encerrados.
                             </div>
                         </div>
                     </div>
@@ -880,7 +878,7 @@
                                 <div class="produto-flow-card h-100">
                                     <h4>Modo simples</h4>
                                     <p class="mb-1">Aplica a <strong>margem sobre o custo</strong> e acrescenta automaticamente tributos e taxa de cartao.</p>
-                                    <small class="text-muted">Formula: custo x (1 + margem) / (1 - tributos - cartao).</small>
+                                    <small class="text-muted">Fórmula: custo × (1 + margem) ÷ (1 - tributos - canal - estrutura).</small>
                                 </div>
                             </div>
                             <div class="col-lg-6">
@@ -904,12 +902,15 @@
                                 {{ form.taxa_cartao.label_tag }}{{ form.taxa_cartao }}
                                 {% if form.taxa_cartao.help_text %}<small class="text-muted d-block">{{ form.taxa_cartao.help_text }}</small>{% endif %}
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2 form-check mt-4">
+                                {{ form.usar_taxa_canal_automatica }} {{ form.usar_taxa_canal_automatica.label_tag }}
+                            </div>
+                            <div class="col-md-2">
                                 <label for="id_preco_sugerido_ui">Preco sugerido</label>
                                 <input id="id_preco_sugerido_ui" class="form-control" readonly>
                                 <div class="hint-unidade">R$</div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="id_preco_minimo_ui">Preco minimo</label>
                                 <input id="id_preco_minimo_ui" class="form-control" readonly>
                                 <div class="hint-unidade">R$</div>
@@ -1035,7 +1036,7 @@
                                 <select id="id_forma_pagamento_simulacao" class="form-control">
                                     <option value="">Taxa média do produto (fallback)</option>
                                     {% for forma in formas_pagamento_precificacao %}
-                                    <option value="{{ forma.id }}">{{ forma.nome }} — {{ forma.taxa_percentual|floatformat:2 }}%</option>
+                                    <option value="{{ forma.id }}">{{ forma.nome }} — {{ forma.taxa_vigente_ui|floatformat:3 }}%</option>
                                     {% endfor %}
                                 </select>
                                 <small class="form-text text-muted">A taxa cadastrada no Caixa substitui a taxa média apenas nesta simulação.</small>
@@ -1060,6 +1061,18 @@
                                 Compare canal e desconto sem alterar o preco salvo.
                             </div>
                         </div>
+                        {% if precos_por_canal %}
+                        <div class="table-responsive mt-3">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead><tr><th>Adquirente</th><th>Maquininha</th><th>Modalidade</th><th>Parcelas</th><th>Taxa</th><th>Mínimo</th><th>Recomendado</th></tr></thead>
+                                <tbody>{% for canal in precos_por_canal %}<tr>
+                                    <td>{{ canal.adquirente }}</td><td>{{ canal.maquininha }}</td><td>{{ canal.modalidade }}</td>
+                                    <td>{% if canal.parcelas_de == canal.parcelas_ate %}{{ canal.parcelas_de }}x{% else %}{{ canal.parcelas_de }}–{{ canal.parcelas_ate }}x{% endif %}</td>
+                                    <td>{{ canal.taxa_percentual|floatformat:3 }}%</td><td>R$ {{ canal.preco_minimo|floatformat:2 }}</td><td>R$ {{ canal.preco_recomendado|floatformat:2 }}</td>
+                                </tr>{% endfor %}</tbody>
+                            </table>
+                        </div>
+                        {% endif %}
                         <div class="simulador-grid mt-2">
                             <div class="kpi-box">
                                 <div class="kpi-label">Dinheiro</div>
@@ -1357,6 +1370,14 @@ function atualizarVisibilidadeTipoItem() {
     atualizarResumoOperacional();
 }
 
+function atualizarTaxaCanalAutomatica() {
+    const automatico = document.getElementById("id_usar_taxa_canal_automatica");
+    const taxa = document.getElementById("id_taxa_cartao");
+    if (!automatico || !taxa) return;
+    taxa.readOnly = automatico.checked;
+    taxa.classList.toggle("calc-readonly", automatico.checked);
+}
+
 function atualizarUbicacoesPorPonto() {
     const campoPonto = document.getElementById("id_ponto_operacional");
     const campoUbicacao = document.getElementById("id_ubicacao_padrao");
@@ -1520,19 +1541,19 @@ async function executarPrecificacaoServidor() {
         const precoMinimo = Number(resultado.preco_minimo || 0);
         const precoUsado = Number(resultado.preco_usado || 0);
         ultimaAliquotaServidor = Number(payload.aliquota || 0);
+        const campoTaxaCanal = document.getElementById("id_taxa_cartao");
+        if (campoTaxaCanal && document.getElementById("id_usar_taxa_canal_automatica")?.checked) {
+            campoTaxaCanal.value = Number(payload.taxa_referencia || 0).toFixed(3);
+        }
 
         const campoCustoOper = document.getElementById("id_custo_operacional");
         const campoRateio = document.getElementById("id_custo_rateio_fixo_ui");
         const custosDetalhados = ["id_custo_frete", "id_custo_impostos", "id_custo_comissao", "id_custo_marketplace", "id_custo_cac"].some((id) => numero(id) > 0);
-        if (campoCustoOper && (custosDetalhados || Number(payload.custo_rateio_fixo || 0) > 0)) {
+        if (campoCustoOper) {
             campoCustoOper.value = custoOperacional.toFixed(2);
-            campoCustoOper.readOnly = true;
             campoCustoOper.classList.add("calc-readonly");
-        } else if (campoCustoOper) {
-            campoCustoOper.readOnly = false;
-            campoCustoOper.classList.remove("calc-readonly");
         }
-        if (campoRateio) campoRateio.value = Number(payload.custo_rateio_fixo || 0).toFixed(2);
+        if (campoRateio) campoRateio.value = Number(payload.taxa_rateio_estrutura || 0).toFixed(3) + "%";
         if (document.getElementById("id_preco_sugerido_ui")) document.getElementById("id_preco_sugerido_ui").value = precoSugerido.toFixed(2);
         if (document.getElementById("id_preco_minimo_ui")) document.getElementById("id_preco_minimo_ui").value = precoMinimo.toFixed(2);
 
@@ -1763,7 +1784,7 @@ function aplicarPresetPrecificacao(preset) {
 document.addEventListener("DOMContentLoaded", () => {
     const ids = [
         "id_custo_unitario",
-        "id_custo_operacional",
+        "id_custo_adicional_manual",
         "id_custo_frete",
         "id_custo_impostos",
         "id_custo_comissao",
@@ -1773,6 +1794,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "id_margem_lucro",
         "id_margem_minima",
         "id_taxa_cartao",
+        "id_usar_taxa_canal_automatica",
         "id_aliquota_manual",
         "id_icms",
         "id_ipi",
@@ -1851,6 +1873,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("id_estoque_inicial")?.addEventListener("input", atualizarResumoEntradaInicial);
     document.getElementById("id_custo_entrada_inicial")?.addEventListener("input", atualizarResumoEntradaInicial);
     document.getElementById("id_incluir_rateio_custo_fixo")?.addEventListener("change", recalcularPreco);
+    document.getElementById("id_usar_taxa_canal_automatica")?.addEventListener("change", atualizarTaxaCanalAutomatica);
     document.getElementById("id_usar_aliquota_manual")?.addEventListener("change", () => {
         atualizarCamposTributarios();
         recalcularPreco();
@@ -1902,6 +1925,7 @@ document.addEventListener("DOMContentLoaded", () => {
     definirModoAvancado({% if modo_edicao %}true{% else %}false{% endif %});
     selecionarAbaProduto("essencial");
     atualizarVisibilidadeTipoItem();
+    atualizarTaxaCanalAutomatica();
     atualizarUbicacoesPorPonto();
     atualizarCamposTributarios();
     atualizarCategoriaManual();

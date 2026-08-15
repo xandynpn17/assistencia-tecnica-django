@@ -131,7 +131,7 @@
                                 <td>{{ custo.get_tipo_display }}<br><small>{{ custo.get_origem_display }}</small></td>
                                 <td>{% if custo.item_orcamento %}Orçamento: {{ custo.item_orcamento.nome }}{% elif custo.servico_peca %}OS: {{ custo.servico_peca.nome }}{% elif custo.produto_estoque %}Estoque: {{ custo.produto_estoque.nome }}{% else %}-{% endif %}{% if custo.lancamento_caixa %}<br><small>Saída #{{ custo.lancamento_caixa_id }}</small>{% endif %}</td>
                                 <td class="text-right">R$ {{ custo.total|floatformat:2 }}</td>
-                                <td>{% if custo.estornado %}<span class="badge badge-secondary">Estornado</span>{% else %}<span class="badge badge-success">Ativo</span>{% endif %}</td>
+                                <td>{% if custo.estornado %}<span class="badge badge-secondary">Estornado</span>{% elif custo.estado == 'previsto' %}<span class="badge badge-warning">Previsto</span>{% else %}<span class="badge badge-success">Realizado</span>{% endif %}</td>
                                 <td class="text-right">
                                     {% if not custo.estornado %}
                                     <form method="post" class="d-flex" style="gap:4px;" onsubmit="return window.AppMessages.confirmSync('Estornar este custo interno?');">
@@ -356,9 +356,10 @@
                 <input type="hidden" name="form_type" value="custo_os">
                 <div class="modal-body">
                     <div class="form-row">
-                        <div class="form-group col-md-4"><label>Tipo</label>{{ custo_os_form.tipo }}</div>
-                        <div class="form-group col-md-4"><label>Origem</label>{{ custo_os_form.origem }}</div>
-                        <div class="form-group col-md-4"><label>Competência</label>{{ custo_os_form.data_competencia }}</div>
+                        <div class="form-group col-md-3"><label>Tipo</label>{{ custo_os_form.tipo }}</div>
+                        <div class="form-group col-md-3"><label>Origem</label>{{ custo_os_form.origem }}</div>
+                        <div class="form-group col-md-3"><label>Estado</label>{{ custo_os_form.estado }}</div>
+                        <div class="form-group col-md-3"><label>Competência</label>{{ custo_os_form.data_competencia }}</div>
                     </div>
                     <div class="form-group"><label>Descrição</label>{{ custo_os_form.descricao }}</div>
                     <div class="form-row">
@@ -481,6 +482,27 @@
                         <div class="form-group col-md-4 mb-2">
                             <label>Garantia (dias)</label>
                             <input type="number" name="garantia_dias" id="sp_garantia" class="form-control" min="0" value="">
+                        </div>
+                        <div class="form-group col-md-4 mb-2">
+                            <label>Situação do custo interno</label>
+                            <select name="situacao_custo" id="sp_situacao_custo" class="form-control">
+                                <option value="nao_informado">Não informado</option>
+                                <option value="previsto_final">Custo final previsto</option>
+                                <option value="fornecido_cliente">Fornecida pelo cliente</option>
+                                <option value="sem_custo">Sem custo para a empresa</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4 mb-2">
+                            <label>Custo final previsto</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend"><span class="input-group-text">R$</span></div>
+                                <input type="number" step="0.01" min="0" name="custo_previsto_final" id="sp_custo_previsto" class="form-control" value="0">
+                            </div>
+                            <small class="text-muted">Valor interno, já com frete e despesas de aquisição. Não aparece ao cliente.</small>
+                        </div>
+                        <div class="form-group col-md-4 mb-2">
+                            <label>Referência interna do custo</label>
+                            <input type="text" name="custo_previsto_observacao" id="sp_custo_observacao" class="form-control" maxlength="180" placeholder="Fornecedor ou cotação">
                         </div>
                         <div class="form-group col-md-4 mb-2">
                             <label>Ponto da reserva</label>

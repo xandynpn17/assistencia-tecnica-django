@@ -251,6 +251,20 @@ def _contexto_form_produto(*, form, empresa, menu_sub, modo_edicao, produto=None
     formas_pagamento = filtrar_catalogo_empresa(
         FormaPagamento.objects.filter(ativa=True), empresa
     ).order_by("nome")
+    for forma in formas_pagamento:
+        forma.taxa_vigente_ui = forma.obter_condicao_vigente()["taxa_percentual"]
+    precos_por_canal = []
+    if referencia_precificacao and empresa:
+        from caixa.services.precificacao_automatica import listar_precos_por_canal
+
+        precos_por_canal = listar_precos_por_canal(
+            empresa=empresa,
+            custo_base=referencia_precificacao.custo_total,
+            aliquota=referencia_precificacao._aliquota_percentual(),
+            margem_minima=referencia_precificacao.margem_minima,
+            margem_alvo=referencia_precificacao.margem_lucro,
+            taxa_estrutura=referencia_precificacao.taxa_rateio_estrutura,
+        )
     return {
         "form": form,
         "produto": produto,
@@ -276,6 +290,7 @@ def _contexto_form_produto(*, form, empresa, menu_sub, modo_edicao, produto=None
         },
         "categorias_catalogo": _categorias_catalogo_payload(empresa),
         "formas_pagamento_precificacao": formas_pagamento,
+        "precos_por_canal": precos_por_canal,
     }
 
 
@@ -317,7 +332,7 @@ def api_simular_precificacao(request):
     else:
         produto_fiscal.regra_tributaria = None
     custo_unitario = _decimal_post(request, "custo_unitario")
-    custo_operacional_manual = _decimal_post(request, "custo_operacional")
+    custo_operacional_manual = _decimal_post(request, "custo_adicional_manual")
     custos_detalhados = sum(
         (_decimal_post(request, campo) for campo in (
             "custo_frete",
@@ -328,7 +343,7 @@ def api_simular_precificacao(request):
         )),
         Decimal("0"),
     )
-    custo_operacional_sem_rateio = custos_detalhados if custos_detalhados > 0 else custo_operacional_manual
+    custo_operacional_sem_rateio = custo_operacional_manual + custos_detalhados
     margem_alvo = _decimal_post(request, "margem_lucro")
     margem_minima = _decimal_post(request, "margem_minima")
     modo_preco = (request.POST.get("modo_preco") or "simples").strip()
@@ -366,11 +381,28 @@ def api_simular_precificacao(request):
     forma_id = (request.POST.get("forma_pagamento_id") or "").strip()
     forma_referencia = formas.filter(id=int(forma_id)).first() if forma_id.isdigit() else None
     taxa_fallback = _decimal_post(request, "taxa_cartao")
-    taxa_referencia = decimal_seguro(getattr(forma_referencia, "taxa_percentual", taxa_fallback))
+    usar_taxa_automatica = request.POST.get("usar_taxa_canal_automatica") in {"1", "true", "on", "True"}
+    if forma_referencia:
+        taxa_referencia = decimal_seguro(
+            forma_referencia.obter_condicao_vigente()["taxa_percentual"]
+        )
+    elif usar_taxa_automatica:
+        from caixa.services.precificacao_automatica import calcular_taxa_canal_referencia
+
+        canal_memoria = calcular_taxa_canal_referencia(empresa=empresa)
+        taxa_referencia = (
+            canal_memoria["taxa_percentual"]
+            if canal_memoria["fonte"] != "sem_dados"
+            else taxa_fallback
+        )
+    else:
+        taxa_referencia = taxa_fallback
 
     def taxa_canal(codigos, fallback=Decimal("0")):
         forma = formas.filter(codigo__in=codigos).order_by("codigo").first()
-        return decimal_seguro(getattr(forma, "taxa_percentual", fallback))
+        if not forma:
+            return decimal_seguro(fallback)
+        return decimal_seguro(forma.obter_condicao_vigente()["taxa_percentual"])
 
     canais = {
         "dinheiro": taxa_canal(["dinheiro"], _decimal_post(request, "taxa_dinheiro")),
@@ -380,38 +412,37 @@ def api_simular_precificacao(request):
     }
 
     custo_sem_rateio = custo_unitario + custo_operacional_sem_rateio
-    preliminar = calcular_precificacao(
-        custo_base=custo_sem_rateio,
-        margem_alvo=margem_alvo,
-        margem_minima=margem_minima,
-        taxa_cartao=taxa_referencia,
-        aliquota=aliquota,
-        modo_preco=modo_preco,
-    )
     rateio = Decimal("0.00")
-    if tipo_item != "servico" and incluir_rateio and previsao > 0:
-        simulacao_produto = Produto(
-            empresa=empresa,
-            tipo_item=tipo_item,
-            is_servico=False,
-            incluir_rateio_custo_fixo=True,
-            previsao_venda_mensal=previsao,
-            custo_unitario=custo_unitario,
-            custo_operacional=custo_operacional_sem_rateio,
-            custo_frete=_decimal_post(request, "custo_frete"),
-            custo_impostos=_decimal_post(request, "custo_impostos"),
-            custo_comissao=_decimal_post(request, "custo_comissao"),
-            custo_marketplace=_decimal_post(request, "custo_marketplace"),
-            custo_cac=_decimal_post(request, "custo_cac"),
-            preco_final=preco_final,
-            preco_sugerido=preliminar["preco_sugerido"],
-        )
-        if produto:
-            simulacao_produto.pk = produto.pk
-        rateio = simulacao_produto.calcular_rateio_custo_fixo_unitario(
-            previsao_override=previsao,
-            incluir_override=True,
-        ).quantize(Decimal("0.01"))
+    taxa_estrutura = Decimal("0.00")
+    rateio_memoria = None
+    if tipo_item != "servico" and incluir_rateio:
+        from caixa.services.precificacao_automatica import calcular_rateio_estrutura
+
+        rateio_memoria = calcular_rateio_estrutura(empresa=empresa, escopo="produtos")
+        taxa_estrutura = rateio_memoria["taxa_aplicada"]
+        if rateio_memoria["receita_escopo"] <= 0 and previsao > 0:
+            simulacao_produto = Produto(
+                empresa=empresa,
+                tipo_item=tipo_item,
+                is_servico=False,
+                incluir_rateio_custo_fixo=True,
+                previsao_venda_mensal=previsao,
+                custo_unitario=custo_unitario,
+                custo_adicional_manual=custo_operacional_manual,
+                custo_operacional=custo_operacional_sem_rateio,
+                custo_frete=_decimal_post(request, "custo_frete"),
+                custo_impostos=_decimal_post(request, "custo_impostos"),
+                custo_comissao=_decimal_post(request, "custo_comissao"),
+                custo_marketplace=_decimal_post(request, "custo_marketplace"),
+                custo_cac=_decimal_post(request, "custo_cac"),
+                preco_final=preco_final,
+            )
+            if produto:
+                simulacao_produto.pk = produto.pk
+            rateio = simulacao_produto.calcular_rateio_custo_fixo_unitario(
+                previsao_override=previsao,
+                incluir_override=True,
+            ).quantize(Decimal("0.01"))
 
     custo_operacional = custo_operacional_sem_rateio + rateio
     resultado = simular_precificacao(
@@ -420,6 +451,7 @@ def api_simular_precificacao(request):
         margem_minima=margem_minima,
         taxa_referencia=taxa_referencia,
         aliquota=aliquota,
+        taxa_estrutura=taxa_estrutura,
         modo_preco=modo_preco,
         preco_final=preco_final,
         desconto=_decimal_post(request, "desconto"),
@@ -448,6 +480,8 @@ def api_simular_precificacao(request):
         } if tributacao else {"origem": "manual", "alertas": []},
         "custo_operacional": str(custo_operacional.quantize(Decimal("0.01"))),
         "custo_rateio_fixo": str(rateio),
+        "taxa_rateio_estrutura": str(taxa_estrutura),
+        "rateio_memoria": serializar(rateio_memoria or {}),
         "resultado": serializar(resultado),
     })
 
@@ -783,7 +817,7 @@ def criar_produto(request):
             "ipi": ultimo.ipi,
             "pis_cofins": ultimo.pis_cofins,
             "margem_lucro": ultimo.margem_lucro,
-            "custo_operacional": ultimo.custo_operacional,
+            "custo_adicional_manual": ultimo.custo_adicional_manual,
             "custo_cac": getattr(ultimo, "custo_cac", 0),
             "previsao_venda_mensal": getattr(ultimo, "previsao_venda_mensal", 0),
             "incluir_rateio_custo_fixo": getattr(ultimo, "incluir_rateio_custo_fixo", False),

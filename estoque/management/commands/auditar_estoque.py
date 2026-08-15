@@ -1,6 +1,10 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from estoque.services import diagnosticar_inconsistencias_estoque, reconciliar_totais_produto
+from estoque.services import (
+    diagnosticar_inconsistencias_estoque,
+    planejar_reconciliacao_ubicacoes_por_camadas,
+    reconciliar_totais_produto,
+)
 
 
 class Command(BaseCommand):
@@ -22,12 +26,31 @@ class Command(BaseCommand):
             action="store_true",
             help="Retorna erro se restarem divergências após a auditoria.",
         )
+        parser.add_argument(
+            "--planejar-localizacoes",
+            action="store_true",
+            help="Simula reconstrução das localizações a partir das camadas de custo.",
+        )
+        parser.add_argument(
+            "--aplicar-localizacoes-por-camadas",
+            action="store_true",
+            help="Aplica somente reconciliações em que camadas e saldo do ponto fecham exatamente.",
+        )
 
     def handle(self, *args, **options):
         corrigir_totais = bool(options.get("corrigir_totais"))
         incluir_inativos = bool(options.get("incluir_inativos"))
         falhar_se_divergir = bool(options.get("falhar_se_divergir"))
         apenas_ativos = not incluir_inativos
+
+        if options.get("planejar_localizacoes") or options.get("aplicar_localizacoes_por_camadas"):
+            plano = planejar_reconciliacao_ubicacoes_por_camadas(
+                apenas_ativos=apenas_ativos,
+                aplicar=bool(options.get("aplicar_localizacoes_por_camadas")),
+            )
+            verbo = "Reconciliados" if plano["aplicado"] else "Candidatos seguros"
+            self.stdout.write(f"{verbo}: {len(plano['candidatos'])}")
+            self.stdout.write(f"Pendentes de inventário físico: {len(plano['pendentes'])}")
 
         diagnostico = diagnosticar_inconsistencias_estoque(apenas_ativos=apenas_ativos)
         divergencias = list(diagnostico["divergencias_totais"])
