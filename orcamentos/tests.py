@@ -451,6 +451,10 @@ class ItemOrcamentoTecnicoTests(TestCase):
         self.assertEqual(item.subtotal(), Decimal("200.00"))
         self.assertEqual(item.desconto_calculado(), Decimal("30.00"))
         self.assertEqual(item.total(), Decimal("170.00"))
+        self.assertEqual(self.orcamento.subtotal_bruto_itens(), Decimal("200.00"))
+        self.assertEqual(self.orcamento.subtotal_itens(), Decimal("170.00"))
+        self.assertEqual(self.orcamento.desconto_itens_calculado(), Decimal("30.00"))
+        self.assertEqual(self.orcamento.desconto_total_calculado(), Decimal("30.00"))
 
     def test_adicionar_item_nao_aceita_desconto_valor_e_percentual_juntos(self):
         response = self.client.post(
@@ -659,6 +663,30 @@ class ImpressaoOrcamentoPdfTests(TestCase):
         self.assertIn("Detalhe técnico do serviço.", texto_unificado)
         self.assertNotIn("Status: Pendente", texto_unificado)
         self.assertIn("R$ 100,00", texto_unificado)
+
+    def test_imprimir_orcamento_soma_desconto_aplicado_diretamente_no_item(self):
+        item = self.orcamento.itens.first()
+        item.desconto_valor = Decimal("15.00")
+        item.save(update_fields=["desconto_valor"])
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("orcamentos.views.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(
+                reverse("orcamentos:imprimir_orcamento", args=[self.orcamento.id])
+            )
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertIn("Subtotal antes dos descontos", texto_unificado)
+        self.assertIn("Descontos aplicados", texto_unificado)
+        self.assertIn("Desconto no item: R$ 15,00", texto_unificado)
+        self.assertIn("R$ 100,00", texto_unificado)
+        self.assertIn("R$ 15,00", texto_unificado)
+        self.assertIn("R$ 85,00", texto_unificado)
 
     def test_imprimir_orcamento_nunca_exibe_custos_ou_fornecedor_internos(self):
         item = self.orcamento.itens.first()

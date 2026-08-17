@@ -779,7 +779,7 @@ def imprimir_orcamento(request, pk):
                 ],
                 [
                     Paragraph("<b>Economia com Desconto</b>", styles["OrcLabel"]),
-                    Paragraph(formatar_moeda_br(orcamento.desconto_calculado()), styles["OrcValue"]),
+                    Paragraph(formatar_moeda_br(orcamento.desconto_total_calculado()), styles["OrcValue"]),
                 ],
                 [
                     Paragraph("<b>Total final para aprovação</b>", styles["OrcLabel"]),
@@ -961,8 +961,8 @@ def imprimir_orcamento(request, pk):
     ]))
     totais = Table(
         [
-            [Paragraph("Subtotal", styles["OrcTotalLabel"]), Paragraph(formatar_moeda_br(orcamento.subtotal_itens()), styles["OrcTotalValue"])],
-            [Paragraph("Desconto", styles["OrcTotalLabel"]), Paragraph(formatar_moeda_br(orcamento.desconto_calculado()), styles["OrcTotalValue"])],
+            [Paragraph("Subtotal antes dos descontos", styles["OrcTotalLabel"]), Paragraph(formatar_moeda_br(orcamento.subtotal_bruto_itens()), styles["OrcTotalValue"])],
+            [Paragraph("Descontos aplicados", styles["OrcTotalLabel"]), Paragraph(formatar_moeda_br(orcamento.desconto_total_calculado()), styles["OrcTotalValue"])],
             [Paragraph("Total Final", styles["OrcTotalLabel"]), Paragraph(formatar_moeda_br(orcamento.total()), styles["OrcTotalValue"])],
         ],
         colWidths=[usable_w - (layout_docs["orc_total_col_cm"] * cm), layout_docs["orc_total_col_cm"] * cm],

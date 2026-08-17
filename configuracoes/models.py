@@ -1382,6 +1382,12 @@ class ConfiguracaoSistema(models.Model):
         default=True,
         verbose_name="Relatório: exibir serviços e peças",
     )
+    google_avaliacao_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name="Link direto para avaliação no Google",
+        help_text="Usado somente na versão opcional do relatório técnico com pedido de avaliação.",
+    )
     pdf_orcamento_exibir_tipo_equipamento = models.BooleanField(
         default=True,
         verbose_name="Orçamento: exibir tipo do equipamento",

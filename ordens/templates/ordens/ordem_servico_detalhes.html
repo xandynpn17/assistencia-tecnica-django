@@ -293,6 +293,13 @@
                     Relatório Técnico
                   </a>
                 </li>
+                {% if avaliacao_google_disponivel %}
+                <li>
+                  <a class="dropdown-item" href="{% url 'ordens:imprimir_relatorio_tecnico' ordem.id %}?avaliacao=1" target="_blank">
+                    Relatório Técnico + avaliação Google
+                  </a>
+                </li>
+                {% endif %}
                 {% if orcamento %}
                 <li>
                   <a class="dropdown-item" href="{% url 'orcamentos:imprimir_orcamento' orcamento.id %}" target="_blank">

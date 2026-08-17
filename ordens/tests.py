@@ -3424,6 +3424,77 @@ class ImpressaoPdfHeadersTests(TestCase):
         self.assertNotIn("R$ 120,00", texto_unificado)
         self.assertNotIn("Assinaturas do Cliente", texto_unificado)
 
+    def test_imprimir_relatorio_tecnico_preserva_quebras_de_linha(self):
+        self.ordem.relatorio_tecnico = "Primeira etapa concluída.\nSegunda etapa testada.\\nTerceira etapa aprovada."
+        self.ordem.save(update_fields=["relatorio_tecnico"])
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(
+                reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id])
+            )
+
+        self.assertEqual(response.status_code, 200)
+        texto_relatorio = next(
+            texto for texto in textos_pdf if "Primeira etapa concluída" in texto
+        )
+        self.assertEqual(texto_relatorio.count("<br/>"), 2)
+        self.assertIn("Segunda etapa testada.<br/>Terceira etapa aprovada.", texto_relatorio)
+
+    def test_relatorio_com_avaliacao_google_e_opcional(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.google_avaliacao_url = "https://example.com/avaliar-no-google"
+        config.save(update_fields=["google_avaliacao_url"])
+
+        textos_normal = []
+        textos_avaliacao = []
+
+        def _spy_normal(texto, *args, **kwargs):
+            textos_normal.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        def _spy_avaliacao(texto, *args, **kwargs):
+            textos_avaliacao.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_spy_normal):
+            response_normal = self.client.get(
+                reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id])
+            )
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_spy_avaliacao):
+            response_avaliacao = self.client.get(
+                reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+                {"avaliacao": "1"},
+            )
+
+        self.assertEqual(response_normal.status_code, 200)
+        self.assertEqual(response_avaliacao.status_code, 200)
+        self.assertNotIn("avalie no Google", "\n".join(textos_normal))
+        texto_avaliacao = "\n".join(textos_avaliacao)
+        self.assertIn("Obrigado por confiar", texto_avaliacao)
+        self.assertIn("Escaneie o QR Code e avalie no Google", texto_avaliacao)
+
+    def test_menu_oferece_rt_com_avaliacao_somente_quando_link_configurado(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.google_avaliacao_url = ""
+        config.save(update_fields=["google_avaliacao_url"])
+
+        resposta_sem_link = self.client.get(self.ordem.get_absolute_url())
+        self.assertEqual(resposta_sem_link.status_code, 200)
+        self.assertNotContains(resposta_sem_link, "Relatório Técnico + avaliação Google")
+
+        config.google_avaliacao_url = "https://example.com/avaliar-no-google"
+        config.save(update_fields=["google_avaliacao_url"])
+        resposta_com_link = self.client.get(self.ordem.get_absolute_url())
+
+        self.assertEqual(resposta_com_link.status_code, 200)
+        self.assertContains(resposta_com_link, "Relatório Técnico + avaliação Google")
+        self.assertContains(resposta_com_link, "?avaliacao=1")
+
     def test_imprimir_ordem_servico_impressao_reserva_faixa_para_etiqueta(self):
         frames = []
 

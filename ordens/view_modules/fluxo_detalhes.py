@@ -106,6 +106,9 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["reserva_auto_validade_dias"] = max(
             1, int(getattr(cfg_reserva, "estoque_reserva_os_validade_dias", 3) or 3)
         )
+        context["avaliacao_google_disponivel"] = bool(
+            (getattr(cfg_reserva, "google_avaliacao_url", "") or "").strip()
+        )
         context["taloes_os"] = ordem.taloes.select_related("criado_por", "pagamento").all()
         context["empresa_talao"] = obter_empresa_ativa(self.request, strict=False) or ordem.empresa
         context["total_os"] = sum(item.total() for item in context["itens"])

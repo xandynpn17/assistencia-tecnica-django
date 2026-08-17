@@ -257,7 +257,7 @@ def contexto_variaveis_mensagem(ordem, request=None):
         "modelo": ordem.modelo_equipamento or "",
         "defeito": ordem.defeito or "",
         "valor_orcamento": f"{(orcamento.valor_total if orcamento else Decimal('0.00')):.2f}",
-        "desconto_orcamento": f"{(orcamento.desconto_calculado() if orcamento else Decimal('0.00')):.2f}",
+        "desconto_orcamento": f"{(orcamento.desconto_total_calculado() if orcamento else Decimal('0.00')):.2f}",
         "prazo_reparo": "3 dias uteis",
         "prazo_diagnostico": "48h",
         "valor_diagnostico": "0.00",

@@ -2,9 +2,12 @@
 import os
 import re
 from datetime import datetime
+from xml.sax.saxutils import escape
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from reportlab.graphics.barcode import qr
+from reportlab.graphics.shapes import Drawing
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -131,6 +134,26 @@ def _quebrar_tokens_longos(valor, tamanho_bloco=18):
         return " ".join(partes)
 
     return re.sub(r"[A-Za-z0-9@._:/\\\-]{19,}", _split_token, texto)
+
+
+def _texto_pdf_com_quebras(valor, padrao="-"):
+    texto = str(valor or padrao).replace("\\n", "\n")
+    texto = texto.replace("\r\n", "\n").replace("\r", "\n")
+    return escape(texto).replace("\n", "<br/>")
+
+
+def _qr_drawing(conteudo, tamanho):
+    widget = qr.QrCodeWidget(conteudo)
+    bounds = widget.getBounds()
+    largura = bounds[2] - bounds[0]
+    altura = bounds[3] - bounds[1]
+    drawing = Drawing(
+        tamanho,
+        tamanho,
+        transform=[tamanho / largura, 0, 0, tamanho / altura, 0, 0],
+    )
+    drawing.add(widget)
+    return drawing
 
 
 def _encurtar_canvas_texto(canv, valor, largura_max, fonte_nome, fonte_tamanho):
@@ -1670,6 +1693,10 @@ def imprimir_relatorio_tecnico(request, pk):
     tema_docs = _tema_layout_documentos(config)
     layout_docs = _perfil_layout_documentos(config)
     modo_resumido = getattr(config, "pdf_relatorio_modo_resumido", True)
+    google_avaliacao_url = (getattr(config, "google_avaliacao_url", "") or "").strip()
+    incluir_avaliacao = bool_like(request.GET.get("avaliacao"), default=False) and bool(
+        google_avaliacao_url
+    )
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="relatorio_tecnico_{ordem.numero_os}.pdf"'
     doc = SimpleDocTemplate(
@@ -1709,6 +1736,9 @@ def imprimir_relatorio_tecnico(request, pk):
             "RtTotalValue": {"bold": True, "font_size": layout_docs["rt_value_pt"] + 1.3, "leading": layout_docs["rt_value_pt"] + 3, "text_color": tema_docs["title_color"], "alignment": 2},
             "RtHeroLabel": {"bold": True, "font_size": layout_docs["rt_meta_pt"] - 0.1, "leading": layout_docs["rt_meta_pt"] + 1.5, "text_color": tema_docs["hero_text"]},
             "RtHeroValue": {"bold": True, "font_size": layout_docs["rt_value_pt"] + 0.6, "leading": layout_docs["rt_value_pt"] + 2.8, "text_color": tema_docs["hero_value"]},
+            "RtReviewTitle": {"bold": True, "font_size": 14, "leading": 17, "text_color": colors.HexColor("#073B8C")},
+            "RtReviewText": {"bold": False, "font_size": 9.4, "leading": 12.5, "text_color": colors.HexColor("#1F2D3D")},
+            "RtReviewStars": {"bold": True, "font_size": 15, "leading": 17, "text_color": colors.HexColor("#0B66D8")},
         },
     )
 
@@ -1799,6 +1829,56 @@ def imprimir_relatorio_tecnico(request, pk):
             )
         )
         return table
+
+    def _bloco_avaliacao_google():
+        nome_empresa = escape(
+            (empresa.nome_fantasia or empresa.nome) if empresa else "nossa assistência"
+        )
+        qr_code = _qr_drawing(google_avaliacao_url, 3.0 * cm)
+        qr_box = Table([[qr_code]], colWidths=[3.35 * cm], rowHeights=[3.35 * cm])
+        qr_box.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                    ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#0B66D8")),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ]
+            )
+        )
+        textos = [
+            Paragraph(f"Obrigado por confiar na {nome_empresa}!", styles["RtReviewTitle"]),
+            Paragraph("★ ★ ★ ★ ★", styles["RtReviewStars"]),
+            Paragraph(
+                "Se você ficou satisfeito com o atendimento, sua avaliação nos ajuda a continuar melhorando.",
+                styles["RtReviewText"],
+            ),
+            Paragraph("<b>Escaneie o QR Code e avalie no Google.</b>", styles["RtReviewText"]),
+        ]
+        painel = Table(
+            [[textos, qr_box]],
+            colWidths=[usable_w - 4.15 * cm, 3.65 * cm],
+        )
+        painel.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F3F8FF")),
+                    ("BOX", (0, 0), (-1, -1), 1.0, colors.HexColor("#0B66D8")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (0, 0), 14),
+                    ("RIGHTPADDING", (0, 0), (0, 0), 12),
+                    ("TOPPADDING", (0, 0), (-1, -1), 11),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 11),
+                    ("LEFTPADDING", (1, 0), (1, 0), 5),
+                    ("RIGHTPADDING", (1, 0), (1, 0), 10),
+                ]
+            )
+        )
+        return KeepTogether([painel])
 
     logo = logo_or_paragraph(
         empresa,
@@ -1908,7 +1988,7 @@ def imprimir_relatorio_tecnico(request, pk):
             ),
             Spacer(1, layout_docs["rt_block_gap_cm"] * cm),
             _title_bar(titulo_diag_rt),
-            Paragraph(ordem.relatorio_tecnico or "-", styles["RtText"]),
+            Paragraph(_texto_pdf_com_quebras(ordem.relatorio_tecnico), styles["RtText"]),
             Spacer(1, 0.25 * cm),
         ]
     )
@@ -2100,6 +2180,8 @@ def imprimir_relatorio_tecnico(request, pk):
             Paragraph(f"Documento emitido em {(ordem.data_conclusao or datetime.now()).strftime('%d/%m/%Y')}.", styles["RtMeta"]),
         ]
     )
+    if incluir_avaliacao:
+        story.extend([Spacer(1, 0.35 * cm), _bloco_avaliacao_google()])
 
     doc.build(story, canvasmaker=make_numbered_canvas(_draw_footer))
     return _aplicar_xframe_preview(request, response)

@@ -931,6 +931,13 @@
                   <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_responsaveis }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_responsaveis.id_for_label }}">{{ form.pdf_relatorio_exibir_responsaveis.label }}</label></div>{% if form.pdf_relatorio_exibir_responsaveis.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_responsaveis.help_text }}</small>{% endif %}</div>
                   <div class="col-md-6 form-group mb-0"><div class="form-check">{{ form.pdf_relatorio_exibir_servicos_pecas }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_servicos_pecas.id_for_label }}">{{ form.pdf_relatorio_exibir_servicos_pecas.label }}</label></div>{% if form.pdf_relatorio_exibir_servicos_pecas.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_servicos_pecas.help_text }}</small>{% endif %}</div>
                 </div>
+                <div class="section-label">Experiência do cliente</div>
+                <div class="form-group mb-0">
+                  <label for="{{ form.google_avaliacao_url.id_for_label }}">{{ form.google_avaliacao_url.label }}</label>
+                  {{ form.google_avaliacao_url }}
+                  {% if form.google_avaliacao_url.errors %}<div class="text-danger small">{{ form.google_avaliacao_url.errors|striptags }}</div>{% endif %}
+                  {% if form.google_avaliacao_url.help_text %}<small class="form-text text-muted">{{ form.google_avaliacao_url.help_text }}</small>{% endif %}
+                </div>
                 <div class="print-doc-grid-note">Aqui definimos o nível de detalhe do relatório técnico entregue ao cliente.</div>
                 </div>
               </div>

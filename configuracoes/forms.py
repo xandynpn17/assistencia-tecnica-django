@@ -806,6 +806,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'pdf_relatorio_exibir_datas_movimento',
             'pdf_relatorio_exibir_responsaveis',
             'pdf_relatorio_exibir_servicos_pecas',
+            'google_avaliacao_url',
             'pdf_orcamento_exibir_nome_cliente',
             'pdf_orcamento_exibir_telefone_cliente',
             'pdf_orcamento_exibir_documento_cliente',
@@ -878,6 +879,12 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'layout_os_data_fonte_pt': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': 6, 'max': 10}),
             'layout_documentos_preset': forms.Select(attrs={'class': 'form-control'}),
             'layout_documentos_cor': forms.Select(attrs={'class': 'form-control'}),
+            'google_avaliacao_url': forms.URLInput(
+                attrs={
+                    'class': 'form-control',
+                    'placeholder': 'https://g.page/r/.../review',
+                }
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -941,6 +948,9 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["pdf_relatorio_exibir_datas_movimento"].help_text = "Controla a exibição das datas de entrada e saída do equipamento."
         self.fields["pdf_relatorio_exibir_responsaveis"].help_text = "Controla a exibição do atendente e do técnico responsável."
         self.fields["pdf_relatorio_exibir_servicos_pecas"].help_text = "Controla a tabela final de serviços e peças executados."
+        self.fields["google_avaliacao_url"].help_text = (
+            "Cole o link direto de avaliação do Perfil da Empresa no Google. O QR será gerado automaticamente apenas na opção RT + avaliação."
+        )
         self.fields["pdf_orcamento_exibir_nome_cliente"].help_text = "Mantém o nome do cliente no orçamento."
         self.fields["pdf_orcamento_exibir_telefone_cliente"].help_text = "Mantém o telefone do cliente no orçamento."
         self.fields["pdf_orcamento_exibir_documento_cliente"].help_text = "Exibe CPF/CNPJ no orçamento quando você precisa de conferência formal."

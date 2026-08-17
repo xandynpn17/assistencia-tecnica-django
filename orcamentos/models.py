@@ -45,6 +45,18 @@ class Orcamento(models.Model):
     def subtotal_itens(self):
         return sum(item.total() for item in self.itens.all())
 
+    def subtotal_bruto_itens(self):
+        return sum(
+            (Decimal(item.subtotal() or 0) for item in self.itens.all()),
+            Decimal("0.00"),
+        )
+
+    def desconto_itens_calculado(self):
+        return sum(
+            (Decimal(item.desconto_calculado() or 0) for item in self.itens.all()),
+            Decimal("0.00"),
+        )
+
     def desconto_calculado(self):
         subtotal = Decimal(self.subtotal_itens() or 0)
         percentual = Decimal(self.desconto_percentual or 0)
@@ -62,6 +74,9 @@ class Orcamento(models.Model):
     def total(self):
         subtotal = Decimal(self.subtotal_itens() or 0)
         return max(Decimal("0.00"), subtotal - self.desconto_calculado())
+
+    def desconto_total_calculado(self):
+        return self.desconto_itens_calculado() + self.desconto_calculado()
 
     def atualizar_total(self):
         self.valor_total = self.total()
