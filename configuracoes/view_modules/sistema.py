@@ -55,6 +55,18 @@ def configuracao_sistema_edit_impl(request):
     garantir_modelos_operacionais_padrao(sobrescrever=False)
     config = ConfiguracaoSistema.get_configuracao()
     config_os = ConfiguracaoOrdemServico.get_configuracao()
+    secoes_validas = {
+        "geral",
+        "atendimento",
+        "estoque",
+        "financeiro",
+        "comunicacao",
+        "documentos",
+        "manutencao",
+    }
+    secao_ativa = (request.POST.get("secao") or request.GET.get("secao") or "geral").strip().lower()
+    if secao_ativa not in secoes_validas:
+        secao_ativa = "geral"
     pode_editar_termos_os = bool(request.user.is_superuser or getattr(request.user, "tipo_usuario", "") == "adm")
     if request.method == "POST":
         form = ConfiguracaoSistemaForm(request.POST, instance=config)
@@ -101,7 +113,7 @@ def configuracao_sistema_edit_impl(request):
             )
             emitir_evento_interno("configuracoes.alterada", {"escopo": "configuracao_sistema"})
             messages.success(request, "Configuracoes do sistema salvas com sucesso!")
-            return redirect("configuracoes:painel")
+            return redirect(f"{reverse('configuracoes:configuracao_sistema')}?secao={secao_ativa}")
     else:
         form = ConfiguracaoSistemaForm(instance=config)
         form.fields["rodape_relatorio"].initial = config_os.rodape_relatorio
@@ -113,10 +125,11 @@ def configuracao_sistema_edit_impl(request):
         "estados_brasil": ConfiguracaoSistema.ESTADOS_BRASIL,
         "ddd_brasil": ConfiguracaoSistema.DDD_BRASIL,
         "config_operacional_tab": "sistema",
-        "config_operacional_title": "Sistema e regras operacionais",
+        "config_secao": secao_ativa,
+        "config_operacional_title": "Regras operacionais",
         "config_operacional_subtitle": (
-            "Aqui ficam os comportamentos globais da operacao: busca, SLA, estoque, garantia, "
-            "integracoes e padroes que impactam todas as areas do sistema."
+            "Ajuste cada área separadamente: atendimento, estoque, financeiro, comunicação, "
+            "documentos e manutenção."
         ),
     }
     return render(request, "configuracoes/configuracao_sistema_form.html", context)

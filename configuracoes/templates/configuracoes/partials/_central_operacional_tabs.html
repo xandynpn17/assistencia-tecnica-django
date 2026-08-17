@@ -1,163 +1,102 @@
 <style>
-  .config-operacional-shell {
-    margin-bottom: 1.25rem;
+  .config-hub {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid #dbe6f3;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 10px 26px rgba(29, 58, 112, 0.06);
   }
-  .config-operacional-intro {
+  .config-hub-head {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 1rem;
-    padding: 1rem 1.1rem;
-    border: 1px solid #d7e3f4;
-    border-radius: 18px;
-    background: linear-gradient(135deg, #f7fbff 0%, #eef5ff 100%);
-    box-shadow: 0 14px 32px rgba(29, 58, 112, 0.08);
+    margin-bottom: .85rem;
   }
-  .config-operacional-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0.35rem 0.75rem;
-    border-radius: 999px;
-    background: rgba(33, 105, 212, 0.1);
-    color: #1f5fbf;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+  .config-hub-eyebrow {
+    color: #2563eb;
+    font-size: .74rem;
+    font-weight: 800;
+    letter-spacing: .07em;
     text-transform: uppercase;
   }
-  .config-operacional-title {
-    margin: 0.7rem 0 0.35rem;
-    font-size: 1.6rem;
-    font-weight: 800;
+  .config-hub-title {
+    margin: .2rem 0 .15rem;
     color: #183153;
+    font-size: 1.35rem;
+    font-weight: 800;
   }
-  .config-operacional-subtitle {
-    margin: 0;
-    max-width: 760px;
-    color: #5f748f;
-    line-height: 1.55;
-  }
-  .config-operacional-badge {
+  .config-hub-subtitle { margin: 0; color: #637995; font-size: .9rem; }
+  .config-hub-home {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.5rem 0.8rem;
-    border-radius: 12px;
-    background: #fff;
-    border: 1px solid #d7e3f4;
-    color: #223d64;
-    font-weight: 600;
+    gap: .4rem;
+    padding: .48rem .7rem;
+    border: 1px solid #dbe6f3;
+    border-radius: 10px;
+    color: #28476f;
+    background: #f8fbff;
+    font-size: .82rem;
+    font-weight: 700;
     white-space: nowrap;
   }
-  .config-operacional-tabs {
+  .config-hub-nav {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.85rem;
-    margin-top: 0.95rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .55rem;
   }
-  .config-operacional-tab {
+  .config-hub-link {
     display: flex;
-    align-items: flex-start;
-    gap: 0.85rem;
-    padding: 1rem 1.05rem;
-    border-radius: 16px;
-    background: #fff;
-    border: 1px solid #d7e3f4;
-    text-decoration: none !important;
-    color: #1d3557;
-    box-shadow: 0 10px 26px rgba(17, 24, 39, 0.05);
-    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-  }
-  .config-operacional-tab:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 14px 30px rgba(17, 24, 39, 0.08);
-    border-color: #a9c6f3;
-    color: #173863;
-  }
-  .config-operacional-tab.is-active {
-    border-color: #3b82f6;
-    background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%);
-    box-shadow: 0 16px 30px rgba(59, 130, 246, 0.12);
-  }
-  .config-operacional-tab-icon {
-    width: 2.75rem;
-    height: 2.75rem;
-    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    border-radius: 14px;
-    background: #edf4ff;
-    color: #2563eb;
-    font-size: 1rem;
-    flex: 0 0 auto;
+    gap: .55rem;
+    min-height: 48px;
+    padding: .62rem .7rem;
+    border: 1px solid #e1e9f3;
+    border-radius: 11px;
+    background: #fbfdff;
+    color: #28476f;
+    text-decoration: none !important;
+    font-size: .85rem;
+    font-weight: 700;
   }
-  .config-operacional-tab.is-active .config-operacional-tab-icon {
-    background: #2563eb;
-    color: #fff;
-  }
-  .config-operacional-tab-title {
-    display: block;
-    margin-bottom: 0.25rem;
-    font-weight: 800;
-    font-size: 1rem;
-  }
-  .config-operacional-tab-text {
-    display: block;
-    color: #637995;
-    font-size: 0.92rem;
-    line-height: 1.45;
-  }
+  .config-hub-link i { width: 1.25rem; color: #3b82f6; text-align: center; }
+  .config-hub-link:hover,
+  .config-hub-link.is-active { border-color: #70a7f7; background: #eff6ff; color: #1d4ed8; }
   @media (max-width: 991.98px) {
-    .config-operacional-intro {
-      flex-direction: column;
+    .config-hub-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 575.98px) {
+    .config-hub-head { display: block; }
+    .config-hub-home { margin-top: .65rem; }
+    .config-hub-nav {
+      display: flex;
+      overflow-x: auto;
+      padding-bottom: .25rem;
+      scroll-snap-type: x proximity;
     }
-    .config-operacional-tabs {
-      grid-template-columns: 1fr;
-    }
+    .config-hub-link { min-width: 158px; scroll-snap-align: start; }
   }
 </style>
 
-<div class="config-operacional-shell">
-  <div class="config-operacional-intro">
+<div class="config-hub">
+  <div class="config-hub-head">
     <div>
-      <span class="config-operacional-eyebrow">
-        <i class="fas fa-layer-group"></i> Central Operacional
-      </span>
-      <h1 class="config-operacional-title">{{ config_operacional_title|default:"Base da operação" }}</h1>
-      <p class="config-operacional-subtitle">
-        {{ config_operacional_subtitle|default:"Organize a empresa, as regras da OS e os comportamentos padrão do sistema num fluxo único, mais claro para manutenção do dia a dia." }}
-      </p>
+      <div class="config-hub-eyebrow"><i class="fas fa-sliders-h mr-1"></i> Central de configurações</div>
+      <h1 class="config-hub-title">{{ config_operacional_title|default:"Configurações da empresa" }}</h1>
+      <p class="config-hub-subtitle">{{ config_operacional_subtitle|default:"Escolha uma área para alterar regras e dados da operação." }}</p>
     </div>
-    <div class="config-operacional-badge">
-      <i class="fas fa-shield-alt"></i>
-      Configuração central da loja
-    </div>
+    <a class="config-hub-home" href="{% url 'configuracoes:painel' %}"><i class="fas fa-th-large"></i> Ver todas</a>
   </div>
 
-  <div class="config-operacional-tabs">
-    <a href="{% url 'configuracoes:empresa' %}" class="config-operacional-tab{% if config_operacional_tab == 'empresa' %} is-active{% endif %}">
-      <span class="config-operacional-tab-icon"><i class="fas fa-building"></i></span>
-      <span>
-        <span class="config-operacional-tab-title">Empresa</span>
-        <span class="config-operacional-tab-text">Identidade visual, contato, tributação e dados-base usados em todo o sistema.</span>
-      </span>
-    </a>
-
-    <a href="{% url 'configuracoes:configuracao_os' %}" class="config-operacional-tab{% if config_operacional_tab == 'os' %} is-active{% endif %}">
-      <span class="config-operacional-tab-icon"><i class="fas fa-tools"></i></span>
-      <span>
-        <span class="config-operacional-tab-title">Ordem de Serviço</span>
-        <span class="config-operacional-tab-text">Prefixo, numeração e rodapé técnico usados na abertura e nos relatórios das OS.</span>
-      </span>
-    </a>
-
-    <a href="{% url 'configuracoes:configuracao_sistema' %}" class="config-operacional-tab{% if config_operacional_tab == 'sistema' %} is-active{% endif %}">
-      <span class="config-operacional-tab-icon"><i class="fas fa-cogs"></i></span>
-      <span>
-        <span class="config-operacional-tab-title">Sistema</span>
-        <span class="config-operacional-tab-text">Campos obrigatórios, SLA, integrações, estoque, garantia e comportamento padrão da operação.</span>
-      </span>
-    </a>
-  </div>
+  <nav class="config-hub-nav" aria-label="Áreas de configuração">
+    <a href="{% url 'configuracoes:empresa' %}?secao=empresa" class="config-hub-link{% if config_operacional_tab == 'empresa' and config_secao != 'fiscal' and config_secao != 'estoque' %} is-active{% endif %}"><i class="fas fa-building"></i> Empresa</a>
+    <a href="{% url 'configuracoes:empresa' %}?secao=fiscal" class="config-hub-link{% if config_operacional_tab == 'empresa' and config_secao == 'fiscal' %} is-active{% endif %}"><i class="fas fa-file-invoice-dollar"></i> Fiscal</a>
+    <a href="{% url 'configuracoes:configuracao_sistema' %}?secao=atendimento" class="config-hub-link{% if config_operacional_tab == 'os' or config_secao == 'atendimento' %} is-active{% endif %}"><i class="fas fa-tools"></i> Atendimento e OS</a>
+    <a href="{% url 'configuracoes:configuracao_sistema' %}?secao=estoque" class="config-hub-link{% if config_secao == 'estoque' %} is-active{% endif %}"><i class="fas fa-boxes"></i> Estoque</a>
+    <a href="{% url 'configuracoes:configuracao_sistema' %}?secao=financeiro" class="config-hub-link{% if config_secao == 'financeiro' %} is-active{% endif %}"><i class="fas fa-cash-register"></i> Financeiro</a>
+    <a href="{% url 'configuracoes:configuracao_sistema' %}?secao=comunicacao" class="config-hub-link{% if config_operacional_tab == 'comunicacao' or config_secao == 'comunicacao' %} is-active{% endif %}"><i class="fas fa-comments"></i> Comunicação</a>
+    <a href="{% url 'configuracoes:configuracao_sistema' %}?secao=documentos" class="config-hub-link{% if config_secao == 'documentos' %} is-active{% endif %}"><i class="fas fa-file-pdf"></i> Documentos</a>
+    <a href="{% url 'configuracoes:painel' %}#administracao" class="config-hub-link"><i class="fas fa-user-shield"></i> Administração</a>
+  </nav>
 </div>

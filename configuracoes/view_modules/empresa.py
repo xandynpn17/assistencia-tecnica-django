@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from configuracoes.forms import AliquotaForm, EmpresaForm
 from configuracoes.models import Aliquota, Empresa
@@ -12,6 +13,10 @@ from configuracoes.models import SetupInicialSistema
 
 def empresa_edit_impl(request):
     empresa = obter_empresa_ativa(request, strict=False)
+    secoes_validas = {"empresa", "fiscal", "estoque"}
+    secao_ativa = (request.POST.get("secao") or request.GET.get("secao") or "empresa").strip().lower()
+    if secao_ativa not in secoes_validas:
+        secao_ativa = "empresa"
     if request.method == "POST":
         form = EmpresaForm(request.POST, request.FILES, instance=empresa)
         if form.is_valid():
@@ -25,20 +30,33 @@ def empresa_edit_impl(request):
             )
             emitir_evento_interno("configuracoes.alterada", {"escopo": "empresa", "empresa_id": obj.id})
             messages.success(request, "Dados da empresa atualizados com sucesso!", extra_tags="configuracoes")
-            return redirect("configuracoes:painel")
+            return redirect(f"{reverse('configuracoes:empresa')}?secao={secao_ativa}")
     else:
         form = EmpresaForm(instance=empresa)
+    titulos_secao = {
+        "empresa": (
+            "Empresa e identidade",
+            "Mantenha dados institucionais, contatos, endereço e logos usados em todo o sistema.",
+        ),
+        "fiscal": (
+            "Fiscal e tributário",
+            "Configure regime, anexos e alíquotas-base para comércio e serviços.",
+        ),
+        "estoque": (
+            "Alçadas de estoque",
+            "Defina os limites de ofertas e cedências que exigem aprovação.",
+        ),
+    }
+    titulo_secao, subtitulo_secao = titulos_secao[secao_ativa]
     return render(
         request,
         "configuracoes/empresa_form.html",
         {
             "form": form,
             "config_operacional_tab": "empresa",
-            "config_operacional_title": "Empresa e identidade",
-            "config_operacional_subtitle": (
-                "Concentre aqui a identidade visual, os contatos oficiais e a base tributária "
-                "que sustenta documentos, PDFs e rotinas comerciais da operação."
-            ),
+            "config_secao": secao_ativa,
+            "config_operacional_title": titulo_secao,
+            "config_operacional_subtitle": subtitulo_secao,
         },
     )
 

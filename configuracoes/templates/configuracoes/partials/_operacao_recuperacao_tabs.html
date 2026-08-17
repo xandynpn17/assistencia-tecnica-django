@@ -4,17 +4,17 @@
     border-radius: 18px;
     background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
     box-shadow: 0 10px 28px rgba(21, 46, 74, 0.08);
-    margin-bottom: 22px;
+    margin-bottom: 16px;
     overflow: hidden;
   }
 
   .ops-nav-head {
-    padding: 18px 22px 10px;
+    padding: 14px 16px 9px;
   }
 
   .ops-nav-head h2 {
     margin: 0 0 6px;
-    font-size: 1.45rem;
+    font-size: 1.25rem;
     color: #17324d;
   }
 
@@ -24,18 +24,17 @@
   }
 
   .ops-nav-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 0 22px 20px;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    padding: 0 16px 14px;
   }
 
   .ops-nav-link {
-    min-width: 180px;
-    flex: 1 1 180px;
+    min-width: 0;
     border-radius: 14px;
     border: 1px solid #d7e2ec;
-    padding: 14px 16px;
+    padding: 10px 11px;
     text-decoration: none !important;
     color: #1c3550;
     background: #fff;
@@ -57,14 +56,25 @@
   .ops-nav-link strong {
     display: block;
     margin-bottom: 4px;
-    font-size: 1rem;
+    font-size: .9rem;
   }
 
   .ops-nav-link span {
     display: block;
-    font-size: .88rem;
+    font-size: .78rem;
     color: #6d7f92;
     line-height: 1.35;
+  }
+  @media (max-width: 991.98px) {
+    .ops-nav-links {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+    }
+    .ops-nav-link {
+      flex: 0 0 185px;
+      scroll-snap-align: start;
+    }
   }
 </style>
 

@@ -114,6 +114,7 @@ class CatalogosOperacionaisPorEmpresaTests(TestCase):
                 "nome": "Dinheiro",
                 "codigo": "dinheiro",
                 "tipo": "avista",
+                "parcelas_padrao": "1",
                 "taxa_percentual": "0",
                 "dias_recebimento": "0",
                 "ativa": True,

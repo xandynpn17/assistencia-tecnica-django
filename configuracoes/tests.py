@@ -355,16 +355,17 @@ class PermissoesConfiguracoesTests(TestCase):
         response = self.client.get(reverse("configuracoes:painel"))
         self.assertEqual(response.status_code, 200)
 
-    def test_painel_exibe_resumo_e_acoes_operacionais(self):
+    def test_painel_exibe_resumo_e_areas_de_configuracao(self):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:painel"))
         self.assertEqual(response.status_code, 200)
         html = response.content.decode(response.charset or "utf-8")
         self.assertIn("Visao rapida", html)
-        self.assertIn("Acoes criticas", html)
         self.assertIn("Proximos passos recomendados", html)
-        self.assertIn("Gerar backup", html)
-        self.assertIn("Monitorar integra", html)
+        self.assertIn("Configura", html)
+        self.assertIn("reas operacionais", html)
+        self.assertIn("Cadastros de apoio", html)
+        self.assertIn("Administra", html)
 
     @override_settings(LOCAL_RECOVERY_KEY="rec-chave-123")
     def test_painel_exibe_atalho_de_recuperacao_local_quando_habilitada(self):
@@ -374,16 +375,16 @@ class PermissoesConfiguracoesTests(TestCase):
         self.assertContains(response, "Recuperacao local")
         self.assertContains(response, reverse("configuracoes:restore_banco_publico"))
 
-    def test_empresa_exibe_abas_da_central_operacional(self):
+    def test_empresa_exibe_navegacao_da_central_de_configuracoes(self):
         self._concluir_setup_para_ui()
         self.client.force_login(self.admin)
         response = self.client.get(reverse("configuracoes:empresa"))
         self.assertEqual(response.status_code, 200)
         html = response.content.decode(response.charset or "utf-8")
-        self.assertIn("Central Operacional", html)
+        self.assertIn("Central de configura", html)
         self.assertIn("Empresa", html)
-        self.assertIn("Ordem de Servi", html)
-        self.assertIn("Sistema", html)
+        self.assertIn("Fiscal", html)
+        self.assertIn("Atendimento e OS", html)
 
     def test_configuracao_os_exibe_layout_refinado(self):
         self._concluir_setup_para_ui()
@@ -395,17 +396,40 @@ class PermissoesConfiguracoesTests(TestCase):
         self.assertIn("PDFs e termos", html)
         self.assertIn("Sistema &gt; Documentos", html)
 
-    def test_configuracao_sistema_exibe_abas_da_central_operacional(self):
+    def test_configuracao_sistema_exibe_areas_separadas(self):
         self._concluir_setup_para_ui()
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("configuracoes:configuracao_sistema"))
         self.assertEqual(response.status_code, 200)
         html = response.content.decode(response.charset or "utf-8")
-        self.assertIn("Central Operacional", html)
-        self.assertIn("central da loja", html)
-        self.assertIn("Opera", html)
-        self.assertIn("Fluxo da OS", html)
+        self.assertIn("Central de configura", html)
+        self.assertIn("Atendimento e OS", html)
+        self.assertIn("Financeiro", html)
+        self.assertIn("Comunica", html)
         self.assertIn("Documentos", html)
+        self.assertIn('src="about:blank" data-preview-url=', html)
+
+    def test_configuracao_sistema_respeita_secao_solicitada(self):
+        self._concluir_setup_para_ui()
+        self.client.force_login(self.gerente)
+        response = self.client.get(
+            reverse("configuracoes:configuracao_sistema"),
+            {"secao": "financeiro"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="secao" id="config-secao-ativa" value="financeiro"')
+        self.assertContains(response, 'data-config-group="financeiro"')
+        self.assertContains(response, "Política de comissões")
+
+    def test_empresa_separa_configuracao_fiscal_dos_dados_institucionais(self):
+        self._concluir_setup_para_ui()
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("configuracoes:empresa"), {"secao": "fiscal"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="secao" id="empresa-secao-ativa" value="fiscal"')
+        self.assertContains(response, "Configuração fiscal e tributária")
+        self.assertContains(response, 'data-empresa-section="empresa"')
+        self.assertContains(response, 'data-empresa-section="fiscal"')
 
 
     def test_tipos_equipamento_exibe_central_de_catalogo(self):

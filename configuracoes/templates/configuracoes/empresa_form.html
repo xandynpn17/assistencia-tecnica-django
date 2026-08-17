@@ -18,6 +18,13 @@
     </div>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
+      <input type="hidden" name="secao" id="empresa-secao-ativa" value="{{ config_secao|default:'empresa' }}">
+      <div class="empresa-section-nav" role="tablist" aria-label="Seções da empresa">
+        <button type="button" data-empresa-tab="empresa" class="{% if config_secao == 'empresa' or not config_secao %}is-active{% endif %}"><i class="fas fa-building"></i> Dados e identidade</button>
+        <button type="button" data-empresa-tab="fiscal" class="{% if config_secao == 'fiscal' %}is-active{% endif %}"><i class="fas fa-file-invoice-dollar"></i> Fiscal e tributário</button>
+        <button type="button" data-empresa-tab="estoque" class="{% if config_secao == 'estoque' %}is-active{% endif %}"><i class="fas fa-boxes"></i> Alçadas de estoque</button>
+      </div>
+      <div data-empresa-section="empresa">
       <div class="row">
         <div class="col-md-4">{{ form.nome.label_tag }} {{ form.nome }}</div>
         <div class="col-md-4">{{ form.nome_fantasia.label_tag }} {{ form.nome_fantasia }}</div>
@@ -202,8 +209,16 @@
           </div>
         </div>
       </div>
-      <hr>
-      <h5>Configurao Tributria</h5>
+      </div>
+
+      <div data-empresa-section="fiscal">
+      <div class="section-heading-card">
+        <div>
+          <h5>Configuração fiscal e tributária</h5>
+          <p>Defina a base usada nas sugestões de impostos e preços. Valide regime, anexos e alíquotas com orientação contábil.</p>
+        </div>
+        <a href="{% url 'configuracoes:lista_aliquotas' %}" class="btn btn-sm btn-outline-primary">Gerenciar alíquotas complementares</a>
+      </div>
       <div class="row">
         <div class="col-md-4">{{ form.regime_tributario.label_tag }} {{ form.regime_tributario }}</div>
         <div class="col-md-4">{{ form.anexo_simples.label_tag }} {{ form.anexo_simples }}</div>
@@ -225,13 +240,21 @@
           <div class="col-md-3">{{ form.cofins.label_tag }} {{ form.cofins }}</div>
         </div>
       </div>
+      </div>
 
-      <hr>
-      <h5>Alçadas de estoque</h5>
+      <div data-empresa-section="estoque">
+      <div class="section-heading-card">
+        <div>
+          <h5>Alçadas de ofertas e cedências</h5>
+          <p>Defina quando uma movimentação precisa de aprovação de gerente ou administrador.</p>
+        </div>
+        <a href="{% url 'configuracoes:configuracao_sistema' %}?secao=estoque" class="btn btn-sm btn-outline-primary">Outras regras de estoque</a>
+      </div>
       <p class="text-muted small">Valores calculados pelo custo do produto. Acima destes limites, ofertas e cedências aguardam aprovação de gerente ou administrador.</p>
       <div class="row mb-3">
         <div class="col-md-4">{{ form.limite_oferta_sem_aprovacao.label_tag }} {{ form.limite_oferta_sem_aprovacao }}<small class="form-text text-muted">{{ form.limite_oferta_sem_aprovacao.help_text }}</small></div>
         <div class="col-md-4">{{ form.limite_cedencia_sem_aprovacao.label_tag }} {{ form.limite_cedencia_sem_aprovacao }}<small class="form-text text-muted">{{ form.limite_cedencia_sem_aprovacao.help_text }}</small></div>
+      </div>
       </div>
 
       <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
@@ -301,6 +324,50 @@
 
 {% block extra_css %}
 <style>
+  .empresa-section-nav {
+    display: flex;
+    gap: .55rem;
+    margin-bottom: 1rem;
+    padding: .45rem;
+    border: 1px solid #dbe6f3;
+    border-radius: 12px;
+    background: #f8fbff;
+  }
+  .empresa-section-nav button {
+    flex: 1;
+    padding: .7rem .8rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: #51677f;
+    font-weight: 700;
+  }
+  .empresa-section-nav button.is-active {
+    border-color: #8bb8f8;
+    background: #fff;
+    color: #1d4ed8;
+    box-shadow: 0 7px 18px rgba(29, 78, 216, .08);
+  }
+  [data-empresa-section].is-hidden { display: none; }
+  .section-heading-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid #dbe6f3;
+    border-radius: 12px;
+    background: #f8fbff;
+  }
+  .section-heading-card h5 { margin: 0 0 .25rem; color: #183153; }
+  .section-heading-card p { margin: 0; color: #637995; font-size: .9rem; }
+  @media (max-width: 767.98px) {
+    .empresa-section-nav { overflow-x: auto; }
+    .empresa-section-nav button { min-width: 175px; }
+    .section-heading-card { display: block; }
+    .section-heading-card .btn { margin-top: .75rem; }
+  }
   .logo-card {
     border: 1px solid #d8dee6;
     border-radius: 14px;
@@ -558,6 +625,25 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const tabs = Array.from(document.querySelectorAll("[data-empresa-tab]"));
+  const secoes = Array.from(document.querySelectorAll("[data-empresa-section]"));
+  const campo = document.getElementById("empresa-secao-ativa");
+
+  function ativar(secao) {
+    tabs.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.empresaTab === secao));
+    secoes.forEach((bloco) => bloco.classList.toggle("is-hidden", bloco.dataset.empresaSection !== secao));
+    if (campo) campo.value = secao;
+    const url = new URL(window.location.href);
+    url.searchParams.set("secao", secao);
+    window.history.replaceState({}, "", url);
+  }
+
+  tabs.forEach((tab) => tab.addEventListener("click", function () { ativar(tab.dataset.empresaTab); }));
+  ativar(campo?.value || "empresa");
+});
+</script>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
   const regime = document.getElementById("id_regime_tributario");

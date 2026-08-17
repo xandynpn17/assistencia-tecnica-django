@@ -5,18 +5,21 @@
 <style>
   .config-system-nav {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
+    flex-direction: column;
+    gap: 0.45rem;
+    position: sticky;
+    top: 1rem;
+    align-self: start;
   }
   .config-system-tab {
     border: 1px solid #d7e3f4;
     background: #fff;
     color: #28476f;
-    border-radius: 999px;
-    padding: 0.7rem 1rem;
+    border-radius: 11px;
+    padding: 0.72rem 0.8rem;
     font-weight: 700;
     line-height: 1.1;
+    text-align: left;
     box-shadow: 0 8px 20px rgba(17, 24, 39, 0.04);
     transition: all 0.18s ease;
   }
@@ -39,12 +42,50 @@
   .config-system-card-hidden {
     display: none;
   }
+  .config-system-layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+  }
   .config-system-summary {
     display: grid;
     grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     gap: 0.85rem;
     margin-bottom: 1rem;
   }
+  .config-settings-search {
+    position: relative;
+  }
+  .config-settings-search i {
+    position: absolute;
+    left: .85rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #7c8da3;
+  }
+  .config-settings-search input {
+    padding-left: 2.35rem;
+    border-radius: 10px;
+  }
+  .config-save-bar {
+    position: sticky;
+    bottom: .75rem;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .8rem;
+    margin-top: 1rem;
+    padding: .75rem;
+    border: 1px solid #d7e3f4;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 12px 30px rgba(17, 24, 39, .12);
+    backdrop-filter: blur(8px);
+  }
+  .config-save-status { color: #64748b; font-size: .84rem; }
+  .config-save-status.is-dirty { color: #b45309; font-weight: 700; }
   .config-system-summary-card {
     border: 1px solid #e5edf8;
     border-radius: 16px;
@@ -229,6 +270,19 @@
       width: 100%;
       justify-content: space-between;
     }
+    .config-system-layout { grid-template-columns: 1fr; }
+    .config-system-nav {
+      position: static;
+      flex-direction: row;
+      overflow-x: auto;
+      padding-bottom: .35rem;
+      scroll-snap-type: x proximity;
+    }
+    .config-system-tab {
+      flex: 0 0 190px;
+      scroll-snap-align: start;
+    }
+    .config-save-bar { bottom: .35rem; }
   }
 </style>
 {% endblock %}
@@ -237,65 +291,68 @@
 {% include 'configuracoes/partials/_central_operacional_tabs.html' %}
 <div class="card card-modern">
   <div class="card-modern-header">
-    <i class="fas fa-cogs"></i> Configura&ccedil;&otilde;es do Sistema
+    <i class="fas fa-cogs"></i> Regras operacionais
   </div>
   <div class="card-modern-body">
     <div class="config-system-summary">
       <div class="config-system-summary-card">
-        <h6>Visão rápida</h6>
-        <p>Esta tela centraliza as regras do dia a dia da loja: abertura de OS, controle de estoque, garantias, alertas e conteúdo dos documentos.</p>
+        <h6>Configuração por área</h6>
+        <p>As regras foram separadas pelo local onde produzem efeito. Use o menu lateral para alterar somente uma área de cada vez.</p>
         <div class="config-system-summary-tags">
-          <span class="config-system-summary-tag"><i class="fas fa-tools"></i> Operação</span>
-          <span class="config-system-summary-tag"><i class="fas fa-boxes"></i> Estoque</span>
-          <span class="config-system-summary-tag"><i class="fas fa-shield-alt"></i> Controle</span>
-          <span class="config-system-summary-tag"><i class="fas fa-file-alt"></i> PDFs</span>
+          <span class="config-system-summary-tag"><i class="fas fa-check-circle"></i> Mesmos dados</span>
+          <span class="config-system-summary-tag"><i class="fas fa-history"></i> Salvamento auditado</span>
         </div>
       </div>
       <div class="config-system-summary-card">
-        <h6>Como usar</h6>
-        <p>Escolha um bloco acima, ajuste apenas o que for necessário e salve. As áreas de prévia e comparador ficam recolhidas quando você não estiver revisando layout.</p>
+        <h6>Encontrar uma configuração</h6>
+        <div class="config-settings-search">
+          <i class="fas fa-search"></i>
+          <input id="config-settings-search" class="form-control" type="search" placeholder="Ex.: garantia, comissão, assinatura ou backup" autocomplete="off">
+        </div>
+        <small id="config-settings-search-status" class="form-text text-muted">A pesquisa procura em todas as áreas abaixo.</small>
       </div>
     </div>
+    <div class="config-system-layout">
     <div class="config-system-nav" id="config-system-nav">
-      <button type="button" class="config-system-tab is-active" data-config-group="base">
-        Operação básica
-        <small>Localização, busca e API de CEP</small>
+      <button type="button" class="config-system-tab{% if config_secao == 'geral' %} is-active{% endif %}" data-config-group="geral">
+        Geral
+        <small>Localização, busca e CEP</small>
       </button>
-      <button type="button" class="config-system-tab" data-config-group="os">
-        Fluxo da OS
-        <small>Campos obrigatórios, mensagens e atendimento</small>
+      <button type="button" class="config-system-tab{% if config_secao == 'atendimento' %} is-active{% endif %}" data-config-group="atendimento">
+        Atendimento e OS
+        <small>Obrigatoriedades, SLA e garantia</small>
       </button>
-      <button type="button" class="config-system-tab" data-config-group="estoque">
-        Estoque e backup
-        <small>Reserva, inventário e retenção</small>
+      <button type="button" class="config-system-tab{% if config_secao == 'estoque' %} is-active{% endif %}" data-config-group="estoque">
+        Estoque
+        <small>Reserva, custo e inventário</small>
       </button>
-      <button type="button" class="config-system-tab" data-config-group="regras">
-        Garantia e controle
-        <small>Bônus, antifraude e desempenho</small>
+      <button type="button" class="config-system-tab{% if config_secao == 'financeiro' %} is-active{% endif %}" data-config-group="financeiro">
+        Financeiro
+        <small>Comissões e antifraude</small>
       </button>
-      <button type="button" class="config-system-tab" data-config-group="documentos">
+      <button type="button" class="config-system-tab{% if config_secao == 'comunicacao' %} is-active{% endif %}" data-config-group="comunicacao">
+        Comunicação
+        <small>Mensagens automáticas</small>
+      </button>
+      <button type="button" class="config-system-tab{% if config_secao == 'documentos' %} is-active{% endif %}" data-config-group="documentos">
         Documentos
-        <small>Layout, termos e pré-visualização</small>
+        <small>Conteúdo, layout e prévia</small>
+      </button>
+      <button type="button" class="config-system-tab{% if config_secao == 'manutencao' %} is-active{% endif %}" data-config-group="manutencao">
+        Privacidade e manutenção
+        <small>LGPD, backup e recuperação</small>
       </button>
     </div>
     <form method="post">
       {% csrf_token %}
+      <input type="hidden" name="secao" id="config-secao-ativa" value="{{ config_secao|default:'geral' }}">
       
       <!-- Localizacao -->
-      <div class="card mb-3" data-config-group="base">
+      <div class="card mb-3" data-config-group="geral">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-map-marker-alt mr-2"></i> Localizacao Padrao</h5>
+          <h5 class="mb-0"><i class="fas fa-map-marker-alt mr-2"></i> Localização padrão</h5>
         </div>
         <div class="card-body">
-          <div class="form-group form-check">
-            {{ form.usar_confirmacao_assinatura_digital }}
-            <label class="form-check-label" for="{{ form.usar_confirmacao_assinatura_digital.id_for_label }}">
-              {{ form.usar_confirmacao_assinatura_digital.label }}
-            </label>
-            <small class="form-text text-muted">
-              Quando desmarcado, a abertura da OS nao envia automaticamente o WhatsApp com link de confirmacao; o sistema exibe apenas o numero da ordem.
-            </small>
-          </div>
           <div class="row">
             <div class="col-md-4">
               <div class="form-group">
@@ -313,7 +370,7 @@
               <div class="form-group">
                 <label>{{ form.numero_loja_talao.label }}</label>
                 {{ form.numero_loja_talao }}
-                <small class="form-text text-muted">Usado no numero do talao (2 digitos).</small>
+                <small class="form-text text-muted">Usado no número do talão (2 dígitos).</small>
               </div>
             </div>
           </div>
@@ -321,7 +378,7 @@
       </div>
       
       <!-- Busca -->
-      <div class="card mb-3" data-config-group="base">
+      <div class="card mb-3" data-config-group="geral">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-search mr-2"></i> Configurações de busca</h5>
         </div>
@@ -329,20 +386,15 @@
           <div class="form-group">
             <label>{{ form.busca_minimo_caracteres.label }}</label>
             {{ form.busca_minimo_caracteres }}
-            <small class="form-text text-muted">Minimo de numeros para buscar clientes (recomendado: 7)</small>
-          </div>
-          <div class="form-group mb-0">
-            <label>{{ form.sla_dias_os_sem_movimentacao.label }}</label>
-            {{ form.sla_dias_os_sem_movimentacao }}
-            {% if form.sla_dias_os_sem_movimentacao.help_text %}<small class="form-text text-muted">{{ form.sla_dias_os_sem_movimentacao.help_text }}</small>{% endif %}
+            <small class="form-text text-muted">Mínimo de números para buscar clientes (recomendado: 7).</small>
           </div>
         </div>
       </div>
       
       <!-- Campos Cliente -->
-      <div class="card mb-3" data-config-group="os">
+      <div class="card mb-3" data-config-group="atendimento">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-user mr-2"></i> Campos Obrigatorios - Cliente</h5>
+          <h5 class="mb-0"><i class="fas fa-user mr-2"></i> Campos obrigatórios do cliente</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -361,11 +413,25 @@
       </div>
       
       <!-- Campos Ordem -->
-      <div class="card mb-3" data-config-group="os">
+      <div class="card mb-3" data-config-group="atendimento">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-tools mr-2"></i> Campos Obrigatorios - Ordem</h5>
+          <h5 class="mb-0"><i class="fas fa-tools mr-2"></i> Regras de abertura da OS</h5>
         </div>
         <div class="card-body">
+          <div class="alert alert-light border d-flex flex-wrap justify-content-between align-items-center">
+            <span>Prefixo, sequência e geração automática são mantidos numa tela curta e específica.</span>
+            <a href="{% url 'configuracoes:configuracao_os' %}" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">Numeração da OS</a>
+          </div>
+          <div class="form-group form-check">
+            {{ form.usar_confirmacao_assinatura_digital }}
+            <label class="form-check-label" for="{{ form.usar_confirmacao_assinatura_digital.id_for_label }}">{{ form.usar_confirmacao_assinatura_digital.label }}</label>
+            <small class="form-text text-muted">Controla o envio do link de confirmação e assinatura na abertura da ordem.</small>
+          </div>
+          <div class="form-group">
+            <label>{{ form.sla_dias_os_sem_movimentacao.label }}</label>
+            {{ form.sla_dias_os_sem_movimentacao }}
+            {% if form.sla_dias_os_sem_movimentacao.help_text %}<small class="form-text text-muted">{{ form.sla_dias_os_sem_movimentacao.help_text }}</small>{% endif %}
+          </div>
           <div class="row">
             {% for field in form %}
               {% if field.name|slice:"0:6" == "ordem_" %}
@@ -382,7 +448,7 @@
       </div>
       
       <!-- API CEP -->
-      <div class="card mb-3" data-config-group="base">
+      <div class="card mb-3" data-config-group="geral">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-map-marked-alt mr-2"></i> API CEP</h5>
         </div>
@@ -400,19 +466,18 @@
 
       <div class="card mb-3" data-config-group="estoque">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-boxes mr-2"></i> Estoque, Inventario e Continuidade</h5>
+          <h5 class="mb-0"><i class="fas fa-boxes mr-2"></i> Estoque e inventário</h5>
         </div>
         <div class="card-body">
           <div class="alert alert-light border">
-            <strong>Organizacao rapida:</strong> primeiro definimos a politica do estoque, depois o inventario ciclico e por fim a protecao dos backups.
+            <strong>Organização:</strong> configure reservas, método de custo, locais padrão e a frequência do inventário físico.
             <div class="mt-2 d-flex flex-wrap gap-2">
-              <a href="{% url 'configuracoes:backup_banco' %}" class="btn btn-sm btn-outline-primary">Abrir backup</a>
-              <a href="{% url 'configuracoes:restore_banco' %}" class="btn btn-sm btn-outline-secondary">Abrir restauracao</a>
+              <a href="{% url 'configuracoes:empresa' %}?secao=estoque" class="btn btn-sm btn-outline-primary">Alçadas de ofertas e cedências</a>
             </div>
           </div>
 
           <div class="border rounded p-3 mb-3 bg-light">
-            <h6 class="font-weight-bold mb-3"><i class="fas fa-warehouse mr-2"></i> Politica operacional do estoque</h6>
+            <h6 class="font-weight-bold mb-3"><i class="fas fa-warehouse mr-2"></i> Política operacional do estoque</h6>
             <div class="row">
               <div class="col-md-6">
                 <div class="form-check mb-3">
@@ -422,10 +487,6 @@
                 <div class="form-check mb-3">
                   {{ form.estoque_pre_reserva_exige_saldo }}
                   <label class="form-check-label">{{ form.estoque_pre_reserva_exige_saldo.label }}</label>
-                </div>
-                <div class="form-check mb-0">
-                  {{ form.lgpd_mascarar_documento }}
-                  <label class="form-check-label">{{ form.lgpd_mascarar_documento.label }}</label>
                 </div>
               </div>
               <div class="col-md-6">
@@ -474,7 +535,7 @@
           </div>
 
           <div class="border rounded p-3 mb-3">
-            <h6 class="font-weight-bold mb-3"><i class="fas fa-clipboard-check mr-2"></i> Inventario ciclico</h6>
+            <h6 class="font-weight-bold mb-3"><i class="fas fa-clipboard-check mr-2"></i> Inventário cíclico</h6>
             <div class="row">
               <div class="col-md-6">
                 <div class="form-group">
@@ -489,34 +550,48 @@
                 </div>
               </div>
             </div>
-            <small class="form-text text-muted">Use este bloco para definir a cadencia de conferencia fisica da loja e acompanhar a ultima execucao registrada.</small>
+            <small class="form-text text-muted">Defina a cadência da conferência física e acompanhe a última execução registrada.</small>
           </div>
 
-          <div class="border rounded p-3 bg-light">
-            <h6 class="font-weight-bold mb-3"><i class="fas fa-shield-alt mr-2"></i> Backup e recuperacao</h6>
-            <div class="row">
-              <div class="col-md-7">
-                <div class="form-group">
-                  <label>{{ form.backup_diretorio_oficial.label }}</label>
-                  {{ form.backup_diretorio_oficial }}
-                  {% if form.backup_diretorio_oficial.help_text %}<small class="form-text text-muted">{{ form.backup_diretorio_oficial.help_text }}</small>{% endif %}
-                </div>
-              </div>
-              <div class="col-md-5">
-                <div class="form-group mb-0">
-                  <label>{{ form.backup_retencao_dias.label }}</label>
-                  {{ form.backup_retencao_dias }}
-                </div>
+        </div>
+      </div>
+
+      <div class="card mb-3" data-config-group="manutencao">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-shield-alt mr-2"></i> Privacidade, backup e recuperação</h5>
+        </div>
+        <div class="card-body">
+          <div class="form-check mb-3">
+            {{ form.lgpd_mascarar_documento }}
+            <label class="form-check-label" for="{{ form.lgpd_mascarar_documento.id_for_label }}">{{ form.lgpd_mascarar_documento.label }}</label>
+            <small class="form-text text-muted">Protege documentos pessoais nas telas e relatórios em que o dado completo não é necessário.</small>
+          </div>
+          <div class="row">
+            <div class="col-md-7">
+              <div class="form-group">
+                <label>{{ form.backup_diretorio_oficial.label }}</label>
+                {{ form.backup_diretorio_oficial }}
+                {% if form.backup_diretorio_oficial.help_text %}<small class="form-text text-muted">{{ form.backup_diretorio_oficial.help_text }}</small>{% endif %}
               </div>
             </div>
-            <div class="small text-muted">
-              Esta pasta passa a ser a fonte oficial para gerar backups autom?ticos, listar arquivos nas telas de restore e permitir recupera??o antes do login.
+            <div class="col-md-5">
+              <div class="form-group">
+                <label>{{ form.backup_retencao_dias.label }}</label>
+                {{ form.backup_retencao_dias }}
+              </div>
             </div>
+          </div>
+          <div class="alert alert-light border mb-0 d-flex flex-wrap justify-content-between align-items-center">
+            <span>O diretório oficial é usado na geração, listagem e recuperação dos backups.</span>
+            <span class="mt-2 mt-md-0">
+              <a href="{% url 'configuracoes:backup_banco' %}" class="btn btn-sm btn-outline-primary">Gerenciar backups</a>
+              <a href="{% url 'configuracoes:restore_banco' %}" class="btn btn-sm btn-outline-secondary">Restaurar</a>
+            </span>
           </div>
         </div>
       </div>
 
-      <div class="card mb-3" data-config-group="regras">
+      <div class="card mb-3" data-config-group="financeiro">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-percent mr-2"></i> Política de comissões</h5>
         </div>
@@ -581,9 +656,9 @@
         </div>
       </div>
 
-      <div class="card mb-3" data-config-group="regras">
+      <div class="card mb-3" data-config-group="financeiro">
         <div class="card-header bg-light">
-          <h5 class="mb-0"><i class="fas fa-percentage mr-2"></i> Percentuais Padrao (Meu Desempenho)</h5>
+          <h5 class="mb-0"><i class="fas fa-percentage mr-2"></i> Percentuais padrão de desempenho</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -600,7 +675,7 @@
         </div>
       </div>
 
-      <div class="card mb-3" data-config-group="regras">
+      <div class="card mb-3" data-config-group="atendimento">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-shield-alt mr-2"></i> Garantia p&oacute;s-servi&ccedil;o</h5>
         </div>
@@ -626,7 +701,7 @@
         </div>
       </div>
 
-      <div class="card mb-3" data-config-group="regras">
+      <div class="card mb-3" data-config-group="financeiro">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-user-shield mr-2"></i> Antifraude no Caixa</h5>
         </div>
@@ -663,16 +738,19 @@
               {% if form.antifraude_motivo_minimo_caracteres.help_text %}<small class="form-text text-muted">{{ form.antifraude_motivo_minimo_caracteres.help_text }}</small>{% endif %}
             </div>
           </div>
-          <small class="text-muted">Essas regras aumentam a seguranca em operacoes sensiveis (descontos criticos e exclusao de pagamentos).</small>
+          <small class="text-muted">Essas regras aumentam a segurança em operações sensíveis, como descontos críticos e exclusão de pagamentos.</small>
         </div>
       </div>
 
-      <div class="card mb-3" data-config-group="os">
+      <div class="card mb-3" data-config-group="comunicacao">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-comments mr-2"></i> Mensagens automáticas</h5>
         </div>
         <div class="card-body">
           <p class="text-muted">Esses textos são usados pelo fluxo automático da OS, como abertura, envio de orçamento e aviso de pronto contactado. Variáveis disponíveis: <code>{cliente_nome}</code>, <code>{saudacao_cliente}</code>, <code>{numero_os}</code>, <code>{equipamento_resumo}</code>, <code>{codigo_portal}</code>, <code>{valor_orcamento}</code>, <code>{condicoes}</code>, <code>{itens_orcamento}</code>, <code>{itens_orcamento_resumidos}</code>, <code>{quantidade_itens_orcamento}</code>, <code>{status_os}</code>, <code>{empresa_nome}</code>, <code>{telefone_loja}</code>, <code>{email_loja}</code>, <code>{link_orcamento_pdf}</code>, <code>{link_ordem_pdf}</code>, <code>{link_confirmacao}</code>.</p>
+          <div class="mb-3">
+            <a href="{% url 'configuracoes:modelos_mensagem' %}" class="btn btn-sm btn-outline-primary"><i class="fas fa-layer-group mr-1"></i> Biblioteca de modelos de mensagem</a>
+          </div>
           <div class="row">
             <div class="col-md-12 form-group">
               <div class="form-check">
@@ -710,24 +788,11 @@
               {% if form.condicoes_orcamento.help_text %}<small class="form-text text-muted">{{ form.condicoes_orcamento.help_text }}</small>{% endif %}
               {{ form.condicoes_orcamento.errors }}
             </div>
-            <div class="col-md-12 form-group">
-              <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Serviço" }}</label>
-              {{ form.termos_ordem_servico }}
-              <small class="form-text text-muted">Usado nos PDFs de OS (digital e impressão).</small>
-              {% if form.termos_ordem_servico.help_text %}<small class="form-text text-muted">{{ form.termos_ordem_servico.help_text }}</small>{% endif %}
-              {{ form.termos_ordem_servico.errors }}
-            </div>
-            <div class="col-md-12 form-group">
-              <label>{{ form.rodape_relatorio.label|default:"Rodapé dos relatórios" }}</label>
-              {{ form.rodape_relatorio }}
-              {% if form.rodape_relatorio.help_text %}<small class="form-text text-muted">{{ form.rodape_relatorio.help_text }}</small>{% endif %}
-              {{ form.rodape_relatorio.errors }}
-            </div>
           </div>
         </div>
       </div>
 
-      <div class="card mb-3" data-config-group="os">
+      <div class="card mb-3" data-config-group="documentos">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-print mr-2"></i> Layout de Impressao da OS</h5>
         </div>
@@ -781,18 +846,39 @@
               {% if form.layout_os_exibir_etiqueta_corte.help_text %}<small class="form-text text-muted">{{ form.layout_os_exibir_etiqueta_corte.help_text }}</small>{% endif %}
             </div>
           </div>
-          <small class="text-muted">Use esse bloco para ajustar o A4 com corte ao meio sem alterar codigo.</small>
+          <small class="text-muted">Use este bloco para ajustar o A4 com corte ao meio sem alterar o código.</small>
         </div>
       </div>
 
-      <div class="card mb-3" data-config-group="os">
+      <div class="card mb-3" data-config-group="documentos">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="fas fa-align-left mr-2"></i> Termos e textos dos documentos</h5>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Serviço" }}</label>
+            {{ form.termos_ordem_servico }}
+            <small class="form-text text-muted">Usado nas vias digital e impressa da Ordem de Serviço.</small>
+            {% if form.termos_ordem_servico.help_text %}<small class="form-text text-muted">{{ form.termos_ordem_servico.help_text }}</small>{% endif %}
+            {{ form.termos_ordem_servico.errors }}
+          </div>
+          <div class="form-group mb-0">
+            <label>{{ form.rodape_relatorio.label|default:"Rodapé dos relatórios" }}</label>
+            {{ form.rodape_relatorio }}
+            {% if form.rodape_relatorio.help_text %}<small class="form-text text-muted">{{ form.rodape_relatorio.help_text }}</small>{% endif %}
+            {{ form.rodape_relatorio.errors }}
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3" data-config-group="documentos">
         <div class="card-header bg-light">
           <h5 class="mb-0"><i class="fas fa-list-check mr-2"></i> Conteúdo impresso</h5>
         </div>
         <div class="card-body">
           <div class="row">
             <div class="col-lg-6 mb-3">
-              <div class="print-settings-card print-doc-card h-100" data-print-card>
+              <div class="print-settings-card print-doc-card h-100" data-print-card data-collapsed-default="1">
                 <div class="print-doc-header">
                   <div class="print-doc-meta">
                     <div class="print-doc-title">
@@ -960,25 +1046,25 @@
             <div class="col-lg-6 mb-3">
               <div class="preview-grid-card">
                 <label>OS Impress&atilde;o</label>
-                <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_impressao&amp;_preview=1" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+                <iframe class="js-preview-frame" src="about:blank" data-preview-url="{% url 'configuracoes:preview_documento' %}?tipo=os_impressao&amp;_preview=1" data-preview-tipo="os_impressao" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
               </div>
             </div>
             <div class="col-lg-6 mb-3">
               <div class="preview-grid-card">
                 <label>OS Digital</label>
-                <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+                <iframe class="js-preview-frame" src="about:blank" data-preview-url="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1" data-preview-tipo="os_digital" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
               </div>
             </div>
             <div class="col-lg-6 mb-3">
               <div class="preview-grid-card">
                 <label>Relat&oacute;rio T&eacute;cnico</label>
-                <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=relatorio&amp;_preview=1" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+                <iframe class="js-preview-frame" src="about:blank" data-preview-url="{% url 'configuracoes:preview_documento' %}?tipo=relatorio&amp;_preview=1" data-preview-tipo="relatorio" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
               </div>
             </div>
             <div class="col-lg-6 mb-3">
               <div class="preview-grid-card">
                 <label>Or&ccedil;amento</label>
-                <iframe class="js-preview-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=orcamento&amp;_preview=1" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+                <iframe class="js-preview-frame" src="about:blank" data-preview-url="{% url 'configuracoes:preview_documento' %}?tipo=orcamento&amp;_preview=1" data-preview-tipo="orcamento" width="100%" height="300" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
               </div>
             </div>
           </div>
@@ -1031,19 +1117,25 @@
           <div class="row">
             <div class="col-lg-6 mb-3">
               <label class="small text-muted">Preview A</label>
-              <iframe id="preview_compare_frame_a" class="js-compare-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1&amp;layout_documentos_preset=clean" width="100%" height="360" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+              <iframe id="preview_compare_frame_a" class="js-compare-frame" src="about:blank" data-preview-url="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1&amp;layout_documentos_preset=clean" data-preview-tipo="os_digital" width="100%" height="360" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
             </div>
             <div class="col-lg-6 mb-3">
               <label class="small text-muted">Preview B</label>
-              <iframe id="preview_compare_frame_b" class="js-compare-frame" src="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1&amp;layout_documentos_preset=executivo" width="100%" height="360" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
+              <iframe id="preview_compare_frame_b" class="js-compare-frame" src="about:blank" data-preview-url="{% url 'configuracoes:preview_documento' %}?tipo=os_digital&amp;_preview=1&amp;layout_documentos_preset=executivo" data-preview-tipo="os_digital" width="100%" height="360" style="border:1px solid #dee2e6;border-radius:6px;"></iframe>
             </div>
           </div>
         </div>
       </div>
        
-      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
-      <a href="{% url 'configuracoes:painel' %}" class="btn btn-secondary">Cancelar</a>
+      <div class="config-save-bar">
+        <span id="config-save-status" class="config-save-status"><i class="fas fa-check-circle mr-1"></i> Nenhuma alteração pendente</span>
+        <span>
+          <a href="{% url 'configuracoes:painel' %}" class="btn btn-outline-secondary">Descartar</a>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Salvar alterações</button>
+        </span>
+      </div>
     </form>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -1078,6 +1170,9 @@
       toggle.addEventListener("click", function () {
         body.classList.toggle("is-collapsed");
         atualizarCard(card);
+        if (!body.classList.contains("is-collapsed")) {
+          document.dispatchEvent(new CustomEvent("config:preview-open", { detail: { card } }));
+        }
       });
       atualizarCard(card);
     });
@@ -1089,33 +1184,13 @@
     if (!nav) {
       return;
     }
-
-    const cards = Array.from(document.querySelectorAll(".card-modern-body > form > .card.mb-3"));
-    const grupos = {
-      base: [
-        "Localizacao Padrao",
-        "Configurações de busca",
-        "API CEP"
-      ],
-      os: [
-        "Campos Obrigatorios - Cliente",
-        "Campos Obrigatorios - Ordem",
-        "Mensagens automáticas"
-      ],
-      estoque: [
-        "Estoque, Inventario e Backup"
-      ],
-      regras: [
-        "Bonus por Retirada Rapida",
-        "Percentuais Padrao (Meu Desempenho)",
-        "Garantia pós-serviço",
-        "Antifraude no Caixa"
-      ],
-      documentos: [
-        "Layout de Impressao da OS",
-        "Pré-visualização dos Layouts"
-      ]
-    };
+    const form = nav.parentElement.querySelector("form");
+    const cards = Array.from(form.querySelectorAll(":scope > .card.mb-3[data-config-group]"));
+    const campoSecao = document.getElementById("config-secao-ativa");
+    const pesquisa = document.getElementById("config-settings-search");
+    const statusPesquisa = document.getElementById("config-settings-search-status");
+    const statusSalvar = document.getElementById("config-save-status");
+    const botoes = Array.from(nav.querySelectorAll("[data-config-group]"));
 
     function normalizar(texto) {
       return (texto || "")
@@ -1125,36 +1200,67 @@
         .trim();
     }
 
-    const mapaTituloGrupo = {};
-    Object.entries(grupos).forEach(([grupo, titulos]) => {
-      titulos.forEach((titulo) => {
-        mapaTituloGrupo[normalizar(titulo)] = grupo;
-      });
-    });
-
-    cards.forEach((card) => {
-      if (card.dataset.configGroup) {
-        return;
-      }
-      const titulo = normalizar(card.querySelector(".card-header h5")?.textContent || "");
-      card.dataset.configGroup = mapaTituloGrupo[titulo] || "base";
-    });
-
-    const botoes = Array.from(nav.querySelectorAll("[data-config-group]"));
     function ativarGrupo(grupo) {
+      if (campoSecao) {
+        campoSecao.value = grupo;
+      }
       botoes.forEach((botao) => botao.classList.toggle("is-active", botao.dataset.configGroup === grupo));
       cards.forEach((card) => {
         card.classList.toggle("config-system-card-hidden", card.dataset.configGroup !== grupo);
       });
+      const url = new URL(window.location.href);
+      url.searchParams.set("secao", grupo);
+      window.history.replaceState({}, "", url);
     }
 
     botoes.forEach((botao) => {
       botao.addEventListener("click", function () {
+        if (pesquisa) {
+          pesquisa.value = "";
+        }
         ativarGrupo(botao.dataset.configGroup);
       });
     });
 
-    ativarGrupo("base");
+    if (pesquisa) {
+      pesquisa.addEventListener("input", function () {
+        const termo = normalizar(pesquisa.value).toLowerCase();
+        if (!termo) {
+          ativarGrupo(campoSecao?.value || "geral");
+          statusPesquisa.textContent = "A pesquisa procura em todas as áreas abaixo.";
+          return;
+        }
+        botoes.forEach((botao) => botao.classList.remove("is-active"));
+        let encontrados = 0;
+        cards.forEach((card) => {
+          const corresponde = normalizar(card.textContent).toLowerCase().includes(termo);
+          card.classList.toggle("config-system-card-hidden", !corresponde);
+          if (corresponde) {
+            encontrados += 1;
+          }
+        });
+        statusPesquisa.textContent = encontrados
+          ? `${encontrados} bloco(s) encontrado(s).`
+          : "Nenhuma configuração encontrada.";
+      });
+    }
+
+    form.addEventListener("input", function (event) {
+      if (event.target === pesquisa || !statusSalvar) {
+        return;
+      }
+      statusSalvar.classList.add("is-dirty");
+      statusSalvar.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> Alterações ainda não salvas';
+    });
+    form.addEventListener("change", function () {
+      if (!statusSalvar) {
+        return;
+      }
+      statusSalvar.classList.add("is-dirty");
+      statusSalvar.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> Alterações ainda não salvas';
+    });
+
+    ativarGrupo(campoSecao?.value || "geral");
   })();
 </script>
 <script>
@@ -1260,25 +1366,32 @@
       if (!frame) {
         return;
       }
-      const atual = new URL(frame.src, window.location.origin);
+      const origem = frame.dataset.previewUrl || frame.src;
+      const atual = new URL(origem, window.location.origin);
       const params = new URLSearchParams(overrides.toString());
-      params.set("tipo", tipo || atual.searchParams.get("tipo") || "os_impressao");
+      params.set("tipo", tipo || frame.dataset.previewTipo || atual.searchParams.get("tipo") || "os_impressao");
       frame.src = atual.pathname + "?" + params.toString();
+      frame.dataset.loaded = "1";
     }
 
-    function atualizarPrevia() {
+    function atualizarPrevia(forcar) {
       if (!previewFrames.length) {
         return;
       }
       const overrides = buildOverrides(true);
       previewFrames.forEach((frame) => {
-        const atual = new URL(frame.src, window.location.origin);
-        atualizarFrame(frame, atual.searchParams.get("tipo") || "os_impressao", overrides);
+        if (!forcar && frame.dataset.loaded !== "1") {
+          return;
+        }
+        atualizarFrame(frame, frame.dataset.previewTipo || "os_impressao", overrides);
       });
     }
 
-    function atualizarComparador() {
+    function atualizarComparador(forcar) {
       if (!compareFrameA || !compareFrameB || !compareTipo || !comparePresetA || !comparePresetB) {
+        return;
+      }
+      if (!forcar && compareFrameA.dataset.loaded !== "1" && compareFrameB.dataset.loaded !== "1") {
         return;
       }
       const tipo = (compareTipo.value || "os_digital").trim();
@@ -1294,22 +1407,22 @@
       atualizarFrame(compareFrameB, tipo, overridesB);
     }
 
-    function atualizarTudo() {
-      atualizarPrevia();
-      atualizarComparador();
+    function atualizarTudo(forcar) {
+      atualizarPrevia(Boolean(forcar));
+      atualizarComparador(Boolean(forcar));
     }
 
     campos.forEach((nome) => {
       const campo = document.getElementById("id_" + nome);
       if (campo) {
-        campo.addEventListener("change", atualizarTudo);
-        campo.addEventListener("input", atualizarTudo);
+        campo.addEventListener("change", function () { atualizarTudo(false); });
+        campo.addEventListener("input", function () { atualizarTudo(false); });
       }
     });
 
     [compareTipo, comparePresetA, comparePresetB].forEach((campo) => {
       if (campo) {
-        campo.addEventListener("change", atualizarComparador);
+        campo.addEventListener("change", function () { atualizarComparador(true); });
       }
     });
 
@@ -1321,11 +1434,22 @@
       btn.type = "button";
       btn.className = "btn btn-sm btn-outline-secondary";
       btn.textContent = "Atualizar pr\u00e9via";
-      btn.addEventListener("click", atualizarTudo);
+      btn.addEventListener("click", function () { atualizarPrevia(true); });
       actions.appendChild(btn);
     }
 
-    atualizarTudo();
+    document.addEventListener("config:preview-open", function (event) {
+      const card = event.detail?.card;
+      if (!card) {
+        return;
+      }
+      if (card.querySelector(".js-preview-frame")) {
+        atualizarPrevia(true);
+      }
+      if (card.querySelector(".js-compare-frame")) {
+        atualizarComparador(true);
+      }
+    });
   })();
 </script>
 {% endblock %}
