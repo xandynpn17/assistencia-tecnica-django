@@ -1,0 +1,53 @@
+{% extends 'core/base.html' %}
+{% load widget_tweaks %}
+{% block content %}
+<div class="container-fluid mt-3">
+  {% include 'caixa/_subnav_caixa.html' %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-1">Editar conta bancária</h3>
+      <div class="text-muted">{{ conta.nome }} · {{ conta.banco_nome }}</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'caixa:tesouraria' %}">Voltar</a>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-8">
+      {% if linha_duplicada and conta.saldo_inicial %}
+      <div class="alert alert-warning">
+        <strong>Possível duplicidade detectada.</strong>
+        O saldo inicial de R$ {{ conta.saldo_inicial|floatformat:2 }} tem o mesmo valor de uma linha do extrato em {{ linha_duplicada.data_movimento|date:'d/m/Y' }}:
+        “{{ linha_duplicada.descricao }}”. Se essa linha representa a entrada do dinheiro na conta, o saldo inicial deve representar apenas o valor existente antes dela.
+      </div>
+      {% endif %}
+      <div class="alert alert-info">
+        O saldo inicial é o valor existente na conta imediatamente antes dos movimentos controlados pelo sistema. Alterá-lo recalcula o saldo histórico e exige justificativa.
+      </div>
+      <div class="card">
+        <div class="card-header"><strong>Dados e base do saldo</strong></div>
+        <div class="card-body">
+          <form method="post" novalidate>
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button class="btn btn-primary">Salvar alteração auditada</button>
+            <a class="btn btn-outline-secondary" href="{% url 'caixa:tesouraria' %}">Cancelar</a>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-header"><strong>Resumo antes da alteração</strong></div>
+        <div class="card-body">
+          <div class="text-muted">Saldo inicial</div>
+          <h5>R$ {{ saldo_inicial_antes|floatformat:2 }}</h5>
+          <div class="text-muted">Data-base</div>
+          <h5>{{ data_saldo_inicial_antes|date:'d/m/Y' }}</h5>
+          <div class="text-muted">Saldo atual calculado</div>
+          <h5 class="mb-0">R$ {{ saldo_atual_antes|floatformat:2 }}</h5>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

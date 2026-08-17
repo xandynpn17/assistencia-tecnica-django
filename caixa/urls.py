@@ -43,6 +43,7 @@ urlpatterns = [
     path("fluxo-projetado/", views.fluxo_projetado, name="fluxo_projetado"),
     path("relatorios/", views.relatorios, name="relatorios"),
     path("tesouraria/", views.tesouraria, name="tesouraria"),
+    path("tesouraria/contas/<int:conta_id>/editar/", views.editar_conta_bancaria, name="editar_conta_bancaria"),
     path("tesouraria/extrato/<int:linha_id>/", views.tratar_linha_extrato, name="tratar_linha_extrato"),
     path("tesouraria/conciliacao/grupo/", views.conciliar_extrato_grupo, name="conciliar_extrato_grupo"),
     path("tesouraria/conciliacao/<int:conciliacao_id>/desfazer/", views.desfazer_conciliacao_bancaria, name="desfazer_conciliacao_bancaria"),

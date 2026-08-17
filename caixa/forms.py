@@ -97,6 +97,21 @@ class ContaBancariaForm(forms.ModelForm):
         widgets = {"data_saldo_inicial": forms.DateInput(attrs={"type": "date"})}
 
 
+class EditarContaBancariaForm(ContaBancariaForm):
+    justificativa = forms.CharField(
+        min_length=12,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Obrigatória para manter o histórico da alteração.",
+    )
+
+    def clean(self):
+        dados = super().clean()
+        campos_conta = set(self.Meta.fields)
+        if not campos_conta.intersection(self.changed_data):
+            raise forms.ValidationError("Altere ao menos uma informação da conta bancária.")
+        return dados
+
+
 class TransferenciaTesourariaForm(forms.ModelForm):
     class Meta:
         model = TransferenciaTesouraria

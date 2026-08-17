@@ -632,7 +632,11 @@ def fechar_periodo_bancario(*, conta, periodo_inicio, periodo_fim, saldo_extrato
     ).count()
     if pendentes:
         raise ValidationError(f"Existem {pendentes} linha(s) de extrato pendente(s) no período.")
-    movimentos = MovimentoBancario.objects.filter(conta=conta, data_movimento__lte=periodo_fim)
+    movimentos = MovimentoBancario.objects.filter(
+        conta=conta,
+        data_movimento__gte=conta.data_saldo_inicial,
+        data_movimento__lte=periodo_fim,
+    )
     entradas = movimentos.filter(tipo="entrada").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     saidas = movimentos.filter(tipo="saida").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
     saldo_sistema = Decimal(conta.saldo_inicial or 0) + entradas - saidas

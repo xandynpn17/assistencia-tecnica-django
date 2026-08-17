@@ -4,14 +4,15 @@ from uuid import uuid4
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from configuracoes.permissions import CAIXA_FINANCIAL_ROLES, has_sensitive_permission, require_sensitive_permission, role_required
 from configuracoes.services.tenant_guard import obter_empresa_ativa
 
-from ..forms import AporteCapitalForm, ConciliacaoBancariaGrupoForm, ConciliarExtratoForm, ContaBancariaForm, CriarMovimentoExtratoForm, FechamentoBancarioForm, ImportarExtratoForm, MovimentoSocioForm, TransferenciaTesourariaForm
-from ..models import AporteCapital, ConciliacaoBancaria, ContaBancaria, FechamentoBancario, ImportacaoExtratoBancario, LinhaExtratoBancario, MovimentoBancario, MovimentoSocio, TransferenciaTesouraria
+from ..forms import AporteCapitalForm, ConciliacaoBancariaGrupoForm, ConciliarExtratoForm, ContaBancariaForm, CriarMovimentoExtratoForm, EditarContaBancariaForm, FechamentoBancarioForm, ImportarExtratoForm, MovimentoSocioForm, TransferenciaTesourariaForm
+from ..models import AporteCapital, AuditoriaFinanceira, ConciliacaoBancaria, ContaBancaria, FechamentoBancario, ImportacaoExtratoBancario, LinhaExtratoBancario, MovimentoBancario, MovimentoSocio, TransferenciaTesouraria
 from ..services.tesouraria import conciliar_grupo, conciliar_linha, criar_movimento_de_linha_extrato, desfazer_conciliacao, fechar_periodo_bancario, ignorar_linha, importar_extrato_arquivo, movimentos_bancarios_disponiveis, reabrir_periodo_bancario, registrar_aporte_capital, registrar_movimento_socio, registrar_transferencia, sugerir_correspondencias
 from .helpers import _garantir_categorias_financeiras_padrao
 
@@ -132,7 +133,14 @@ def tesouraria(request):
             messages.error(request, "; ".join(exc.messages))
         return redirect("caixa:tesouraria")
 
-    contas = ContaBancaria.objects.filter(empresa=empresa).prefetch_related("movimentos")
+    possivel_duplicidade = LinhaExtratoBancario.objects.filter(
+        conta=OuterRef("pk"),
+        data_movimento=OuterRef("data_saldo_inicial"),
+        valor=OuterRef("saldo_inicial"),
+    )
+    contas = ContaBancaria.objects.filter(empresa=empresa).annotate(
+        possivel_saldo_inicial_duplicado=Exists(possivel_duplicidade)
+    ).prefetch_related("movimentos")
     return render(request, "caixa/tesouraria.html", {
         "contas": contas,
         "conta_form": conta_form,
@@ -151,6 +159,77 @@ def tesouraria(request):
         "conciliacoes": ConciliacaoBancaria.objects.filter(empresa=empresa).select_related("conta", "conciliado_por", "desfeito_por")[:50],
         "importacoes_extrato": ImportacaoExtratoBancario.objects.filter(empresa=empresa).select_related("conta", "importado_por")[:30],
         "fechamentos_bancarios": FechamentoBancario.objects.filter(empresa=empresa).select_related("conta", "fechado_por", "reaberto_por")[:30],
+        "pode_editar_conta_bancaria": has_sensitive_permission(
+            request.user, "perm_caixa_corrigir_lancamentos"
+        ),
+        "menu_app": "caixa",
+        "menu_sub": "tesouraria",
+    })
+
+
+@role_required(CAIXA_FINANCIAL_ROLES)
+def editar_conta_bancaria(request, conta_id):
+    require_sensitive_permission(request.user, "perm_caixa_corrigir_lancamentos")
+    empresa = obter_empresa_ativa(request, strict=False)
+    conta = get_object_or_404(ContaBancaria, pk=conta_id, empresa=empresa)
+    saldo_inicial_antes = conta.saldo_inicial
+    data_saldo_inicial_antes = conta.data_saldo_inicial
+    saldo_atual_antes = conta.saldo_atual
+    linha_duplicada = LinhaExtratoBancario.objects.filter(
+        conta=conta,
+        data_movimento=conta.data_saldo_inicial,
+        valor=conta.saldo_inicial,
+    ).order_by("id").first()
+    form = EditarContaBancariaForm(request.POST or None, instance=conta)
+
+    if request.method == "POST" and form.is_valid():
+        alterou_base_saldo = bool(
+            {"saldo_inicial", "data_saldo_inicial"}.intersection(form.changed_data)
+        )
+        if alterou_base_saldo and FechamentoBancario.objects.filter(
+            conta=conta, status="fechado"
+        ).exists():
+            form.add_error(
+                None,
+                "Reabra os períodos bancários fechados antes de alterar a base do saldo.",
+            )
+        else:
+            with transaction.atomic():
+                conta_bloqueada = ContaBancaria.objects.select_for_update().get(
+                    pk=conta.pk, empresa=empresa
+                )
+                saldo_anterior = conta_bloqueada.saldo_inicial
+                data_anterior = conta_bloqueada.data_saldo_inicial
+                for campo in EditarContaBancariaForm.Meta.fields:
+                    setattr(conta_bloqueada, campo, form.cleaned_data[campo])
+                conta_bloqueada.full_clean()
+                conta_bloqueada.save()
+                conta_atualizada = conta_bloqueada
+                motivo = form.cleaned_data["justificativa"].strip()
+                AuditoriaFinanceira.objects.create(
+                    evento="conta_bancaria_editada",
+                    descricao=(
+                        f"Conta bancária #{conta_atualizada.pk} ({conta_atualizada.nome}) editada. "
+                        f"Saldo inicial: {saldo_anterior:.2f} -> {conta_atualizada.saldo_inicial:.2f}; "
+                        f"data-base: {data_anterior:%d/%m/%Y} -> "
+                        f"{conta_atualizada.data_saldo_inicial:%d/%m/%Y}. Motivo: {motivo}"
+                    )[:255],
+                    valor=conta_atualizada.saldo_inicial,
+                    usuario=request.user,
+                )
+            messages.success(
+                request,
+                "Conta bancária atualizada com justificativa registrada na auditoria.",
+            )
+            return redirect("caixa:tesouraria")
+
+    return render(request, "caixa/editar_conta_bancaria.html", {
+        "conta": conta,
+        "form": form,
+        "saldo_inicial_antes": saldo_inicial_antes,
+        "data_saldo_inicial_antes": data_saldo_inicial_antes,
+        "saldo_atual_antes": saldo_atual_antes,
+        "linha_duplicada": linha_duplicada,
         "menu_app": "caixa",
         "menu_sub": "tesouraria",
     })

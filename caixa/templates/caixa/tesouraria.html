@@ -31,7 +31,14 @@
         <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="fechar_periodo">{{ fechamento_form.as_p }}<button class="btn btn-dark">Fechar período</button></form>
       </div></div>
       <div class="row">
-        {% for conta in contas %}<div class="col-md-6"><div class="card mb-3"><div class="card-body"><strong>{{ conta.nome }}</strong><div class="text-muted">{{ conta.banco_nome }} · ag. {{ conta.agencia|default:'-' }} · {{ conta.numero }}</div><h4 class="mt-2 mb-0">R$ {{ conta.saldo_atual|floatformat:2 }}</h4><small class="text-muted">Projetado: R$ {{ conta.saldo_projetado|floatformat:2 }}</small></div></div></div>{% empty %}<div class="col-12"><div class="alert alert-light border">Nenhuma conta cadastrada.</div></div>{% endfor %}
+        {% for conta in contas %}<div class="col-md-6"><div class="card mb-3"><div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div><strong>{{ conta.nome }}</strong><div class="text-muted">{{ conta.banco_nome }} · ag. {{ conta.agencia|default:'-' }} · {{ conta.numero }}</div></div>
+            {% if pode_editar_conta_bancaria %}<a class="btn btn-sm btn-outline-primary" href="{% url 'caixa:editar_conta_bancaria' conta.id %}">Editar conta</a>{% endif %}
+          </div>
+          <h4 class="mt-2 mb-0">R$ {{ conta.saldo_atual|floatformat:2 }}</h4><small class="text-muted">Projetado: R$ {{ conta.saldo_projetado|floatformat:2 }} · Saldo inicial: R$ {{ conta.saldo_inicial|floatformat:2 }} em {{ conta.data_saldo_inicial|date:'d/m/Y' }}</small>
+          {% if conta.saldo_inicial and conta.possivel_saldo_inicial_duplicado %}<div class="alert alert-warning py-2 mt-2 mb-0"><small><strong>Verifique o saldo inicial:</strong> existe no extrato do mesmo dia uma movimentação com o mesmo valor. Ela pode estar sendo contada duas vezes.</small></div>{% endif %}
+        </div></div></div>{% empty %}<div class="col-12"><div class="alert alert-light border">Nenhuma conta cadastrada.</div></div>{% endfor %}
       </div>
     </div>
   </div>

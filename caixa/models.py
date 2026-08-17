@@ -830,15 +830,19 @@ class ContaBancaria(models.Model):
 
     @property
     def saldo_atual(self):
-        realizados = self.movimentos.filter(data_movimento__lte=timezone.localdate())
+        realizados = self.movimentos.filter(
+            data_movimento__gte=self.data_saldo_inicial,
+            data_movimento__lte=timezone.localdate(),
+        )
         entradas = realizados.filter(tipo="entrada").aggregate(total=models.Sum("valor"))["total"] or Decimal("0.00")
         saidas = realizados.filter(tipo="saida").aggregate(total=models.Sum("valor"))["total"] or Decimal("0.00")
         return Decimal(self.saldo_inicial or 0) + entradas - saidas
 
     @property
     def saldo_projetado(self):
-        entradas = self.movimentos.filter(tipo="entrada").aggregate(total=models.Sum("valor"))["total"] or Decimal("0.00")
-        saidas = self.movimentos.filter(tipo="saida").aggregate(total=models.Sum("valor"))["total"] or Decimal("0.00")
+        movimentos = self.movimentos.filter(data_movimento__gte=self.data_saldo_inicial)
+        entradas = movimentos.filter(tipo="entrada").aggregate(total=models.Sum("valor"))["total"] or Decimal("0.00")
+        saidas = movimentos.filter(tipo="saida").aggregate(total=models.Sum("valor"))["total"] or Decimal("0.00")
         return Decimal(self.saldo_inicial or 0) + entradas - saidas
 
 
