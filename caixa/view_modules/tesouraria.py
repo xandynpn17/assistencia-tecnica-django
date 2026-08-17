@@ -13,6 +13,7 @@ from configuracoes.services.tenant_guard import obter_empresa_ativa
 from ..forms import AporteCapitalForm, ConciliacaoBancariaGrupoForm, ConciliarExtratoForm, ContaBancariaForm, CriarMovimentoExtratoForm, FechamentoBancarioForm, ImportarExtratoForm, MovimentoSocioForm, TransferenciaTesourariaForm
 from ..models import AporteCapital, ConciliacaoBancaria, ContaBancaria, FechamentoBancario, ImportacaoExtratoBancario, LinhaExtratoBancario, MovimentoBancario, MovimentoSocio, TransferenciaTesouraria
 from ..services.tesouraria import conciliar_grupo, conciliar_linha, criar_movimento_de_linha_extrato, desfazer_conciliacao, fechar_periodo_bancario, ignorar_linha, importar_extrato_arquivo, movimentos_bancarios_disponiveis, reabrir_periodo_bancario, registrar_aporte_capital, registrar_movimento_socio, registrar_transferencia, sugerir_correspondencias
+from .helpers import _garantir_categorias_financeiras_padrao
 
 
 logger = logging.getLogger(__name__)
@@ -159,6 +160,7 @@ def tesouraria(request):
 def tratar_linha_extrato(request, linha_id):
     require_sensitive_permission(request.user, "perm_caixa_conciliar_banco")
     empresa = obter_empresa_ativa(request, strict=False)
+    _garantir_categorias_financeiras_padrao(empresa)
     linha = get_object_or_404(LinhaExtratoBancario, pk=linha_id, empresa=empresa)
     valor_esperado = abs(linha.valor)
     tipo_esperado = "entrada" if linha.valor > 0 else "saida"

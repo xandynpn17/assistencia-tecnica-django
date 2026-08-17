@@ -290,6 +290,7 @@ class CriarMovimentoExtratoForm(forms.Form):
         self.fields["categoria"].queryset = CategoriaFinanceira.objects.filter(
             empresa=empresa, tipo="entrada" if entrada else "saida", ativa=True
         ).order_by("nome")
+        self.categorias_disponiveis = self.fields["categoria"].queryset.exists()
         self.fields["centro_custo"].queryset = CentroCusto.objects.filter(
             empresa=empresa, ativo=True
         ).order_by("nome")

@@ -332,6 +332,10 @@ def _garantir_centros_custo_padrao(empresa=None):
 
 def _garantir_categorias_financeiras_padrao(empresa=None):
     defaults = [
+        {"nome": "Venda de Produtos", "tipo": "entrada", "classificacao_despesa": "nao_aplicavel", "tratamento_rateio": "nao_ratear", "ativa": True},
+        {"nome": "Servicos e Reparos", "tipo": "entrada", "classificacao_despesa": "nao_aplicavel", "tratamento_rateio": "nao_ratear", "ativa": True},
+        {"nome": "Outras Receitas Operacionais", "tipo": "entrada", "classificacao_despesa": "nao_aplicavel", "tratamento_rateio": "nao_ratear", "ativa": True},
+        {"nome": "Rendimentos Financeiros", "tipo": "entrada", "classificacao_despesa": "nao_aplicavel", "tratamento_rateio": "nao_ratear", "ativa": True},
         {"nome": "Cliente OS", "tipo": "receber", "classificacao_despesa": "nao_aplicavel", "tratamento_rateio": "nao_ratear", "ativa": True},
         {"nome": "Garantia Fabricante", "tipo": "receber", "classificacao_despesa": "nao_aplicavel", "tratamento_rateio": "nao_ratear", "ativa": True},
         {"nome": "Recebimento Avulso", "tipo": "receber", "classificacao_despesa": "nao_aplicavel", "tratamento_rateio": "nao_ratear", "ativa": True},

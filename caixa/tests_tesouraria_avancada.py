@@ -102,6 +102,45 @@ class TesourariaAvancadaTests(TestCase):
         )
         self.assertFalse(movimentos_bancarios_disponiveis().filter(pk=movimento.pk).exists())
 
+    def test_credito_do_extrato_cria_categorias_de_entrada_e_pode_ser_conciliado(self):
+        self.client.force_login(self.usuario)
+        linha = importar_extrato_arquivo(
+            conta=self.banco,
+            conteudo=(
+                b"data;descricao;valor;identificador\n"
+                b"2026-08-13;Transferencia recebida cliente;30,00;RECEITA-30\n"
+            ),
+            nome_arquivo="receita.csv",
+            usuario=self.usuario,
+        )[0]
+        rota = reverse("caixa:tratar_linha_extrato", args=[linha.pk])
+
+        resposta = self.client.get(rota)
+
+        self.assertEqual(resposta.status_code, 200)
+        categorias = resposta.context["form_criar"].fields["categoria"].queryset
+        self.assertTrue(categorias.filter(nome="Servicos e Reparos", tipo="entrada").exists())
+        categoria = categorias.get(nome="Servicos e Reparos")
+
+        resposta = self.client.post(rota, {
+            "criar_movimento": "1",
+            "classificacao": "receita_operacional",
+            "descricao_movimento": "Pagamento de reparo recebido",
+            "categoria": str(categoria.pk),
+            "centro_custo": "",
+            "conta_relacionada": "",
+            "conta_pagar": "",
+            "forma_pagamento": "",
+            "pagamento": "",
+            "aportante": "",
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        linha.refresh_from_db()
+        self.assertEqual(linha.status, "conciliado")
+        self.assertEqual(linha.movimento.tipo, "entrada")
+        self.assertEqual(linha.movimento.valor, Decimal("30.00"))
+
     def test_movimento_ja_conciliado_nao_reaparece_e_post_antigo_nao_gera_500(self):
         self.client.force_login(self.usuario)
         linha = importar_extrato_arquivo(
