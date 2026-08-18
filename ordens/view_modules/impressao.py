@@ -43,6 +43,8 @@ from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragrap
 from core.pdf_theme import get_document_profile, get_document_theme, resolve_layout_preset
 
 from ..models import OrdemServico, ServicoPeca
+from .relatorio_direto import gerar_relatorio_tecnico_direto
+from .relatorio_profissional import gerar_relatorio_tecnico_profissional
 
 logger = logging.getLogger(__name__)
 BULLET_MARK = "\u2022"
@@ -1694,9 +1696,31 @@ def imprimir_relatorio_tecnico(request, pk):
     layout_docs = _perfil_layout_documentos(config)
     modo_resumido = getattr(config, "pdf_relatorio_modo_resumido", True)
     google_avaliacao_url = (getattr(config, "google_avaliacao_url", "") or "").strip()
-    incluir_avaliacao = bool_like(request.GET.get("avaliacao"), default=False) and bool(
-        google_avaliacao_url
-    )
+    avaliacao_solicitada = bool_like(request.GET.get("avaliacao"), default=False)
+    if avaliacao_solicitada and not google_avaliacao_url and bool_like(
+        request.GET.get("_preview"), default=False
+    ):
+        google_avaliacao_url = "https://example.com/avaliacao-google-preview"
+    incluir_avaliacao = avaliacao_solicitada and bool(google_avaliacao_url)
+    modelo_relatorio = (request.GET.get("modelo") or "").strip().lower()
+    if modelo_relatorio == "profissional":
+        response = gerar_relatorio_tecnico_profissional(
+            ordem=ordem,
+            empresa=empresa,
+            config=config,
+            google_avaliacao_url=google_avaliacao_url,
+            incluir_avaliacao=incluir_avaliacao,
+        )
+        return _aplicar_xframe_preview(request, response)
+    if modelo_relatorio == "direto":
+        response = gerar_relatorio_tecnico_direto(
+            ordem=ordem,
+            empresa=empresa,
+            config=config,
+            google_avaliacao_url=google_avaliacao_url,
+            incluir_avaliacao=incluir_avaliacao,
+        )
+        return _aplicar_xframe_preview(request, response)
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="relatorio_tecnico_{ordem.numero_os}.pdf"'
     doc = SimpleDocTemplate(

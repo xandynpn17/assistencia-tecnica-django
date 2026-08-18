@@ -288,6 +288,8 @@
                     Ordem de Serviço (Digital)
                   </a>
                 </li>
+                <li><div class="dropdown-divider"></div></li>
+                <li><h6 class="dropdown-header">Relatório técnico clássico</h6></li>
                 <li>
                   <a class="dropdown-item" href="{% url 'ordens:imprimir_relatorio_tecnico' ordem.id %}" target="_blank">
                     Relatório Técnico
@@ -300,7 +302,36 @@
                   </a>
                 </li>
                 {% endif %}
+                <li><div class="dropdown-divider"></div></li>
+                <li><h6 class="dropdown-header">Relatório técnico profissional</h6></li>
+                <li>
+                  <a class="dropdown-item" href="{% url 'ordens:imprimir_relatorio_tecnico' ordem.id %}?modelo=profissional" target="_blank">
+                    Relatório Técnico - modelo profissional
+                  </a>
+                </li>
+                {% if avaliacao_google_disponivel %}
+                <li>
+                  <a class="dropdown-item" href="{% url 'ordens:imprimir_relatorio_tecnico' ordem.id %}?modelo=profissional&amp;avaliacao=1" target="_blank">
+                    Modelo profissional + avaliação Google
+                  </a>
+                </li>
+                {% endif %}
+                <li><div class="dropdown-divider"></div></li>
+                <li><h6 class="dropdown-header">Relatório técnico direto</h6></li>
+                <li>
+                  <a class="dropdown-item" href="{% url 'ordens:imprimir_relatorio_tecnico' ordem.id %}?modelo=direto" target="_blank">
+                    Relatório Técnico - modelo direto
+                  </a>
+                </li>
+                {% if avaliacao_google_disponivel %}
+                <li>
+                  <a class="dropdown-item" href="{% url 'ordens:imprimir_relatorio_tecnico' ordem.id %}?modelo=direto&amp;avaliacao=1" target="_blank">
+                    Modelo direto + avaliação Google
+                  </a>
+                </li>
+                {% endif %}
                 {% if orcamento %}
+                <li><div class="dropdown-divider"></div></li>
                 <li>
                   <a class="dropdown-item" href="{% url 'orcamentos:imprimir_orcamento' orcamento.id %}" target="_blank">
                     Orçamento

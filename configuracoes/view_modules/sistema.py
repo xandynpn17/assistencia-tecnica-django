@@ -145,6 +145,8 @@ def preview_documento_impl(request):
         "layout_os_impressao",
         "layout_documentos_preset",
         "layout_documentos_cor",
+        "modelo",
+        "avaliacao",
         "layout_os_frente_espaco_assinaturas_cm",
         "layout_os_verso_espaco_assinatura_cm",
         "layout_os_data_fonte_pt",
@@ -212,6 +214,8 @@ def preview_documento_impl(request):
             preview_params[key] = value
     if preview_ativo or preview_params:
         preview_params["_preview"] = "1"
+    if tipo == "relatorio_google":
+        preview_params["avaliacao"] = "1"
 
     def _build_url(route_name, kwargs):
         url = reverse(route_name, kwargs=kwargs)
@@ -250,9 +254,9 @@ def preview_documento_impl(request):
         if not ordem:
             return _preview_documento_sample(request, tipo="os_digital", empresa=empresa)
         return redirect(_build_url("ordens:imprimir_ordem_servico", {"pk": ordem.pk}))
-    if tipo == "relatorio":
+    if tipo in {"relatorio", "relatorio_google"}:
         if not ordem:
-            return _preview_documento_sample(request, tipo="relatorio", empresa=empresa)
+            return _preview_documento_sample(request, tipo=tipo, empresa=empresa)
         return redirect(_build_url("ordens:imprimir_relatorio_tecnico", {"pk": ordem.pk}))
     if tipo == "orcamento":
         if not orcamento:
@@ -274,6 +278,10 @@ def _preview_documento_sample(request, *, tipo, empresa):
         imprimir_relatorio_tecnico,
     )
     from orcamentos.views import imprimir_orcamento
+
+    if tipo == "relatorio_google" and not (request.GET.get("avaliacao") or "").strip():
+        request.GET = request.GET.copy()
+        request.GET["avaliacao"] = "1"
 
     with transaction.atomic():
         cliente = Cliente.objects.create(
@@ -379,7 +387,7 @@ def _preview_documento_sample(request, *, tipo, empresa):
 
         if tipo == "os_digital":
             response = imprimir_ordem_servico(request, ordem.pk)
-        elif tipo == "relatorio":
+        elif tipo in {"relatorio", "relatorio_google"}:
             response = imprimir_relatorio_tecnico(request, ordem.pk)
         elif tipo == "orcamento":
             response = imprimir_orcamento(request, orcamento.pk)

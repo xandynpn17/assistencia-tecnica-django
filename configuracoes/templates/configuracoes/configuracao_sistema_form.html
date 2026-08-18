@@ -1088,11 +1088,12 @@
                 <option value="os_digital">OS Digital</option>
                 <option value="os_impressao">OS Impressão</option>
                 <option value="relatorio">Relatório Técnico</option>
+                <option value="relatorio_google">Relatório Técnico + avaliação Google</option>
                 <option value="orcamento">Orçamento</option>
               </select>
             </div>
             <div class="col-md-4 form-group">
-              <label class="small text-muted">Preset A</label>
+              <label class="small text-muted">Modelo / Preset A</label>
               <select id="preview_compare_preset_a" class="form-control form-control-sm">
                 <option value="clean" selected>clean</option>
                 <option value="executivo">executivo</option>
@@ -1100,10 +1101,12 @@
                 <option value="compacto">compacto</option>
                 <option value="tecnico">Técnico</option>
                 <option value="parceiro">parceiro</option>
+                <option value="profissional">Profissional (somente RT)</option>
+                <option value="direto">Direto (somente RT)</option>
               </select>
             </div>
             <div class="col-md-4 form-group">
-              <label class="small text-muted">Preset B</label>
+              <label class="small text-muted">Modelo / Preset B</label>
               <select id="preview_compare_preset_b" class="form-control form-control-sm">
                 <option value="executivo" selected>executivo</option>
                 <option value="clean">clean</option>
@@ -1111,6 +1114,8 @@
                 <option value="compacto">compacto</option>
                 <option value="tecnico">Técnico</option>
                 <option value="parceiro">parceiro</option>
+                <option value="profissional">Profissional (somente RT)</option>
+                <option value="direto">Direto (somente RT)</option>
               </select>
             </div>
           </div>
@@ -1398,10 +1403,22 @@
       const presetA = (comparePresetA.value || "clean").trim();
       const presetB = (comparePresetB.value || "executivo").trim();
 
+      function aplicarModelo(overrides, preset) {
+        const relatorio = tipo === "relatorio" || tipo === "relatorio_google";
+        if (tipo === "relatorio_google") {
+          overrides.set("avaliacao", "1");
+        }
+        if (relatorio && (preset === "profissional" || preset === "direto")) {
+          overrides.set("modelo", preset);
+          return;
+        }
+        overrides.set("layout_documentos_preset", preset);
+      }
+
       const overridesA = buildOverrides(false);
-      overridesA.set("layout_documentos_preset", presetA);
+      aplicarModelo(overridesA, presetA);
       const overridesB = buildOverrides(false);
-      overridesB.set("layout_documentos_preset", presetB);
+      aplicarModelo(overridesB, presetB);
 
       atualizarFrame(compareFrameA, tipo, overridesA);
       atualizarFrame(compareFrameB, tipo, overridesB);

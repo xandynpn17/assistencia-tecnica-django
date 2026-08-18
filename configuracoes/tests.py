@@ -1733,6 +1733,66 @@ class PreviewDocumentoTests(TestCase):
         self.assertIn("Pré-visualização dos Layouts", texto)
         self.assertNotIn("Pr\u00c3\u00a9-visualiza\u00c3\u00a7\u00c3\u00a3o dos Layouts", texto)
 
+    def test_comparador_inclui_modelos_de_relatorio_e_google(self):
+        response = self.client.get(reverse("configuracoes:configuracao_sistema"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="relatorio_google"')
+        self.assertContains(response, 'value="profissional"')
+        self.assertContains(response, 'value="direto"')
+        self.assertContains(response, "Profissional (somente RT)")
+        self.assertContains(response, "Direto (somente RT)")
+
+    def test_preview_relatorio_google_repassa_modelo_e_avaliacao(self):
+        response = self.client.get(
+            reverse("configuracoes:preview_documento"),
+            {
+                "tipo": "relatorio_google",
+                "ordem_id": str(self.ordem.id),
+                "_preview": "1",
+                "modelo": "direto",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        destino = urlparse(response["Location"])
+        self.assertEqual(
+            destino.path,
+            reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+        )
+        qs = parse_qs(destino.query)
+        self.assertEqual(qs.get("_preview"), ["1"])
+        self.assertEqual(qs.get("modelo"), ["direto"])
+        self.assertEqual(qs.get("avaliacao"), ["1"])
+
+    def test_preview_profissional_google_sem_os_usa_qr_demonstrativo(self):
+        from reportlab.platypus import Paragraph as reportlab_paragraph
+
+        OrdemServico.objects.all().delete()
+        Orcamento.objects.all().delete()
+        config = ConfiguracaoSistema.get_configuracao()
+        config.google_avaliacao_url = ""
+        config.save(update_fields=["google_avaliacao_url"])
+        textos = []
+
+        def _spy(texto, *args, **kwargs):
+            textos.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.relatorio_profissional.Paragraph", side_effect=_spy):
+            response = self.client.get(
+                reverse("configuracoes:preview_documento"),
+                {
+                    "tipo": "relatorio_google",
+                    "modelo": "profissional",
+                    "_preview": "1",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertIn("GOSTOU DO ATENDIMENTO?", "\n".join(textos))
+
     def test_preview_documento_sem_dados_reais_retorna_pdf_mock(self):
         OrdemServico.objects.all().delete()
         Orcamento.objects.all().delete()

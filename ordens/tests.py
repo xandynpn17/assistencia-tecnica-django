@@ -3478,6 +3478,188 @@ class ImpressaoPdfHeadersTests(TestCase):
         self.assertIn("Obrigado por confiar", texto_avaliacao)
         self.assertIn("Escaneie o QR Code e avalie no Google", texto_avaliacao)
 
+    def test_relatorio_profissional_coexiste_com_modelo_classico(self):
+        self.ordem.relatorio_tecnico = (
+            "Conector substituído.\nLimpeza técnica e testes concluídos."
+        )
+        self.ordem.save(update_fields=["relatorio_tecnico"])
+        ServicoPeca.objects.create(
+            ordem=self.ordem,
+            tipo="peca",
+            nome="Conector de alimentação",
+            descricao="Componente substituído durante o reparo",
+            quantidade=1,
+            valor_unitario=Decimal("35.00"),
+        )
+        textos_profissional = []
+
+        def _spy_profissional(texto, *args, **kwargs):
+            textos_profissional.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        resposta_classica = self.client.get(
+            reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id])
+        )
+        with patch(
+            "ordens.view_modules.relatorio_profissional.Paragraph",
+            side_effect=_spy_profissional,
+        ):
+            resposta_profissional = self.client.get(
+                reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+                {"modelo": "profissional"},
+            )
+
+        self.assertEqual(resposta_classica.status_code, 200)
+        self.assertEqual(resposta_profissional.status_code, 200)
+        self.assertTrue(resposta_classica.content.startswith(b"%PDF"))
+        self.assertTrue(resposta_profissional.content.startswith(b"%PDF"))
+        self.assertNotEqual(resposta_classica.content, resposta_profissional.content)
+        self.assertIn(
+            "relatorio_tecnico_profissional_",
+            resposta_profissional["Content-Disposition"],
+        )
+        texto_unificado = "\n".join(textos_profissional)
+        self.assertIn("RELATÓRIO TÉCNICO", texto_unificado)
+        self.assertIn("Conclusão técnica", texto_unificado)
+        self.assertIn("Conector substituído.<br/>Limpeza técnica", texto_unificado)
+        self.assertIn("Conector de alimentação", texto_unificado)
+        self.assertNotIn("GOSTOU DO ATENDIMENTO?", texto_unificado)
+        self.assertNotIn("STATUS", textos_profissional)
+        self.assertNotIn("TÉCNICO", textos_profissional)
+        self.assertNotIn("CONTATO", textos_profissional)
+
+    def test_relatorio_profissional_tem_avaliacao_google_opcional(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.google_avaliacao_url = "https://example.com/avaliar-no-google"
+        config.save(update_fields=["google_avaliacao_url"])
+        textos_profissional = []
+
+        def _spy_profissional(texto, *args, **kwargs):
+            textos_profissional.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch(
+            "ordens.view_modules.relatorio_profissional.Paragraph",
+            side_effect=_spy_profissional,
+        ):
+            resposta = self.client.get(
+                reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+                {"modelo": "profissional", "avaliacao": "1"},
+            )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(resposta.content.startswith(b"%PDF"))
+        texto_unificado = "\n".join(textos_profissional)
+        self.assertIn("GOSTOU DO ATENDIMENTO?", texto_unificado)
+        self.assertIn("Escaneie o QR Code e avalie-nos no Google", texto_unificado)
+
+    def test_relatorio_profissional_longo_pagina_sem_erro(self):
+        ServicoPeca.objects.bulk_create(
+            [
+                ServicoPeca(
+                    ordem=self.ordem,
+                    tipo="servico" if indice % 2 == 0 else "peca",
+                    nome=f"Item técnico {indice:03d}",
+                    descricao="Descrição de teste para validação da quebra de página.",
+                    quantidade=1,
+                    valor_unitario=Decimal("15.00"),
+                )
+                for indice in range(1, 90)
+            ]
+        )
+        self.ordem.relatorio_tecnico = "Procedimento técnico validado. " * 700
+        self.ordem.save(update_fields=["relatorio_tecnico"])
+
+        resposta = self.client.get(
+            reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+            {"modelo": "profissional"},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(resposta.content.startswith(b"%PDF"))
+        self.assertTrue(any(total >= 2 for total in self._pdf_page_counts(resposta.content)))
+
+    def test_relatorio_direto_coexiste_com_demais_modelos(self):
+        self.ordem.relatorio_tecnico = "Substituição concluída.\nTestes finais aprovados."
+        self.ordem.peritagem = "Gabinete com sinais leves de uso."
+        self.ordem.save(update_fields=["relatorio_tecnico", "peritagem"])
+        ServicoPeca.objects.create(
+            ordem=self.ordem,
+            tipo="servico",
+            nome="Revisão técnica",
+            descricao="Limpeza e testes de funcionamento",
+            quantidade=1,
+            valor_unitario=Decimal("80.00"),
+        )
+        textos = []
+
+        def _spy(texto, *args, **kwargs):
+            textos.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.relatorio_direto.Paragraph", side_effect=_spy):
+            resposta = self.client.get(
+                reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+                {"modelo": "direto"},
+            )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(resposta.content.startswith(b"%PDF"))
+        self.assertIn("relatorio_tecnico_direto_", resposta["Content-Disposition"])
+        texto_unificado = "\n".join(textos)
+        self.assertIn("RELATÓRIO TÉCNICO", texto_unificado)
+        self.assertIn("Dados do equipamento", texto_unificado)
+        self.assertIn("Defeito reclamado", texto_unificado)
+        self.assertIn("Peritagem", texto_unificado)
+        self.assertIn("Resposta técnica", texto_unificado)
+        self.assertIn("Revisão técnica", texto_unificado)
+        self.assertNotIn("GOSTOU DO ATENDIMENTO?", texto_unificado)
+
+    def test_relatorio_direto_tem_versao_google(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.google_avaliacao_url = "https://example.com/avaliar-no-google"
+        config.save(update_fields=["google_avaliacao_url"])
+        textos = []
+
+        def _spy(texto, *args, **kwargs):
+            textos.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.relatorio_direto.Paragraph", side_effect=_spy):
+            resposta = self.client.get(
+                reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+                {"modelo": "direto", "avaliacao": "1"},
+            )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("GOSTOU DO ATENDIMENTO?", "\n".join(textos))
+
+    def test_relatorio_direto_longo_pagina_sem_erro(self):
+        ServicoPeca.objects.bulk_create(
+            [
+                ServicoPeca(
+                    ordem=self.ordem,
+                    tipo="servico" if indice % 2 == 0 else "peca",
+                    nome=f"Item direto {indice:03d}",
+                    descricao="Descrição extensa para validação de paginação.",
+                    quantidade=1,
+                    valor_unitario=Decimal("12.00"),
+                )
+                for indice in range(1, 90)
+            ]
+        )
+        self.ordem.relatorio_tecnico = "Procedimento técnico documentado. " * 700
+        self.ordem.save(update_fields=["relatorio_tecnico"])
+
+        resposta = self.client.get(
+            reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+            {"modelo": "direto"},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(resposta.content.startswith(b"%PDF"))
+        self.assertTrue(any(total >= 2 for total in self._pdf_page_counts(resposta.content)))
+
     def test_menu_oferece_rt_com_avaliacao_somente_quando_link_configurado(self):
         config = ConfiguracaoSistema.get_configuracao()
         config.google_avaliacao_url = ""
@@ -3494,6 +3676,28 @@ class ImpressaoPdfHeadersTests(TestCase):
         self.assertEqual(resposta_com_link.status_code, 200)
         self.assertContains(resposta_com_link, "Relatório Técnico + avaliação Google")
         self.assertContains(resposta_com_link, "?avaliacao=1")
+
+    def test_menu_mantem_modelos_anteriores_e_acrescenta_profissional(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.google_avaliacao_url = "https://example.com/avaliar-no-google"
+        config.save(update_fields=["google_avaliacao_url"])
+
+        resposta = self.client.get(self.ordem.get_absolute_url())
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertRegex(
+            resposta.content.decode(),
+            r'href="[^"]+/imprimir_relatorio/\d+/"[^>]*>\s*Relatório Técnico\s*</a>',
+        )
+        self.assertContains(resposta, "Relatório Técnico + avaliação Google")
+        self.assertContains(resposta, "Relatório Técnico - modelo profissional")
+        self.assertContains(resposta, "Modelo profissional + avaliação Google")
+        self.assertContains(resposta, "Relatório Técnico - modelo direto")
+        self.assertContains(resposta, "Modelo direto + avaliação Google")
+        self.assertContains(resposta, "?modelo=profissional")
+        self.assertContains(resposta, "modelo=profissional&amp;avaliacao=1")
+        self.assertContains(resposta, "?modelo=direto")
+        self.assertContains(resposta, "modelo=direto&amp;avaliacao=1")
 
     def test_imprimir_ordem_servico_impressao_reserva_faixa_para_etiqueta(self):
         frames = []
