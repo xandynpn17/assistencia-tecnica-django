@@ -816,6 +816,9 @@
                                 Calculada com despesas classificadas e receitas dos últimos meses encerrados.
                             </div>
                         </div>
+                        <div class="alert alert-light border py-2 mt-2 mb-0 small" id="rateio-automatico-status">
+                            O sistema verificará se o histórico financeiro é suficiente antes de aplicar o rateio.
+                        </div>
                     </div>
 
                     <div class="pricing-subsection" id="bloco-tributos">
@@ -915,6 +918,9 @@
                                 <input id="id_preco_minimo_ui" class="form-control" readonly>
                                 <div class="hint-unidade">R$</div>
                             </div>
+                        </div>
+                        <div class="alert alert-light border py-2 mt-2 mb-0 small" id="capacidade-margem-status">
+                            A capacidade de margem será calculada após considerar tributos, taxa de recebimento e estrutura.
                         </div>
                     </div>
 
@@ -1554,6 +1560,26 @@ async function executarPrecificacaoServidor() {
             campoCustoOper.classList.add("calc-readonly");
         }
         if (campoRateio) campoRateio.value = Number(payload.taxa_rateio_estrutura || 0).toFixed(3) + "%";
+        const rateioStatus = document.getElementById("rateio-automatico-status");
+        if (rateioStatus) {
+            const memoria = payload.rateio_memoria || {};
+            const fonte = memoria.fonte_calculo || "sem_rateio";
+            const taxaEstrutura = Number(payload.taxa_rateio_estrutura || 0);
+            const alertasRateio = Array.isArray(memoria.alertas) ? memoria.alertas.map(htmlSeguro).join(" ") : "";
+            if (fonte === "projecao_mes_atual") {
+                rateioStatus.className = "alert alert-warning border py-2 mt-2 mb-0 small";
+                rateioStatus.innerHTML = `<strong>Rateio provisório: ${percentual(taxaEstrutura)}.</strong> Despesa mensal considerada: ${moeda(Number(memoria.despesas_projetadas_mensais || 0))}; receita mensal projetada: ${moeda(Number(memoria.receita_projetada_mensal || 0))}. ${alertasRateio}`;
+            } else if (fonte === "sem_base_confiavel") {
+                rateioStatus.className = "alert alert-info border py-2 mt-2 mb-0 small";
+                rateioStatus.innerHTML = `<strong>Rateio temporariamente não aplicado.</strong> O histórico ainda não é suficiente para formar um percentual seguro. ${alertasRateio}`;
+            } else if (fonte === "meses_fechados") {
+                rateioStatus.className = "alert alert-success border py-2 mt-2 mb-0 small";
+                rateioStatus.innerHTML = `<strong>Rateio consolidado: ${percentual(taxaEstrutura)}.</strong> Base: ${moeda(Number(memoria.despesas_alocadas || 0))} de despesas e ${moeda(Number(memoria.receita_escopo || 0))} de receita no período. ${alertasRateio}`;
+            } else {
+                rateioStatus.className = "alert alert-light border py-2 mt-2 mb-0 small";
+                rateioStatus.textContent = "Rateio estrutural desativado para este produto.";
+            }
+        }
         if (document.getElementById("id_preco_sugerido_ui")) document.getElementById("id_preco_sugerido_ui").value = precoSugerido.toFixed(2);
         if (document.getElementById("id_preco_minimo_ui")) document.getElementById("id_preco_minimo_ui").value = precoMinimo.toFixed(2);
 
@@ -1567,6 +1593,17 @@ async function executarPrecificacaoServidor() {
 
         const alerta = document.getElementById("alerta-minimo");
         if (alerta) alerta.style.display = (precoUsado > 0 && precoUsado < precoMinimo) ? "block" : "none";
+        const capacidadeStatus = document.getElementById("capacidade-margem-status");
+        if (capacidadeStatus) {
+            const capacidade = Number(payload.capacidade_margem || 0);
+            const parametrosInvalidos = resultado.parametros_invalidos === true;
+            capacidadeStatus.className = parametrosInvalidos
+                ? "alert alert-danger border py-2 mt-2 mb-0 small"
+                : "alert alert-light border py-2 mt-2 mb-0 small";
+            capacidadeStatus.innerHTML = parametrosInvalidos
+                ? `<strong>Combinação inviável.</strong> Margem, tributos e taxas atingiram 100% do preço. Reduza a margem ou revise o rateio e as taxas. Capacidade disponível: ${percentual(capacidade)}.`
+                : `<strong>Capacidade para margem líquida: ${percentual(capacidade)}.</strong> Este é o espaço restante após tributos, recebimento e estrutura; mantenha a margem mínima e, no modo avançado, a margem alvo abaixo desse valor.`;
+        }
         const blocoJustificativa = document.getElementById("bloco-justificativa-abaixo-minimo");
         const checkAbaixoMin = document.getElementById("id_permitir_preco_abaixo_minimo");
         if (blocoJustificativa) blocoJustificativa.style.display = (precoUsado > 0 && precoUsado < precoMinimo && !!checkAbaixoMin?.checked) ? "" : "none";

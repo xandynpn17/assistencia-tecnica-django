@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -23,12 +24,17 @@ def _receitas_periodo(*, empresa, inicio, fim):
         empresa=empresa,
         data_competencia__gte=inicio,
         data_competencia__lte=fim,
-    ).only("valor", "stock_item_id", "encargos_gerenciais_snapshot")
+    ).only("valor", "stock_item_id", "encargos_gerenciais_snapshot", "data_competencia")
     receita_total = Decimal("0.00")
     receita_produtos = Decimal("0.00")
+    quantidade = 0
+    meses_com_receita = set()
     for pagamento in pagamentos.iterator():
         valor = Decimal(pagamento.valor or 0)
         receita_total += valor
+        if valor > 0:
+            quantidade += 1
+            meses_com_receita.add(pagamento.data_competencia.replace(day=1))
         if pagamento.stock_item_id:
             receita_produtos += valor
             continue
@@ -37,7 +43,7 @@ def _receitas_periodo(*, empresa, inicio, fim):
             receita_produtos += Decimal(str(snapshot.get("base_produto") or 0))
         except (TypeError, ValueError, ArithmeticError):
             continue
-    return receita_total, receita_produtos
+    return receita_total, receita_produtos, quantidade, len(meses_com_receita)
 
 
 def calcular_rateio_estrutura(*, empresa, data_referencia=None, meses=3, escopo="produtos"):
@@ -79,6 +85,11 @@ def calcular_rateio_estrutura(*, empresa, data_referencia=None, meses=3, escopo=
         estornada_em__isnull=True,
         custo_os__isnull=True,
     ).filter(categorias)
+    meses_com_despesas = len(
+        set(obrigacoes.dates("data_competencia", "month"))
+        | set(saidas_avulsas.dates("data_competencia", "month"))
+        | set(compras_cartao.dates("data_competencia", "month"))
+    )
 
     total_obrigacoes = obrigacoes.aggregate(total=Sum("valor_total"))["total"] or Decimal("0.00")
     total_saidas = saidas_avulsas.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
@@ -101,7 +112,11 @@ def calcular_rateio_estrutura(*, empresa, data_referencia=None, meses=3, escopo=
             + total_tratamento(compras_cartao, "valor_total", tratamento_especifico)
         )
 
-    receita_total, receita_produtos = _receitas_periodo(empresa=empresa, inicio=inicio, fim=fim)
+    receita_total, receita_produtos, quantidade_receitas, meses_com_receita = _receitas_periodo(
+        empresa=empresa,
+        inicio=inicio,
+        fim=fim,
+    )
     if escopo == "produtos":
         receita_escopo = receita_produtos
         participacao = Decimal("0.00") if receita_total <= 0 else min(Decimal("1"), receita_produtos / receita_total)
@@ -116,8 +131,69 @@ def calcular_rateio_estrutura(*, empresa, data_referencia=None, meses=3, escopo=
         alertas.append("Sem receita histórica suficiente no escopo para calcular o rateio.")
     else:
         taxa_bruta = (despesas_alocadas / receita_escopo) * Decimal("100")
-    taxa_aplicada = min(Decimal("70.000"), max(Decimal("0.000"), taxa_bruta))
-    if taxa_bruta > taxa_aplicada:
+
+    taxa_fechada = taxa_bruta
+    taxa_calculada = taxa_bruta
+    fonte_calculo = "meses_fechados"
+    confiabilidade = "consolidada"
+    receita_projetada_mensal = Decimal("0.00")
+    despesas_projetadas_mensais = Decimal("0.00")
+
+    # Uma base recém-iniciada pode conter despesas de vários meses e apenas um
+    # recebimento antigo. Nessa situação, limitar a taxa bruta a 70% mascara a
+    # falta de dados e inviabiliza a margem do produto. Usa o mês atual como
+    # projeção provisória somente quando já há amostra operacional mínima.
+    meses_minimos = min(2, max(1, int(meses or 1)))
+    base_fechada_distorcida = (
+        taxa_bruta > Decimal("70.000")
+        and (quantidade_receitas < 3 or meses_com_receita < meses_minimos)
+    )
+    if base_fechada_distorcida:
+        inicio_mes_atual = data_referencia.replace(day=1)
+        receita_atual, produtos_atual, quantidade_atual, _ = _receitas_periodo(
+            empresa=empresa,
+            inicio=inicio_mes_atual,
+            fim=data_referencia,
+        )
+        dias_decorridos = max(1, data_referencia.day)
+        dias_no_mes = monthrange(data_referencia.year, data_referencia.month)[1]
+        amostra_atual_suficiente = quantidade_atual >= 3 and dias_decorridos >= 7 and receita_atual > 0
+        if amostra_atual_suficiente:
+            fator_projecao = Decimal(dias_no_mes) / Decimal(dias_decorridos)
+            receita_total_projetada = receita_atual * fator_projecao
+            produtos_projetados = produtos_atual * fator_projecao
+            if escopo == "produtos":
+                receita_projetada_mensal = produtos_projetados
+            else:
+                receita_projetada_mensal = max(Decimal("0.00"), receita_total_projetada - produtos_projetados)
+            participacao_projetada = (
+                Decimal("0.00")
+                if receita_total_projetada <= 0
+                else min(Decimal("1"), receita_projetada_mensal / receita_total_projetada)
+            )
+            despesas_projetadas_mensais = (
+                especifico + (geral * participacao_projetada)
+            ) / Decimal(max(1, meses_com_despesas))
+            taxa_calculada = (
+                Decimal("0.00")
+                if receita_projetada_mensal <= 0
+                else (despesas_projetadas_mensais / receita_projetada_mensal) * Decimal("100")
+            )
+            fonte_calculo = "projecao_mes_atual"
+            confiabilidade = "provisoria"
+            alertas.append(
+                "Histórico encerrado insuficiente; foi usada uma projeção provisória do mês atual."
+            )
+        else:
+            taxa_calculada = Decimal("0.00")
+            fonte_calculo = "sem_base_confiavel"
+            confiabilidade = "insuficiente"
+            alertas.append(
+                "Rateio não aplicado: ainda não há recebimentos suficientes para uma projeção confiável."
+            )
+
+    taxa_aplicada = min(Decimal("70.000"), max(Decimal("0.000"), taxa_calculada))
+    if taxa_calculada > taxa_aplicada:
         alertas.append("Taxa estrutural acima do limite de segurança de 70%; revise despesas e classificações.")
 
     return {
@@ -133,8 +209,16 @@ def calcular_rateio_estrutura(*, empresa, data_referencia=None, meses=3, escopo=
         "receita_total": receita_total.quantize(CENTAVOS),
         "receita_escopo": receita_escopo.quantize(CENTAVOS),
         "participacao_escopo": (participacao * Decimal("100")).quantize(Decimal("0.01")),
-        "taxa_bruta": taxa_bruta.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP),
+        "taxa_bruta": taxa_calculada.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP),
+        "taxa_fechada": taxa_fechada.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP),
         "taxa_aplicada": taxa_aplicada.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP),
+        "fonte_calculo": fonte_calculo,
+        "confiabilidade": confiabilidade,
+        "quantidade_receitas": quantidade_receitas,
+        "meses_com_receita": meses_com_receita,
+        "meses_com_despesas": meses_com_despesas,
+        "receita_projetada_mensal": receita_projetada_mensal.quantize(CENTAVOS),
+        "despesas_projetadas_mensais": despesas_projetadas_mensais.quantize(CENTAVOS),
         "alertas": alertas,
     }
 
@@ -164,14 +248,19 @@ def calcular_taxa_canal_referencia(*, empresa, data_referencia=None, dias=90):
     taxas_ativas = TaxaMaquininha.objects.filter(
         empresa=empresa,
         ativo=True,
+        maquininha__ativo=True,
+        maquininha__adquirente__ativo=True,
         vigencia_inicio__lte=data_referencia,
     ).filter(Q(vigencia_fim__isnull=True) | Q(vigencia_fim__gte=data_referencia))
-    media = taxas_ativas.aggregate(valor=Sum("taxa_percentual"))["valor"] or Decimal("0.00")
     quantidade = taxas_ativas.count()
-    percentual = Decimal("0.00") if quantidade == 0 else media / Decimal(quantidade)
+    referencia = taxas_ativas.order_by("-taxa_percentual", "-taxa_fixa", "id").first()
+    percentual = Decimal("0.00") if referencia is None else referencia.taxa_percentual
     return {
         "taxa_percentual": percentual.quantize(Decimal("0.001")),
-        "fonte": "media_tabelas_ativas" if quantidade else "sem_dados",
+        "taxa_fixa": Decimal("0.00") if referencia is None else referencia.taxa_fixa.quantize(CENTAVOS),
+        "fonte": "maior_taxa_ativa" if quantidade else "sem_dados",
+        "condicao_id": getattr(referencia, "id", None),
+        "condicoes_ativas": quantidade,
         "valor_base": Decimal("0.00"),
         "custo_canais": Decimal("0.00"),
     }

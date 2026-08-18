@@ -2850,6 +2850,37 @@ class ProdutoCadastroAprimoradoTests(TestCase):
         )
         self.assertEqual(produto.ubicacao_padrao_id, self.ubicacao.id)
 
+    def test_criar_produto_aceita_margens_maiores_que_dez_porcento(self):
+        response = self.client.post(
+            reverse("estoque:criar_produto"),
+            data=self._payload_produto(
+                nome="Produto com margem alta válida",
+                margem_lucro="75.00",
+                margem_minima="40.00",
+                preco_final="300.00",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        produto = Produto.objects.get(nome="Produto com margem alta válida")
+        self.assertEqual(produto.margem_lucro, Decimal("75.00"))
+        self.assertEqual(produto.margem_minima, Decimal("40.00"))
+
+    def test_margem_inviavel_informa_capacidade_disponivel(self):
+        response = self.client.post(
+            reverse("estoque:criar_produto"),
+            data=self._payload_produto(
+                nome="Produto com margem inviável",
+                margem_lucro="95.00",
+                margem_minima="95.00",
+                preco_final="300.00",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "deve ser menor que 94")
+        self.assertFalse(Produto.objects.filter(nome="Produto com margem inviável").exists())
+
     def test_criar_produto_exige_permissao_granular(self):
         user_model = get_user_model()
         operador = user_model.objects.create_user(

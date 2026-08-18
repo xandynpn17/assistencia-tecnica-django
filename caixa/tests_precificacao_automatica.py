@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -80,6 +80,77 @@ class PrecificacaoAutomaticaTests(TestCase):
         resultado = calcular_rateio_estrutura(empresa=self.empresa, escopo="produtos")
         self.assertEqual(resultado["despesas_alocadas"], Decimal("0.00"))
 
+    def test_rateio_distorcido_usa_projecao_do_mes_atual_com_amostra_suficiente(self):
+        referencia = date(2026, 8, 18)
+        competencia_fechada = date(2026, 7, 1)
+        ContaPagar.objects.create(
+            empresa=self.empresa,
+            descricao="Estrutura acumulada",
+            data_emissao=competencia_fechada,
+            data_competencia=competencia_fechada,
+            vencimento=competencia_fechada + timedelta(days=9),
+            valor_total=Decimal("1500.00"),
+            categoria=self.categoria_estrutura,
+        )
+        Pagamento.objects.create(
+            empresa=self.empresa,
+            valor=Decimal("50.00"),
+            data_competencia=competencia_fechada,
+            data_movimento=competencia_fechada,
+            encargos_gerenciais_snapshot={"base_produto": "50.00"},
+        )
+        for dia in (5, 10, 15):
+            Pagamento.objects.create(
+                empresa=self.empresa,
+                valor=Decimal("500.00"),
+                data_competencia=date(2026, 8, dia),
+                data_movimento=date(2026, 8, dia),
+                encargos_gerenciais_snapshot={"base_produto": "500.00"},
+            )
+
+        resultado = calcular_rateio_estrutura(
+            empresa=self.empresa,
+            escopo="produtos",
+            data_referencia=referencia,
+        )
+
+        self.assertEqual(resultado["fonte_calculo"], "projecao_mes_atual")
+        self.assertEqual(resultado["confiabilidade"], "provisoria")
+        self.assertEqual(resultado["despesas_projetadas_mensais"], Decimal("1500.00"))
+        self.assertEqual(resultado["receita_projetada_mensal"], Decimal("2583.33"))
+        self.assertEqual(resultado["taxa_aplicada"], Decimal("58.065"))
+
+    def test_rateio_distorcido_sem_amostra_nao_aplica_teto_artificial(self):
+        referencia = date(2026, 8, 18)
+        competencia_fechada = date(2026, 7, 1)
+        ContaPagar.objects.create(
+            empresa=self.empresa,
+            descricao="Estrutura sem histórico",
+            data_emissao=competencia_fechada,
+            data_competencia=competencia_fechada,
+            vencimento=competencia_fechada + timedelta(days=9),
+            valor_total=Decimal("1500.00"),
+            categoria=self.categoria_estrutura,
+        )
+        Pagamento.objects.create(
+            empresa=self.empresa,
+            valor=Decimal("50.00"),
+            data_competencia=competencia_fechada,
+            data_movimento=competencia_fechada,
+            encargos_gerenciais_snapshot={"base_produto": "50.00"},
+        )
+
+        resultado = calcular_rateio_estrutura(
+            empresa=self.empresa,
+            escopo="produtos",
+            data_referencia=referencia,
+        )
+
+        self.assertEqual(resultado["fonte_calculo"], "sem_base_confiavel")
+        self.assertEqual(resultado["confiabilidade"], "insuficiente")
+        self.assertEqual(resultado["taxa_fechada"], Decimal("3000.000"))
+        self.assertEqual(resultado["taxa_aplicada"], Decimal("0.000"))
+
     def test_forma_pagamento_resolve_taxa_da_maquininha_por_vigencia_e_parcelas(self):
         conta = ContaBancaria.objects.create(
             empresa=self.empresa,
@@ -123,7 +194,7 @@ class PrecificacaoAutomaticaTests(TestCase):
         self.assertEqual(condicao["taxa_percentual"], Decimal("4.250"))
         self.assertEqual(condicao["taxa_fixa"], Decimal("0.30"))
 
-    def test_taxa_referencia_sem_historico_usa_media_das_tabelas(self):
+    def test_taxa_referencia_sem_historico_usa_maior_taxa_ativa(self):
         adquirente = AdquirentePagamento.objects.create(empresa=self.empresa, nome="Rede")
         maquininha = MaquininhaPagamento.objects.create(
             empresa=self.empresa, adquirente=adquirente, nome="Rede Loja"
@@ -137,8 +208,9 @@ class PrecificacaoAutomaticaTests(TestCase):
             taxa_percentual=Decimal("3.000"), vigencia_inicio=self.mes_anterior,
         )
         resultado = calcular_taxa_canal_referencia(empresa=self.empresa)
-        self.assertEqual(resultado["taxa_percentual"], Decimal("2.000"))
-        self.assertEqual(resultado["fonte"], "media_tabelas_ativas")
+        self.assertEqual(resultado["taxa_percentual"], Decimal("3.000"))
+        self.assertEqual(resultado["fonte"], "maior_taxa_ativa")
+        self.assertEqual(resultado["condicoes_ativas"], 2)
 
     def test_preco_por_canal_incorpora_tarifa_fixa_antes_das_aliquotas(self):
         adquirente = AdquirentePagamento.objects.create(empresa=self.empresa, nome="Getnet")

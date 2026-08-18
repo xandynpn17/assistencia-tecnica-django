@@ -632,7 +632,7 @@ class ProdutoForm(forms.ModelForm):
             pis_cofins=cleaned.get("pis_cofins"),
             produto=produto_fiscal,
         )
-        preco_minimo = calcular_precificacao(
+        resultado_precificacao = calcular_precificacao(
             custo_base=custo_base,
             margem_alvo=cleaned.get("margem_lucro"),
             margem_minima=cleaned.get("margem_minima"),
@@ -640,7 +640,24 @@ class ProdutoForm(forms.ModelForm):
             aliquota=aliquota,
             taxa_estrutura=taxa_estrutura,
             modo_preco=cleaned.get("modo_preco") or "simples",
-        )["preco_minimo"]
+        )
+        preco_minimo = resultado_precificacao["preco_minimo"]
+        capacidade_margem = max(
+            Decimal("0.00"),
+            Decimal("100.00") - Decimal(str(aliquota or 0)) - taxa_canal - taxa_estrutura,
+        )
+        margem_minima = Decimal(str(cleaned.get("margem_minima") or 0))
+        margem_alvo = Decimal(str(cleaned.get("margem_lucro") or 0))
+        if margem_minima >= capacidade_margem:
+            self.add_error(
+                "margem_minima",
+                f"A margem mínima deve ser menor que {capacidade_margem:.3f}% após tributos, taxas e rateio.",
+            )
+        if (cleaned.get("modo_preco") or "simples") == "avancado" and margem_alvo >= capacidade_margem:
+            self.add_error(
+                "margem_lucro",
+                f"No modo avançado, a margem alvo deve ser menor que {capacidade_margem:.3f}% após tributos, taxas e rateio.",
+            )
 
         preco_abaixo = preco_final > 0 and preco_final < preco_minimo
         justificativa = (cleaned.get("justificativa_preco_abaixo_minimo") or "").strip()

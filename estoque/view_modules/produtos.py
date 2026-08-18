@@ -382,6 +382,7 @@ def api_simular_precificacao(request):
     forma_referencia = formas.filter(id=int(forma_id)).first() if forma_id.isdigit() else None
     taxa_fallback = _decimal_post(request, "taxa_cartao")
     usar_taxa_automatica = request.POST.get("usar_taxa_canal_automatica") in {"1", "true", "on", "True"}
+    canal_memoria = None
     if forma_referencia:
         taxa_referencia = decimal_seguro(
             forma_referencia.obter_condicao_vigente()["taxa_percentual"]
@@ -457,6 +458,19 @@ def api_simular_precificacao(request):
         desconto=_decimal_post(request, "desconto"),
         canais=canais,
     )
+    capacidade_margem = max(
+        Decimal("0.00"),
+        Decimal("100.00") - decimal_seguro(aliquota) - taxa_referencia - taxa_estrutura,
+    ).quantize(Decimal("0.001"))
+
+    if forma_referencia:
+        forma_referencia_rotulo = forma_referencia.nome
+    elif canal_memoria and canal_memoria.get("fonte") == "historico_ponderado_90_dias":
+        forma_referencia_rotulo = "Histórico ponderado dos últimos 90 dias"
+    elif canal_memoria and canal_memoria.get("fonte") == "maior_taxa_ativa":
+        forma_referencia_rotulo = "Maior taxa ativa cadastrada"
+    else:
+        forma_referencia_rotulo = "Taxa informada no produto"
 
     def serializar(valor):
         if isinstance(valor, Decimal):
@@ -471,7 +485,8 @@ def api_simular_precificacao(request):
         # embora a memória interna do motor preserve quatro casas.
         "aliquota": str(Decimal(str(aliquota)).quantize(Decimal("0.001"))),
         "taxa_referencia": str(taxa_referencia),
-        "forma_referencia": getattr(forma_referencia, "nome", "") or "Taxa media do produto",
+        "forma_referencia": forma_referencia_rotulo,
+        "capacidade_margem": str(capacidade_margem),
         "tributacao": {
             "regra_codigo": tributacao["regra_codigo"],
             "anexo": tributacao["anexo"],
