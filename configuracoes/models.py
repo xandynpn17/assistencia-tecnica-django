@@ -894,6 +894,12 @@ class ConfiguracaoSistema(models.Model):
         ("pb", "Preto e Branco"),
     ]
 
+    RELATORIO_TECNICO_MODELO_CHOICES = [
+        ("classico", "Clássico"),
+        ("profissional", "Profissional"),
+        ("direto", "Direto"),
+    ]
+
     ESTADOS_BRASIL = [
         ('AC', 'Acre'), ('AL', 'Alagoas'), ('AP', 'Amapá'), ('AM', 'Amazonas'),
         ('BA', 'Bahia'), ('CE', 'Ceará'), ('DF', 'Distrito Federal'), ('ES', 'Espírito Santo'),
@@ -1313,6 +1319,12 @@ class ConfiguracaoSistema(models.Model):
     pdf_relatorio_modo_resumido = models.BooleanField(
         default=True,
         verbose_name="Relatório: usar versão resumida para o cliente",
+    )
+    pdf_relatorio_modelo = models.CharField(
+        max_length=20,
+        choices=RELATORIO_TECNICO_MODELO_CHOICES,
+        default="classico",
+        verbose_name="Modelo padrão do Relatório Técnico",
     )
     pdf_relatorio_exibir_telefone_cliente = models.BooleanField(
         default=True,

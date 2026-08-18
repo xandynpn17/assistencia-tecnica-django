@@ -787,6 +787,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'pdf_os_exibir_manutencao_preventiva',
             'pdf_os_exibir_termos',
             'pdf_os_exibir_assinaturas',
+            'pdf_relatorio_modelo',
             'pdf_relatorio_modo_resumido',
             'pdf_relatorio_exibir_nome_cliente',
             'pdf_relatorio_exibir_telefone_cliente',
@@ -879,6 +880,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'layout_os_data_fonte_pt': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': 6, 'max': 10}),
             'layout_documentos_preset': forms.Select(attrs={'class': 'form-control'}),
             'layout_documentos_cor': forms.Select(attrs={'class': 'form-control'}),
+            'pdf_relatorio_modelo': forms.Select(attrs={'class': 'form-control'}),
             'google_avaliacao_url': forms.URLInput(
                 attrs={
                     'class': 'form-control',
@@ -929,6 +931,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["pdf_os_exibir_manutencao_preventiva"].help_text = "Exibe o prazo sugerido de manutenção preventiva, quando preenchido."
         self.fields["pdf_os_exibir_termos"].help_text = "Desative apenas se a OS padrão usar folha separada de termos."
         self.fields["pdf_os_exibir_assinaturas"].help_text = "Controla o bloco de assinatura da OS padrão, digital e física."
+        self.fields["pdf_relatorio_modelo"].help_text = "Define a única versão exibida no menu de impressão da OS. A opção com avaliação Google usa este mesmo modelo."
         self.fields["pdf_relatorio_modo_resumido"].help_text = "Recomendado: mostra apenas identificação, defeito, peritagem, laudo, peças e serviços, sem valores ou controles internos."
         self.fields["pdf_relatorio_exibir_nome_cliente"].help_text = "Mantém o nome do cliente no laudo técnico."
         self.fields["pdf_relatorio_exibir_telefone_cliente"].help_text = "Mantém o telefone do cliente no laudo técnico."

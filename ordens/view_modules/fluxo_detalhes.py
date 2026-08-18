@@ -109,6 +109,14 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["avaliacao_google_disponivel"] = bool(
             (getattr(cfg_reserva, "google_avaliacao_url", "") or "").strip()
         )
+        modelo_relatorio = getattr(cfg_reserva, "pdf_relatorio_modelo", "classico")
+        modelos_validos = dict(getattr(cfg_reserva, "RELATORIO_TECNICO_MODELO_CHOICES", []))
+        if modelo_relatorio not in modelos_validos:
+            modelo_relatorio = "classico"
+        context["relatorio_tecnico_modelo"] = modelo_relatorio
+        context["relatorio_tecnico_modelo_label"] = modelos_validos.get(
+            modelo_relatorio, "Clássico"
+        )
         context["taloes_os"] = ordem.taloes.select_related("criado_por", "pagamento").all()
         context["empresa_talao"] = obter_empresa_ativa(self.request, strict=False) or ordem.empresa
         context["total_os"] = sum(item.total() for item in context["itens"])

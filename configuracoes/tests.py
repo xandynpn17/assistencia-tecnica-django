@@ -1742,6 +1742,8 @@ class PreviewDocumentoTests(TestCase):
         self.assertContains(response, 'value="direto"')
         self.assertContains(response, "Profissional (somente RT)")
         self.assertContains(response, "Direto (somente RT)")
+        self.assertContains(response, 'name="pdf_relatorio_modelo"')
+        self.assertContains(response, "Define a única versão exibida no menu de impressão")
 
     def test_preview_relatorio_google_repassa_modelo_e_avaliacao(self):
         response = self.client.get(
@@ -1779,7 +1781,7 @@ class PreviewDocumentoTests(TestCase):
             textos.append(str(texto))
             return reportlab_paragraph(texto, *args, **kwargs)
 
-        with patch("ordens.view_modules.relatorio_profissional.Paragraph", side_effect=_spy):
+        with patch("ordens.view_modules.avaliacao_google_pdf.Paragraph", side_effect=_spy):
             response = self.client.get(
                 reverse("configuracoes:preview_documento"),
                 {
@@ -1791,7 +1793,7 @@ class PreviewDocumentoTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.content.startswith(b"%PDF"))
-        self.assertIn("GOSTOU DO ATENDIMENTO?", "\n".join(textos))
+        self.assertIn("Sua opinião é muito importante para nós", "\n".join(textos))
 
     def test_preview_documento_sem_dados_reais_retorna_pdf_mock(self):
         OrdemServico.objects.all().delete()

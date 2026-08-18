@@ -2,8 +2,6 @@ from datetime import datetime
 from xml.sax.saxutils import escape
 
 from django.http import HttpResponse
-from reportlab.graphics.barcode import qr
-from reportlab.graphics.shapes import Drawing
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -23,6 +21,7 @@ from core.formatters import formatar_telefone_br
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
 
 from ..models import ServicoPeca
+from .avaliacao_google_pdf import bloco_avaliacao_google
 
 
 BLUE = colors.HexColor("#1268C4")
@@ -47,18 +46,6 @@ def _formatar_data_hora(valor):
         return valor.strftime("%d/%m/%Y %H:%M")
     except (AttributeError, TypeError, ValueError):
         return "Não informado"
-
-
-def _qr_drawing(conteudo, tamanho):
-    widget = qr.QrCodeWidget(conteudo)
-    x1, y1, x2, y2 = widget.getBounds()
-    drawing = Drawing(
-        tamanho,
-        tamanho,
-        transform=[tamanho / (x2 - x1), 0, 0, tamanho / (y2 - y1), 0, 0],
-    )
-    drawing.add(widget)
-    return drawing
 
 
 def _criar_estilos(fonts):
@@ -440,43 +427,6 @@ def _tabela_fotos(ordem, styles, usable_w):
     return tabela
 
 
-def _bloco_avaliacao(empresa, styles, url):
-    nome_empresa = "nossa empresa"
-    if empresa:
-        nome_empresa = empresa.nome_fantasia or empresa.nome or nome_empresa
-    copy = [
-        Paragraph("GOSTOU DO ATENDIMENTO?", styles["ProfReviewTitle"]),
-        Paragraph(
-            f"Sua avaliação ajuda a {escape(str(nome_empresa))} a melhorar todos os dias.",
-            styles["ProfReviewText"],
-        ),
-        Paragraph("Escaneie o QR Code e avalie-nos no Google.", styles["ProfReviewText"]),
-    ]
-    qr_cell = [
-        _qr_drawing(url, 2.2 * cm),
-        Paragraph("APONTE A CÂMERA", styles["ProfQrCaption"]),
-    ]
-    tabela = Table([[copy, qr_cell]], colWidths=[5.25 * cm, 2.65 * cm])
-    tabela.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), SURFACE),
-                ("BOX", (0, 0), (-1, -1), 0.55, BORDER),
-                ("LINEBEFORE", (0, 0), (0, 0), 3.2, BLUE),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN", (1, 0), (1, 0), "CENTER"),
-                ("LEFTPADDING", (0, 0), (0, 0), 10),
-                ("RIGHTPADDING", (0, 0), (0, 0), 7),
-                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                ("LEFTPADDING", (1, 0), (1, 0), 4),
-                ("RIGHTPADDING", (1, 0), (1, 0), 6),
-            ]
-        )
-    )
-    return tabela
-
-
 def _assinatura_e_avaliacao(ordem, empresa, styles, usable_w, incluir_avaliacao, url):
     emissao = ordem.data_conclusao or datetime.now()
     nome_tecnico = str(ordem.tecnico_responsavel_valido or "Responsável técnico")
@@ -499,22 +449,20 @@ def _assinatura_e_avaliacao(ordem, empresa, styles, usable_w, incluir_avaliacao,
             )
         )
         return tabela_assinatura
-    review = _bloco_avaliacao(empresa, styles, url)
-    review_w = 8.35 * cm
+    review = bloco_avaliacao_google(empresa, url, usable_w)
     tabela = Table(
-        [[assinatura, review]],
-        colWidths=[usable_w - review_w, review_w],
+        [[assinatura], [review]],
+        colWidths=[usable_w],
     )
     tabela.setStyle(
         TableStyle(
             [
                 ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
-                ("LEFTPADDING", (0, 0), (0, 0), 0),
-                ("RIGHTPADDING", (0, 0), (0, 0), 12),
-                ("LEFTPADDING", (1, 0), (1, 0), 0),
-                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                 ("TOPPADDING", (0, 0), (-1, -1), 0),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 1), (0, 1), 8),
             ]
         )
     )
@@ -535,7 +483,7 @@ def gerar_relatorio_tecnico_profissional(
     )
     margem_x = 1.45 * cm
     margem_top = 1.15 * cm
-    margem_bottom = 1.25 * cm
+    margem_bottom = 0.82 * cm
     usable_w = A4[0] - (2 * margem_x)
     fonts = get_pdf_fonts()
     styles = _criar_estilos(fonts)
@@ -674,7 +622,7 @@ def gerar_relatorio_tecnico_profissional(
 
     def _draw_footer(canv, total_pages):
         canv.saveState()
-        baseline = 0.72 * cm
+        baseline = 0.50 * cm
         canv.setStrokeColor(BORDER)
         canv.setLineWidth(0.5)
         canv.line(margem_x, baseline + (0.23 * cm), A4[0] - margem_x, baseline + (0.23 * cm))

@@ -945,6 +945,15 @@
                   </div>
                 </div>
                 <div class="print-doc-body is-collapsed" data-print-body>
+                <div class="section-label">Modelo de impressão</div>
+                <div class="row mb-2">
+                  <div class="col-12 form-group">
+                    <label for="{{ form.pdf_relatorio_modelo.id_for_label }}">{{ form.pdf_relatorio_modelo.label }}</label>
+                    {{ form.pdf_relatorio_modelo }}
+                    {% if form.pdf_relatorio_modelo.errors %}<div class="text-danger small">{{ form.pdf_relatorio_modelo.errors|striptags }}</div>{% endif %}
+                    {% if form.pdf_relatorio_modelo.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_modelo.help_text }}</small>{% endif %}
+                  </div>
+                </div>
                 <div class="section-label">Cliente</div>
                 <div class="row mb-2">
                   <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_nome_cliente }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_nome_cliente.id_for_label }}">{{ form.pdf_orcamento_exibir_nome_cliente.label }}</label></div>{% if form.pdf_orcamento_exibir_nome_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_nome_cliente.help_text }}</small>{% endif %}</div>

@@ -2,8 +2,6 @@ from datetime import datetime
 from xml.sax.saxutils import escape
 
 from django.http import HttpResponse
-from reportlab.graphics.barcode import qr
-from reportlab.graphics.shapes import Drawing
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -22,6 +20,7 @@ from core.formatters import formatar_telefone_br
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
 
 from ..models import ServicoPeca
+from .avaliacao_google_pdf import bloco_avaliacao_google
 
 
 INK = colors.HexColor("#161B22")
@@ -37,18 +36,6 @@ def _texto_pdf(valor, padrao="Não informado."):
     texto = str(valor or padrao).replace("\\n", "\n")
     texto = texto.replace("\r\n", "\n").replace("\r", "\n")
     return escape(texto).replace("\n", "<br/>")
-
-
-def _qr_drawing(conteudo, tamanho):
-    widget = qr.QrCodeWidget(conteudo)
-    x1, y1, x2, y2 = widget.getBounds()
-    drawing = Drawing(
-        tamanho,
-        tamanho,
-        transform=[tamanho / (x2 - x1), 0, 0, tamanho / (y2 - y1), 0, 0],
-    )
-    drawing.add(widget)
-    return drawing
 
 
 def _styles(fonts):
@@ -382,54 +369,17 @@ def _rodape_final(ordem, empresa, styles, usable_w, incluir_avaliacao, url):
             )
         )
         return tabela_assinatura
-    nome = "nossa empresa"
-    if empresa:
-        nome = empresa.nome_fantasia or empresa.nome or nome
-    review = Table(
-        [
-            [
-                [
-                    Paragraph("GOSTOU DO ATENDIMENTO?", styles["DirReviewTitle"]),
-                    Paragraph(
-                        f"Sua avaliação ajuda a {escape(str(nome))} a melhorar.",
-                        styles["DirReviewText"],
-                    ),
-                    Paragraph("Escaneie o QR Code e avalie-nos no Google.", styles["DirReviewText"]),
-                ],
-                [_qr_drawing(url, 1.95 * cm), Paragraph("APONTE A CÂMERA", styles["DirQr"])],
-            ]
-        ],
-        colWidths=[5.45 * cm, 2.35 * cm],
-    )
-    review.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), LIGHT),
-                ("BOX", (0, 0), (-1, -1), 0.55, SOFT_LINE),
-                ("LINEBEFORE", (0, 0), (0, 0), 2.8, BLUE),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN", (1, 0), (1, 0), "CENTER"),
-                ("LEFTPADDING", (0, 0), (0, 0), 9),
-                ("RIGHTPADDING", (0, 0), (0, 0), 6),
-                ("LEFTPADDING", (1, 0), (1, 0), 3),
-                ("RIGHTPADDING", (1, 0), (1, 0), 5),
-                ("TOPPADDING", (0, 0), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-            ]
-        )
-    )
-    review_w = 8.25 * cm
-    combined = Table([[assinatura, review]], colWidths=[usable_w - review_w, review_w])
+    review = bloco_avaliacao_google(empresa, url, usable_w)
+    combined = Table([[assinatura], [review]], colWidths=[usable_w])
     combined.setStyle(
         TableStyle(
             [
                 ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
-                ("LEFTPADDING", (0, 0), (0, 0), 0),
-                ("RIGHTPADDING", (0, 0), (0, 0), 12),
-                ("LEFTPADDING", (1, 0), (1, 0), 0),
-                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                 ("TOPPADDING", (0, 0), (-1, -1), 0),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 1), (0, 1), 8),
             ]
         )
     )
@@ -450,7 +400,7 @@ def gerar_relatorio_tecnico_direto(
     )
     margem_x = 1.35 * cm
     margem_top = 1.0 * cm
-    margem_bottom = 1.2 * cm
+    margem_bottom = 0.80 * cm
     usable_w = A4[0] - (2 * margem_x)
     fonts = get_pdf_fonts()
     styles = _styles(fonts)
@@ -509,7 +459,7 @@ def gerar_relatorio_tecnico_direto(
 
     def _footer(canv, total_pages):
         canv.saveState()
-        baseline = 0.68 * cm
+        baseline = 0.48 * cm
         canv.setStrokeColor(SOFT_LINE)
         canv.setLineWidth(0.4)
         canv.line(margem_x, baseline + (0.22 * cm), A4[0] - margem_x, baseline + (0.22 * cm))
