@@ -813,6 +813,21 @@
               {{ form.layout_documentos_cor }}
               {% if form.layout_documentos_cor.help_text %}<small class="form-text text-muted">{{ form.layout_documentos_cor.help_text }}</small>{% endif %}
             </div>
+            <div class="col-12">
+              <div class="alert alert-info border mb-3">
+                <div class="row align-items-start">
+                  <div class="col-md-5 form-group mb-md-0">
+                    <label for="{{ form.pdf_relatorio_modelo.id_for_label }}"><strong>{{ form.pdf_relatorio_modelo.label }}</strong></label>
+                    {{ form.pdf_relatorio_modelo }}
+                    {% if form.pdf_relatorio_modelo.errors %}<div class="text-danger small">{{ form.pdf_relatorio_modelo.errors|striptags }}</div>{% endif %}
+                    {% if form.pdf_relatorio_modelo.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_modelo.help_text }}</small>{% endif %}
+                  </div>
+                  <div class="col-md-7 small text-muted pt-md-4">
+                    <strong>Como funciona:</strong> o tema visual geral define o acabamento dos documentos. Este campo define especificamente a estrutura do Relatório Técnico. A versão Google é opcional e mantém a estrutura escolhida aqui.
+                  </div>
+                </div>
+              </div>
+            </div>
             <div class="col-md-4 form-group">
               <label>{{ form.layout_os_frente_espaco_assinaturas_cm.label }}</label>
               {{ form.layout_os_frente_espaco_assinaturas_cm }}
@@ -945,15 +960,6 @@
                   </div>
                 </div>
                 <div class="print-doc-body is-collapsed" data-print-body>
-                <div class="section-label">Modelo de impressão</div>
-                <div class="row mb-2">
-                  <div class="col-12 form-group">
-                    <label for="{{ form.pdf_relatorio_modelo.id_for_label }}">{{ form.pdf_relatorio_modelo.label }}</label>
-                    {{ form.pdf_relatorio_modelo }}
-                    {% if form.pdf_relatorio_modelo.errors %}<div class="text-danger small">{{ form.pdf_relatorio_modelo.errors|striptags }}</div>{% endif %}
-                    {% if form.pdf_relatorio_modelo.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_modelo.help_text }}</small>{% endif %}
-                  </div>
-                </div>
                 <div class="section-label">Cliente</div>
                 <div class="row mb-2">
                   <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_orcamento_exibir_nome_cliente }}<label class="form-check-label" for="{{ form.pdf_orcamento_exibir_nome_cliente.id_for_label }}">{{ form.pdf_orcamento_exibir_nome_cliente.label }}</label></div>{% if form.pdf_orcamento_exibir_nome_cliente.help_text %}<small class="form-text text-muted">{{ form.pdf_orcamento_exibir_nome_cliente.help_text }}</small>{% endif %}</div>

@@ -1737,13 +1737,20 @@ class PreviewDocumentoTests(TestCase):
         response = self.client.get(reverse("configuracoes:configuracao_sistema"))
 
         self.assertEqual(response.status_code, 200)
+        html = response.content.decode(response.charset or "utf-8")
         self.assertContains(response, 'value="relatorio_google"')
         self.assertContains(response, 'value="profissional"')
         self.assertContains(response, 'value="direto"')
         self.assertContains(response, "Profissional (somente RT)")
         self.assertContains(response, "Direto (somente RT)")
         self.assertContains(response, 'name="pdf_relatorio_modelo"')
-        self.assertContains(response, "Define a única versão exibida no menu de impressão")
+        self.assertContains(response, "Tema visual geral dos documentos")
+        self.assertContains(response, "Escolha Clássico, Profissional ou Direto")
+        self.assertEqual(html.count('name="pdf_relatorio_modelo"'), 1)
+        self.assertLess(
+            html.index('name="pdf_relatorio_modelo"'),
+            html.index("<strong>Orçamento</strong>"),
+        )
 
     def test_preview_relatorio_google_repassa_modelo_e_avaliacao(self):
         response = self.client.get(

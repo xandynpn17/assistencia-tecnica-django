@@ -906,7 +906,11 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["layout_os_verso_espaco_assinatura_cm"].help_text = "Ajuste fino em cm para descer/subir assinatura abaixo dos termos."
         self.fields["layout_os_data_fonte_pt"].help_text = "Tamanho da fonte das datas (bloco de assinatura)."
         self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com numero da OS na linha de recorte."
-        self.fields["layout_documentos_preset"].help_text = "Tema visual aplicado aos PDFs (OS digital, OS impressao, relatorio e orcamento)."
+        self.fields["layout_documentos_preset"].label = "Tema visual geral dos documentos"
+        self.fields["layout_documentos_preset"].help_text = (
+            "Aplica cores, tipografia e acabamento à OS, ao orçamento e ao RT Clássico. "
+            "A estrutura do Relatório Técnico é escolhida separadamente logo abaixo."
+        )
         self.fields["layout_documentos_cor"].help_text = "Escolha se os PDFs saem em colorido ou escala de cinza (preto e branco)."
         self.fields["pdf_os_exibir_documento_cliente"].help_text = "Controle global da OS padrão usada em todas as vias do documento."
         self.fields["pdf_os_exibir_nome_cliente"].help_text = "Mantém ou oculta o nome do cliente na OS padrão."
@@ -931,7 +935,10 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["pdf_os_exibir_manutencao_preventiva"].help_text = "Exibe o prazo sugerido de manutenção preventiva, quando preenchido."
         self.fields["pdf_os_exibir_termos"].help_text = "Desative apenas se a OS padrão usar folha separada de termos."
         self.fields["pdf_os_exibir_assinaturas"].help_text = "Controla o bloco de assinatura da OS padrão, digital e física."
-        self.fields["pdf_relatorio_modelo"].help_text = "Define a única versão exibida no menu de impressão da OS. A opção com avaliação Google usa este mesmo modelo."
+        self.fields["pdf_relatorio_modelo"].help_text = (
+            "Escolha Clássico, Profissional ou Direto. Esta será a única estrutura normal exibida no menu da OS; "
+            "a opção com avaliação Google usa o mesmo modelo."
+        )
         self.fields["pdf_relatorio_modo_resumido"].help_text = "Recomendado: mostra apenas identificação, defeito, peritagem, laudo, peças e serviços, sem valores ou controles internos."
         self.fields["pdf_relatorio_exibir_nome_cliente"].help_text = "Mantém o nome do cliente no laudo técnico."
         self.fields["pdf_relatorio_exibir_telefone_cliente"].help_text = "Mantém o telefone do cliente no laudo técnico."
