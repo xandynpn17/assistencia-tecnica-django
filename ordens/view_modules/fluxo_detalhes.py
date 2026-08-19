@@ -102,7 +102,8 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             .select_related("produto", "ponto_operacional")
             .order_by("status", "valido_ate", "-id")
         )
-        cfg_reserva = ConfiguracaoSistema.get_configuracao()
+        empresa_documentos = ordem.empresa or obter_empresa_ativa(self.request, strict=False)
+        cfg_reserva = ConfiguracaoSistema.get_configuracao(empresa=empresa_documentos)
         context["reserva_auto_validade_dias"] = max(
             1, int(getattr(cfg_reserva, "estoque_reserva_os_validade_dias", 3) or 3)
         )
@@ -118,7 +119,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             modelo_relatorio, "Clássico"
         )
         context["taloes_os"] = ordem.taloes.select_related("criado_por", "pagamento").all()
-        context["empresa_talao"] = obter_empresa_ativa(self.request, strict=False) or ordem.empresa
+        context["empresa_talao"] = empresa_documentos
         context["total_os"] = sum(item.total() for item in context["itens"])
         pagamentos_os = Pagamento.objects.filter(ordem_servico=ordem).order_by("-data")
         total_pago = sum((p.valor for p in pagamentos_os), Decimal("0.00"))

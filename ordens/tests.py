@@ -3397,6 +3397,79 @@ class ImpressaoPdfHeadersTests(TestCase):
         self.assertNotIn("Atendente:", texto_unificado)
         self.assertIn("Primeira regra.", texto_unificado)
 
+    def test_verso_equilibrado_identifica_vias_e_formata_subtitulos(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.pdf_os_exibir_termos = True
+        config.pdf_os_exibir_assinaturas = True
+        config.layout_os_verso_modelo = "equilibrado"
+        config.layout_os_verso_exibir_identificacao = True
+        config.termos_ordem_servico_versao = "1.2 - 08/2026"
+        config.termos_ordem_servico = (
+            "**CONDIÇÕES GERAIS** O prazo informado é estimado. "
+            "O cliente autoriza a abertura do equipamento. "
+            "**GARANTIA** A garantia limita-se ao serviço executado."
+        )
+        config.save(
+            update_fields=[
+                "pdf_os_exibir_termos",
+                "pdf_os_exibir_assinaturas",
+                "layout_os_verso_modelo",
+                "layout_os_verso_exibir_identificacao",
+                "termos_ordem_servico_versao",
+                "termos_ordem_servico",
+            ]
+        )
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(
+                reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id])
+            )
+
+        self.assertEqual(response.status_code, 200)
+        texto_unificado = "\n".join(textos_pdf)
+        self.assertGreaterEqual(texto_unificado.count(f"<b>Nº {self.ordem.numero_os}</b>"), 2)
+        self.assertGreaterEqual(texto_unificado.count("<b>Cliente:</b>"), 2)
+        self.assertGreaterEqual(texto_unificado.count("<b>Termos:</b> 1.2 - 08/2026"), 2)
+        self.assertGreaterEqual(texto_unificado.count("<b>CONDIÇÕES GERAIS:</b>"), 2)
+        self.assertGreaterEqual(texto_unificado.count("<b>GARANTIA:</b>"), 2)
+        self.assertNotIn("**CONDIÇÕES GERAIS**", texto_unificado)
+        self.assertEqual(max(self._pdf_page_counts(response.content)), 2)
+
+    def test_verso_equilibrado_pode_ocultar_identificacao_por_empresa(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.layout_os_verso_modelo = "equilibrado"
+        config.layout_os_verso_exibir_identificacao = False
+        config.termos_ordem_servico_versao = "VERSAO_INTERNA_2026"
+        config.termos_ordem_servico = "Regra curta para validação."
+        config.save(
+            update_fields=[
+                "layout_os_verso_modelo",
+                "layout_os_verso_exibir_identificacao",
+                "termos_ordem_servico_versao",
+                "termos_ordem_servico",
+            ]
+        )
+        textos_pdf = []
+
+        def _paragraph_spy(texto, *args, **kwargs):
+            textos_pdf.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.impressao.Paragraph", side_effect=_paragraph_spy):
+            response = self.client.get(
+                reverse("ordens:imprimir_ordem_servico_impressao", args=[self.ordem.id])
+            )
+
+        self.assertEqual(response.status_code, 200)
+        textos_meta = [texto for texto in textos_pdf if "VERSAO_INTERNA_2026" in texto]
+        self.assertEqual(len(textos_meta), 2)
+        self.assertTrue(all("<b>Cliente:</b>" not in texto for texto in textos_meta))
+
     def test_imprimir_relatorio_tecnico_resumido_oculta_valores_e_assinaturas_do_cliente(self):
         config = ConfiguracaoSistema.get_configuracao()
         config.pdf_relatorio_modo_resumido = True
@@ -3711,6 +3784,92 @@ class ImpressaoPdfHeadersTests(TestCase):
 
         self.assertEqual(resposta.status_code, 200)
         self.assertIn("relatorio_tecnico_direto_", resposta["Content-Disposition"])
+
+    def test_preview_relatorio_aplica_modelo_selecionado_antes_de_salvar(self):
+        resposta = self.client.get(
+            reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+            {"_preview": "1", "pdf_relatorio_modelo": "profissional"},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn(
+            "relatorio_tecnico_profissional_",
+            resposta["Content-Disposition"],
+        )
+
+    def test_relatorio_usa_modelo_configurado_na_empresa_da_os(self):
+        empresa = Empresa.objects.create(nome="Empresa do RT")
+        self.ordem.empresa = empresa
+        self.ordem.save(update_fields=["empresa"])
+        config_global = ConfiguracaoSistema.get_configuracao()
+        config_global.pdf_relatorio_modelo = "classico"
+        config_global.save(update_fields=["pdf_relatorio_modelo"])
+        config_empresa = ConfiguracaoSistema.get_configuracao(empresa=empresa)
+        config_empresa.pdf_relatorio_modelo = "direto"
+        config_empresa.save(update_fields=["pdf_relatorio_modelo"])
+
+        resposta = self.client.get(
+            reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id])
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("relatorio_tecnico_direto_", resposta["Content-Disposition"])
+
+    def test_relatorios_ocultam_assinatura_tecnico_quando_desativada(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.pdf_relatorio_exibir_assinatura_tecnico = False
+        config.save(update_fields=["pdf_relatorio_exibir_assinatura_tecnico"])
+        modelos = (
+            ("classico", "ordens.view_modules.impressao.Paragraph"),
+            ("profissional", "ordens.view_modules.relatorio_profissional.Paragraph"),
+            ("direto", "ordens.view_modules.relatorio_direto.Paragraph"),
+        )
+
+        for modelo, paragraph_path in modelos:
+            with self.subTest(modelo=modelo):
+                textos = []
+
+                def _spy(texto, *args, **kwargs):
+                    textos.append(str(texto))
+                    return reportlab_paragraph(texto, *args, **kwargs)
+
+                params = {} if modelo == "classico" else {"modelo": modelo}
+                with patch(paragraph_path, side_effect=_spy):
+                    resposta = self.client.get(
+                        reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+                        params,
+                    )
+
+                self.assertEqual(resposta.status_code, 200)
+                texto_unificado = "\n".join(textos)
+                self.assertNotIn("Assinatura do Técnico", texto_unificado)
+                self.assertNotIn("Documento emitido em", texto_unificado)
+                self.assertNotIn("________________________________", texto_unificado)
+
+    def test_relatorio_sem_assinatura_mantem_avaliacao_google(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.pdf_relatorio_exibir_assinatura_tecnico = False
+        config.google_avaliacao_url = "https://example.com/avaliar-no-google"
+        config.save(
+            update_fields=[
+                "pdf_relatorio_exibir_assinatura_tecnico",
+                "google_avaliacao_url",
+            ]
+        )
+        textos = []
+
+        def _spy(texto, *args, **kwargs):
+            textos.append(str(texto))
+            return reportlab_paragraph(texto, *args, **kwargs)
+
+        with patch("ordens.view_modules.avaliacao_google_pdf.Paragraph", side_effect=_spy):
+            resposta = self.client.get(
+                reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+                {"modelo": "direto", "avaliacao": "1"},
+            )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("Sua opinião é muito importante para nós", "\n".join(textos))
 
     def test_imprimir_ordem_servico_impressao_reserva_faixa_para_etiqueta(self):
         frames = []

@@ -844,6 +844,20 @@
               {% if form.layout_os_data_fonte_pt.help_text %}<small class="form-text text-muted">{{ form.layout_os_data_fonte_pt.help_text }}</small>{% endif %}
             </div>
             <div class="col-md-6 form-group">
+              <label>{{ form.layout_os_verso_modelo.label }}</label>
+              {{ form.layout_os_verso_modelo }}
+              {% if form.layout_os_verso_modelo.help_text %}<small class="form-text text-muted">{{ form.layout_os_verso_modelo.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-6 form-group">
+              <div class="form-check mt-4">
+                {{ form.layout_os_verso_exibir_identificacao }}
+                <label class="form-check-label" for="{{ form.layout_os_verso_exibir_identificacao.id_for_label }}">
+                  {{ form.layout_os_verso_exibir_identificacao.label }}
+                </label>
+              </div>
+              {% if form.layout_os_verso_exibir_identificacao.help_text %}<small class="form-text text-muted">{{ form.layout_os_verso_exibir_identificacao.help_text }}</small>{% endif %}
+            </div>
+            <div class="col-md-6 form-group">
               <div class="form-check mt-4">
                 {{ form.layout_os_digital_exibir_validacao }}
                 <label class="form-check-label" for="{{ form.layout_os_digital_exibir_validacao.id_for_label }}">
@@ -870,6 +884,12 @@
           <h5 class="mb-0"><i class="fas fa-align-left mr-2"></i> Termos e textos dos documentos</h5>
         </div>
         <div class="card-body">
+          <div class="form-group">
+            <label>{{ form.termos_ordem_servico_versao.label }}</label>
+            {{ form.termos_ordem_servico_versao }}
+            {% if form.termos_ordem_servico_versao.help_text %}<small class="form-text text-muted">{{ form.termos_ordem_servico_versao.help_text }}</small>{% endif %}
+            {{ form.termos_ordem_servico_versao.errors }}
+          </div>
           <div class="form-group">
             <label>{{ form.termos_ordem_servico.label|default:"Termos da Ordem de Serviço" }}</label>
             {{ form.termos_ordem_servico }}
@@ -1031,6 +1051,10 @@
                   <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_datas_movimento }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_datas_movimento.id_for_label }}">{{ form.pdf_relatorio_exibir_datas_movimento.label }}</label></div>{% if form.pdf_relatorio_exibir_datas_movimento.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_datas_movimento.help_text }}</small>{% endif %}</div>
                   <div class="col-md-6 form-group"><div class="form-check">{{ form.pdf_relatorio_exibir_responsaveis }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_responsaveis.id_for_label }}">{{ form.pdf_relatorio_exibir_responsaveis.label }}</label></div>{% if form.pdf_relatorio_exibir_responsaveis.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_responsaveis.help_text }}</small>{% endif %}</div>
                   <div class="col-md-6 form-group mb-0"><div class="form-check">{{ form.pdf_relatorio_exibir_servicos_pecas }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_servicos_pecas.id_for_label }}">{{ form.pdf_relatorio_exibir_servicos_pecas.label }}</label></div>{% if form.pdf_relatorio_exibir_servicos_pecas.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_servicos_pecas.help_text }}</small>{% endif %}</div>
+                </div>
+                <div class="section-label">Finalização</div>
+                <div class="row">
+                  <div class="col-12 form-group mb-0"><div class="form-check">{{ form.pdf_relatorio_exibir_assinatura_tecnico }}<label class="form-check-label" for="{{ form.pdf_relatorio_exibir_assinatura_tecnico.id_for_label }}">{{ form.pdf_relatorio_exibir_assinatura_tecnico.label }}</label></div>{% if form.pdf_relatorio_exibir_assinatura_tecnico.help_text %}<small class="form-text text-muted">{{ form.pdf_relatorio_exibir_assinatura_tecnico.help_text }}</small>{% endif %}</div>
                 </div>
                 <div class="section-label">Experiência do cliente</div>
                 <div class="form-group mb-0">
@@ -1343,8 +1367,12 @@
       "layout_os_impressao",
       "layout_documentos_preset",
       "layout_documentos_cor",
+      "pdf_relatorio_modelo",
+      "pdf_relatorio_exibir_assinatura_tecnico",
       "layout_os_frente_espaco_assinaturas_cm",
       "layout_os_verso_espaco_assinatura_cm",
+      "layout_os_verso_modelo",
+      "layout_os_verso_exibir_identificacao",
       "layout_os_data_fonte_pt",
       "layout_os_digital_exibir_validacao",
       "layout_os_exibir_etiqueta_corte"

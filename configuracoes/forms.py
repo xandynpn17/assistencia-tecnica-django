@@ -759,6 +759,9 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'layout_os_impressao',
             'layout_os_frente_espaco_assinaturas_cm',
             'layout_os_verso_espaco_assinatura_cm',
+            'layout_os_verso_modelo',
+            'layout_os_verso_exibir_identificacao',
+            'termos_ordem_servico_versao',
             'layout_os_data_fonte_pt',
             'layout_os_digital_exibir_validacao',
             'layout_os_exibir_etiqueta_corte',
@@ -788,6 +791,7 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'pdf_os_exibir_termos',
             'pdf_os_exibir_assinaturas',
             'pdf_relatorio_modelo',
+            'pdf_relatorio_exibir_assinatura_tecnico',
             'pdf_relatorio_modo_resumido',
             'pdf_relatorio_exibir_nome_cliente',
             'pdf_relatorio_exibir_telefone_cliente',
@@ -877,6 +881,10 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
             'layout_os_impressao': forms.Select(attrs={'class': 'form-control'}),
             'layout_os_frente_espaco_assinaturas_cm': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.05', 'min': -1, 'max': 2}),
             'layout_os_verso_espaco_assinatura_cm': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.05', 'min': -1, 'max': 2}),
+            'layout_os_verso_modelo': forms.Select(attrs={'class': 'form-control'}),
+            'termos_ordem_servico_versao': forms.TextInput(
+                attrs={'class': 'form-control', 'maxlength': 40, 'placeholder': 'Ex.: 1.2 - 08/2026'}
+            ),
             'layout_os_data_fonte_pt': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': 6, 'max': 10}),
             'layout_documentos_preset': forms.Select(attrs={'class': 'form-control'}),
             'layout_documentos_cor': forms.Select(attrs={'class': 'form-control'}),
@@ -904,6 +912,15 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["layout_os_impressao"].help_text = "Preset base para organizar espacos na OS de impressao."
         self.fields["layout_os_frente_espaco_assinaturas_cm"].help_text = "Ajuste fino em cm no bloco de assinatura da frente."
         self.fields["layout_os_verso_espaco_assinatura_cm"].help_text = "Ajuste fino em cm para descer/subir assinatura abaixo dos termos."
+        self.fields["layout_os_verso_modelo"].help_text = (
+            "Equilibrado melhora hierarquia, identificação e assinaturas. Compacto preserva a ocupação anterior."
+        )
+        self.fields["layout_os_verso_exibir_identificacao"].help_text = (
+            "Ajuda a identificar cada meia folha caso original e duplicado sejam separados."
+        )
+        self.fields["termos_ordem_servico_versao"].help_text = (
+            "Opcional. Identifica qual texto contratual foi aceito pelo cliente."
+        )
         self.fields["layout_os_data_fonte_pt"].help_text = "Tamanho da fonte das datas (bloco de assinatura)."
         self.fields["layout_os_exibir_etiqueta_corte"].help_text = "Mostra ou oculta a etiqueta com numero da OS na linha de recorte."
         self.fields["layout_documentos_preset"].label = "Tema visual geral dos documentos"
@@ -938,6 +955,9 @@ class ConfiguracaoSistemaForm(forms.ModelForm):
         self.fields["pdf_relatorio_modelo"].help_text = (
             "Escolha Clássico, Profissional ou Direto. Esta será a única estrutura normal exibida no menu da OS; "
             "a opção com avaliação Google usa o mesmo modelo."
+        )
+        self.fields["pdf_relatorio_exibir_assinatura_tecnico"].help_text = (
+            "Desative para remover a linha de assinatura, o nome do técnico/utilizador e a data de emissão do final do RT."
         )
         self.fields["pdf_relatorio_modo_resumido"].help_text = "Recomendado: mostra apenas identificação, defeito, peritagem, laudo, peças e serviços, sem valores ou controles internos."
         self.fields["pdf_relatorio_exibir_nome_cliente"].help_text = "Mantém o nome do cliente no laudo técnico."

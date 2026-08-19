@@ -19,7 +19,8 @@ from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_
 
 
 def configuracao_os_edit_impl(request):
-    config = ConfiguracaoOrdemServico.get_configuracao()
+    empresa = obter_empresa_ativa(request, strict=False)
+    config = ConfiguracaoOrdemServico.get_configuracao(empresa=empresa)
     if request.method == "POST":
         form = ConfiguracaoOrdemServicoForm(request.POST, instance=config)
         if form.is_valid():
@@ -53,8 +54,9 @@ def configuracao_os_edit_impl(request):
 
 def configuracao_sistema_edit_impl(request):
     garantir_modelos_operacionais_padrao(sobrescrever=False)
-    config = ConfiguracaoSistema.get_configuracao()
-    config_os = ConfiguracaoOrdemServico.get_configuracao()
+    empresa = obter_empresa_ativa(request, strict=False)
+    config = ConfiguracaoSistema.get_configuracao(empresa=empresa)
+    config_os = ConfiguracaoOrdemServico.get_configuracao(empresa=empresa)
     secoes_validas = {
         "geral",
         "atendimento",
@@ -146,9 +148,12 @@ def preview_documento_impl(request):
         "layout_documentos_preset",
         "layout_documentos_cor",
         "modelo",
+        "pdf_relatorio_modelo",
         "avaliacao",
         "layout_os_frente_espaco_assinaturas_cm",
         "layout_os_verso_espaco_assinatura_cm",
+        "layout_os_verso_modelo",
+        "layout_os_verso_exibir_identificacao",
         "layout_os_data_fonte_pt",
         "layout_os_digital_exibir_validacao",
         "layout_os_exibir_etiqueta_corte",
@@ -193,6 +198,7 @@ def preview_documento_impl(request):
         "pdf_relatorio_exibir_datas_movimento",
         "pdf_relatorio_exibir_responsaveis",
         "pdf_relatorio_exibir_servicos_pecas",
+        "pdf_relatorio_exibir_assinatura_tecnico",
         "pdf_orcamento_exibir_nome_cliente",
         "pdf_orcamento_exibir_telefone_cliente",
         "pdf_orcamento_exibir_documento_cliente",

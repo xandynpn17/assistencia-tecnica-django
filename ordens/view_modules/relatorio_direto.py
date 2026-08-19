@@ -348,15 +348,28 @@ def _itens(ordem, styles, usable_w):
     return table
 
 
-def _rodape_final(ordem, empresa, styles, usable_w, incluir_avaliacao, url):
+def _rodape_final(
+    ordem,
+    empresa,
+    styles,
+    usable_w,
+    incluir_avaliacao,
+    url,
+    *,
+    exibir_assinatura=True,
+):
     emissao = ordem.data_conclusao or datetime.now()
     tecnico = str(ordem.tecnico_responsavel_valido or "Responsável técnico")
-    assinatura = [
-        Paragraph("______________________________________", styles["DirValue"]),
-        Paragraph(escape(tecnico), styles["DirValue"]),
-        Paragraph(f"Documento emitido em {emissao.strftime('%d/%m/%Y')}", styles["DirSmall"]),
-    ]
+    assinatura = []
+    if exibir_assinatura:
+        assinatura = [
+            Paragraph("______________________________________", styles["DirValue"]),
+            Paragraph(escape(tecnico), styles["DirValue"]),
+            Paragraph(f"Documento emitido em {emissao.strftime('%d/%m/%Y')}", styles["DirSmall"]),
+        ]
     if not incluir_avaliacao or not url:
+        if not assinatura:
+            return None
         tabela_assinatura = Table([[assinatura]], colWidths=[usable_w])
         tabela_assinatura.setStyle(
             TableStyle(
@@ -370,6 +383,8 @@ def _rodape_final(ordem, empresa, styles, usable_w, incluir_avaliacao, url):
         )
         return tabela_assinatura
     review = bloco_avaliacao_google(empresa, url, usable_w)
+    if not assinatura:
+        return review
     combined = Table([[assinatura], [review]], colWidths=[usable_w])
     combined.setStyle(
         TableStyle(
@@ -439,18 +454,19 @@ def gerar_relatorio_tecnico_direto(
                 ]
             )
 
-    story.append(
-        TopPadder(
-            _rodape_final(
-                ordem,
-                empresa,
-                styles,
-                usable_w,
-                incluir_avaliacao,
-                google_avaliacao_url,
-            )
-        )
+    rodape_final = _rodape_final(
+        ordem,
+        empresa,
+        styles,
+        usable_w,
+        incluir_avaliacao,
+        google_avaliacao_url,
+        exibir_assinatura=getattr(
+            config, "pdf_relatorio_exibir_assinatura_tecnico", True
+        ),
     )
+    if rodape_final is not None:
+        story.append(TopPadder(rodape_final))
 
     nome = "Assistência técnica"
     if empresa:

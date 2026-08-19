@@ -880,6 +880,10 @@ class ConfiguracaoSistema(models.Model):
         ("padrao", "Padrão"),
         ("amplo", "Amplo"),
     ]
+    LAYOUT_OS_VERSO_CHOICES = [
+        ("compacto", "Compacto (modelo anterior)"),
+        ("equilibrado", "Equilibrado"),
+    ]
     LAYOUT_DOCUMENTOS_CHOICES = [
         ("classico", "Clássico"),
         ("clean", "Clean"),
@@ -1172,6 +1176,22 @@ class ConfiguracaoSistema(models.Model):
         validators=[MinValueValidator(-1), MaxValueValidator(2)],
         verbose_name="Ajuste de espaço da assinatura no verso (cm)",
     )
+    layout_os_verso_modelo = models.CharField(
+        max_length=20,
+        choices=LAYOUT_OS_VERSO_CHOICES,
+        default="equilibrado",
+        verbose_name="Modelo do verso da OS impressa",
+    )
+    layout_os_verso_exibir_identificacao = models.BooleanField(
+        default=True,
+        verbose_name="Exibir OS e cliente no verso",
+    )
+    termos_ordem_servico_versao = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        verbose_name="Versão dos termos da OS",
+    )
     layout_os_data_fonte_pt = models.DecimalField(
         max_digits=3,
         decimal_places=1,
@@ -1325,6 +1345,10 @@ class ConfiguracaoSistema(models.Model):
         choices=RELATORIO_TECNICO_MODELO_CHOICES,
         default="classico",
         verbose_name="Modelo padrão do Relatório Técnico",
+    )
+    pdf_relatorio_exibir_assinatura_tecnico = models.BooleanField(
+        default=False,
+        verbose_name="Relatório: exibir assinatura e identificação do técnico",
     )
     pdf_relatorio_exibir_telefone_cliente = models.BooleanField(
         default=True,

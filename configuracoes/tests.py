@@ -1744,6 +1744,10 @@ class PreviewDocumentoTests(TestCase):
         self.assertContains(response, "Profissional (somente RT)")
         self.assertContains(response, "Direto (somente RT)")
         self.assertContains(response, 'name="pdf_relatorio_modelo"')
+        self.assertContains(response, 'name="pdf_relatorio_exibir_assinatura_tecnico"')
+        self.assertContains(response, 'name="layout_os_verso_modelo"')
+        self.assertContains(response, 'name="layout_os_verso_exibir_identificacao"')
+        self.assertContains(response, 'name="termos_ordem_servico_versao"')
         self.assertContains(response, "Tema visual geral dos documentos")
         self.assertContains(response, "Escolha Clássico, Profissional ou Direto")
         self.assertEqual(html.count('name="pdf_relatorio_modelo"'), 1)
@@ -1773,6 +1777,42 @@ class PreviewDocumentoTests(TestCase):
         self.assertEqual(qs.get("_preview"), ["1"])
         self.assertEqual(qs.get("modelo"), ["direto"])
         self.assertEqual(qs.get("avaliacao"), ["1"])
+
+    def test_preview_relatorio_repassa_modelo_e_assinatura_da_tela(self):
+        response = self.client.get(
+            reverse("configuracoes:preview_documento"),
+            {
+                "tipo": "relatorio",
+                "ordem_id": str(self.ordem.id),
+                "_preview": "1",
+                "pdf_relatorio_modelo": "profissional",
+                "pdf_relatorio_exibir_assinatura_tecnico": "0",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        destino = urlparse(response["Location"])
+        qs = parse_qs(destino.query)
+        self.assertEqual(qs.get("pdf_relatorio_modelo"), ["profissional"])
+        self.assertEqual(qs.get("pdf_relatorio_exibir_assinatura_tecnico"), ["0"])
+
+    def test_preview_os_repassa_modelo_e_identificacao_do_verso(self):
+        response = self.client.get(
+            reverse("configuracoes:preview_documento"),
+            {
+                "tipo": "os_impressao",
+                "ordem_id": str(self.ordem.id),
+                "_preview": "1",
+                "layout_os_verso_modelo": "equilibrado",
+                "layout_os_verso_exibir_identificacao": "0",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        destino = urlparse(response["Location"])
+        qs = parse_qs(destino.query)
+        self.assertEqual(qs.get("layout_os_verso_modelo"), ["equilibrado"])
+        self.assertEqual(qs.get("layout_os_verso_exibir_identificacao"), ["0"])
 
     def test_preview_profissional_google_sem_os_usa_qr_demonstrativo(self):
         from reportlab.platypus import Paragraph as reportlab_paragraph
