@@ -3810,6 +3810,88 @@ class PoliticaCustoEstoqueTests(TestCase):
         self.assertEqual(saldo.quantidade, 2)
         self.assertEqual(Pagamento.objects.count(), pagamentos_antes)
 
+    def test_pmp_nao_duplica_custo_quando_ubicacao_fica_negativa(self):
+        from estoque.services import registrar_movimentacao_estoque
+
+        self.config.estoque_metodo_custo = ConfiguracaoSistema.ESTOQUE_METODO_CUSTO_PMP
+        self.config.estoque_permitir_negativo = True
+        self.config.save(
+            update_fields=["estoque_metodo_custo", "estoque_permitir_negativo", "data_atualizacao"]
+        )
+        ubicacao_sem_camada = UbicacaoEstoque.objects.create(
+            ponto_operacional=self.ponto_origem,
+            codigo="A2",
+            descricao="Local sem camada de custo",
+            ativo=True,
+        )
+
+        self._registrar_entrada(2, "2.00")
+        movimento = registrar_movimentacao_estoque(
+            produto=self.produto,
+            tipo="consumo_os",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=ubicacao_sem_camada,
+            observacao="Baixa em local divergente",
+        )
+
+        self.assertEqual(movimento.valor_unitario_custo, Decimal("2.00"))
+        self.assertEqual(movimento.valor_total_custo, Decimal("2.00"))
+
+    def test_ubicacao_preferencial_prioriza_local_com_saldo(self):
+        from estoque.services import obter_ubicacao_preferencial
+
+        ubicacao_vazia = UbicacaoEstoque.objects.create(
+            ponto_operacional=self.ponto_origem,
+            codigo="A2",
+            descricao="Local padrao vazio",
+            ativo=True,
+        )
+        self._registrar_entrada(2, "2.00")
+        self.produto.ubicacao_padrao = ubicacao_vazia
+        self.produto.save(update_fields=["ubicacao_padrao"])
+
+        escolhida = obter_ubicacao_preferencial(self.produto, self.ponto_origem)
+
+        self.assertEqual(escolhida, self.ubicacao_origem)
+
+    def test_estorno_reduz_saldo_negativo_de_ubicacao_sem_ser_bloqueado(self):
+        from estoque.services import estornar_movimentacao_estoque, registrar_movimentacao_estoque
+
+        self.config.estoque_permitir_negativo = True
+        self.config.save(update_fields=["estoque_permitir_negativo", "data_atualizacao"])
+        ubicacao_sem_saldo = UbicacaoEstoque.objects.create(
+            ponto_operacional=self.ponto_origem,
+            codigo="A3",
+            descricao="Local negativo legado",
+            ativo=True,
+        )
+        self._registrar_entrada(2, "2.00")
+        primeiro = registrar_movimentacao_estoque(
+            produto=self.produto,
+            tipo="consumo_os",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=ubicacao_sem_saldo,
+            observacao="Primeira baixa indevida",
+        )
+        registrar_movimentacao_estoque(
+            produto=self.produto,
+            tipo="consumo_os",
+            quantidade=1,
+            origem=self.ponto_origem,
+            origem_ubicacao=ubicacao_sem_saldo,
+            observacao="Segunda baixa indevida",
+        )
+
+        estornar_movimentacao_estoque(primeiro, motivo="Correcao de duplicidade")
+
+        saldo = SaldoEstoqueUbicacao.objects.get(
+            produto=self.produto,
+            ubicacao=ubicacao_sem_saldo,
+        )
+        self.assertEqual(saldo.quantidade, -1)
+
     def test_cedencia_baixa_estoque_e_exige_justificativa(self):
         from estoque.services import registrar_movimentacao_estoque
 

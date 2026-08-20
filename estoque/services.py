@@ -397,8 +397,42 @@ def _garantir_saldo_ubicacao_legado(produto, ponto_operacional, ubicacao):
 def obter_ubicacao_preferencial(produto, ponto_operacional):
     if not ponto_operacional:
         return None
-    if getattr(produto, "ubicacao_padrao_id", None) and produto.ubicacao_padrao.ponto_operacional_id == ponto_operacional.id:
-        return produto.ubicacao_padrao
+    ubicacao_padrao = None
+    if (
+        getattr(produto, "ubicacao_padrao_id", None)
+        and produto.ubicacao_padrao.ponto_operacional_id == ponto_operacional.id
+    ):
+        ubicacao_padrao = produto.ubicacao_padrao
+        saldo_padrao = (
+            SaldoEstoqueUbicacao.objects.filter(
+                produto=produto,
+                ponto_operacional=ponto_operacional,
+                ubicacao=ubicacao_padrao,
+            )
+            .values_list("quantidade", flat=True)
+            .first()
+        )
+        if int(saldo_padrao or 0) > 0:
+            return ubicacao_padrao
+
+    # A localizacao padrao pode ter sido alterada depois da entrada. Para uma
+    # baixa automatica, use primeiro uma localizacao que realmente possua saldo,
+    # evitando criar negativos enquanto ha unidades em outra prateleira.
+    saldo_positivo = (
+        SaldoEstoqueUbicacao.objects.select_related("ubicacao")
+        .filter(
+            produto=produto,
+            ponto_operacional=ponto_operacional,
+            ubicacao__ativo=True,
+            quantidade__gt=0,
+        )
+        .order_by("-quantidade", "ubicacao__codigo")
+        .first()
+    )
+    if saldo_positivo:
+        return saldo_positivo.ubicacao
+    if ubicacao_padrao:
+        return ubicacao_padrao
     ubicacao = (
         UbicacaoEstoque.objects.filter(ponto_operacional=ponto_operacional, ativo=True)
         .order_by("codigo")
@@ -568,7 +602,11 @@ def _consumir_camadas_custo(*, produto, ponto_operacional, ubicacao, quantidade,
         if not allow_negative:
             raise ValueError("Camadas de custo insuficientes para a saida informada.")
         custo_fallback = Decimal(str(produto.custo_medio or produto.custo_unitario or 0))
-        custo_total += custo_fallback * Decimal(restante)
+        # No PMP o custo total da quantidade inteira ja foi calculado acima pelo
+        # custo medio. Somar novamente o saldo sem camada duplicaria o custo da
+        # saida (por exemplo, R$ 2,00 passaria a R$ 4,00).
+        if metodo != ConfiguracaoSistema.ESTOQUE_METODO_CUSTO_PMP:
+            custo_total += custo_fallback * Decimal(restante)
         consumos.append(
             {
                 "camada_id": None,
@@ -1545,6 +1583,11 @@ def registrar_movimentacao_estoque(
             destino,
             destino_ubicacao_ref,
             quantidade_gravada,
+            # Uma contrapartida pode apenas reduzir um negativo legado sem
+            # elimina-lo por completo (ex.: duas baixas indevidas e um estorno).
+            # A entrada e sempre positiva, portanto permitir o saldo residual
+            # negativo nao piora a divergencia e torna o estorno executavel.
+            allow_negative=True,
             inicializar_de_saldo_legado=False,
         )
         custo_movimento = Decimal(
@@ -2005,7 +2048,13 @@ def _estornar_custo_movimentacao_os(movimento, *, usuario=None, motivo=""):
 
 
 @transaction.atomic
-def converter_reserva(reserva, usuario=None, motivo="Conversao de reserva"):
+def converter_reserva(
+    reserva,
+    usuario=None,
+    motivo="Conversao de reserva",
+    *,
+    servico_peca_id=None,
+):
     if reserva.status != "ativa":
         raise ValueError("Apenas reservas ativas podem ser convertidas.")
     if reserva.valido_ate < timezone.localdate():
@@ -2013,7 +2062,7 @@ def converter_reserva(reserva, usuario=None, motivo="Conversao de reserva"):
     if not reserva.ponto_operacional:
         raise ValueError("Reserva sem ponto operacional definido.")
 
-    item_os_id = _extrair_item_os_do_motivo(reserva.motivo_status)
+    item_os_id = servico_peca_id or _extrair_item_os_do_motivo(reserva.motivo_status)
     movimento = registrar_movimentacao_estoque(
         produto=reserva.produto,
         tipo="consumo_os" if reserva.ordem_servico_id else "reserva",
@@ -2082,33 +2131,63 @@ def consumir_reservas_ordem(ordem, usuario=None, *, incluir_auto=True, incluir_m
     reservas = ReservaEstoque.objects.filter(
         ordem_servico=ordem,
         status="ativa",
-    ).select_related("produto", "ponto_operacional")
+    ).select_related("produto", "ponto_operacional", "item_orcamento")
     if incluir_auto and not incluir_manuais:
         reservas = reservas.filter(motivo_status__startswith=RESERVA_AUTO_OS_PREFIX)
     elif incluir_manuais and not incluir_auto:
         reservas = reservas.exclude(motivo_status__startswith=RESERVA_AUTO_OS_PREFIX)
 
+    from ordens.models import ServicoPeca
+
     item_ids_convertidos = set()
+    quantidade_por_item = {}
     total = 0
     for reserva in reservas:
         item_os_id = _extrair_item_os_do_motivo(reserva.motivo_status)
+        if not item_os_id and reserva.item_orcamento_id:
+            item_os_id = (
+                ServicoPeca.objects.filter(
+                    ordem=ordem,
+                    item_orcamento_id=reserva.item_orcamento_id,
+                    produto_estoque_id=reserva.produto_id,
+                )
+                .order_by("id")
+                .values_list("id", flat=True)
+                .first()
+            )
+        if item_os_id:
+            quantidade_por_item[item_os_id] = (
+                quantidade_por_item.get(item_os_id, 0) + int(reserva.quantidade or 0)
+            )
+            item_quantidade = int(
+                ServicoPeca.objects.filter(pk=item_os_id, ordem=ordem)
+                .values_list("quantidade", flat=True)
+                .first()
+                or 0
+            )
+            if quantidade_por_item[item_os_id] > item_quantidade:
+                raise ValueError(
+                    "A quantidade reservada para o item da OS e maior que a quantidade utilizada. "
+                    "Ajuste ou cancele a reserva antes de fechar."
+                )
         converter_reserva(
             reserva,
             usuario=usuario,
             motivo=f"Consumo automatico no fechamento da OS {ordem.numero_os}",
+            servico_peca_id=item_os_id,
         )
         if item_os_id:
             item_ids_convertidos.add(item_os_id)
         total += 1
 
     if item_ids_convertidos:
-        from ordens.models import ServicoPeca
-
-        ServicoPeca.objects.filter(
-            id__in=item_ids_convertidos,
-            ordem=ordem,
-            estoque_consumido_em__isnull=True,
-        ).update(estoque_consumido_em=timezone.now())
+        agora = timezone.now()
+        for item in ServicoPeca.objects.filter(id__in=item_ids_convertidos, ordem=ordem):
+            if quantidade_por_item.get(item.id, 0) >= int(item.quantidade or 0):
+                ServicoPeca.objects.filter(
+                    pk=item.pk,
+                    estoque_consumido_em__isnull=True,
+                ).update(estoque_consumido_em=agora)
     return total
 
 
@@ -2150,6 +2229,23 @@ def consumir_itens_estoque_ordem(ordem, usuario=None):
     for item in itens:
         if item.id in reservas_auto_item_ids:
             continue
+        from ordens.models import CustoOrdemServico
+
+        quantidade_ja_coberta = (
+            CustoOrdemServico.objects.filter(
+                servico_peca=item,
+                origem="estoque",
+                estado="realizado",
+                estornado_em__isnull=True,
+                movimentacao_estoque__origem_tipo="reserva",
+            ).aggregate(total=Sum("quantidade"))["total"]
+            or Decimal("0")
+        )
+        quantidade_baixa = Decimal(int(item.quantidade or 0)) - Decimal(quantidade_ja_coberta)
+        if quantidade_baixa <= 0:
+            item.estoque_consumido_em = timezone.now()
+            item.save(update_fields=["estoque_consumido_em"])
+            continue
         produto = item.produto_estoque
         ponto = item.ponto_operacional_reserva or getattr(produto, "ponto_operacional", None)
         ubicacao = obter_ubicacao_preferencial(produto, ponto) if produto and ponto else None
@@ -2166,7 +2262,7 @@ def consumir_itens_estoque_ordem(ordem, usuario=None):
         movimento = registrar_movimentacao_estoque(
             produto=produto,
             tipo="consumo_os",
-            quantidade=item.quantidade,
+            quantidade=int(quantidade_baixa),
             origem=ponto,
             origem_ubicacao=ubicacao,
             observacao=f"Consumo automatico na OS {ordem.numero_os} - item {item.id}",
@@ -2225,16 +2321,22 @@ def devolver_itens_estoque_ordem(ordem, usuario=None):
                 origem="estoque",
                 estornado_em__isnull=True,
                 movimentacao_estoque__isnull=False,
+                movimentacao_estoque__origem_tipo="ordem_servico",
             )
             .select_related("movimentacao_estoque")
             .order_by("-id")
             .first()
         )
         movimento_original = custo_ativo.movimentacao_estoque if custo_ativo else None
+        if not movimento_original:
+            item.estoque_consumido_em = None
+            item.save(update_fields=["estoque_consumido_em"])
+            continue
+        quantidade_devolucao = abs(int(movimento_original.quantidade or 0))
         registrar_movimentacao_estoque(
             produto=produto,
             tipo="devolucao_reserva",
-            quantidade=item.quantidade,
+            quantidade=quantidade_devolucao,
             destino=ponto,
             destino_ubicacao_ref=ubicacao,
             observacao=f"Devolucao automatica por reabertura da OS {ordem.numero_os} - item {item.id}",

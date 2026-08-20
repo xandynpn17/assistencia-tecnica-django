@@ -165,8 +165,8 @@ class FechamentoOSService:
                 )
                 itens_estoque_processados = consumir_itens_estoque_ordem(ordem, usuario=usuario)
             else:
-                reservas_processadas = devolver_reservas_ordem(ordem, usuario=usuario)
                 itens_estoque_processados = devolver_itens_estoque_ordem(ordem, usuario=usuario)
+                reservas_processadas = devolver_reservas_ordem(ordem, usuario=usuario)
 
             LinhaTrabalho.objects.create(
                 ordem=ordem,

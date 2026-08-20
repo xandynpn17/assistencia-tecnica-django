@@ -1958,6 +1958,60 @@ class OrdemEstoqueIntegracaoTests(TestCase):
         saldo = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto)
         self.assertEqual(saldo.quantidade, 5)
 
+    def test_reserva_do_item_orcamento_nao_duplica_baixa_no_fechamento(self):
+        orcamento = Orcamento.objects.create(
+            empresa=self.ordem.empresa,
+            cliente=self.cliente,
+            ordem_servico=self.ordem,
+            status="aprovado",
+        )
+        item_orcamento = ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome=self.produto.nome,
+            valor_unitario=Decimal("100.00"),
+            quantidade=2,
+            tipo_item="peca",
+            origem="estoque",
+            status="aprovado",
+        )
+        item_os = ServicoPeca.objects.create(
+            ordem=self.ordem,
+            produto_estoque=self.produto,
+            item_orcamento=item_orcamento,
+            tipo="peca",
+            nome=self.produto.nome,
+            quantidade=2,
+            valor_unitario=Decimal("100.00"),
+        )
+        self.reserva.item_orcamento = item_orcamento
+        self.reserva.save(update_fields=["item_orcamento"])
+
+        response = self.client.get(
+            reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]),
+            {"confirmar_financeiro": "1"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        item_os.refresh_from_db()
+        saldo = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto)
+        self.assertEqual(saldo.quantidade, 3)
+        self.assertIsNotNone(item_os.estoque_consumido_em)
+        self.assertEqual(
+            self.produto.movimentacoes.filter(tipo="consumo_os", origem_tipo="reserva").count(),
+            1,
+        )
+        self.assertFalse(
+            self.produto.movimentacoes.filter(
+                tipo="consumo_os",
+                origem_tipo="ordem_servico",
+                origem_referencia=self.ordem.numero_os,
+            ).exists()
+        )
+
+        self.client.get(reverse("ordens:toggle_fechamento_os", args=[self.ordem.id]))
+        saldo.refresh_from_db()
+        self.assertEqual(saldo.quantidade, 5)
+
 
 class MensagensPorModeloTests(TestCase):
     def setUp(self):
