@@ -55,7 +55,7 @@ def garantir_conta_receber_os(ordem, ignorar_pagamento_id=None):
         .first()
     )
 
-    nao_cobravel = ordem.resultado_financeiro != "cobravel"
+    nao_cobravel = ordem.resultado_financeiro != "cobravel" or ordem.eh_garantia_fabricante
     if total_os <= Decimal("0.00") or nao_cobravel:
         if conta:
             conta.empresa = ordem.empresa
@@ -118,9 +118,15 @@ class FechamentoOSService:
     def _validar_custos_pecas_manuais(ordem):
         pendentes = []
         for item in ordem.servicos_pecas.filter(tipo="peca", produto_estoque__isnull=True).select_related("item_orcamento"):
-            custos = ordem.custos_internos.filter(estornado_em__isnull=True)
+            custos = ordem.custos_internos.filter(
+                estornado_em__isnull=True,
+                estado="realizado",
+            )
             if item.item_orcamento_id:
-                confirmado = custos.filter(item_orcamento_id=item.item_orcamento_id).exists()
+                confirmado = custos.filter(
+                    models.Q(servico_peca=item)
+                    | models.Q(item_orcamento_id=item.item_orcamento_id)
+                ).exists()
             else:
                 confirmado = custos.filter(servico_peca=item).exists()
             if not confirmado:
@@ -171,9 +177,19 @@ class FechamentoOSService:
             )
 
             atualizou_auditoria_garantia = False
-            if ordem.fechada and ordem.tipo_reparo == "Garantia":
-                upsert_auditoria_garantia_ordem(ordem)
-                atualizou_auditoria_garantia = True
+            if ordem.fechada and ordem.eh_garantia_fabricante:
+                atualizou_auditoria_garantia = bool(upsert_auditoria_garantia_ordem(ordem))
+            elif not ordem.fechada and ordem.eh_garantia_fabricante:
+                contas_garantia = ContaReceber.objects.filter(
+                    ordem_servico=ordem,
+                    tipo_origem="garantia_fabricante",
+                ).exclude(status="paga")
+                for conta_garantia in contas_garantia:
+                    conta_garantia.valor_aberto = Decimal("0.00")
+                    conta_garantia.status = "cancelada"
+                    conta_garantia.save(
+                        update_fields=["valor_aberto", "status", "atualizado_em"]
+                    )
 
             total_os = _total_servicos_pecas(ordem)
             garantir_conta_receber_os(ordem)
@@ -214,6 +230,9 @@ class FechamentoOSService:
             itens_estoque_processados = consumir_itens_estoque_ordem(ordem, usuario=usuario)
             total_os = _total_servicos_pecas(ordem)
             garantir_conta_receber_os(ordem)
+            atualizou_auditoria_garantia = False
+            if ordem.eh_garantia_fabricante:
+                atualizou_auditoria_garantia = bool(upsert_auditoria_garantia_ordem(ordem))
 
         return FechamentoOSResultado(
             ordem=ordem,
@@ -223,4 +242,5 @@ class FechamentoOSService:
             reservas_processadas=reservas_processadas,
             itens_estoque_processados=itens_estoque_processados,
             total_os=total_os,
+            atualizou_auditoria_garantia=atualizou_auditoria_garantia,
         )

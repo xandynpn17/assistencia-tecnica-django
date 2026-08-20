@@ -191,6 +191,15 @@ class OrdemServico(models.Model):
         return f"{self.numero_os} - {self.cliente.nome} - {self.marca_equipamento} {self.modelo_equipamento}"
 
     @property
+    def eh_garantia_fabricante(self):
+        """Distingue garantia contratual do fabricante de retorno de serviço."""
+        return (self.tipo_reparo or "").strip().casefold() == "garantia"
+
+    @property
+    def eh_garantia_servico(self):
+        return (self.tipo_reparo or "").strip().casefold().startswith("garantia de servi")
+
+    @property
     def status_listagem_codigo(self):
         status = self.normalizar_status_os(self.status)
         if self.fechada:
@@ -915,6 +924,10 @@ class OrdemTalao(models.Model):
 
 
 class PedidoCompra(models.Model):
+    FINALIDADE_CHOICES = [
+        ("uso_direto_os", "Compra para uso direto nesta OS"),
+        ("reposicao_estoque_os", "Reposição do estoque utilizado nesta OS"),
+    ]
     STATUS_CHOICES = [
         ("contactar", "Contactar"),
         ("indisponivel", "Indisponível"),
@@ -956,6 +969,12 @@ class PedidoCompra(models.Model):
     descricao = models.TextField(blank=True)
     fornecedor_nome = models.CharField(max_length=160, blank=True)
     documento_referencia = models.CharField(max_length=100, blank=True)
+    finalidade = models.CharField(
+        max_length=24,
+        choices=FINALIDADE_CHOICES,
+        default="uso_direto_os",
+        db_index=True,
+    )
     quantidade_solicitada = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     custo_estimado_unitario = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     data_prevista = models.DateField(null=True, blank=True)
@@ -1003,6 +1022,8 @@ class PedidoCompra(models.Model):
             errors["item_orcamento"] = "O item do orçamento não pertence à OS."
         if self.produto_estoque_id and self.produto_estoque.empresa_id not in {None, self.empresa_id}:
             errors["produto_estoque"] = "O produto pertence a outra empresa."
+        if self.finalidade == "reposicao_estoque_os" and not self.produto_estoque_id:
+            errors["produto_estoque"] = "A reposição exige o produto de estoque que foi utilizado na OS."
         if self.conta_pagar_id and self.conta_pagar.empresa_id != self.empresa_id:
             errors["conta_pagar"] = "A obrigação pertence a outra empresa."
         if Decimal(self.quantidade_solicitada or 0) <= 0:

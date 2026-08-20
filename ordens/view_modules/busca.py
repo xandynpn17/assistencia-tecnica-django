@@ -80,6 +80,12 @@ def _aplicar_busca_ordens(queryset, termo_busca):
             numero_serie_busca=_serie_normalizada_expr("numero_serie_equipamento")
         ).filter(numero_serie_busca=serial_normalizado)
 
+    if termo_lower.startswith("rp:"):
+        referencia = termo[3:].strip()
+        if len(referencia) < 2:
+            return queryset.none()
+        return queryset.filter(referencia_parceiro__icontains=referencia)
+
     termo_os = termo.upper().replace(" ", "")
     if re.fullmatch(r"OS-\d{4,}", termo_os):
         return queryset.filter(numero_os__iexact=termo_os)
@@ -103,13 +109,15 @@ def _mensagem_busca_ordens_invalida(termo_busca):
         return f"Use pelo menos {minimo_numerico} numeros apos cpf: ou tel:."
     if termo_lower.startswith("sn:") and len((termo[3:] or "").strip()) < 3:
         return "Informe o numero de serie completo apos sn:."
+    if termo_lower.startswith("rp:") and len((termo[3:] or "").strip()) < 2:
+        return "Informe ao menos 2 caracteres da referência após rp:."
     if re.fullmatch(r"OS-\d{4,}", termo.upper().replace(" ", "")):
         return ""
     if digits and termo == digits and len(digits) >= 4:
         return ""
-    if termo_lower.startswith(("cpf:", "tel:", "sn:", "id:")):
+    if termo_lower.startswith(("cpf:", "tel:", "sn:", "rp:", "id:")):
         return ""
-    return "Use o numero exato da OS ou os prefixos cpf:, tel: ou sn:."
+    return "Use o numero exato da OS ou os prefixos cpf:, tel:, sn: ou rp:."
 
 
 def _aplicar_filtro_rapido_ordens(queryset, quick_filter, user):
@@ -157,6 +165,7 @@ def buscar_ordens(request):
             "cliente": ordem.cliente.nome,
             "telefone": ordem.cliente.telefone,
             "cpf": ordem.cliente.documento or "",
+            "referencia_parceiro": ordem.referencia_parceiro or "",
             "url": f"/ordens/{ordem.pk}/detalhes/",
         }
         for ordem in resultados[:30]
@@ -273,4 +282,3 @@ class OrdemServicoListView(RoleRequiredMixin, ListView):
 
 
 __all__ = ["OrdemServicoListView", "buscar_ordens"]
-

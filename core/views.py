@@ -15,7 +15,7 @@ from clientes.models import Cliente, ORIGEM_CLIENTE_CHOICES
 from configuracoes.permissions import ORDER_ROLES, has_role
 from configuracoes.services.setup_inicial import setup_inicial_concluido
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
-from ordens.models import LinhaTrabalho, OrdemServico, ServicoPeca
+from ordens.models import LinhaTrabalho, OrdemServico, PedidoCompra, ServicoPeca
 from orcamentos.models import Orcamento
 from django.conf import settings
 
@@ -73,6 +73,9 @@ def _dashboard_shared_context(request):
     pendencias_sla = calcular_pendencias_sla(empresa=empresa)
     pendencias_sla_preview = pendencias_sla[:5]
     resumo_sla = resumo_pendencias_por_regra(pendencias_sla)
+    pedidos_pendentes = filtrar_queryset_empresa(
+        PedidoCompra.objects.all(), empresa, campo="ordem__empresa"
+    ).exclude(status="fechado")
 
     return {
         "empresa": empresa,
@@ -87,6 +90,7 @@ def _dashboard_shared_context(request):
         "pendencias_sla_total": len(pendencias_sla),
         "pendencias_sla_preview": pendencias_sla_preview,
         "pendencias_sla_resumo": resumo_sla,
+        "pedidos_compra_pendentes_total": pedidos_pendentes.count(),
         "is_operational": is_operational,
         "is_managerial": is_managerial,
         "dashboard_links": {
@@ -96,6 +100,7 @@ def _dashboard_shared_context(request):
             "prontas": f"{reverse('ordens:lista_ordens')}?carregar=1&quick=prontas",
             "criticas": f"{reverse('ordens:lista_ordens')}?carregar=1&quick=criticas",
             "paradas": f"{reverse('ordens:lista_ordens')}?carregar=1&quick=paradas_15",
+            "pedidos_pendentes": reverse("ordens:dashboard_pedidos"),
         },
         "menu_app": "core",
     }

@@ -532,11 +532,17 @@ def _garantir_conta_os(ordem, ignorar_pagamento_id=None):
 
 
 def _dados_garantia_ordem(ordem):
-    if not ordem or ordem.tipo_reparo != "Garantia":
+    if not ordem or not ordem.eh_garantia_fabricante:
         return None
-    marca = None
+    marca = getattr(ordem, "marca_garantia", None)
+    if marca and (
+        not marca.ativo
+        or not marca.parceira_garantia
+        or marca.empresa_id not in {None, ordem.empresa_id}
+    ):
+        marca = None
     nome_marca = (ordem.marca_equipamento or "").strip()
-    if nome_marca:
+    if not marca and nome_marca:
         marca = MarcaGarantia.objects.filter(
             nome__iexact=nome_marca,
             ativo=True,
@@ -548,9 +554,28 @@ def _dados_garantia_ordem(ordem):
     data_ref = ordem.data_abertura.date() if ordem.data_abertura else timezone.localdate()
     regra = RegraGarantiaMarca.buscar_regra_vigente(marca, ordem.tipo_equipamento, data_ref=data_ref)
     if regra:
-        valor_previsto = regra.valor_mao_obra
+        valor_previsto = Decimal(regra.valor_mao_obra or 0)
+        if valor_previsto <= 0:
+            return None
     else:
         valor_previsto = Decimal(marca.valor_mao_obra_garantia or 0)
+        if valor_previsto <= 0:
+            valor_previsto = sum(
+                (
+                    item.total()
+                    for orcamento in ordem.orcamentos.all()
+                    for item in orcamento.itens.filter(status="aprovado", tipo_item="servico")
+                ),
+                Decimal("0.00"),
+            )
+        if valor_previsto <= 0:
+            valor_previsto = sum(
+                (
+                    item.total()
+                    for item in ordem.servicos_pecas.filter(tipo="servico")
+                ),
+                Decimal("0.00"),
+            )
         if valor_previsto <= 0:
             return None
     fornecedor = marca.fornecedor if marca else None
@@ -563,7 +588,7 @@ def _dados_garantia_ordem(ordem):
 
 
 def _garantir_conta_garantia(ordem, dados_garantia=None, ignorar_pagamento_id=None):
-    if not ordem or ordem.tipo_reparo != "Garantia":
+    if not ordem or not ordem.eh_garantia_fabricante:
         return None
     dados = dados_garantia or _dados_garantia_ordem(ordem)
     if not dados:
@@ -665,22 +690,10 @@ def _atualizar_status_contas_abertas():
 
 
 def _valor_garantia_sugerido(ordem):
-    if not ordem or ordem.tipo_reparo != "Garantia":
+    if not ordem or not ordem.eh_garantia_fabricante:
         return None
-    nome_marca = (ordem.marca_equipamento or "").strip()
-    if not nome_marca:
-        return None
-    marca = MarcaGarantia.objects.filter(
-        nome__iexact=nome_marca,
-        ativo=True,
-        parceira_garantia=True,
-    ).filter(Q(empresa=ordem.empresa) | Q(empresa__isnull=True)).first()
-    if marca:
-        data_ref = ordem.data_abertura.date() if ordem.data_abertura else timezone.localdate()
-        regra = RegraGarantiaMarca.buscar_regra_vigente(marca, ordem.tipo_equipamento, data_ref=data_ref)
-        if regra:
-            return regra.valor_mao_obra
-    return None
+    dados = _dados_garantia_ordem(ordem)
+    return dados.get("valor_previsto_fabricante") if dados else None
 
 
 def _base_comissao(ordem):

@@ -40,7 +40,7 @@
                 </a>
                 {% elif ordem.status == 'pronto_contactado' and not ordem.fechada %}
                 <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1{% if request.GET.confirmar_fechamento == '1' %}&confirmar_financeiro=1{% endif %}" class="btn btn-sm {% if destacar_fechar_e_caixa %}btn-success{% else %}btn-outline-success{% endif %}">
-                    Fechar e ir ao Caixa
+                    {% if ordem.tipo_reparo == 'Garantia' %}Fechar e faturar fabricante{% else %}Fechar e ir ao Caixa{% endif %}
                 </a>
                 {% elif liberada_para_entrega %}
                 <a href="{% url 'ordens:detalhes_ordem' ordem.id %}?tab=relatorio" class="btn btn-sm {% if destacar_revisar_entrega %}btn-success{% else %}btn-outline-success{% endif %}">
@@ -253,7 +253,7 @@
                 <p class="mb-1"><strong>Comissão prevista técnica:</strong> R$ {{ auditoria_garantia.comissao_prevista_tecnica|floatformat:2 }}</p>
                 <p class="mb-0"><strong>Status faturamento:</strong> {{ auditoria_garantia.get_status_faturamento_display }}</p>
                 {% else %}
-                <p class="mb-0 text-muted">Feche a OS para gerar auditoria financeira da garantia.</p>
+                <p class="mb-0 text-muted">{% if ordem.fechada %}Cobrança não gerada. Confira a marca parceira e o valor/regra de mão de obra da garantia.{% else %}Feche a OS para gerar a conta a receber do fabricante.{% endif %}</p>
                 {% endif %}
             </div>
             {% endif %}
@@ -267,6 +267,21 @@
                         <p class="mb-1 small">R$ {{ item.valor_unitario|floatformat:2 }} x {{ item.quantidade }} = R$ {{ item.total|floatformat:2 }}</p>
                         {% if item.produto_estoque %}
                         <small class="text-muted">Estoque vinculado: {{ item.produto_estoque.nome }}{% if item.ponto_operacional_reserva %} | Ponto {{ item.ponto_operacional_reserva.codigo }}{% elif item.produto_estoque.ponto_operacional %} | Ponto {{ item.produto_estoque.ponto_operacional.codigo }}{% endif %}{% if item.estoque_consumido_em %} | Baixado{% endif %}</small><br>
+                        {% if ordem.tipo_reparo == 'Garantia' and not ordem.fechada %}
+                            {% if item.produto_estoque_id in reposicoes_pendentes_produto_ids %}
+                            <a href="?tab=pedidos" class="badge badge-info mt-1">Reposição já solicitada</a>
+                            {% else %}
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-info mt-1 js-solicitar-reposicao"
+                                    data-toggle="modal"
+                                    data-target="#modalAdicionarPedido"
+                                    data-produto-id="{{ item.produto_estoque_id }}"
+                                    data-produto-nome="{{ item.produto_estoque.nome }}"
+                                    data-quantidade="{{ item.quantidade }}">
+                                <i class="fas fa-sync-alt mr-1"></i>Solicitar reposição
+                            </button>
+                            {% endif %}
+                        {% endif %}
                         {% endif %}
                         <small class="text-muted">Responsável: {{ item.tecnico_responsavel.username|default:"-" }}</small>
                         {% if item.garantia_dias %}
@@ -373,6 +388,7 @@
                         <div class="form-group col-md-4"><label>Item do orçamento</label>{{ custo_os_form.item_orcamento }}</div>
                         <div class="form-group col-md-4"><label>Produto de estoque</label>{{ custo_os_form.produto_estoque }}</div>
                     </div>
+                    <small class="form-text text-muted mb-3">Para uma peça avulsa, basta selecionar o “Item comercial da OS”. Se ele veio do orçamento, o vínculo correspondente será preenchido automaticamente.</small>
                     <div class="form-group"><label>Fornecedor</label>{{ custo_os_form.fornecedor_nome }}</div>
                     <div class="form-group"><label>Saída financeira vinculada (opcional)</label>{{ custo_os_form.lancamento_caixa }}<small class="form-text text-muted">Ao selecionar uma saída, escolha a origem “Despesa paga”. Isso evita contar o mesmo custo duas vezes na DRE.</small></div>
                     <div class="form-group"><label>Conta a pagar vinculada (opcional)</label>{{ custo_os_form.conta_pagar }}<small class="form-text text-muted">Use para compras ainda não pagas ou parceladas. Não selecione simultaneamente uma saída financeira.</small></div>

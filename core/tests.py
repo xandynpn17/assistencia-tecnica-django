@@ -10,7 +10,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from caixa.models import CategoriaFinanceira, ContaPagar, ContaReceber, Pagamento, PagamentoContaPagar
+from caixa.models import Caixa, CategoriaFinanceira, ContaPagar, ContaReceber, Pagamento, PagamentoContaPagar
 from clientes.models import Cliente
 from configuracoes.models import Empresa
 from ordens.models import OrdemServico
@@ -362,6 +362,11 @@ class DashboardTests(TestCase):
             tipo="saida",
             ativa=True,
         )
+        caixa, _ = Caixa.objects.get_or_create(
+            empresa=self.empresa,
+            data=timezone.localdate(),
+            defaults={"aberto": True},
+        )
         conta_pagar = PagamentoContaPagar.objects.create(
             conta=ContaPagar.objects.create(
                 empresa=self.empresa,
@@ -373,6 +378,7 @@ class DashboardTests(TestCase):
                 vencimento=timezone.localdate(),
                 status="paga",
             ),
+            caixa=caixa,
             valor=Decimal("120.00"),
         )
         # garante uso da variavel e data no periodo

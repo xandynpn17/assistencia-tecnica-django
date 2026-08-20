@@ -335,7 +335,8 @@
             </a>
             {% elif not ordem.fechada and pode_concluir_os %}
             <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}?ir_caixa=1{% if request.GET.confirmar_fechamento == '1' %}&confirmar_financeiro=1{% endif %}" class="btn {% if destacar_fechar_e_caixa %}btn-success{% else %}btn-outline-success{% endif %} btn-sm">
-                <i class="fas fa-cash-register mr-1"></i> Fechar e ir ao Caixa
+                <i class="fas {% if ordem.tipo_reparo == 'Garantia' %}fa-file-invoice-dollar{% else %}fa-cash-register{% endif %} mr-1"></i>
+                {% if ordem.tipo_reparo == 'Garantia' %}Fechar e faturar fabricante{% else %}Fechar e ir ao Caixa{% endif %}
             </a>
             <a href="{% url 'ordens:toggle_fechamento_os' ordem.id %}{% if request.GET.confirmar_fechamento == '1' %}?confirmar_financeiro=1{% endif %}" class="btn btn-danger btn-sm">
                 <i class="fas fa-lock-open mr-1"></i> Fechar
@@ -688,6 +689,13 @@
                     {% if pode_ver_custos_os %}
                     <hr>
                     <p class="small text-muted mb-2"><i class="fas fa-lock mr-1"></i>Dados internos — não aparecem nos documentos do cliente.</p>
+                    <div class="form-group mb-2">
+                        <label for="pedido_finalidade">Finalidade da compra</label>
+                        <select name="finalidade" id="pedido_finalidade" class="form-control" required>
+                            {% for value, label in pedido_finalidade_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Use “reposição” quando a peça da loja já foi vinculada à OS. No recebimento, ela volta ao estoque e não duplica o custo do reparo.</small>
+                    </div>
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label for="pedido_item_orcamento">Peça do orçamento</label>
@@ -734,6 +742,24 @@
         </div>
     </div>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".js-solicitar-reposicao").forEach(function (botao) {
+        botao.addEventListener("click", function () {
+            const finalidade = document.getElementById("pedido_finalidade");
+            const produto = document.getElementById("pedido_produto_estoque");
+            const titulo = document.getElementById("pedido_titulo");
+            const tipoPeca = document.getElementById("pedido_tipo_peca");
+            const quantidade = document.querySelector('#modalAdicionarPedido [name="quantidade_solicitada"]');
+            if (finalidade) finalidade.value = "reposicao_estoque_os";
+            if (produto) produto.value = botao.dataset.produtoId || "";
+            if (titulo) titulo.value = `Repor ${botao.dataset.produtoNome || "peça"} utilizada na OS`;
+            if (tipoPeca) tipoPeca.value = botao.dataset.produtoNome || "";
+            if (quantidade) quantidade.value = botao.dataset.quantidade || "1";
+        });
+    });
+});
+</script>
 
 <div class="modal fade" id="modalAdicionarAlerta" tabindex="-1" role="dialog" aria-labelledby="modalAdicionarAlertaLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -931,6 +957,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     feedback.className = "small text-success";
                     $("#modalAdicionarLinha").modal("hide");
                     form.reset();
+                    const localLinha = form.querySelector('[name="local_armazenamento"]');
+                    const localDetalhes = document.getElementById("localArmazenamento");
+                    if (localLinha) {
+                        localLinha.value = data.local_armazenamento || "";
+                        localLinha.defaultValue = data.local_armazenamento || "";
+                    }
+                    if (localDetalhes) localDetalhes.value = data.local_armazenamento || "";
                 } else {
                     feedback.textContent = "Erro ao adicionar.";
                     feedback.className = "small text-danger";

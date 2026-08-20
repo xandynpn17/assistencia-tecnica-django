@@ -17,6 +17,7 @@
                     <div>
                         <h6 class="mb-1">{{ pedido.numero_oc|default:"OC sem número" }} — {{ pedido.titulo }}</h6>
                         <div class="small text-muted">{{ pedido.get_status_display }} · criado em {{ pedido.criado_em|date:"d/m/Y H:i" }}</div>
+                        <div class="small mt-1"><span class="badge {% if pedido.finalidade == 'reposicao_estoque_os' %}badge-info{% else %}badge-secondary{% endif %}">{{ pedido.get_finalidade_display }}</span></div>
                         {% if pedido.tipo_peca %}<div class="small"><strong>Tipo:</strong> {{ pedido.tipo_peca }}</div>{% endif %}
                         {% if pedido.descricao %}<div class="small mt-1">{{ pedido.descricao }}</div>{% endif %}
                         {% if pode_ver_custos_os %}
@@ -60,7 +61,7 @@
                     <div class="form-row">
                         <div class="form-group col-md-2"><label>Quantidade</label><input type="number" name="quantidade" class="form-control form-control-sm" value="{{ pedido.quantidade_pendente|stringformat:'.3f' }}" min="0.001" step="0.001" required></div>
                         <div class="form-group col-md-2"><label>Custo unitário</label><input type="number" name="custo_unitario" class="form-control form-control-sm" value="{% if pedido.custo_estimado_unitario != None %}{{ pedido.custo_estimado_unitario|stringformat:'.2f' }}{% else %}0.00{% endif %}" min="0" step="0.01" required></div>
-                        <div class="form-group col-md-3"><label>Destino</label><select name="destino" class="form-control form-control-sm"><option value="uso_os">Uso direto na OS</option><option value="estoque">Entrada no estoque</option></select></div>
+                        <div class="form-group col-md-3"><label>Destino</label><select name="destino" class="form-control form-control-sm">{% if pedido.finalidade == 'reposicao_estoque_os' %}<option value="estoque">Entrada no estoque (reposição)</option>{% else %}<option value="uso_os">Uso direto na OS</option><option value="estoque">Entrada no estoque</option>{% endif %}</select></div>
                         <div class="form-group col-md-2"><label>Competência</label><input type="date" name="data_competencia" value="{{ hoje_iso }}" class="form-control form-control-sm" required></div>
                         <div class="form-group col-md-3"><label>Documento</label><input type="text" name="documento_referencia" value="{{ pedido.documento_referencia }}" class="form-control form-control-sm"></div>
                     </div>

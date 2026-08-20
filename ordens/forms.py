@@ -247,13 +247,29 @@ class OrdemSerieForm(forms.ModelForm):
 
 
 class LinhaTrabalhoForm(forms.ModelForm):
+    local_armazenamento = forms.CharField(
+        required=False,
+        label="Local de armazenamento (opcional)",
+        help_text="Se deixar em branco, o local atual da OS será mantido.",
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "maxlength": 200,
+                "placeholder": "Ex.: prateleira A, bancada 2",
+            }
+        ),
+    )
+
     def __init__(self, *args, **kwargs):
+        ordem = kwargs.pop("ordem", None)
         super().__init__(*args, **kwargs)
         self.fields["status"].choices = [
             (value, label)
             for value, label in self.fields["status"].choices
             if value not in {"criada", "concluida"}
         ]
+        if ordem and not self.is_bound:
+            self.fields["local_armazenamento"].initial = ordem.local_armazenamento or ""
 
     class Meta:
         model = LinhaTrabalho
@@ -387,6 +403,11 @@ class CustoOrdemServicoForm(forms.ModelForm):
         self.ordem = kwargs.pop("ordem")
         super().__init__(*args, **kwargs)
         empresa = self.ordem.empresa
+        # O ModelForm executa ``CustoOrdemServico.clean`` ainda em ``is_valid``.
+        # Atribua o escopo antes dessa etapa para que vínculos legítimos da OS
+        # não sejam rejeitados por a instância nova ainda estar sem ordem/empresa.
+        self.instance.ordem = self.ordem
+        self.instance.empresa = empresa
         self.fields["servico_peca"].queryset = self.ordem.servicos_pecas.order_by("nome", "id")
         self.fields["item_orcamento"].queryset = self.fields["item_orcamento"].queryset.filter(
             orcamento__ordem_servico=self.ordem

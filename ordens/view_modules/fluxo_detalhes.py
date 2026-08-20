@@ -66,7 +66,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             tipo_evento="automatico",
             descricao__startswith="Status alterado de",
         ).order_by("-criado_em", "-id")
-        context["linha_form"] = LinhaTrabalhoForm()
+        context["linha_form"] = LinhaTrabalhoForm(ordem=ordem)
         context["servico_form"] = ServicoPecaForm(empresa=ordem.empresa)
         context["orcamento_form"] = OrcamentoForm()
         context["tipos_reparacao"] = OrdemServico.TIPOS_REPARACAO
@@ -125,7 +125,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         total_pago = sum((p.valor for p in pagamentos_os), Decimal("0.00"))
         total_desconto = sum((p.desconto or Decimal("0.00") for p in pagamentos_os), Decimal("0.00"))
         saldo_financeiro = max(Decimal("0.00"), context["total_os"] - total_pago - total_desconto)
-        if ordem.resultado_financeiro != "cobravel":
+        if ordem.resultado_financeiro != "cobravel" or ordem.eh_garantia_fabricante:
             saldo_financeiro = Decimal("0.00")
         referencias_pagamento = [ref for ref in pagamentos_os.values_list("referencia", flat=True) if ref]
 
@@ -135,6 +135,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
         context["saldo_financeiro_os"] = saldo_financeiro
         context["os_pago"] = (
             ordem.resultado_financeiro != "cobravel"
+            or ordem.eh_garantia_fabricante
             or
             context["total_os"] <= Decimal("0.00")
             or total_pago + total_desconto >= context["total_os"]
@@ -190,11 +191,13 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             "aprovados": 0,
             "recusados": 0,
             "quantidade_total": 0,
+            "total_aprovado": Decimal("0.00"),
         }
         for item in itens_orcamento:
             stats_orcamento["quantidade_total"] += int(item.quantidade or 0)
             if item.status == "aprovado":
                 stats_orcamento["aprovados"] += 1
+                stats_orcamento["total_aprovado"] += item.total()
             elif item.status == "recusado":
                 stats_orcamento["recusados"] += 1
             else:
@@ -229,6 +232,13 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             ).all()
         )
         context["pedido_status_choices"] = PedidoCompra.STATUS_CHOICES
+        context["pedido_finalidade_choices"] = PedidoCompra.FINALIDADE_CHOICES
+        context["reposicoes_pendentes_produto_ids"] = set(
+            ordem.pedidos_compra.filter(
+                finalidade="reposicao_estoque_os",
+                produto_estoque__isnull=False,
+            ).exclude(status="fechado").values_list("produto_estoque_id", flat=True)
+        )
         context["hoje_iso"] = timezone.localdate().isoformat()
         if context["pode_ver_custos_os"]:
             from caixa.models import ContaPagar
@@ -369,13 +379,25 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
         # Linha de trabalho
         if form_type == "linha":
-            linha_form = LinhaTrabalhoForm(request.POST)
+            linha_form = LinhaTrabalhoForm(request.POST, ordem=self.object)
             if linha_form.is_valid():
                 linha = linha_form.save(commit=False)
                 linha.ordem = self.object
                 linha.usuario = request.user
                 linha.tipo_evento = "manual"
                 linha.save()
+                local_novo = (linha_form.cleaned_data.get("local_armazenamento") or "").strip()
+                local_anterior = (self.object.local_armazenamento or "").strip()
+                if local_novo and local_novo != local_anterior:
+                    self.object.local_armazenamento = local_novo
+                    self.object.save(update_fields=["local_armazenamento"])
+                    _log_os(
+                        self.object,
+                        "edicao_critica",
+                        f"Local de armazenamento alterado de '{local_anterior or '-'}' para '{local_novo}'.",
+                        usuario=request.user,
+                        dados_extras={"local_anterior": local_anterior, "local_novo": local_novo},
+                    )
                 novo_status = OrdemServico.normalizar_status_os(request.POST.get("status"))
                 if novo_status and novo_status != self.object.status:
                     try:
@@ -443,6 +465,12 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 custo.empresa = self.object.empresa
                 custo.ordem = self.object
                 custo.criado_por = request.user
+                if (
+                    custo.servico_peca_id
+                    and not custo.item_orcamento_id
+                    and custo.servico_peca.item_orcamento_id
+                ):
+                    custo.item_orcamento_id = custo.servico_peca.item_orcamento_id
                 custo.full_clean()
                 custo.save()
                 _log_os(
@@ -455,6 +483,10 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 messages.success(request, "Custo interno registrado. Esse valor não aparece para o cliente.")
             else:
                 messages.error(request, "Revise os dados do custo interno.")
+                for campo, erros in custo_form.errors.items():
+                    rotulo = custo_form.fields[campo].label if campo in custo_form.fields else "Dados do custo"
+                    for erro in erros:
+                        messages.error(request, f"{rotulo}: {erro}")
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
         elif form_type == "estornar_custo_os":
@@ -743,14 +775,28 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 extra={"total_os": f"{resultado.total_os:.2f}", "reservas_processadas": resultado.reservas_processadas},
             )
 
-            if resultado.total_os > Decimal("0.00"):
+            if self.object.eh_garantia_fabricante and resultado.atualizou_auditoria_garantia:
+                messages.success(
+                    request,
+                    "Garantia finalizada e lançada nas contas a receber do fabricante. O cliente não foi enviado ao caixa.",
+                )
+            elif self.object.eh_garantia_fabricante:
+                messages.warning(
+                    request,
+                    "Garantia finalizada, mas falta configurar a marca parceira ou o valor de mão de obra para gerar a cobrança do fabricante.",
+                )
+            elif resultado.total_os > Decimal("0.00"):
                 messages.success(
                     request,
                     f"OS finalizada! Continue no Caixa para registrar o pagamento de {resultado.total_os:.2f}.",
                 )
             else:
                 messages.success(request, "OS finalizada sem valor a receber. Nenhum pagamento foi gerado.")
-            if request.POST.get("ir_caixa") == "1" and resultado.total_os > Decimal("0.00"):
+            if (
+                request.POST.get("ir_caixa") == "1"
+                and resultado.total_os > Decimal("0.00")
+                and not self.object.eh_garantia_fabricante
+            ):
                 return redirect(f"{reverse('caixa:registrar_pagamento')}?os={self.object.id}&valor={resultado.total_os:.2f}")
             return redirect(f"{self.object.get_absolute_url()}?tab=servicos")
 
@@ -813,12 +859,16 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             tipo_peca = (request.POST.get("tipo_peca") or "").strip()
             descricao = (request.POST.get("descricao") or "").strip()
             status_inicial = request.POST.get("status_inicial") or "contactar"
+            finalidade = request.POST.get("finalidade") or "uso_direto_os"
             status_validos = {valor for valor, _ in PedidoCompra.STATUS_CHOICES}
+            finalidades_validas = {valor for valor, _ in PedidoCompra.FINALIDADE_CHOICES}
             if not titulo:
                 messages.error(request, "Informe um titulo para o pedido.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
             if status_inicial not in status_validos:
                 status_inicial = "contactar"
+            if finalidade not in finalidades_validas:
+                finalidade = "uso_direto_os"
 
             item_orcamento = produto_estoque = conta_pagar = None
             quantidade_solicitada = Decimal("1.000")
@@ -855,6 +905,17 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                         ContaPagar, pk=conta_id, empresa=self.object.empresa
                     )
 
+            if (
+                finalidade == "reposicao_estoque_os"
+                and produto_estoque
+                and self.object.pedidos_compra.filter(
+                    finalidade="reposicao_estoque_os",
+                    produto_estoque=produto_estoque,
+                ).exclude(status="fechado").exists()
+            ):
+                messages.info(request, "Já existe um pedido de reposição pendente para este produto nesta OS.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
+
             pedido = PedidoCompra(
                 ordem=self.object,
                 empresa=self.object.empresa,
@@ -866,6 +927,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 descricao=descricao,
                 fornecedor_nome=(request.POST.get("fornecedor_nome") or "").strip() if has_sensitive_permission(request.user, "perm_os_registrar_custo") else "",
                 documento_referencia=(request.POST.get("documento_referencia") or "").strip() if has_sensitive_permission(request.user, "perm_os_registrar_custo") else "",
+                finalidade=finalidade if has_sensitive_permission(request.user, "perm_os_registrar_custo") else "uso_direto_os",
                 quantidade_solicitada=quantidade_solicitada,
                 custo_estimado_unitario=custo_estimado_unitario,
                 data_prevista=data_prevista,

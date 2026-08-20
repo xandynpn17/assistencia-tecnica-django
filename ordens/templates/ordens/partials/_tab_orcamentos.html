@@ -1,3 +1,4 @@
+{% load l10n %}
 <!-- Orçamento da OS -->
 <div class="tab-pane fade {% if active_tab == 'orcamentos' %}show active{% endif %}" id="orcamentos">
     <div class="card-modern flex-fill">
@@ -40,6 +41,16 @@
                     <div class="small text-muted mt-1">
                         <span class="mr-3"><strong>Descrição:</strong> {{ orcamento.descricao|default:"-" }}</span>
                         <span><strong>Total:</strong> R$ {{ orcamento.valor_total|default:0|floatformat:2 }}</span>
+                    </div>
+                    <div class="d-flex flex-wrap mt-2" style="gap:8px;">
+                        <div class="border rounded px-3 py-2 bg-light">
+                            <small class="text-muted d-block">Total aprovado</small>
+                            <strong class="text-success">R$ {{ orcamento_stats.total_aprovado|floatformat:2 }}</strong>
+                        </div>
+                        <div class="border rounded px-3 py-2 bg-light">
+                            <small class="text-muted d-block">Total selecionado</small>
+                            <strong id="totalSelecionadoOrcamento">R$ 0,00</strong>
+                        </div>
                     </div>
                 </div>
                 <div class="d-flex flex-wrap justify-content-end" style="gap:8px;">
@@ -126,7 +137,7 @@
                     <tbody>
                         {% for item in orcamento_itens %}
                         <tr>
-                            <td><input type="checkbox" name="itens_selecionados" value="{{ item.id }}"></td>
+                            <td><input type="checkbox" name="itens_selecionados" value="{{ item.id }}" data-total="{{ item.total|unlocalize }}"></td>
                             <td>{{ item.ean }}</td>
                             <td>{{ item.nome }}</td>
                             <td>{{ item.descricao }}</td>
@@ -217,11 +228,24 @@ function validarSelecao(acao) {
 }
 
 const checkAll = document.getElementById('checkAll');
+function atualizarTotalSelecionadoOrcamento() {
+    const total = Array.from(document.querySelectorAll('input[name="itens_selecionados"]:checked'))
+        .reduce((soma, campo) => soma + Number.parseFloat(campo.dataset.total || '0'), 0);
+    const destino = document.getElementById('totalSelecionadoOrcamento');
+    if (destino) {
+        destino.textContent = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+}
+
 if (checkAll) {
     checkAll.addEventListener('change', function() {
         document.querySelectorAll('input[name="itens_selecionados"]').forEach(cb => cb.checked = this.checked);
+        atualizarTotalSelecionadoOrcamento();
     });
 }
+document.querySelectorAll('input[name="itens_selecionados"]').forEach(cb => {
+    cb.addEventListener('change', atualizarTotalSelecionadoOrcamento);
+});
 </script>
 
 <div class="modal fade" id="modalAdicionarItem2" tabindex="-1" role="dialog"

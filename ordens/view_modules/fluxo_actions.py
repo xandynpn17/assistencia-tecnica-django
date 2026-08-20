@@ -435,7 +435,7 @@ def toggle_fechamento_os(request, pk):
             total_pago = _total_pago_ordem(ordem)
             saldo_faltante = (
                 max(Decimal("0.00"), total_autorizado - total_pago)
-                if ordem.resultado_financeiro == "cobravel"
+                if ordem.resultado_financeiro == "cobravel" and not ordem.eh_garantia_fabricante
                 else Decimal("0.00")
             )
             if saldo_faltante > Decimal("0.00") and not confirmar_financeiro:
@@ -469,6 +469,7 @@ def toggle_fechamento_os(request, pk):
         if (
             ordem.fechada
             and ordem.resultado_financeiro == "cobravel"
+            and not ordem.eh_garantia_fabricante
             and request.GET.get("ir_caixa") == "1"
             and resultado.total_os > Decimal("0.00")
         ):
@@ -487,7 +488,18 @@ def toggle_fechamento_os(request, pk):
             },
         )
 
-        if resultado.reservas_processadas or resultado.itens_estoque_processados:
+        if ordem.fechada and ordem.eh_garantia_fabricante:
+            if resultado.atualizou_auditoria_garantia:
+                messages.success(
+                    request,
+                    "Garantia fechada e lançada nas contas a receber do fabricante. Não foi criada cobrança para o cliente.",
+                )
+            else:
+                messages.warning(
+                    request,
+                    "A OS foi fechada, mas a cobrança do fabricante não foi criada. Confira a marca parceira e o valor/regra de mão de obra da garantia.",
+                )
+        elif resultado.reservas_processadas or resultado.itens_estoque_processados:
             messages.success(
                 request,
                 "Ordem atualizada com sucesso! "

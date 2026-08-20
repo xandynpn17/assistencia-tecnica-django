@@ -145,8 +145,19 @@
             <a href="{% url 'configuracoes:painel_sla' %}" class="header-action-link">Ver painel SLA</a>
         </div>
         <div class="card-modern-body">
-            {% if pendencias_sla_total %}
+            {% if pendencias_sla_total or pedidos_compra_pendentes_total %}
             <div class="row">
+                {% if pedidos_compra_pendentes_total %}
+                <div class="col-md-6 col-lg-4 mb-2">
+                    <a href="{{ dashboard_links.pedidos_pendentes }}" class="text-decoration-none">
+                        <div class="status-line priority-line mb-0" style="border-left-color:#f39c12;">
+                            <strong>Pedidos de compra pendentes</strong>
+                            <span class="badge bg-warning rounded-pill">{{ pedidos_compra_pendentes_total }}</span>
+                        </div>
+                    </a>
+                </div>
+                {% endif %}
+                {% if pendencias_sla_total %}
                 <div class="col-md-6 col-lg-4 mb-2">
                     <a href="{% url 'configuracoes:painel_sla' %}" class="text-decoration-none">
                         <div class="status-line priority-line mb-0" style="border-left-color:#e74c3c;">
@@ -155,6 +166,7 @@
                         </div>
                     </a>
                 </div>
+                {% endif %}
                 {% for resumo in pendencias_sla_resumo %}
                 <div class="col-md-6 col-lg-4 mb-2">
                     <a href="{% url 'configuracoes:painel_sla' %}?regra={{ resumo.codigo|default:'' }}" class="text-decoration-none">

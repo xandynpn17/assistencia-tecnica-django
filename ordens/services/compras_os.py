@@ -49,6 +49,10 @@ def receber_pedido_os(
         raise ValidationError("A quantidade recebida ultrapassa o saldo pendente do pedido.")
     if destino not in {"uso_os", "estoque"}:
         raise ValidationError("Destino de recebimento inválido.")
+    if pedido.finalidade == "reposicao_estoque_os" and destino != "estoque":
+        raise ValidationError(
+            "Pedidos de reposição do estoque devem ser recebidos como entrada no estoque, evitando duplicar o custo da OS."
+        )
     conta_pagar = conta_pagar or pedido.conta_pagar
     produto_estoque = produto_estoque or pedido.produto_estoque
     data_competencia = data_competencia or timezone.localdate()
@@ -108,7 +112,11 @@ def receber_pedido_os(
             destino=ponto_operacional,
             destino_ubicacao_ref=ubicacao,
             valor_unitario_custo=custo_unitario,
-            observacao=f"Recebimento {pedido.numero_oc or pedido.pk} para estoque",
+            observacao=(
+                f"Reposição do estoque utilizado na OS {pedido.ordem.numero_os} — {pedido.numero_oc or pedido.pk}"
+                if pedido.finalidade == "reposicao_estoque_os"
+                else f"Recebimento {pedido.numero_oc or pedido.pk} para estoque"
+            ),
             usuario=usuario,
             chave_idempotencia=f"recebimento-pedido-os:{recebimento.pk}:entrada",
             origem_tipo="pedido_compra_os",
@@ -128,7 +136,8 @@ def receber_pedido_os(
         status=status,
         descricao=(
             f"Recebidas {quantidade} UN a R$ {custo_unitario:.2f}; "
-            f"destino: {'uso direto na OS' if destino == 'uso_os' else 'estoque'}."
+            f"destino: {'uso direto na OS' if destino == 'uso_os' else 'estoque'}; "
+            f"finalidade: {pedido.get_finalidade_display().lower()}."
         ),
         usuario=usuario,
     )

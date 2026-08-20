@@ -88,6 +88,7 @@ def adicionar_linha(request, os_id):
         status_linha = request.POST.get("status") or ordem.status
         status_os = OrdemServico.normalizar_status_os(status_linha)
         descricao = request.POST.get("descricao")
+        local_novo = (request.POST.get("local_armazenamento") or "").strip()
 
         if status_os == "concluida":
             return JsonResponse(
@@ -105,6 +106,17 @@ def adicionar_linha(request, os_id):
             usuario=request.user,
             tipo_evento="manual",
         )
+        local_anterior = (ordem.local_armazenamento or "").strip()
+        if local_novo and local_novo != local_anterior:
+            ordem.local_armazenamento = local_novo
+            ordem.save(update_fields=["local_armazenamento"])
+            log_os(
+                ordem,
+                "edicao_critica",
+                f"Local de armazenamento alterado de '{local_anterior or '-'}' para '{local_novo}'.",
+                usuario=request.user,
+                dados_extras={"local_anterior": local_anterior, "local_novo": local_novo},
+            )
         mensagem_aviso = ""
         if status_os and status_os != ordem.status:
             try:
@@ -129,6 +141,7 @@ def adicionar_linha(request, os_id):
                 "usuario": linha.usuario.username if linha.usuario else "",
                 "data": localtime(linha.criado_em).strftime("%d/%m/%Y %H:%M"),
                 "warning": mensagem_aviso,
+                "local_armazenamento": ordem.local_armazenamento or "",
             }
         )
     except OrdemServico.DoesNotExist:

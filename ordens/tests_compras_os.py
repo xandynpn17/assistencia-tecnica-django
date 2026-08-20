@@ -11,6 +11,7 @@ from configuracoes.models import Empresa
 from estoque.models import PontoOperacional, Produto, UbicacaoEstoque
 from orcamentos.models import ItemOrcamento, Orcamento
 from ordens.models import CustoOrdemServico, OrdemServico, PedidoCompra, ServicoPeca
+from ordens.forms import CustoOrdemServicoForm
 from orcamentos.services import FluxoOrcamentoService
 from ordens.services.compras_os import receber_pedido_os, estornar_recebimento_pedido_os
 from ordens.services.fechamento_os import FechamentoOSService
@@ -132,6 +133,81 @@ class RecebimentoPedidoCompraOSTests(TestCase):
         self.ordem.save(update_fields=["relatorio_tecnico", "tipo_reparacao"])
         resultado = FechamentoOSService.finalizar_para_caixa(self.ordem, usuario=self.usuario)
         self.assertTrue(resultado.fechando)
+
+    def test_fechamento_aceita_custo_real_vinculado_so_a_peca_comercial_migrada(self):
+        self.item.status = "aprovado"
+        self.item.save(update_fields=["status"])
+        FluxoOrcamentoService.migrar_itens_aprovados_da_ordem(
+            self.ordem,
+            usuario=self.usuario,
+            criar_historico=False,
+        )
+        peca = ServicoPeca.objects.get(ordem=self.ordem, item_orcamento=self.item)
+        CustoOrdemServico.objects.create(
+            empresa=self.empresa,
+            ordem=self.ordem,
+            servico_peca=peca,
+            tipo="peca",
+            origem="compra_especifica",
+            estado="realizado",
+            descricao="Tela comprada após aprovação",
+            quantidade=1,
+            custo_unitario=Decimal("60.00"),
+            criado_por=self.usuario,
+        )
+
+        FechamentoOSService._validar_custos_pecas_manuais(self.ordem)
+
+    def test_formulario_aceita_custo_vinculado_a_peca_da_propria_os(self):
+        peca = ServicoPeca.objects.create(
+            ordem=self.ordem,
+            item_orcamento=self.item,
+            tipo="peca",
+            nome="Tela comprada após orçamento",
+            quantidade=1,
+            valor_unitario=Decimal("130.00"),
+        )
+        form = CustoOrdemServicoForm(
+            {
+                "tipo": "peca",
+                "origem": "compra_especifica",
+                "estado": "realizado",
+                "descricao": "Compra da tela",
+                "quantidade": "1",
+                "unidade": "UN",
+                "custo_unitario": "60.00",
+                "data_competencia": timezone.localdate().isoformat(),
+                "servico_peca": str(peca.id),
+            },
+            ordem=self.ordem,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+
+    def test_fechamento_nao_confunde_custo_previsto_com_custo_real(self):
+        peca = ServicoPeca.objects.create(
+            ordem=self.ordem,
+            item_orcamento=self.item,
+            tipo="peca",
+            nome="Tela comprada depois",
+            quantidade=1,
+            valor_unitario=Decimal("130.00"),
+        )
+        CustoOrdemServico.objects.create(
+            empresa=self.empresa,
+            ordem=self.ordem,
+            servico_peca=peca,
+            tipo="peca",
+            origem="compra_especifica",
+            estado="previsto",
+            descricao="Cotação inicial",
+            quantidade=1,
+            custo_unitario=Decimal("60.00"),
+            criado_por=self.usuario,
+        )
+
+        with self.assertRaisesMessage(ValueError, "Confirme o custo real"):
+            FechamentoOSService._validar_custos_pecas_manuais(self.ordem)
 
     def test_migracao_repara_vinculo_estoque_ausente_por_ean(self):
         ponto = PontoOperacional.objects.create(

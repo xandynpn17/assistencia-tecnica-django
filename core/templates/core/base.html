@@ -170,7 +170,7 @@
         <div class="search-container">
           <div class="search-main">
             <input type="text" id="search-input" class="form-control form-control-sm"
-                   placeholder="Buscar por OS exata ou use cpf:, tel:, sn:" autocomplete="off">
+                   placeholder="Buscar OS ou use cpf:, tel:, sn:, rp:" autocomplete="off">
             <div id="search-results" class="search-results"></div>
             <div id="search-feedback" class="search-feedback"></div>
           </div>
@@ -840,11 +840,19 @@ document.addEventListener("DOMContentLoaded", function () {
             return { ok: true, mensagem: "" };
         }
 
+        if (lower.startsWith("rp:")) {
+            const referencia = termo.slice(3).trim();
+            if (referencia.length < 2) {
+                return { ok: false, mensagem: "Use ao menos 2 caracteres após rp:." };
+            }
+            return { ok: true, mensagem: "" };
+        }
+
         if (/^os-\d{4,}$/i.test(termo) || /^\d{4,}$/.test(termo)) {
             return { ok: true, mensagem: "" };
         }
 
-        return { ok: false, mensagem: "Use OS exata ou os prefixos cpf:, tel: ou sn:." };
+        return { ok: false, mensagem: "Use OS exata ou os prefixos cpf:, tel:, sn: ou rp:." };
     }
 
     function executarBusca() {
