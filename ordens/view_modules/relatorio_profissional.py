@@ -17,11 +17,11 @@ from reportlab.platypus import (
     TopPadder,
 )
 
-from core.formatters import formatar_telefone_br
+from core.formatters import formatar_moeda_br, formatar_telefone_br
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
 
-from ..models import ServicoPeca
 from .avaliacao_google_pdf import bloco_avaliacao_google
+from .relatorio_financeiro import montar_resumo_financeiro_relatorio
 
 
 BLUE = colors.HexColor("#1268C4")
@@ -336,17 +336,20 @@ def _resumo(ordem, empresa, styles, usable_w):
 
 
 def _tabela_itens(ordem, styles, usable_w):
-    itens = list(ServicoPeca.objects.filter(ordem=ordem))
-    if not itens:
+    resumo = montar_resumo_financeiro_relatorio(ordem)
+    if not resumo.itens:
         return None
     linhas = [
         [
             Paragraph("TIPO", styles["ProfFieldLabel"]),
             Paragraph("DESCRIÇÃO", styles["ProfFieldLabel"]),
-            Paragraph("QTD.", styles["ProfFieldLabel"]),
+            Paragraph("QTD", styles["ProfFieldLabel"]),
+            Paragraph("VALOR UNIT.", styles["ProfFieldLabel"]),
+            Paragraph("SUBTOTAL", styles["ProfFieldLabel"]),
         ]
     ]
-    for item in itens:
+    for linha_financeira in resumo.itens:
+        item = linha_financeira.item
         descricao = escape(item.nome or "Item sem descrição")
         if item.descricao:
             descricao = f"{descricao}<br/><font color='#607286'>{_texto_pdf(item.descricao, '')}</font>"
@@ -355,11 +358,13 @@ def _tabela_itens(ordem, styles, usable_w):
                 Paragraph(escape(item.get_tipo_display()), styles["ProfFieldValue"]),
                 Paragraph(descricao, styles["ProfFieldValue"]),
                 Paragraph(escape(str(item.quantidade)), styles["ProfFieldValue"]),
+                Paragraph(formatar_moeda_br(linha_financeira.valor_unitario), styles["ProfFieldValue"]),
+                Paragraph(formatar_moeda_br(linha_financeira.valor_total), styles["ProfFieldValue"]),
             ]
         )
     tabela = Table(
         linhas,
-        colWidths=[2.8 * cm, usable_w - 4.4 * cm, 1.6 * cm],
+        colWidths=[2.15 * cm, usable_w - 7.85 * cm, 1.15 * cm, 2.25 * cm, 2.3 * cm],
         repeatRows=1,
     )
     tabela.setStyle(
@@ -370,6 +375,7 @@ def _tabela_itens(ordem, styles, usable_w):
                 ("BOX", (0, 0), (-1, -1), 0.55, BORDER),
                 ("LINEBELOW", (0, 0), (-1, -2), 0.35, BORDER),
                 ("ALIGN", (2, 0), (2, -1), "CENTER"),
+                ("ALIGN", (3, 0), (4, -1), "RIGHT"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 8),
@@ -378,7 +384,31 @@ def _tabela_itens(ordem, styles, usable_w):
             ]
         )
     )
-    return tabela
+    totais = Table(
+        [
+            [Paragraph("Valor total", styles["ProfFieldLabel"]), Paragraph(formatar_moeda_br(resumo.valor_total), styles["ProfFieldValue"])],
+            [Paragraph("Desconto", styles["ProfFieldLabel"]), Paragraph(formatar_moeda_br(resumo.desconto), styles["ProfFieldValue"])],
+            [Paragraph("Valor com desconto", styles["ProfFieldLabel"]), Paragraph(formatar_moeda_br(resumo.valor_com_desconto), styles["ProfFieldValue"])],
+        ],
+        colWidths=[4.2 * cm, 3.4 * cm],
+        hAlign="RIGHT",
+    )
+    totais.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.55, BORDER),
+                ("INNERGRID", (0, 0), (-1, -1), 0.35, BORDER),
+                ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, SURFACE]),
+                ("BACKGROUND", (0, -1), (-1, -1), BLUE_SOFT),
+                ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return tabela, totais
 
 
 def _tabela_fotos(ordem, styles, usable_w):
@@ -589,8 +619,9 @@ def gerar_relatorio_tecnico_profissional(
     ]
     secao = 4
     if getattr(config, "pdf_relatorio_exibir_servicos_pecas", True):
-        tabela_itens = _tabela_itens(ordem, styles, usable_w)
-        if tabela_itens is not None:
+        tabelas_itens = _tabela_itens(ordem, styles, usable_w)
+        if tabelas_itens is not None:
+            tabela_itens, totais_itens = tabelas_itens
             story.extend(
                 [
                     Spacer(1, 0.34 * cm),
@@ -602,6 +633,8 @@ def gerar_relatorio_tecnico_profissional(
                     ),
                     Spacer(1, 0.13 * cm),
                     tabela_itens,
+                    Spacer(1, 0.14 * cm),
+                    totais_itens,
                 ]
             )
             secao += 1

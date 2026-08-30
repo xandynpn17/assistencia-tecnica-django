@@ -3524,7 +3524,7 @@ class ImpressaoPdfHeadersTests(TestCase):
         self.assertEqual(len(textos_meta), 2)
         self.assertTrue(all("<b>Cliente:</b>" not in texto for texto in textos_meta))
 
-    def test_imprimir_relatorio_tecnico_resumido_oculta_valores_e_assinaturas_do_cliente(self):
+    def test_imprimir_relatorio_tecnico_resumido_exibe_valores_e_oculta_assinaturas_do_cliente(self):
         config = ConfiguracaoSistema.get_configuracao()
         config.pdf_relatorio_modo_resumido = True
         config.save(update_fields=["pdf_relatorio_modo_resumido"])
@@ -3548,8 +3548,68 @@ class ImpressaoPdfHeadersTests(TestCase):
         texto_unificado = "\n".join(textos_pdf)
         self.assertIn("Display frontal", texto_unificado)
         self.assertIn("Peças utilizadas e serviços realizados", texto_unificado)
-        self.assertNotIn("R$ 120,00", texto_unificado)
+        self.assertIn("R$ 120,00", texto_unificado)
+        self.assertIn("Valor total", texto_unificado)
+        self.assertIn("Desconto", texto_unificado)
+        self.assertIn("Valor com desconto", texto_unificado)
         self.assertNotIn("Assinaturas do Cliente", texto_unificado)
+
+    def test_relatorios_tecnicos_exibem_total_desconto_e_valor_final_do_orcamento(self):
+        config = ConfiguracaoSistema.get_configuracao()
+        config.pdf_relatorio_modo_resumido = True
+        config.save(update_fields=["pdf_relatorio_modo_resumido"])
+        orcamento = Orcamento.objects.create(
+            cliente=self.cliente,
+            ordem_servico=self.ordem,
+            status="aprovado",
+            desconto_valor=Decimal("30.00"),
+        )
+        item_orcamento = ItemOrcamento.objects.create(
+            orcamento=orcamento,
+            nome="Conjunto de reparo",
+            valor_unitario=Decimal("100.00"),
+            quantidade=2,
+            desconto_percentual=Decimal("10.00"),
+            tipo_item="peca",
+            status="aprovado",
+        )
+        ServicoPeca.objects.create(
+            ordem=self.ordem,
+            item_orcamento=item_orcamento,
+            tipo="peca",
+            nome=item_orcamento.nome,
+            quantidade=2,
+            valor_unitario=Decimal("90.00"),
+        )
+        modelos = (
+            ("classico", "ordens.view_modules.impressao.Paragraph"),
+            ("profissional", "ordens.view_modules.relatorio_profissional.Paragraph"),
+            ("direto", "ordens.view_modules.relatorio_direto.Paragraph"),
+        )
+
+        for modelo, paragraph_path in modelos:
+            with self.subTest(modelo=modelo):
+                textos = []
+
+                def _spy(texto, *args, **kwargs):
+                    textos.append(str(texto))
+                    return reportlab_paragraph(texto, *args, **kwargs)
+
+                with patch(paragraph_path, side_effect=_spy):
+                    response = self.client.get(
+                        reverse("ordens:imprimir_relatorio_tecnico", args=[self.ordem.id]),
+                        {"modelo": modelo},
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                texto_unificado = "\n".join(textos)
+                self.assertIn("R$ 100,00", texto_unificado)
+                self.assertIn("Valor total", texto_unificado)
+                self.assertIn("R$ 200,00", texto_unificado)
+                self.assertIn("Desconto", texto_unificado)
+                self.assertIn("R$ 50,00", texto_unificado)
+                self.assertIn("Valor com desconto", texto_unificado)
+                self.assertIn("R$ 150,00", texto_unificado)
 
     def test_imprimir_relatorio_tecnico_preserva_quebras_de_linha(self):
         self.ordem.relatorio_tecnico = "Primeira etapa concluída.\nSegunda etapa testada.\\nTerceira etapa aprovada."

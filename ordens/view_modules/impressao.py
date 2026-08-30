@@ -41,9 +41,10 @@ from core.formatters import formatar_moeda_br, formatar_telefone_br
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
 from core.pdf_theme import get_document_profile, get_document_theme, resolve_layout_preset
 
-from ..models import OrdemServico, ServicoPeca
+from ..models import OrdemServico
 from .avaliacao_google_pdf import bloco_avaliacao_google
 from .relatorio_direto import gerar_relatorio_tecnico_direto
+from .relatorio_financeiro import montar_resumo_financeiro_relatorio
 from .relatorio_profissional import gerar_relatorio_tecnico_profissional
 
 logger = logging.getLogger(__name__)
@@ -2142,38 +2143,28 @@ def imprimir_relatorio_tecnico(request, pk):
             Spacer(1, 0.25 * cm),
         ]
     )
-    itens = list(ServicoPeca.objects.filter(ordem=ordem))
+    resumo_financeiro = montar_resumo_financeiro_relatorio(ordem)
+    itens = resumo_financeiro.itens
     if itens and getattr(config, "pdf_relatorio_exibir_servicos_pecas", True):
         story.append(_title_bar("Peças utilizadas e serviços realizados"))
-        if modo_resumido:
-            linhas = [[
-                Paragraph("<b>Tipo</b>", styles["RtLabel"]),
-                Paragraph("<b>Descrição</b>", styles["RtLabel"]),
-                Paragraph("<b>Qtd.</b>", styles["RtLabel"]),
-            ]]
-        else:
-            linhas = [[
-                Paragraph("<b>Tipo</b>", styles["RtLabel"]),
-                Paragraph("<b>Descrição</b>", styles["RtLabel"]),
-                Paragraph("<b>Qtd.</b>", styles["RtLabel"]),
-                Paragraph("<b>Unit.</b>", styles["RtLabel"]),
-                Paragraph("<b>Total</b>", styles["RtLabel"]),
-            ]]
-        for item in itens:
+        linhas = [[
+            Paragraph("<b>Tipo</b>", styles["RtLabel"]),
+            Paragraph("<b>Descrição</b>", styles["RtLabel"]),
+            Paragraph("<b>Qtd</b>", styles["RtLabel"]),
+            Paragraph("<b>Valor unit.</b>", styles["RtLabel"]),
+            Paragraph("<b>Subtotal</b>", styles["RtLabel"]),
+        ]]
+        for linha_financeira in itens:
+            item = linha_financeira.item
             linha_item = [
                 Paragraph(item.get_tipo_display(), styles["RtValue"]),
                 Paragraph(item.nome, styles["RtValue"]),
                 Paragraph(str(item.quantidade), styles["RtValue"]),
+                Paragraph(formatar_moeda_br(linha_financeira.valor_unitario), styles["RtValue"]),
+                Paragraph(formatar_moeda_br(linha_financeira.valor_total), styles["RtValue"]),
             ]
-            if not modo_resumido:
-                linha_item.extend(
-                    [
-                        Paragraph(formatar_moeda_br(item.valor_unitario), styles["RtValue"]),
-                        Paragraph(formatar_moeda_br(item.total()), styles["RtValue"]),
-                    ]
-                )
             linhas.append(linha_item)
-        max_desc = max((len((item.nome or "").strip()) for item in itens), default=0)
+        max_desc = max((len((linha.item.nome or "").strip()) for linha in itens), default=0)
         tipo_w = max(1.9 * cm, min(2.5 * cm, usable_w * 0.16))
         qtd_w = max(1.2 * cm, min(1.6 * cm, usable_w * 0.10))
         unit_w = max(2.0 * cm, min(2.4 * cm, usable_w * 0.16))
@@ -2188,20 +2179,12 @@ def imprimir_relatorio_tecnico(request, pk):
             unit_w = max(1.8 * cm, unit_w - (deficit * 0.55))
             total_w = max(1.8 * cm, total_w - (deficit * 0.45))
             desc_w = usable_w - (tipo_w + qtd_w + unit_w + total_w)
-        if modo_resumido:
-            tabela_itens = Table(
-                linhas,
-                colWidths=[tipo_w, usable_w - tipo_w - qtd_w, qtd_w],
-                repeatRows=1,
-            )
-            coluna_alinhamento_final = 2
-        else:
-            tabela_itens = Table(
-                linhas,
-                colWidths=[tipo_w, desc_w, qtd_w, unit_w, total_w],
-                repeatRows=1,
-            )
-            coluna_alinhamento_final = 4
+        tabela_itens = Table(
+            linhas,
+            colWidths=[tipo_w, desc_w, qtd_w, unit_w, total_w],
+            repeatRows=1,
+        )
+        coluna_alinhamento_final = 4
         tabela_itens.setStyle(
             TableStyle(
                 [
@@ -2219,29 +2202,30 @@ def imprimir_relatorio_tecnico(request, pk):
             )
         )
         story.extend([tabela_itens, Spacer(1, 0.18 * cm)])
-        if not modo_resumido:
-            totais_relatorio = Table(
+        totais_relatorio = Table(
+            [
+                [Paragraph("Valor total", styles["RtTotalLabel"]), Paragraph(formatar_moeda_br(resumo_financeiro.valor_total), styles["RtTotalValue"])],
+                [Paragraph("Desconto", styles["RtTotalLabel"]), Paragraph(formatar_moeda_br(resumo_financeiro.desconto), styles["RtTotalValue"])],
+                [Paragraph("Valor com desconto", styles["RtTotalLabel"]), Paragraph(formatar_moeda_br(resumo_financeiro.valor_com_desconto), styles["RtTotalValue"])],
+            ],
+            colWidths=[usable_w - 5.2 * cm, 5.2 * cm],
+        )
+        totais_relatorio.setStyle(
+            TableStyle(
                 [
-                    [Paragraph("Itens executados", styles["RtTotalLabel"]), Paragraph(str(len(itens)), styles["RtTotalValue"])],
-                    [Paragraph("Total de serviços e peças", styles["RtTotalLabel"]), Paragraph(formatar_moeda_br(sum(item.total() for item in itens)), styles["RtTotalValue"])],
-                ],
-                colWidths=[usable_w - 5.2 * cm, 5.2 * cm],
+                    ("BOX", (0, 0), (-1, -1), 0.6, tema_docs["section_line"]),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, tema_docs["section_line"]),
+                    ("ROWBACKGROUNDS", (0, 0), (-1, -1), [tema_docs["row_alt"], tema_docs["table_bg"]]),
+                    ("BACKGROUND", (0, -1), (-1, -1), tema_docs["section_bg"]),
+                    ("ALIGN", (0, 0), (0, -1), "RIGHT"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ]
             )
-            totais_relatorio.setStyle(
-                TableStyle(
-                    [
-                        ("BOX", (0, 0), (-1, -1), 0.6, tema_docs["section_line"]),
-                        ("INNERGRID", (0, 0), (-1, -1), 0.25, tema_docs["section_line"]),
-                        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [tema_docs["row_alt"], tema_docs["table_bg"]]),
-                        ("ALIGN", (0, 0), (0, -1), "RIGHT"),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                        ("TOPPADDING", (0, 0), (-1, -1), 5),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                    ]
-                )
-            )
-            story.extend([KeepTogether([totais_relatorio]), Spacer(1, 0.35 * cm)])
+        )
+        story.extend([KeepTogether([totais_relatorio]), Spacer(1, 0.35 * cm)])
 
     arquivos_relatorio = list(ordem.arquivos.filter(incluir_relatorio=True).order_by("-criado_em"))
     fotos_total = sum(1 for arquivo in ordem.arquivos.all() if arquivo.eh_imagem)

@@ -16,11 +16,11 @@ from reportlab.platypus import (
     TopPadder,
 )
 
-from core.formatters import formatar_telefone_br
+from core.formatters import formatar_moeda_br, formatar_telefone_br
 from core.pdf_utils import add_paragraph_styles, get_pdf_fonts, logo_or_paragraph, make_numbered_canvas
 
-from ..models import ServicoPeca
 from .avaliacao_google_pdf import bloco_avaliacao_google
+from .relatorio_financeiro import montar_resumo_financeiro_relatorio
 
 
 INK = colors.HexColor("#161B22")
@@ -303,17 +303,20 @@ def _bloco_texto(titulo, valor, styles, usable_w):
 
 
 def _itens(ordem, styles, usable_w):
-    itens = list(ServicoPeca.objects.filter(ordem=ordem))
-    if not itens:
+    resumo = montar_resumo_financeiro_relatorio(ordem)
+    if not resumo.itens:
         return None
     linhas = [
         [
             Paragraph("TIPO", styles["DirTableHead"]),
             Paragraph("DESIGNAÇÃO", styles["DirTableHead"]),
-            Paragraph("QTD.", styles["DirTableHead"]),
+            Paragraph("QTD", styles["DirTableHead"]),
+            Paragraph("VALOR UNIT.", styles["DirTableHead"]),
+            Paragraph("SUBTOTAL", styles["DirTableHead"]),
         ]
     ]
-    for item in itens:
+    for linha_financeira in resumo.itens:
+        item = linha_financeira.item
         descricao = escape(item.nome or "Item sem descrição")
         if item.descricao:
             descricao += f"<br/><font color='#59636E'>{_texto_pdf(item.descricao, '')}</font>"
@@ -322,11 +325,13 @@ def _itens(ordem, styles, usable_w):
                 Paragraph(escape(item.get_tipo_display()), styles["DirValue"]),
                 Paragraph(descricao, styles["DirValue"]),
                 Paragraph(escape(str(item.quantidade)), styles["DirValue"]),
+                Paragraph(formatar_moeda_br(linha_financeira.valor_unitario), styles["DirValue"]),
+                Paragraph(formatar_moeda_br(linha_financeira.valor_total), styles["DirValue"]),
             ]
         )
     table = Table(
         linhas,
-        colWidths=[2.7 * cm, usable_w - (4.2 * cm), 1.5 * cm],
+        colWidths=[2.1 * cm, usable_w - 7.75 * cm, 1.15 * cm, 2.2 * cm, 2.3 * cm],
         repeatRows=1,
     )
     table.setStyle(
@@ -338,6 +343,7 @@ def _itens(ordem, styles, usable_w):
                 ("INNERGRID", (0, 0), (-1, -1), 0.35, SOFT_LINE),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("ALIGN", (2, 0), (2, -1), "CENTER"),
+                ("ALIGN", (3, 0), (4, -1), "RIGHT"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 7),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 7),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
@@ -345,7 +351,31 @@ def _itens(ordem, styles, usable_w):
             ]
         )
     )
-    return table
+    totais = Table(
+        [
+            [Paragraph("Valor total", styles["DirLabel"]), Paragraph(formatar_moeda_br(resumo.valor_total), styles["DirValue"])],
+            [Paragraph("Desconto", styles["DirLabel"]), Paragraph(formatar_moeda_br(resumo.desconto), styles["DirValue"])],
+            [Paragraph("Valor com desconto", styles["DirLabel"]), Paragraph(formatar_moeda_br(resumo.valor_com_desconto), styles["DirValue"])],
+        ],
+        colWidths=[4.2 * cm, 3.4 * cm],
+        hAlign="RIGHT",
+    )
+    totais.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.55, LINE),
+                ("INNERGRID", (0, 0), (-1, -1), 0.35, SOFT_LINE),
+                ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, LIGHT]),
+                ("BACKGROUND", (0, -1), (-1, -1), LIGHT),
+                ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return table, totais
 
 
 def _rodape_final(
@@ -445,12 +475,15 @@ def gerar_relatorio_tecnico_direto(
     story.append(_bloco_texto("Resposta técnica", ordem.relatorio_tecnico, styles, usable_w))
 
     if getattr(config, "pdf_relatorio_exibir_servicos_pecas", True):
-        tabela_itens = _itens(ordem, styles, usable_w)
-        if tabela_itens is not None:
+        tabelas_itens = _itens(ordem, styles, usable_w)
+        if tabelas_itens is not None:
+            tabela_itens, totais_itens = tabelas_itens
             story.extend(
                 [
                     _linha_titulo("Serviços e peças", styles, usable_w),
                     tabela_itens,
+                    Spacer(1, 0.12 * cm),
+                    totais_itens,
                 ]
             )
 
