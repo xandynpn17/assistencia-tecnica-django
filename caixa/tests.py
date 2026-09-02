@@ -3993,15 +3993,39 @@ class CaixaPermissoesTests(TestCase):
         self.assertNotContains(response, ">Garantia Fabricante</button>")
         self.assertNotContains(response, "Valores r&aacute;pidos")
 
-    def test_registrar_pagamento_sem_origem_exige_decisao_para_avulso(self):
+    def test_registrar_pagamento_sem_origem_inicia_como_avulso(self):
         self.client.force_login(self.atendente)
         response = self.client.get(reverse("caixa:registrar_pagamento"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'id="pdv-aguardando-origem"')
-        self.assertContains(response, 'id="btn-recebimento-avulso"')
-        self.assertContains(response, 'id="pdv-operacao-principal" class="d-none"')
-        self.assertContains(response, "Localize uma OS para iniciar")
+        self.assertNotContains(response, 'id="pdv-aguardando-origem"')
+        self.assertContains(response, 'id="pdv-operacao-principal"')
+        self.assertNotContains(response, 'id="pdv-operacao-principal" class="d-none"')
+        self.assertContains(response, "Avulso ativo")
+        self.assertContains(response, 'id="id_guia_codigo_busca"')
+        self.assertContains(response, "Origem do recebimento (opcional)")
+        self.assertContains(response, 'aria-keyshortcuts="Alt+1"')
+        self.assertContains(response, 'aria-keyshortcuts="Alt+Enter"')
+        self.assertContains(response, "event.altKey")
+
+    def test_registrar_pagamento_avulso_sem_validar_os(self):
+        self.client.force_login(self.atendente)
+
+        response = self.client.post(
+            reverse("caixa:registrar_pagamento"),
+            {
+                "valor": "35.00",
+                "metodo": "pix",
+                "referencia": "AVULSO-SEM-OS",
+                "chave_idempotencia": "avulso-sem-os-1",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pagamento = Pagamento.objects.get(chave_idempotencia="avulso-sem-os-1")
+        self.assertIsNone(pagamento.ordem_servico_id)
+        self.assertIsNone(pagamento.stock_item_id)
+        self.assertEqual(pagamento.valor, Decimal("35.00"))
 
     def test_registrar_pagamento_em_dinheiro_valida_valor_recebido(self):
         self.client.force_login(self.atendente)

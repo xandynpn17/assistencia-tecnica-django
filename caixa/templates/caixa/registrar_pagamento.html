@@ -788,12 +788,12 @@
                         <div class="d-flex flex-wrap align-items-center gap-2">
                             <div class="atalhos-operacao" aria-label="Atalhos do recebimento">
                                 {% if not guia_codigo %}
-                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="origem"><kbd>F1</kbd> OS</button>
+                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="origem" aria-keyshortcuts="Alt+1"><kbd>Alt+1</kbd> OS</button>
                                 {% endif %}
-                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="valor"><kbd>F2</kbd> Valor</button>
-                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="forma"><kbd>F3</kbd> Forma</button>
-                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="concluir"><kbd>F4</kbd> Concluir</button>
-                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="opcoes"><kbd>F8</kbd> Mais</button>
+                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="valor" aria-keyshortcuts="Alt+2"><kbd>Alt+2</kbd> Valor</button>
+                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="forma" aria-keyshortcuts="Alt+3"><kbd>Alt+3</kbd> Forma</button>
+                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="concluir" aria-keyshortcuts="Alt+Enter"><kbd>Alt+Enter</kbd> Concluir</button>
+                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="opcoes" aria-keyshortcuts="Alt+8"><kbd>Alt+8</kbd> Mais</button>
                             </div>
                         </div>
                     </div>
@@ -801,7 +801,7 @@
                         <div class="recebimento-origem">
                             <div class="recebimento-etapa-label">
                                 <span class="recebimento-etapa-numero">1</span>
-                                {% if guia_codigo %}Guia de venda carregada{% else %}Localizar origem do recebimento{% endif %}
+                                {% if guia_codigo %}Guia de venda carregada{% else %}Origem do recebimento (opcional){% endif %}
                             </div>
                         {% if guia_codigo and vendas_guia %}
                         <div class="pdv-origem-validada">
@@ -831,22 +831,40 @@
                             <span class="badge badge-success">Pronta para receber</span>
                         </div>
                         {% else %}
-                        <form method="get" class="pdv-busca-form">
-                            <label for="id_os_numero_busca" class="sr-only">N&uacute;mero da OS</label>
-                            <input type="text"
-                                   id="id_os_numero_busca"
-                                   name="os_numero"
-                                   class="form-control"
-                                   placeholder="Digite o n&uacute;mero da OS"
-                                   value="{{ numero_os_busca|default:'' }}"
-                                   autocomplete="off"
-                                   {% if pagamento_sucesso %}autofocus{% endif %}>
-                            <button type="submit" class="btn btn-primary">Localizar OS</button>
-                            <span class="pdv-busca-hint">F1 localiza &middot; Enter valida</span>
-                        </form>
+                        <div class="row align-items-end">
+                            <div class="col-lg-5 mb-2">
+                                <form method="get" class="pdv-busca-form">
+                                    <label for="id_os_numero_busca" class="sr-only">N&uacute;mero da OS</label>
+                                    <input type="text"
+                                           id="id_os_numero_busca"
+                                           name="os_numero"
+                                           class="form-control"
+                                           placeholder="OS (opcional)"
+                                           value="{{ numero_os_busca|default:'' }}"
+                                           autocomplete="off">
+                                    <button type="submit" class="btn btn-outline-primary">Localizar OS</button>
+                                </form>
+                            </div>
+                            <div class="col-lg-5 mb-2">
+                                <form method="get" class="pdv-busca-form">
+                                    <label for="id_guia_codigo_busca" class="sr-only">C&oacute;digo da guia de venda</label>
+                                    <input type="text"
+                                           id="id_guia_codigo_busca"
+                                           name="guia"
+                                           class="form-control"
+                                           placeholder="Guia de venda (opcional)"
+                                           autocomplete="off">
+                                    <button type="submit" class="btn btn-outline-primary">Carregar guia &middot; Alt+G</button>
+                                </form>
+                            </div>
+                            <div class="col-lg-2 mb-2">
+                                <div class="btn btn-success btn-block disabled" aria-disabled="true">Avulso ativo</div>
+                            </div>
+                        </div>
+                        <div class="small text-muted">Sem localizar uma origem, o registro ser&aacute; tratado como recebimento avulso.</div>
                         {% endif %}
                         </div>
-                        <div class="recebimento-etapa-label {% if not ordem and not guia_codigo and not venda and not form.errors %}d-none{% endif %}" id="pdv-etapa-pagamento">
+                        <div class="recebimento-etapa-label" id="pdv-etapa-pagamento">
                             <span class="recebimento-etapa-numero">2</span>
                             Informar pagamento e concluir
                         </div>
@@ -871,16 +889,7 @@
                                 {{ form.chave_idempotencia }}
                             </div>
 
-                            {% if not ordem and not guia_codigo and not venda and not form.errors %}
-                            <div id="pdv-aguardando-origem" class="pdv-aguardando-origem">
-                                <div>
-                                    <strong>Localize uma OS para iniciar</strong>
-                                    <span>O valor e o saldo serão carregados automaticamente, evitando pagamentos na origem errada.</span>
-                                </div>
-                                <button type="button" id="btn-recebimento-avulso" class="btn btn-outline-primary">Recebimento avulso</button>
-                            </div>
-                            {% endif %}
-                            <div id="pdv-operacao-principal" class="{% if not ordem and not guia_codigo and not venda and not form.errors %}d-none{% endif %}">
+                            <div id="pdv-operacao-principal">
                             <div class="pagamento-core-card">
                                 <div class="pagamento-core-head">
                                     <div>
@@ -1009,10 +1018,10 @@
                                         <span id="finalizacao-forma-label">Selecione a forma de pagamento</span>
                                     </div>
                                     <button type="submit" id="btn-finalizar-pos" class="btn btn-success btn-lg px-4">
-                                        Receber e concluir &middot; F4
+                                        Receber e concluir &middot; Alt+Enter
                                     </button>
                                     <button type="button" class="pdv-mais-opcoes js-atalho-pagamento" data-atalho="opcoes">
-                                        Mais op&ccedil;&otilde;es &middot; F8
+                                        Mais op&ccedil;&otilde;es &middot; Alt+8
                                     </button>
                                 </div>
                             </div>
@@ -1360,6 +1369,7 @@
 document.addEventListener("DOMContentLoaded", function () {
     const valorInput = document.getElementById("id_valor_pos");
     const origemInput = document.getElementById("id_os_numero_busca");
+    const guiaInput = document.getElementById("id_guia_codigo_busca");
     const formaInput = document.getElementById("id_forma_pos");
     const formaSecundariaInput = document.getElementById("id_forma_pagamento_secundaria");
     const valorSecundarioInput = document.getElementById("id_valor_secundario");
@@ -1407,10 +1417,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const opcoesDrawer = document.getElementById("pdv-opcoes-drawer");
     const opcoesOverlay = document.getElementById("pdv-opcoes-overlay");
     const opcoesFechar = document.getElementById("pdv-opcoes-fechar");
-    const operacaoPrincipal = document.getElementById("pdv-operacao-principal");
-    const aguardandoOrigem = document.getElementById("pdv-aguardando-origem");
-    const etapaPagamento = document.getElementById("pdv-etapa-pagamento");
-    const btnRecebimentoAvulso = document.getElementById("btn-recebimento-avulso");
     const formaAtual = document.getElementById("pdv-forma-atual");
     const parcelasPrincipalOpcoes = document.getElementById("parcelas-principal-opcoes");
     const parcelasSecundariaOpcoes = document.getElementById("parcelas-secundaria-opcoes");
@@ -1734,11 +1740,10 @@ document.addEventListener("DOMContentLoaded", function () {
             }
             return;
         }
-        const operacaoBloqueada = operacaoPrincipal && operacaoPrincipal.classList.contains("d-none");
-        if (operacaoBloqueada && ["valor", "forma", "concluir"].includes(atalho)) {
-            if (origemInput) {
-                origemInput.focus();
-                origemInput.select();
+        if (atalho === "guia") {
+            if (guiaInput) {
+                guiaInput.focus();
+                guiaInput.select();
             }
             return;
         }
@@ -1915,18 +1920,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     if (opcoesOverlay) opcoesOverlay.addEventListener("click", fecharMaisOpcoes);
     if (opcoesFechar) opcoesFechar.addEventListener("click", fecharMaisOpcoes);
-    if (btnRecebimentoAvulso) {
-        btnRecebimentoAvulso.addEventListener("click", function () {
-            if (aguardandoOrigem) aguardandoOrigem.classList.add("d-none");
-            if (operacaoPrincipal) operacaoPrincipal.classList.remove("d-none");
-            if (etapaPagamento) etapaPagamento.classList.remove("d-none");
-            if (valorInput) {
-                valorInput.focus();
-                valorInput.select();
-            }
-        });
-    }
-
     botoesModoRecebimento.forEach(function (btn) {
         btn.addEventListener("click", function () {
             aplicarModoRecebimento(btn.dataset.modo, true);
@@ -1993,33 +1986,32 @@ document.addEventListener("DOMContentLoaded", function () {
     aplicarModoRecebimento(modoRecebimentoInput ? modoRecebimentoInput.value : "manual", false);
 
     document.addEventListener("keydown", function (event) {
-        if (event.key === "F1") {
-            event.preventDefault();
-            executarAtalhoPagamento("origem");
+        let atalho = "";
+        if (event.altKey && !event.ctrlKey && !event.metaKey) {
+            if (event.key === "1") atalho = "origem";
+            if (event.key.toLowerCase() === "g") atalho = "guia";
+            if (event.key === "2") atalho = "valor";
+            if (event.key === "3") atalho = "forma";
+            if (event.key === "8") atalho = "opcoes";
+            if (event.key === "Enter") atalho = "concluir";
         }
-        if (event.key === "F2") {
-            event.preventDefault();
-            executarAtalhoPagamento("valor");
+        if (!atalho) {
+            const atalhosFuncao = {
+                F1: "origem",
+                F2: "valor",
+                F3: "forma",
+                F4: "concluir",
+                F6: "misto",
+                F7: "desconto",
+                F8: "opcoes",
+            };
+            atalho = atalhosFuncao[event.key] || "";
         }
-        if (event.key === "F3") {
+        if (atalho) {
             event.preventDefault();
-            executarAtalhoPagamento("forma");
-        }
-        if (event.key === "F4") {
-            event.preventDefault();
-            executarAtalhoPagamento("concluir");
-        }
-        if (event.key === "F6") {
-            event.preventDefault();
-            executarAtalhoPagamento("misto");
-        }
-        if (event.key === "F7") {
-            event.preventDefault();
-            executarAtalhoPagamento("desconto");
-        }
-        if (event.key === "F8") {
-            event.preventDefault();
-            executarAtalhoPagamento("opcoes");
+            event.stopPropagation();
+            executarAtalhoPagamento(atalho);
+            return;
         }
         if (event.key === "Escape" && opcoesDrawer && opcoesDrawer.classList.contains("is-open")) {
             event.preventDefault();
