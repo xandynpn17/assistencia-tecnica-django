@@ -197,6 +197,16 @@
             </div>
         </div>
         {% endif %}
+        {% if pagamento.valor_recebido_dinheiro is not None %}
+        <div class="row">
+            <div class="label">Dinheiro recebido</div>
+            <div class="value">R$ {{ pagamento.valor_recebido_dinheiro|floatformat:2 }}</div>
+        </div>
+        <div class="row">
+            <div class="label">Troco entregue</div>
+            <div class="value">R$ {{ pagamento.troco_entregue|floatformat:2 }}</div>
+        </div>
+        {% endif %}
 
         {% if pagamento.cliente_nome or pagamento.cliente_documento or pagamento.cliente_telefone %}
         <div class="rule"></div>

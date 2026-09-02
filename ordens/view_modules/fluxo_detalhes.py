@@ -10,6 +10,8 @@ from .common import (
 from ..services.anexos import EXTENSOES_IMAGEM, MAX_FOTOS_POR_OS, preparar_arquivo_anexo
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
 from django.utils.dateparse import parse_date
 from configuracoes.permissions import has_sensitive_permission, is_management_user, require_sensitive_permission
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
@@ -67,7 +69,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             descricao__startswith="Status alterado de",
         ).order_by("-criado_em", "-id")
         context["linha_form"] = LinhaTrabalhoForm(ordem=ordem)
-        context["servico_form"] = ServicoPecaForm(empresa=ordem.empresa)
+        context["servico_form"] = ServicoPecaForm(empresa=ordem.empresa, ordem=ordem)
         context["orcamento_form"] = OrcamentoForm()
         context["tipos_reparacao"] = OrdemServico.TIPOS_REPARACAO
         context["item_form"] = ItemOrcamentoForm()
@@ -232,12 +234,16 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             ).all()
         )
         context["pedido_status_choices"] = PedidoCompra.STATUS_CHOICES
+        context["pedido_status_operacionais"] = [
+            escolha for escolha in PedidoCompra.STATUS_CHOICES
+            if escolha[0] not in PedidoCompra.STATUS_TERMINAIS
+        ]
         context["pedido_finalidade_choices"] = PedidoCompra.FINALIDADE_CHOICES
         context["reposicoes_pendentes_produto_ids"] = set(
             ordem.pedidos_compra.filter(
                 finalidade="reposicao_estoque_os",
                 produto_estoque__isnull=False,
-            ).exclude(status="fechado").values_list("produto_estoque_id", flat=True)
+            ).exclude(status__in=PedidoCompra.STATUS_TERMINAIS).values_list("produto_estoque_id", flat=True)
         )
         context["hoje_iso"] = timezone.localdate().isoformat()
         if context["pode_ver_custos_os"]:
@@ -519,7 +525,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
 
         # Serviços & Peças
         elif form_type == "servico_peca":
-            servico_form = ServicoPecaForm(request.POST, empresa=self.object.empresa)
+            servico_form = ServicoPecaForm(request.POST, empresa=self.object.empresa, ordem=self.object)
             if servico_form.is_valid():
                 try:
                     with transaction.atomic():
@@ -527,6 +533,32 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                         item.ordem = self.object
                         item.produto_estoque = servico_form.cleaned_data.get("produto_estoque")
                         item.ponto_operacional_reserva = servico_form.cleaned_data.get("ponto_operacional_reserva")
+                        if (
+                            item.tipo == "servico"
+                            and item.responsavel_cobranca == "fabricante"
+                            and Decimal(item.valor_unitario or 0) <= 0
+                            and self.object.eh_garantia_fabricante
+                        ):
+                            from configuracoes.models import MarcaGarantia, RegraGarantiaMarca
+
+                            marca = self.object.marca_garantia
+                            if not marca and (self.object.marca_equipamento or "").strip():
+                                marca = MarcaGarantia.objects.filter(
+                                    Q(empresa=self.object.empresa) | Q(empresa__isnull=True),
+                                    nome__iexact=(self.object.marca_equipamento or "").strip(),
+                                    ativo=True,
+                                    parceira_garantia=True,
+                                ).first()
+                            if marca:
+                                data_ref = self.object.data_abertura.date() if self.object.data_abertura else timezone.localdate()
+                                regra = RegraGarantiaMarca.buscar_regra_vigente(
+                                    marca, self.object.tipo_equipamento, data_ref=data_ref
+                                )
+                                item.valor_unitario = Decimal(
+                                    getattr(regra, "valor_mao_obra", 0)
+                                    or marca.valor_mao_obra_garantia
+                                    or 0
+                                )
                         tipo_reparo = (self.object.tipo_reparo or "").strip().lower()
                         if tipo_reparo.startswith("garantia de servi"):
                             item.comissionavel = item.tipo != "servico" or bool(request.POST.get("comissionavel"))
@@ -911,7 +943,7 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 and self.object.pedidos_compra.filter(
                     finalidade="reposicao_estoque_os",
                     produto_estoque=produto_estoque,
-                ).exclude(status="fechado").exists()
+                ).exclude(status__in=PedidoCompra.STATUS_TERMINAIS).exists()
             ):
                 messages.info(request, "Já existe um pedido de reposição pendente para este produto nesta OS.")
                 return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
@@ -987,18 +1019,30 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
                 PedidoCompra, pk=request.POST.get("pedido_id"), ordem=self.object,
                 empresa=self.object.empresa,
             )
-            produto = Produto.objects.filter(
-                pk=request.POST.get("produto_estoque"), empresa=self.object.empresa
-            ).first()
-            conta_pagar = ContaPagar.objects.filter(
-                pk=request.POST.get("conta_pagar"), empresa=self.object.empresa
-            ).first()
-            ponto = PontoOperacional.objects.filter(
-                pk=request.POST.get("ponto_operacional"), empresa=self.object.empresa, ativo=True
-            ).first()
-            ubicacao = UbicacaoEstoque.objects.filter(
-                pk=request.POST.get("ubicacao"), ponto_operacional=ponto, ativo=True
-            ).first() if ponto else None
+            produto_id = (request.POST.get("produto_estoque") or "").strip()
+            conta_id = (request.POST.get("conta_pagar") or "").strip()
+            ponto_id = (request.POST.get("ponto_operacional") or "").strip()
+            ubicacao_id = (request.POST.get("ubicacao") or "").strip()
+            produto = (
+                Produto.objects.filter(pk=int(produto_id), empresa=self.object.empresa).first()
+                if produto_id.isdigit() else None
+            )
+            conta_pagar = (
+                ContaPagar.objects.filter(pk=int(conta_id), empresa=self.object.empresa).first()
+                if conta_id.isdigit() else None
+            )
+            ponto = (
+                PontoOperacional.objects.filter(
+                    pk=int(ponto_id), empresa=self.object.empresa, ativo=True
+                ).first()
+                if ponto_id.isdigit() else None
+            )
+            ubicacao = (
+                UbicacaoEstoque.objects.filter(
+                    pk=int(ubicacao_id), ponto_operacional=ponto, ativo=True
+                ).first()
+                if ponto and ubicacao_id.isdigit() else None
+            )
             try:
                 recebimento = receber_pedido_os(
                     pedido=pedido,
@@ -1055,6 +1099,12 @@ class DetalhesOrdemView(RoleRequiredMixin, DetailView):
             status_validos = {valor for valor, _ in PedidoCompra.STATUS_CHOICES}
             if status_linha not in status_validos:
                 messages.error(request, "Status de pedido inválido.")
+                return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
+            if status_linha in PedidoCompra.STATUS_TERMINAIS:
+                messages.error(
+                    request,
+                    "Use as ações Fechar ou Cancelar para encerrar o pedido com histórico e justificativa.",
+                )
                 return redirect(f"{self.object.get_absolute_url()}?tab=pedidos")
 
             PedidoCompraLinha.objects.create(

@@ -597,6 +597,11 @@ class ServicoPeca(models.Model):
         ("fornecido_cliente", "Fornecida pelo cliente"),
         ("sem_custo", "Sem custo para a empresa"),
     ]
+    RESPONSAVEL_COBRANCA_CHOICES = [
+        ("cliente", "Cliente"),
+        ("fabricante", "Fabricante / garantia"),
+        ("sem_cobranca", "Sem cobrança"),
+    ]
     ordem = models.ForeignKey("OrdemServico", on_delete=models.CASCADE, related_name="servicos_pecas")
     produto_estoque = models.ForeignKey(
         "estoque.Produto",
@@ -620,6 +625,12 @@ class ServicoPeca(models.Model):
         related_name="servicos_pecas",
     )
     tipo = models.CharField(max_length=20, choices=(("servico", "Serviço"), ("peca", "Peça")))
+    responsavel_cobranca = models.CharField(
+        max_length=20,
+        choices=RESPONSAVEL_COBRANCA_CHOICES,
+        default="cliente",
+        db_index=True,
+    )
     nome = models.CharField(max_length=100)
     descricao = models.TextField(blank=True, null=True)
     quantidade = models.PositiveIntegerField(default=1)
@@ -940,7 +951,9 @@ class PedidoCompra(models.Model):
         ("recepcionado", "Recepcionado"),
         ("transito", "Trânsito"),
         ("fechado", "Fechado"),
+        ("cancelado", "Cancelado"),
     ]
+    STATUS_TERMINAIS = {"fechado", "cancelado"}
 
     ordem = models.ForeignKey(
         OrdemServico,

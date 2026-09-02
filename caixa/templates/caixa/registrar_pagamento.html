@@ -13,6 +13,85 @@
   .pagamento-helper p:last-child {
     margin-bottom: 0;
   }
+  .recebimento-unico-card {
+    border: 1px solid #cddff4 !important;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .recebimento-page .card-body {
+    padding: 14px 16px;
+  }
+  .recebimento-unico-head {
+    background: linear-gradient(135deg, #f5f9ff 0%, #eaf3ff 100%);
+    border-bottom: 1px solid #d6e5f6;
+    padding: 11px 14px;
+  }
+  .recebimento-unico-title {
+    color: #123b66;
+    font-size: 1.08rem;
+    font-weight: 800;
+  }
+  .recebimento-unico-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: #1769d2;
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    padding: 5px 9px;
+    text-transform: uppercase;
+  }
+  .atalhos-operacao {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .atalhos-operacao .btn {
+    align-items: center;
+    background: rgba(255, 255, 255, .9);
+    border-color: #c5d9ee;
+    color: #244b73;
+    display: inline-flex;
+    font-size: .76rem;
+    font-weight: 700;
+    gap: 5px;
+    padding: 5px 8px;
+  }
+  .atalhos-operacao kbd {
+    background: #1769d2;
+    border-radius: 4px;
+    box-shadow: none;
+    color: #fff;
+    font-size: .66rem;
+    padding: 2px 5px;
+  }
+  .recebimento-origem {
+    border-bottom: 1px solid #e7edf3;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+  .recebimento-etapa-label {
+    align-items: center;
+    color: #26445f;
+    display: flex;
+    font-size: .84rem;
+    font-weight: 800;
+    gap: 7px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .recebimento-etapa-numero {
+    align-items: center;
+    background: #1769d2;
+    border-radius: 999px;
+    color: #fff;
+    display: inline-flex;
+    height: 23px;
+    justify-content: center;
+    width: 23px;
+  }
   .resumo-os-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -75,9 +154,14 @@
     font-weight: 600;
   }
   .atalhos-forma {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(105px, 1fr));
     gap: 8px;
+  }
+  .atalhos-forma .btn {
+    font-size: .9rem;
+    font-weight: 700;
+    min-height: 44px;
   }
   .atalhos-forma .btn.active {
     box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
@@ -229,15 +313,169 @@
     border: 1px solid #dbe5ee;
     border-radius: 14px;
     background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    margin-bottom: 12px;
+    min-height: 220px;
+    padding: 12px 252px 12px 12px;
+    position: relative;
+  }
+  .pagamento-modo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .pagamento-modo .btn {
+    border-radius: 999px;
+    font-weight: 700;
+  }
+  .pagamento-modo-status {
+    color: #5f6b77;
+    font-size: .82rem;
+  }
+  .parcelas-opcoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .parcelas-opcoes .btn {
+    min-width: 44px;
+  }
+  .taxa-config-status {
+    border-radius: 9px;
+    padding: 8px 10px;
+    font-size: .82rem;
+    margin-top: 8px;
+  }
+  .taxa-config-status.is-ok {
+    color: #1f6f43;
+    background: #edf8f1;
+    border: 1px solid #cde8d6;
+  }
+  .taxa-config-status.is-error {
+    color: #8a4b08;
+    background: #fff7e6;
+    border: 1px solid #f2d49b;
+  }
+  .finalizacao-barra {
+    display: flex;
+    align-items: stretch;
+    background: linear-gradient(160deg, #eef6ff 0%, #ffffff 100%);
+    border: 1px solid #c9def5;
+    border-radius: 12px;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+    min-height: 194px;
+    padding: 13px;
+    position: absolute;
+    right: 14px;
+    top: 14px;
+    width: 228px;
+  }
+  .finalizacao-total {
+    color: #526778;
+    font-size: .82rem;
+  }
+  .finalizacao-total strong {
+    display: block;
+    color: #173a5e;
+    font-size: 1.25rem;
+  }
+  .finalizacao-barra .btn {
+    font-weight: 800;
+    min-height: 44px;
+    white-space: normal;
+  }
+  .finalizacao-dica {
+    color: #647789;
+    display: block;
+    font-size: .74rem;
+    line-height: 1.35;
+    margin-top: 8px;
+  }
+  .pdv-busca-form {
+    align-items: center;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) 150px auto;
+  }
+  .pdv-busca-form .form-control,
+  .pdv-busca-form .btn {
+    min-height: 42px;
+  }
+  .pdv-origem-validada {
+    align-items: center;
+    background: #f3f8fe;
+    border: 1px solid #d2e2f2;
+    border-radius: 10px;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 9px 11px;
+  }
+  .pdv-origem-validada > div:first-child {
+    min-width: 0;
+  }
+  .pdv-origem-validada > div:first-child strong {
+    color: #173a5e;
+    display: block;
+  }
+  .pdv-origem-validada > div:first-child span {
+    color: #5f7182;
+    display: block;
+    font-size: .82rem;
+  }
+  .pdv-origem-validada strong,
+  .pdv-origem-validada span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pdv-aguardando-origem {
+    align-items: center;
+    background: #f8fafc;
+    border: 1px dashed #c8d6e4;
+    border-radius: 12px;
+    display: flex;
+    gap: 14px;
+    justify-content: space-between;
     padding: 16px;
-    margin-bottom: 16px;
+  }
+  .pdv-aguardando-origem strong {
+    color: #244767;
+    display: block;
+  }
+  .pdv-forma-atual {
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #d7e1eb;
+    border-radius: 8px;
+    color: #657687;
+    display: flex;
+    font-size: .88rem;
+    font-weight: 600;
+    min-height: 48px;
+    padding: 8px 11px;
+  }
+  .pdv-forma-atual.is-selected {
+    background: #eef7ff;
+    border-color: #97c4ef;
+    color: #174d82;
+  }
+  .cedulas-recebidas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
   }
   .pagamento-core-head {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 8px;
   }
   .pagamento-core-title {
     font-size: 1rem;
@@ -249,6 +487,85 @@
     font-size: .83rem;
     color: #5f6b77;
     margin-bottom: 0;
+  }
+  .resumo-secundario {
+    margin-top: 12px;
+  }
+  .resumo-secundario > summary {
+    color: #526778;
+    cursor: pointer;
+    font-size: .82rem;
+    font-weight: 700;
+  }
+  .pdv-mais-opcoes {
+    background: #fff;
+    border: 1px solid #c8d8e8;
+    border-radius: 9px;
+    color: #28527b;
+    font-size: .78rem;
+    font-weight: 700;
+    padding: 7px 10px;
+    width: 100%;
+  }
+  .pdv-opcoes-overlay {
+    background: rgba(13, 30, 48, .42);
+    border: 0;
+    display: none;
+    inset: 0;
+    padding: 0;
+    position: fixed;
+    z-index: 1045;
+  }
+  .pdv-opcoes-overlay.is-open {
+    display: block;
+  }
+  .pdv-opcoes-drawer {
+    background: #fff;
+    box-shadow: -12px 0 30px rgba(18, 42, 65, .18);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: calc(100vw - 18px);
+    position: fixed;
+    right: 0;
+    top: 0;
+    transform: translateX(105%);
+    transition: transform .2s ease;
+    width: 480px;
+    z-index: 1050;
+  }
+  .pdv-opcoes-drawer.is-open {
+    transform: translateX(0);
+  }
+  .pdv-opcoes-head {
+    align-items: flex-start;
+    background: linear-gradient(135deg, #f4f9ff 0%, #e7f2ff 100%);
+    border-bottom: 1px solid #d5e4f3;
+    display: flex;
+    gap: 14px;
+    justify-content: space-between;
+    padding: 16px 18px;
+  }
+  .pdv-opcoes-title {
+    color: #173f68;
+    font-size: 1rem;
+    font-weight: 800;
+  }
+  .pdv-opcoes-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 14px 16px 24px;
+  }
+  .pdv-opcoes-fechar {
+    background: #fff;
+    border: 1px solid #bed0e2;
+    border-radius: 8px;
+    color: #284b6e;
+    min-height: 36px;
+    min-width: 36px;
+  }
+  body.pdv-opcoes-abertas {
+    overflow: hidden;
   }
   .pagamento-context-chip {
     display: inline-flex;
@@ -262,6 +579,47 @@
     font-size: .8rem;
     font-weight: 700;
     white-space: nowrap;
+  }
+  .liquidacao-preview {
+    border: 1px solid #cfe0f3;
+    border-radius: 12px;
+    background: #f5f9ff;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .liquidacao-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .liquidacao-preview-item {
+    border-right: 1px solid #dbe7f4;
+    padding-right: 8px;
+  }
+  .liquidacao-preview-item:last-child {
+    border-right: 0;
+  }
+  .liquidacao-preview-label {
+    display: block;
+    color: #667786;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .035em;
+    margin-bottom: 2px;
+  }
+  .liquidacao-preview-value {
+    color: #173a5e;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+  .liquidacao-preview-note {
+    color: #526778;
+    font-size: .78rem;
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+  .liquidacao-preview-warning {
+    color: #856404;
   }
   .pagamento-advanced {
     border: 1px solid #e4e8ee;
@@ -298,6 +656,26 @@
     padding: 14px;
     border-top: 1px solid #eef1f4;
   }
+  @media (max-width: 991.98px) {
+    .pagamento-core-card {
+      min-height: 0;
+      padding: 14px;
+    }
+    .finalizacao-barra {
+      align-items: center;
+      flex-direction: row;
+      margin-top: 10px;
+      min-height: 0;
+      position: static;
+      width: auto;
+    }
+    .pdv-origem-validada {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .pdv-origem-validada .pdv-origem-extra {
+      display: none;
+    }
+  }
   @media (max-width: 575.98px) {
     .resumo-os-grid {
       grid-template-columns: 1fr;
@@ -311,16 +689,44 @@
     .pagamento-core-head {
       flex-direction: column;
     }
+    .finalizacao-barra {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .finalizacao-barra .btn {
+      width: 100%;
+    }
+    .liquidacao-preview-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .liquidacao-preview-item:nth-child(2) {
+      border-right: 0;
+    }
+    .atalhos-forma,
+    .pdv-busca-form {
+      grid-template-columns: 1fr 1fr;
+    }
+    .pdv-busca-form .pdv-busca-hint {
+      display: none;
+    }
+    .pdv-aguardando-origem {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .pdv-opcoes-drawer {
+      max-width: 100vw;
+      width: 100vw;
+    }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-3">
+<div class="container-fluid mt-2 recebimento-page">
     {% include 'caixa/_subnav_caixa.html' %}
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
         <div>
-            <h1 class="h3 mb-0">{% if guia_codigo %}Registrar Pagamento da Guia{% else %}Registrar Pagamento (POS){% endif %}</h1>
+            <h1 class="h4 mb-0">{% if guia_codigo %}Registrar Pagamento da Guia{% else %}Registrar Pagamento{% endif %}</h1>
             <small class="text-muted d-block">{% if guia_codigo %}Etapa 4 da venda a mostrador: receber, imprimir comprovante e concluir a baixa financeira.{% else %}Recebimento r&aacute;pido de OS, guias e atendimentos operacionais.{% endif %}</small>
         </div>
         <div class="d-flex gap-2">
@@ -328,31 +734,6 @@
             <a href="{% if user|is_management %}{% url 'caixa:dashboard_caixa' %}{% else %}{% url 'caixa:registrar_pagamento' %}{% endif %}" class="btn btn-outline-secondary btn-sm">Voltar ao dashboard</a>
         </div>
     </div>
-    {% if guia_codigo and guia_resumo %}
-    <div class="guia-recebimento-strip">
-        <div class="guia-recebimento-card">
-            <div class="guia-recebimento-label">Guia</div>
-            <div class="guia-recebimento-value">{{ guia_resumo.codigo }}</div>
-            <div class="guia-recebimento-note">{{ guia_resumo.status_label }}</div>
-        </div>
-        <div class="guia-recebimento-card">
-            <div class="guia-recebimento-label">Total a receber</div>
-            <div class="guia-recebimento-value">R$ {{ guia_resumo.valor_total|floatformat:2 }}</div>
-            <div class="guia-recebimento-note">{{ guia_resumo.quantidade_total }} unidade(s) em {{ guia_resumo.itens_total }} item(ns)</div>
-        </div>
-        <div class="guia-recebimento-card">
-            <div class="guia-recebimento-label">Pontos</div>
-            <div class="guia-recebimento-value">{{ guia_resumo.pontos_label }}</div>
-            <div class="guia-recebimento-note">Origem: {{ guia_resumo.origem_label }}</div>
-        </div>
-        <div class="guia-recebimento-card">
-            <div class="guia-recebimento-label">Operacao</div>
-            <div class="guia-recebimento-value">{{ guia_resumo.operadores_label }}</div>
-            <div class="guia-recebimento-note">Vendedor: {{ guia_resumo.vendedores_label }}</div>
-        </div>
-    </div>
-    {% endif %}
-
     {% if not caixa %}
         <div class="alert alert-danger">
             Nenhum caixa aberto. <a href="{% url 'caixa:abrir_caixa' %}">Abra um caixa</a> primeiro.
@@ -397,72 +778,77 @@
         </div>
         {% endif %}
         <div class="row">
-            <div class="col-lg-8">
-                <div class="card shadow-sm border-0 mb-3">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <strong>{% if guia_codigo %}1) Origem do recebimento{% else %}1) Validar Ordem de Servi&ccedil;o{% endif %}</strong>
-                        <small class="text-muted">{% if guia_codigo %}Guia carregada para conclus&atilde;o da venda a mostrador{% else %}Digite OS-0123 ou somente 123{% endif %}</small>
+            <div class="col-12">
+                <div class="card shadow-sm recebimento-unico-card">
+                    <div class="recebimento-unico-head d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <div class="recebimento-unico-title">Recebimento rápido</div>
+                            <small class="text-muted">Origem, valor, modalidade, taxas e conclusão no mesmo painel.</small>
+                        </div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <div class="atalhos-operacao" aria-label="Atalhos do recebimento">
+                                {% if not guia_codigo %}
+                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="origem"><kbd>F1</kbd> OS</button>
+                                {% endif %}
+                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="valor"><kbd>F2</kbd> Valor</button>
+                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="forma"><kbd>F3</kbd> Forma</button>
+                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="concluir"><kbd>F4</kbd> Concluir</button>
+                                <button type="button" class="btn btn-sm js-atalho-pagamento" data-atalho="opcoes"><kbd>F8</kbd> Mais</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="card-body">
+                        <div class="recebimento-origem">
+                            <div class="recebimento-etapa-label">
+                                <span class="recebimento-etapa-numero">1</span>
+                                {% if guia_codigo %}Guia de venda carregada{% else %}Localizar origem do recebimento{% endif %}
+                            </div>
                         {% if guia_codigo and vendas_guia %}
-                        <div class="pagamento-helper mb-3">
-                            <p class="mb-1"><strong>Fluxo da venda a mostrador:</strong> guia consolidada, itens conferidos e pronta para recebimento no caixa.</p>
-                            <p class="text-muted mb-0">Se precisar revisar os itens antes de receber, use o resumo lateral ou abra a guia completa.</p>
+                        <div class="pdv-origem-validada">
+                            <div>
+                                <strong>Guia {{ guia_codigo }}</strong>
+                                <span>{{ guia_resumo.itens_total }} item(ns) &middot; Total R$ {{ guia_total|floatformat:2 }}</span>
+                            </div>
+                            <span class="badge badge-success">Pronta para receber</span>
                         </div>
-                        {% endif %}
-                        {% if not guia_codigo %}
-                        <form method="get" class="form-row align-items-end">
-                            <div class="col-md-9">
-                                <label for="id_os_numero_busca"><strong>N&uacute;mero da OS</strong></label>
-                                <input type="text"
-                                       id="id_os_numero_busca"
-                                       name="os_numero"
-                                       class="form-control form-control-lg"
-                                       placeholder="Ex: OS-0123"
-                                       value="{{ numero_os_busca|default:'' }}"
-                                       autocomplete="off">
+                        {% elif ordem %}
+                        <div class="pdv-origem-validada">
+                            <div>
+                                <strong>OS {{ ordem.numero_os }}</strong>
+                                <span>{{ ordem.cliente.nome }} &middot; Saldo R$ {{ ordem_valor_aberto|floatformat:2 }}</span>
                             </div>
-                            <div class="col-md-3">
-                                <button type="submit" class="btn btn-outline-primary btn-lg btn-block">
-                                    Validar
-                                </button>
+                            <div class="d-flex align-items-center gap-2 pdv-origem-extra">
+                                <span class="badge badge-success">OS validada</span>
+                                <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-sm btn-outline-secondary">Trocar OS</a>
                             </div>
+                        </div>
+                        {% elif venda %}
+                        <div class="pdv-origem-validada">
+                            <div>
+                                <strong>Venda carregada</strong>
+                                <span>Total R$ {{ venda.valor_total|floatformat:2 }}</span>
+                            </div>
+                            <span class="badge badge-success">Pronta para receber</span>
+                        </div>
+                        {% else %}
+                        <form method="get" class="pdv-busca-form">
+                            <label for="id_os_numero_busca" class="sr-only">N&uacute;mero da OS</label>
+                            <input type="text"
+                                   id="id_os_numero_busca"
+                                   name="os_numero"
+                                   class="form-control"
+                                   placeholder="Digite o n&uacute;mero da OS"
+                                   value="{{ numero_os_busca|default:'' }}"
+                                   autocomplete="off"
+                                   {% if pagamento_sucesso %}autofocus{% endif %}>
+                            <button type="submit" class="btn btn-primary">Localizar OS</button>
+                            <span class="pdv-busca-hint">F1 localiza &middot; Enter valida</span>
                         </form>
                         {% endif %}
-                        <div class="pagamento-helper mt-3">
-                            <p class="mb-1"><strong>Fluxo r&aacute;pido:</strong> {% if guia_codigo %}confirme valor, forma de pagamento e finalize a venda no mesmo ecr&atilde;.{% else %}valide a OS, confirme valor e forma de pagamento e finalize a venda no mesmo ecr&atilde;.{% endif %}</p>
-                            <p class="text-muted mb-0">{% if guia_codigo %}A baixa do estoque e a vincula&ccedil;&atilde;o da venda acontecem junto com este recebimento.{% else %}Se precisar confirmar dados t&eacute;cnicos ou hist&oacute;ricos da OS antes do recebimento, use o atalho do resumo lateral.{% endif %}</p>
                         </div>
-                    </div>
-                </div>
-
-                <div class="card shadow-sm border-0">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <strong>2) Finalizar Pagamento</strong>
-                        <small class="text-muted">F2 valor | F3 forma | F4 finalizar</small>
-                    </div>
-                    <div class="card-body">
-                        <div class="pagamento-step-strip mb-3">
-                            <div class="pagamento-step">
-                                <div class="pagamento-step-number">1</div>
-                                <div class="pagamento-step-title">Origem</div>
-                                <p class="pagamento-step-copy">{% if guia_codigo %}Guia carregada e pronta para recebimento.{% else %}Confirme a OS antes de receber.{% endif %}</p>
-                            </div>
-                            <div class="pagamento-step">
-                                <div class="pagamento-step-number">2</div>
-                                <div class="pagamento-step-title">Valor</div>
-                                <p class="pagamento-step-copy">{% if guia_codigo %}Use o total da guia ou ajuste o valor de balc&atilde;o.{% else %}Use o saldo aberto da OS ou ajuste manualmente.{% endif %}</p>
-                            </div>
-                            <div class="pagamento-step">
-                                <div class="pagamento-step-number">3</div>
-                                <div class="pagamento-step-title">Forma</div>
-                                <p class="pagamento-step-copy">Selecione a forma principal e, se precisar, complemente com pagamento misto.</p>
-                            </div>
-                            <div class="pagamento-step">
-                                <div class="pagamento-step-number">4</div>
-                                <div class="pagamento-step-title">Concluir</div>
-                                <p class="pagamento-step-copy">Finalize, imprima o comprovante e siga para entrega ou pr&oacute;xima venda.</p>
-                            </div>
+                        <div class="recebimento-etapa-label {% if not ordem and not guia_codigo and not venda and not form.errors %}d-none{% endif %}" id="pdv-etapa-pagamento">
+                            <span class="recebimento-etapa-numero">2</span>
+                            Informar pagamento e concluir
                         </div>
                         <form
                             method="post"
@@ -470,11 +856,13 @@
                             data-antifraude-exige-desconto="{{ antifraude_config.antifraude_exigir_dupla_confirmacao_desconto|yesno:'1,0' }}"
                             data-antifraude-limiar="{{ antifraude_config.antifraude_desconto_critico_percentual|floatformat:2 }}"
                             data-antifraude-minimo="{{ antifraude_config.antifraude_motivo_minimo_caracteres }}"
+                            data-empresa="{{ request.user.empresa_id|default:'global' }}"
                         >
                             {% csrf_token %}
                             {{ form.non_field_errors }}
 
                             <input type="hidden" name="os_numero" value="{{ numero_os_busca|default:'' }}">
+                            <input type="hidden" name="modo_recebimento" id="id_modo_recebimento" value="{{ modo_recebimento|default:'manual' }}">
                             <input type="hidden" name="confirmar_desconto_critico" id="id_confirmar_desconto_critico" value="0">
                             <input type="hidden" name="justificativa_desconto_critico" id="id_justificativa_desconto_critico" value="">
                             <div class="d-none">
@@ -483,11 +871,21 @@
                                 {{ form.chave_idempotencia }}
                             </div>
 
+                            {% if not ordem and not guia_codigo and not venda and not form.errors %}
+                            <div id="pdv-aguardando-origem" class="pdv-aguardando-origem">
+                                <div>
+                                    <strong>Localize uma OS para iniciar</strong>
+                                    <span>O valor e o saldo serão carregados automaticamente, evitando pagamentos na origem errada.</span>
+                                </div>
+                                <button type="button" id="btn-recebimento-avulso" class="btn btn-outline-primary">Recebimento avulso</button>
+                            </div>
+                            {% endif %}
+                            <div id="pdv-operacao-principal" class="{% if not ordem and not guia_codigo and not venda and not form.errors %}d-none{% endif %}">
                             <div class="pagamento-core-card">
                                 <div class="pagamento-core-head">
                                     <div>
-                                        <div class="pagamento-core-title">Recebimento principal</div>
-                                        <p class="pagamento-core-copy">Este &eacute; o bloco do balc&atilde;o: valor, forma de pagamento, troco e conclus&atilde;o ficam juntos para reduzir cliques.</p>
+                                        <div class="pagamento-core-title">Pagamento</div>
+                                        <p class="pagamento-core-copy">Escolha a forma, confira o valor e conclua. Os demais recursos ficam em Mais op&ccedil;&otilde;es.</p>
                                     </div>
                                     {% if guia_codigo and guia_resumo %}
                                     <span class="pagamento-context-chip">Venda a mostrador</span>
@@ -496,31 +894,87 @@
                                     {% endif %}
                                 </div>
 
+                                {% if valor_base_pagamento %}
+                                <div class="pagamento-modo" data-valor-base="{{ valor_base_pagamento|floatformat:2 }}">
+                                    <button type="button" class="btn btn-sm btn-primary js-modo-recebimento" data-modo="total">
+                                        {% if guia_codigo %}Total da guia{% else %}Receber saldo total{% endif %}
+                                    </button>
+                                    {% if permite_pagamento_parcial %}
+                                    <button type="button" class="btn btn-sm btn-outline-primary js-modo-recebimento" data-modo="parcial">
+                                        Pagamento parcial
+                                    </button>
+                                    {% endif %}
+                                    <span id="pagamento-modo-status" class="pagamento-modo-status"></span>
+                                </div>
+                                {% endif %}
+
+                                <div class="mb-3">
+                                    <label class="d-block mb-2"><strong>Como o cliente pagou?</strong></label>
+                                    <div class="atalhos-forma">
+                                        {% for forma in formas_pagamento_meta %}
+                                        {% if forma.atalho_principal %}
+                                        <button type="button" class="btn btn-outline-primary js-forma-rapida" data-forma-id="{{ forma.id }}" data-forma-codigo="{{ forma.codigo }}">{{ forma.atalho_nome }}</button>
+                                        {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+
                                 <div class="form-row">
-                                    <div class="form-group col-md-4">
-                                        <label for="{{ form.valor.id_for_label }}"><strong>Valor base</strong></label>
+                                    <div class="form-group col-md-5">
+                                        <label for="{{ form.valor.id_for_label }}"><strong>Valor a receber</strong></label>
                                         {{ form.valor|add_class:"form-control form-control-lg"|attr:"id:id_valor_pos" }}
                                         {% if form.valor.errors %}<small class="text-danger">{{ form.valor.errors|striptags }}</small>{% endif %}
                                     </div>
-                                    <div class="form-group col-md-5">
-                                        <label for="{{ form.forma_pagamento.id_for_label }}"><strong>Forma de Pagamento</strong></label>
-                                        {{ form.forma_pagamento|add_class:"form-control form-control-lg"|attr:"id:id_forma_pos" }}
+                                    <div class="form-group col-md-4">
+                                        <label><strong>Forma selecionada</strong></label>
+                                        <div id="pdv-forma-atual" class="pdv-forma-atual">Selecione uma op&ccedil;&atilde;o acima</div>
                                         {% if form.forma_pagamento.errors %}<small class="text-danger">{{ form.forma_pagamento.errors|striptags }}</small>{% endif %}
                                     </div>
-                                    <div class="form-group col-md-3">
-                                        <label for="{{ form.referencia.id_for_label }}"><strong>Refer&ecirc;ncia</strong></label>
-                                        {{ form.referencia|add_class:"form-control form-control-lg" }}
+                                    <div id="bloco-referencia-principal" class="form-group col-md-3 d-none">
+                                        <label for="{{ form.referencia.id_for_label }}"><strong>NSU / refer&ecirc;ncia</strong></label>
+                                        {{ form.referencia|add_class:"form-control form-control-lg"|attr:"placeholder:Opcional" }}
                                         {% if form.referencia.errors %}<small class="text-danger">{{ form.referencia.errors|striptags }}</small>{% endif %}
                                     </div>
                                 </div>
 
-                                <div class="mb-3">
-                                    <label class="d-block mb-2"><strong>Atalhos de pagamento</strong></label>
-                                    <div class="atalhos-forma">
-                                        {% for forma in formas_pagamento_meta %}
-                                        <button type="button" class="btn btn-sm btn-outline-primary js-forma-rapida" data-forma-id="{{ forma.id }}" data-forma-codigo="{{ forma.codigo }}">{{ forma.nome }}</button>
-                                        {% endfor %}
+                                <div id="bloco-condicao-principal" class="form-row mb-2 d-none">
+                                    <div class="form-group col-md-5">
+                                        <label for="{{ form.parcelas_principal.id_for_label }}"><strong>Parcelas</strong></label>
+                                        {{ form.parcelas_principal|attr:"type:hidden"|attr:"id:id_parcelas_principal" }}
+                                        <div id="parcelas-principal-opcoes" class="parcelas-opcoes"></div>
+                                        {% if form.parcelas_principal.errors %}<small class="text-danger">{{ form.parcelas_principal.errors|striptags }}</small>{% endif %}
                                     </div>
+                                    <div class="form-group col-md-4">
+                                        <label for="{{ form.bandeira_principal.id_for_label }}"><strong>Bandeira</strong></label>
+                                        {{ form.bandeira_principal|add_class:"form-control"|attr:"id:id_bandeira_principal" }}
+                                        {% if form.bandeira_principal.errors %}<small class="text-danger">{{ form.bandeira_principal.errors|striptags }}</small>{% endif %}
+                                    </div>
+                                    <div class="form-group col-md-3 d-flex align-items-end">
+                                        <small class="text-muted mb-2">Somente combina&ccedil;&otilde;es com taxa vigente podem ser conclu&iacute;das.</small>
+                                    </div>
+                                </div>
+                                <div id="taxa-config-status" class="taxa-config-status d-none mb-2" aria-live="polite" tabindex="-1"></div>
+
+                                <div id="liquidacao-preview" class="liquidacao-preview d-none" aria-live="polite">
+                                    <div class="liquidacao-preview-grid">
+                                        <div class="liquidacao-preview-item">
+                                            <span class="liquidacao-preview-label">Processado no banco</span>
+                                            <span id="liquidacao-bruto" class="liquidacao-preview-value">R$ 0,00</span>
+                                        </div>
+                                        <div class="liquidacao-preview-item">
+                                            <span class="liquidacao-preview-label">Taxa estimada</span>
+                                            <span id="liquidacao-taxa" class="liquidacao-preview-value">R$ 0,00</span>
+                                        </div>
+                                        <div class="liquidacao-preview-item">
+                                            <span class="liquidacao-preview-label">L&iacute;quido banc&aacute;rio</span>
+                                            <span id="liquidacao-liquido" class="liquidacao-preview-value">R$ 0,00</span>
+                                        </div>
+                                        <div class="liquidacao-preview-item">
+                                            <span class="liquidacao-preview-label">Cr&eacute;dito previsto</span>
+                                            <span id="liquidacao-prazo" class="liquidacao-preview-value">Hoje</span>
+                                        </div>
+                                    </div>
+                                    <p id="liquidacao-detalhe" class="liquidacao-preview-note"></p>
                                 </div>
 
                                 <div id="bloco-dinheiro" class="row mb-3 d-none">
@@ -528,6 +982,15 @@
                                         <label for="{{ form.valor_recebido.id_for_label }}"><strong>Valor recebido</strong></label>
                                         {{ form.valor_recebido|add_class:"form-control form-control-lg"|attr:"id:id_valor_recebido_pos" }}
                                         {% if form.valor_recebido.errors %}<small class="text-danger">{{ form.valor_recebido.errors|striptags }}</small>{% endif %}
+                                        <small class="text-muted d-block mt-2">Atalhos das c&eacute;dulas entregues pelo cliente:</small>
+                                        <div class="cedulas-recebidas">
+                                            <button type="button" class="btn btn-sm btn-outline-primary js-cedula-exata">Valor exato</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary js-cedula-recebida" data-value="20">R$ 20</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary js-cedula-recebida" data-value="50">R$ 50</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary js-cedula-recebida" data-value="100">R$ 100</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary js-cedula-recebida" data-value="200">R$ 200</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary js-cedula-recebida" data-value="500">R$ 500</button>
+                                        </div>
                                     </div>
                                     <div class="col-md-4">
                                         <label class="d-block"><strong>Troco</strong></label>
@@ -539,36 +1002,45 @@
                                     </div>
                                 </div>
 
-                                <div class="mb-3">
-                                    <label class="d-block mb-2"><strong>Valores r&aacute;pidos</strong></label>
-                                    <div class="btn-group btn-group-sm flex-wrap" role="group">
-                                        {% if guia_codigo and guia_total > 0 %}
-                                        <button type="button" class="btn btn-outline-primary js-valor-rapido" data-value="{{ guia_total|floatformat:2 }}">Total da guia</button>
-                                        {% elif ordem and ordem_valor_aberto > 0 %}
-                                        <button type="button" class="btn btn-outline-primary js-valor-rapido" data-value="{{ ordem_valor_aberto|floatformat:2 }}">Saldo aberto</button>
-                                        {% endif %}
-                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="30.00">30,00</button>
-                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="50.00">50,00</button>
-                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="100.00">100,00</button>
-                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="150.00">150,00</button>
-                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="200.00">200,00</button>
-                                        <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="300.00">300,00</button>
+                                <div class="finalizacao-barra">
+                                    <div class="finalizacao-total">
+                                        Total desta opera&ccedil;&atilde;o
+                                        <strong id="finalizacao-total-valor">R$ 0,00</strong>
+                                        <span id="finalizacao-forma-label">Selecione a forma de pagamento</span>
                                     </div>
-                                    {% if guia_codigo and guia_total > 0 %}
-                                    <small class="text-muted d-block mt-2">Total atual da guia: <strong>R$ {{ guia_total|floatformat:2 }}</strong></small>
-                                    {% elif ordem and ordem_valor_aberto > 0 %}
-                                    <small class="text-muted d-block mt-2">Saldo atual da OS: <strong>R$ {{ ordem_valor_aberto|floatformat:2 }}</strong></small>
-                                    {% endif %}
-                                </div>
-
-                                <div class="d-flex justify-content-end">
                                     <button type="submit" id="btn-finalizar-pos" class="btn btn-success btn-lg px-4">
-                                        Finalizar Pagamento
+                                        Receber e concluir &middot; F4
+                                    </button>
+                                    <button type="button" class="pdv-mais-opcoes js-atalho-pagamento" data-atalho="opcoes">
+                                        Mais op&ccedil;&otilde;es &middot; F8
                                     </button>
                                 </div>
                             </div>
+                            </div>
 
-                            <details class="pagamento-advanced">
+                            <button type="button" id="pdv-opcoes-overlay" class="pdv-opcoes-overlay" aria-label="Fechar mais op&ccedil;&otilde;es"></button>
+                            <aside id="pdv-opcoes-drawer" class="pdv-opcoes-drawer" aria-hidden="true" aria-labelledby="pdv-opcoes-title">
+                                <div class="pdv-opcoes-head">
+                                    <div>
+                                        <div id="pdv-opcoes-title" class="pdv-opcoes-title">Mais op&ccedil;&otilde;es do recebimento</div>
+                                        <small class="text-muted">F6 pagamento misto &middot; F7 desconto &middot; Esc fechar</small>
+                                    </div>
+                                    <button type="button" id="pdv-opcoes-fechar" class="pdv-opcoes-fechar" aria-label="Fechar">&times;</button>
+                                </div>
+                                <div class="pdv-opcoes-body">
+                            <details id="opcao-outras-formas" class="pagamento-advanced" {% if form.forma_pagamento.errors %}open{% endif %}>
+                                <summary><span>Outras formas de pagamento</span></summary>
+                                <div class="pagamento-advanced-body">
+                                    <div class="form-group mb-0">
+                                        <label for="{{ form.forma_pagamento.id_for_label }}"><strong>Forma principal</strong></label>
+                                        {{ form.forma_pagamento|add_class:"form-control"|attr:"id:id_forma_pos" }}
+                                        {% if form.forma_pagamento.errors %}<small class="text-danger">{{ form.forma_pagamento.errors|striptags }}</small>{% endif %}
+                                        <small class="text-muted d-block mt-1">Use para transfer&ecirc;ncia, garantia do fabricante, custo interno ou uma maquininha diferente.</small>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <details id="opcao-pagamento-misto" class="pagamento-advanced" {% if form.forma_pagamento_secundaria.errors or form.valor_secundario.errors or form.parcelas_secundaria.errors or form.bandeira_secundaria.errors %}open{% endif %}>
                                 <summary>
                                     <span>Pagamento misto opcional</span>
                                 </summary>
@@ -598,6 +1070,19 @@
                                                 {% if form.referencia_secundaria.errors %}<small class="text-danger">{{ form.referencia_secundaria.errors|striptags }}</small>{% endif %}
                                             </div>
                                         </div>
+                                        <div id="bloco-condicao-secundaria" class="form-row d-none">
+                                            <div class="form-group col-md-4">
+                                                <label for="{{ form.parcelas_secundaria.id_for_label }}"><strong>Parcelas da forma secundária</strong></label>
+                                                {{ form.parcelas_secundaria|attr:"type:hidden"|attr:"id:id_parcelas_secundaria" }}
+                                                <div id="parcelas-secundaria-opcoes" class="parcelas-opcoes"></div>
+                                                {% if form.parcelas_secundaria.errors %}<small class="text-danger">{{ form.parcelas_secundaria.errors|striptags }}</small>{% endif %}
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label for="{{ form.bandeira_secundaria.id_for_label }}"><strong>Bandeira da forma secundária</strong></label>
+                                                {{ form.bandeira_secundaria|add_class:"form-control"|attr:"id:id_bandeira_secundaria" }}
+                                                {% if form.bandeira_secundaria.errors %}<small class="text-danger">{{ form.bandeira_secundaria.errors|striptags }}</small>{% endif %}
+                                            </div>
+                                        </div>
                                         <div id="pagamentoMistoResumo" class="pagamento-misto-resumo">
                                             <strong>Composi&ccedil;&atilde;o atual:</strong> pagamento em forma &uacute;nica.
                                             <small>Quando preencher a forma secund&aacute;ria, o valor principal ser&aacute; recalculado automaticamente.</small>
@@ -606,7 +1091,7 @@
                                 </div>
                             </details>
 
-                            <details class="pagamento-advanced" {% if mensagem_antifraude or form.desconto_valor.errors or form.desconto_percentual.errors %}open{% endif %}>
+                            <details id="opcao-desconto" class="pagamento-advanced" {% if mensagem_antifraude or form.desconto_valor.errors or form.desconto_percentual.errors %}open{% endif %}>
                                 <summary>
                                     <span>Desconto e total final</span>
                                 </summary>
@@ -649,7 +1134,7 @@
                             </details>
 
                             {% if guia_codigo or venda %}
-                            <details class="pagamento-advanced" {% if form.cliente_nome.errors or form.cliente_documento.errors or form.cliente_telefone.errors %}open{% endif %}>
+                            <details id="opcao-comprador" class="pagamento-advanced" {% if form.cliente_nome.errors or form.cliente_documento.errors or form.cliente_telefone.errors %}open{% endif %}>
                                 <summary>
                                     <span>Identificacao opcional do comprador</span>
                                 </summary>
@@ -678,7 +1163,7 @@
                             </details>
                             {% endif %}
 
-                            <details class="pagamento-advanced" {% if form.data_competencia.errors or form.data_movimento.errors %}open{% endif %}>
+                            <details id="opcao-datas" class="pagamento-advanced" {% if form.data_competencia.errors or form.data_movimento.errors %}open{% endif %}>
                                 <summary><span>Datas contábeis e financeiras</span></summary>
                                 <div class="pagamento-advanced-body">
                                     <div class="form-row">
@@ -699,7 +1184,7 @@
                                 </div>
                             </details>
 
-                            <details class="pagamento-advanced" {% if form.observacao.errors %}open{% endif %}>
+                            <details id="opcao-observacao" class="pagamento-advanced" {% if form.observacao.errors %}open{% endif %}>
                                 <summary>
                                     <span>Mensagem adicional no tal&atilde;o</span>
                                 </summary>
@@ -712,15 +1197,17 @@
                                     </div>
                                 </div>
                             </details>
+                                </div>
+                            </aside>
                         </form>
                     </div>
                 </div>
             </div>
 
-            <div class="col-lg-4">
-                <div class="card shadow-sm border-0 mb-3">
-                    <div class="card-header bg-white"><strong>{% if guia_codigo and guia_resumo %}Resumo da Guia{% else %}Resumo R&aacute;pido{% endif %}</strong></div>
-                    <div class="card-body">
+            <div class="col-12">
+                <details class="resumo-secundario">
+                    <summary>{% if guia_codigo and guia_resumo %}Resumo da Guia — ver detalhes completos{% elif ordem %}Resumo da OS — ver detalhes completos{% else %}Ver resumo da origem{% endif %}</summary>
+                    <div class="card card-body border-0 bg-light mt-2 mb-3">
                         <p class="mb-2"><strong>Caixa:</strong> {% if caixa.aberto %}Aberto{% else %}Fechado{% endif %}</p>
                         {% if ordem %}
                             <div class="alert alert-success py-2 mb-2">OS v&aacute;lida</div>
@@ -860,7 +1347,7 @@
                             <p class="mb-0 text-muted">Valide a OS para pagamento vinculado.</p>
                         {% endif %}
                     </div>
-                </div>
+                </details>
             </div>
         </div>
     {% endif %}
@@ -872,6 +1359,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const valorInput = document.getElementById("id_valor_pos");
+    const origemInput = document.getElementById("id_os_numero_busca");
     const formaInput = document.getElementById("id_forma_pos");
     const formaSecundariaInput = document.getElementById("id_forma_pagamento_secundaria");
     const valorSecundarioInput = document.getElementById("id_valor_secundario");
@@ -879,20 +1367,60 @@ document.addEventListener("DOMContentLoaded", function () {
     const descontoValorInput = document.getElementById("id_desconto_valor_pos");
     const descontoPercentualInput = document.getElementById("id_desconto_percentual_pos");
     const referenciaSecundariaInput = document.getElementById("id_referencia_secundaria");
+    const parcelasPrincipalInput = document.getElementById("id_parcelas_principal");
+    const bandeiraPrincipalInput = document.getElementById("id_bandeira_principal");
+    const parcelasSecundariaInput = document.getElementById("id_parcelas_secundaria");
+    const bandeiraSecundariaInput = document.getElementById("id_bandeira_secundaria");
+    const blocoCondicaoPrincipal = document.getElementById("bloco-condicao-principal");
+    const blocoCondicaoSecundaria = document.getElementById("bloco-condicao-secundaria");
+    const dataMovimentoInput = document.getElementById("id_data_movimento");
+    const liquidacaoPreview = document.getElementById("liquidacao-preview");
+    const liquidacaoBruto = document.getElementById("liquidacao-bruto");
+    const liquidacaoTaxa = document.getElementById("liquidacao-taxa");
+    const liquidacaoLiquido = document.getElementById("liquidacao-liquido");
+    const liquidacaoPrazo = document.getElementById("liquidacao-prazo");
+    const liquidacaoDetalhe = document.getElementById("liquidacao-detalhe");
+    const taxaConfigStatus = document.getElementById("taxa-config-status");
     const formPagamento = document.getElementById("form-pagamento-pos");
     const btnFinalizar = document.getElementById("btn-finalizar-pos");
     const confirmarDescontoInput = document.getElementById("id_confirmar_desconto_critico");
     const justificativaDescontoInput = document.getElementById("id_justificativa_desconto_critico");
-    const botoesRapidos = document.querySelectorAll(".js-valor-rapido");
+    const modoRecebimentoInput = document.getElementById("id_modo_recebimento");
+    const botoesModoRecebimento = document.querySelectorAll(".js-modo-recebimento");
+    const botoesAtalhoPagamento = document.querySelectorAll(".js-atalho-pagamento");
+    const pagamentoModoContainer = document.querySelector(".pagamento-modo");
+    const pagamentoModoStatus = document.getElementById("pagamento-modo-status");
     const botoesForma = document.querySelectorAll(".js-forma-rapida");
+    const botoesCedula = document.querySelectorAll(".js-cedula-recebida");
+    const botaoCedulaExata = document.querySelector(".js-cedula-exata");
     const blocoDinheiro = document.getElementById("bloco-dinheiro");
+    const blocoReferenciaPrincipal = document.getElementById("bloco-referencia-principal");
+    const referenciaPrincipalInput = document.getElementById("id_referencia");
     const trocoValor = document.getElementById("troco-valor");
     const trocoCelulas = document.getElementById("troco-celulas");
     const descontoSubtotal = document.getElementById("desconto-subtotal");
     const descontoTotal = document.getElementById("desconto-total");
     const valorFinalCliente = document.getElementById("valor-final-cliente");
+    const finalizacaoTotalValor = document.getElementById("finalizacao-total-valor");
+    const finalizacaoFormaLabel = document.getElementById("finalizacao-forma-label");
     const pagamentoMistoResumo = document.getElementById("pagamentoMistoResumo");
-    const formasMeta = JSON.parse(document.getElementById("formas-pagamento-meta").textContent || "[]");
+    const opcoesDrawer = document.getElementById("pdv-opcoes-drawer");
+    const opcoesOverlay = document.getElementById("pdv-opcoes-overlay");
+    const opcoesFechar = document.getElementById("pdv-opcoes-fechar");
+    const operacaoPrincipal = document.getElementById("pdv-operacao-principal");
+    const aguardandoOrigem = document.getElementById("pdv-aguardando-origem");
+    const etapaPagamento = document.getElementById("pdv-etapa-pagamento");
+    const btnRecebimentoAvulso = document.getElementById("btn-recebimento-avulso");
+    const formaAtual = document.getElementById("pdv-forma-atual");
+    const parcelasPrincipalOpcoes = document.getElementById("parcelas-principal-opcoes");
+    const parcelasSecundariaOpcoes = document.getElementById("parcelas-secundaria-opcoes");
+    const formasMetaScript = document.getElementById("formas-pagamento-meta");
+    let formasMeta = [];
+    try {
+        formasMeta = JSON.parse(formasMetaScript ? (formasMetaScript.textContent || "[]") : "[]");
+    } catch (erro) {
+        formasMeta = [];
+    }
     const formasPorId = {};
     formasMeta.forEach(function (item) { formasPorId[String(item.id)] = item.codigo; });
     const celulasTroco = [200, 100, 50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05];
@@ -927,6 +1455,214 @@ document.addEventListener("DOMContentLoaded", function () {
         return "R$ " + value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    function arredondarCentavos(value) {
+        return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+    }
+
+    function dataReferenciaISO() {
+        if (dataMovimentoInput && dataMovimentoInput.value) return dataMovimentoInput.value;
+        const agora = new Date();
+        const ano = agora.getFullYear();
+        const mes = String(agora.getMonth() + 1).padStart(2, "0");
+        const dia = String(agora.getDate()).padStart(2, "0");
+        return `${ano}-${mes}-${dia}`;
+    }
+
+    function adicionarDiasISO(dataISO, dias) {
+        const partes = String(dataISO || "").split("-").map(Number);
+        if (partes.length !== 3 || partes.some((parte) => !Number.isFinite(parte))) return "";
+        const data = new Date(partes[0], partes[1] - 1, partes[2]);
+        data.setDate(data.getDate() + Number(dias || 0));
+        return data.toLocaleDateString("pt-BR");
+    }
+
+    function normalizarTexto(value) {
+        return String(value || "").trim().toLocaleLowerCase("pt-BR");
+    }
+
+    function metaForma(formaId) {
+        return formasMeta.find((item) => String(item.id) === String(formaId || "")) || null;
+    }
+
+    function condicoesVigentes(meta) {
+        if (!meta) return [];
+        const dataReferencia = dataReferenciaISO();
+        return (meta.condicoes || []).filter(function (item) {
+            return item.modalidade === meta.modalidade
+                && (!item.vigencia_inicio || item.vigencia_inicio <= dataReferencia)
+                && (!item.vigencia_fim || item.vigencia_fim >= dataReferencia);
+        });
+    }
+
+    function condicaoVigente(meta, parcelas, bandeira) {
+        if (!meta) return null;
+        const candidatas = condicoesVigentes(meta).filter(function (item) {
+            return Number(item.parcelas_de || 1) <= parcelas
+                && Number(item.parcelas_ate || 1) >= parcelas;
+        });
+        const bandeiraNormalizada = normalizarTexto(bandeira);
+        const especifica = bandeiraNormalizada
+            ? candidatas.find((item) => normalizarTexto(item.bandeira) === bandeiraNormalizada)
+            : null;
+        return especifica || candidatas.find((item) => !normalizarTexto(item.bandeira)) || null;
+    }
+
+    function atualizarOpcoesCondicao(meta, parcelasInput, bandeiraInput, container) {
+        if (!meta || !meta.usa_maquininha || !["pix", "debito", "credito"].includes(meta.modalidade)) {
+            if (container) container.innerHTML = "";
+            return;
+        }
+
+        const condicoes = condicoesVigentes(meta);
+        const parcelasValidas = new Set();
+        condicoes.forEach(function (item) {
+            const inicio = Math.max(1, Number(item.parcelas_de || 1));
+            const fim = Math.min(48, Number(item.parcelas_ate || inicio));
+            for (let parcela = inicio; parcela <= fim; parcela += 1) parcelasValidas.add(parcela);
+        });
+        const opcoesParcelas = Array.from(parcelasValidas).sort((a, b) => a - b);
+        let parcelaAtual = Math.max(1, parseInt(parcelasInput && parcelasInput.value ? parcelasInput.value : (meta.parcelas_padrao || 1), 10) || 1);
+        if (opcoesParcelas.length && !parcelasValidas.has(parcelaAtual)) {
+            const padrao = Number(meta.parcelas_padrao || 1);
+            parcelaAtual = parcelasValidas.has(padrao) ? padrao : opcoesParcelas[0];
+            if (parcelasInput) parcelasInput.value = parcelaAtual;
+        }
+
+        if (container) {
+            container.innerHTML = "";
+            opcoesParcelas.forEach(function (parcela) {
+                const botao = document.createElement("button");
+                botao.type = "button";
+                botao.className = "btn btn-sm " + (parcela === parcelaAtual ? "btn-primary" : "btn-outline-primary");
+                botao.textContent = parcela + "x";
+                botao.addEventListener("click", function () {
+                    if (parcelasInput) parcelasInput.value = parcela;
+                    atualizarTroco();
+                });
+                container.appendChild(botao);
+            });
+            if (!opcoesParcelas.length) {
+                const aviso = document.createElement("span");
+                aviso.className = "small text-warning";
+                aviso.textContent = "Nenhuma parcela com taxa vigente.";
+                container.appendChild(aviso);
+            }
+        }
+
+        if (!bandeiraInput) return;
+        const valorAnterior = bandeiraInput.value;
+        const condicoesParcela = condicoes.filter(function (item) {
+            return Number(item.parcelas_de || 1) <= parcelaAtual && Number(item.parcelas_ate || 1) >= parcelaAtual;
+        });
+        const possuiGeral = condicoesParcela.some((item) => !normalizarTexto(item.bandeira));
+        const bandeiras = Array.from(new Set(
+            condicoesParcela.map((item) => String(item.bandeira || "").trim()).filter(Boolean)
+        )).sort((a, b) => a.localeCompare(b, "pt-BR"));
+        bandeiraInput.innerHTML = "";
+        const opcaoGeral = document.createElement("option");
+        opcaoGeral.value = "";
+        opcaoGeral.textContent = possuiGeral ? "Taxa geral / qualquer bandeira" : "Selecione a bandeira";
+        bandeiraInput.appendChild(opcaoGeral);
+        bandeiras.forEach(function (nome) {
+            const opcao = document.createElement("option");
+            opcao.value = nome;
+            opcao.textContent = nome;
+            bandeiraInput.appendChild(opcao);
+        });
+        if (bandeiras.includes(valorAnterior)) {
+            bandeiraInput.value = valorAnterior;
+        } else if (!possuiGeral && bandeiras.length === 1) {
+            bandeiraInput.value = bandeiras[0];
+        } else {
+            bandeiraInput.value = "";
+        }
+    }
+
+    function calcularLiquidacaoParte(formaId, valorBruto, parcelasInput, bandeiraInput) {
+        const meta = metaForma(formaId);
+        if (!meta || !meta.liquida_em_banco || valorBruto <= 0) return null;
+        const parcelas = Math.max(1, parseInt(parcelasInput && parcelasInput.value ? parcelasInput.value : (meta.parcelas_padrao || 1), 10) || 1);
+        const bandeira = bandeiraInput ? bandeiraInput.value : "";
+        const condicao = condicaoVigente(meta, parcelas, bandeira);
+        const percentual = parseMoney(condicao ? condicao.taxa_percentual : (meta.usa_maquininha ? 0 : meta.taxa_percentual_legada));
+        const taxaFixa = parseMoney(condicao ? condicao.taxa_fixa : 0);
+        const dias = Number(condicao ? condicao.dias_recebimento : meta.dias_recebimento_legado) || 0;
+        const taxa = arredondarCentavos((valorBruto * percentual / 100) + taxaFixa);
+        const liquido = arredondarCentavos(Math.max(0, valorBruto - taxa));
+        const nomeCondicao = condicao
+            ? `${percentual.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}%${taxaFixa > 0 ? " + " + formatMoney(taxaFixa) : ""}`
+            : `${percentual.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}% (regra geral)`;
+        return {
+            nome: meta.nome,
+            maquininha: meta.maquininha_nome || "Conta banc&aacute;ria",
+            bruto: arredondarCentavos(valorBruto),
+            taxa: taxa,
+            liquido: liquido,
+            dias: dias,
+            data: adicionarDiasISO(dataReferenciaISO(), dias),
+            regra: nomeCondicao,
+            semCondicaoEspecifica: Boolean(meta.usa_maquininha && !condicao),
+        };
+    }
+
+    function atualizarPrevisaoLiquidacao(totalFinal) {
+        if (!liquidacaoPreview) return;
+        const formaPrincipalId = formaInput ? formaInput.value : "";
+        const formaSecundariaId = formaSecundariaInput ? formaSecundariaInput.value : "";
+        const valorSecundario = formaSecundariaId
+            ? Math.min(totalFinal, Math.max(0, parseMoney(valorSecundarioInput ? valorSecundarioInput.value : "")))
+            : 0;
+        const valorPrincipal = Math.max(0, totalFinal - valorSecundario);
+        const partes = [
+            calcularLiquidacaoParte(formaPrincipalId, valorPrincipal, parcelasPrincipalInput, bandeiraPrincipalInput),
+            calcularLiquidacaoParte(formaSecundariaId, valorSecundario, parcelasSecundariaInput, bandeiraSecundariaInput),
+        ].filter(Boolean);
+
+        const validacoes = [
+            { meta: metaForma(formaPrincipalId), parcelas: parcelasPrincipalInput, bandeira: bandeiraPrincipalInput },
+            { meta: valorSecundario > 0 ? metaForma(formaSecundariaId) : null, parcelas: parcelasSecundariaInput, bandeira: bandeiraSecundariaInput },
+        ].filter((item) => item.meta && item.meta.usa_maquininha && ["pix", "debito", "credito"].includes(item.meta.modalidade));
+        const invalidas = validacoes.filter(function (item) {
+            const parcelas = Math.max(1, parseInt(item.parcelas && item.parcelas.value ? item.parcelas.value : (item.meta.parcelas_padrao || 1), 10) || 1);
+            const bandeira = item.bandeira ? item.bandeira.value : "";
+            return !item.meta.liquida_em_banco || !condicaoVigente(item.meta, parcelas, bandeira);
+        });
+        const configuracaoValida = invalidas.length === 0;
+        if (formPagamento) formPagamento.dataset.taxaConfigurada = configuracaoValida ? "1" : "0";
+        if (btnFinalizar) {
+            btnFinalizar.disabled = !configuracaoValida;
+            btnFinalizar.title = configuracaoValida ? "" : "Cadastre ou selecione uma taxa vigente para continuar.";
+        }
+        if (taxaConfigStatus) {
+            taxaConfigStatus.classList.toggle("d-none", validacoes.length === 0);
+            taxaConfigStatus.classList.toggle("is-ok", validacoes.length > 0 && configuracaoValida);
+            taxaConfigStatus.classList.toggle("is-error", !configuracaoValida);
+            if (validacoes.length > 0) {
+                taxaConfigStatus.textContent = configuracaoValida
+                    ? "Taxa vigente localizada. O valor líquido e o prazo estão calculados abaixo."
+                    : "A forma selecionada precisa de conta de liquidação e taxa vigente para esta modalidade, bandeira e parcelas. Ajuste a seleção ou complete o cadastro antes de receber.";
+            }
+        }
+
+        liquidacaoPreview.classList.toggle("d-none", partes.length === 0);
+        if (!partes.length) return;
+
+        const bruto = partes.reduce((total, item) => total + item.bruto, 0);
+        const taxa = partes.reduce((total, item) => total + item.taxa, 0);
+        const liquido = partes.reduce((total, item) => total + item.liquido, 0);
+        const datas = Array.from(new Set(partes.map((item) => item.dias === 0 ? "Hoje" : `D+${item.dias} (${item.data})`)));
+        liquidacaoBruto.textContent = formatMoney(arredondarCentavos(bruto));
+        liquidacaoTaxa.textContent = formatMoney(arredondarCentavos(taxa));
+        liquidacaoLiquido.textContent = formatMoney(arredondarCentavos(liquido));
+        liquidacaoPrazo.textContent = datas.join(" / ");
+        liquidacaoDetalhe.innerHTML = partes.map(function (item) {
+            const aviso = item.semCondicaoEspecifica
+                ? " <span class=\"liquidacao-preview-warning\">(sem taxa espec&iacute;fica; aplicada a regra geral)</span>"
+                : "";
+            return `${item.nome}: ${item.regra}, l&iacute;quido ${formatMoney(item.liquido)} em ${item.dias === 0 ? "hoje" : "D+" + item.dias}${aviso}`;
+        }).join("<br>");
+    }
+
     function sugerirCelulas(valor) {
         if (!trocoCelulas) return;
         trocoCelulas.innerHTML = "";
@@ -951,12 +1687,130 @@ document.addEventListener("DOMContentLoaded", function () {
             btn.classList.toggle("active", ativo);
             btn.classList.toggle("btn-primary", ativo);
             btn.classList.toggle("btn-outline-primary", !ativo);
+            btn.setAttribute("aria-pressed", ativo ? "true" : "false");
         });
+        if (formaAtual) {
+            formaAtual.textContent = formaInput && formaInput.value
+                ? descreverFormaPorId(formaInput.value)
+                : "Selecione uma opção acima";
+            formaAtual.classList.toggle("is-selected", Boolean(formaInput && formaInput.value));
+        }
+    }
+
+    function abrirMaisOpcoes(secaoId) {
+        if (!opcoesDrawer || !opcoesOverlay) return;
+        opcoesDrawer.classList.add("is-open");
+        opcoesOverlay.classList.add("is-open");
+        opcoesDrawer.setAttribute("aria-hidden", "false");
+        document.body.classList.add("pdv-opcoes-abertas");
+        if (secaoId) {
+            const secao = document.getElementById(secaoId);
+            if (secao) {
+                secao.open = true;
+                window.setTimeout(function () {
+                    secao.scrollIntoView({ behavior: "smooth", block: "start" });
+                    const campo = secao.querySelector("input:not([type='hidden']), select, textarea, button");
+                    if (campo) campo.focus({ preventScroll: true });
+                }, 220);
+            }
+        } else if (opcoesFechar) {
+            opcoesFechar.focus();
+        }
+    }
+
+    function fecharMaisOpcoes() {
+        if (!opcoesDrawer || !opcoesOverlay) return;
+        opcoesDrawer.classList.remove("is-open");
+        opcoesOverlay.classList.remove("is-open");
+        opcoesDrawer.setAttribute("aria-hidden", "true");
+        document.body.classList.remove("pdv-opcoes-abertas");
+    }
+
+    function executarAtalhoPagamento(atalho) {
+        if (atalho === "origem") {
+            if (origemInput) {
+                origemInput.focus();
+                origemInput.select();
+            }
+            return;
+        }
+        const operacaoBloqueada = operacaoPrincipal && operacaoPrincipal.classList.contains("d-none");
+        if (operacaoBloqueada && ["valor", "forma", "concluir"].includes(atalho)) {
+            if (origemInput) {
+                origemInput.focus();
+                origemInput.select();
+            }
+            return;
+        }
+        if (atalho === "valor") {
+            if (valorInput) {
+                valorInput.focus();
+                if (!valorInput.readOnly) valorInput.select();
+            }
+            return;
+        }
+        if (atalho === "forma") {
+            const primeiraFormaRapida = document.querySelector(".js-forma-rapida");
+            if (primeiraFormaRapida) {
+                primeiraFormaRapida.focus();
+            } else {
+                abrirMaisOpcoes("opcao-outras-formas");
+            }
+            return;
+        }
+        if (atalho === "misto") {
+            abrirMaisOpcoes("opcao-pagamento-misto");
+            return;
+        }
+        if (atalho === "desconto") {
+            abrirMaisOpcoes("opcao-desconto");
+            return;
+        }
+        if (atalho === "opcoes") {
+            abrirMaisOpcoes();
+            return;
+        }
+        if (atalho === "concluir" && formPagamento && btnFinalizar) {
+            if (btnFinalizar.disabled) {
+                if (taxaConfigStatus && !taxaConfigStatus.classList.contains("d-none")) {
+                    taxaConfigStatus.scrollIntoView({ behavior: "smooth", block: "center" });
+                    taxaConfigStatus.focus({ preventScroll: true });
+                }
+                return;
+            }
+            formPagamento.requestSubmit(btnFinalizar);
+        }
     }
 
     function descreverFormaPorId(formaId) {
-        const meta = formasMeta.find((item) => String(item.id) === String(formaId || ""));
+        const meta = metaForma(formaId);
         return meta ? meta.nome : "Forma principal";
+    }
+
+    function atualizarCampoReferencia() {
+        if (!blocoReferenciaPrincipal) return;
+        const principal = metaForma(formaInput ? formaInput.value : "");
+        const modalidade = principal ? (principal.modalidade || principal.codigo || "") : "";
+        const exibir = ["pix", "debito", "credito", "transferencia"].includes(modalidade)
+            || /pix|cartao|credito|debito|transferencia/.test(principal ? principal.codigo : "");
+        blocoReferenciaPrincipal.classList.toggle("d-none", !exibir);
+        if (!exibir && referenciaPrincipalInput) referenciaPrincipalInput.value = "";
+    }
+
+    function atualizarCondicoesMaquininha() {
+        const principal = metaForma(formaInput ? formaInput.value : "");
+        const secundaria = metaForma(formaSecundariaInput ? formaSecundariaInput.value : "");
+        const principalUsaTaxa = principal && principal.usa_maquininha && ["pix", "debito", "credito"].includes(principal.modalidade);
+        const secundariaUsaTaxa = secundaria && secundaria.usa_maquininha && ["pix", "debito", "credito"].includes(secundaria.modalidade);
+        if (blocoCondicaoPrincipal) blocoCondicaoPrincipal.classList.toggle("d-none", !principalUsaTaxa);
+        if (blocoCondicaoSecundaria) blocoCondicaoSecundaria.classList.toggle("d-none", !secundariaUsaTaxa);
+        if (principal && parcelasPrincipalInput && !parcelasPrincipalInput.value) parcelasPrincipalInput.value = principal.parcelas_padrao || 1;
+        if (secundaria && parcelasSecundariaInput && !parcelasSecundariaInput.value) parcelasSecundariaInput.value = secundaria.parcelas_padrao || 1;
+        atualizarOpcoesCondicao(principal, parcelasPrincipalInput, bandeiraPrincipalInput, parcelasPrincipalOpcoes);
+        atualizarOpcoesCondicao(secundaria, parcelasSecundariaInput, bandeiraSecundariaInput, parcelasSecundariaOpcoes);
+        if (!principalUsaTaxa && bandeiraPrincipalInput) bandeiraPrincipalInput.value = "";
+        if (!secundariaUsaTaxa && bandeiraSecundariaInput) bandeiraSecundariaInput.value = "";
+        atualizarCampoReferencia();
     }
 
     function calcularTotaisPagamento() {
@@ -1010,7 +1864,15 @@ document.addEventListener("DOMContentLoaded", function () {
         const composicao = atualizarResumoPagamentoMisto(totais.totalFinal);
         const isDinheiro = composicao.totalDinheiro > 0;
         blocoDinheiro.classList.toggle("d-none", !isDinheiro);
+        atualizarCondicoesMaquininha();
         atualizarAtalhosForma();
+        atualizarPrevisaoLiquidacao(totais.totalFinal);
+        if (finalizacaoTotalValor) finalizacaoTotalValor.textContent = formatMoney(totais.totalFinal);
+        if (finalizacaoFormaLabel) {
+            finalizacaoFormaLabel.textContent = formaInput && formaInput.value
+                ? descreverFormaPorId(formaInput.value)
+                : "Selecione a forma de pagamento";
+        }
         if (!isDinheiro) {
             trocoValor.textContent = "R$ 0,00";
             if (trocoCelulas) trocoCelulas.innerHTML = "";
@@ -1022,21 +1884,78 @@ document.addEventListener("DOMContentLoaded", function () {
         sugerirCelulas(troco);
     }
 
-    botoesRapidos.forEach(function (btn) {
-        btn.addEventListener("click", function () {
-            if (!valorInput) return;
-            valorInput.value = btn.getAttribute("data-value");
+    function aplicarModoRecebimento(modo, focar) {
+        if (!valorInput || !modoRecebimentoInput) return;
+        const valorBase = parseMoney(pagamentoModoContainer ? pagamentoModoContainer.dataset.valorBase : "");
+        const modoEfetivo = modo === "parcial" ? "parcial" : (valorBase > 0 ? "total" : "manual");
+        modoRecebimentoInput.value = modoEfetivo;
+        valorInput.readOnly = modoEfetivo === "total" && valorBase > 0;
+        if (modoEfetivo === "total" && valorBase > 0) valorInput.value = valorBase.toFixed(2);
+        botoesModoRecebimento.forEach(function (btn) {
+            const ativo = btn.dataset.modo === modoEfetivo;
+            btn.classList.toggle("btn-primary", ativo);
+            btn.classList.toggle("btn-outline-primary", !ativo);
+        });
+        if (pagamentoModoStatus) {
+            pagamentoModoStatus.textContent = modoEfetivo === "parcial"
+                ? "Informe somente o valor recebido agora. O restante continuará em aberto."
+                : (valorBase > 0 ? "Saldo completo carregado automaticamente." : "Informe o valor da operação.");
+        }
+        if (modoEfetivo === "parcial" && focar) {
             valorInput.focus();
+            valorInput.select();
+        }
+        atualizarTroco();
+    }
+
+    botoesAtalhoPagamento.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            executarAtalhoPagamento(btn.dataset.atalho || "");
+        });
+    });
+    if (opcoesOverlay) opcoesOverlay.addEventListener("click", fecharMaisOpcoes);
+    if (opcoesFechar) opcoesFechar.addEventListener("click", fecharMaisOpcoes);
+    if (btnRecebimentoAvulso) {
+        btnRecebimentoAvulso.addEventListener("click", function () {
+            if (aguardandoOrigem) aguardandoOrigem.classList.add("d-none");
+            if (operacaoPrincipal) operacaoPrincipal.classList.remove("d-none");
+            if (etapaPagamento) etapaPagamento.classList.remove("d-none");
+            if (valorInput) {
+                valorInput.focus();
+                valorInput.select();
+            }
+        });
+    }
+
+    botoesModoRecebimento.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            aplicarModoRecebimento(btn.dataset.modo, true);
+        });
+    });
+
+    botoesCedula.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            if (!valorRecebidoInput) return;
+            valorRecebidoInput.value = Number(btn.dataset.value || 0).toFixed(2);
             atualizarTroco();
         });
     });
+
+    if (botaoCedulaExata) {
+        botaoCedulaExata.addEventListener("click", function () {
+            if (!valorRecebidoInput) return;
+            const totais = calcularTotaisPagamento();
+            const composicao = atualizarResumoPagamentoMisto(totais.totalFinal);
+            valorRecebidoInput.value = Number(composicao.totalDinheiro || 0).toFixed(2);
+            atualizarTroco();
+        });
+    }
 
     botoesForma.forEach(function (btn) {
         btn.addEventListener("click", function () {
             if (!formaInput) return;
             formaInput.value = btn.getAttribute("data-forma-id");
-            atualizarTroco();
-            formaInput.dispatchEvent(new Event("change"));
+            formaInput.dispatchEvent(new Event("change", { bubbles: true }));
         });
     });
 
@@ -1054,26 +1973,75 @@ document.addEventListener("DOMContentLoaded", function () {
         atualizarTroco();
     });
     if (valorRecebidoInput) valorRecebidoInput.addEventListener("input", atualizarTroco);
-    calcularTotaisPagamento();
-    atualizarTroco();
+    if (parcelasPrincipalInput) parcelasPrincipalInput.addEventListener("input", atualizarTroco);
+    if (bandeiraPrincipalInput) bandeiraPrincipalInput.addEventListener("change", atualizarTroco);
+    if (parcelasSecundariaInput) parcelasSecundariaInput.addEventListener("input", atualizarTroco);
+    if (bandeiraSecundariaInput) bandeiraSecundariaInput.addEventListener("change", atualizarTroco);
+    if (dataMovimentoInput) dataMovimentoInput.addEventListener("change", atualizarTroco);
+    const chaveUltimaForma = "abgest.caixa.ultimaForma." + (formPagamento ? formPagamento.dataset.empresa : "global");
+    if (formaInput && !formaInput.value) {
+        try {
+            const ultimaForma = window.localStorage.getItem(chaveUltimaForma);
+            const ultimaFormaMeta = metaForma(ultimaForma);
+            if (ultimaFormaMeta && ["dinheiro", "pix", "debito", "credito"].includes(ultimaFormaMeta.modalidade)) {
+                formaInput.value = ultimaForma;
+            }
+        } catch (erro) {
+            // O fluxo continua normalmente quando o navegador bloqueia armazenamento local.
+        }
+    }
+    aplicarModoRecebimento(modoRecebimentoInput ? modoRecebimentoInput.value : "manual", false);
 
     document.addEventListener("keydown", function (event) {
+        if (event.key === "F1") {
+            event.preventDefault();
+            executarAtalhoPagamento("origem");
+        }
         if (event.key === "F2") {
             event.preventDefault();
-            if (valorInput) valorInput.focus();
+            executarAtalhoPagamento("valor");
         }
         if (event.key === "F3") {
             event.preventDefault();
-            if (formaInput) formaInput.focus();
+            executarAtalhoPagamento("forma");
         }
         if (event.key === "F4") {
             event.preventDefault();
-            if (formPagamento && btnFinalizar) formPagamento.requestSubmit(btnFinalizar);
+            executarAtalhoPagamento("concluir");
+        }
+        if (event.key === "F6") {
+            event.preventDefault();
+            executarAtalhoPagamento("misto");
+        }
+        if (event.key === "F7") {
+            event.preventDefault();
+            executarAtalhoPagamento("desconto");
+        }
+        if (event.key === "F8") {
+            event.preventDefault();
+            executarAtalhoPagamento("opcoes");
+        }
+        if (event.key === "Escape" && opcoesDrawer && opcoesDrawer.classList.contains("is-open")) {
+            event.preventDefault();
+            fecharMaisOpcoes();
         }
     });
 
+    if (opcoesDrawer && opcoesDrawer.querySelector("details[open]")) {
+        abrirMaisOpcoes(opcoesDrawer.querySelector("details[open]").id);
+    }
+
     if (formPagamento && btnFinalizar) {
         formPagamento.addEventListener("submit", function (event) {
+            atualizarTroco();
+            if ((formPagamento.dataset.taxaConfigurada || "1") !== "1") {
+                event.preventDefault();
+                if (taxaConfigStatus) {
+                    taxaConfigStatus.scrollIntoView({ behavior: "smooth", block: "center" });
+                    taxaConfigStatus.focus({ preventScroll: true });
+                }
+                return;
+            }
             const exigeAntifraudeDesconto = (formPagamento.dataset.antifraudeExigeDesconto || "0") === "1";
             const limiarAntifraude = parseMoney(formPagamento.dataset.antifraudeLimiar || "0");
             const minimoMotivo = parseInt(formPagamento.dataset.antifraudeMinimo || "12", 10);
@@ -1101,6 +2069,13 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
                     if (confirmarDescontoInput) confirmarDescontoInput.value = "1";
                     if (justificativaDescontoInput) justificativaDescontoInput.value = motivo;
+                }
+            }
+            if (formaInput && formaInput.value) {
+                try {
+                    window.localStorage.setItem(chaveUltimaForma, formaInput.value);
+                } catch (erro) {
+                    // O pagamento nao depende da memoria de preferencia do navegador.
                 }
             }
             btnFinalizar.disabled = true;

@@ -33,7 +33,7 @@ class ItemOrcamentoForm(forms.ModelForm):
         fields = [
             'ean', 'nome', 'descricao', 'valor_unitario', 'desconto_valor',
             'desconto_percentual', 'quantidade', 'tipo_item', 'origem',
-            'tecnico_responsavel', 'comissionavel', 'custo_estimado_unitario',
+            'responsavel_cobranca', 'tecnico_responsavel', 'comissionavel', 'custo_estimado_unitario',
             'fornecedor_estimado', 'referencia_cotacao', 'situacao_aquisicao',
         ]
         widgets = {
@@ -73,6 +73,7 @@ class ItemOrcamentoForm(forms.ModelForm):
                 'class': 'form-control'
             }),
             'tipo_item': forms.Select(attrs={'class': 'form-control'}),
+            'responsavel_cobranca': forms.Select(attrs={'class': 'form-control'}),
             'origem': forms.Select(attrs={'class': 'form-control'}),
             'tecnico_responsavel': forms.Select(attrs={'class': 'form-control'}),
             'comissionavel': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -94,6 +95,7 @@ class ItemOrcamentoForm(forms.ModelForm):
         self.fields["desconto_valor"].label = "Desconto (R$)"
         self.fields["desconto_percentual"].label = "Desconto (%)"
         self.fields["comissionavel"].label = "Serviço extra comissionável"
+        self.fields["responsavel_cobranca"].label = "Quem paga este item"
 
     def clean(self):
         """

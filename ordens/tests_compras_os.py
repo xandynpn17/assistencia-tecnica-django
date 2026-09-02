@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from caixa.models import ContaPagar
@@ -74,6 +75,61 @@ class RecebimentoPedidoCompraOSTests(TestCase):
         self.assertTrue(segundo.custo_os.estornado)
         self.assertEqual(self.pedido.status, "recepcionado_parcial")
         self.assertEqual(CustoOrdemServico.objects.filter(ordem=self.ordem, estornado_em__isnull=True).count(), 1)
+
+    def test_tela_recebe_item_avulso_com_campos_opcionais_vazios_sem_erro_500(self):
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            reverse("ordens:detalhes_ordem", args=[self.ordem.pk]),
+            {
+                "form_type": "pedido_compra_receber",
+                "pedido_id": str(self.pedido.pk),
+                "quantidade": "2.000",
+                "custo_unitario": "25.00",
+                "destino": "uso_os",
+                "data_competencia": timezone.localdate().isoformat(),
+                "documento_referencia": "NF TESTE",
+                "produto_estoque": "",
+                "conta_pagar": "",
+                "ponto_operacional": "",
+                "ubicacao": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.status, "recepcionado")
+        recebimento = self.pedido.recebimentos.get(estornado_em__isnull=True)
+        self.assertIsNone(recebimento.produto_estoque_id)
+        self.assertEqual(recebimento.custo_os.total, Decimal("50.00"))
+
+    def test_cancelamento_pedido_exige_motivo_e_preserva_historico(self):
+        self.client.force_login(self.usuario)
+        url = reverse("ordens:toggle_fechamento_pedido", args=[self.pedido.pk])
+
+        sem_motivo = self.client.post(url, {"acao": "cancelar", "retorno": "os"})
+        self.assertEqual(sem_motivo.status_code, 302)
+        self.pedido.refresh_from_db()
+        self.assertNotEqual(self.pedido.status, "cancelado")
+
+        response = self.client.post(
+            url,
+            {
+                "acao": "cancelar",
+                "retorno": "os",
+                "motivo": "OS concluída sem necessidade da compra",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.status, "cancelado")
+        self.assertTrue(
+            self.pedido.linhas.filter(
+                status="cancelado",
+                descricao__icontains="sem necessidade",
+            ).exists()
+        )
 
     def test_entrada_estoque_atualiza_saldo_e_exige_natureza_ativo(self):
         ponto = PontoOperacional.objects.create(empresa=self.empresa, codigo="LAB", nome="Laboratório")

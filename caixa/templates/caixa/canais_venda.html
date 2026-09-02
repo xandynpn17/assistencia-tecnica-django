@@ -67,7 +67,7 @@
     </div>
     <div class="col-lg-4 mb-3">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white"><strong>3. Taxa por modalidade</strong></div>
+        <div class="card-header bg-white"><strong>3. Taxa por modalidade, bandeira e parcelas</strong></div>
         <div class="card-body">
           <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="taxa">
             {% if taxa_edicao %}<input type="hidden" name="taxa_id" value="{{ taxa_edicao.id }}">{% endif %}
@@ -104,18 +104,18 @@
     <div class="card-header bg-white"><strong>Tabela vigente e histórica</strong></div>
     <div class="table-responsive">
       <table class="table table-sm table-hover mb-0">
-        <thead><tr><th>Adquirente</th><th>Maquininha</th><th>Modalidade</th><th>Parcelas</th><th>Taxa</th><th>Fixa</th><th>Prazo</th><th>Vigência</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Adquirente</th><th>Maquininha</th><th>Modalidade</th><th>Bandeira</th><th>Parcelas</th><th>Taxa</th><th>Fixa</th><th>Prazo</th><th>Vigência</th><th>Status</th><th></th></tr></thead>
         <tbody>
           {% for taxa in taxas %}
           <tr>
-            <td>{{ taxa.maquininha.adquirente.nome }}</td><td>{{ taxa.maquininha.nome }}</td><td>{{ taxa.get_modalidade_display }}</td>
+            <td>{{ taxa.maquininha.adquirente.nome }}</td><td>{{ taxa.maquininha.nome }}</td><td>{{ taxa.get_modalidade_display }}</td><td>{{ taxa.bandeira|default:'Todas' }}</td>
             <td>{% if taxa.parcelas_de == taxa.parcelas_ate %}{{ taxa.parcelas_de }}x{% else %}{{ taxa.parcelas_de }}–{{ taxa.parcelas_ate }}x{% endif %}</td>
             <td>{{ taxa.taxa_percentual|floatformat:3 }}%</td><td>R$ {{ taxa.taxa_fixa|floatformat:2 }}</td><td>D+{{ taxa.dias_recebimento }}</td>
             <td>{{ taxa.vigencia_inicio|date:'d/m/Y' }} – {{ taxa.vigencia_fim|date:'d/m/Y'|default:'aberta' }}</td>
             <td>{% if taxa.ativo %}<span class="badge badge-success">Ativa</span>{% else %}<span class="badge badge-secondary">Inativa</span>{% endif %}</td>
             <td><a class="btn btn-sm btn-outline-primary" href="?editar_taxa={{ taxa.id }}">Editar/encerrar</a></td>
           </tr>
-          {% empty %}<tr><td colspan="10" class="text-center text-muted py-4">Cadastre uma adquirente, uma maquininha e depois as taxas.</td></tr>{% endfor %}
+          {% empty %}<tr><td colspan="11" class="text-center text-muted py-4">Cadastre uma adquirente, uma maquininha e depois as taxas.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>

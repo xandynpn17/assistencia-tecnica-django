@@ -253,7 +253,7 @@ def dashboard_pedidos_compra(request):
     if quick_filter == "sem_tecnico":
         pedidos_base = pedidos_base.filter(sem_tecnico_q)
     elif quick_filter == "atrasados":
-        pedidos_base = pedidos_base.exclude(status="fechado").filter(
+        pedidos_base = pedidos_base.exclude(status__in=PedidoCompra.STATUS_TERMINAIS).filter(
             criado_em__lt=timezone.now() - timedelta(days=7)
         )
     elif quick_filter == "os_prontas":
@@ -263,13 +263,16 @@ def dashboard_pedidos_compra(request):
     if status_filtro:
         pedidos = pedidos.filter(status=status_filtro)
     else:
-        pedidos = pedidos.exclude(status="fechado")
+        pedidos = pedidos.exclude(status__in=PedidoCompra.STATUS_TERMINAIS)
 
     base_counts = dict(
         pedidos_base.values("status").annotate(total=Count("id")).values_list("status", "total")
     )
     status_cards = []
-    total_abertos = sum(total for status, total in base_counts.items() if status != "fechado")
+    total_abertos = sum(
+        total for status, total in base_counts.items()
+        if status not in PedidoCompra.STATUS_TERMINAIS
+    )
     status_cards.append(
         {
             "codigo": "",
@@ -298,7 +301,7 @@ def dashboard_pedidos_compra(request):
         {
             "codigo": "atrasados",
             "rotulo": "Atrasados +7 dias",
-            "total": pedidos_scope.exclude(status="fechado").filter(
+            "total": pedidos_scope.exclude(status__in=PedidoCompra.STATUS_TERMINAIS).filter(
                 criado_em__lt=timezone.now() - timedelta(days=7)
             ).count(),
             "ativo": quick_filter == "atrasados",
@@ -330,7 +333,7 @@ def dashboard_pedidos_compra(request):
             else ""
         ),
         "pedidos_sem_tecnico_total": pedidos_base.filter(sem_tecnico_q).count(),
-        "pedidos_atrasados_total": pedidos_base.exclude(status="fechado").filter(
+        "pedidos_atrasados_total": pedidos_base.exclude(status__in=PedidoCompra.STATUS_TERMINAIS).filter(
             criado_em__lt=timezone.now() - timedelta(days=7)
         ).count(),
         "pedidos_prontos_total": pedidos_base.filter(ordem__status="pronto_contactado").count(),
@@ -342,12 +345,31 @@ def dashboard_pedidos_compra(request):
 
 @role_required(ORDER_ROLES)
 def toggle_fechamento_pedido_compra(request, pedido_id):
-    pedido = get_object_or_404(PedidoCompra.objects.select_related("ordem"), id=pedido_id)
+    empresa = obter_empresa_ativa(request, strict=False)
+    pedido = get_object_or_404(
+        filtrar_queryset_empresa(
+            PedidoCompra.objects.select_related("ordem"), empresa, campo="ordem__empresa"
+        ),
+        id=pedido_id,
+    )
     ordem = pedido.ordem
     if request.method != "POST":
         return redirect("ordens:dashboard_pedidos")
 
-    if pedido.status == "fechado":
+    acao = (request.POST.get("acao") or "").strip().lower()
+    motivo = (request.POST.get("motivo") or "").strip()
+    if not acao:
+        acao = "reabrir" if pedido.status in PedidoCompra.STATUS_TERMINAIS else "fechar"
+    retorno_os = request.POST.get("retorno") == "os"
+    destino = (
+        f"{ordem.get_absolute_url()}?tab=pedidos"
+        if retorno_os else reverse("ordens:dashboard_pedidos")
+    )
+
+    if acao == "reabrir":
+        if pedido.status not in PedidoCompra.STATUS_TERMINAIS:
+            messages.info(request, "O pedido já está aberto.")
+            return redirect(destino)
         pedido.status = "contactar"
         pedido.save(update_fields=["status"])
         PedidoCompraLinha.objects.create(
@@ -371,30 +393,53 @@ def toggle_fechamento_pedido_compra(request, pedido_id):
             usuario=request.user,
             dados_extras={"pedido_id": pedido.id, "status": pedido.status},
         )
-    else:
-        pedido.status = "fechado"
+    elif acao in {"fechar", "cancelar"}:
+        if pedido.status in PedidoCompra.STATUS_TERMINAIS:
+            messages.info(request, "O pedido já está encerrado.")
+            return redirect(destino)
+        if acao == "cancelar" and pedido.recebimentos.filter(estornado_em__isnull=True).exists():
+            messages.error(
+                request,
+                "Este pedido possui recebimento ativo. Estorne o recebimento antes de cancelar.",
+            )
+            return redirect(destino)
+        if (acao == "cancelar" or pedido.quantidade_pendente > 0) and not motivo:
+            messages.error(
+                request,
+                "Informe a justificativa para cancelar ou encerrar um pedido ainda pendente.",
+            )
+            return redirect(destino)
+
+        pedido.status = "cancelado" if acao == "cancelar" else "fechado"
         pedido.save(update_fields=["status"])
+        rotulo = "cancelado" if acao == "cancelar" else "fechado"
+        descricao = f"Pedido {rotulo}."
+        if motivo:
+            descricao = f"{descricao} Justificativa: {motivo}"
         PedidoCompraLinha.objects.create(
             pedido=pedido,
-            status="fechado",
-            descricao="Pedido fechado.",
+            status=pedido.status,
+            descricao=descricao,
             usuario=request.user,
         )
         LinhaTrabalho.objects.create(
             ordem=ordem,
             status=ordem.status,
-            descricao=f"Pedido {pedido.numero_oc or pedido.id} fechado.",
+            descricao=f"Pedido {pedido.numero_oc or pedido.id} {rotulo}. {motivo}".strip(),
             usuario=request.user,
             tipo_evento="manual",
         )
-        messages.success(request, "Pedido fechado.")
+        messages.success(request, f"Pedido {rotulo} com histórico preservado.")
         _log_os(
             ordem,
             "cancelamento",
-            f"Pedido {pedido.numero_oc or pedido.id} fechado.",
+            f"Pedido {pedido.numero_oc or pedido.id} {rotulo}. {motivo}".strip(),
             usuario=request.user,
-            dados_extras={"pedido_id": pedido.id, "status": pedido.status},
+            dados_extras={"pedido_id": pedido.id, "status": pedido.status, "motivo": motivo},
         )
+    else:
+        messages.error(request, "Ação de pedido inválida.")
+        return redirect(destino)
 
     registrar_auditoria(
         logger,
@@ -403,7 +448,7 @@ def toggle_fechamento_pedido_compra(request, pedido_id):
         ordem=ordem,
         extra={"pedido_id": pedido.id, "status": pedido.status},
     )
-    return redirect("ordens:dashboard_pedidos")
+    return redirect(destino)
 
 
 # ===========================
@@ -464,6 +509,17 @@ def toggle_fechamento_os(request, pk):
                     ordem=ordem,
                     mensagem=mensagem_alerta,
                     criado_por=request.user,
+                )
+
+        if ordem.fechada:
+            pedidos_abertos = ordem.pedidos_compra.exclude(
+                status__in=PedidoCompra.STATUS_TERMINAIS
+            ).count()
+            if pedidos_abertos:
+                messages.warning(
+                    request,
+                    f"A OS foi concluída, mas possui {pedidos_abertos} pedido(s) de compra aberto(s). "
+                    "Receba, feche ou cancele cada pedido na aba Pedidos.",
                 )
 
         if (

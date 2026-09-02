@@ -244,6 +244,16 @@ def aplicar_custos_base_produto(produto):
         + (produto.custo_cac or 0)
         + (produto.custo_rateio_fixo or 0)
     )
+    if (
+        not produto.pk
+        and custo_operacional_detalhado == 0
+        and (produto.custo_operacional or 0) > 0
+    ):
+        # Compatibilidade com integrações e rotinas antigas que ainda enviam
+        # o custo operacional consolidado ao criar o produto. Na interface
+        # atual esse valor é calculado e o complemento fica no campo manual.
+        produto.custo_adicional_manual = produto.custo_operacional
+        custo_operacional_detalhado = produto.custo_operacional
     produto.custo_operacional = custo_operacional_detalhado
 
     if (produto.custo_medio or 0) <= 0 and (produto.custo_unitario or 0) > 0:

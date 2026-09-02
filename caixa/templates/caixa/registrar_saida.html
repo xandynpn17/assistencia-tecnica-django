@@ -1,6 +1,59 @@
 {% extends 'core/base.html' %}
 {% load widget_tweaks %}
 
+{% block extra_css %}
+<style>
+    .saida-flow-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    .saida-flow-step {
+        border: 1px solid #e3e9ef;
+        border-radius: 12px;
+        background: #f8fbff;
+        padding: 10px 12px;
+    }
+    .saida-flow-step strong {
+        display: block;
+        color: #243746;
+        font-size: .88rem;
+    }
+    .saida-flow-step small {
+        color: #647382;
+    }
+    .saida-origem-resumo {
+        border: 1px solid #d8e5f1;
+        border-radius: 10px;
+        background: #f5f9ff;
+        padding: 10px 12px;
+        color: #29445c;
+        font-size: .86rem;
+    }
+    .saida-avancado {
+        border: 1px solid #e4e8ee;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-top: 14px;
+    }
+    .saida-avancado summary {
+        cursor: pointer;
+        background: #f8fafc;
+        padding: 11px 13px;
+        color: #314150;
+        font-weight: 700;
+    }
+    .saida-avancado-body {
+        padding: 13px;
+        border-top: 1px solid #e9edf2;
+    }
+    @media (max-width: 767.98px) {
+        .saida-flow-strip { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-3">
     {% include 'caixa/_subnav_caixa.html' %}
@@ -56,6 +109,12 @@
                     <div class="card-body">
                         {{ form.non_field_errors }}
 
+                        <div class="saida-flow-strip">
+                            <div class="saida-flow-step"><strong>1. Identifique</strong><small>Descrição, categoria e centro.</small></div>
+                            <div class="saida-flow-step"><strong>2. Informe o valor</strong><small>Valor e meio efetivamente usado.</small></div>
+                            <div class="saida-flow-step"><strong>3. Confirme a origem</strong><small>Caixa físico ou conta bancária.</small></div>
+                        </div>
+
                         <div class="form-group">
                             <label for="{{ form.descricao.id_for_label }}"><strong>Descrição</strong></label>
                             {{ form.descricao|add_class:"form-control form-control-lg"|attr:"placeholder:Ex: compra de materiais, combustível, frete" }}
@@ -72,7 +131,7 @@
                             <label for="{{ form.centro_custo.id_for_label }}"><strong>Centro de custo</strong></label>
                             {{ form.centro_custo|add_class:"form-control form-control-lg"|attr:"id:id_centro_saida" }}
                             {% if form.centro_custo.errors %}<small class="text-danger">{{ form.centro_custo.errors|striptags }}</small>{% endif %}
-                            <small class="text-muted">Centros padrão sóo criados automaticamente. Ajuste em "Centros de custo" se necessório.</small>
+                            <small class="text-muted">Centros padrão são criados automaticamente. Ajuste em "Centros de custo" se necessário.</small>
                         </div>
 
                         <div class="form-group mb-3">
@@ -101,22 +160,8 @@
                             </div>
                         </div>
 
-                        <div class="form-row">
-                            <div class="form-group col-md-6">
-                                <label for="{{ form.data_competencia.id_for_label }}"><strong>Competência</strong></label>
-                                {{ form.data_competencia|add_class:"form-control" }}
-                                {% if form.data_competencia.errors %}<small class="text-danger">{{ form.data_competencia.errors|striptags }}</small>{% endif %}
-                                <small class="text-muted">Mês/período ao qual a despesa pertence.</small>
-                            </div>
-                            <div class="form-group col-md-6">
-                                <label for="{{ form.data_movimento.id_for_label }}"><strong>Movimentação</strong></label>
-                                {{ form.data_movimento|add_class:"form-control" }}
-                                {% if form.data_movimento.errors %}<small class="text-danger">{{ form.data_movimento.errors|striptags }}</small>{% endif %}
-                                <small class="text-muted">Dia em que ocorreu a saída financeira.</small>
-                            </div>
-                        </div>
-                        <div class="alert alert-light border py-2 small">
-                            Lançamentos retroativos exigem permissão específica; a data e hora reais do registro permanecem na auditoria.
+                        <div id="saida-origem-resumo" class="saida-origem-resumo mb-2" aria-live="polite">
+                            Selecione o meio de pagamento para definir de onde o valor sairá.
                         </div>
 
                         <div class="mb-2">
@@ -130,6 +175,29 @@
                                 <button type="button" class="btn btn-outline-secondary js-valor-rapido" data-value="300.00">300,00</button>
                             </div>
                         </div>
+
+                        <details class="saida-avancado" {% if form.data_competencia.errors or form.data_movimento.errors %}open{% endif %}>
+                            <summary>Datas contábeis e lançamento retroativo</summary>
+                            <div class="saida-avancado-body">
+                                <div class="form-row">
+                                    <div class="form-group col-md-6">
+                                        <label for="{{ form.data_competencia.id_for_label }}"><strong>Competência</strong></label>
+                                        {{ form.data_competencia|add_class:"form-control" }}
+                                        {% if form.data_competencia.errors %}<small class="text-danger">{{ form.data_competencia.errors|striptags }}</small>{% endif %}
+                                        <small class="text-muted">Período econômico ao qual a despesa pertence.</small>
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label for="{{ form.data_movimento.id_for_label }}"><strong>Movimentação</strong></label>
+                                        {{ form.data_movimento|add_class:"form-control" }}
+                                        {% if form.data_movimento.errors %}<small class="text-danger">{{ form.data_movimento.errors|striptags }}</small>{% endif %}
+                                        <small class="text-muted">Dia em que o dinheiro efetivamente saiu.</small>
+                                    </div>
+                                </div>
+                                <div class="alert alert-light border py-2 small mb-0">
+                                    Lançamentos retroativos exigem permissão específica; a data e hora reais do registro permanecem na auditoria.
+                                </div>
+                            </div>
+                        </details>
                     </div>
                     <div class="card-footer d-flex justify-content-between">
                         <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-outline-secondary">Cancelar</a>
@@ -190,8 +258,20 @@ document.addEventListener("DOMContentLoaded", function () {
     const formaInput = document.getElementById("id_forma_saida");
     const caixaInput = document.getElementById("id_caixa_saida");
     const contaInput = document.getElementById("id_conta_saida");
+    const origemResumo = document.getElementById("saida-origem-resumo");
     const formSaida = document.getElementById("form-saida");
     const btnSalvar = document.getElementById("btn-salvar-saida");
+
+    function selecionarUnicaOpcao(input) {
+        if (!input || input.value) return;
+        const opcoes = Array.from(input.options || []).filter(function (opcao) { return Boolean(opcao.value); });
+        if (opcoes.length === 1) input.value = opcoes[0].value;
+    }
+
+    function textoOpcaoSelecionada(input) {
+        if (!input || !input.value || !input.options[input.selectedIndex]) return "";
+        return input.options[input.selectedIndex].text.trim();
+    }
 
     function ajustarOrigemFinanceira() {
         if (!formaInput) return;
@@ -202,13 +282,28 @@ document.addEventListener("DOMContentLoaded", function () {
         if (caixaInput) {
             caixaInput.disabled = !dinheiro;
             if (!dinheiro) caixaInput.value = "";
+            if (dinheiro) selecionarUnicaOpcao(caixaInput);
         }
         if (contaInput) {
             contaInput.disabled = dinheiro;
             if (dinheiro) contaInput.value = "";
+            if (!dinheiro) selecionarUnicaOpcao(contaInput);
+        }
+        if (origemResumo) {
+            if (!formaInput.value) {
+                origemResumo.textContent = "Selecione o meio de pagamento para definir de onde o valor sairá.";
+            } else if (dinheiro) {
+                const caixaNome = textoOpcaoSelecionada(caixaInput);
+                origemResumo.innerHTML = `<strong>Origem:</strong> ${caixaNome || "selecione o caixa físico"}. Esta saída reduzirá somente o numerário do caixa indicado.`;
+            } else {
+                const contaNome = textoOpcaoSelecionada(contaInput);
+                origemResumo.innerHTML = `<strong>Origem:</strong> ${contaNome || "selecione a conta bancária"}. Esta saída não altera o caixa físico atual.`;
+            }
         }
     }
     if (formaInput) formaInput.addEventListener("change", ajustarOrigemFinanceira);
+    if (caixaInput) caixaInput.addEventListener("change", ajustarOrigemFinanceira);
+    if (contaInput) contaInput.addEventListener("change", ajustarOrigemFinanceira);
     ajustarOrigemFinanceira();
 
     document.querySelectorAll(".js-valor-rapido").forEach(function (botao) {

@@ -2329,6 +2329,21 @@ def devolver_itens_estoque_ordem(ordem, usuario=None):
         )
         movimento_original = custo_ativo.movimentacao_estoque if custo_ativo else None
         if not movimento_original:
+            # Backups e OS legadas podem ter a baixa física sem o registro de
+            # custo interno correspondente (por exemplo, antes da empresa ser
+            # associada à OS). A movimentação continua sendo a fonte segura
+            # para devolver exatamente o consumo deste item.
+            movimento_original = (
+                MovimentacaoEstoque.objects.filter(
+                    produto=produto,
+                    tipo="consumo_os",
+                    chave_idempotencia__startswith=f"os-item:{item.pk}:consumo:",
+                    movimentos_de_estorno__isnull=True,
+                )
+                .order_by("-id")
+                .first()
+            )
+        if not movimento_original:
             item.estoque_consumido_em = None
             item.save(update_fields=["estoque_consumido_em"])
             continue

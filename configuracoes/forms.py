@@ -1,5 +1,6 @@
 ﻿from io import BytesIO
 import re
+from decimal import Decimal
 
 from django import forms
 from django.contrib.auth.password_validation import validate_password
@@ -1222,11 +1223,16 @@ class MarcaGarantiaForm(forms.ModelForm):
 
     class Meta:
         model = MarcaGarantia
-        fields = ["nome", "fornecedor", "parceira_garantia", "procedimentos", "ativo"]
+        fields = [
+            "nome", "fornecedor", "parceira_garantia", "valor_mao_obra_garantia",
+            "valor_mao_obra_tecnico_garantia", "procedimentos", "ativo",
+        ]
         widgets = {
             "nome": forms.TextInput(attrs={"class": "form-control"}),
             "fornecedor": forms.Select(attrs={"class": "form-control"}),
             "procedimentos": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "valor_mao_obra_garantia": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": 0}),
+            "valor_mao_obra_tecnico_garantia": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": 0}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -1250,12 +1256,19 @@ class MarcaGarantiaForm(forms.ModelForm):
             "Marque somente quando existir fluxo de garantia ativo com esta marca."
         )
         self.fields["procedimentos"].label = "Procedimento operacional da marca"
+        self.fields["valor_mao_obra_garantia"].label = "Valor padrão pago pela marca"
+        self.fields["valor_mao_obra_garantia"].help_text = "Fallback quando o valor é fixo para toda a marca. A regra por equipamento tem prioridade."
+        self.fields["valor_mao_obra_tecnico_garantia"].required = False
+        self.fields["valor_mao_obra_tecnico_garantia"].help_text = "Repasse padrão ao técnico; pode ser menor que o valor recebido da marca."
         self.fields["procedimentos"].widget.attrs["placeholder"] = (
             "Ex.: abrir chamado no portal, anexar NF, aguardar aprovacao, faturar mao de obra em 30 dias."
         )
         self.fields["procedimentos"].help_text = (
             "Descreva como abrir garantia, aprovar servico, enviar comprovantes, faturar mao de obra e tratar excecoes."
         )
+
+    def clean_valor_mao_obra_tecnico_garantia(self):
+        return self.cleaned_data.get("valor_mao_obra_tecnico_garantia") or Decimal("0.00")
 
     def save(self, commit=True):
         instance = super().save(commit=False)

@@ -818,6 +818,7 @@ def resolver_itens_xml_em_massa(
     # O rateio considera a nota inteira, ainda que apenas uma parte seja confirmada agora.
     rateios = rateios_despesas_xml(entrada, todos_itens)
     resultado = {"confirmados": 0, "criados": 0, "atualizados": 0, "produtos": []}
+    ultimo_produto_criado = None
     for item in itens:
         if item.resolvido:
             continue
@@ -845,7 +846,7 @@ def resolver_itens_xml_em_massa(
             gtin = _gtin_para_produto(item.gtin)
             preco_final = Decimal(str(ajuste.get("preco_final") or item.preco_final_proposto or 0))
             custo_projetado = _custo_unitario_projetado_xml(item, rateios[item.pk])
-            produto = Produto.objects.create(
+            produto = Produto(
                 empresa=entrada.empresa,
                 nome=nome,
                 ean=gtin,
@@ -867,6 +868,12 @@ def resolver_itens_xml_em_massa(
                 ponto_operacional=entrada.ponto_operacional,
                 ubicacao_padrao=entrada.ubicacao,
             )
+            # Durante um lote, recalcular o rateio de todo o catálogo a cada
+            # novo item transforma a importação em um processo quadrático.
+            # O próprio produto continua sendo precificado normalmente; a
+            # atualização dos relacionados é feita uma única vez ao final.
+            produto.save(_skip_rateio_refresh=True)
+            ultimo_produto_criado = produto
             ProdutoHistorico.objects.create(
                 produto=produto,
                 acao="IMPORTACAO",
@@ -941,6 +948,10 @@ def resolver_itens_xml_em_massa(
         ])
         resultado["confirmados"] += 1
         resultado["produtos"].append(produto.pk)
+    if ultimo_produto_criado:
+        from estoque.services_produto import atualizar_produtos_relacionados_rateio
+
+        atualizar_produtos_relacionados_rateio(ultimo_produto_criado)
     return resultado
 
 

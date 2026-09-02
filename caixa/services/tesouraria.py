@@ -109,14 +109,33 @@ def registrar_pagamento_bancario(pagamento):
     movimentos = []
     for indice, item in enumerate(composicao):
         forma_id = (item or {}).get("forma_id")
-        forma = FormaPagamento.objects.select_related("conta_bancaria_liquidacao").filter(pk=forma_id).first()
-        conta = getattr(forma, "conta_bancaria_liquidacao", None)
+        forma = FormaPagamento.objects.select_related(
+            "conta_bancaria_liquidacao", "maquininha__conta_bancaria_liquidacao"
+        ).filter(pk=forma_id).first()
+        conta = getattr(forma, "conta_bancaria_liquidacao", None) or getattr(
+            getattr(forma, "maquininha", None), "conta_bancaria_liquidacao", None
+        )
         if not conta or conta.empresa_id != pagamento.empresa_id:
             continue
         valor_bruto = Decimal(str((item or {}).get("valor") or 0))
-        taxa = (valor_bruto * Decimal(forma.taxa_percentual or 0) / Decimal("100")).quantize(Decimal("0.01"))
+        detalhes_taxa = (pagamento.encargos_gerenciais_snapshot or {}).get("taxas_detalhe") or []
+        detalhe = detalhes_taxa[indice] if indice < len(detalhes_taxa) else None
+        if detalhe and int(detalhe.get("forma_id") or 0) == int(forma_id or 0):
+            taxa = Decimal(str(detalhe.get("taxa_valor") or 0)).quantize(Decimal("0.01"))
+            dias_recebimento = int(detalhe.get("dias_recebimento") or 0)
+        else:
+            condicao = forma.obter_condicao_vigente(
+                data_referencia=pagamento.data_movimento,
+                parcelas=(item or {}).get("parcelas") or 1,
+                bandeira=(item or {}).get("bandeira") or "",
+            )
+            taxa = (
+                valor_bruto * Decimal(condicao.get("taxa_percentual") or 0) / Decimal("100")
+                + Decimal(condicao.get("taxa_fixa") or 0)
+            ).quantize(Decimal("0.01"))
+            dias_recebimento = int(condicao.get("dias_recebimento") or 0)
         valor_liquido = valor_bruto - taxa
-        data_liquidacao = pagamento.data_movimento + timedelta(days=int(forma.dias_recebimento or 0))
+        data_liquidacao = pagamento.data_movimento + timedelta(days=dias_recebimento)
         if valor_liquido <= 0:
             continue
         movimentos.append(
@@ -129,7 +148,14 @@ def registrar_pagamento_bancario(pagamento):
                 valor=valor_liquido,
                 data_movimento=data_liquidacao,
                 chave=f"pagamento:{pagamento.pk}:forma:{forma.pk}:parcela:{indice}",
-                metadados={"referencia": (item or {}).get("referencia") or "", "valor_bruto": str(valor_bruto), "taxa": str(taxa), "dias_liquidacao": int(forma.dias_recebimento or 0)},
+                metadados={
+                    "referencia": (item or {}).get("referencia") or "",
+                    "valor_bruto": str(valor_bruto),
+                    "taxa": str(taxa),
+                    "dias_liquidacao": dias_recebimento,
+                    "parcelas": int((item or {}).get("parcelas") or 1),
+                    "bandeira": (item or {}).get("bandeira") or "",
+                },
             )
         )
     return movimentos

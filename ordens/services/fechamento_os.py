@@ -23,7 +23,7 @@ VALOR_MONETARIO = models.DecimalField(max_digits=14, decimal_places=2)
 
 
 def _total_servicos_pecas(ordem):
-    return ordem.servicos_pecas.aggregate(
+    return ordem.servicos_pecas.exclude(responsavel_cobranca="sem_cobranca").aggregate(
         total=Coalesce(
             Sum(F("quantidade") * F("valor_unitario"), output_field=VALOR_MONETARIO),
             Decimal("0.00"),
@@ -33,7 +33,9 @@ def _total_servicos_pecas(ordem):
 
 
 def _total_pagamentos_liquidados(ordem, ignorar_pagamento_id=None):
-    pagamentos = Pagamento.objects.filter(ordem_servico=ordem)
+    pagamentos = Pagamento.objects.filter(ordem_servico=ordem).exclude(
+        models.Q(forma_pagamento__codigo="garantia_fabricante") | models.Q(metodo="garantia_fabricante")
+    )
     if ignorar_pagamento_id:
         pagamentos = pagamentos.exclude(id=ignorar_pagamento_id)
     return pagamentos.aggregate(
@@ -46,7 +48,13 @@ def _total_pagamentos_liquidados(ordem, ignorar_pagamento_id=None):
 
 
 def garantir_conta_receber_os(ordem, ignorar_pagamento_id=None):
-    total_os = _total_servicos_pecas(ordem)
+    total_os = ordem.servicos_pecas.filter(responsavel_cobranca="cliente").aggregate(
+        total=Coalesce(
+            Sum(F("quantidade") * F("valor_unitario"), output_field=VALOR_MONETARIO),
+            Decimal("0.00"),
+            output_field=VALOR_MONETARIO,
+        )
+    )["total"]
     total_pago = _total_pagamentos_liquidados(ordem, ignorar_pagamento_id=ignorar_pagamento_id)
     valor_aberto = max(Decimal("0.00"), total_os - total_pago)
     conta = (
@@ -55,7 +63,7 @@ def garantir_conta_receber_os(ordem, ignorar_pagamento_id=None):
         .first()
     )
 
-    nao_cobravel = ordem.resultado_financeiro != "cobravel" or ordem.eh_garantia_fabricante
+    nao_cobravel = ordem.resultado_financeiro != "cobravel"
     if total_os <= Decimal("0.00") or nao_cobravel:
         if conta:
             conta.empresa = ordem.empresa

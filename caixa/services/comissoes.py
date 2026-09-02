@@ -316,6 +316,7 @@ def _fontes_comissionaveis(ordem):
                 "base_bruta": base_bruta,
                 "tecnico": linha.tecnico_responsavel,
                 "item_orcamento": item_orc,
+                "servico_peca": linha,
                 "produto": _produto_por_ean_ou_nome(ean=ean_ref, nome=linha.nome),
                 "comissionavel": getattr(linha, "comissionavel", True),
             }
@@ -339,6 +340,7 @@ def _fontes_comissionaveis(ordem):
                 "base_bruta": Decimal(item.subtotal() or 0),
                 "tecnico": item.tecnico_responsavel,
                 "item_orcamento": item,
+                "servico_peca": None,
                 "produto": _produto_do_item(item) if tipo_item == "peca" else None,
                 "comissionavel": getattr(item, "comissionavel", True),
             }
@@ -370,17 +372,47 @@ def _regra_garantia_vigente(ordem):
 
 def _mapa_comissao_fixa_garantia(ordem, fontes):
     regra_garantia = _regra_garantia_vigente(ordem)
-    if not regra_garantia:
-        return {}
-    total_tecnico = Decimal(str(getattr(regra_garantia, "valor_mao_obra_tecnico", 0) or 0))
+    marca = getattr(regra_garantia, "marca", None) or getattr(ordem, "marca_garantia", None)
+    total_tecnico = Decimal(str(
+        getattr(regra_garantia, "valor_mao_obra_tecnico", 0)
+        or getattr(marca, "valor_mao_obra_tecnico_garantia", 0)
+        or 0
+    ))
     if total_tecnico <= 0:
         return {}
 
+    fontes_servico = [
+        fonte for fonte in fontes
+        if (fonte.get("tipo_item") or "").strip().lower() == "servico"
+    ]
+    possui_fabricante_explicito = any(
+        (
+            getattr(fonte.get("item_orcamento"), "responsavel_cobranca", None)
+            or getattr(fonte.get("servico_peca"), "responsavel_cobranca", None)
+        ) == "fabricante"
+        for fonte in fontes_servico
+    )
+    valor_mao_obra_fabricante = Decimal(str(
+        getattr(regra_garantia, "valor_mao_obra", 0)
+        or getattr(marca, "valor_mao_obra_garantia", 0)
+        or 0
+    ))
+
     elegiveis = []
     base_total = Decimal("0.00")
-    for fonte in fontes:
-        if (fonte.get("tipo_item") or "").strip().lower() != "servico":
-            continue
+    for fonte in fontes_servico:
+        item_orcamento = fonte.get("item_orcamento")
+        servico_peca = fonte.get("servico_peca")
+        responsavel = getattr(item_orcamento, "responsavel_cobranca", None) or getattr(
+            servico_peca, "responsavel_cobranca", None
+        )
+        if responsavel and responsavel != "fabricante":
+            # Compatibilidade: itens de garantia criados antes da separacao de pagadores
+            # ficaram com o padrao "cliente". Quando nao existe outra linha explicitamente
+            # do fabricante, o valor exato da regra identifica essa mao de obra legada.
+            base_legada = _base_comissao_fonte(fonte)
+            if possui_fabricante_explicito or valor_mao_obra_fabricante <= 0 or base_legada != valor_mao_obra_fabricante:
+                continue
         tecnico = fonte.get("tecnico")
         if not tecnico:
             continue

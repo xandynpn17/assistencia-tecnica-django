@@ -101,6 +101,7 @@ def calcular_snapshot_encargos_pagamento(pagamento):
             condicao = forma.obter_condicao_vigente(
                 data_referencia=data_referencia,
                 parcelas=item.get("parcelas") or 1,
+                bandeira=item.get("bandeira") or "",
             ) if forma else {"taxa_percentual": 0, "taxa_fixa": 0, "fonte": "sem_forma", "condicao_id": None}
             taxa_percentual = Decimal(str(condicao["taxa_percentual"] or 0))
             taxa_fixa = Decimal(str(condicao["taxa_fixa"] or 0))
@@ -118,6 +119,9 @@ def calcular_snapshot_encargos_pagamento(pagamento):
                     "taxa_valor": str(taxa_valor),
                     "taxa_fonte": condicao["fonte"],
                     "condicao_id": condicao["condicao_id"],
+                    "parcelas": int(item.get("parcelas") or 1),
+                    "bandeira": condicao.get("bandeira") or item.get("bandeira") or "",
+                    "dias_recebimento": int(condicao.get("dias_recebimento") or 0),
                 }
             )
     else:
@@ -139,6 +143,9 @@ def calcular_snapshot_encargos_pagamento(pagamento):
                 "taxa_valor": str(taxas),
                 "taxa_fonte": condicao["fonte"],
                 "condicao_id": condicao["condicao_id"],
+                "parcelas": int(getattr(forma, "parcelas_padrao", 1) or 1),
+                "bandeira": condicao.get("bandeira") or "",
+                "dias_recebimento": int(condicao.get("dias_recebimento") or 0),
             }
         )
     return {
@@ -321,9 +328,13 @@ def montar_composicao_pagamento(
     forma_principal,
     referencia_principal,
     valor_total_liquido,
+    parcelas_principal=1,
+    bandeira_principal="",
     forma_secundaria=None,
     valor_secundario=None,
     referencia_secundaria="",
+    parcelas_secundaria=1,
+    bandeira_secundaria="",
 ):
     valor_total_liquido = Decimal(valor_total_liquido or Decimal("0.00")).quantize(Decimal("0.01"))
     valor_secundario = Decimal(valor_secundario or Decimal("0.00")).quantize(Decimal("0.01"))
@@ -347,6 +358,8 @@ def montar_composicao_pagamento(
                 "forma_nome": forma_principal.nome,
                 "valor": f"{valor_principal:.2f}",
                 "referencia": (referencia_principal or "").strip(),
+                "parcelas": max(1, int(parcelas_principal or 1)),
+                "bandeira": " ".join(str(bandeira_principal or "").strip().split()),
             }
         )
         composicao.append(
@@ -356,6 +369,8 @@ def montar_composicao_pagamento(
                 "forma_nome": forma_secundaria.nome,
                 "valor": f"{valor_secundario:.2f}",
                 "referencia": (referencia_secundaria or "").strip(),
+                "parcelas": max(1, int(parcelas_secundaria or 1)),
+                "bandeira": " ".join(str(bandeira_secundaria or "").strip().split()),
             }
         )
         return composicao
@@ -367,6 +382,8 @@ def montar_composicao_pagamento(
             "forma_nome": getattr(forma_principal, "nome", "") or "-",
             "valor": f"{valor_total_liquido:.2f}",
             "referencia": (referencia_principal or "").strip(),
+            "parcelas": max(1, int(parcelas_principal or 1)),
+            "bandeira": " ".join(str(bandeira_principal or "").strip().split()),
         }
     )
     return composicao
@@ -384,6 +401,7 @@ def processar_pagamento_pos_transacional(
     desconto_aplicado,
     desconto_percentual,
     composicao_pagamento,
+    valor_recebido_dinheiro,
     chave_idempotencia,
     usuario,
     vincular_talao_cb,
@@ -416,6 +434,19 @@ def processar_pagamento_pos_transacional(
         pagamento.desconto_percentual = desconto_percentual if desconto_aplicado > Decimal("0.00") else Decimal("0.00")
         pagamento.valor = Decimal(pagamento.valor or Decimal("0.00")) - desconto_aplicado
         pagamento.formas_pagamento_compostas = composicao_pagamento or []
+        valor_dinheiro = sum(
+            (
+                Decimal(str(item_comp.get("valor") or 0))
+                for item_comp in pagamento.formas_pagamento_compostas
+                if item_comp.get("forma_codigo") == "dinheiro"
+            ),
+            Decimal("0.00"),
+        )
+        if valor_dinheiro > Decimal("0.00") and valor_recebido_dinheiro is not None:
+            pagamento.valor_recebido_dinheiro = Decimal(valor_recebido_dinheiro)
+            pagamento.troco_entregue = max(
+                Decimal("0.00"), pagamento.valor_recebido_dinheiro - valor_dinheiro
+            )
         pagamento.chave_idempotencia = chave_idempotencia or None
         pagamento.save()
         vincular_talao_cb(pagamento.ordem_servico, pagamento.numero_talao, pagamento=pagamento)

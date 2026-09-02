@@ -124,6 +124,7 @@
                             <th>Total</th>
                             <th>Status</th>
                             <th>Tipo</th>
+                            <th>Quem paga</th>
                             <th>Origem</th>
                             {% if pode_ver_custos_os %}
                             <th class="table-info">Custo estimado</th>
@@ -156,6 +157,11 @@
                                 {% endif %}
                             </td>
                             <td>{{ item.get_tipo_item_display|default:"Serviço" }}</td>
+                            <td>
+                                {% if item.responsavel_cobranca == 'fabricante' %}<span class="badge badge-primary">Fabricante</span>
+                                {% elif item.responsavel_cobranca == 'sem_cobranca' %}<span class="badge badge-secondary">Sem cobrança</span>
+                                {% else %}<span class="badge badge-success">Cliente</span>{% endif %}
+                            </td>
                             <td>{{ item.origem }}</td>
                             {% if pode_ver_custos_os %}
                             <td class="table-info">{% if item.custo_estimado_unitario is not None %}R$ {{ item.custo_estimado_total|floatformat:2 }}{% else %}<span class="text-danger">Não informado</span>{% endif %}</td>
@@ -187,7 +193,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="{% if pode_ver_custos_os %}17{% else %}14{% endif %}" class="text-center text-muted">Nenhum item adicionado</td>
+                            <td colspan="{% if pode_ver_custos_os %}18{% else %}15{% endif %}" class="text-center text-muted">Nenhum item adicionado</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -330,7 +336,7 @@ document.querySelectorAll('input[name="itens_selecionados"]').forEach(cb => {
                     </div>
 
                     <div class="row">
-                        <div class="col-md-4 mb-2">
+                        <div class="col-md-3 mb-2">
                             <label for="id_tipo_item2">Tipo do Item</label>
                             <select name="tipo_item" id="id_tipo_item2" class="form-control" required>
                                 <option value="" selected>Selecione</option>
@@ -338,7 +344,7 @@ document.querySelectorAll('input[name="itens_selecionados"]').forEach(cb => {
                                 <option value="peca">Peça</option>
                             </select>
                         </div>
-                        <div class="col-md-4 mb-2">
+                        <div class="col-md-3 mb-2">
                             <label>Origem</label>
                             <div>
                                 <span id="id_origem_badge" class="badge badge-secondary">Manual</span>
@@ -346,7 +352,7 @@ document.querySelectorAll('input[name="itens_selecionados"]').forEach(cb => {
                             </div>
                             <input type="hidden" name="origem" id="id_origem2" value="manual">
                         </div>
-                        <div class="col-md-4 mb-2">
+                        <div class="col-md-3 mb-2">
                             <label for="id_tecnico_responsavel2">Responsável da comissão</label>
                             <select name="tecnico_responsavel" id="id_tecnico_responsavel2" class="form-control">
                                 <option value="">-- Selecione --</option>
@@ -354,6 +360,15 @@ document.querySelectorAll('input[name="itens_selecionados"]').forEach(cb => {
                                 <option value="{{ user.id }}">{{ user.username }}</option>
                                 {% endfor %}
                             </select>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <label for="id_responsavel_cobranca2">Quem paga este item</label>
+                            <select name="responsavel_cobranca" id="id_responsavel_cobranca2" class="form-control">
+                                <option value="cliente" {% if not ordem.eh_garantia_fabricante %}selected{% endif %}>Cliente</option>
+                                <option value="fabricante" {% if ordem.eh_garantia_fabricante %}selected{% endif %}>Fabricante / garantia</option>
+                                <option value="sem_cobranca">Sem cobrança</option>
+                            </select>
+                            <small class="form-text text-muted">Não altera se é serviço ou peça; define somente a cobrança.</small>
                         </div>
                     </div>
                     {% if pode_ver_custos_os %}
@@ -412,6 +427,7 @@ function editarItem(id) {
             document.querySelector('#modalAdicionarItem2 input[name="desconto_valor"]').value = data.desconto_valor || '0.00';
             document.querySelector('#modalAdicionarItem2 input[name="desconto_percentual"]').value = data.desconto_percentual || '0.00';
             document.querySelector('#modalAdicionarItem2 select[name="tipo_item"]').value = data.tipo_item || '';
+            document.querySelector('#modalAdicionarItem2 select[name="responsavel_cobranca"]').value = data.responsavel_cobranca || 'cliente';
             document.querySelector('#modalAdicionarItem2 input[name="origem"]').value = data.origem || 'manual';
             document.querySelector('#modalAdicionarItem2 select[name="tecnico_responsavel"]').value = data.tecnico_responsavel || '';
             const custoEstimado = document.getElementById('id_custo_estimado_unitario2');

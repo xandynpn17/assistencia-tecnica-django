@@ -8,7 +8,7 @@
   }
   .caixa-subnav-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
   .caixa-subnav-group {
@@ -33,8 +33,38 @@
   .caixa-subnav-actions .btn {
     border-radius: 999px;
   }
+  .caixa-subnav-more {
+    grid-column: 1 / -1;
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .caixa-subnav-more summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 10px 12px;
+    color: #425567;
+    font-size: .82rem;
+    font-weight: 700;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .caixa-subnav-more summary::-webkit-details-marker { display: none; }
+  .caixa-subnav-more summary::after { content: "+"; color: #71808e; }
+  .caixa-subnav-more[open] summary::after { content: "-"; }
+  .caixa-subnav-more-body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 0 10px 10px;
+    border-top: 1px solid #eef2f6;
+    padding-top: 10px;
+  }
   @media (max-width: 991.98px) {
-    .caixa-subnav-grid {
+    .caixa-subnav-grid,
+    .caixa-subnav-more-body {
       grid-template-columns: 1fr;
     }
   }
@@ -66,7 +96,7 @@
 
       {% if user|has_role_alias:'caixa_financial' %}
       <section class="caixa-subnav-group">
-        <div class="caixa-subnav-label">Financeiro</div>
+        <div class="caixa-subnav-label">Acompanhamento di&aacute;rio</div>
         <div class="caixa-subnav-actions">
           <a href="{% url 'caixa:dashboard_financeiro' %}" class="btn btn-sm {% if menu_sub == 'dashboard_financeiro' %}btn-dark{% else %}btn-outline-dark{% endif %}">
             Financeiro
@@ -77,68 +107,46 @@
           <a href="{% url 'caixa:contas_pagar' %}" class="btn btn-sm {% if menu_sub == 'contas_pagar' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
             Contas a pagar
           </a>
-          <a href="{% url 'caixa:cartoes_corporativos' %}" class="btn btn-sm {% if menu_sub == 'cartoes_corporativos' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-            Cart&otilde;es da empresa
-          </a>
-          <a href="{% url 'caixa:aging_receber' %}" class="btn btn-sm {% if menu_sub == 'aging_receber' %}btn-outline-secondary{% else %}btn-outline-secondary{% endif %}">
-            Aging receber
-          </a>
-          <a href="{% url 'caixa:aging_pagar' %}" class="btn btn-sm {% if menu_sub == 'aging_pagar' %}btn-outline-secondary{% else %}btn-outline-secondary{% endif %}">
-            Aging pagar
-          </a>
-          <a href="{% url 'caixa:relatorios' %}" class="btn btn-sm {% if menu_sub == 'relatorios' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-            Relat&oacute;rios
-          </a>
           <a href="{% url 'caixa:tesouraria' %}" class="btn btn-sm {% if menu_sub == 'tesouraria' %}btn-dark{% else %}btn-outline-dark{% endif %}">
             Bancos e concilia&ccedil;&atilde;o
           </a>
-          {% if user|has_perm_sensivel:'perm_caixa_ver_dre' %}
-          <a href="{% url 'caixa:dre' %}" class="btn btn-sm {% if menu_sub == 'dre' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-            DRE
-          </a>
-          {% endif %}
-          <a href="{% url 'caixa:fluxo_projetado' %}" class="btn btn-sm {% if menu_sub == 'fluxo_projetado' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-            Fluxo
-          </a>
-          {% if user|has_perm_sensivel:'perm_caixa_administrar_plano_contas' %}<a href="{% url 'caixa:contabilidade_gerencial' %}" class="btn btn-sm {% if menu_sub == 'contabilidade_gerencial' %}btn-dark{% else %}btn-outline-dark{% endif %}">Contabilidade gerencial</a>{% endif %}
-          {% if user|has_perm_sensivel:'perm_caixa_corrigir_lancamentos' %}<a href="{% url 'caixa:saneamento_lancamentos' %}" class="btn btn-sm {% if menu_sub == 'saneamento_lancamentos' %}btn-warning{% else %}btn-outline-warning{% endif %}">Corrigir lançamentos</a>{% endif %}
         </div>
       </section>
 
-      <section class="caixa-subnav-group">
-        <div class="caixa-subnav-label">Apoio e cadastros</div>
-        <div class="caixa-subnav-actions">
-          <a href="{% url 'caixa:taloes' %}" class="btn btn-sm {% if menu_sub == 'taloes' %}btn-outline-dark{% else %}btn-outline-dark{% endif %}">
-            Tal&otilde;es
-          </a>
-          <a href="{% url 'caixa:formas_pagamento' %}" class="btn btn-sm {% if menu_sub == 'formas_pagamento' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-            Formas
-          </a>
-          <a href="{% url 'caixa:canais_venda' %}" class="btn btn-sm {% if menu_sub == 'canais_venda' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-            Canais e maquininhas
-          </a>
-          <a href="{% url 'caixa:centros_custo' %}" class="btn btn-sm {% if menu_sub == 'centros_custo' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-            Centros
-          </a>
-          <a href="{% url 'caixa:custos_fixos' %}" class="btn btn-sm {% if menu_sub == 'custos_fixos' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-            Custos fixos
-          </a>
-          <a href="{% url 'caixa:categorias_financeiras' %}" class="btn btn-sm {% if menu_sub == 'categorias_financeiras' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-            Categorias
-          </a>
-          <a href="{% url 'caixa:garantias_fabricante' %}" class="btn btn-sm {% if menu_sub == 'garantias_fabricante' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-            Garantias
-          </a>
-          {% if user|has_perm_sensivel:'perm_caixa_gerir_comissoes' %}
-          <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-sm {% if menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_pendencias' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'meu_desempenho' %}btn-info{% else %}btn-outline-info{% endif %}">
-            Comiss&otilde;es
-          </a>
-          <a href="{% url 'caixa:premios_meta' %}" class="btn btn-sm {% if menu_sub == 'premios_meta' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-            Pr&ecirc;mios
-          </a>
-          {% endif %}
+      <details class="caixa-subnav-more" {% if menu_sub == 'relatorios' or menu_sub == 'aging_receber' or menu_sub == 'aging_pagar' or menu_sub == 'dre' or menu_sub == 'fluxo_projetado' or menu_sub == 'contabilidade_gerencial' or menu_sub == 'saneamento_lancamentos' or menu_sub == 'cartoes_corporativos' or menu_sub == 'taloes' or menu_sub == 'formas_pagamento' or menu_sub == 'canais_venda' or menu_sub == 'centros_custo' or menu_sub == 'custos_fixos' or menu_sub == 'categorias_financeiras' or menu_sub == 'garantias_fabricante' or menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_pendencias' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'meu_desempenho' or menu_sub == 'premios_meta' %}open{% endif %}>
+        <summary>Relat&oacute;rios, corre&ccedil;&otilde;es e cadastros</summary>
+        <div class="caixa-subnav-more-body">
+          <section class="caixa-subnav-group">
+            <div class="caixa-subnav-label">An&aacute;lise e controle</div>
+            <div class="caixa-subnav-actions">
+              <a href="{% url 'caixa:relatorios' %}" class="btn btn-sm {% if menu_sub == 'relatorios' %}btn-dark{% else %}btn-outline-dark{% endif %}">Relat&oacute;rios</a>
+              <a href="{% url 'caixa:aging_receber' %}" class="btn btn-sm btn-outline-secondary">Aging receber</a>
+              <a href="{% url 'caixa:aging_pagar' %}" class="btn btn-sm btn-outline-secondary">Aging pagar</a>
+              <a href="{% url 'caixa:fluxo_projetado' %}" class="btn btn-sm {% if menu_sub == 'fluxo_projetado' %}btn-dark{% else %}btn-outline-dark{% endif %}">Fluxo</a>
+              {% if user|has_perm_sensivel:'perm_caixa_ver_dre' %}<a href="{% url 'caixa:dre' %}" class="btn btn-sm {% if menu_sub == 'dre' %}btn-dark{% else %}btn-outline-dark{% endif %}">DRE</a>{% endif %}
+              {% if user|has_perm_sensivel:'perm_caixa_administrar_plano_contas' %}<a href="{% url 'caixa:contabilidade_gerencial' %}" class="btn btn-sm {% if menu_sub == 'contabilidade_gerencial' %}btn-dark{% else %}btn-outline-dark{% endif %}">Contabilidade gerencial</a>{% endif %}
+              {% if user|has_perm_sensivel:'perm_caixa_corrigir_lancamentos' %}<a href="{% url 'caixa:saneamento_lancamentos' %}" class="btn btn-sm {% if menu_sub == 'saneamento_lancamentos' %}btn-warning{% else %}btn-outline-warning{% endif %}">Corrigir lan&ccedil;amentos</a>{% endif %}
+            </div>
+          </section>
+          <section class="caixa-subnav-group">
+            <div class="caixa-subnav-label">Cadastros e apoio</div>
+            <div class="caixa-subnav-actions">
+              <a href="{% url 'caixa:taloes' %}" class="btn btn-sm btn-outline-dark">Tal&otilde;es</a>
+              <a href="{% url 'caixa:formas_pagamento' %}" class="btn btn-sm {% if menu_sub == 'formas_pagamento' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Formas</a>
+              <a href="{% url 'caixa:canais_venda' %}" class="btn btn-sm {% if menu_sub == 'canais_venda' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Canais e maquininhas</a>
+              <a href="{% url 'caixa:cartoes_corporativos' %}" class="btn btn-sm {% if menu_sub == 'cartoes_corporativos' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Cart&otilde;es da empresa</a>
+              <a href="{% url 'caixa:centros_custo' %}" class="btn btn-sm {% if menu_sub == 'centros_custo' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Centros</a>
+              <a href="{% url 'caixa:categorias_financeiras' %}" class="btn btn-sm {% if menu_sub == 'categorias_financeiras' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Categorias</a>
+              <a href="{% url 'caixa:custos_fixos' %}" class="btn btn-sm {% if menu_sub == 'custos_fixos' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Custos fixos</a>
+              <a href="{% url 'caixa:garantias_fabricante' %}" class="btn btn-sm {% if menu_sub == 'garantias_fabricante' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Garantias</a>
+              {% if user|has_perm_sensivel:'perm_caixa_gerir_comissoes' %}
+              <a href="{% url 'caixa:comissoes_pagamento' %}" class="btn btn-sm {% if menu_sub == 'comissoes_pagamento' or menu_sub == 'comissoes_pendencias' or menu_sub == 'comissoes_tecnicos' or menu_sub == 'meu_desempenho' %}btn-info{% else %}btn-outline-info{% endif %}">Comiss&otilde;es</a>
+              <a href="{% url 'caixa:premios_meta' %}" class="btn btn-sm {% if menu_sub == 'premios_meta' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Pr&ecirc;mios</a>
+              {% endif %}
+            </div>
+          </section>
         </div>
-      </section>
+      </details>
       {% endif %}
     </div>
   </div>

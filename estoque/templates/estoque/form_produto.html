@@ -1070,9 +1070,9 @@
                         {% if precos_por_canal %}
                         <div class="table-responsive mt-3">
                             <table class="table table-sm table-hover mb-0">
-                                <thead><tr><th>Adquirente</th><th>Maquininha</th><th>Modalidade</th><th>Parcelas</th><th>Taxa</th><th>Mínimo</th><th>Recomendado</th></tr></thead>
+                                <thead><tr><th>Adquirente</th><th>Maquininha</th><th>Modalidade</th><th>Bandeira</th><th>Parcelas</th><th>Taxa</th><th>Mínimo</th><th>Recomendado</th></tr></thead>
                                 <tbody>{% for canal in precos_por_canal %}<tr>
-                                    <td>{{ canal.adquirente }}</td><td>{{ canal.maquininha }}</td><td>{{ canal.modalidade }}</td>
+                                    <td>{{ canal.adquirente }}</td><td>{{ canal.maquininha }}</td><td>{{ canal.modalidade }}</td><td>{{ canal.bandeira }}</td>
                                     <td>{% if canal.parcelas_de == canal.parcelas_ate %}{{ canal.parcelas_de }}x{% else %}{{ canal.parcelas_de }}–{{ canal.parcelas_ate }}x{% endif %}</td>
                                     <td>{{ canal.taxa_percentual|floatformat:3 }}%</td><td>R$ {{ canal.preco_minimo|floatformat:2 }}</td><td>R$ {{ canal.preco_recomendado|floatformat:2 }}</td>
                                 </tr>{% endfor %}</tbody>

@@ -216,9 +216,71 @@ def abrir_caixa(request):
             "resumo_ultimo_caixa": resumo_ultimo_caixa,
             "saldo_sugerido_abertura": saldo_sugerido_abertura,
             "saldo_inicial_digitado": saldo_digitado,
+            "pode_reabrir": has_sensitive_permission(
+                request.user, "perm_caixa_corrigir_lancamentos"
+            ),
             "menu_app": "caixa",
             "menu_sub": "abrir_caixa",
         }
+
+    if (
+        request.method == "POST"
+        and (request.POST.get("acao") or "").strip() == "reabrir"
+        and caixa_hoje
+        and not caixa_hoje.aberto
+    ):
+        try:
+            require_sensitive_permission(request.user, "perm_caixa_corrigir_lancamentos")
+            motivo = (request.POST.get("motivo_reabertura") or "").strip()
+            if not motivo:
+                messages.error(request, "Informe o motivo da reabertura do caixa.")
+                return render(
+                    request,
+                    "caixa/abrir_caixa.html",
+                    _contexto_abrir(
+                        caixa_hoje,
+                        False,
+                        "O caixa de hoje está encerrado. A reabertura exige justificativa.",
+                    ),
+                )
+            with transaction.atomic():
+                caixa_reabrir = Caixa.objects.select_for_update().get(pk=caixa_hoje.pk)
+                outro_aberto = caixas_empresa.select_for_update().filter(aberto=True).exclude(
+                    pk=caixa_reabrir.pk
+                ).first()
+                if outro_aberto:
+                    raise ValidationError(
+                        f"Já existe um caixa aberto em {outro_aberto.data:%d/%m/%Y}."
+                    )
+                if caixa_reabrir.aberto:
+                    messages.info(request, "O caixa já estava aberto.")
+                    return _redirect_pos_operacao(request, "caixa:registrar_pagamento")
+                resumo_fecho = (
+                    f"saldo_final={caixa_reabrir.saldo_final:.2f} | "
+                    f"contado={caixa_reabrir.valor_contado_fisico:.2f} | "
+                    f"diferenca={caixa_reabrir.diferenca_fechamento:.2f}"
+                )
+                caixa_reabrir.aberto = True
+                caixa_reabrir.save(update_fields=["aberto"])
+            _log_financeiro(
+                "caixa_reaberto",
+                request.user,
+                valor=caixa_reabrir.saldo_final,
+                descricao=(
+                    f"Caixa #{caixa_reabrir.id} reaberto | {resumo_fecho} | "
+                    f"motivo={motivo}"
+                ),
+            )
+            messages.success(request, "Caixa reaberto. Pagamentos e saídas em dinheiro estão liberados.")
+            return _redirect_pos_operacao(request, "caixa:registrar_pagamento")
+        except (PermissionDenied, ValidationError) as exc:
+            mensagem = "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+            messages.error(request, mensagem or "Não foi possível reabrir o caixa.")
+            return render(
+                request,
+                "caixa/abrir_caixa.html",
+                _contexto_abrir(caixa_hoje, False, "O caixa de hoje permanece encerrado."),
+            )
 
     if caixa:
         return render(
@@ -986,8 +1048,13 @@ def registrar_pagamento(request):
     ordem_total_pago = Decimal("0.00")
     ordem_valor_aberto = Decimal("0.00")
     if ordem:
-        ordem_total_os = ordem.receita_total_financeira() or Decimal("0.00")
-        pagamentos_ordem_qs = Pagamento.objects.filter(ordem_servico=ordem)
+        ordem_total_os = sum(
+            (item.total() for item in ordem.servicos_pecas.filter(responsavel_cobranca="cliente")),
+            Decimal("0.00"),
+        )
+        pagamentos_ordem_qs = Pagamento.objects.filter(ordem_servico=ordem).exclude(
+            Q(forma_pagamento__codigo="garantia_fabricante") | Q(metodo="garantia_fabricante")
+        )
         ordem_total_pago = pagamentos_ordem_qs.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
         ordem_total_desconto = pagamentos_ordem_qs.aggregate(total=Sum("desconto"))["total"] or Decimal("0.00")
         ordem_valor_aberto = max(Decimal("0.00"), ordem_total_os - _total_liquidado_pagamentos(pagamentos_ordem_qs))
@@ -1054,9 +1121,13 @@ def registrar_pagamento(request):
                         forma_principal=forma_principal,
                         referencia_principal=form.data.get("referencia"),
                         valor_total_liquido=valor_final_form,
+                        parcelas_principal=form.data.get("parcelas_principal") or 1,
+                        bandeira_principal=form.data.get("bandeira_principal") or "",
                         forma_secundaria=forma_secundaria,
                         valor_secundario=valor_secundario_form,
                         referencia_secundaria=form.data.get("referencia_secundaria"),
+                        parcelas_secundaria=form.data.get("parcelas_secundaria") or 1,
+                        bandeira_secundaria=form.data.get("bandeira_secundaria") or "",
                     )
                 except ValueError:
                     composicao_preview = []
@@ -1094,6 +1165,75 @@ def registrar_pagamento(request):
             if emitir_fiscal_url:
                 origem_fiscal = "OS" if pagamento_sucesso.ordem_servico_id else ("VENDA_BALCAO" if guia_codigo or venda or pagamento_sucesso.stock_item_id else "MANUAL")
                 emitir_fiscal_url = f"{emitir_fiscal_url}?{urlencode({'tipo': 'NFCE', 'origem': origem_fiscal, 'origem_referencia': pagamento_sucesso.numero_talao or pagamento_sucesso.id, 'valor_total': pagamento_sucesso.valor})}"
+        formas_pagamento_meta = []
+        modalidades_atalho_adicionadas = set()
+        for forma in form.fields["forma_pagamento"].queryset.select_related(
+            "maquininha", "maquininha__conta_bancaria_liquidacao", "conta_bancaria_liquidacao"
+        ):
+            codigo_forma = (forma.codigo or "").lower().replace("-", "_")
+            modalidade_interface = forma.modalidade or (
+                "dinheiro" if codigo_forma == "dinheiro" or codigo_forma.startswith("dinheiro_")
+                else "pix" if codigo_forma == "pix" or codigo_forma.startswith("pix_")
+                else "debito" if "debito" in codigo_forma
+                else "credito" if "credito" in codigo_forma
+                else "transferencia" if "transfer" in codigo_forma
+                else "outro"
+            )
+            condicoes = []
+            if forma.maquininha_id:
+                for condicao in forma.maquininha.taxas.filter(ativo=True).order_by("-vigencia_inicio", "-id"):
+                    condicoes.append(
+                        {
+                            "id": condicao.id,
+                            "modalidade": condicao.modalidade,
+                            "bandeira": condicao.bandeira,
+                            "parcelas_de": condicao.parcelas_de,
+                            "parcelas_ate": condicao.parcelas_ate,
+                            "taxa_percentual": str(condicao.taxa_percentual or Decimal("0.00")),
+                            "taxa_fixa": str(condicao.taxa_fixa or Decimal("0.00")),
+                            "dias_recebimento": condicao.dias_recebimento,
+                            "vigencia_inicio": condicao.vigencia_inicio.isoformat(),
+                            "vigencia_fim": condicao.vigencia_fim.isoformat() if condicao.vigencia_fim else "",
+                        }
+                    )
+            modalidade_atalho = modalidade_interface in {"dinheiro", "pix", "debito", "credito"}
+            atalho_principal = modalidade_atalho and modalidade_interface not in modalidades_atalho_adicionadas
+            if atalho_principal:
+                modalidades_atalho_adicionadas.add(modalidade_interface)
+            formas_pagamento_meta.append(
+                {
+                    "id": forma.id,
+                    "codigo": forma.codigo,
+                    "nome": forma.nome,
+                    "modalidade": modalidade_interface,
+                    "atalho_principal": atalho_principal,
+                    "atalho_nome": {
+                        "dinheiro": "Dinheiro",
+                        "pix": "PIX",
+                        "debito": "Débito",
+                        "credito": "Crédito",
+                    }.get(modalidade_interface, forma.nome),
+                    "parcelas_padrao": forma.parcelas_padrao,
+                    "usa_maquininha": bool(forma.maquininha_id),
+                    "maquininha_nome": forma.maquininha.nome if forma.maquininha_id else "",
+                    "adquirente_nome": (
+                        forma.maquininha.adquirente.nome
+                        if forma.maquininha_id and forma.maquininha.adquirente_id
+                        else ""
+                    ),
+                    "liquida_em_banco": bool(
+                        forma.conta_bancaria_liquidacao_id
+                        or (
+                            forma.maquininha_id
+                            and forma.maquininha.conta_bancaria_liquidacao_id
+                        )
+                    ),
+                    "taxa_percentual_legada": str(forma.taxa_percentual or Decimal("0.00")),
+                    "dias_recebimento_legado": forma.dias_recebimento,
+                    "condicoes": condicoes,
+                }
+            )
+
         return {
             "form": form,
             "ordem": ordem,
@@ -1110,10 +1250,7 @@ def registrar_pagamento(request):
             "ordem_total_pago": ordem_total_pago,
             "ordem_total_desconto": ordem_total_desconto,
             "ordem_valor_aberto": ordem_valor_aberto,
-            "formas_pagamento_meta": [
-                {"id": forma.id, "codigo": forma.codigo, "nome": forma.nome}
-                for forma in form.fields["forma_pagamento"].queryset
-            ],
+            "formas_pagamento_meta": formas_pagamento_meta,
             "pagamento_sucesso": pagamento_sucesso,
             "emitir_fiscal_url": emitir_fiscal_url,
             "pode_excluir_pagamento": has_sensitive_permission(request.user, "perm_caixa_excluir_pagamento"),
@@ -1122,6 +1259,12 @@ def registrar_pagamento(request):
             "valor_recebido": valor_recebido,
             "composicao_preview": composicao_preview,
             "valor_base_pagamento": ordem_valor_aberto if ordem else (guia_total if vendas_guia else (venda.valor_total if venda else None)),
+            "modo_recebimento": (
+                (request.POST.get("modo_recebimento") or "").strip()
+                if request.method == "POST"
+                else ("total" if ordem or vendas_guia or venda else "manual")
+            ),
+            "permite_pagamento_parcial": bool(ordem and ordem_valor_aberto > Decimal("0.00")),
             "antifraude_config": config_sistema,
             "mensagem_antifraude": mensagem_antifraude,
             "menu_app": "caixa",
@@ -1159,9 +1302,13 @@ def registrar_pagamento(request):
                     forma_principal=pagamento_preview.forma_pagamento,
                     referencia_principal=pagamento_preview.referencia,
                     valor_total_liquido=valor_liquido_pagamento,
+                    parcelas_principal=form.cleaned_data.get("parcelas_principal") or 1,
+                    bandeira_principal=form.cleaned_data.get("bandeira_principal") or "",
                     forma_secundaria=forma_secundaria,
                     valor_secundario=valor_secundario,
                     referencia_secundaria=referencia_secundaria,
+                    parcelas_secundaria=form.cleaned_data.get("parcelas_secundaria") or 1,
+                    bandeira_secundaria=form.cleaned_data.get("bandeira_secundaria") or "",
                 )
             except ValueError as exc:
                 form.add_error(None, str(exc))
@@ -1248,11 +1395,6 @@ def registrar_pagamento(request):
                     form.add_error("forma_pagamento", erro_metodo)
                     form.add_error("metodo", erro_metodo)
                     return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
-                if ordem.tipo_reparo == "Garantia" and codigo_forma != "garantia_fabricante":
-                    erro_metodo = "Ordens em garantia devem ser recebidas com a forma Garantia fabricante."
-                    form.add_error("forma_pagamento", erro_metodo)
-                    form.add_error("metodo", erro_metodo)
-                    return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
                 if ordem.tipo_reparo == "Garantia" and codigo_forma == "garantia_fabricante":
                     marca = MarcaGarantia.objects.filter(
                         nome__iexact=(ordem.marca_equipamento or "").strip(),
@@ -1267,11 +1409,21 @@ def registrar_pagamento(request):
                     data_ref = ordem.data_abertura.date() if ordem.data_abertura else timezone.localdate()
                     regra_garantia = RegraGarantiaMarca.buscar_regra_vigente(marca, ordem.tipo_equipamento, data_ref=data_ref)
                     if not regra_garantia:
-                        erro_regra = "Pagamento em garantia bloqueado: configure uma regra de garantia para a marca e o tipo de equipamento desta OS."
-                        form.add_error("forma_pagamento", erro_regra)
-                        form.add_error("metodo", erro_regra)
-                        return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
-                    if Decimal(regra_garantia.valor_mao_obra or Decimal("0.00")) <= Decimal("0.00"):
+                        valor_manual_fabricante = sum(
+                            (
+                                item.total()
+                                for item in ordem.servicos_pecas.filter(
+                                    tipo="servico", responsavel_cobranca="fabricante"
+                                )
+                            ),
+                            Decimal("0.00"),
+                        )
+                        if valor_manual_fabricante <= Decimal("0.00"):
+                            erro_regra = "Defina o valor do item pago pelo fabricante ou configure uma regra para a marca/equipamento."
+                            form.add_error("forma_pagamento", erro_regra)
+                            form.add_error("metodo", erro_regra)
+                            return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
+                    elif Decimal(regra_garantia.valor_mao_obra or Decimal("0.00")) <= Decimal("0.00"):
                         erro_regra = "Pagamento em garantia bloqueado: a regra vigente da marca precisa ter valor de mao de obra maior que zero."
                         form.add_error("forma_pagamento", erro_regra)
                         form.add_error("metodo", erro_regra)
@@ -1288,6 +1440,7 @@ def registrar_pagamento(request):
                     desconto_aplicado=desconto_aplicado,
                     desconto_percentual=desconto_percentual,
                     composicao_pagamento=composicao_pagamento,
+                    valor_recebido_dinheiro=valor_recebido_dinheiro,
                     chave_idempotencia=chave_idempotencia,
                     usuario=request.user,
                     vincular_talao_cb=_vincular_talao_itens_ordem,
@@ -1341,6 +1494,24 @@ def registrar_pagamento(request):
                 )
                 form.add_error(None, "; ".join(exc.messages) if getattr(exc, "messages", None) else str(exc))
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
+            except Exception as exc:
+                logger.exception(
+                    "caixa_pagamento_erro_inesperado",
+                    extra={
+                        "modulo": "caixa",
+                        "acao": "registrar_pagamento",
+                        "usuario_id": getattr(request.user, "id", None),
+                        "ordem_id": getattr(ordem, "id", None),
+                        "guia_codigo": guia_codigo,
+                        "erro": str(exc),
+                    },
+                )
+                form.add_error(
+                    None,
+                    "O pagamento não foi gravado porque ocorreu uma falha interna. "
+                    "Tente novamente; se persistir, consulte o registro técnico usando o horário da tentativa.",
+                )
+                return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
 
             if pagamento.desconto > Decimal("0.00"):
                 messages.success(request, f"Pagamento de {pagamento.valor:.2f} registrado com desconto de {pagamento.desconto:.2f}. Talao: {pagamento.numero_talao}.")
@@ -1351,7 +1522,9 @@ def registrar_pagamento(request):
         initial = {}
         if ordem:
             initial["ordem_servico"] = ordem.id
-            if garantia_sugerida is not None:
+            if ordem_valor_aberto > Decimal("0.00"):
+                initial["valor"] = ordem_valor_aberto
+            elif garantia_sugerida is not None:
                 forma_garantia = _forma_pagamento_por_codigo("garantia_fabricante", empresa)
                 if forma_garantia:
                     initial["forma_pagamento"] = forma_garantia.id

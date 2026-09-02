@@ -33,6 +33,7 @@
   .status-badge.comprar { background: #fff7d6; color: #8a6300; }
   .status-badge.comprado { background: #e7f5ec; color: #166534; }
   .status-badge.fechado { background: #e5e7eb; color: #374151; }
+  .status-badge.cancelado { background: #fee2e2; color: #991b1b; }
   .table thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; border-top: none; }
   .table-hover tbody tr:hover { background: #f8fbff; }
   .pedido-title { font-weight: 600; color: #1f2937; }
@@ -231,10 +232,11 @@
           <td class="text-right pr-4" data-label="Ação">
             <form method="post" action="{% url 'ordens:toggle_fechamento_pedido' pedido.id %}" class="d-inline">
               {% csrf_token %}
-              {% if pedido.status == "fechado" %}
+              {% if pedido.status == "fechado" or pedido.status == "cancelado" %}
+              <input type="hidden" name="acao" value="reabrir">
               <button type="submit" class="btn btn-sm btn-outline-warning">Reabrir</button>
               {% else %}
-              <button type="submit" class="btn btn-sm btn-outline-success">Fechar</button>
+              <a href="{% url 'ordens:detalhes_ordem' pedido.ordem.id %}?tab=pedidos" class="btn btn-sm btn-outline-primary">Gerir</a>
               {% endif %}
             </form>
           </td>

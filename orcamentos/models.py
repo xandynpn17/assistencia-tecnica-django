@@ -105,6 +105,11 @@ class ItemOrcamento(models.Model):
         ("recebido", "Recebido"),
         ("cancelado", "Cancelado"),
     ]
+    RESPONSAVEL_COBRANCA_CHOICES = [
+        ("cliente", "Cliente"),
+        ("fabricante", "Fabricante / garantia"),
+        ("sem_cobranca", "Sem cobrança"),
+    ]
 
     orcamento = models.ForeignKey(Orcamento, on_delete=models.CASCADE, related_name='itens')
     ean = models.CharField(max_length=50, blank=True, null=True)
@@ -115,6 +120,12 @@ class ItemOrcamento(models.Model):
     desconto_valor = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     desconto_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tipo_item = models.CharField(max_length=20, choices=TIPO_ITEM_CHOICES, default="servico")
+    responsavel_cobranca = models.CharField(
+        max_length=20,
+        choices=RESPONSAVEL_COBRANCA_CHOICES,
+        default="cliente",
+        db_index=True,
+    )
     origem = models.CharField(max_length=10, choices=ORIGEM_CHOICES, default='manual')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pendente')  # ← campo novo
     tecnico_responsavel = models.ForeignKey(
@@ -176,3 +187,6 @@ class ItemOrcamento(models.Model):
             self.tipo_item = "peca" if self.origem == "estoque" else "servico"
         super().save(*args, **kwargs)
         self.orcamento.atualizar_total()
+
+    def __str__(self):
+        return f"{self.nome} · {self.get_tipo_item_display()} · R$ {self.total():.2f}"

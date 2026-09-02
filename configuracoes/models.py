@@ -343,6 +343,12 @@ class MarcaGarantia(models.Model):
     parceira_garantia = models.BooleanField(default=False)
     procedimentos = models.TextField(blank=True)
     valor_mao_obra_garantia = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    valor_mao_obra_tecnico_garantia = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name="Repasse padrão ao técnico",
+    )
     ativo = models.BooleanField(default=True)
 
     class Meta:

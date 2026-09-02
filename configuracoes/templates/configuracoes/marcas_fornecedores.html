@@ -219,6 +219,14 @@
                   {{ marca_form.fornecedor.label_tag }}{{ marca_form.fornecedor }}
                   {% if marca_form.fornecedor.help_text %}<small class="text-muted d-block">{{ marca_form.fornecedor.help_text }}</small>{% endif %}
                 </div>
+                <div class="col-md-2">
+                  {{ marca_form.valor_mao_obra_garantia.label_tag }}{{ marca_form.valor_mao_obra_garantia }}
+                  <small class="text-muted d-block">{{ marca_form.valor_mao_obra_garantia.help_text }}</small>
+                </div>
+                <div class="col-md-2">
+                  {{ marca_form.valor_mao_obra_tecnico_garantia.label_tag }}{{ marca_form.valor_mao_obra_tecnico_garantia }}
+                  <small class="text-muted d-block">{{ marca_form.valor_mao_obra_tecnico_garantia.help_text }}</small>
+                </div>
                 <div class="col-md-8">
                   {{ marca_form.procedimentos.label_tag }}{{ marca_form.procedimentos }}
                   {% if marca_form.procedimentos.help_text %}<small class="text-muted d-block">{{ marca_form.procedimentos.help_text }}</small>{% endif %}

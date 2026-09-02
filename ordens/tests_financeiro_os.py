@@ -6,7 +6,8 @@ from django.utils import timezone
 
 from caixa.models import CategoriaFinanceira, ContaReceber
 from clientes.models import Cliente
-from configuracoes.models import Empresa
+from configuracoes.models import Empresa, FornecedorGarantia, MarcaGarantia, RegraGarantiaMarca
+from caixa.view_modules.helpers import _garantir_conta_garantia
 from estoque.models import (
     PontoOperacional,
     Produto,
@@ -65,6 +66,49 @@ class CustosEFechamentoFinanceiroOSTests(TestCase):
         conta.refresh_from_db()
         self.assertEqual(conta.status, "cancelada")
         self.assertEqual(conta.valor_aberto, Decimal("0.00"))
+
+    def test_os_garantia_mista_separa_cliente_e_fabricante(self):
+        fornecedor = FornecedorGarantia.objects.create(
+            empresa=self.empresa, nome="Fabricante", razao_social="Fabricante"
+        )
+        marca = MarcaGarantia.objects.create(
+            empresa=self.empresa,
+            nome="Marca",
+            fornecedor=fornecedor,
+            parceira_garantia=True,
+        )
+        RegraGarantiaMarca.objects.create(
+            marca=marca,
+            tipo_produto="climatizador",
+            valor_mao_obra=Decimal("18.00"),
+            valor_mao_obra_tecnico=Decimal("10.00"),
+            inicio_vigencia=timezone.localdate(),
+        )
+        self.ordem.tipo_reparo = "Garantia"
+        self.ordem.marca_garantia = marca
+        self.ordem.save(update_fields=["tipo_reparo", "marca_garantia"])
+        ServicoPeca.objects.create(
+            ordem=self.ordem,
+            tipo="servico",
+            responsavel_cobranca="fabricante",
+            nome="Mao de obra da garantia",
+            quantidade=1,
+            valor_unitario=Decimal("18.00"),
+        )
+        ServicoPeca.objects.create(
+            ordem=self.ordem,
+            tipo="servico",
+            responsavel_cobranca="cliente",
+            nome="Servico adicional fora da garantia",
+            quantidade=1,
+            valor_unitario=Decimal("100.00"),
+        )
+
+        conta_cliente = garantir_conta_receber_os(self.ordem)
+        conta_fabricante = _garantir_conta_garantia(self.ordem)
+
+        self.assertEqual(conta_cliente.valor_original, Decimal("100.00"))
+        self.assertEqual(conta_fabricante.valor_original, Decimal("18.00"))
 
     def test_custo_real_substitui_estimativa_e_insumo_compoe_margem(self):
         orcamento = Orcamento.objects.create(

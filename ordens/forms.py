@@ -291,7 +291,15 @@ class ServicoPecaForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.empresa = kwargs.pop("empresa", None)
+        self.ordem = kwargs.pop("ordem", None)
         super().__init__(*args, **kwargs)
+        self.fields["responsavel_cobranca"].required = False
+        if not self.is_bound:
+            self.fields["responsavel_cobranca"].initial = (
+                "fabricante"
+                if self.ordem and self.ordem.eh_garantia_fabricante
+                else "cliente"
+            )
         self.fields["tecnico_responsavel"].queryset = usuarios_tecnicos_qs()
         pontos_reserva = PontoOperacional.objects.filter(ativo=True)
         if self.empresa:
@@ -307,6 +315,12 @@ class ServicoPecaForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        if not cleaned.get("responsavel_cobranca"):
+            cleaned["responsavel_cobranca"] = (
+                "fabricante"
+                if self.ordem and self.ordem.eh_garantia_fabricante
+                else "cliente"
+            )
         produto_id = cleaned.pop("produto_estoque_id", None)
         produto = None
         if produto_id:
@@ -362,13 +376,14 @@ class ServicoPecaForm(forms.ModelForm):
     class Meta:
         model = ServicoPeca
         fields = [
-            "tipo", "nome", "descricao", "quantidade", "valor_unitario",
+            "tipo", "responsavel_cobranca", "nome", "descricao", "quantidade", "valor_unitario",
             "custo_previsto_final", "situacao_custo", "custo_previsto_observacao",
             "garantia_dias", "tecnico_responsavel", "ponto_operacional_reserva",
             "comissionavel", "numeros_taloes",
         ]
         widgets = {
             "tipo": forms.Select(attrs={"class": "form-control"}),
+            "responsavel_cobranca": forms.Select(attrs={"class": "form-control"}),
             "nome": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nome do serviço/peça"}),
             "descricao": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "Descrição opcional"}),
             "quantidade": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
@@ -412,6 +427,12 @@ class CustoOrdemServicoForm(forms.ModelForm):
         self.fields["item_orcamento"].queryset = self.fields["item_orcamento"].queryset.filter(
             orcamento__ordem_servico=self.ordem
         ).order_by("nome", "id")
+        self.fields["servico_peca"].label_from_instance = lambda item: (
+            f"{item.nome} · {item.get_tipo_display()} · R$ {item.total():.2f}"
+        )
+        self.fields["item_orcamento"].label_from_instance = lambda item: (
+            f"{item.nome} · {item.get_tipo_item_display()} · R$ {item.total():.2f}"
+        )
         produtos = Produto.objects.filter(ativo=True)
         if empresa:
             produtos = produtos.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
@@ -440,6 +461,11 @@ class CustoOrdemServicoForm(forms.ModelForm):
         produto = cleaned.get("produto_estoque")
         if servico_peca and servico_peca.ordem_id != self.ordem.id:
             self.add_error("servico_peca", "O item comercial não pertence a esta OS.")
+        elif servico_peca:
+            cleaned["item_orcamento"] = item_orcamento or servico_peca.item_orcamento
+            cleaned["produto_estoque"] = produto or servico_peca.produto_estoque
+            item_orcamento = cleaned["item_orcamento"]
+            produto = cleaned["produto_estoque"]
         if item_orcamento and item_orcamento.orcamento.ordem_servico_id != self.ordem.id:
             self.add_error("item_orcamento", "O item do orçamento não pertence a esta OS.")
         if produto:

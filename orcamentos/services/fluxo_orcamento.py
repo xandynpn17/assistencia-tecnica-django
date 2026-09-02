@@ -247,6 +247,7 @@ class FluxoOrcamentoService:
                     "valor_unitario": cls._valor_unitario_migrado(item, usar_valor_liquido=usar_valor_liquido),
                     "quantidade": int(item.quantidade or 1) or 1,
                     "tipo": cls._tipo_item_resolvido(item),
+                    "responsavel_cobranca": item.responsavel_cobranca,
                     "tecnico_responsavel": item.tecnico_responsavel or ordem.tecnico_responsavel,
                     "produto_estoque": produto_estoque,
                     "ponto_operacional_reserva": ponto_estoque,
@@ -268,6 +269,9 @@ class FluxoOrcamentoService:
                     if ponto_estoque and not servico_peca.ponto_operacional_reserva_id:
                         servico_peca.ponto_operacional_reserva = ponto_estoque
                         campos_atualizados.append("ponto_operacional_reserva")
+                    if servico_peca.responsavel_cobranca != item.responsavel_cobranca:
+                        servico_peca.responsavel_cobranca = item.responsavel_cobranca
+                        campos_atualizados.append("responsavel_cobranca")
                     if campos_atualizados:
                         servico_peca.save(update_fields=campos_atualizados)
                     itens_ja_migrados += 1

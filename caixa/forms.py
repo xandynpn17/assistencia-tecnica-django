@@ -445,6 +445,10 @@ class PagamentoForm(forms.ModelForm):
         required=False,
     )
     referencia_secundaria = forms.CharField(max_length=50, required=False)
+    parcelas_principal = forms.IntegerField(min_value=1, max_value=48, required=False, initial=1)
+    bandeira_principal = forms.ChoiceField(required=False, choices=[])
+    parcelas_secundaria = forms.IntegerField(min_value=1, max_value=48, required=False, initial=1)
+    bandeira_secundaria = forms.ChoiceField(required=False, choices=[])
     valor_recebido = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -502,6 +506,17 @@ class PagamentoForm(forms.ModelForm):
         self.fields["forma_pagamento_secundaria"].label = "Forma secundaria"
         self.fields["valor_secundario"].label = "Valor secundario"
         self.fields["referencia_secundaria"].label = "Referencia secundaria"
+        self.fields["parcelas_principal"].label = "Parcelas"
+        self.fields["bandeira_principal"].label = "Bandeira"
+        self.fields["parcelas_secundaria"].label = "Parcelas da forma secundaria"
+        self.fields["bandeira_secundaria"].label = "Bandeira da forma secundaria"
+        bandeiras = TaxaMaquininha.objects.filter(ativo=True).exclude(bandeira="")
+        if empresa:
+            bandeiras = bandeiras.filter(empresa=empresa)
+        nomes_bandeiras = sorted(set(bandeiras.values_list("bandeira", flat=True)), key=str.casefold)
+        escolhas_bandeira = [("", "Taxa geral / nao se aplica"), *((nome, nome) for nome in nomes_bandeiras)]
+        self.fields["bandeira_principal"].choices = escolhas_bandeira
+        self.fields["bandeira_secundaria"].choices = escolhas_bandeira
         self.fields["cliente_nome"].label = "Comprador"
         self.fields["cliente_nome"].required = False
         self.fields["cliente_nome"].widget = forms.TextInput(
@@ -532,11 +547,15 @@ class PagamentoForm(forms.ModelForm):
         cleaned_data["data_movimento"] = cleaned_data.get("data_movimento") or timezone.localdate()
         forma_pagamento = cleaned_data.get("forma_pagamento")
         forma_secundaria = cleaned_data.get("forma_pagamento_secundaria")
+        parcelas_principal = cleaned_data.get("parcelas_principal") or 1
+        parcelas_secundaria = cleaned_data.get("parcelas_secundaria") or 1
         valor = cleaned_data.get("valor") or Decimal("0.00")
         valor_recebido = cleaned_data.get("valor_recebido")
         valor_secundario = cleaned_data.get("valor_secundario") or Decimal("0.00")
         desconto_valor = cleaned_data.get("desconto_valor") or Decimal("0.00")
         desconto_percentual = cleaned_data.get("desconto_percentual") or Decimal("0.00")
+        if not forma_pagamento:
+            self.add_error("forma_pagamento", "Selecione a forma de pagamento.")
         if (
             forma_pagamento
             and forma_pagamento.codigo == "dinheiro"
@@ -562,7 +581,90 @@ class PagamentoForm(forms.ModelForm):
             self.add_error("valor_secundario", "Informe o valor da forma secundaria.")
         if valor_secundario < Decimal("0.00"):
             self.add_error("valor_secundario", "O valor secundario nao pode ser negativo.")
+        sem_parcelamento = {"pix", "debito", "dinheiro", "transferencia"}
+        if forma_pagamento and forma_pagamento.modalidade in sem_parcelamento and parcelas_principal != 1:
+            self.add_error("parcelas_principal", "Esta modalidade deve usar uma parcela.")
+        if forma_secundaria and forma_secundaria.modalidade in sem_parcelamento and parcelas_secundaria != 1:
+            self.add_error("parcelas_secundaria", "Esta modalidade deve usar uma parcela.")
+        self._validar_regra_maquininha(
+            forma=forma_pagamento,
+            parcelas=parcelas_principal,
+            bandeira=cleaned_data.get("bandeira_principal") or "",
+            data_referencia=cleaned_data["data_movimento"],
+            campo_parcelas="parcelas_principal",
+            campo_bandeira="bandeira_principal",
+        )
+        self._validar_regra_maquininha(
+            forma=forma_secundaria,
+            parcelas=parcelas_secundaria,
+            bandeira=cleaned_data.get("bandeira_secundaria") or "",
+            data_referencia=cleaned_data["data_movimento"],
+            campo_parcelas="parcelas_secundaria",
+            campo_bandeira="bandeira_secundaria",
+        )
         return cleaned_data
+
+    def _validar_regra_maquininha(
+        self,
+        *,
+        forma,
+        parcelas,
+        bandeira,
+        data_referencia,
+        campo_parcelas,
+        campo_bandeira,
+    ):
+        """Impede que uma venda de maquininha seja gravada com taxa silenciosamente zerada."""
+        if not forma or not forma.maquininha_id or forma.modalidade not in {"pix", "debito", "credito"}:
+            return
+
+        campo_forma = "forma_pagamento_secundaria" if campo_parcelas == "parcelas_secundaria" else "forma_pagamento"
+
+        if not forma.maquininha.ativo:
+            self.add_error(campo_forma, "A maquininha vinculada a esta forma de pagamento esta inativa.")
+            return
+        if not (forma.conta_bancaria_liquidacao_id or forma.maquininha.conta_bancaria_liquidacao_id):
+            self.add_error(
+                campo_forma,
+                "Vincule uma conta bancaria de liquidacao a esta forma ou maquininha antes de receber.",
+            )
+            return
+
+        regras = TaxaMaquininha.objects.filter(
+            empresa_id=forma.maquininha.empresa_id,
+            maquininha_id=forma.maquininha_id,
+            modalidade=forma.modalidade,
+            ativo=True,
+            parcelas_de__lte=parcelas,
+            parcelas_ate__gte=parcelas,
+            vigencia_inicio__lte=data_referencia,
+        ).filter(Q(vigencia_fim__isnull=True) | Q(vigencia_fim__gte=data_referencia))
+
+        bandeira = " ".join(str(bandeira or "").strip().split())
+        regra_geral = regras.filter(bandeira="").exists()
+        regra_bandeira = bool(bandeira) and regras.filter(bandeira__iexact=bandeira).exists()
+        if regra_geral or regra_bandeira:
+            return
+
+        bandeiras_disponiveis = sorted(
+            set(regras.exclude(bandeira="").values_list("bandeira", flat=True)),
+            key=str.casefold,
+        )
+        if bandeiras_disponiveis and not bandeira:
+            self.add_error(
+                campo_bandeira,
+                "Selecione a bandeira para aplicar a taxa correta desta maquininha.",
+            )
+            return
+
+        detalhe = f" para a bandeira {bandeira}" if bandeira else ""
+        self.add_error(
+            campo_parcelas,
+            (
+                f"Nao existe taxa vigente para {forma.nome}, {parcelas}x{detalhe}. "
+                "Cadastre a condicao da maquininha antes de receber."
+            ),
+        )
 
 
 class LancamentoCaixaForm(forms.ModelForm):
@@ -1030,7 +1132,7 @@ class TaxaMaquininhaForm(forms.ModelForm):
     class Meta:
         model = TaxaMaquininha
         fields = [
-            "maquininha", "modalidade", "parcelas_de", "parcelas_ate", "taxa_percentual",
+            "maquininha", "modalidade", "bandeira", "parcelas_de", "parcelas_ate", "taxa_percentual",
             "taxa_fixa", "dias_recebimento", "vigencia_inicio", "vigencia_fim", "ativo",
         ]
         widgets = {
@@ -1044,6 +1146,7 @@ class TaxaMaquininhaForm(forms.ModelForm):
         if not self.instance.empresa_id:
             self.instance.empresa = empresa
         self.fields["maquininha"].queryset = MaquininhaPagamento.objects.filter(empresa=empresa, ativo=True)
+        self.fields["bandeira"].widget.attrs.update({"placeholder": "Ex.: Visa, Mastercard, Elo"})
 
 
 class ContaPagarForm(forms.ModelForm):

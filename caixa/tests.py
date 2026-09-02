@@ -139,6 +139,44 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(response_abrir.status_code, 200)
         self.assertEqual(response_fechar.status_code, 200)
 
+    def test_gerente_reabre_caixa_encerrado_do_mesmo_dia_com_auditoria(self):
+        caixa = Caixa.objects.get(aberto=True)
+        caixa.aberto = False
+        caixa.saldo_final = Decimal("250.00")
+        caixa.valor_contado_fisico = Decimal("0.00")
+        caixa.save(update_fields=["aberto", "saldo_final", "valor_contado_fisico"])
+        self.client.force_login(self.gerente)
+
+        response = self.client.post(
+            reverse("caixa:abrir_caixa"),
+            {
+                "acao": "reabrir",
+                "motivo_reabertura": "Fechado antes do fim do expediente",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        caixa.refresh_from_db()
+        self.assertTrue(caixa.aberto)
+        auditoria = AuditoriaFinanceira.objects.filter(evento="caixa_reaberto").latest("id")
+        self.assertIn("Fechado antes do fim do expediente", auditoria.descricao)
+
+    def test_reabrir_caixa_exige_justificativa(self):
+        caixa = Caixa.objects.get(aberto=True)
+        caixa.aberto = False
+        caixa.save(update_fields=["aberto"])
+        self.client.force_login(self.gerente)
+
+        response = self.client.post(
+            reverse("caixa:abrir_caixa"),
+            {"acao": "reabrir", "motivo_reabertura": ""},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        caixa.refresh_from_db()
+        self.assertFalse(caixa.aberto)
+        self.assertContains(response, "Informe o motivo da reabertura")
+
     def test_gerente_com_acesso_ao_dashboard_financeiro(self):
         self.client.force_login(self.gerente)
         response = self.client.get(reverse("caixa:dashboard_financeiro"))
@@ -3937,6 +3975,33 @@ class CaixaPermissoesTests(TestCase):
         self.assertContains(response, self.atendente.username)
         self.assertContains(response, "T&eacute;cnico respons&aacute;vel:")
         self.assertContains(response, self.tecnico.username)
+        self.assertContains(response, "Receber saldo total")
+        self.assertContains(response, "Pagamento parcial")
+        self.assertContains(response, "Como o cliente pagou?")
+        self.assertContains(response, "Receber e concluir")
+        self.assertContains(response, "Mais op&ccedil;&otilde;es")
+        self.assertContains(response, 'data-atalho="opcoes"')
+        self.assertContains(response, 'id="pdv-operacao-principal"')
+        self.assertContains(response, 'id="pdv-forma-atual"')
+        self.assertContains(response, 'id="pdv-opcoes-drawer"')
+        self.assertContains(response, 'id="opcao-outras-formas"')
+        self.assertContains(response, 'id="opcao-pagamento-misto"')
+        self.assertContains(response, 'id="opcao-desconto"')
+        self.assertContains(response, ">Dinheiro</button>")
+        self.assertContains(response, ">PIX</button>")
+        self.assertNotContains(response, ">Custo da Loja</button>")
+        self.assertNotContains(response, ">Garantia Fabricante</button>")
+        self.assertNotContains(response, "Valores r&aacute;pidos")
+
+    def test_registrar_pagamento_sem_origem_exige_decisao_para_avulso(self):
+        self.client.force_login(self.atendente)
+        response = self.client.get(reverse("caixa:registrar_pagamento"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="pdv-aguardando-origem"')
+        self.assertContains(response, 'id="btn-recebimento-avulso"')
+        self.assertContains(response, 'id="pdv-operacao-principal" class="d-none"')
+        self.assertContains(response, "Localize uma OS para iniciar")
 
     def test_registrar_pagamento_em_dinheiro_valida_valor_recebido(self):
         self.client.force_login(self.atendente)
@@ -4018,7 +4083,7 @@ class CaixaPermissoesTests(TestCase):
         self.assertContains(response, "permitido apenas para ordens em garantia")
         self.assertFalse(Pagamento.objects.filter(referencia="GAR-FORA-001").exists())
 
-    def test_registrar_pagamento_exige_forma_garantia_fabricante_para_ordem_em_garantia(self):
+    def test_registrar_pagamento_permite_parcela_do_cliente_em_ordem_de_garantia(self):
         fornecedor = FornecedorGarantia.objects.create(nome="Fabricante Obrigatorio")
         MarcaGarantia.objects.create(
             nome="Marca Obrigatoria",
@@ -4047,9 +4112,11 @@ class CaixaPermissoesTests(TestCase):
                 "chave_idempotencia": "token-garantia-obr-1",
             },
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "devem ser recebidas com a forma Garantia fabricante")
-        self.assertFalse(Pagamento.objects.filter(referencia="GAR-OBR-001").exists())
+        self.assertEqual(response.status_code, 302)
+        pagamento = Pagamento.objects.get(referencia="GAR-OBR-001")
+        self.assertEqual(pagamento.ordem_servico, ordem_garantia)
+        self.assertEqual(pagamento.valor, Decimal("100.00"))
+        self.assertNotEqual(pagamento.metodo, "garantia_fabricante")
 
     def test_excluir_pagamento_exige_justificativa_e_reverte_conta(self):
         self.client.force_login(self.gerente)

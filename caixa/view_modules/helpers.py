@@ -516,7 +516,10 @@ def _vincular_talao_itens_ordem(ordem, numero_talao, pagamento=None):
 def _garantir_conta_os(ordem, ignorar_pagamento_id=None):
     from ordens.services.fechamento_os import garantir_conta_receber_os
 
-    total_os = sum((item.total() for item in ordem.servicos_pecas.all()), Decimal("0.00"))
+    total_os = sum(
+        (item.total() for item in ordem.servicos_pecas.filter(responsavel_cobranca="cliente")),
+        Decimal("0.00"),
+    )
     if total_os <= Decimal("0.00"):
         contas_existentes = ContaReceber.objects.filter(
             ordem_servico=ordem,
@@ -556,6 +559,16 @@ def _dados_garantia_ordem(ordem):
     if regra:
         valor_previsto = Decimal(regra.valor_mao_obra or 0)
         if valor_previsto <= 0:
+            valor_previsto = sum(
+                (
+                    item.total()
+                    for item in ordem.servicos_pecas.filter(
+                        tipo="servico", responsavel_cobranca="fabricante"
+                    )
+                ),
+                Decimal("0.00"),
+            )
+        if valor_previsto <= 0:
             return None
     else:
         valor_previsto = Decimal(marca.valor_mao_obra_garantia or 0)
@@ -564,7 +577,9 @@ def _dados_garantia_ordem(ordem):
                 (
                     item.total()
                     for orcamento in ordem.orcamentos.all()
-                    for item in orcamento.itens.filter(status="aprovado", tipo_item="servico")
+                    for item in orcamento.itens.filter(
+                        status="aprovado", tipo_item="servico", responsavel_cobranca="fabricante"
+                    )
                 ),
                 Decimal("0.00"),
             )
@@ -572,7 +587,9 @@ def _dados_garantia_ordem(ordem):
             valor_previsto = sum(
                 (
                     item.total()
-                    for item in ordem.servicos_pecas.filter(tipo="servico")
+                    for item in ordem.servicos_pecas.filter(
+                        tipo="servico", responsavel_cobranca="fabricante"
+                    )
                 ),
                 Decimal("0.00"),
             )

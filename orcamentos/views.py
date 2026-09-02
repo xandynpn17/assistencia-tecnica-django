@@ -23,7 +23,7 @@ from datetime import datetime
 from django.db.models import Q, Sum
 from django.utils import timezone
 
-from configuracoes.models import ConfiguracaoSistema, Empresa
+from configuracoes.models import ConfiguracaoSistema, Empresa, MarcaGarantia, RegraGarantiaMarca
 from estoque.models import PontoOperacional, Produto, ReservaEstoque, SaldoEstoquePonto
 from estoque.services import cancelar_reserva
 from caixa.services.comissoes import cancelar_comissoes_por_item
@@ -49,6 +49,33 @@ def _detectar_produto_estoque(ean, nome, empresa=None):
     if not ean_limpo:
         return None
     return Produto.objects.filter(empresa=empresa, ativo=True, permite_os=True, ean=ean_limpo).first()
+
+
+def _responsavel_cobranca_item(ordem, payload):
+    valor = (payload.get("responsavel_cobranca") or "").strip()
+    validos = {codigo for codigo, _ in ItemOrcamento.RESPONSAVEL_COBRANCA_CHOICES}
+    if valor in validos:
+        return valor
+    return "fabricante" if ordem.eh_garantia_fabricante else "cliente"
+
+
+def _valor_servico_garantia_sugerido(ordem):
+    if not ordem.eh_garantia_fabricante:
+        return None
+    marca = getattr(ordem, "marca_garantia", None)
+    if not marca and (ordem.marca_equipamento or "").strip():
+        marca = MarcaGarantia.objects.filter(
+            Q(empresa=ordem.empresa) | Q(empresa__isnull=True),
+            nome__iexact=(ordem.marca_equipamento or "").strip(),
+            ativo=True,
+            parceira_garantia=True,
+        ).first()
+    if not marca:
+        return None
+    data_ref = ordem.data_abertura.date() if ordem.data_abertura else timezone.localdate()
+    regra = RegraGarantiaMarca.buscar_regra_vigente(marca, ordem.tipo_equipamento, data_ref=data_ref)
+    valor = Decimal(getattr(regra, "valor_mao_obra", 0) or getattr(marca, "valor_mao_obra_garantia", 0) or 0)
+    return valor if valor > 0 else None
 
 
 def _garantir_ordem_editavel(request, ordem, form_type):
@@ -336,11 +363,20 @@ def adicionar_item(request, orcamento_id):
         if tipo_item not in {"servico", "peca"}:
             messages.error(request, "Selecione obrigatoriamente o tipo do item: Serviço ou Peça.")
             return _redirect_orcamento_na_os(orcamento.ordem_servico, open_modal="adicionar_item")
+        responsavel_cobranca = _responsavel_cobranca_item(orcamento.ordem_servico, request.POST)
+        if responsavel_cobranca == "fabricante" and tipo_item == "servico" and valor_unitario <= 0:
+            valor_sugerido = _valor_servico_garantia_sugerido(orcamento.ordem_servico)
+            if valor_sugerido is not None:
+                valor_unitario = valor_sugerido
+                messages.info(request, f"Valor de garantia preenchido automaticamente: R$ {valor_sugerido:.2f}.")
 
         dados_custo, erro_custo = _dados_custo_estimado(request)
         if erro_custo:
             messages.error(request, erro_custo)
             return _redirect_orcamento_na_os(orcamento.ordem_servico, open_modal="adicionar_item")
+        if produto and tipo_item == "peca" and dados_custo.get("custo_estimado_unitario") is None:
+            dados_custo["custo_estimado_unitario"] = Decimal(produto.custo_medio or produto.custo_unitario or 0)
+            dados_custo["fornecedor_estimado"] = produto.fornecedor_manual or produto.fornecedor or "Estoque"
 
         item = ItemOrcamento.objects.create(
             orcamento=orcamento,
@@ -352,6 +388,7 @@ def adicionar_item(request, orcamento_id):
             desconto_valor=desconto_valor,
             desconto_percentual=desconto_percentual,
             tipo_item=tipo_item,
+            responsavel_cobranca=responsavel_cobranca,
             origem=origem,
             tecnico_responsavel=tecnico,
             comissionavel=_item_comissionavel_ajustado(orcamento.ordem_servico, tipo_item, request.POST),
@@ -448,6 +485,9 @@ def editar_item(request, item_id):
             item.tipo_item = tipo_item
         elif item.origem == "estoque":
             item.tipo_item = "peca"
+        item.responsavel_cobranca = _responsavel_cobranca_item(item.orcamento.ordem_servico, request.POST)
+        if item.responsavel_cobranca == "fabricante" and item.tipo_item == "servico" and item.valor_unitario <= 0:
+            item.valor_unitario = _valor_servico_garantia_sugerido(item.orcamento.ordem_servico) or item.valor_unitario
         item.comissionavel = _item_comissionavel_ajustado(item.orcamento.ordem_servico, item.tipo_item, request.POST)
         tecnico_id = request.POST.get("tecnico_responsavel")
         if tecnico_id:
@@ -460,6 +500,9 @@ def editar_item(request, item_id):
             return _redirect_orcamento_na_os(item.orcamento.ordem_servico)
         for campo, valor in dados_custo.items():
             setattr(item, campo, valor)
+        if produto and item.tipo_item == "peca" and item.custo_estimado_unitario is None:
+            item.custo_estimado_unitario = Decimal(produto.custo_medio or produto.custo_unitario or 0)
+            item.fornecedor_estimado = produto.fornecedor_manual or produto.fornecedor or "Estoque"
         item.save()
         messages.success(request, "Item do orçamento da OS atualizado com sucesso!")
         return _redirect_orcamento_na_os(item.orcamento.ordem_servico)
@@ -475,6 +518,7 @@ def editar_item(request, item_id):
         "desconto_valor": str(item.desconto_valor or Decimal("0.00")),
         "desconto_percentual": str(item.desconto_percentual or Decimal("0.00")),
         "tipo_item": item.tipo_item,
+        "responsavel_cobranca": item.responsavel_cobranca,
         "origem": item.origem,
         "tecnico_responsavel": item.tecnico_responsavel_id,
         "comissionavel": item.comissionavel,
@@ -535,7 +579,19 @@ def aceitar_itens_orcamento(request, orcamento_id):
             return _redirect_orcamento_na_os(orc.ordem_servico)
 
         resultado = FluxoOrcamentoService.aceitar_itens(orc, itens_ids, usuario=request.user)
-        messages.success(request, f"{resultado.itens_processados} item(ns) do orçamento da OS aprovado(s) com sucesso!")
+        migracao = FluxoOrcamentoService.migrar_itens_selecionados(
+            orc,
+            itens_ids,
+            usuario=request.user,
+            descricao_historico="{total} item(ns) aprovado(s) sincronizado(s) automaticamente com Serviços e Peças.",
+            usar_valor_liquido=True,
+            copiar_comissionavel=True,
+        )
+        messages.success(
+            request,
+            f"{resultado.itens_processados} item(ns) aprovado(s); "
+            f"{migracao.total_migrados} sincronizado(s) automaticamente com Serviços e Peças.",
+        )
     return _redirect_orcamento_na_os(orc.ordem_servico)
 
 

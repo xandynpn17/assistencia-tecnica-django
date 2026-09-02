@@ -199,6 +199,7 @@ class EvolucaoOperacionalOSTests(TestCase):
             quantidade=1,
             valor_unitario=Decimal("100.00"),
             status="aprovado",
+            responsavel_cobranca="fabricante",
         )
 
         resultado = FechamentoOSService.finalizar_para_caixa(self.ordem, usuario=self.usuario)

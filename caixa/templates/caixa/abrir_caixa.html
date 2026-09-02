@@ -162,8 +162,23 @@
                             <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-outline-warning">Registrar sa&iacute;da</a>
                             <a href="{% url 'caixa:fechar_caixa' %}" class="btn btn-outline-danger">Fechar caixa</a>
                         {% else %}
-                            <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-primary">Voltar para opera&ccedil;&atilde;o</a>
-                            <a href="{% url 'caixa:dashboard_financeiro' %}" class="btn btn-outline-dark">Ver Financeiro</a>
+                            {% if pode_reabrir %}
+                            <form method="post" class="w-100">
+                                {% csrf_token %}
+                                <input type="hidden" name="acao" value="reabrir">
+                                <label for="motivo_reabertura" class="small font-weight-bold">Motivo da reabertura</label>
+                                <div class="input-group">
+                                    <input type="text" id="motivo_reabertura" name="motivo_reabertura" class="form-control" required placeholder="Ex.: caixa encerrado antes do fim do expediente">
+                                    <div class="input-group-append">
+                                        <button type="submit" class="btn btn-warning">Reabrir caixa</button>
+                                    </div>
+                                </div>
+                                <small class="form-text text-muted">A reabertura preserva os movimentos existentes e fica registrada na auditoria.</small>
+                            </form>
+                            {% else %}
+                            <div class="alert alert-warning mb-2 w-100">Solicite a um gerente ou administrador a reabertura deste caixa.</div>
+                            {% endif %}
+                            <a href="{% url 'caixa:dashboard_financeiro' %}" class="btn btn-outline-dark mt-2">Ver Financeiro</a>
                         {% endif %}
                     </div>
                 </div>

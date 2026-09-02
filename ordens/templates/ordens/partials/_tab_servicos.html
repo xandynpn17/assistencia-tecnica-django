@@ -383,12 +383,18 @@
                         <div class="form-group col-md-3"><label>Custo unitário</label>{{ custo_os_form.custo_unitario }}</div>
                         <div class="form-group col-md-3"><label>Documento</label>{{ custo_os_form.documento_referencia }}</div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-4"><label>Item comercial da OS</label>{{ custo_os_form.servico_peca }}</div>
-                        <div class="form-group col-md-4"><label>Item do orçamento</label>{{ custo_os_form.item_orcamento }}</div>
-                        <div class="form-group col-md-4"><label>Produto de estoque</label>{{ custo_os_form.produto_estoque }}</div>
+                    <div class="form-group">
+                        <label>Relacionar ao serviço ou peça da OS</label>{{ custo_os_form.servico_peca }}
+                        <small class="form-text text-muted">No uso normal, escolha somente este campo. Orçamento e estoque serão vinculados automaticamente.</small>
                     </div>
-                    <small class="form-text text-muted mb-3">Para uma peça avulsa, basta selecionar o “Item comercial da OS”. Se ele veio do orçamento, o vínculo correspondente será preenchido automaticamente.</small>
+                    <details class="border rounded p-2 mb-3">
+                        <summary class="font-weight-bold">Vínculos avançados (opcional)</summary>
+                        <div class="form-row mt-2">
+                            <div class="form-group col-md-6"><label>Item do orçamento</label>{{ custo_os_form.item_orcamento }}</div>
+                            <div class="form-group col-md-6"><label>Produto de estoque</label>{{ custo_os_form.produto_estoque }}</div>
+                        </div>
+                        <small class="text-muted">Use apenas para corrigir registros antigos ou custos que ainda não possuem item comercial.</small>
+                    </details>
                     <div class="form-group"><label>Fornecedor</label>{{ custo_os_form.fornecedor_nome }}</div>
                     <div class="form-group"><label>Saída financeira vinculada (opcional)</label>{{ custo_os_form.lancamento_caixa }}<small class="form-text text-muted">Ao selecionar uma saída, escolha a origem “Despesa paga”. Isso evita contar o mesmo custo duas vezes na DRE.</small></div>
                     <div class="form-group"><label>Conta a pagar vinculada (opcional)</label>{{ custo_os_form.conta_pagar }}<small class="form-text text-muted">Use para compras ainda não pagas ou parceladas. Não selecione simultaneamente uma saída financeira.</small></div>
@@ -474,9 +480,17 @@
                                 <option value="servico">Serviço</option>
                             </select>
                         </div>
-                        <div class="form-group col-md-8 mb-2">
+                        <div class="form-group col-md-5 mb-2">
                             <label>Nome</label>
                             <input type="text" name="nome" id="sp_nome" class="form-control" required>
+                        </div>
+                        <div class="form-group col-md-3 mb-2">
+                            <label>Quem paga</label>
+                            <select name="responsavel_cobranca" id="sp_responsavel_cobranca" class="form-control">
+                                <option value="cliente" {% if not ordem.eh_garantia_fabricante %}selected{% endif %}>Cliente</option>
+                                <option value="fabricante" {% if ordem.eh_garantia_fabricante %}selected{% endif %}>Fabricante / garantia</option>
+                                <option value="sem_cobranca">Sem cobrança</option>
+                            </select>
                         </div>
                     </div>
                     <div class="form-group mb-2">
@@ -484,18 +498,18 @@
                         <textarea name="descricao" id="sp_descricao" rows="2" class="form-control"></textarea>
                     </div>
                     <div class="form-row">
-                        <div class="form-group col-md-4 mb-2">
+                        <div id="sp_bloco_situacao_custo" class="form-group col-md-4 mb-2">
                             <label>Quantidade</label>
                             <input type="number" name="quantidade" id="sp_quantidade" class="form-control" min="1" value="1" required>
                         </div>
-                        <div class="form-group col-md-4 mb-2">
+                        <div id="sp_bloco_custo_previsto" class="form-group col-md-4 mb-2">
                             <label>Valor unitário</label>
                             <div class="input-group">
                                 <div class="input-group-prepend"><span class="input-group-text">R$</span></div>
                                 <input type="number" step="0.01" name="valor_unitario" id="sp_valor" class="form-control" required>
                             </div>
                         </div>
-                        <div class="form-group col-md-4 mb-2">
+                        <div id="sp_bloco_custo_observacao" class="form-group col-md-4 mb-2">
                             <label>Garantia (dias)</label>
                             <input type="number" name="garantia_dias" id="sp_garantia" class="form-control" min="0" value="">
                         </div>
@@ -616,17 +630,42 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!btnBuscar) return;
 
     function aplicarProdutoNoFormulario(produto) {
+        document.getElementById('sp_produto_estoque_id').value = produto.id || '';
         document.getElementById('sp_tipo').value = 'peca';
         document.getElementById('sp_nome').value = produto.nome || '';
         document.getElementById('sp_descricao').value = produto.descricao || '';
         document.getElementById('sp_valor').value = produto.preco || '';
         document.getElementById('sp_garantia').value = produto.garantia_peca_dias || '';
         document.getElementById('sp_quantidade').value = 1;
+        document.getElementById('sp_situacao_custo').value = 'nao_informado';
+        document.getElementById('sp_custo_previsto').value = '0';
+        ['sp_bloco_situacao_custo', 'sp_bloco_custo_previsto', 'sp_bloco_custo_observacao'].forEach((id) => {
+            const bloco = document.getElementById(id);
+            if (bloco) bloco.classList.add('d-none');
+        });
+        const avisoExistente = document.getElementById('sp_aviso_custo_estoque');
+        if (avisoExistente) avisoExistente.remove();
+        const aviso = document.createElement('div');
+        aviso.id = 'sp_aviso_custo_estoque';
+        aviso.className = 'alert alert-success py-2 mb-2';
+        aviso.textContent = 'Produto vinculado ao estoque. O custo será importado automaticamente na baixa, sem aparecer ao cliente.';
+        resultado.parentNode.insertBefore(aviso, resultado.nextSibling);
         const pontoSelect = document.getElementById('sp_ponto_reserva');
         if (pontoSelect) {
             pontoSelect.value = produto.ponto_operacional_id ? String(produto.ponto_operacional_id) : '';
         }
         resultado.innerHTML = '';
+    }
+
+    function limparVinculoEstoque() {
+        const produtoId = document.getElementById('sp_produto_estoque_id');
+        if (produtoId) produtoId.value = '';
+        ['sp_bloco_situacao_custo', 'sp_bloco_custo_previsto', 'sp_bloco_custo_observacao'].forEach((id) => {
+            const bloco = document.getElementById(id);
+            if (bloco) bloco.classList.remove('d-none');
+        });
+        const aviso = document.getElementById('sp_aviso_custo_estoque');
+        if (aviso) aviso.remove();
     }
 
     function renderResultados(data) {
@@ -682,6 +721,7 @@ document.addEventListener('DOMContentLoaded', function () {
             buscarComRanking();
         }
     });
+    document.getElementById('sp_nome')?.addEventListener('input', limparVinculoEstoque);
 
     modal.on('shown.bs.modal', function () {
         buscarComRanking();

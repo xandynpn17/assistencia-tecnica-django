@@ -1,20 +1,25 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 from django.utils import timezone
 
 from caixa.models import (
     AdquirentePagamento,
     CategoriaFinanceira,
+    Caixa,
     ContaBancaria,
     ContaPagar,
     FormaPagamento,
     MaquininhaPagamento,
+    MovimentoBancario,
     Pagamento,
     TaxaMaquininha,
 )
+from caixa.forms import PagamentoForm
 from caixa.services.precificacao_automatica import (
     calcular_rateio_estrutura,
     calcular_taxa_canal_referencia,
@@ -193,6 +198,268 @@ class PrecificacaoAutomaticaTests(TestCase):
         self.assertEqual(condicao["condicao_id"], taxa.pk)
         self.assertEqual(condicao["taxa_percentual"], Decimal("4.250"))
         self.assertEqual(condicao["taxa_fixa"], Decimal("0.30"))
+
+    def test_bandeira_e_parcelas_geram_liquidacao_bancaria_liquida(self):
+        conta = ContaBancaria.objects.create(
+            empresa=self.empresa,
+            nome="Nubank",
+            banco_nome="Nubank",
+            numero="1",
+            saldo_inicial=0,
+            data_saldo_inicial=self.hoje,
+        )
+        adquirente = AdquirentePagamento.objects.create(empresa=self.empresa, nome="Adquirente")
+        maquininha = MaquininhaPagamento.objects.create(
+            empresa=self.empresa,
+            adquirente=adquirente,
+            nome="Maquina 1",
+            conta_bancaria_liquidacao=conta,
+        )
+        TaxaMaquininha.objects.create(
+            empresa=self.empresa,
+            maquininha=maquininha,
+            modalidade="credito",
+            bandeira="Visa",
+            parcelas_de=2,
+            parcelas_ate=2,
+            taxa_percentual=Decimal("3.913"),
+            vigencia_inicio=self.mes_anterior,
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            nome="Credito",
+            codigo="credito-maquina",
+            modalidade="credito",
+            maquininha=maquininha,
+            conta_bancaria_liquidacao=conta,
+        )
+
+        pagamento = Pagamento.objects.create(
+            empresa=self.empresa,
+            valor=Decimal("460.00"),
+            forma_pagamento=forma,
+            formas_pagamento_compostas=[{
+                "forma_id": forma.id,
+                "forma_codigo": forma.codigo,
+                "forma_nome": forma.nome,
+                "valor": "460.00",
+                "parcelas": 2,
+                "bandeira": "Visa",
+            }],
+            data_movimento=self.hoje,
+        )
+
+        pagamento.refresh_from_db()
+        movimento = MovimentoBancario.objects.get(origem_tipo="pagamento", origem_id=pagamento.id)
+        self.assertEqual(pagamento.taxas_recebimento_estimadas, Decimal("18.00"))
+        self.assertEqual(movimento.valor, Decimal("442.00"))
+        self.assertEqual(movimento.metadados["bandeira"], "Visa")
+
+    def test_tela_pagamento_expoe_previsao_de_taxa_bandeira_e_liquidacao(self):
+        conta = ContaBancaria.objects.create(
+            empresa=self.empresa,
+            nome="Conta da maquininha",
+            banco_nome="Banco",
+            numero="123",
+            saldo_inicial=0,
+            data_saldo_inicial=self.hoje,
+        )
+        adquirente = AdquirentePagamento.objects.create(empresa=self.empresa, nome="Rede UI")
+        maquininha = MaquininhaPagamento.objects.create(
+            empresa=self.empresa,
+            adquirente=adquirente,
+            nome="Rede Balcao",
+            conta_bancaria_liquidacao=conta,
+        )
+        taxa = TaxaMaquininha.objects.create(
+            empresa=self.empresa,
+            maquininha=maquininha,
+            modalidade="credito",
+            bandeira="Visa",
+            parcelas_de=2,
+            parcelas_ate=6,
+            taxa_percentual=Decimal("3.913"),
+            dias_recebimento=2,
+            vigencia_inicio=self.mes_anterior,
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            nome="Credito Rede",
+            codigo="credito-rede-ui",
+            modalidade="credito",
+            maquininha=maquininha,
+            parcelas_padrao=2,
+        )
+        Caixa.objects.create(empresa=self.empresa, aberto=True, saldo_inicial=0)
+        usuario = get_user_model().objects.create_user(
+            username="atendente_taxa_ui",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+            empresa=self.empresa,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("caixa:registrar_pagamento"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "L&iacute;quido banc&aacute;rio")
+        self.assertContains(response, "Cr&eacute;dito previsto")
+        meta = next(item for item in response.context["formas_pagamento_meta"] if item["id"] == forma.id)
+        self.assertTrue(meta["liquida_em_banco"])
+        self.assertEqual(meta["maquininha_nome"], "Rede Balcao")
+        self.assertEqual(meta["condicoes"][0]["id"], taxa.id)
+        self.assertEqual(meta["condicoes"][0]["bandeira"], "Visa")
+
+    def test_pagamento_em_dinheiro_grava_recebido_e_troco_sem_erro(self):
+        Caixa.objects.create(empresa=self.empresa, aberto=True, saldo_inicial=0)
+        FormaPagamento.objects.create(
+            empresa=self.empresa,
+            nome="Dinheiro",
+            codigo="dinheiro",
+            modalidade="dinheiro",
+        )
+        usuario = get_user_model().objects.create_user(
+            username="atendente_troco",
+            password="senha-forte-123",
+            tipo_usuario="atendente",
+            empresa=self.empresa,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.post(
+            reverse("caixa:registrar_pagamento"),
+            {
+                "valor": "80.00",
+                "metodo": "dinheiro",
+                "valor_recebido": "100.00",
+                "referencia": "DIN-TROCO-001",
+                "chave_idempotencia": "din-troco-profissional-1",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pagamento = Pagamento.objects.get(referencia="DIN-TROCO-001")
+        self.assertEqual(pagamento.valor_recebido_dinheiro, Decimal("100.00"))
+        self.assertEqual(pagamento.troco_entregue, Decimal("20.00"))
+
+    def test_form_pagamento_bloqueia_maquininha_sem_taxa_compativel(self):
+        adquirente = AdquirentePagamento.objects.create(empresa=self.empresa, nome="Stone")
+        conta = ContaBancaria.objects.create(
+            empresa=self.empresa,
+            nome="Conta Stone",
+            banco_nome="Banco",
+            numero="001",
+            saldo_inicial=0,
+            data_saldo_inicial=self.hoje,
+        )
+        maquininha = MaquininhaPagamento.objects.create(
+            empresa=self.empresa,
+            adquirente=adquirente,
+            nome="Stone Balcao",
+            conta_bancaria_liquidacao=conta,
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            nome="Credito Stone",
+            codigo="credito-stone",
+            modalidade="credito",
+            maquininha=maquininha,
+            parcelas_padrao=3,
+        )
+
+        form = PagamentoForm(
+            data={
+                "valor": "460.00",
+                "forma_pagamento": str(forma.id),
+                "parcelas_principal": "3",
+                "data_movimento": self.hoje.isoformat(),
+            },
+            empresa=self.empresa,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Nao existe taxa vigente", form.errors["parcelas_principal"][0])
+
+    def test_form_pagamento_aceita_apenas_combinacao_com_taxa_vigente(self):
+        adquirente = AdquirentePagamento.objects.create(empresa=self.empresa, nome="Stone Taxada")
+        conta = ContaBancaria.objects.create(
+            empresa=self.empresa,
+            nome="Conta Stone Taxada",
+            banco_nome="Banco",
+            numero="002",
+            saldo_inicial=0,
+            data_saldo_inicial=self.hoje,
+        )
+        maquininha = MaquininhaPagamento.objects.create(
+            empresa=self.empresa,
+            adquirente=adquirente,
+            nome="Stone Taxada Balcao",
+            conta_bancaria_liquidacao=conta,
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            nome="Credito Stone Taxada",
+            codigo="credito-stone-taxada",
+            modalidade="credito",
+            maquininha=maquininha,
+            parcelas_padrao=3,
+        )
+        TaxaMaquininha.objects.create(
+            empresa=self.empresa,
+            maquininha=maquininha,
+            modalidade="credito",
+            parcelas_de=2,
+            parcelas_ate=6,
+            taxa_percentual=Decimal("3.913"),
+            vigencia_inicio=self.mes_anterior,
+        )
+
+        form = PagamentoForm(
+            data={
+                "valor": "460.00",
+                "forma_pagamento": str(forma.id),
+                "parcelas_principal": "3",
+                "data_movimento": self.hoje.isoformat(),
+            },
+            empresa=self.empresa,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+
+    def test_form_pagamento_exige_conta_de_liquidacao_da_maquininha(self):
+        adquirente = AdquirentePagamento.objects.create(empresa=self.empresa, nome="Rede sem conta")
+        maquininha = MaquininhaPagamento.objects.create(
+            empresa=self.empresa,
+            adquirente=adquirente,
+            nome="Rede sem liquidacao",
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            nome="Debito sem liquidacao",
+            codigo="debito-sem-liquidacao",
+            modalidade="debito",
+            maquininha=maquininha,
+        )
+        TaxaMaquininha.objects.create(
+            empresa=self.empresa,
+            maquininha=maquininha,
+            modalidade="debito",
+            taxa_percentual=Decimal("1.490"),
+            vigencia_inicio=self.mes_anterior,
+        )
+
+        form = PagamentoForm(
+            data={
+                "valor": "100.00",
+                "forma_pagamento": str(forma.id),
+                "parcelas_principal": "1",
+                "data_movimento": self.hoje.isoformat(),
+            },
+            empresa=self.empresa,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("conta bancaria de liquidacao", form.errors["forma_pagamento"][0])
 
     def test_taxa_referencia_sem_historico_usa_maior_taxa_ativa(self):
         adquirente = AdquirentePagamento.objects.create(empresa=self.empresa, nome="Rede")

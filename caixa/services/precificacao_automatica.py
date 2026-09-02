@@ -295,6 +295,7 @@ def listar_precos_por_canal(*, empresa, custo_base, aliquota, margem_minima, mar
             "maquininha": condicao.maquininha.nome,
             "adquirente": condicao.maquininha.adquirente.nome,
             "modalidade": condicao.get_modalidade_display(),
+            "bandeira": condicao.bandeira or "Todas",
             "parcelas_de": condicao.parcelas_de,
             "parcelas_ate": condicao.parcelas_ate,
             "taxa_percentual": condicao.taxa_percentual,

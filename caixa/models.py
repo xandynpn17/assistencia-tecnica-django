@@ -85,6 +85,8 @@ class Pagamento(models.Model):
     cliente_telefone = models.CharField(max_length=30, blank=True)
     formas_pagamento_compostas = models.JSONField(default=list, blank=True)
     valor = models.DecimalField(max_digits=10, decimal_places=2)
+    valor_recebido_dinheiro = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    troco_entregue = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     desconto_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     impostos_estimados = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
@@ -131,6 +133,12 @@ class Pagamento(models.Model):
             valor = Decimal(str((item or {}).get("valor") or "0"))
             referencia = (item or {}).get("referencia") or ""
             trecho = f"{nome}: R$ {valor:.2f}"
+            parcelas = int((item or {}).get("parcelas") or 1)
+            bandeira = (item or {}).get("bandeira") or ""
+            if bandeira:
+                trecho = f"{trecho} · {bandeira}"
+            if parcelas > 1:
+                trecho = f"{trecho} · {parcelas}x"
             if referencia:
                 trecho = f"{trecho} ({referencia})"
             linhas.append(trecho)
@@ -259,12 +267,13 @@ class FormaPagamento(models.Model):
         }:
             raise ValidationError({"conta_bancaria_liquidacao": "A conta de liquidação pertence a outra empresa."})
 
-    def obter_condicao_vigente(self, *, data_referencia=None, parcelas=None):
+    def obter_condicao_vigente(self, *, data_referencia=None, parcelas=None, bandeira=""):
         """Retorna a condição versionada da maquininha ou a taxa legada da forma."""
         data_referencia = data_referencia or timezone.localdate()
         parcelas = max(1, int(parcelas or self.parcelas_padrao or 1))
+        bandeira = " ".join(str(bandeira or "").strip().split())
         if self.maquininha_id and self.modalidade:
-            condicao = self.maquininha.taxas.filter(
+            condicoes = self.maquininha.taxas.filter(
                 modalidade=self.modalidade,
                 ativo=True,
                 parcelas_de__lte=parcelas,
@@ -272,7 +281,10 @@ class FormaPagamento(models.Model):
                 vigencia_inicio__lte=data_referencia,
             ).filter(Q(vigencia_fim__isnull=True) | Q(vigencia_fim__gte=data_referencia)).order_by(
                 "-vigencia_inicio", "-id"
-            ).first()
+            )
+            condicao = condicoes.filter(bandeira__iexact=bandeira).first() if bandeira else None
+            # Uma condição sem bandeira funciona como fallback para todas as bandeiras.
+            condicao = condicao or condicoes.filter(bandeira="").first()
             if condicao:
                 return {
                     "taxa_percentual": Decimal(condicao.taxa_percentual or 0),
@@ -280,6 +292,7 @@ class FormaPagamento(models.Model):
                     "dias_recebimento": int(condicao.dias_recebimento or 0),
                     "fonte": "maquininha",
                     "condicao_id": condicao.pk,
+                    "bandeira": condicao.bandeira,
                 }
         return {
             "taxa_percentual": Decimal(self.taxa_percentual or 0),
@@ -287,6 +300,7 @@ class FormaPagamento(models.Model):
             "dias_recebimento": int(self.dias_recebimento or 0),
             "fonte": "forma_pagamento",
             "condicao_id": None,
+            "bandeira": bandeira,
         }
 
 
@@ -342,6 +356,12 @@ class TaxaMaquininha(models.Model):
     )
     maquininha = models.ForeignKey(MaquininhaPagamento, on_delete=models.CASCADE, related_name="taxas")
     modalidade = models.CharField(max_length=12, choices=MODALIDADE_CHOICES)
+    bandeira = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="Opcional. Deixe vazio para uma taxa geral da modalidade.",
+    )
     parcelas_de = models.PositiveSmallIntegerField(default=1)
     parcelas_ate = models.PositiveSmallIntegerField(default=1)
     taxa_percentual = models.DecimalField(max_digits=7, decimal_places=3, default=0)
@@ -355,7 +375,7 @@ class TaxaMaquininha(models.Model):
         ordering = ["maquininha__nome", "modalidade", "parcelas_de", "-vigencia_inicio"]
         constraints = [
             models.UniqueConstraint(
-                fields=["maquininha", "modalidade", "parcelas_de", "parcelas_ate", "vigencia_inicio"],
+                fields=["maquininha", "modalidade", "bandeira", "parcelas_de", "parcelas_ate", "vigencia_inicio"],
                 name="cx_taxa_maq_faixa_vigencia_unica",
             ),
             models.CheckConstraint(condition=Q(parcelas_de__gte=1), name="cx_taxa_maq_parc_de_gte1"),
@@ -366,6 +386,7 @@ class TaxaMaquininha(models.Model):
 
     def clean(self):
         super().clean()
+        self.bandeira = " ".join((self.bandeira or "").strip().split()).title()
         if self.maquininha_id and self.maquininha.empresa_id != self.empresa_id:
             raise ValidationError("A taxa e a maquininha pertencem a empresas diferentes.")
         if self.parcelas_de > self.parcelas_ate:
@@ -378,6 +399,7 @@ class TaxaMaquininha(models.Model):
             sobrepostas = TaxaMaquininha.objects.filter(
                 maquininha_id=self.maquininha_id,
                 modalidade=self.modalidade,
+                bandeira__iexact=self.bandeira,
                 ativo=True,
                 parcelas_de__lte=self.parcelas_ate,
                 parcelas_ate__gte=self.parcelas_de,
@@ -394,7 +416,8 @@ class TaxaMaquininha(models.Model):
 
     def __str__(self):
         faixa = str(self.parcelas_de) if self.parcelas_de == self.parcelas_ate else f"{self.parcelas_de}-{self.parcelas_ate}"
-        return f"{self.maquininha.nome} · {self.get_modalidade_display()} {faixa}x · {self.taxa_percentual}%"
+        bandeira = f" · {self.bandeira}" if self.bandeira else ""
+        return f"{self.maquininha.nome} · {self.get_modalidade_display()}{bandeira} {faixa}x · {self.taxa_percentual}%"
 
 
 class CategoriaFinanceira(models.Model):
