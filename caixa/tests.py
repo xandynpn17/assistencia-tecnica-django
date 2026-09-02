@@ -4043,6 +4043,31 @@ class CaixaPermissoesTests(TestCase):
         self.assertContains(response, "valor recebido")
         self.assertFalse(Pagamento.objects.filter(referencia="DIN-001").exists())
 
+    def test_registrar_pagamento_em_dinheiro_com_campos_opcionais_vazios_nao_gera_500(self):
+        self.client.force_login(self.atendente)
+        response = self.client.post(
+            reverse("caixa:registrar_pagamento"),
+            {
+                "valor": "80.00",
+                "metodo": "dinheiro",
+                "referencia": "DIN-BROWSER-VAZIOS",
+                "valor_recebido": "",
+                "forma_pagamento_secundaria": "",
+                "valor_secundario": "",
+                "parcelas_principal": "1",
+                "parcelas_secundaria": "1",
+                "bandeira_principal": "",
+                "bandeira_secundaria": "",
+                "chave_idempotencia": "token-dinheiro-browser-vazios",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Informe o valor recebido em dinheiro")
+        self.assertContains(response, "valorRecebidoInput.required = isDinheiro")
+        self.assertContains(response, "valorRecebidoInput.setCustomValidity")
+        self.assertFalse(Pagamento.objects.filter(referencia="DIN-BROWSER-VAZIOS").exists())
+
     def test_registrar_pagamento_nao_duplica_com_mesma_chave_idempotencia(self):
         self.client.force_login(self.atendente)
         payload = {

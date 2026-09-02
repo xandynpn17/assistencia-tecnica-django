@@ -1869,6 +1869,19 @@ document.addEventListener("DOMContentLoaded", function () {
         const composicao = atualizarResumoPagamentoMisto(totais.totalFinal);
         const isDinheiro = composicao.totalDinheiro > 0;
         blocoDinheiro.classList.toggle("d-none", !isDinheiro);
+        if (valorRecebidoInput) {
+            valorRecebidoInput.required = isDinheiro;
+            const valorRecebido = parseMoney(valorRecebidoInput.value);
+            if (!isDinheiro) {
+                valorRecebidoInput.setCustomValidity("");
+            } else if (!String(valorRecebidoInput.value || "").trim()) {
+                valorRecebidoInput.setCustomValidity("Informe o valor recebido em dinheiro.");
+            } else if (valorRecebido < composicao.totalDinheiro) {
+                valorRecebidoInput.setCustomValidity("O valor recebido não pode ser menor que o valor em dinheiro.");
+            } else {
+                valorRecebidoInput.setCustomValidity("");
+            }
+        }
         atualizarCondicoesMaquininha();
         atualizarAtalhosForma();
         atualizarPrevisaoLiquidacao(totais.totalFinal);

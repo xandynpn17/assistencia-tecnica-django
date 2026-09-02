@@ -1088,6 +1088,20 @@ def registrar_pagamento(request):
         valor_recebido = None
         composicao_preview = []
         mensagem_antifraude = ""
+
+        def _forma_postada(campo):
+            """Resolve selects opcionais sem consultar o banco com uma PK vazia/invalida."""
+            forma_validada = (getattr(form, "cleaned_data", {}) or {}).get(campo)
+            if forma_validada is not None:
+                return forma_validada
+            try:
+                forma_id = int(form.data.get(campo) or 0)
+            except (TypeError, ValueError):
+                return None
+            if forma_id <= 0:
+                return None
+            return form.fields["forma_pagamento"].queryset.filter(pk=forma_id).first()
+
         if form.is_bound:
             try:
                 valor_recebido = Decimal(str(form.data.get("valor_recebido") or "0"))
@@ -1113,8 +1127,8 @@ def registrar_pagamento(request):
                 desconto_form = min((valor_form * desconto_percentual_form) / Decimal("100.00"), valor_form)
             desconto_form = min(max(desconto_form, Decimal("0.00")), valor_form)
             valor_final_form = valor_form - desconto_form
-            forma_principal = form.fields["forma_pagamento"].queryset.filter(id=form.data.get("forma_pagamento")).first()
-            forma_secundaria = form.fields["forma_pagamento"].queryset.filter(id=form.data.get("forma_pagamento_secundaria")).first()
+            forma_principal = _forma_postada("forma_pagamento")
+            forma_secundaria = _forma_postada("forma_pagamento_secundaria")
             if forma_principal:
                 try:
                     composicao_preview = montar_composicao_pagamento(
