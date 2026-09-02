@@ -556,21 +556,35 @@ class PagamentoForm(forms.ModelForm):
         desconto_percentual = cleaned_data.get("desconto_percentual") or Decimal("0.00")
         if not forma_pagamento:
             self.add_error("forma_pagamento", "Selecione a forma de pagamento.")
-        if (
-            forma_pagamento
-            and forma_pagamento.codigo == "dinheiro"
-            and not forma_secundaria
-            and valor_recebido is not None
-            and valor_recebido < valor
-        ):
-            self.add_error(
-                "valor_recebido",
-                "O valor recebido nao pode ser menor que o valor do pagamento em dinheiro.",
-            )
         if desconto_valor > Decimal("0.00") and desconto_percentual > Decimal("0.00"):
             raise forms.ValidationError("Use desconto por valor ou por percentual, nao os dois ao mesmo tempo.")
         if desconto_percentual > Decimal("100.00"):
             self.add_error("desconto_percentual", "O desconto percentual nao pode ser maior que 100%.")
+        desconto_aplicado = Decimal("0.00")
+        if desconto_percentual > Decimal("0.00") and desconto_percentual <= Decimal("100.00"):
+            desconto_aplicado = (valor * desconto_percentual) / Decimal("100.00")
+        elif desconto_valor > Decimal("0.00"):
+            desconto_aplicado = desconto_valor
+        valor_liquido = valor - min(max(desconto_aplicado, Decimal("0.00")), valor)
+        codigo_forma = (getattr(forma_pagamento, "codigo", "") or "").lower().replace("-", "_")
+        forma_em_dinheiro = bool(
+            forma_pagamento
+            and (
+                forma_pagamento.modalidade == "dinheiro"
+                or codigo_forma == "dinheiro"
+                or codigo_forma.startswith("dinheiro_")
+            )
+        )
+        if (
+            forma_em_dinheiro
+            and not forma_secundaria
+            and valor_recebido is not None
+            and valor_recebido < valor_liquido
+        ):
+            self.add_error(
+                "valor_recebido",
+                "O valor recebido nao pode ser menor que o valor liquido em dinheiro.",
+            )
         if forma_secundaria and not forma_pagamento:
             self.add_error("forma_pagamento", "Informe a forma principal antes de adicionar uma forma secundaria.")
         if forma_secundaria and forma_pagamento and forma_secundaria == forma_pagamento:

@@ -4068,6 +4068,60 @@ class CaixaPermissoesTests(TestCase):
         self.assertContains(response, "valorRecebidoInput.setCustomValidity")
         self.assertFalse(Pagamento.objects.filter(referencia="DIN-BROWSER-VAZIOS").exists())
 
+    def test_finalizar_guia_com_desconto_em_dinheiro_grava_liquido_e_troco(self):
+        self.client.force_login(self.gerente)
+        ponto = PontoOperacional.objects.create(codigo="POGDIN", nome="Loja guia dinheiro")
+        produto = Produto.objects.create(
+            nome="Produto guia com desconto",
+            ean="7899991110207",
+            preco_final=Decimal("100.00"),
+            preco=Decimal("100.00"),
+            quantidade=5,
+            ponto_operacional=ponto,
+            ativo=True,
+        )
+        SaldoEstoquePonto.objects.create(produto=produto, ponto_operacional=ponto, quantidade=5)
+        venda = VendaRapidaEstoque.objects.create(
+            produto=produto,
+            ponto_operacional=ponto,
+            quantidade=1,
+            valor_unitario=Decimal("100.00"),
+            valor_total=Decimal("100.00"),
+            funcionario_numero="12",
+            cesto_codigo="CES-GUIA-DIN",
+            guia_pagamento="GUIA-DIN-DESC",
+            status="pre_reserva",
+            usuario=self.gerente,
+        )
+
+        response = self.client.post(
+            reverse("caixa:registrar_pagamento") + "?guia=GUIA-DIN-DESC",
+            {
+                "valor": "100.00",
+                "metodo": "dinheiro",
+                "valor_recebido": "90.00",
+                "desconto_valor": "10.00",
+                "desconto_percentual": "",
+                "forma_pagamento_secundaria": "",
+                "valor_secundario": "",
+                "parcelas_principal": "1",
+                "parcelas_secundaria": "1",
+                "bandeira_principal": "",
+                "bandeira_secundaria": "",
+                "referencia": "GUIA-DIN-DESC-PG",
+                "chave_idempotencia": "guia-dinheiro-desconto-1",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pagamento = Pagamento.objects.get(chave_idempotencia="guia-dinheiro-desconto-1")
+        self.assertEqual(pagamento.valor, Decimal("90.00"))
+        self.assertEqual(pagamento.desconto, Decimal("10.00"))
+        self.assertEqual(pagamento.valor_recebido_dinheiro, Decimal("90.00"))
+        self.assertEqual(pagamento.troco_entregue, Decimal("0.00"))
+        venda.refresh_from_db()
+        self.assertEqual(venda.status, "vendida")
+
     def test_registrar_pagamento_nao_duplica_com_mesma_chave_idempotencia(self):
         self.client.force_login(self.atendente)
         payload = {
