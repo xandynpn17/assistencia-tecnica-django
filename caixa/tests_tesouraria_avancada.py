@@ -13,7 +13,7 @@ from caixa.models import (
 from caixa.services.cartoes_corporativos import pagar_fatura_cartao, registrar_compra_cartao
 from caixa.services.contabilidade import ativar_plano_contas, criar_plano_contas_gerencial
 from caixa.services.tesouraria import (
-    conciliar_linha, criar_movimento_de_linha_extrato, fechar_periodo_bancario, importar_extrato_arquivo, registrar_aporte_capital,
+    _extrair_transacoes_pdf_sumup, conciliar_linha, criar_movimento_de_linha_extrato, fechar_periodo_bancario, importar_extrato_arquivo, registrar_aporte_capital,
     movimentos_bancarios_disponiveis, registrar_movimento_bancario, registrar_movimento_socio,
     sugerir_correspondencias,
 )
@@ -104,6 +104,26 @@ class TesourariaAvancadaTests(TestCase):
         self.assertEqual(criadas[0].data_movimento, date(2026, 9, 1))
         self.assertEqual(criadas[0].valor, Decimal("173.60"))
         self.assertIn("Taxa R$ 1.40", criadas[0].descricao)
+
+    def test_extrai_venda_e_taxa_do_relatorio_pdf_sumup(self):
+        texto = """
+        Relatório de depósitos
+        SumUp Instituição de Pagamento Brasil Ltda.
+        Resumo das suas vendas
+        27/08/2026, 13\ue09257 TAAA42C
+        VRU9
+        1 / 2 R$460,00 R$460,00 R$17,94 R$0,00 R$442,06
+        """
+
+        transacoes = _extrair_transacoes_pdf_sumup(texto)
+
+        self.assertEqual(len(transacoes), 1)
+        self.assertEqual(transacoes[0]["codigo"], "TAAA42CVRU9")
+        self.assertEqual(transacoes[0]["data"], date(2026, 8, 27))
+        self.assertEqual(transacoes[0]["parcelas"], "2x")
+        self.assertEqual(transacoes[0]["valor_bruto"], Decimal("460.00"))
+        self.assertEqual(transacoes[0]["taxa"], Decimal("17.94"))
+        self.assertEqual(transacoes[0]["valor_liquido"], Decimal("442.06"))
 
     def test_linha_desconhecida_vira_despesa_somente_com_classificacao_humana(self):
         linha = importar_extrato_arquivo(

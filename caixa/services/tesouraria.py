@@ -400,6 +400,85 @@ def _importar_extrato_sumup(*, conta, leitor, usuario=None):
     return criadas
 
 
+def _extrair_transacoes_pdf_sumup(texto):
+    texto = (texto or "").replace("\xa0", " ")
+    texto = re.sub(r"(?<=\d)[\ue000-\uf8ff](?=\d)", ":", texto)
+    if "Relatório de depósitos" not in texto or "SumUp" not in texto:
+        raise ValidationError("O PDF não é um relatório de depósitos da SumUp reconhecido.")
+    if "Resumo das suas vendas" not in texto:
+        raise ValidationError("O relatório SumUp não contém o resumo das vendas.")
+
+    resumo = texto.split("Resumo das suas vendas", 1)[1]
+    # O extrator do PDF pode quebrar o código TAAA em duas linhas (7 + 4 caracteres).
+    resumo = re.sub(r"\b(T[A-Z0-9]{6})\s+([A-Z0-9]{4})\b", r"\1\2", resumo)
+    moeda = r"R\$\s*([\d.]+,\d{2})"
+    padrao = re.compile(
+        rf"(?P<data>\d{{2}}/\d{{2}}/\d{{4}}),\s*\d{{2}}:\d{{2}}\s+"
+        rf"(?P<codigo>T[A-Z0-9]{{10}})\s+"
+        rf"(?P<parcelas>(?:À|A)\s+vista|\d+\s*/\s*\d+)\s+"
+        rf"{moeda}\s+{moeda}\s+{moeda}\s+{moeda}\s+{moeda}",
+        flags=re.IGNORECASE,
+    )
+    transacoes = []
+    for match in padrao.finditer(resumo):
+        valores = match.groups()[-5:]
+        parcelas_brutas = " ".join(match.group("parcelas").split())
+        if "/" in parcelas_brutas:
+            parcelas = f"{parcelas_brutas.split('/')[-1].strip()}x"
+        else:
+            parcelas = "à vista"
+        transacoes.append({
+            "data": datetime.strptime(match.group("data"), "%d/%m/%Y").date(),
+            "codigo": match.group("codigo").upper(),
+            "parcelas": parcelas,
+            "valor_bruto": _parse_decimal_extrato(valores[0], linha="PDF"),
+            "taxa": _parse_decimal_extrato(valores[2], linha="PDF"),
+            "deducoes": _parse_decimal_extrato(valores[3], linha="PDF"),
+            "valor_liquido": _parse_decimal_extrato(valores[4], linha="PDF"),
+        })
+    if not transacoes:
+        raise ValidationError("Não foi possível identificar os depósitos no PDF da SumUp.")
+    return transacoes
+
+
+def importar_relatorio_pdf_sumup(*, conta, conteudo, usuario=None):
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+    from caixa.models import LinhaExtratoBancario
+
+    try:
+        leitor = PdfReader(io.BytesIO(conteudo))
+        if leitor.is_encrypted:
+            raise ValidationError("O PDF está protegido por senha e não pode ser importado.")
+        texto = "\n".join((pagina.extract_text() or "") for pagina in leitor.pages)
+    except ValidationError:
+        raise
+    except (PdfReadError, OSError, ValueError) as exc:
+        raise ValidationError("Não foi possível ler o PDF informado.") from exc
+
+    criadas = []
+    for transacao in _extrair_transacoes_pdf_sumup(texto):
+        descricao = (
+            f"Depósito SumUp · {transacao['parcelas']} · Bruto R$ {transacao['valor_bruto']:.2f} · "
+            f"Taxa R$ {transacao['taxa']:.2f}"
+        )
+        if transacao["deducoes"]:
+            descricao += f" · Deduções R$ {transacao['deducoes']:.2f}"
+        linha, criada = LinhaExtratoBancario.objects.get_or_create(
+            conta=conta,
+            identificador_externo=f"sumup:{transacao['codigo']}",
+            defaults={
+                "empresa": conta.empresa,
+                "data_movimento": transacao["data"],
+                "descricao": descricao[:255],
+                "valor": transacao["valor_liquido"],
+            },
+        )
+        if criada:
+            criadas.append(linha)
+    return criadas
+
+
 @transaction.atomic
 def importar_extrato_csv(*, conta, conteudo, usuario=None):
     from caixa.models import LinhaExtratoBancario
@@ -516,8 +595,13 @@ def importar_extrato_arquivo(*, conta, conteudo, nome_arquivo="", usuario=None):
     amostra = conteudo[:1000] if isinstance(conteudo, bytes) else str(conteudo)[:1000]
     if isinstance(amostra, bytes):
         amostra = amostra.decode("latin-1", errors="ignore")
+    parece_pdf = nome.endswith(".pdf") or bytes_arquivo.startswith(b"%PDF")
     parece_ofx = nome.endswith(".ofx") or "<OFX>" in amostra.upper() or "<STMTTRN>" in amostra.upper()
-    if parece_ofx:
+    if parece_pdf:
+        criadas = importar_relatorio_pdf_sumup(
+            conta=conta, conteudo=bytes_arquivo, usuario=usuario
+        )
+    elif parece_ofx:
         criadas = importar_extrato_ofx(conta=conta, conteudo=conteudo, usuario=usuario)
         saldo_match = re.search(r"<BALAMT>\s*([^<\r\n]+)", amostra, flags=re.IGNORECASE)
         if saldo_match:

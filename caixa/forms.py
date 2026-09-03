@@ -186,10 +186,13 @@ class ImportarExtratoForm(forms.Form):
     conta = forms.ModelChoiceField(queryset=ContaBancaria.objects.none())
     arquivo = forms.FileField(
         help_text=(
-            "OFX do banco, relatório Transações da SumUp em CSV ou CSV com colunas "
-            "data, descricao, valor e identificador opcional."
+            "OFX do banco, relatório Transações da SumUp em CSV, relatório de depósitos da SumUp em PDF "
+            "ou CSV com colunas data, descricao, valor e identificador opcional. No PDF da SumUp, "
+            "selecione a conta de destino indicada no relatório."
         ),
-        widget=forms.ClearableFileInput(attrs={"accept": ".ofx,.csv,text/csv,application/x-ofx"}),
+        widget=forms.ClearableFileInput(attrs={
+            "accept": ".ofx,.csv,.pdf,text/csv,application/x-ofx,application/pdf"
+        }),
     )
 
     def __init__(self, *args, **kwargs):
