@@ -82,6 +82,29 @@ class TesourariaAvancadaTests(TestCase):
                 chave="movimento-em-periodo-fechado", usuario=self.usuario,
             )
 
+    def test_importa_relatorio_transacoes_sumup_sem_duplicar_deposito(self):
+        conteudo = (
+            "Conta,Registro de data e hora,Código da transação,Tipo de transação,Status,"
+            "Bandeira do cartão,Últimos 4 dígitos do cartão,Modalidade do cartão,"
+            "Valor da transação,Valor da taxa,Valor pago\n"
+            "loja@example.com,2026-09-01 16:12:19,TAAA444RZ9M,Pagamento,Efetuado,"
+            "MAESTRO,2923,DEBIT,175.0,1.4,173.6\n"
+            ",2026-09-01 16:12:32,TAAA444RZ9M,Depósito,Pago,,,,175.0,1.4,173.6\n"
+            "loja@example.com,2026-09-01 17:00:00,FALHOU001,Pagamento,Falhou,"
+            "VISA,1234,CREDIT,50.0,0.0,0.0\n"
+        ).encode("utf-8")
+
+        criadas = importar_extrato_arquivo(
+            conta=self.banco, conteudo=conteudo, nome_arquivo="sumup-transactions-report.csv",
+            usuario=self.usuario,
+        )
+
+        self.assertEqual(len(criadas), 1)
+        self.assertEqual(criadas[0].identificador_externo, "sumup:TAAA444RZ9M")
+        self.assertEqual(criadas[0].data_movimento, date(2026, 9, 1))
+        self.assertEqual(criadas[0].valor, Decimal("173.60"))
+        self.assertIn("Taxa R$ 1.40", criadas[0].descricao)
+
     def test_linha_desconhecida_vira_despesa_somente_com_classificacao_humana(self):
         linha = importar_extrato_arquivo(
             conta=self.banco,

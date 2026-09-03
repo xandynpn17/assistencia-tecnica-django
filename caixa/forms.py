@@ -185,7 +185,10 @@ class MovimentoSocioForm(forms.ModelForm):
 class ImportarExtratoForm(forms.Form):
     conta = forms.ModelChoiceField(queryset=ContaBancaria.objects.none())
     arquivo = forms.FileField(
-        help_text="OFX do banco ou CSV com colunas data, descricao, valor e identificador opcional.",
+        help_text=(
+            "OFX do banco, relatório Transações da SumUp em CSV ou CSV com colunas "
+            "data, descricao, valor e identificador opcional."
+        ),
         widget=forms.ClearableFileInput(attrs={"accept": ".ofx,.csv,text/csv,application/x-ofx"}),
     )
 

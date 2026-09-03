@@ -339,12 +339,65 @@ def registrar_movimento_socio(
 
 
 def _parse_data(valor):
-    for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+    for formato in ("%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%d %H:%M:%S"):
         try:
             return datetime.strptime((valor or "").strip(), formato).date()
         except ValueError:
             pass
     raise ValidationError(f"Data inválida no extrato: {valor}")
+
+
+def _parse_decimal_extrato(valor, *, linha):
+    texto = str(valor or "0").strip()
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    try:
+        return Decimal(texto)
+    except Exception as exc:
+        raise ValidationError(f"Valor inválido na linha {linha}.") from exc
+
+
+def _importar_extrato_sumup(*, conta, leitor, usuario=None):
+    """Importa o relatório Transações da SumUp sem duplicar Pagamento/Depósito."""
+    from caixa.models import LinhaExtratoBancario
+
+    criadas = []
+    status_efetuados = {"efetuado", "pago", "successful", "success"}
+    for numero, row in enumerate(leitor, start=2):
+        tipo = (row.get("Tipo de transação") or "").strip().casefold()
+        status = (row.get("Status") or "").strip().casefold()
+
+        # A SumUp repete cada venda em uma linha "Depósito" com o mesmo código.
+        # A entrada financeira da conta é representada uma única vez pelo pagamento.
+        if tipo != "pagamento" or status not in status_efetuados:
+            continue
+
+        data = _parse_data(row.get("Registro de data e hora"))
+        valor_liquido = _parse_decimal_extrato(row.get("Valor pago"), linha=numero)
+        valor_bruto = _parse_decimal_extrato(row.get("Valor da transação"), linha=numero)
+        taxa = _parse_decimal_extrato(row.get("Valor da taxa"), linha=numero)
+        codigo = (row.get("Código da transação") or "").strip()
+        bandeira = (row.get("Bandeira do cartão") or "").strip()
+        modalidade = (row.get("Modalidade do cartão") or "").strip()
+        final_cartao = (row.get("Últimos 4 dígitos do cartão") or "").strip()
+        detalhes_cartao = " ".join(parte for parte in (modalidade, bandeira, f"final {final_cartao}" if final_cartao else "") if parte)
+        descricao = f"SumUp · {detalhes_cartao or 'Pagamento'} · Bruto R$ {valor_bruto:.2f} · Taxa R$ {taxa:.2f}"
+        identificador = f"sumup:{codigo}" if codigo else hashlib.sha256(
+            f"sumup|{data}|{descricao}|{valor_liquido}|{numero}".encode("utf-8")
+        ).hexdigest()
+        linha, criada = LinhaExtratoBancario.objects.get_or_create(
+            conta=conta,
+            identificador_externo=identificador[:180],
+            defaults={
+                "empresa": conta.empresa,
+                "data_movimento": data,
+                "descricao": descricao[:255],
+                "valor": valor_liquido,
+            },
+        )
+        if criada:
+            criadas.append(linha)
+    return criadas
 
 
 @transaction.atomic
@@ -353,14 +406,15 @@ def importar_extrato_csv(*, conta, conteudo, usuario=None):
 
     texto = conteudo.decode("utf-8-sig") if isinstance(conteudo, bytes) else str(conteudo)
     leitor = csv.DictReader(io.StringIO(texto), delimiter=";" if ";" in texto.splitlines()[0] else ",")
+    campos = set(leitor.fieldnames or [])
+    if {"Registro de data e hora", "Código da transação", "Tipo de transação", "Valor pago"}.issubset(campos):
+        return _importar_extrato_sumup(conta=conta, leitor=leitor, usuario=usuario)
+
     criadas = []
     for numero, row in enumerate(leitor, start=2):
         data = _parse_data(row.get("data"))
         descricao = (row.get("descricao") or "").strip()
-        try:
-            valor = Decimal((row.get("valor") or "0").replace(".", "").replace(",", ".") if "," in (row.get("valor") or "") else (row.get("valor") or "0"))
-        except Exception as exc:
-            raise ValidationError(f"Valor inválido na linha {numero}.") from exc
+        valor = _parse_decimal_extrato(row.get("valor"), linha=numero)
         base = f"{data}|{descricao}|{valor}|{numero}"
         identificador = (row.get("identificador") or "").strip() or hashlib.sha256(base.encode()).hexdigest()
         linha, criada = LinhaExtratoBancario.objects.get_or_create(
