@@ -101,6 +101,7 @@
     <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-success"><i class="fas fa-play"></i> Abrir caixa</a>
     {% endif %}
     <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-primary"><i class="fas fa-plus"></i> Registrar pagamento</a>
+    <a href="{% url 'caixa:checkout_agrupado' %}" class="btn btn-outline-primary"><i class="fas fa-shopping-basket"></i> Checkout agrupado</a>
     <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-warning"><i class="fas fa-minus"></i> Registrar saída</a>
     <a href="{% url 'caixa:contas_receber' %}?prontas_sem_recebimento=1" class="btn btn-outline-secondary">
       <i class="fas fa-file-invoice-dollar"></i> Prontas sem recebimento ({{ prontas_sem_recebimento_qtd }})

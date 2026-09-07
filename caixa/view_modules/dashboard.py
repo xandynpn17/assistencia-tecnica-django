@@ -30,6 +30,7 @@ from caixa.services.comissoes import (
 )
 from caixa.services.pagamentos import (
     calcular_desconto_pagamento,
+    composicao_item_eh_dinheiro,
     excluir_pagamento_com_justificativa,
     montar_composicao_pagamento,
     processar_pagamento_pos_transacional,
@@ -1156,7 +1157,7 @@ def registrar_pagamento(request):
                     )
             valor_dinheiro = Decimal("0.00")
             for item_comp in composicao_preview:
-                if (item_comp or {}).get("forma_codigo") == "dinheiro":
+                if composicao_item_eh_dinheiro(item_comp):
                     valor_dinheiro += Decimal(str((item_comp or {}).get("valor") or "0"))
             if valor_recebido is not None and valor_dinheiro > Decimal("0.00") and valor_recebido >= valor_dinheiro:
                 troco_sugerido = valor_recebido - valor_dinheiro
@@ -1331,7 +1332,7 @@ def registrar_pagamento(request):
                 (
                     Decimal(str(item_comp.get("valor") or "0"))
                     for item_comp in composicao_pagamento
-                    if item_comp.get("forma_codigo") == "dinheiro"
+                    if composicao_item_eh_dinheiro(item_comp)
                 ),
                 Decimal("0.00"),
             )

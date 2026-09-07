@@ -181,8 +181,18 @@
         </div>
         <div class="row">
             <div class="label">Origem</div>
-            <div class="value">{% if pagamento.ordem_servico %}OS {{ pagamento.ordem_servico.numero_os }}{% else %}Venda a mostrador{% endif %}</div>
+            <div class="value">{% if pagamento.origens_compostas %}Checkout agrupado{% elif pagamento.ordem_servico %}OS {{ pagamento.ordem_servico.numero_os }}{% else %}Venda a mostrador{% endif %}</div>
         </div>
+        {% if pagamento.origens_compostas %}
+        <div class="block">
+            <div class="label">Itens desta operacao</div>
+            <div class="value">
+                {% for origem in pagamento.origens_compostas_legiveis %}
+                    {{ origem.descricao }} — R$ {{ origem.valor_bruto|floatformat:2 }}{% if origem.desconto %} (desconto R$ {{ origem.desconto|floatformat:2 }}){% endif %}{% if not forloop.last %}<br>{% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
         <div class="row">
             <div class="label">Forma pagamento</div>
             <div class="value">{{ pagamento.metodo_display }}</div>

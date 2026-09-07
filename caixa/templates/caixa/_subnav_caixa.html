@@ -82,6 +82,9 @@
           <a href="{% url 'caixa:registrar_pagamento' %}" class="btn btn-sm {% if menu_sub == 'registrar_pagamento' %}btn-primary{% else %}btn-outline-primary{% endif %}">
             Pagamentos
           </a>
+          <a href="{% url 'caixa:checkout_agrupado' %}" class="btn btn-sm {% if menu_sub == 'checkout_agrupado' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            Checkout agrupado
+          </a>
           <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-sm {% if menu_sub == 'registrar_saida' %}btn-warning{% else %}btn-outline-warning{% endif %}">
             Sa&iacute;das
           </a>

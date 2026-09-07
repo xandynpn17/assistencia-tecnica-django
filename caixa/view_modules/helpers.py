@@ -622,13 +622,28 @@ def _garantir_conta_garantia(ordem, dados_garantia=None, ignorar_pagamento_id=No
         categoria.save(update_fields=["tipo", "ativa"])
 
     valor_previsto = Decimal(dados.get("valor_previsto_fabricante") or Decimal("0.00"))
+    valor_aprovado_informado = Decimal(
+        dados.get("valor_aprovado_fabricante") or Decimal("0.00")
+    )
+    valor_cobranca = (
+        valor_aprovado_informado
+        if valor_aprovado_informado > Decimal("0.00")
+        else valor_previsto
+    )
+    valor_recebido_informado = Decimal(
+        dados.get("valor_recebido_fabricante") or Decimal("0.00")
+    )
     pagamentos_qs = Pagamento.objects.filter(ordem_servico=ordem).filter(
         Q(forma_pagamento__codigo="garantia_fabricante") | Q(metodo="garantia_fabricante")
     )
     if ignorar_pagamento_id:
         pagamentos_qs = pagamentos_qs.exclude(id=ignorar_pagamento_id)
     total_pago = sum((p.valor for p in pagamentos_qs), Decimal("0.00"))
-    valor_aberto = max(Decimal("0.00"), valor_previsto - total_pago)
+    # A baixa manual da auditoria e um Pagamento de garantia podem representar o
+    # mesmo recebimento. Usar o maior acumulado evita cobrar novamente sem somar
+    # duas vezes o mesmo fato financeiro.
+    total_recebido = max(total_pago, valor_recebido_informado)
+    valor_aberto = max(Decimal("0.00"), valor_cobranca - total_recebido)
 
     regra = dados.get("regra")
     prazo = int(getattr(regra, "prazo_pagamento_dias", 0) or 0)
@@ -639,7 +654,6 @@ def _garantir_conta_garantia(ordem, dados_garantia=None, ignorar_pagamento_id=No
     marca = dados.get("marca")
     cliente_nome = fornecedor.nome if fornecedor else (marca.nome if marca else "Fabricante")
     descricao = f"Garantia fabricante - {cliente_nome} - OS {ordem.numero_os}"
-    valor_aprovado = Decimal(dados.get("valor_aprovado_fabricante") or valor_previsto)
     referencia_cobranca = (dados.get("referencia_faturamento") or "").strip()
 
     conta = ContaReceber.objects.filter(ordem_servico=ordem, tipo_origem="garantia_fabricante").order_by("-id").first()
@@ -654,9 +668,9 @@ def _garantir_conta_garantia(ordem, dados_garantia=None, ignorar_pagamento_id=No
             descricao=descricao,
             tipo_origem="garantia_fabricante",
             cliente_nome=cliente_nome,
-            valor_original=valor_previsto,
+            valor_original=valor_cobranca,
             valor_aberto=valor_aberto,
-            valor_aprovado_garantia=valor_aprovado,
+            valor_aprovado_garantia=valor_cobranca,
             data_base_cobranca=data_base,
             prazo_pagamento_dias=prazo if prazo > 0 else 30,
             referencia_cobranca=referencia_cobranca,
@@ -671,13 +685,18 @@ def _garantir_conta_garantia(ordem, dados_garantia=None, ignorar_pagamento_id=No
         conta.descricao = descricao
         conta.tipo_origem = "garantia_fabricante"
         conta.cliente_nome = cliente_nome
-        conta.valor_original = valor_previsto
+        conta.valor_original = valor_cobranca
         conta.valor_aberto = valor_aberto
-        conta.valor_aprovado_garantia = valor_aprovado
+        conta.valor_aprovado_garantia = valor_cobranca
         conta.data_base_cobranca = data_base
         conta.prazo_pagamento_dias = prazo if prazo > 0 else 30
         conta.referencia_cobranca = referencia_cobranca
         conta.vencimento = vencimento
+    # Ao reabrir uma OS a conta e cancelada. Se a OS for concluida novamente, a
+    # sincronizacao precisa reativar a mesma conta em vez de deixa-la invisivel
+    # nos relatorios de contas a receber.
+    if conta.status == "cancelada":
+        conta.status = "aberta"
     conta.atualizar_status_automatico()
     conta.save()
     return conta
@@ -789,6 +808,7 @@ def _upsert_auditoria_garantia_ordem(ordem):
     dados_com_auditoria = {
         **dados,
         "valor_aprovado_fabricante": auditoria.valor_aprovado_fabricante or dados["valor_previsto_fabricante"],
+        "valor_recebido_fabricante": auditoria.valor_recebido_fabricante,
         "referencia_faturamento": auditoria.referencia_faturamento,
     }
     conta = _garantir_conta_garantia(ordem, dados_com_auditoria)

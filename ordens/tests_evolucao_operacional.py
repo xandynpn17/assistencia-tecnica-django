@@ -224,3 +224,9 @@ class EvolucaoOperacionalOSTests(TestCase):
         conta.refresh_from_db()
         self.assertEqual(conta.status, "cancelada")
         self.assertEqual(conta.valor_aberto, Decimal("0.00"))
+
+        FechamentoOSService.alternar_fechamento(self.ordem, usuario=self.usuario)
+        conta.refresh_from_db()
+        self.assertEqual(conta.status, "aberta")
+        self.assertEqual(conta.valor_original, Decimal("100.00"))
+        self.assertEqual(conta.valor_aberto, Decimal("100.00"))

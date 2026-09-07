@@ -22,21 +22,29 @@ def taloes(request):
     exportar = (request.GET.get("export") or "").strip().lower()
     pagamentos = Pagamento.objects.select_related("ordem_servico", "forma_pagamento").order_by("-data", "-id")
     if empresa_ativa:
-        pagamentos = pagamentos.filter(Q(ordem_servico__isnull=True) | Q(ordem_servico__empresa=empresa_ativa))
+        pagamentos = pagamentos.filter(
+            Q(empresa=empresa_ativa)
+            | Q(empresa__isnull=True, ordem_servico__empresa=empresa_ativa)
+        )
     if busca:
         pagamentos = pagamentos.filter(
             Q(numero_talao__icontains=busca)
             | Q(referencia__icontains=busca)
             | Q(ordem_servico__numero_os__icontains=busca)
-        )
+            | Q(taloes_os__ordem__numero_os__icontains=busca)
+            | Q(cliente_nome__icontains=busca)
+        ).distinct()
 
     if exportar in {"csv", "pdf"}:
         linhas = []
         for pagamento in pagamentos:
+            origens = ", ".join(
+                item["descricao"] for item in pagamento.origens_compostas_legiveis
+            )
             linhas.append(
                 [
                     pagamento.numero_talao or "-",
-                    getattr(pagamento.ordem_servico, "numero_os", "") or "-",
+                    origens or getattr(pagamento.ordem_servico, "numero_os", "") or "-",
                     _fmt_decimal(pagamento.valor),
                     pagamento.metodo_display,
                     pagamento.referencia or "-",
@@ -71,7 +79,10 @@ def imprimir_talao(request, pagamento_id):
     empresa = obter_empresa_ativa(request, strict=False)
     pagamentos_qs = Pagamento.objects.select_related("ordem_servico", "forma_pagamento")
     if empresa:
-        pagamentos_qs = pagamentos_qs.filter(Q(ordem_servico__isnull=True) | Q(ordem_servico__empresa=empresa))
+        pagamentos_qs = pagamentos_qs.filter(
+            Q(empresa=empresa)
+            | Q(empresa__isnull=True, ordem_servico__empresa=empresa)
+        )
     pagamento = get_object_or_404(pagamentos_qs, id=pagamento_id)
     return render(
         request,

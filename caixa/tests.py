@@ -44,9 +44,17 @@ from caixa.models import (
 )
 from clientes.models import Cliente
 from configuracoes.models import ConfiguracaoSistema, Empresa, FornecedorGarantia, MarcaGarantia, RegraGarantiaMarca
-from estoque.models import MovimentacaoEstoque, PontoOperacional, Produto, SaldoEstoquePonto, VendaRapidaEstoque
+from estoque.models import (
+    MovimentacaoEstoque,
+    PontoOperacional,
+    Produto,
+    SaldoEstoquePonto,
+    SaldoEstoqueUbicacao,
+    UbicacaoEstoque,
+    VendaRapidaEstoque,
+)
 from orcamentos.models import ItemOrcamento, Orcamento
-from ordens.models import LinhaTrabalho, OrdemServico, ServicoPeca
+from ordens.models import LinhaTrabalho, OrdemServico, OrdemTalao, ServicoPeca
 from caixa.services.comissao_status import ComissaoStatusError, aplicar_acao_comissao
 from caixa.services.comissoes import (
     cancelar_comissoes_por_ordem,
@@ -4496,6 +4504,7 @@ class CaixaPermissoesTests(TestCase):
         self.assertIsNotNone(conta)
         self.assertEqual(conta.status, "paga")
         self.assertEqual(str(conta.valor_aberto), "0.00")
+        self.assertEqual(conta.valor_original, Decimal("125.00"))
         self.assertEqual(conta.valor_aprovado_garantia, Decimal("125.00"))
         self.assertEqual(conta.fornecedor_garantia, fornecedor)
         self.assertEqual(conta.marca_garantia, marca)
@@ -4521,6 +4530,7 @@ class CaixaPermissoesTests(TestCase):
             marca=marca,
             valor_previsto_fabricante=Decimal("150.00"),
             comissao_prevista_tecnica=Decimal("50.00"),
+            data_base_cobranca=timezone.localdate(),
             status_faturamento="pendente",
         )
         hoje = timezone.localdate()
@@ -4535,6 +4545,27 @@ class CaixaPermissoesTests(TestCase):
         self.assertIn("Marca CSV", conteudo)
         self.assertIn("Valor Aprovado", conteudo)
         self.assertIn("Valor Recebido", conteudo)
+
+    def test_relatorio_caixa_exibe_garantia_em_carteira_sem_somar_ao_saldo(self):
+        self.client.force_login(self.gerente)
+        ContaReceber.objects.create(
+            descricao="Garantia em carteira",
+            tipo_origem="garantia_fabricante",
+            cliente_nome="Fabricante Teste",
+            valor_original=Decimal("88.00"),
+            valor_aberto=Decimal("88.00"),
+            valor_aprovado_garantia=Decimal("88.00"),
+            data_base_cobranca=timezone.localdate(),
+            vencimento=timezone.localdate() + timedelta(days=30),
+            status="aberta",
+        )
+
+        response = self.client.get(reverse("caixa:relatorios"), {"preset": "mes_atual"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_receber_fabricantes"], Decimal("88.00"))
+        self.assertEqual(response.context["total_entradas"], Decimal("0.00"))
+        self.assertContains(response, "Posi&ccedil;&atilde;o de contas a receber", html=False)
 
     def test_contas_receber_filtra_garantia_por_marca_e_fornecedor(self):
         self.client.force_login(self.gerente)
@@ -5223,6 +5254,278 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(response.context["perdas_estoque"], Decimal("5.00"))
         self.assertEqual(response.context["lucro_bruto"], Decimal("80.00"))
         self.assertEqual(response.context["resultado_operacional"], Decimal("45.00"))
+
+
+class CheckoutAgrupadoTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.empresa = Empresa.objects.create(nome="Empresa Checkout", cnpj="11222333000181")
+        self.usuario = user_model.objects.create_user(
+            username="checkout_operador",
+            password="senha-forte-123",
+            tipo_usuario="gerente",
+            empresa=self.empresa,
+        )
+        self.caixa = Caixa.objects.create(
+            empresa=self.empresa,
+            aberto=True,
+            saldo_inicial=Decimal("0.00"),
+            data=timezone.localdate(),
+        )
+        self.forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            nome="PIX Checkout",
+            codigo="pix_checkout",
+            tipo="avista",
+            modalidade="pix",
+            ativa=True,
+        )
+        self.cliente = Cliente.objects.create(
+            empresa=self.empresa,
+            nome="Cliente Checkout",
+            documento="52998224725",
+            telefone="11999990000",
+            estado="SP",
+        )
+
+    def _criar_conta_os(self, numero, valor):
+        ordem = OrdemServico.objects.create(
+            empresa=self.empresa,
+            cliente=self.cliente,
+            numero_os=numero,
+            tipo_equipamento="celular",
+            modelo_equipamento=numero,
+            defeito="Teste checkout",
+            tipo_reparo="Fora de Garantia",
+            resultado_financeiro="cobravel",
+            status="concluida",
+            fechada=True,
+        )
+        ServicoPeca.objects.create(
+            ordem=ordem,
+            tipo="servico",
+            nome=f"Servico {numero}",
+            quantidade=1,
+            valor_unitario=valor,
+            responsavel_cobranca="cliente",
+        )
+        conta = ContaReceber.objects.create(
+            empresa=self.empresa,
+            ordem_servico=ordem,
+            descricao=f"OS {numero}",
+            tipo_origem="cliente_os",
+            cliente_nome=self.cliente.nome,
+            valor_original=valor,
+            valor_aberto=valor,
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        return ordem, conta
+
+    def _payload(self, contas, valor, **extras):
+        payload = {
+            "contas_ids": [str(conta.id) for conta in contas],
+            "valor": str(valor),
+            "forma_pagamento": str(self.forma.id),
+            "parcelas_principal": "1",
+            "desconto_valor": "0.00",
+            "desconto_percentual": "0.00",
+            "chave_idempotencia": f"checkout-teste-{valor}-{len(contas)}",
+        }
+        payload.update(extras)
+        return payload
+
+    def test_checkout_liquida_duas_os_com_um_pagamento_e_um_talao(self):
+        ordem_a, conta_a = self._criar_conta_os("OS-CHK-01", Decimal("100.00"))
+        ordem_b, conta_b = self._criar_conta_os("OS-CHK-02", Decimal("60.00"))
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            reverse("caixa:checkout_agrupado"),
+            self._payload([conta_a, conta_b], "160.00"),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pagamento = Pagamento.objects.get(chave_idempotencia="checkout-teste-160.00-2")
+        conta_a.refresh_from_db()
+        conta_b.refresh_from_db()
+        self.assertEqual(pagamento.valor, Decimal("160.00"))
+        self.assertEqual(len(pagamento.origens_compostas), 2)
+        self.assertEqual(conta_a.status, "paga")
+        self.assertEqual(conta_b.status, "paga")
+        self.assertEqual(RecebimentoConta.objects.filter(pagamento=pagamento).count(), 2)
+        self.assertEqual(OrdemTalao.objects.filter(pagamento=pagamento).count(), 2)
+
+    def test_checkout_rateia_desconto_e_estorno_reabre_as_duas_contas(self):
+        _, conta_a = self._criar_conta_os("OS-CHK-03", Decimal("100.00"))
+        _, conta_b = self._criar_conta_os("OS-CHK-04", Decimal("50.00"))
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            reverse("caixa:checkout_agrupado"),
+            self._payload(
+                [conta_a, conta_b],
+                "150.00",
+                desconto_valor="15.00",
+                chave_idempotencia="checkout-com-desconto",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pagamento = Pagamento.objects.get(chave_idempotencia="checkout-com-desconto")
+        self.assertEqual(pagamento.valor, Decimal("135.00"))
+        self.assertEqual(pagamento.desconto, Decimal("15.00"))
+        self.assertEqual(
+            RecebimentoConta.objects.filter(pagamento=pagamento).aggregate(total=Sum("desconto"))["total"],
+            Decimal("15.00"),
+        )
+        excluir_pagamento_com_justificativa(
+            pagamento=pagamento,
+            usuario=self.usuario,
+            justificativa="Cancelamento integral do checkout de teste",
+        )
+        conta_a.refresh_from_db()
+        conta_b.refresh_from_db()
+        self.assertEqual(conta_a.valor_aberto, Decimal("100.00"))
+        self.assertEqual(conta_b.valor_aberto, Decimal("50.00"))
+
+    def test_checkout_inclui_guia_e_baixa_estoque_na_mesma_operacao(self):
+        _, conta = self._criar_conta_os("OS-CHK-05", Decimal("80.00"))
+        ponto = PontoOperacional.objects.create(
+            empresa=self.empresa,
+            codigo="CHK",
+            nome="Balcao checkout",
+        )
+        ubicacao = UbicacaoEstoque.objects.create(
+            ponto_operacional=ponto,
+            codigo="CHK-A1",
+            descricao="Prateleira checkout",
+            ativo=True,
+        )
+        produto = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Capa checkout",
+            preco=Decimal("20.00"),
+            preco_final=Decimal("20.00"),
+            quantidade=3,
+            ponto_operacional=ponto,
+            ubicacao_padrao=ubicacao,
+            ativo=True,
+        )
+        SaldoEstoquePonto.objects.create(produto=produto, ponto_operacional=ponto, quantidade=3)
+        SaldoEstoqueUbicacao.objects.create(
+            produto=produto,
+            ponto_operacional=ponto,
+            ubicacao=ubicacao,
+            quantidade=3,
+        )
+        venda = VendaRapidaEstoque.objects.create(
+            produto=produto,
+            ponto_operacional=ponto,
+            quantidade=2,
+            valor_unitario=Decimal("20.00"),
+            valor_total=Decimal("40.00"),
+            funcionario_numero="12",
+            cesto_codigo="CES-CHK-01",
+            guia_pagamento="GUIA-CHK-01",
+            status="pre_reserva",
+            usuario=self.usuario,
+        )
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            reverse("caixa:checkout_agrupado"),
+            self._payload(
+                [conta],
+                "120.00",
+                guia_codigo="GUIA-CHK-01",
+                chave_idempotencia="checkout-com-guia",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pagamento = Pagamento.objects.get(chave_idempotencia="checkout-com-guia")
+        venda.refresh_from_db()
+        saldo = SaldoEstoquePonto.objects.get(produto=produto, ponto_operacional=ponto)
+        self.assertEqual(venda.status, "vendida")
+        self.assertEqual(venda.pagamento, pagamento)
+        self.assertEqual(saldo.quantidade, 1)
+        self.assertEqual(len(pagamento.origens_compostas), 2)
+
+    def test_checkout_rejeita_os_de_clientes_diferentes(self):
+        _, conta_a = self._criar_conta_os("OS-CHK-06", Decimal("70.00"))
+        outro_cliente = Cliente.objects.create(
+            empresa=self.empresa,
+            nome="Outro cliente checkout",
+            documento="16899535009",
+            telefone="11988880000",
+            estado="SP",
+        )
+        ordem_b = OrdemServico.objects.create(
+            empresa=self.empresa,
+            cliente=outro_cliente,
+            numero_os="OS-CHK-07",
+            tipo_equipamento="notebook",
+            modelo_equipamento="Modelo B",
+            defeito="Teste checkout",
+            tipo_reparo="Fora de Garantia",
+            resultado_financeiro="cobravel",
+            status="concluida",
+            fechada=True,
+        )
+        conta_b = ContaReceber.objects.create(
+            empresa=self.empresa,
+            ordem_servico=ordem_b,
+            descricao="OS OS-CHK-07",
+            tipo_origem="cliente_os",
+            cliente_nome=outro_cliente.nome,
+            valor_original=Decimal("30.00"),
+            valor_aberto=Decimal("30.00"),
+            vencimento=timezone.localdate(),
+            status="aberta",
+        )
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            reverse("caixa:checkout_agrupado"),
+            self._payload(
+                [conta_a, conta_b],
+                "100.00",
+                chave_idempotencia="checkout-clientes-diferentes",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "As OS do checkout precisam pertencer ao mesmo cliente")
+        self.assertFalse(Pagamento.objects.filter(chave_idempotencia="checkout-clientes-diferentes").exists())
+
+    def test_checkout_reconhece_modalidade_dinheiro_e_calcula_troco(self):
+        _, conta = self._criar_conta_os("OS-CHK-08", Decimal("100.00"))
+        forma_dinheiro = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            nome="Espécie balcão",
+            codigo="especie_balcao",
+            tipo="avista",
+            modalidade="dinheiro",
+            ativa=True,
+        )
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            reverse("caixa:checkout_agrupado"),
+            self._payload(
+                [conta],
+                "100.00",
+                forma_pagamento=str(forma_dinheiro.id),
+                valor_recebido="120.00",
+                chave_idempotencia="checkout-dinheiro-troco",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pagamento = Pagamento.objects.get(chave_idempotencia="checkout-dinheiro-troco")
+        self.assertEqual(pagamento.valor_recebido_dinheiro, Decimal("120.00"))
+        self.assertEqual(pagamento.troco_entregue, Decimal("20.00"))
 
 
 class CaixaMultiempresaTests(TestCase):

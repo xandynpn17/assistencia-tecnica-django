@@ -6,7 +6,7 @@ from django.db.models import F, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from caixa.models import CategoriaFinanceira, ContaReceber, Pagamento
+from caixa.models import CategoriaFinanceira, ContaReceber, Pagamento, RecebimentoConta
 from caixa.services.garantias import upsert_auditoria_garantia_ordem
 from estoque.services import (
     consumir_itens_estoque_ordem,
@@ -33,18 +33,40 @@ def _total_servicos_pecas(ordem):
 
 
 def _total_pagamentos_liquidados(ordem, ignorar_pagamento_id=None):
+    conta = (
+        ContaReceber.objects.filter(ordem_servico=ordem, tipo_origem="cliente_os")
+        .order_by("-id")
+        .first()
+    )
+    recebimentos = RecebimentoConta.objects.none()
+    pagamentos_vinculados_ids = []
+    if conta:
+        recebimentos = RecebimentoConta.objects.filter(conta=conta)
+        if ignorar_pagamento_id:
+            recebimentos = recebimentos.exclude(pagamento_id=ignorar_pagamento_id)
+        pagamentos_vinculados_ids = list(
+            recebimentos.exclude(pagamento_id__isnull=True).values_list("pagamento_id", flat=True)
+        )
     pagamentos = Pagamento.objects.filter(ordem_servico=ordem).exclude(
         models.Q(forma_pagamento__codigo="garantia_fabricante") | models.Q(metodo="garantia_fabricante")
-    )
+    ).exclude(id__in=pagamentos_vinculados_ids)
     if ignorar_pagamento_id:
         pagamentos = pagamentos.exclude(id=ignorar_pagamento_id)
-    return pagamentos.aggregate(
+    total_direto = pagamentos.aggregate(
         total=Coalesce(
             Sum(F("valor") + F("desconto"), output_field=VALOR_MONETARIO),
             Decimal("0.00"),
             output_field=VALOR_MONETARIO,
         )
     )["total"]
+    total_alocado = recebimentos.aggregate(
+        total=Coalesce(
+            Sum(F("valor") + F("desconto"), output_field=VALOR_MONETARIO),
+            Decimal("0.00"),
+            output_field=VALOR_MONETARIO,
+        )
+    )["total"]
+    return total_direto + total_alocado
 
 
 def garantir_conta_receber_os(ordem, ignorar_pagamento_id=None):

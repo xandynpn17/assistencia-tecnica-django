@@ -155,6 +155,37 @@
         </div>
     </div>
 
+    <div class="card mb-3 border-primary">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+                <strong>Posi&ccedil;&atilde;o de contas a receber</strong>
+                <div class="small text-muted">Valores ainda pendentes. N&atilde;o entram no saldo do caixa at&eacute; o recebimento.</div>
+            </div>
+            <a href="{% url 'caixa:contas_receber' %}" class="btn btn-sm btn-outline-primary">Abrir contas a receber</a>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3 mb-2">
+                    <div class="text-muted small">Carteira total</div>
+                    <strong>R$ {{ total_carteira_receber|floatformat:2 }}</strong>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <div class="text-muted small">Clientes</div>
+                    <strong>R$ {{ total_receber_clientes|floatformat:2 }}</strong>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <div class="text-muted small">Fabricantes</div>
+                    <strong>R$ {{ total_receber_fabricantes|floatformat:2 }}</strong>
+                    <div><a class="small" href="{% url 'caixa:garantias_fabricante' %}">Ver garantias</a></div>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <div class="text-muted small">Vencido</div>
+                    <strong class="{% if total_receber_vencido > 0 %}text-danger{% endif %}">R$ {{ total_receber_vencido|floatformat:2 }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-lg-6">
             <div class="card mb-3">

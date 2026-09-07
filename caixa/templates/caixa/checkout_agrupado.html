@@ -1,0 +1,317 @@
+{% extends "core/base.html" %}
+
+{% block title %}Checkout agrupado{% endblock %}
+
+{% block extra_css %}
+<style>
+  .checkout-shell { max-width: 1500px; margin: 0 auto; }
+  .checkout-head, .checkout-card {
+    border: 1px solid #dce5ef; border-radius: 16px; background: #fff;
+    box-shadow: 0 12px 28px rgba(31, 53, 77, .06);
+  }
+  .checkout-head { padding: 16px 18px; margin-bottom: 14px; }
+  .checkout-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(340px, .7fr); gap: 14px; align-items: start; }
+  .checkout-card { overflow: hidden; margin-bottom: 14px; }
+  .checkout-card-head { padding: 13px 16px; border-bottom: 1px solid #e4ebf2; background: #f8fbff; }
+  .checkout-card-body { padding: 16px; }
+  .checkout-step { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 50%; background: #1268d6; color: #fff; font-weight: 700; margin-right: 8px; }
+  .checkout-search { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .checkout-list { max-height: 430px; overflow-y: auto; border: 1px solid #e1e8f0; border-radius: 12px; }
+  .checkout-row { display: grid; grid-template-columns: 34px 1.2fr 1fr 120px; gap: 10px; align-items: center; padding: 11px 12px; border-bottom: 1px solid #edf1f5; cursor: pointer; margin: 0; }
+  .checkout-row:last-child { border-bottom: 0; }
+  .checkout-row:hover { background: #f5f9ff; }
+  .checkout-row.is-selected { background: #eaf4ff; }
+  .checkout-row.is-disabled { opacity: .45; cursor: not-allowed; }
+  .checkout-row strong, .checkout-row span { display: block; }
+  .checkout-muted { color: #6d7c8b; font-size: .82rem; }
+  .checkout-money { text-align: right; font-weight: 700; }
+  .checkout-guide { border: 1px dashed #b8c9da; border-radius: 12px; padding: 12px; background: #fbfdff; }
+  .checkout-total { position: sticky; top: 10px; }
+  .checkout-total-value { font-size: 2rem; font-weight: 800; color: #153c67; }
+  .checkout-breakdown { padding: 10px 0; border-top: 1px solid #e8edf2; margin-top: 10px; }
+  .checkout-breakdown-row { display: flex; justify-content: space-between; gap: 12px; margin: 5px 0; }
+  .checkout-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .checkout-form-grid .full { grid-column: 1 / -1; }
+  .checkout-shortcuts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .checkout-shortcuts kbd { background: #1268d6; }
+  .checkout-submit { min-height: 58px; font-size: 1.15rem; font-weight: 700; }
+  .checkout-success { border-left: 5px solid #22a447; }
+  @media (max-width: 991.98px) {
+    .checkout-grid { grid-template-columns: 1fr; }
+    .checkout-total { position: static; }
+    .checkout-row { grid-template-columns: 30px 1fr 100px; }
+    .checkout-equipment { display: none; }
+  }
+  @media (max-width: 575.98px) {
+    .checkout-form-grid { grid-template-columns: 1fr; }
+    .checkout-form-grid .full { grid-column: auto; }
+    .checkout-row { grid-template-columns: 28px 1fr; }
+    .checkout-money { grid-column: 2; text-align: left; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3 checkout-shell">
+  {% include "caixa/_subnav_caixa.html" %}
+
+  <div class="checkout-head d-flex justify-content-between align-items-center flex-wrap" style="gap:12px;">
+    <div>
+      <h1 class="h4 mb-1">Checkout agrupado</h1>
+      <div class="text-muted">Receba várias OS do mesmo cliente e acessórios em uma única operação.</div>
+    </div>
+    <div class="checkout-shortcuts">
+      <button type="button" class="btn btn-sm btn-outline-primary js-checkout-shortcut" data-target="busca"><kbd>Alt+1</kbd> Buscar</button>
+      <button type="button" class="btn btn-sm btn-outline-primary js-checkout-shortcut" data-target="guia"><kbd>Alt+2</kbd> Guia</button>
+      <button type="button" class="btn btn-sm btn-outline-primary js-checkout-shortcut" data-target="forma"><kbd>Alt+3</kbd> Forma</button>
+      <button type="button" class="btn btn-sm btn-outline-success js-checkout-shortcut" data-target="concluir"><kbd>Alt+Enter</kbd> Concluir</button>
+    </div>
+  </div>
+
+  {% if pagamento_sucesso %}
+  <div class="alert alert-success checkout-success d-flex justify-content-between align-items-center flex-wrap">
+    <div>
+      <strong>Checkout concluído.</strong>
+      <div class="small">Talão {{ pagamento_sucesso.numero_talao }} · R$ {{ pagamento_sucesso.valor|floatformat:2 }} · {{ pagamento_sucesso.metodo_display }}</div>
+    </div>
+    <div class="d-flex" style="gap:8px;">
+      <a href="{% url 'caixa:imprimir_talao' pagamento_sucesso.id %}" target="_blank" class="btn btn-sm btn-success">Imprimir comprovante</a>
+      <a href="{% url 'caixa:checkout_agrupado' %}" class="btn btn-sm btn-outline-success">Novo checkout</a>
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post" id="checkoutForm" novalidate>
+    {% csrf_token %}
+    {{ form.chave_idempotencia }}
+    <input type="hidden" name="valor" id="id_valor" value="{{ total_bruto|stringformat:'0.2f' }}">
+    <div class="checkout-grid">
+      <section>
+        <div class="checkout-card">
+          <div class="checkout-card-head"><strong><span class="checkout-step">1</span>Selecione as OS</strong></div>
+          <div class="checkout-card-body">
+            <div class="checkout-search mb-3">
+              <input type="search" id="checkoutBusca" class="form-control" placeholder="Cliente, número da OS, telefone, documento ou equipamento" value="{{ busca }}">
+              <button type="button" class="btn btn-outline-secondary" id="limparBusca">Limpar</button>
+            </div>
+            <div class="small text-muted mb-2">Depois da primeira seleção, o sistema mantém disponíveis somente OS do mesmo cliente.</div>
+            <div class="checkout-list" id="checkoutListaOS">
+              {% for conta in contas_disponiveis %}
+              <label class="checkout-row {% if conta.id in contas_selecionadas_ids %}is-selected{% endif %}" data-search="{{ conta.cliente_nome|lower }} {{ conta.ordem_servico.numero_os|lower }} {{ conta.ordem_servico.tipo_equipamento|lower }} {{ conta.ordem_servico.modelo_equipamento|lower }} {{ conta.ordem_servico.cliente.telefone|lower }} {{ conta.ordem_servico.cliente.documento|lower }}" data-cliente="{{ conta.ordem_servico.cliente_id|default:'' }}" data-valor="{{ conta.valor_aberto|stringformat:'0.2f' }}">
+                <input type="checkbox" name="contas_ids" value="{{ conta.id }}" {% if conta.id in contas_selecionadas_ids %}checked{% endif %}>
+                <span>
+                  <strong>{{ conta.ordem_servico.numero_os }} · {{ conta.cliente_nome|default:"Cliente sem nome" }}</strong>
+                  <span class="checkout-muted">Vencimento {{ conta.vencimento|date:"d/m/Y" }} · {{ conta.get_status_display }}</span>
+                </span>
+                <span class="checkout-equipment">
+                  {{ conta.ordem_servico.tipo_equipamento|default:"Equipamento" }}
+                  <span class="checkout-muted">{{ conta.ordem_servico.marca_equipamento }} {{ conta.ordem_servico.modelo_equipamento }}</span>
+                </span>
+                <span class="checkout-money">R$ {{ conta.valor_aberto|floatformat:2 }}</span>
+              </label>
+              {% empty %}
+              <div class="p-4 text-center text-muted">Nenhuma conta de cliente pendente.</div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="checkout-card">
+          <div class="checkout-card-head"><strong><span class="checkout-step">2</span>Adicionar acessórios</strong></div>
+          <div class="checkout-card-body">
+            <div class="checkout-guide">
+              <div class="form-row align-items-end">
+                <div class="col-md-7">
+                  <label for="guiaCodigo">Guia criada no Estoque/POS</label>
+                  <input id="guiaCodigo" name="guia_codigo" class="form-control" value="{{ guia_codigo }}" placeholder="Ex.: GUI-00000001">
+                </div>
+                <div class="col-md-5 mt-2 mt-md-0 d-flex" style="gap:8px;">
+                  <button type="button" id="carregarGuia" class="btn btn-outline-primary flex-fill">Carregar guia</button>
+                  <a href="{% url 'estoque:consulta_artigos' %}" class="btn btn-outline-secondary flex-fill">Montar itens</a>
+                </div>
+              </div>
+              {% if erro_guia %}<div class="text-danger small mt-2">{{ erro_guia }}</div>{% endif %}
+              {% if vendas_guia %}
+              <div class="mt-3">
+                {% for venda in vendas_guia %}
+                <div class="checkout-breakdown-row"><span>{{ venda.produto.nome }} × {{ venda.quantidade }}</span><strong>R$ {{ venda.valor_total|floatformat:2 }}</strong></div>
+                {% endfor %}
+              </div>
+              {% else %}
+              <div class="small text-muted mt-2">Opcional. Monte os acessórios no Estoque e informe a guia aqui.</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="checkout-total">
+        <div class="checkout-card">
+          <div class="checkout-card-head"><strong><span class="checkout-step">3</span>Pagamento único</strong></div>
+          <div class="checkout-card-body">
+            {% if form.non_field_errors %}<div class="alert alert-danger py-2">{{ form.non_field_errors }}</div>{% endif %}
+            <div class="checkout-muted">Total selecionado</div>
+            <div class="checkout-total-value">R$ <span id="checkoutTotal">{{ total_bruto|floatformat:2 }}</span></div>
+            <div class="checkout-breakdown">
+              <div class="checkout-breakdown-row"><span>OS selecionadas</span><strong>R$ <span id="checkoutTotalOS">{{ total_contas|floatformat:2 }}</span></strong></div>
+              <div class="checkout-breakdown-row"><span>Acessórios</span><strong>R$ {{ total_guia|floatformat:2 }}</strong></div>
+              <div class="checkout-breakdown-row"><span>Quantidade de OS</span><strong id="checkoutQtdOS">{{ contas_selecionadas|length }}</strong></div>
+              <div class="checkout-breakdown-row text-danger"><span>Desconto</span><strong>- R$ <span id="checkoutDesconto">0,00</span></strong></div>
+              <div class="checkout-breakdown-row"><span>Valor a receber</span><strong>R$ <span id="checkoutLiquido">{{ total_bruto|floatformat:2 }}</span></strong></div>
+              <div class="checkout-breakdown-row text-success" id="checkoutTrocoLinha" hidden><span>Troco</span><strong>R$ <span id="checkoutTroco">0,00</span></strong></div>
+            </div>
+
+            <div class="checkout-form-grid">
+              <div class="full">
+                <label for="id_forma_pagamento">Forma de pagamento</label>
+                {{ form.forma_pagamento }}
+                {% for erro in form.forma_pagamento.errors %}<div class="text-danger small">{{ erro }}</div>{% endfor %}
+              </div>
+              <div>
+                <label for="id_parcelas_principal">Parcelas</label>{{ form.parcelas_principal }}
+                {% for erro in form.parcelas_principal.errors %}<div class="text-danger small">{{ erro }}</div>{% endfor %}
+              </div>
+              <div>
+                <label for="id_bandeira_principal">Bandeira</label>{{ form.bandeira_principal }}
+                {% for erro in form.bandeira_principal.errors %}<div class="text-danger small">{{ erro }}</div>{% endfor %}
+              </div>
+              <div>
+                <label for="id_desconto_valor">Desconto R$</label>{{ form.desconto_valor }}
+                {% for erro in form.desconto_valor.errors %}<div class="text-danger small">{{ erro }}</div>{% endfor %}
+              </div>
+              <div>
+                <label for="id_desconto_percentual">Desconto %</label>{{ form.desconto_percentual }}
+                {% for erro in form.desconto_percentual.errors %}<div class="text-danger small">{{ erro }}</div>{% endfor %}
+              </div>
+              <div class="full">
+                <label for="id_valor_recebido">Dinheiro entregue pelo cliente</label>{{ form.valor_recebido }}
+                {% for erro in form.valor_recebido.errors %}<div class="text-danger small">{{ erro }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <details class="mt-3">
+              <summary class="text-primary" style="cursor:pointer;">Pagamento misto, referência e outros dados</summary>
+              <div class="checkout-form-grid mt-3">
+                <div><label>Segunda forma</label>{{ form.forma_pagamento_secundaria }}</div>
+                <div><label>Valor na segunda forma</label>{{ form.valor_secundario }}</div>
+                <div><label>Parcelas da segunda</label>{{ form.parcelas_secundaria }}</div>
+                <div><label>Bandeira da segunda</label>{{ form.bandeira_secundaria }}</div>
+                <div class="full"><label>Referência/comprovante</label>{{ form.referencia }}</div>
+                <div><label>Data de competência</label>{{ form.data_competencia }}</div>
+                <div><label>Data do movimento</label>{{ form.data_movimento }}</div>
+                <div class="full"><label>Observação</label>{{ form.observacao }}</div>
+                <div class="full alert alert-warning py-2 mb-0">
+                  <label class="mb-1"><input type="checkbox" name="confirmar_desconto_critico" value="1"> Confirmo o desconto crítico, quando aplicável</label>
+                  <textarea name="justificativa_desconto_critico" class="form-control" rows="2" placeholder="Justificativa do desconto crítico"></textarea>
+                </div>
+                <div class="full"><label>Comprador</label>{{ form.cliente_nome }}</div>
+                <div><label>CPF/CNPJ</label>{{ form.cliente_documento }}</div>
+                <div><label>Telefone</label>{{ form.cliente_telefone }}</div>
+              </div>
+            </details>
+
+            <button type="submit" id="checkoutConcluir" class="btn btn-success btn-block checkout-submit mt-3" {% if not total_bruto %}disabled{% endif %}>
+              Receber tudo e concluir
+            </button>
+            <div class="small text-muted text-center mt-2">A operação só é gravada se todas as OS, pagamentos e baixas de estoque forem concluídos.</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const form = document.getElementById("checkoutForm");
+  const rows = Array.from(document.querySelectorAll(".checkout-row"));
+  const busca = document.getElementById("checkoutBusca");
+  const guia = document.getElementById("guiaCodigo");
+  const totalGuia = Number("{{ total_guia|stringformat:'0.2f' }}".replace(",", ".")) || 0;
+  const valorInput = document.getElementById("id_valor");
+  const submit = document.getElementById("checkoutConcluir");
+  const descontoValor = document.getElementById("id_desconto_valor");
+  const descontoPercentual = document.getElementById("id_desconto_percentual");
+  const valorRecebido = document.getElementById("id_valor_recebido");
+
+  function numero(input) {
+    return Number(String(input && input.value || "0").replace(",", ".")) || 0;
+  }
+
+  function moeda(valor) {
+    return Math.max(0, valor).toFixed(2).replace(".", ",");
+  }
+
+  function atualizarResumo(total) {
+    const percentual = Math.max(0, numero(descontoPercentual));
+    const descontoFixo = Math.max(0, numero(descontoValor));
+    const desconto = Math.min(total, percentual > 0 ? total * percentual / 100 : descontoFixo);
+    const liquido = Math.max(0, total - desconto);
+    const recebido = Math.max(0, numero(valorRecebido));
+    const troco = recebido > liquido ? recebido - liquido : 0;
+    document.getElementById("checkoutDesconto").textContent = moeda(desconto);
+    document.getElementById("checkoutLiquido").textContent = moeda(liquido);
+    document.getElementById("checkoutTroco").textContent = moeda(troco);
+    document.getElementById("checkoutTrocoLinha").hidden = troco <= 0;
+  }
+
+  function atualizarSelecao() {
+    const marcados = rows.filter(row => row.querySelector("input").checked);
+    const clienteAtivo = marcados.map(row => row.dataset.cliente).find(Boolean) || "";
+    let totalOS = 0;
+    rows.forEach(row => {
+      const input = row.querySelector("input");
+      const incompativel = Boolean(clienteAtivo && row.dataset.cliente && row.dataset.cliente !== clienteAtivo && !input.checked);
+      input.disabled = incompativel;
+      row.classList.toggle("is-disabled", incompativel);
+      row.classList.toggle("is-selected", input.checked);
+      if (input.checked) totalOS += Number(row.dataset.valor.replace(",", ".")) || 0;
+    });
+    const total = totalOS + totalGuia;
+    document.getElementById("checkoutTotalOS").textContent = totalOS.toFixed(2).replace(".", ",");
+    document.getElementById("checkoutTotal").textContent = total.toFixed(2).replace(".", ",");
+    document.getElementById("checkoutQtdOS").textContent = String(marcados.length);
+    valorInput.value = total.toFixed(2);
+    submit.disabled = total <= 0;
+    atualizarResumo(total);
+  }
+
+  function filtrar() {
+    const termo = (busca.value || "").trim().toLowerCase();
+    rows.forEach(row => { row.hidden = Boolean(termo && !row.dataset.search.includes(termo)); });
+  }
+
+  rows.forEach(row => row.querySelector("input").addEventListener("change", atualizarSelecao));
+  busca.addEventListener("input", filtrar);
+  document.getElementById("limparBusca").addEventListener("click", () => { busca.value = ""; filtrar(); busca.focus(); });
+  document.getElementById("carregarGuia").addEventListener("click", () => {
+    const codigo = (guia.value || "").trim();
+    if (!codigo) { guia.focus(); return; }
+    const destino = new URL("{% url 'caixa:checkout_agrupado' %}", window.location.origin);
+    destino.searchParams.set("guia", codigo);
+    const contas = rows.filter(row => row.querySelector("input").checked).map(row => row.querySelector("input").value);
+    if (contas.length) destino.searchParams.set("contas", contas.join(","));
+    window.location.href = destino.toString();
+  });
+  document.querySelectorAll(".checkout-total input:not([type='hidden']):not([type='checkbox']), .checkout-total select, .checkout-total textarea").forEach(el => el.classList.add("form-control"));
+  [descontoValor, descontoPercentual, valorRecebido].filter(Boolean).forEach(el => el.addEventListener("input", atualizarSelecao));
+  form.addEventListener("submit", () => { submit.disabled = true; submit.textContent = "Processando checkout..."; });
+
+  function acionar(destino) {
+    if (destino === "busca") busca.focus();
+    if (destino === "guia") guia.focus();
+    if (destino === "forma") document.getElementById("id_forma_pagamento").focus();
+    if (destino === "concluir" && !submit.disabled) submit.click();
+  }
+  document.querySelectorAll(".js-checkout-shortcut").forEach(btn => btn.addEventListener("click", () => acionar(btn.dataset.target)));
+  document.addEventListener("keydown", event => {
+    if (!event.altKey) return;
+    const mapa = {"1": "busca", "2": "guia", "3": "forma", "Enter": "concluir"};
+    if (mapa[event.key]) { event.preventDefault(); acionar(mapa[event.key]); }
+  });
+  atualizarSelecao();
+})();
+</script>
+{% endblock %}

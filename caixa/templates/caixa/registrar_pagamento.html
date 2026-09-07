@@ -730,6 +730,7 @@
             <small class="text-muted d-block">{% if guia_codigo %}Etapa 4 da venda a mostrador: receber, imprimir comprovante e concluir a baixa financeira.{% else %}Recebimento r&aacute;pido de OS, guias e atendimentos operacionais.{% endif %}</small>
         </div>
         <div class="d-flex gap-2">
+            <a href="{% url 'caixa:checkout_agrupado' %}{% if guia_codigo %}?guia={{ guia_codigo|urlencode }}{% endif %}" class="btn btn-outline-primary btn-sm">Agrupar OS e produtos</a>
             <a href="{% url 'caixa:taloes' %}" class="btn btn-outline-dark btn-sm">Consultar tal&otilde;es</a>
             <a href="{% if user|is_management %}{% url 'caixa:dashboard_caixa' %}{% else %}{% url 'caixa:registrar_pagamento' %}{% endif %}" class="btn btn-outline-secondary btn-sm">Voltar ao dashboard</a>
         </div>

@@ -84,6 +84,11 @@ class Pagamento(models.Model):
     cliente_documento = models.CharField(max_length=30, blank=True)
     cliente_telefone = models.CharField(max_length=30, blank=True)
     formas_pagamento_compostas = models.JSONField(default=list, blank=True)
+    origens_compostas = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Snapshot das OS, contas e itens de estoque liquidados no mesmo checkout.",
+    )
     valor = models.DecimalField(max_digits=10, decimal_places=2)
     valor_recebido_dinheiro = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     troco_entregue = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -148,11 +153,30 @@ class Pagamento(models.Model):
             return [f"{self.forma_pagamento.nome}: R$ {Decimal(self.valor or Decimal('0.00')):.2f}"]
         return []
 
+    @property
+    def origens_compostas_legiveis(self):
+        linhas = []
+        for item in self.origens_compostas or []:
+            tipo = (item or {}).get("tipo") or "avulso"
+            descricao = (item or {}).get("descricao") or "Origem nao informada"
+            valor = Decimal(str((item or {}).get("valor_bruto") or "0"))
+            desconto = Decimal(str((item or {}).get("desconto") or "0"))
+            linhas.append(
+                {
+                    "tipo": tipo,
+                    "descricao": descricao,
+                    "valor_bruto": valor,
+                    "desconto": desconto,
+                    "valor_liquido": max(Decimal("0.00"), valor - desconto),
+                }
+            )
+        return linhas
+
     def __str__(self):
         origem = (
             f"OS {self.ordem_servico.numero_os}" if self.ordem_servico else
             f"Venda #{self.stock_item.id}" if self.stock_item else
-            "Avulso"
+            "Checkout agrupado" if self.origens_compostas else "Avulso"
         )
         return f"{origem} - {self.metodo} - {self.valor}"
 

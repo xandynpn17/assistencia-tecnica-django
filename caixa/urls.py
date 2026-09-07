@@ -9,6 +9,7 @@ urlpatterns = [
     path("historico/<int:caixa_id>/", views.detalhe_caixa, name="detalhe_caixa"),
     path("meu-desempenho/", views.meu_desempenho, name="meu_desempenho"),
     path("pagamento/", views.registrar_pagamento, name="registrar_pagamento"),
+    path("checkout/", views.checkout_agrupado, name="checkout_agrupado"),
     path("pagamento/<int:pagamento_id>/excluir/", views.excluir_pagamento, name="excluir_pagamento"),
     path("saida/", views.registrar_saida, name="registrar_saida"),
     path("abrir/", views.abrir_caixa, name="abrir_caixa"),

@@ -41,7 +41,76 @@ def calcular_snapshot_encargos_pagamento(pagamento):
     data_pagamento = getattr(pagamento, "data", None)
     data_referencia = data_pagamento.date() if hasattr(data_pagamento, "date") else data_pagamento
 
-    if pagamento.stock_item_id:
+    if pagamento.origens_compostas:
+        from estoque.models import Produto
+        from ordens.models import OrdemServico
+
+        origens = pagamento.origens_compostas or []
+        ordens = OrdemServico.objects.filter(
+            id__in=[item.get("ordem_id") for item in origens if item.get("ordem_id")]
+        ).prefetch_related("servicos_pecas").in_bulk()
+        produtos = Produto.objects.filter(
+            id__in=[item.get("produto_id") for item in origens if item.get("produto_id")]
+        ).in_bulk()
+        for origem in origens:
+            valor_origem = Decimal(str(origem.get("valor_liquido") or 0))
+            ordem = ordens.get(origem.get("ordem_id"))
+            produto = produtos.get(origem.get("produto_id"))
+            if ordem:
+                bruto_servico = Decimal("0.00")
+                bruto_produto = Decimal("0.00")
+                for item_ordem in ordem.servicos_pecas.exclude(responsavel_cobranca="fabricante"):
+                    total_item = Decimal(str(item_ordem.valor_unitario or 0)) * Decimal(
+                        int(item_ordem.quantidade or 0)
+                    )
+                    if item_ordem.tipo == "servico":
+                        bruto_servico += total_item
+                    else:
+                        bruto_produto += total_item
+                bruto_origem = bruto_servico + bruto_produto
+                proporcao_servico = bruto_servico / bruto_origem if bruto_origem else Decimal("1.00")
+                valor_servico = valor_origem * proporcao_servico
+                valor_produto = valor_origem - valor_servico
+                if valor_servico > 0:
+                    calculo_servico = _calculo_tributario_pagamento(
+                        empresa, "servico", valor=valor_servico, data_referencia=data_referencia
+                    )
+                    memorias_tributarias.append(calculo_servico["memoria"])
+                    base_servico += valor_servico
+                if valor_produto > 0:
+                    calculo_produto = _calculo_tributario_pagamento(
+                        empresa, "produto", valor=valor_produto, data_referencia=data_referencia
+                    )
+                    memorias_tributarias.append(calculo_produto["memoria"])
+                    base_produto += valor_produto
+            elif produto:
+                calculo_produto = _calculo_tributario_pagamento(
+                    empresa,
+                    produto.tipo_item,
+                    valor=valor_origem,
+                    produto=produto,
+                    data_referencia=data_referencia,
+                )
+                memorias_tributarias.append(calculo_produto["memoria"])
+                base_produto += valor_origem
+            else:
+                base_produto += valor_origem
+        total_bases = base_servico + base_produto
+        if total_bases > Decimal("0.00"):
+            calculo_servico = _calculo_tributario_pagamento(
+                empresa, "servico", valor=base_servico, data_referencia=data_referencia
+            )
+            calculo_produto = _calculo_tributario_pagamento(
+                empresa, "produto", valor=base_produto, data_referencia=data_referencia
+            )
+            aliquota = (
+                Decimal(str(calculo_servico["aliquota_efetiva"])) * base_servico
+                + Decimal(str(calculo_produto["aliquota_efetiva"])) * base_produto
+            ) / total_bases
+        else:
+            aliquota = Decimal("0.00")
+        origem_tributaria = "checkout_agrupado_rateado"
+    elif pagamento.stock_item_id:
         produto = pagamento.stock_item
         calculo_produto = _calculo_tributario_pagamento(
             empresa, produto.tipo_item, valor=valor, produto=produto, data_referencia=data_referencia,
@@ -239,7 +308,13 @@ def excluir_pagamento_com_justificativa(*, pagamento, usuario, justificativa):
         for recebimento in recebimentos:
             conta = recebimento.conta
             if conta:
-                conta.valor_aberto += recebimento.valor
+                abatimento_original = Decimal(recebimento.valor or Decimal("0.00")) + Decimal(
+                    recebimento.desconto or Decimal("0.00")
+                )
+                conta.valor_aberto = min(
+                    Decimal(conta.valor_original or Decimal("0.00")),
+                    Decimal(conta.valor_aberto or Decimal("0.00")) + abatimento_original,
+                )
                 conta.atualizar_status_automatico()
                 conta.save(update_fields=["valor_aberto", "status"])
             recebimento.delete()
@@ -276,8 +351,9 @@ def excluir_pagamento_com_justificativa(*, pagamento, usuario, justificativa):
             OrdemTalao.objects.filter(pagamento=pagamento, origem="pagamento").select_related("ordem")
         )
         numeros_taloes = [talao.numero for talao in taloes if talao.numero]
-        if pagamento.ordem_servico_id and numeros_taloes:
-            itens = ServicoPeca.objects.filter(ordem=pagamento.ordem_servico)
+        ordens_taloes_ids = {talao.ordem_id for talao in taloes if talao.ordem_id}
+        if numeros_taloes and ordens_taloes_ids:
+            itens = ServicoPeca.objects.filter(ordem_id__in=ordens_taloes_ids)
             for item in itens:
                 atuais = [n.strip() for n in (item.numeros_taloes or "").split(",") if n.strip()]
                 novos = [n for n in atuais if n not in numeros_taloes]
@@ -356,6 +432,7 @@ def montar_composicao_pagamento(
                 "forma_id": forma_principal.id,
                 "forma_codigo": forma_principal.codigo,
                 "forma_nome": forma_principal.nome,
+                "modalidade": forma_principal.modalidade or "",
                 "valor": f"{valor_principal:.2f}",
                 "referencia": (referencia_principal or "").strip(),
                 "parcelas": max(1, int(parcelas_principal or 1)),
@@ -367,6 +444,7 @@ def montar_composicao_pagamento(
                 "forma_id": forma_secundaria.id,
                 "forma_codigo": forma_secundaria.codigo,
                 "forma_nome": forma_secundaria.nome,
+                "modalidade": forma_secundaria.modalidade or "",
                 "valor": f"{valor_secundario:.2f}",
                 "referencia": (referencia_secundaria or "").strip(),
                 "parcelas": max(1, int(parcelas_secundaria or 1)),
@@ -380,6 +458,7 @@ def montar_composicao_pagamento(
             "forma_id": forma_principal.id if forma_principal else None,
             "forma_codigo": getattr(forma_principal, "codigo", ""),
             "forma_nome": getattr(forma_principal, "nome", "") or "-",
+            "modalidade": getattr(forma_principal, "modalidade", "") or "",
             "valor": f"{valor_total_liquido:.2f}",
             "referencia": (referencia_principal or "").strip(),
             "parcelas": max(1, int(parcelas_principal or 1)),
@@ -387,6 +466,276 @@ def montar_composicao_pagamento(
         }
     )
     return composicao
+
+
+def composicao_item_eh_dinheiro(item):
+    item = item or {}
+    codigo = str(item.get("forma_codigo") or "").lower().replace("-", "_")
+    return bool(
+        item.get("modalidade") == "dinheiro"
+        or codigo == "dinheiro"
+        or codigo.startswith("dinheiro_")
+    )
+
+
+def _ratear_desconto_checkout(origens, desconto_total):
+    desconto_total = Decimal(desconto_total or Decimal("0.00")).quantize(Decimal("0.01"))
+    total_bruto = sum((Decimal(item["valor_bruto"]) for item in origens), Decimal("0.00"))
+    restante = desconto_total
+    rateio = []
+    for indice, origem in enumerate(origens):
+        valor_bruto = Decimal(origem["valor_bruto"]).quantize(Decimal("0.01"))
+        if indice == len(origens) - 1:
+            parcela = restante
+        elif total_bruto > Decimal("0.00"):
+            parcela = (desconto_total * valor_bruto / total_bruto).quantize(Decimal("0.01"))
+            parcela = min(parcela, restante)
+        else:
+            parcela = Decimal("0.00")
+        parcela = min(max(parcela, Decimal("0.00")), valor_bruto)
+        restante -= parcela
+        rateio.append(parcela)
+    return rateio
+
+
+@transaction.atomic
+def processar_checkout_agrupado(
+    *,
+    form,
+    caixa,
+    contas,
+    vendas_guia,
+    guia_codigo,
+    desconto_aplicado,
+    desconto_percentual,
+    composicao_pagamento,
+    valor_recebido_dinheiro,
+    chave_idempotencia,
+    usuario,
+    vincular_talao_cb,
+    log_financeiro_cb,
+    processar_evento_servico_finalizado_cb,
+    processar_evento_retirada_cliente_cb,
+    processar_evento_venda_mostrador_cb,
+):
+    """Liquida varias OS e uma guia de estoque em uma unica operacao atomica."""
+    from caixa.models import ContaReceber, LancamentoCaixa, RecebimentoConta
+    from estoque.models import VendaRapidaEstoque
+    from ordens.models import OrdemTalao
+    from estoque.services import (
+        componentes_fisicos_item_venda,
+        consumir_estoque_ordem_no_pagamento,
+        obter_ubicacao_preferencial,
+        registrar_movimentacao_estoque,
+    )
+
+    contas_ids = [conta.pk for conta in contas]
+    vendas_ids = [venda.pk for venda in vendas_guia]
+    contas = list(
+        ContaReceber.objects.select_for_update(of=("self",))
+        .select_related("ordem_servico", "ordem_servico__cliente")
+        .filter(pk__in=contas_ids)
+        .order_by("id")
+    )
+    vendas_guia = list(
+        VendaRapidaEstoque.objects.select_for_update(of=("self",))
+        .select_related("produto", "ponto_operacional")
+        .filter(pk__in=vendas_ids)
+        .order_by("id")
+    )
+    if len(contas) != len(set(contas_ids)) or len(vendas_guia) != len(set(vendas_ids)):
+        raise ValueError("Uma das origens do checkout nao esta mais disponivel.")
+    if any(conta.status not in {"aberta", "parcial", "vencida"} for conta in contas):
+        raise ValueError("Uma das contas selecionadas ja foi paga ou cancelada. Atualize o checkout.")
+    if any(conta.tipo_origem != "cliente_os" or not conta.ordem_servico_id for conta in contas):
+        raise ValueError("O checkout agrupado aceita somente cobrancas de clientes vinculadas a OS.")
+    if any(venda.status != "pre_reserva" or venda.guia_pagamento != guia_codigo for venda in vendas_guia):
+        raise ValueError("A guia de acessorios ja foi paga, cancelada ou alterada.")
+
+    clientes_ids = {
+        conta.ordem_servico.cliente_id
+        for conta in contas
+        if conta.ordem_servico_id and conta.ordem_servico.cliente_id
+    }
+    if len(clientes_ids) > 1:
+        raise ValueError("Selecione apenas OS do mesmo cliente no checkout.")
+
+    origens = []
+    for conta in contas:
+        origens.append(
+            {
+                "tipo": "os",
+                "conta": conta,
+                "ordem": conta.ordem_servico,
+                "valor_bruto": Decimal(conta.valor_aberto or Decimal("0.00")),
+                "descricao": f"OS {conta.ordem_servico.numero_os}",
+            }
+        )
+    for venda in vendas_guia:
+        origens.append(
+            {
+                "tipo": "produto",
+                "venda": venda,
+                "valor_bruto": Decimal(venda.valor_total or Decimal("0.00")),
+                "descricao": f"{venda.produto.nome} x{venda.quantidade}",
+            }
+        )
+    if not origens:
+        raise ValueError("Selecione ao menos uma OS ou informe uma guia de acessorios.")
+
+    total_bruto = sum((item["valor_bruto"] for item in origens), Decimal("0.00"))
+    desconto_aplicado = Decimal(desconto_aplicado or Decimal("0.00")).quantize(Decimal("0.01"))
+    if desconto_aplicado < Decimal("0.00") or desconto_aplicado >= total_bruto:
+        raise ValueError("O desconto do checkout deve ser menor que o total selecionado.")
+    rateio_desconto = _ratear_desconto_checkout(origens, desconto_aplicado)
+
+    snapshot_origens = []
+    for origem, desconto_origem in zip(origens, rateio_desconto):
+        valor_liquido = (origem["valor_bruto"] - desconto_origem).quantize(Decimal("0.01"))
+        registro = {
+            "tipo": origem["tipo"],
+            "descricao": origem["descricao"],
+            "valor_bruto": f"{origem['valor_bruto']:.2f}",
+            "desconto": f"{desconto_origem:.2f}",
+            "valor_liquido": f"{valor_liquido:.2f}",
+        }
+        if origem["tipo"] == "os":
+            registro.update(
+                conta_id=origem["conta"].pk,
+                ordem_id=origem["ordem"].pk,
+                numero_os=origem["ordem"].numero_os,
+            )
+        else:
+            registro.update(
+                venda_id=origem["venda"].pk,
+                produto_id=origem["venda"].produto_id,
+                guia=guia_codigo,
+                quantidade=origem["venda"].quantidade,
+            )
+        snapshot_origens.append(registro)
+
+    pagamento = form.save(commit=False)
+    pagamento.empresa = getattr(caixa, "empresa", None)
+    pagamento.caixa = caixa
+    pagamento.ordem_servico = None
+    pagamento.stock_item = None
+    pagamento.metodo = pagamento.forma_pagamento.codigo if pagamento.forma_pagamento else ""
+    pagamento.valor = (total_bruto - desconto_aplicado).quantize(Decimal("0.01"))
+    pagamento.desconto = desconto_aplicado
+    pagamento.desconto_percentual = (
+        Decimal(desconto_percentual or Decimal("0.00"))
+        if desconto_aplicado > Decimal("0.00")
+        else Decimal("0.00")
+    )
+    pagamento.formas_pagamento_compostas = composicao_pagamento or []
+    pagamento.origens_compostas = snapshot_origens
+    pagamento.chave_idempotencia = chave_idempotencia or None
+
+    cliente = contas[0].ordem_servico.cliente if contas else None
+    if cliente:
+        pagamento.cliente_nome = pagamento.cliente_nome or cliente.nome or ""
+        pagamento.cliente_documento = pagamento.cliente_documento or cliente.documento or ""
+        pagamento.cliente_telefone = pagamento.cliente_telefone or cliente.telefone or ""
+    valor_dinheiro = sum(
+        (
+            Decimal(str(item.get("valor") or 0))
+            for item in pagamento.formas_pagamento_compostas
+            if composicao_item_eh_dinheiro(item)
+        ),
+        Decimal("0.00"),
+    )
+    if valor_dinheiro > Decimal("0.00") and valor_recebido_dinheiro is not None:
+        pagamento.valor_recebido_dinheiro = Decimal(valor_recebido_dinheiro)
+        pagamento.troco_entregue = max(
+            Decimal("0.00"), pagamento.valor_recebido_dinheiro - valor_dinheiro
+        )
+    pagamento.save()
+
+    numeros_os = ", ".join(origem["ordem"].numero_os for origem in origens if origem["tipo"] == "os")
+    descricao = f"Checkout agrupado {numeros_os}" if numeros_os else f"Venda guia {guia_codigo}"
+    LancamentoCaixa.objects.create(
+        caixa=caixa,
+        pagamento=pagamento,
+        descricao=descricao[:200],
+        valor=pagamento.valor,
+        tipo="entrada",
+        usuario=usuario,
+    )
+    log_financeiro_cb(
+        "pagamento_agrupado_registrado",
+        usuario,
+        pagamento=pagamento,
+        valor=pagamento.valor,
+        descricao=descricao,
+    )
+
+    for origem, desconto_origem in zip(origens, rateio_desconto):
+        if origem["tipo"] != "os":
+            continue
+        conta = origem["conta"]
+        ordem = origem["ordem"]
+        valor_recebido = (origem["valor_bruto"] - desconto_origem).quantize(Decimal("0.01"))
+        conta.valor_aberto = Decimal("0.00")
+        conta.atualizar_status_automatico()
+        conta.save(update_fields=["valor_aberto", "status", "atualizado_em"])
+        RecebimentoConta.objects.create(
+            conta=conta,
+            pagamento=pagamento,
+            valor=valor_recebido,
+            desconto=desconto_origem,
+            referencia=pagamento.referencia or "",
+            observacao=f"Liquidacao no checkout agrupado {pagamento.numero_talao}",
+            usuario=usuario,
+        )
+        vincular_talao_cb(ordem, pagamento.numero_talao, pagamento=pagamento)
+        OrdemTalao.objects.filter(ordem=ordem, numero=pagamento.numero_talao).update(
+            valor=valor_recebido,
+            descricao=(
+                f"Parcela da {origem['descricao']} liquidada no checkout agrupado "
+                f"{pagamento.numero_talao}."
+            ),
+        )
+        log_financeiro_cb(
+            "conta_receber_baixa_checkout",
+            usuario,
+            conta=conta,
+            pagamento=pagamento,
+            valor=origem["valor_bruto"],
+        )
+        processar_evento_servico_finalizado_cb(ordem, evento="SERVICO_FINALIZADO")
+        if ordem.status == "concluida" and conta.status == "paga":
+            consumir_estoque_ordem_no_pagamento(ordem, usuario=usuario)
+            processar_evento_retirada_cliente_cb(ordem, evento="RETIRADA_CLIENTE")
+
+    for origem in origens:
+        if origem["tipo"] != "produto":
+            continue
+        venda = origem["venda"]
+        for componente, quantidade_componente in componentes_fisicos_item_venda(venda):
+            origem_ubicacao = obter_ubicacao_preferencial(componente, venda.ponto_operacional)
+            if not origem_ubicacao:
+                raise ValueError(
+                    f"Produto {componente.nome} sem ubicacao ativa no ponto {venda.ponto_operacional.codigo}."
+                )
+            registrar_movimentacao_estoque(
+                produto=componente,
+                tipo="venda",
+                quantidade=quantidade_componente,
+                origem=venda.ponto_operacional,
+                origem_ubicacao=origem_ubicacao,
+                observacao=f"Checkout agrupado #{pagamento.id} (guia {guia_codigo})",
+                usuario=usuario,
+                chave_idempotencia=f"pagamento:{pagamento.id}:venda:{venda.id}:componente:{componente.id}",
+                origem_tipo="pagamento",
+                origem_referencia=str(pagamento.id),
+            )
+        venda.pagamento = pagamento
+        venda.status = "vendida"
+        venda.concluido_em = timezone.now()
+        venda.save(update_fields=["pagamento", "status", "concluido_em"])
+        processar_evento_venda_mostrador_cb(venda, evento="VENDA_MOSTRADOR")
+
+    return pagamento
 
 
 def processar_pagamento_pos_transacional(
@@ -438,7 +787,7 @@ def processar_pagamento_pos_transacional(
             (
                 Decimal(str(item_comp.get("valor") or 0))
                 for item_comp in pagamento.formas_pagamento_compostas
-                if item_comp.get("forma_codigo") == "dinheiro"
+                if composicao_item_eh_dinheiro(item_comp)
             ),
             Decimal("0.00"),
         )

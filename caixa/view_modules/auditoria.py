@@ -770,6 +770,34 @@ def relatorios(request):
     total_entradas = total_entradas_lancamentos + total_entradas_pagamentos
     saldo_base = caixa.saldo_inicial if restringir_caixa_atual else Decimal("0.00")
     saldo = saldo_base + total_entradas - total_saidas
+
+    # Contas a receber sao exibidas como carteira, separadas do caixa realizado.
+    # Assim a garantia aparece no relatorio sem inflar o saldo antes do efetivo
+    # recebimento do fabricante.
+    carteira_receber = ContaReceber.objects.filter(
+        **filtro_empresa,
+        status__in=["aberta", "parcial", "vencida"],
+    )
+    if data_inicio:
+        carteira_receber = carteira_receber.filter(
+            Q(data_base_cobranca__gte=data_inicio)
+            | Q(data_base_cobranca__isnull=True, criado_em__date__gte=data_inicio)
+        )
+    if data_fim:
+        carteira_receber = carteira_receber.filter(
+            Q(data_base_cobranca__lte=data_fim)
+            | Q(data_base_cobranca__isnull=True, criado_em__date__lte=data_fim)
+        )
+    total_carteira_receber = carteira_receber.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    total_receber_clientes = carteira_receber.exclude(
+        tipo_origem="garantia_fabricante"
+    ).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    total_receber_fabricantes = carteira_receber.filter(
+        tipo_origem="garantia_fabricante"
+    ).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    total_receber_vencido = carteira_receber.filter(vencimento__lt=hoje).aggregate(
+        total=Sum("valor_aberto")
+    )["total"] or Decimal("0.00")
     pagamentos_por_forma = pagamentos.values("forma_pagamento__nome", "metodo").annotate(total=Sum("valor"), quantidade=Count("id")).order_by("-total")[:10]
     saidas_lancamentos = lancamentos.filter(tipo="saida", natureza="operacional")
     mapa_centros_atual = _combinar_mapas(
@@ -993,6 +1021,10 @@ def relatorios(request):
                 ["Entradas sem lancamento", _fmt_decimal(entradas_orfas_pagamento)],
                 ["Saidas totais", _fmt_decimal(total_saidas)],
                 ["Saldo apurado", _fmt_decimal(saldo)],
+                ["Carteira a receber (nao realizada)", _fmt_decimal(total_carteira_receber)],
+                ["A receber de clientes", _fmt_decimal(total_receber_clientes)],
+                ["A receber de fabricantes", _fmt_decimal(total_receber_fabricantes)],
+                ["Carteira vencida", _fmt_decimal(total_receber_vencido)],
             ]
             titulo = "Resumo financeiro"
         elif dataset_export == "executivo":
@@ -1078,6 +1110,10 @@ def relatorios(request):
             "entradas_orfas_pagamento": entradas_orfas_pagamento,
             "total_saidas": total_saidas,
             "saldo": saldo,
+            "total_carteira_receber": total_carteira_receber,
+            "total_receber_clientes": total_receber_clientes,
+            "total_receber_fabricantes": total_receber_fabricantes,
+            "total_receber_vencido": total_receber_vencido,
             "data_inicio": data_inicio_raw,
             "data_fim": data_fim_raw,
             "preset_periodo": preset_periodo,
@@ -1324,6 +1360,7 @@ def garantias_fabricante(request):
                 "regra": auditoria.regra_garantia,
                 "valor_previsto_fabricante": auditoria.valor_previsto_fabricante,
                 "valor_aprovado_fabricante": auditoria.valor_aprovado_fabricante or auditoria.valor_previsto_fabricante,
+                "valor_recebido_fabricante": auditoria.valor_recebido_fabricante,
                 "referencia_faturamento": auditoria.referencia_faturamento,
             },
         )
@@ -1390,7 +1427,13 @@ def garantias_fabricante(request):
     mes_inicio = date(competencia_ano, competencia_mes, 1)
     _, ultimo_dia = monthrange(competencia_ano, competencia_mes)
     mes_fim = date(competencia_ano, competencia_mes, ultimo_dia)
-    garantias_mes = garantias.filter(criado_em__date__gte=mes_inicio, criado_em__date__lte=mes_fim)
+    # Competencia da garantia e a data-base da cobranca. ``criado_em`` mede
+    # somente quando o registro tecnico foi gravado e pode deslocar valores para
+    # outro mes depois de uma sincronizacao ou reabertura da OS.
+    garantias_mes = garantias.filter(
+        data_base_cobranca__gte=mes_inicio,
+        data_base_cobranca__lte=mes_fim,
+    )
 
     resumo_marca_fornecedor = list(
         garantias_mes.values("fornecedor__nome", "marca__nome")
@@ -1429,10 +1472,20 @@ def garantias_fabricante(request):
             linhas,
         )
 
+    def _total_faturamento_status(status):
+        total = Decimal("0.00")
+        for garantia in garantias.filter(status_faturamento=status):
+            if status == "pago":
+                valor = garantia.valor_recebido_fabricante
+            else:
+                valor = garantia.valor_aprovado_fabricante or garantia.valor_previsto_fabricante
+            total += Decimal(valor or Decimal("0.00"))
+        return total
+
     resumo = {
-        "pendente": garantias.filter(status_faturamento="pendente").aggregate(total=Sum("valor_previsto_fabricante"))["total"] or Decimal("0.00"),
-        "enviado": garantias.filter(status_faturamento="enviado").aggregate(total=Sum("valor_previsto_fabricante"))["total"] or Decimal("0.00"),
-        "pago": garantias.filter(status_faturamento="pago").aggregate(total=Sum("valor_previsto_fabricante"))["total"] or Decimal("0.00"),
+        "pendente": _total_faturamento_status("pendente"),
+        "enviado": _total_faturamento_status("enviado"),
+        "pago": _total_faturamento_status("pago"),
     }
     contas_garantia_abertas = ContaReceber.objects.filter(empresa=empresa, tipo_origem="garantia_fabricante", status__in=["aberta", "parcial", "vencida"])
     resumo["contas_abertas"] = contas_garantia_abertas.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")

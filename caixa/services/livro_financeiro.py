@@ -6,6 +6,12 @@ from django.utils import timezone
 
 
 def _descricao_pagamento(pagamento):
+    if pagamento.origens_compostas:
+        descricoes = [item.get("descricao") for item in pagamento.origens_compostas if item.get("descricao")]
+        resumo = ", ".join(descricoes[:3])
+        if len(descricoes) > 3:
+            resumo += f" +{len(descricoes) - 3}"
+        return f"Checkout agrupado: {resumo}"[:255]
     if pagamento.ordem_servico_id:
         numero = getattr(pagamento.ordem_servico, "numero_os", pagamento.ordem_servico_id)
         return f"Pagamento OS {numero}"
