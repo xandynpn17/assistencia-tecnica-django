@@ -278,6 +278,11 @@ def excluir_pagamento_com_justificativa(*, pagamento, usuario, justificativa):
     justificativa = (justificativa or "").strip()
     if not justificativa:
         raise ValueError("Informe o motivo para estornar o pagamento.")
+    if getattr(pagamento, "estornos_origens", None) is not None and pagamento.estornos_origens.exists():
+        raise ValueError(
+            "Este checkout já possui estorno parcial. Estorne as demais origens individualmente "
+            "para preservar o histórico e evitar devoluções em duplicidade."
+        )
 
     from caixa.models import RecebimentoConta
     from estoque.models import VendaRapidaEstoque
@@ -504,6 +509,7 @@ def processar_checkout_agrupado(
     form,
     caixa,
     contas,
+    valores_contas,
     vendas_guia,
     guia_codigo,
     desconto_aplicado,
@@ -560,14 +566,26 @@ def processar_checkout_agrupado(
     if len(clientes_ids) > 1:
         raise ValueError("Selecione apenas OS do mesmo cliente no checkout.")
 
+    valores_contas = valores_contas or {}
     origens = []
     for conta in contas:
+        saldo_aberto = Decimal(conta.valor_aberto or Decimal("0.00")).quantize(Decimal("0.01"))
+        valor_checkout = Decimal(
+            valores_contas.get(conta.pk, saldo_aberto) or Decimal("0.00")
+        ).quantize(Decimal("0.01"))
+        if valor_checkout <= Decimal("0.00"):
+            raise ValueError(f"Informe um valor maior que zero para {conta.ordem_servico.numero_os}.")
+        if valor_checkout > saldo_aberto:
+            raise ValueError(
+                f"O valor de {conta.ordem_servico.numero_os} supera o saldo aberto de R$ {saldo_aberto:.2f}."
+            )
         origens.append(
             {
                 "tipo": "os",
                 "conta": conta,
                 "ordem": conta.ordem_servico,
-                "valor_bruto": Decimal(conta.valor_aberto or Decimal("0.00")),
+                "valor_bruto": valor_checkout,
+                "saldo_antes": saldo_aberto,
                 "descricao": f"OS {conta.ordem_servico.numero_os}",
             }
         )
@@ -604,6 +622,8 @@ def processar_checkout_agrupado(
                 conta_id=origem["conta"].pk,
                 ordem_id=origem["ordem"].pk,
                 numero_os=origem["ordem"].numero_os,
+                saldo_antes=f"{origem['saldo_antes']:.2f}",
+                saldo_depois=f"{max(Decimal('0.00'), origem['saldo_antes'] - origem['valor_bruto']):.2f}",
             )
         else:
             registro.update(
@@ -675,7 +695,10 @@ def processar_checkout_agrupado(
         conta = origem["conta"]
         ordem = origem["ordem"]
         valor_recebido = (origem["valor_bruto"] - desconto_origem).quantize(Decimal("0.01"))
-        conta.valor_aberto = Decimal("0.00")
+        conta.valor_aberto = max(
+            Decimal("0.00"),
+            Decimal(conta.valor_aberto or Decimal("0.00")) - Decimal(origem["valor_bruto"]),
+        )
         conta.atualizar_status_automatico()
         conta.save(update_fields=["valor_aberto", "status", "atualizado_em"])
         RecebimentoConta.objects.create(
@@ -736,6 +759,173 @@ def processar_checkout_agrupado(
         processar_evento_venda_mostrador_cb(venda, evento="VENDA_MOSTRADOR")
 
     return pagamento
+
+
+@transaction.atomic
+def estornar_origem_checkout(*, pagamento, indice_origem, usuario, motivo, reabrir_cobranca=True):
+    """Estorna uma origem do checkout por contrapartida, preservando o recebimento original."""
+    from caixa.models import (
+        Comissao,
+        ContaReceber,
+        EstornoOrigemCheckout,
+        LancamentoCaixa,
+        MovimentoBancario,
+        Pagamento,
+        RecebimentoConta,
+    )
+    from caixa.services.livro_financeiro import registrar_movimento_financeiro
+    from caixa.services.tesouraria import registrar_movimento_bancario
+    from estoque.models import VendaRapidaEstoque
+    from estoque.services import (
+        componentes_fisicos_item_venda,
+        obter_ubicacao_preferencial,
+        registrar_movimentacao_estoque,
+    )
+
+    motivo = (motivo or "").strip()
+    if len(motivo) < 12:
+        raise ValueError("Informe um motivo com pelo menos 12 caracteres para o estorno.")
+    pagamento = Pagamento.objects.select_for_update().get(pk=pagamento.pk)
+    origens = list(pagamento.origens_compostas or [])
+    try:
+        indice_origem = int(indice_origem)
+        origem = dict(origens[indice_origem])
+    except (ValueError, TypeError, IndexError):
+        raise ValueError("A origem selecionada não existe neste checkout.")
+    if origem.get("estornado"):
+        raise ValueError("Esta origem já foi estornada.")
+
+    valor_bruto = Decimal(str(origem.get("valor_bruto") or 0)).quantize(Decimal("0.01"))
+    desconto = Decimal(str(origem.get("desconto") or 0)).quantize(Decimal("0.01"))
+    valor_estornado = Decimal(str(origem.get("valor_liquido") or (valor_bruto - desconto))).quantize(Decimal("0.01"))
+    if valor_estornado <= Decimal("0.00"):
+        raise ValueError("A origem não possui valor disponível para estorno.")
+
+    estorno = EstornoOrigemCheckout.objects.create(
+        pagamento=pagamento,
+        indice_origem=indice_origem,
+        tipo_origem=origem.get("tipo") or "os",
+        descricao=(origem.get("descricao") or "Origem do checkout")[:180],
+        valor_bruto=valor_bruto,
+        desconto=desconto,
+        valor_estornado=valor_estornado,
+        reabrir_cobranca=bool(reabrir_cobranca),
+        motivo=motivo,
+        estornado_por=usuario,
+    )
+
+    if origem.get("tipo") == "os":
+        conta = ContaReceber.objects.select_for_update().filter(
+            pk=origem.get("conta_id"), empresa=pagamento.empresa
+        ).first()
+        recebimento = RecebimentoConta.objects.filter(conta=conta, pagamento=pagamento).first() if conta else None
+        if conta and reabrir_cobranca:
+            conta.valor_aberto = min(
+                Decimal(conta.valor_original or Decimal("0.00")),
+                Decimal(conta.valor_aberto or Decimal("0.00")) + valor_bruto,
+            )
+            conta.atualizar_status_automatico()
+            conta.save(update_fields=["valor_aberto", "status", "atualizado_em"])
+        if recebimento:
+            recebimento.delete()
+    elif origem.get("tipo") == "produto":
+        venda = VendaRapidaEstoque.objects.select_for_update().select_related(
+            "produto", "ponto_operacional"
+        ).filter(pk=origem.get("venda_id"), pagamento=pagamento).first()
+        if venda and venda.status == "vendida":
+            for componente, quantidade in componentes_fisicos_item_venda(venda):
+                ubicacao = obter_ubicacao_preferencial(componente, venda.ponto_operacional)
+                if not ubicacao:
+                    raise ValueError(
+                        f"Produto {componente.nome} sem localização ativa para receber a devolução."
+                    )
+                registrar_movimentacao_estoque(
+                    produto=componente,
+                    tipo="devolucao_reserva",
+                    quantidade=quantidade,
+                    destino=venda.ponto_operacional,
+                    destino_ubicacao_ref=ubicacao,
+                    observacao=f"Estorno parcial do checkout {pagamento.numero_talao}: {motivo[:120]}",
+                    usuario=usuario,
+                    chave_idempotencia=f"checkout-estorno:{estorno.pk}:venda:{venda.pk}:produto:{componente.pk}",
+                    origem_tipo="pagamento",
+                    origem_referencia=str(pagamento.pk),
+                )
+            venda.status = "cancelada"
+            venda.concluido_em = timezone.now()
+            venda.save(update_fields=["status", "concluido_em"])
+            for comissao in Comissao.objects.filter(
+                dados_extras__venda_rapida_id=venda.pk
+            ).exclude(status__in=["CANCELADA", "PAGA"]):
+                extras = dict(comissao.dados_extras or {})
+                extras.update(motivo_cancelamento=motivo, estorno_checkout_id=estorno.pk)
+                comissao.status = "CANCELADA"
+                comissao.dados_extras = extras
+                comissao.save(update_fields=["status", "dados_extras", "atualizado_em"])
+    else:
+        raise ValueError("Tipo de origem não suportado para estorno.")
+
+    origem.update(
+        estornado=True,
+        estorno_id=estorno.pk,
+        estornado_em=timezone.now().isoformat(),
+        motivo_estorno=motivo,
+    )
+    origens[indice_origem] = origem
+    Pagamento.objects.filter(pk=pagamento.pk).update(origens_compostas=origens)
+
+    LancamentoCaixa.objects.create(
+        empresa=pagamento.empresa,
+        caixa=pagamento.caixa,
+        descricao=f"Estorno parcial {pagamento.numero_talao} · {origem.get('descricao') or 'origem'}"[:200],
+        valor=valor_estornado,
+        tipo="saida",
+        natureza="operacional",
+        data_competencia=pagamento.data_competencia,
+        data_movimento=timezone.localdate(),
+        usuario=usuario,
+    )
+    registrar_movimento_financeiro(
+        empresa=pagamento.empresa,
+        caixa=pagamento.caixa,
+        origem_tipo="ajuste",
+        origem_id=estorno.pk,
+        origem_referencia=pagamento.numero_talao or str(pagamento.pk),
+        tipo="saida",
+        natureza="operacional",
+        valor=valor_estornado,
+        descricao=f"Estorno parcial: {origem.get('descricao') or 'origem do checkout'}",
+        data_competencia=pagamento.data_competencia,
+        data_movimento=timezone.localdate(),
+        chave_idempotencia=f"checkout_estorno:{estorno.pk}",
+        usuario=usuario,
+        metadados={"pagamento_id": pagamento.pk, "indice_origem": indice_origem, "motivo": motivo},
+    )
+
+    movimentos_banco = list(
+        MovimentoBancario.objects.filter(
+            origem_tipo="pagamento", origem_id=pagamento.pk, status="ativo"
+        ).select_related("conta")
+    )
+    total_pagamento = Decimal(pagamento.valor or Decimal("0.00"))
+    if movimentos_banco and total_pagamento > Decimal("0.00"):
+        for movimento in movimentos_banco:
+            valor_banco = (Decimal(movimento.valor) * valor_estornado / total_pagamento).quantize(Decimal("0.01"))
+            if valor_banco <= Decimal("0.00"):
+                continue
+            registrar_movimento_bancario(
+                conta=movimento.conta,
+                tipo="saida",
+                origem_tipo="manual",
+                origem_id=estorno.pk,
+                descricao=f"Estorno parcial {pagamento.numero_talao} · {origem.get('descricao') or 'origem'}",
+                valor=valor_banco,
+                data_movimento=timezone.localdate(),
+                chave=f"checkout-estorno:{estorno.pk}:movimento:{movimento.pk}",
+                usuario=usuario,
+                metadados={"pagamento_id": pagamento.pk, "movimento_original_id": movimento.pk},
+            )
+    return estorno
 
 
 def processar_pagamento_pos_transacional(

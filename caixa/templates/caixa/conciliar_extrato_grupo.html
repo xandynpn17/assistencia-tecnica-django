@@ -1,20 +1,69 @@
 {% extends 'core/base.html' %}
+
+{% block title %}Conciliação agrupada{% endblock %}
+
+{% block extra_css %}
+<style>
+  .reconcile-shell { max-width: 1450px; margin: 0 auto; }
+  .reconcile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .reconcile-card { border: 1px solid #dce5ef; border-radius: 14px; background: #fff; overflow: hidden; }
+  .reconcile-head { padding: 13px 15px; background: #f7faff; border-bottom: 1px solid #e3eaf1; }
+  .reconcile-body { padding: 15px; }
+  .reconcile-list { max-height: 430px; overflow: auto; border: 1px solid #e6ebf0; border-radius: 10px; padding: 8px; }
+  .reconcile-list label { display: block; padding: 9px; margin: 0; border-bottom: 1px solid #eef2f5; cursor: pointer; }
+  .reconcile-list label:hover { background: #eef6ff; }
+  .reconcile-summary { border: 1px solid #bad2eb; background: #f5faff; border-radius: 12px; padding: 12px; margin-top: 14px; }
+  @media (max-width: 991.98px) { .reconcile-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
+<div class="container-fluid mt-3 reconcile-shell">
   {% include 'caixa/_subnav_caixa.html' %}
-  <div class="card">
-    <div class="card-header"><strong>Conciliação bancária agrupada</strong></div>
-    <div class="card-body">
-      <div class="alert alert-info">
-        Selecione uma conta para carregar os itens. Você pode conciliar uma ou várias linhas contra movimentos do sistema ou registrar diretamente uma tarifa, juros, rendimento ou ajuste identificado no extrato.
-      </div>
-      <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button class="btn btn-primary">Conciliar seleção</button>
-        <a class="btn btn-outline-secondary" href="{% url 'caixa:tesouraria' %}">Cancelar</a>
-      </form>
-    </div>
+  <div class="d-flex justify-content-between align-items-center flex-wrap mb-3" style="gap:10px;">
+    <div><h1 class="h4 mb-1">Conciliação bancária agrupada</h1><div class="text-muted">Uma transferência da SumUp pode ser comparada com vários pagamentos do sistema.</div></div>
+    <a class="btn btn-outline-secondary" href="{% url 'caixa:tesouraria' %}">Voltar à tesouraria</a>
   </div>
+
+  <form method="post" id="conciliacaoGrupoForm">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="reconcile-card mb-3">
+      <div class="reconcile-body">
+        <label><strong>Conta bancária</strong></label>{{ form.conta }}
+        {% for erro in form.conta.errors %}<div class="text-danger small">{{ erro }}</div>{% endfor %}
+        <div class="small text-muted mt-1">Escolha primeiro a conta onde o depósito entrou.</div>
+      </div>
+    </div>
+
+    <div class="reconcile-grid">
+      <section class="reconcile-card">
+        <div class="reconcile-head"><strong>1. Linhas do extrato</strong><div class="small text-muted">Normalmente selecione o depósito líquido da operadora.</div></div>
+        <div class="reconcile-body"><div class="reconcile-list">{{ form.linhas }}</div>{% for erro in form.linhas.errors %}<div class="text-danger small mt-1">{{ erro }}</div>{% endfor %}</div>
+      </section>
+      <section class="reconcile-card">
+        <div class="reconcile-head"><strong>2. Movimentos do sistema</strong><div class="small text-muted">Selecione todos os pagamentos que compõem o depósito.</div></div>
+        <div class="reconcile-body"><div class="reconcile-list">{{ form.movimentos }}</div>{% for erro in form.movimentos.errors %}<div class="text-danger small mt-1">{{ erro }}</div>{% endfor %}</div>
+      </section>
+    </div>
+
+    <div class="reconcile-card mt-3">
+      <div class="reconcile-head"><strong>3. Diferença identificada</strong></div>
+      <div class="reconcile-body">
+        <label class="d-flex align-items-center" style="gap:8px;">{{ form.registrar_diferenca }} Registrar automaticamente a diferença</label>
+        <div class="small text-muted mb-2">Use para taxa, juros, rendimento ou ajuste que realmente aparece no extrato.</div>
+        <div class="form-row">
+          <div class="col-md-4"><label>Tipo</label>{{ form.tipo_diferenca }}</div>
+          <div class="col-md-8"><label>Descrição</label>{{ form.descricao_diferenca }}</div>
+          <div class="col-md-12 mt-2"><label>Justificativa</label>{{ form.justificativa }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="reconcile-summary d-flex justify-content-between align-items-center flex-wrap" style="gap:10px;">
+      <div><strong>Conferência antes de gravar</strong><div class="small text-muted">O sistema aceita uma linha contra vários pagamentos, várias linhas contra um pagamento ou ambos agrupados.</div></div>
+      <div><button class="btn btn-primary btn-lg">Conciliar seleção</button> <a class="btn btn-outline-secondary btn-lg" href="{% url 'caixa:tesouraria' %}">Cancelar</a></div>
+    </div>
+  </form>
 </div>
 {% endblock %}

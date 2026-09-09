@@ -1486,7 +1486,7 @@ class ConsultaArtigosTests(TestCase):
 
         response_get = self.client.get(reverse("estoque:pos_venda_balcao"), {"q": "GUIA-POS-01"})
         self.assertEqual(response_get.status_code, 200)
-        self.assertContains(response_get, "Pos-venda de balcao")
+        self.assertContains(response_get, "Central de pós-venda")
         self.assertContains(response_get, "Cliente POS")
         self.assertContains(response_get, "Abrir guia")
         self.assertContains(response_get, "Talao")

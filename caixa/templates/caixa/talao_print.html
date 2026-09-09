@@ -188,7 +188,7 @@
             <div class="label">Itens desta operacao</div>
             <div class="value">
                 {% for origem in pagamento.origens_compostas_legiveis %}
-                    {{ origem.descricao }} — R$ {{ origem.valor_bruto|floatformat:2 }}{% if origem.desconto %} (desconto R$ {{ origem.desconto|floatformat:2 }}){% endif %}{% if not forloop.last %}<br>{% endif %}
+                    {% if origem.estornado %}<strong>[ESTORNADO]</strong> {% endif %}{{ origem.descricao }} — R$ {{ origem.valor_bruto|floatformat:2 }}{% if origem.desconto %} (desconto R$ {{ origem.desconto|floatformat:2 }}){% endif %}{% if origem.estornado and origem.motivo_estorno %}<br><small>Motivo: {{ origem.motivo_estorno }}</small>{% endif %}{% if not forloop.last %}<br>{% endif %}
                 {% endfor %}
             </div>
         </div>

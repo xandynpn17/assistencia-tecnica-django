@@ -88,6 +88,9 @@
           <a href="{% url 'caixa:registrar_saida' %}" class="btn btn-sm {% if menu_sub == 'registrar_saida' %}btn-warning{% else %}btn-outline-warning{% endif %}">
             Sa&iacute;das
           </a>
+          <a href="{% url 'estoque:pos_venda_balcao' %}" class="btn btn-sm btn-outline-secondary">
+            P&oacute;s-venda
+          </a>
           <a href="{% url 'caixa:abrir_caixa' %}" class="btn btn-sm {% if menu_sub == 'abrir_caixa' %}btn-success{% else %}btn-outline-success{% endif %}">
             Abrir caixa
           </a>

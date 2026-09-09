@@ -1,6 +1,6 @@
 {% extends "core/base.html" %}
 
-{% block title %}Pos-venda de Balcao{% endblock %}
+{% block title %}Central de pós-venda{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -47,10 +47,12 @@
 {% block content %}
 <div class="ui-module-header">
   <div>
-    <h1 class="ui-module-title">Pos-venda de balcao</h1>
-    <p class="ui-module-subtitle">Garantia, devolucao, troca e orientacao para vendas a mostrador com rastreabilidade do comprovante.</p>
+    <h1 class="ui-module-title">Central de pós-venda</h1>
+    <p class="ui-module-subtitle">Localize o comprovante, registre garantia, troca, devolução ou orientação e mantenha a rastreabilidade.</p>
   </div>
   <div class="ui-module-actions">
+    <a href="{% url 'caixa:checkout_agrupado' %}" class="btn btn-outline-success btn-sm">Voltar ao checkout</a>
+    <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-outline-dark btn-sm">Caixa</a>
     <a href="{% url 'estoque:consulta_artigos' %}" class="btn btn-outline-primary btn-sm">Voltar ao POS</a>
     <a href="{% url 'estoque:painel_venda_mostrador' %}" class="btn btn-outline-secondary btn-sm">Painel operacional</a>
   </div>

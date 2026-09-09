@@ -1,7 +1,7 @@
 from .auditoria import auditoria_operacional, dre, fluxo_projetado, garantias_fabricante, relatorios
 from .comissoes import comissoes_pagamento, comissoes_pendencias, comissoes_tecnicos, meu_desempenho, premios_meta
 from .common import _upsert_auditoria_garantia_ordem, caixa_atual
-from .checkout import checkout_agrupado
+from .checkout import checkout_agrupado, checkout_estornar_origem, checkout_previsao_taxas
 from .dashboard import (
     abrir_caixa,
     dashboard_caixa,
@@ -45,6 +45,8 @@ __all__ = [
     "comissoes_pendencias",
     "comissoes_tecnicos",
     "checkout_agrupado",
+    "checkout_estornar_origem",
+    "checkout_previsao_taxas",
     "contas_pagar",
     "cartoes_corporativos",
     "contabilidade_gerencial",

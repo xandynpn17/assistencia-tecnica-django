@@ -156,7 +156,7 @@ class Pagamento(models.Model):
     @property
     def origens_compostas_legiveis(self):
         linhas = []
-        for item in self.origens_compostas or []:
+        for indice, item in enumerate(self.origens_compostas or []):
             tipo = (item or {}).get("tipo") or "avulso"
             descricao = (item or {}).get("descricao") or "Origem nao informada"
             valor = Decimal(str((item or {}).get("valor_bruto") or "0"))
@@ -164,10 +164,13 @@ class Pagamento(models.Model):
             linhas.append(
                 {
                     "tipo": tipo,
+                    "indice": indice,
                     "descricao": descricao,
                     "valor_bruto": valor,
                     "desconto": desconto,
                     "valor_liquido": max(Decimal("0.00"), valor - desconto),
+                    "estornado": bool((item or {}).get("estornado")),
+                    "motivo_estorno": (item or {}).get("motivo_estorno") or "",
                 }
             )
         return linhas
@@ -206,6 +209,73 @@ class Pagamento(models.Model):
             from .services.pagamentos import registrar_snapshot_encargos_pagamento
 
             registrar_snapshot_encargos_pagamento(self)
+
+
+class CheckoutRascunho(models.Model):
+    STATUS = [
+        ("ativo", "Ativo"),
+        ("concluido", "Concluído"),
+        ("cancelado", "Cancelado"),
+    ]
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.CASCADE,
+        related_name="checkouts_rascunho",
+    )
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="checkouts_rascunho",
+    )
+    nome = models.CharField(max_length=120, blank=True)
+    contas_ids = models.JSONField(default=list, blank=True)
+    valores_contas = models.JSONField(default=dict, blank=True)
+    guia_codigo = models.CharField(max_length=32, blank=True)
+    dados_pagamento = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=12, choices=STATUS, default="ativo", db_index=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-atualizado_em", "-id"]
+
+    def __str__(self):
+        return self.nome or f"Checkout em rascunho #{self.pk}"
+
+
+class EstornoOrigemCheckout(models.Model):
+    TIPO_ORIGEM = [("os", "Ordem de serviço"), ("produto", "Produto")]
+    pagamento = models.ForeignKey(Pagamento, on_delete=models.PROTECT, related_name="estornos_origens")
+    indice_origem = models.PositiveSmallIntegerField()
+    tipo_origem = models.CharField(max_length=12, choices=TIPO_ORIGEM)
+    descricao = models.CharField(max_length=180)
+    valor_bruto = models.DecimalField(max_digits=12, decimal_places=2)
+    desconto = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valor_estornado = models.DecimalField(max_digits=12, decimal_places=2)
+    reabrir_cobranca = models.BooleanField(default=True)
+    motivo = models.TextField()
+    estornado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="estornos_origens_checkout",
+    )
+    estornado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-estornado_em", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pagamento", "indice_origem"],
+                name="cx_estorno_checkout_origem_unica",
+            )
+        ]
+
+    def __str__(self):
+        return f"Estorno {self.pagamento_id}/{self.indice_origem} · {self.descricao}"
 
 
 class FormaPagamento(models.Model):

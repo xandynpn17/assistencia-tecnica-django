@@ -404,6 +404,10 @@ class ConciliacaoBancariaGrupoForm(forms.Form):
         contas = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
         self.fields["conta"].queryset = contas
         self.fields["conta"].widget.attrs["onchange"] = "window.location='?conta=' + this.value"
+        self.fields["conta"].widget.attrs["class"] = "form-control"
+        self.fields["registrar_diferenca"].widget.attrs["class"] = "form-check-input"
+        for nome in ("tipo_diferenca", "descricao_diferenca", "justificativa"):
+            self.fields[nome].widget.attrs["class"] = "form-control"
         conta_id = self.data.get("conta") if self.is_bound else self.initial.get("conta")
         try:
             conta_id = int(conta_id) if conta_id else None

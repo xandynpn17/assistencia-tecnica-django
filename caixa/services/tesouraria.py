@@ -107,6 +107,14 @@ def registrar_pagamento_bancario(pagamento):
     if not composicao and pagamento.forma_pagamento_id:
         composicao = [{"forma_id": pagamento.forma_pagamento_id, "valor": str(pagamento.valor), "referencia": pagamento.referencia or ""}]
     movimentos = []
+    descricoes_origens = [
+        str(item.get("descricao") or "").strip()
+        for item in (pagamento.origens_compostas or [])
+        if not item.get("estornado") and str(item.get("descricao") or "").strip()
+    ]
+    resumo_origens = ", ".join(descricoes_origens[:3])
+    if len(descricoes_origens) > 3:
+        resumo_origens += f" +{len(descricoes_origens) - 3} item(ns)"
     for indice, item in enumerate(composicao):
         forma_id = (item or {}).get("forma_id")
         forma = FormaPagamento.objects.select_related(
@@ -144,7 +152,10 @@ def registrar_pagamento_bancario(pagamento):
                 tipo="entrada",
                 origem_tipo="pagamento",
                 origem_id=pagamento.pk,
-                descricao=f"Recebimento {pagamento.numero_talao or pagamento.pk} - {forma.nome}",
+                descricao=(
+                    f"Recebimento {pagamento.numero_talao or pagamento.pk} - {forma.nome}"
+                    + (f" · {resumo_origens}" if resumo_origens else "")
+                )[:255],
                 valor=valor_liquido,
                 data_movimento=data_liquidacao,
                 chave=f"pagamento:{pagamento.pk}:forma:{forma.pk}:parcela:{indice}",
@@ -155,6 +166,7 @@ def registrar_pagamento_bancario(pagamento):
                     "dias_liquidacao": dias_recebimento,
                     "parcelas": int((item or {}).get("parcelas") or 1),
                     "bandeira": (item or {}).get("bandeira") or "",
+                    "origens_checkout": descricoes_origens,
                 },
             )
         )

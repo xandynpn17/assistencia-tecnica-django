@@ -107,7 +107,7 @@
                         <td><strong>{{ p.numero_talao|default:"-" }}</strong></td>
                         <td>
                           {% if p.origens_compostas %}
-                            {% for origem in p.origens_compostas_legiveis|slice:":3" %}{{ origem.descricao }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+                            {% for origem in p.origens_compostas_legiveis|slice:":3" %}{% if origem.estornado %}<span class="badge badge-danger">Estornado</span> {% endif %}{{ origem.descricao }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
                           {% elif p.ordem_servico %}{{ p.ordem_servico.numero_os }}{% else %}-{% endif %}
                         </td>
                         <td class="text-right">R$ {{ p.valor|floatformat:2 }}</td>

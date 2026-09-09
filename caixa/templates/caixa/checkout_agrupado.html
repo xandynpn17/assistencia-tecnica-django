@@ -17,7 +17,7 @@
   .checkout-step { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 50%; background: #1268d6; color: #fff; font-weight: 700; margin-right: 8px; }
   .checkout-search { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
   .checkout-list { max-height: 430px; overflow-y: auto; border: 1px solid #e1e8f0; border-radius: 12px; }
-  .checkout-row { display: grid; grid-template-columns: 34px 1.2fr 1fr 120px; gap: 10px; align-items: center; padding: 11px 12px; border-bottom: 1px solid #edf1f5; cursor: pointer; margin: 0; }
+  .checkout-row { display: grid; grid-template-columns: 34px 1.2fr .9fr 120px 120px; gap: 10px; align-items: center; padding: 11px 12px; border-bottom: 1px solid #edf1f5; margin: 0; }
   .checkout-row:last-child { border-bottom: 0; }
   .checkout-row:hover { background: #f5f9ff; }
   .checkout-row.is-selected { background: #eaf4ff; }
@@ -25,6 +25,8 @@
   .checkout-row strong, .checkout-row span { display: block; }
   .checkout-muted { color: #6d7c8b; font-size: .82rem; }
   .checkout-money { text-align: right; font-weight: 700; }
+  .checkout-amount label { display: block; margin: 0 0 3px; font-size: .72rem; color: #6d7c8b; }
+  .checkout-amount input { text-align: right; font-weight: 700; }
   .checkout-guide { border: 1px dashed #b8c9da; border-radius: 12px; padding: 12px; background: #fbfdff; }
   .checkout-total { position: sticky; top: 10px; }
   .checkout-total-value { font-size: 2rem; font-weight: 800; color: #153c67; }
@@ -36,17 +38,22 @@
   .checkout-shortcuts kbd { background: #1268d6; }
   .checkout-submit { min-height: 58px; font-size: 1.15rem; font-weight: 700; }
   .checkout-success { border-left: 5px solid #22a447; }
+  .checkout-product-results { max-height: 220px; overflow-y: auto; }
+  .checkout-product-result { display: flex; justify-content: space-between; gap: 12px; padding: 9px 10px; border-bottom: 1px solid #edf1f5; cursor: pointer; }
+  .checkout-product-result:hover, .checkout-product-result.is-selected { background: #eaf4ff; }
+  .checkout-draft-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+  .checkout-draft { min-width: 230px; border: 1px solid #dce5ef; border-radius: 10px; padding: 9px 10px; background: #fff; }
   @media (max-width: 991.98px) {
     .checkout-grid { grid-template-columns: 1fr; }
     .checkout-total { position: static; }
-    .checkout-row { grid-template-columns: 30px 1fr 100px; }
+    .checkout-row { grid-template-columns: 30px 1fr 100px 115px; }
     .checkout-equipment { display: none; }
   }
   @media (max-width: 575.98px) {
     .checkout-form-grid { grid-template-columns: 1fr; }
     .checkout-form-grid .full { grid-column: auto; }
     .checkout-row { grid-template-columns: 28px 1fr; }
-    .checkout-money { grid-column: 2; text-align: left; }
+    .checkout-money, .checkout-amount { grid-column: 2; text-align: left; }
   }
 </style>
 {% endblock %}
@@ -76,7 +83,59 @@
     </div>
     <div class="d-flex" style="gap:8px;">
       <a href="{% url 'caixa:imprimir_talao' pagamento_sucesso.id %}" target="_blank" class="btn btn-sm btn-success">Imprimir comprovante</a>
+      <a href="{% url 'estoque:pos_venda_balcao' %}?q={{ pagamento_sucesso.numero_talao }}" class="btn btn-sm btn-outline-primary">Troca, devolução ou garantia</a>
+      <a href="{% url 'caixa:conciliar_extrato_grupo' %}" class="btn btn-sm btn-outline-dark">Conciliar depósito agrupado</a>
       <a href="{% url 'caixa:checkout_agrupado' %}" class="btn btn-sm btn-outline-success">Novo checkout</a>
+    </div>
+  </div>
+  {% if pagamento_sucesso.origens_compostas %}
+  <div class="checkout-head">
+    <strong>Itens deste recebimento</strong>
+    <div class="small text-muted mb-2">Cada origem pode ser tratada separadamente sem apagar o pagamento original.</div>
+    {% for origem in pagamento_sucesso.origens_compostas_legiveis %}
+    <div class="border rounded p-2 mb-2 {% if origem.estornado %}bg-light text-muted{% endif %}">
+      <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
+        <span><strong>{{ origem.descricao }}</strong> · R$ {{ origem.valor_liquido|floatformat:2 }}{% if origem.desconto %} <small>(desconto R$ {{ origem.desconto|floatformat:2 }})</small>{% endif %}</span>
+        {% if origem.estornado %}
+          <span class="badge badge-secondary">Estornado</span>
+        {% elif pode_estornar_origem %}
+          <button type="button" class="btn btn-sm btn-outline-danger" data-toggle="collapse" data-target="#estornoOrigem{{ origem.indice }}">Estornar esta origem</button>
+        {% endif %}
+      </div>
+      {% if origem.motivo_estorno %}<div class="small mt-1">Motivo: {{ origem.motivo_estorno }}</div>{% endif %}
+      {% if not origem.estornado and pode_estornar_origem %}
+      <div class="collapse mt-2" id="estornoOrigem{{ origem.indice }}">
+        <form method="post" action="{% url 'caixa:checkout_estornar_origem' pagamento_sucesso.id origem.indice %}" class="form-row align-items-end">
+          {% csrf_token %}
+          <div class="col-md-7"><label>Motivo do estorno</label><input name="motivo_estorno" class="form-control" minlength="12" required placeholder="Explique o motivo com pelo menos 12 caracteres"></div>
+          {% if origem.tipo == "os" %}<div class="col-md-3"><label class="d-block"><input type="checkbox" name="reabrir_cobranca" value="1" checked> Reabrir saldo da OS</label></div>{% endif %}
+          <div class="col-md-2"><button class="btn btn-danger btn-block">Confirmar</button></div>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {% if rascunhos_recentes %}
+  <div class="checkout-head">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <strong>Checkouts em rascunho</strong>
+      <span class="small text-muted">Abra para continuar de onde parou.</span>
+    </div>
+    <div class="checkout-draft-strip">
+      {% for item in rascunhos_recentes %}
+      <div class="checkout-draft">
+        <a href="{% url 'caixa:checkout_agrupado' %}?rascunho={{ item.id }}"><strong>{{ item.nome }}</strong></a>
+        <div class="small text-muted">{{ item.contas_ids|length }} OS · {{ item.atualizado_em|date:"d/m H:i" }}</div>
+        <form method="post" class="mt-1">
+          {% csrf_token %}
+          <button class="btn btn-link btn-sm text-danger p-0" name="excluir_rascunho_id" value="{{ item.id }}">Remover</button>
+        </form>
+      </div>
+      {% endfor %}
     </div>
   </div>
   {% endif %}
@@ -84,6 +143,7 @@
   <form method="post" id="checkoutForm" novalidate>
     {% csrf_token %}
     {{ form.chave_idempotencia }}
+    <input type="hidden" name="rascunho_id" value="{{ rascunho.id|default:'' }}">
     <input type="hidden" name="valor" id="id_valor" value="{{ total_bruto|stringformat:'0.2f' }}">
     <div class="checkout-grid">
       <section>
@@ -97,18 +157,22 @@
             <div class="small text-muted mb-2">Depois da primeira seleção, o sistema mantém disponíveis somente OS do mesmo cliente.</div>
             <div class="checkout-list" id="checkoutListaOS">
               {% for conta in contas_disponiveis %}
-              <label class="checkout-row {% if conta.id in contas_selecionadas_ids %}is-selected{% endif %}" data-search="{{ conta.cliente_nome|lower }} {{ conta.ordem_servico.numero_os|lower }} {{ conta.ordem_servico.tipo_equipamento|lower }} {{ conta.ordem_servico.modelo_equipamento|lower }} {{ conta.ordem_servico.cliente.telefone|lower }} {{ conta.ordem_servico.cliente.documento|lower }}" data-cliente="{{ conta.ordem_servico.cliente_id|default:'' }}" data-valor="{{ conta.valor_aberto|stringformat:'0.2f' }}">
-                <input type="checkbox" name="contas_ids" value="{{ conta.id }}" {% if conta.id in contas_selecionadas_ids %}checked{% endif %}>
-                <span>
+              <div class="checkout-row {% if conta.id in contas_selecionadas_ids %}is-selected{% endif %}" data-search="{{ conta.cliente_nome|lower }} {{ conta.ordem_servico.numero_os|lower }} {{ conta.ordem_servico.tipo_equipamento|lower }} {{ conta.ordem_servico.modelo_equipamento|lower }} {{ conta.ordem_servico.cliente.telefone|lower }} {{ conta.ordem_servico.cliente.documento|lower }}" data-cliente="{{ conta.ordem_servico.cliente_id|default:'' }}" data-valor="{{ conta.valor_aberto|stringformat:'0.2f' }}">
+                <input id="checkout_conta_{{ conta.id }}" type="checkbox" name="contas_ids" value="{{ conta.id }}" {% if conta.id in contas_selecionadas_ids %}checked{% endif %}>
+                <label for="checkout_conta_{{ conta.id }}" class="mb-0">
                   <strong>{{ conta.ordem_servico.numero_os }} · {{ conta.cliente_nome|default:"Cliente sem nome" }}</strong>
                   <span class="checkout-muted">Vencimento {{ conta.vencimento|date:"d/m/Y" }} · {{ conta.get_status_display }}</span>
-                </span>
+                </label>
                 <span class="checkout-equipment">
                   {{ conta.ordem_servico.tipo_equipamento|default:"Equipamento" }}
                   <span class="checkout-muted">{{ conta.ordem_servico.marca_equipamento }} {{ conta.ordem_servico.modelo_equipamento }}</span>
                 </span>
-                <span class="checkout-money">R$ {{ conta.valor_aberto|floatformat:2 }}</span>
-              </label>
+                <span class="checkout-money">Saldo<br>R$ {{ conta.valor_aberto|floatformat:2 }}</span>
+                <span class="checkout-amount">
+                  <label for="conta_valor_{{ conta.id }}">Receber agora</label>
+                  <input id="conta_valor_{{ conta.id }}" class="form-control form-control-sm" type="number" name="conta_valor_{{ conta.id }}" min="0.01" max="{{ conta.valor_aberto|stringformat:'0.2f' }}" step="0.01" value="{{ conta.valor_checkout|stringformat:'0.2f' }}">
+                </span>
+              </div>
               {% empty %}
               <div class="p-4 text-center text-muted">Nenhuma conta de cliente pendente.</div>
               {% endfor %}
@@ -134,12 +198,33 @@
               {% if vendas_guia %}
               <div class="mt-3">
                 {% for venda in vendas_guia %}
-                <div class="checkout-breakdown-row"><span>{{ venda.produto.nome }} × {{ venda.quantidade }}</span><strong>R$ {{ venda.valor_total|floatformat:2 }}</strong></div>
+                <div class="checkout-breakdown-row align-items-center">
+                  <span>{{ venda.produto.nome }} × {{ venda.quantidade }}</span>
+                  <span class="d-flex align-items-center" style="gap:8px;"><strong>R$ {{ venda.valor_total|floatformat:2 }}</strong><button type="submit" class="btn btn-link btn-sm text-danger p-0" name="remover_venda_id" value="{{ venda.id }}">Remover</button></span>
+                </div>
                 {% endfor %}
               </div>
               {% else %}
               <div class="small text-muted mt-2">Opcional. Monte os acessórios no Estoque e informe a guia aqui.</div>
               {% endif %}
+            </div>
+
+            <div class="checkout-guide mt-3">
+              <strong>Adicionar produto diretamente</strong>
+              <div class="small text-muted mb-2">Pesquise pelo nome, código, SKU ou EAN sem sair do checkout.</div>
+              <div class="checkout-search">
+                <input type="search" id="checkoutProdutoBusca" class="form-control" placeholder="Digite ao menos 2 caracteres">
+                <button type="button" class="btn btn-outline-primary" id="checkoutProdutoPesquisar">Pesquisar</button>
+              </div>
+              <div id="checkoutProdutoResultados" class="checkout-product-results border rounded mt-2" hidden></div>
+              <input type="hidden" name="produto_id" id="checkoutProdutoId">
+              <div id="checkoutProdutoSelecionado" class="small font-weight-bold text-primary mt-2">Nenhum produto selecionado.</div>
+              <div class="form-row mt-2">
+                <div class="col-md-4"><label>Quantidade</label><input type="number" class="form-control" name="produto_quantidade" min="1" value="1"></div>
+                <div class="col-md-4"><label>Ponto</label><select class="form-control" name="ponto_id">{% for ponto in pontos_checkout %}<option value="{{ ponto.id }}">{{ ponto.codigo }} · {{ ponto.nome }}</option>{% endfor %}</select></div>
+                <div class="col-md-4"><label>Vendedor</label><input class="form-control" name="funcionario_numero" value="{{ funcionario_numero }}" placeholder="Número"></div>
+              </div>
+              <button type="submit" class="btn btn-primary mt-2" name="acao" value="adicionar_produto" id="checkoutAdicionarProduto" disabled>Adicionar ao checkout</button>
             </div>
           </div>
         </div>
@@ -158,6 +243,9 @@
               <div class="checkout-breakdown-row"><span>Quantidade de OS</span><strong id="checkoutQtdOS">{{ contas_selecionadas|length }}</strong></div>
               <div class="checkout-breakdown-row text-danger"><span>Desconto</span><strong>- R$ <span id="checkoutDesconto">0,00</span></strong></div>
               <div class="checkout-breakdown-row"><span>Valor a receber</span><strong>R$ <span id="checkoutLiquido">{{ total_bruto|floatformat:2 }}</span></strong></div>
+              <div class="checkout-breakdown-row text-danger" id="checkoutTaxaLinha" hidden><span>Taxas previstas</span><strong>- R$ <span id="checkoutTaxas">0,00</span></strong></div>
+              <div class="checkout-breakdown-row text-primary" id="checkoutRepasseLinha" hidden><span>Repasse líquido previsto</span><strong>R$ <span id="checkoutRepasse">0,00</span></strong></div>
+              <div class="small text-muted" id="checkoutDataRepasse" hidden></div>
               <div class="checkout-breakdown-row text-success" id="checkoutTrocoLinha" hidden><span>Troco</span><strong>R$ <span id="checkoutTroco">0,00</span></strong></div>
             </div>
 
@@ -213,6 +301,10 @@
             <button type="submit" id="checkoutConcluir" class="btn btn-success btn-block checkout-submit mt-3" {% if not total_bruto %}disabled{% endif %}>
               Receber tudo e concluir
             </button>
+            <div class="input-group mt-2">
+              <input class="form-control" name="nome_rascunho" value="{{ rascunho.nome|default:'' }}" placeholder="Nome do rascunho (opcional)">
+              <div class="input-group-append"><button class="btn btn-outline-secondary" type="submit" name="acao" value="salvar_rascunho">Salvar rascunho</button></div>
+            </div>
             <div class="small text-muted text-center mt-2">A operação só é gravada se todas as OS, pagamentos e baixas de estoque forem concluídos.</div>
           </div>
         </div>
@@ -235,6 +327,13 @@
   const descontoValor = document.getElementById("id_desconto_valor");
   const descontoPercentual = document.getElementById("id_desconto_percentual");
   const valorRecebido = document.getElementById("id_valor_recebido");
+  const produtoBusca = document.getElementById("checkoutProdutoBusca");
+  const produtoResultados = document.getElementById("checkoutProdutoResultados");
+  const produtoId = document.getElementById("checkoutProdutoId");
+  const produtoSelecionado = document.getElementById("checkoutProdutoSelecionado");
+  const produtoAdicionar = document.getElementById("checkoutAdicionarProduto");
+  let totalAtual = 0;
+  let taxaTimer = null;
 
   function numero(input) {
     return Number(String(input && input.value || "0").replace(",", ".")) || 0;
@@ -245,6 +344,7 @@
   }
 
   function atualizarResumo(total) {
+    totalAtual = total;
     const percentual = Math.max(0, numero(descontoPercentual));
     const descontoFixo = Math.max(0, numero(descontoValor));
     const desconto = Math.min(total, percentual > 0 ? total * percentual / 100 : descontoFixo);
@@ -255,6 +355,53 @@
     document.getElementById("checkoutLiquido").textContent = moeda(liquido);
     document.getElementById("checkoutTroco").textContent = moeda(troco);
     document.getElementById("checkoutTrocoLinha").hidden = troco <= 0;
+    clearTimeout(taxaTimer);
+    taxaTimer = setTimeout(atualizarTaxas, 250);
+  }
+
+  async function consultarTaxa(forma, valor, parcelas, bandeira, data) {
+    if (!forma || valor <= 0) return {taxa: 0, liquido: Math.max(0, valor), dias: 0, data_prevista: ""};
+    const parametros = new URLSearchParams({forma, valor: valor.toFixed(2), parcelas: parcelas || "1", bandeira: bandeira || "", data: data || ""});
+    const resposta = await fetch(`{% url 'caixa:checkout_previsao_taxas' %}?${parametros.toString()}`, {headers: {"X-Requested-With": "XMLHttpRequest"}});
+    if (!resposta.ok) throw new Error("taxa");
+    return resposta.json();
+  }
+
+  async function atualizarTaxas() {
+    const percentual = Math.max(0, numero(descontoPercentual));
+    const descontoFixo = Math.max(0, numero(descontoValor));
+    const desconto = Math.min(totalAtual, percentual > 0 ? totalAtual * percentual / 100 : descontoFixo);
+    const liquidoCheckout = Math.max(0, totalAtual - desconto);
+    const formaPrincipal = document.getElementById("id_forma_pagamento");
+    const formaSecundaria = document.getElementById("id_forma_pagamento_secundaria");
+    const valorSecundario = Math.min(liquidoCheckout, Math.max(0, numero(document.getElementById("id_valor_secundario"))));
+    const valorPrincipal = Math.max(0, liquidoCheckout - (formaSecundaria && formaSecundaria.value ? valorSecundario : 0));
+    if (!formaPrincipal || !formaPrincipal.value || liquidoCheckout <= 0) {
+      document.getElementById("checkoutTaxaLinha").hidden = true;
+      document.getElementById("checkoutRepasseLinha").hidden = true;
+      document.getElementById("checkoutDataRepasse").hidden = true;
+      return;
+    }
+    try {
+      const data = (document.getElementById("id_data_movimento") || {}).value || "";
+      const principal = await consultarTaxa(formaPrincipal.value, valorPrincipal, (document.getElementById("id_parcelas_principal") || {}).value, (document.getElementById("id_bandeira_principal") || {}).value, data);
+      const secundaria = formaSecundaria && formaSecundaria.value && valorSecundario > 0
+        ? await consultarTaxa(formaSecundaria.value, valorSecundario, (document.getElementById("id_parcelas_secundaria") || {}).value, (document.getElementById("id_bandeira_secundaria") || {}).value, data)
+        : {taxa: 0, liquido: 0, dias: 0, data_prevista: ""};
+      const taxa = Number(principal.taxa || 0) + Number(secundaria.taxa || 0);
+      const repasse = Number(principal.liquido || 0) + Number(secundaria.liquido || 0);
+      document.getElementById("checkoutTaxas").textContent = moeda(taxa);
+      document.getElementById("checkoutRepasse").textContent = moeda(repasse);
+      document.getElementById("checkoutTaxaLinha").hidden = false;
+      document.getElementById("checkoutRepasseLinha").hidden = false;
+      const datas = [principal.data_prevista, secundaria.data_prevista].filter(Boolean);
+      const dataLinha = document.getElementById("checkoutDataRepasse");
+      dataLinha.textContent = datas.length ? `Previsão de crédito: ${Array.from(new Set(datas)).join(" e ")}` : "Crédito sem prazo configurado.";
+      dataLinha.hidden = false;
+    } catch (erro) {
+      document.getElementById("checkoutDataRepasse").textContent = "Não foi possível calcular a previsão das taxas.";
+      document.getElementById("checkoutDataRepasse").hidden = false;
+    }
   }
 
   function atualizarSelecao() {
@@ -263,11 +410,15 @@
     let totalOS = 0;
     rows.forEach(row => {
       const input = row.querySelector("input");
+      const amountInput = row.querySelector(".checkout-amount input");
       const incompativel = Boolean(clienteAtivo && row.dataset.cliente && row.dataset.cliente !== clienteAtivo && !input.checked);
       input.disabled = incompativel;
       row.classList.toggle("is-disabled", incompativel);
       row.classList.toggle("is-selected", input.checked);
-      if (input.checked) totalOS += Number(row.dataset.valor.replace(",", ".")) || 0;
+      if (input.checked) {
+        const saldo = Number(row.dataset.valor.replace(",", ".")) || 0;
+        totalOS += Math.min(saldo, Math.max(0, numero(amountInput)));
+      }
     });
     const total = totalOS + totalGuia;
     document.getElementById("checkoutTotalOS").textContent = totalOS.toFixed(2).replace(".", ",");
@@ -283,8 +434,60 @@
     rows.forEach(row => { row.hidden = Boolean(termo && !row.dataset.search.includes(termo)); });
   }
 
-  rows.forEach(row => row.querySelector("input").addEventListener("change", atualizarSelecao));
+  async function pesquisarProdutos() {
+    const termo = (produtoBusca.value || "").trim();
+    if (termo.length < 2) {
+      produtoResultados.hidden = true;
+      produtoBusca.focus();
+      return;
+    }
+    produtoResultados.hidden = false;
+    produtoResultados.textContent = "Pesquisando...";
+    try {
+      const resposta = await fetch(`{% url 'estoque:api_consulta_artigos' %}?q=${encodeURIComponent(termo)}`, {headers: {"X-Requested-With": "XMLHttpRequest"}});
+      const dados = await resposta.json();
+      produtoResultados.textContent = "";
+      if (!dados.resultados || !dados.resultados.length) {
+        produtoResultados.textContent = "Nenhum produto encontrado.";
+        return;
+      }
+      dados.resultados.forEach(produto => {
+        const linha = document.createElement("button");
+        linha.type = "button";
+        linha.className = "checkout-product-result btn btn-link text-left w-100";
+        const descricao = document.createElement("span");
+        const nome = document.createElement("strong");
+        nome.textContent = produto.nome;
+        const detalhe = document.createElement("small");
+        detalhe.className = "d-block text-muted";
+        detalhe.textContent = `${produto.sku || produto.ean || "Sem código"} · Estoque ${produto.quantidade}`;
+        descricao.append(nome, detalhe);
+        const preco = document.createElement("strong");
+        preco.textContent = `R$ ${Number(produto.preco || 0).toFixed(2).replace(".", ",")}`;
+        linha.append(descricao, preco);
+        linha.addEventListener("click", () => {
+          produtoResultados.querySelectorAll(".is-selected").forEach(item => item.classList.remove("is-selected"));
+          linha.classList.add("is-selected");
+          produtoId.value = produto.id;
+          produtoSelecionado.textContent = `${produto.nome} · R$ ${Number(produto.preco || 0).toFixed(2).replace(".", ",")}`;
+          produtoAdicionar.disabled = false;
+        });
+        produtoResultados.appendChild(linha);
+      });
+    } catch (erro) {
+      produtoResultados.textContent = "Não foi possível pesquisar agora. Tente novamente.";
+    }
+  }
+
+  rows.forEach(row => {
+    row.querySelector("input").addEventListener("change", atualizarSelecao);
+    row.querySelector(".checkout-amount input").addEventListener("input", atualizarSelecao);
+  });
   busca.addEventListener("input", filtrar);
+  document.getElementById("checkoutProdutoPesquisar").addEventListener("click", pesquisarProdutos);
+  produtoBusca.addEventListener("keydown", event => {
+    if (event.key === "Enter") { event.preventDefault(); pesquisarProdutos(); }
+  });
   document.getElementById("limparBusca").addEventListener("click", () => { busca.value = ""; filtrar(); busca.focus(); });
   document.getElementById("carregarGuia").addEventListener("click", () => {
     const codigo = (guia.value || "").trim();
@@ -293,10 +496,18 @@
     destino.searchParams.set("guia", codigo);
     const contas = rows.filter(row => row.querySelector("input").checked).map(row => row.querySelector("input").value);
     if (contas.length) destino.searchParams.set("contas", contas.join(","));
+    rows.filter(row => row.querySelector("input").checked).forEach(row => {
+      const contaId = row.querySelector("input").value;
+      destino.searchParams.set(`conta_valor_${contaId}`, row.querySelector(".checkout-amount input").value);
+    });
     window.location.href = destino.toString();
   });
   document.querySelectorAll(".checkout-total input:not([type='hidden']):not([type='checkbox']), .checkout-total select, .checkout-total textarea").forEach(el => el.classList.add("form-control"));
   [descontoValor, descontoPercentual, valorRecebido].filter(Boolean).forEach(el => el.addEventListener("input", atualizarSelecao));
+  ["id_forma_pagamento", "id_parcelas_principal", "id_bandeira_principal", "id_forma_pagamento_secundaria", "id_valor_secundario", "id_parcelas_secundaria", "id_bandeira_secundaria", "id_data_movimento"].forEach(id => {
+    const campo = document.getElementById(id);
+    if (campo) { campo.addEventListener("change", atualizarSelecao); campo.addEventListener("input", atualizarSelecao); }
+  });
   form.addEventListener("submit", () => { submit.disabled = true; submit.textContent = "Processando checkout..."; });
 
   function acionar(destino) {

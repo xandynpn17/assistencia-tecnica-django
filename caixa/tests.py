@@ -16,6 +16,7 @@ from caixa.models import (
     AuditoriaFinanceira,
     AuditoriaGarantia,
     Caixa,
+    CheckoutRascunho,
     ConciliacaoBancaria,
     CategoriaFinanceira,
     CentroCusto,
@@ -28,6 +29,7 @@ from caixa.models import (
     CustoFixoMensal,
     DREFechamento,
     DespesaRecorrente,
+    EstornoOrigemCheckout,
     FaixaPremioMeta,
     FormaPagamento,
     LancamentoCaixa,
@@ -61,7 +63,7 @@ from caixa.services.comissoes import (
     processar_evento_servico_finalizado,
 )
 from caixa.services.livro_financeiro import estornar_movimento_financeiro
-from caixa.services.pagamentos import excluir_pagamento_com_justificativa
+from caixa.services.pagamentos import estornar_origem_checkout, excluir_pagamento_com_justificativa
 from caixa.services.tesouraria import (
     conciliar_grupo,
     conciliar_linha,
@@ -5526,6 +5528,237 @@ class CheckoutAgrupadoTests(TestCase):
         pagamento = Pagamento.objects.get(chave_idempotencia="checkout-dinheiro-troco")
         self.assertEqual(pagamento.valor_recebido_dinheiro, Decimal("120.00"))
         self.assertEqual(pagamento.troco_entregue, Decimal("20.00"))
+
+    def test_checkout_permite_recebimento_parcial_por_os(self):
+        ordem, conta = self._criar_conta_os("OS-CHK-09", Decimal("100.00"))
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            reverse("caixa:checkout_agrupado"),
+            self._payload(
+                [conta],
+                "40.00",
+                chave_idempotencia="checkout-parcial-os",
+            ) | {f"conta_valor_{conta.id}": "40.00"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pagamento = Pagamento.objects.get(chave_idempotencia="checkout-parcial-os")
+        conta.refresh_from_db()
+        recebimento = RecebimentoConta.objects.get(pagamento=pagamento, conta=conta)
+        talao = OrdemTalao.objects.get(pagamento=pagamento, ordem=ordem)
+        self.assertEqual(conta.status, "parcial")
+        self.assertEqual(conta.valor_aberto, Decimal("60.00"))
+        self.assertEqual(recebimento.valor, Decimal("40.00"))
+        self.assertEqual(talao.valor, Decimal("40.00"))
+
+    def test_checkout_salva_e_reabre_rascunho(self):
+        _, conta = self._criar_conta_os("OS-CHK-10", Decimal("90.00"))
+        self.client.force_login(self.usuario)
+        payload = self._payload(
+            [conta],
+            "45.00",
+            acao="salvar_rascunho",
+            nome_rascunho="Retirada de dois equipamentos",
+        ) | {f"conta_valor_{conta.id}": "45.00"}
+
+        response = self.client.post(reverse("caixa:checkout_agrupado"), payload)
+
+        self.assertEqual(response.status_code, 302)
+        rascunho = CheckoutRascunho.objects.get(empresa=self.empresa, status="ativo")
+        self.assertEqual(rascunho.contas_ids, [conta.id])
+        self.assertEqual(rascunho.valores_contas[str(conta.id)], "45.00")
+        response_reabrir = self.client.get(reverse("caixa:checkout_agrupado"), {"rascunho": rascunho.id})
+        self.assertEqual(response_reabrir.status_code, 200)
+        self.assertEqual(response_reabrir.context["total_contas"], Decimal("45.00"))
+
+    def test_checkout_adiciona_produto_diretamente(self):
+        self.usuario.numero_vendedor = "77"
+        self.usuario.save(update_fields=["numero_vendedor"])
+        ponto = PontoOperacional.objects.create(empresa=self.empresa, codigo="CHK2", nome="Balcão 2")
+        produto = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Carregador direto",
+            preco=Decimal("35.00"),
+            preco_final=Decimal("35.00"),
+            quantidade=4,
+            ponto_operacional=ponto,
+            ativo=True,
+        )
+        SaldoEstoquePonto.objects.create(produto=produto, ponto_operacional=ponto, quantidade=4)
+        config = ConfiguracaoSistema.get_configuracao(empresa=self.empresa)
+        config.estoque_venda_mostrador_codigos = "CHK2"
+        config.save(update_fields=["estoque_venda_mostrador_codigos"])
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            reverse("caixa:checkout_agrupado"),
+            {
+                "acao": "adicionar_produto",
+                "produto_id": produto.id,
+                "produto_quantidade": "2",
+                "ponto_id": ponto.id,
+                "funcionario_numero": "77",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        venda = VendaRapidaEstoque.objects.get(produto=produto, status="pre_reserva")
+        self.assertTrue(venda.guia_pagamento)
+        self.assertIn(f"guia={venda.guia_pagamento}", response.url)
+
+    def test_previsao_taxa_checkout_retorna_liquido_e_data(self):
+        self.forma.taxa_percentual = Decimal("2.50")
+        self.forma.dias_recebimento = 2
+        self.forma.save(update_fields=["taxa_percentual", "dias_recebimento"])
+        self.client.force_login(self.usuario)
+
+        response = self.client.get(
+            reverse("caixa:checkout_previsao_taxas"),
+            {
+                "forma": self.forma.id,
+                "valor": "100.00",
+                "parcelas": "1",
+                "data": str(timezone.localdate()),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["taxa"], 2.5)
+        self.assertEqual(response.json()["liquido"], 97.5)
+        self.assertEqual(response.json()["dias"], 2)
+
+    def test_estorno_de_uma_origem_reabre_apenas_a_os_escolhida(self):
+        _, conta_a = self._criar_conta_os("OS-CHK-11", Decimal("100.00"))
+        _, conta_b = self._criar_conta_os("OS-CHK-12", Decimal("60.00"))
+        self.client.force_login(self.usuario)
+        self.client.post(
+            reverse("caixa:checkout_agrupado"),
+            self._payload(
+                [conta_a, conta_b],
+                "160.00",
+                chave_idempotencia="checkout-estorno-origem",
+            ),
+        )
+        pagamento = Pagamento.objects.get(chave_idempotencia="checkout-estorno-origem")
+
+        estorno = estornar_origem_checkout(
+            pagamento=pagamento,
+            indice_origem=0,
+            usuario=self.usuario,
+            motivo="Cliente desistiu apenas do primeiro reparo",
+            reabrir_cobranca=True,
+        )
+
+        conta_a.refresh_from_db()
+        conta_b.refresh_from_db()
+        pagamento.refresh_from_db()
+        self.assertEqual(conta_a.valor_aberto, Decimal("100.00"))
+        self.assertEqual(conta_b.valor_aberto, Decimal("0.00"))
+        self.assertFalse(RecebimentoConta.objects.filter(conta=conta_a, pagamento=pagamento).exists())
+        self.assertTrue(RecebimentoConta.objects.filter(conta=conta_b, pagamento=pagamento).exists())
+        self.assertTrue(pagamento.origens_compostas[0]["estornado"])
+        self.assertEqual(EstornoOrigemCheckout.objects.get(pk=estorno.pk).valor_estornado, Decimal("100.00"))
+        self.assertTrue(
+            LancamentoCaixa.objects.filter(tipo="saida", descricao__icontains="Estorno parcial").exists()
+        )
+
+    def test_estorno_de_produto_devolve_estoque_sem_cancelar_checkout_inteiro(self):
+        ponto = PontoOperacional.objects.create(
+            empresa=self.empresa,
+            codigo="CHK-DEV",
+            nome="Balcão devolução",
+        )
+        ubicacao = UbicacaoEstoque.objects.create(
+            ponto_operacional=ponto,
+            codigo="CHK-DEV-A1",
+            descricao="Prateleira devolução",
+            ativo=True,
+        )
+        produto = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Película checkout",
+            preco=Decimal("20.00"),
+            preco_final=Decimal("20.00"),
+            quantidade=3,
+            ponto_operacional=ponto,
+            ubicacao_padrao=ubicacao,
+            ativo=True,
+        )
+        SaldoEstoquePonto.objects.create(produto=produto, ponto_operacional=ponto, quantidade=3)
+        SaldoEstoqueUbicacao.objects.create(
+            produto=produto,
+            ponto_operacional=ponto,
+            ubicacao=ubicacao,
+            quantidade=3,
+        )
+        venda = VendaRapidaEstoque.objects.create(
+            produto=produto,
+            ponto_operacional=ponto,
+            quantidade=2,
+            valor_unitario=Decimal("20.00"),
+            valor_total=Decimal("40.00"),
+            funcionario_numero="12",
+            cesto_codigo="CES-CHK-DEV",
+            guia_pagamento="GUIA-CHK-DEV",
+            status="pre_reserva",
+            usuario=self.usuario,
+        )
+        self.client.force_login(self.usuario)
+        response = self.client.post(
+            reverse("caixa:checkout_agrupado"),
+            self._payload(
+                [],
+                "40.00",
+                guia_codigo="GUIA-CHK-DEV",
+                chave_idempotencia="checkout-estorno-produto",
+            ),
+        )
+        self.assertEqual(response.status_code, 302)
+        pagamento = Pagamento.objects.get(chave_idempotencia="checkout-estorno-produto")
+        saldo = SaldoEstoquePonto.objects.get(produto=produto, ponto_operacional=ponto)
+        self.assertEqual(saldo.quantidade, 1)
+
+        estornar_origem_checkout(
+            pagamento=pagamento,
+            indice_origem=0,
+            usuario=self.usuario,
+            motivo="Cliente devolveu somente a película comprada",
+        )
+
+        venda.refresh_from_db()
+        saldo.refresh_from_db()
+        pagamento.refresh_from_db()
+        self.assertEqual(venda.status, "cancelada")
+        self.assertEqual(saldo.quantidade, 3)
+        self.assertTrue(pagamento.origens_compostas[0]["estornado"])
+
+    def test_checkout_com_estorno_parcial_nao_pode_ser_estornado_integralmente(self):
+        _, conta_a = self._criar_conta_os("OS-CHK-13", Decimal("100.00"))
+        _, conta_b = self._criar_conta_os("OS-CHK-14", Decimal("50.00"))
+        self.client.force_login(self.usuario)
+        self.client.post(
+            reverse("caixa:checkout_agrupado"),
+            self._payload(
+                [conta_a, conta_b],
+                "150.00",
+                chave_idempotencia="checkout-estorno-protegido",
+            ),
+        )
+        pagamento = Pagamento.objects.get(chave_idempotencia="checkout-estorno-protegido")
+        estornar_origem_checkout(
+            pagamento=pagamento,
+            indice_origem=0,
+            usuario=self.usuario,
+            motivo="Cancelamento isolado de uma das ordens do checkout",
+        )
+
+        with self.assertRaisesRegex(ValueError, "estorno parcial"):
+            excluir_pagamento_com_justificativa(
+                pagamento=pagamento,
+                usuario=self.usuario,
+                justificativa="Tentativa de estorno integral após estorno parcial",
+            )
 
 
 class CaixaMultiempresaTests(TestCase):
