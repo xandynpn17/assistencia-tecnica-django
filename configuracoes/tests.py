@@ -1563,7 +1563,11 @@ class ComandosConfiguracoesTests(TestCase):
                         pg_restore=str(pg_restore),
                     )
 
-            run_mock.assert_called_once()
+            self.assertEqual(run_mock.call_count, 3)
+            comandos = [chamada.args[0] for chamada in run_mock.call_args_list]
+            self.assertIn("--list", comandos[0])
+            self.assertIn("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;", comandos[1])
+            self.assertIn("--clean", comandos[2])
             self.assertEqual((media_root / "logos" / "logo.txt").read_text(encoding="utf-8"), "logo-restaurada")
 
     def test_repair_single_tenant_data_associa_registros_sem_empresa(self):

@@ -15,8 +15,14 @@
   <div class="card mb-3">
     <div class="card-header">Cabecalho da entrada</div>
     <div class="card-body">
-      {% if form.errors %}
-      <div class="alert alert-danger">Revise os dados do cabecalho.</div>
+      {% if form.errors or formset.errors or formset.non_form_errors %}
+      <div class="alert alert-danger">
+        <strong>Não foi possível salvar a entrada.</strong>
+        <ul class="mb-0 mt-1 pl-3">
+          {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+          {% for field in form %}{% for error in field.errors %}<li><strong>{{ field.label }}:</strong> {{ error }}</li>{% endfor %}{% endfor %}
+        </ul>
+      </div>
       {% endif %}
 
       {% if produto_inicial %}
@@ -101,6 +107,11 @@
       </div>
 
       {{ formset.management_form }}
+      {% if formset.non_form_errors %}
+      <div class="alert alert-danger">
+        {% for error in formset.non_form_errors %}<div>{{ error }}</div>{% endfor %}
+      </div>
+      {% endif %}
       <div class="table-responsive">
         <table class="table table-sm table-bordered">
           <thead>
@@ -135,7 +146,13 @@
               <td>{{ item_form.observacao }}</td>
             </tr>
             {% if item_form.errors %}
-            <tr><td colspan="9"><div class="text-danger small">{{ item_form.errors }}</div></td></tr>
+            <tr><td colspan="9"><div class="alert alert-danger py-2 mb-0 small">
+              <strong>Revise este item:</strong>
+              <ul class="mb-0 pl-3">
+                {% for error in item_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                {% for field in item_form %}{% for error in field.errors %}<li><strong>{{ field.label }}:</strong> {{ error }}</li>{% endfor %}{% endfor %}
+              </ul>
+            </div></td></tr>
             {% endif %}
             {% endfor %}
           </tbody>

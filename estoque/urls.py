@@ -41,6 +41,7 @@ urlpatterns = [
     path('entradas/<int:entrada_id>/editar/', views.editar_entrada_mercadoria, name='editar_entrada_mercadoria'),
     path('entradas/<int:entrada_id>/receber/', views.receber_entrada_mercadoria_view, name='receber_entrada_mercadoria'),
     path('entradas/<int:entrada_id>/cancelar/', views.cancelar_entrada_mercadoria, name='cancelar_entrada_mercadoria'),
+    path('entradas/<int:entrada_id>/reabrir-xml/', views.reabrir_entrada_xml_view, name='reabrir_entrada_xml'),
     path('pontos-operacionais/', views.pontos_operacionais, name='pontos_operacionais'),
     path('ubicacoes/', views.ubicacoes_estoque, name='ubicacoes_estoque'),
     path('consulta-artigos/', views.consulta_artigos, name='consulta_artigos'),

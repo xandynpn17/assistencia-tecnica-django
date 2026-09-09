@@ -95,6 +95,7 @@ class Command(BaseCommand):
 
     def _restore_postgres(self, db, source, options):
         pg_restore = self._resolve_pg_tool("pg_restore", options.get("pg_restore"))
+        psql = self._resolve_pg_tool("psql")
 
         dump_file = source / "database.dump" if source.is_dir() else source
         if not dump_file.exists():
@@ -126,15 +127,53 @@ class Command(BaseCommand):
         if sslmode:
             env["PGSSLMODE"] = str(sslmode)
 
-        # Evita manter a conexao Django aberta enquanto o pg_restore recria objetos.
+        conexao_args = ["--dbname", str(db["NAME"])]
+        if db.get("HOST"):
+            conexao_args.extend(["--host", str(db["HOST"])])
+        if db.get("PORT"):
+            conexao_args.extend(["--port", str(db["PORT"])])
+        if db.get("USER"):
+            conexao_args.extend(["--username", str(db["USER"])])
+
+        # Confere o pacote antes de apagar o esquema atual. Isso evita perder o
+        # banco em uso quando o arquivo recebido nao for um dump PostgreSQL valido.
+        try:
+            subprocess.run(
+                [str(pg_restore), "--list", str(dump_file)],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+        except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+            erro = getattr(exc, "stderr", "") or getattr(exc, "stdout", "") or str(exc)
+            raise CommandError(f"Backup PostgreSQL invalido ou ilegivel: {erro.strip()}") from exc
+
+        # Um backup antigo nao conhece tabelas criadas por migracoes posteriores.
+        # Zerar o schema antes do pg_restore impede dependencias residuais, dados
+        # misturados e falhas de coluna NOT NULL durante a restauracao.
         connection.close()
         try:
+            subprocess.run(
+                [
+                    str(psql),
+                    *conexao_args,
+                    "--set",
+                    "ON_ERROR_STOP=1",
+                    "--command",
+                    "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
             subprocess.run(command, check=True, capture_output=True, text=True, env=env)
         except FileNotFoundError as exc:
-            raise CommandError(f"pg_restore nao encontrado: {exc}") from exc
+            raise CommandError(f"Ferramenta PostgreSQL nao encontrada: {exc}") from exc
         except subprocess.CalledProcessError as exc:
             erro = (exc.stderr or exc.stdout or str(exc)).strip()
-            raise CommandError(f"Falha no pg_restore: {erro}") from exc
+            raise CommandError(f"Falha ao preparar ou restaurar o PostgreSQL: {erro}") from exc
 
         self.stdout.write(self.style.SUCCESS(f"Banco PostgreSQL restaurado a partir de: {dump_file}"))
 

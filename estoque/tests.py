@@ -4482,6 +4482,18 @@ class EntradaMercadoriaTests(TestCase):
             ).exists()
         )
 
+    def test_entrada_manual_exibe_erro_claro_para_produto_inativo(self):
+        self.produto.ativo = False
+        self.produto.save(update_fields=["ativo"])
+        payload = self._payload_entrada()
+
+        response = self.client.post(reverse("estoque:nova_entrada_mercadoria"), data=payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Não foi possível salvar a entrada")
+        self.assertContains(response, "Faça uma escolha válida")
+        self.assertFalse(EntradaMercadoria.objects.filter(documento_numero="NF-1001").exists())
+
     def test_entrada_mercadoria_aplica_rateio_automatico_quando_itens_nao_tem_rateio_manual(self):
         payload = self._payload_entrada()
         payload["itens-0-frete_rateado_unitario"] = "0.00"

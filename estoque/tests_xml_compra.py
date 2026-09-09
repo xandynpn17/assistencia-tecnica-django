@@ -16,7 +16,7 @@ from configuracoes.models import Empresa, FornecedorGarantia, MarcaGarantia
 from estoque.models import CategoriaProduto, DocumentoFiscalConferencia, DocumentoLoteImportacao, EntradaMercadoria, ItemEntradaMercadoria, ItemImportacaoXML, LoteImportacaoCompra, MovimentacaoEstoque, ParcelaEntradaMercadoria, PontoOperacional, Produto, ProdutoFornecedor, ProdutoHistorico, SaldoEstoquePonto, UbicacaoEstoque
 from estoque.services import receber_entrada_mercadoria
 from estoque.services_documentos_fiscais import confirmar_documento_conferencia, importar_documento_conferencia
-from estoque.services_xml import confirmar_fornecedor_xml, importar_documentos_compra, importar_xml_compra, resolver_item_xml, resolver_itens_xml_em_massa, resolver_lote_importacao, salvar_rascunhos_produtos_xml
+from estoque.services_xml import confirmar_fornecedor_xml, importar_documentos_compra, importar_xml_compra, reabrir_entrada_xml_cancelada, resolver_item_xml, resolver_itens_xml_em_massa, resolver_lote_importacao, salvar_rascunhos_produtos_xml
 
 
 def xml_nfe(*, chave, destinatario="11222333000181", emitente="11444777000161", gtin="7891234567895", codigo="ABC-1", status="100", quantidade="2.0000", parcelas=None):
@@ -87,6 +87,57 @@ class ImportacaoXMLCompraTests(TestCase):
         self.assertEqual(FornecedorGarantia.objects.get().cnpj_normalizado, "11444777000161")
         self.assertEqual(FornecedorGarantia.objects.get().municipio, "São Paulo")
         self.assertEqual(FornecedorGarantia.objects.get().cep, "01001000")
+
+    def test_importacao_identifica_produto_inativo_sem_reativar_automaticamente(self):
+        inativo = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Produto antigo inativo",
+            ean="7891234567895",
+            ativo=False,
+        )
+
+        entrada, _ = self.importar()
+        item = entrada.itens_xml.get()
+
+        self.assertEqual(item.produto, inativo)
+        self.assertFalse(item.produto.ativo)
+        self.assertEqual(item.correspondencia, "gtin_inativo")
+
+    def test_reabre_xml_cancelado_e_reativa_produto_inativo_so_na_aprovacao(self):
+        inativo = Produto.objects.create(
+            empresa=self.empresa,
+            nome="Produto desativado",
+            ean="7891234567895",
+            ativo=False,
+        )
+        entrada, _ = self.importar(codigo="REABRIR-1")
+        item = entrada.itens_xml.get()
+        entrada.status = "cancelada"
+        entrada.save(update_fields=["status"])
+
+        reabrir_entrada_xml_cancelada(entrada=entrada, usuario=self.usuario)
+
+        entrada.refresh_from_db()
+        item.refresh_from_db()
+        self.assertEqual(entrada.status, "rascunho")
+        self.assertEqual(item.produto, inativo)
+        self.assertFalse(item.produto.ativo)
+        self.assertFalse(item.revisao_tributaria_confirmada)
+        resolver_itens_xml_em_massa(
+            entrada=entrada,
+            usuario=self.usuario,
+            item_ids=[item.pk],
+        )
+        inativo.refresh_from_db()
+        self.assertTrue(inativo.ativo)
+
+    def test_confirmacao_fornecedor_rejeita_cadastro_inativo(self):
+        entrada, _ = self.importar()
+        entrada.fornecedor_config.ativo = False
+        entrada.fornecedor_config.save(update_fields=["ativo"])
+
+        with self.assertRaisesMessage(ValidationError, "fornecedor associado está inativo"):
+            confirmar_fornecedor_xml(entrada=entrada, usuario=self.usuario)
 
     def test_importa_lote_zip_de_xml_sem_movimentar_estoque(self):
         buffer = io.BytesIO()

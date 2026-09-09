@@ -20,6 +20,11 @@
       <input type="hidden" name="motivo" value="Cancelada manualmente antes do recebimento">
       <button type="submit" class="btn btn-outline-danger btn-sm">Cancelar rascunho</button>
     </form>
+    {% elif entrada.status == 'cancelada' and entrada.importada_xml %}
+    <form method="post" action="{% url 'estoque:reabrir_entrada_xml' entrada.id %}" onsubmit="return confirm('Reabrir a conferência desta NF-e? Nenhum saldo será movimentado até o recebimento.');">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary btn-sm">Reabrir conferência</button>
+    </form>
     {% endif %}
   </div>
 </div>
@@ -93,13 +98,24 @@
 <div class="card mb-3 border-primary">
   <div class="card-header d-flex justify-content-between"><strong>Conferência do XML</strong><span>{{ itens_xml_pendentes }} pendência(s)</span></div>
   <div class="card-body">
+    {% if entrada.status == 'cancelada' %}
+    <div class="alert alert-danger">
+      <strong>Esta conferência está cancelada.</strong> O mesmo XML não cria outra entrada porque a chave da NF-e deve ser única. Use <strong>Reabrir conferência</strong> acima para continuar com segurança.
+    </div>
+    {% endif %}
     <div class="row mb-3"><div class="col-md-8"><strong>Chave:</strong> {{ entrada.chave_acesso_nfe }}</div><div class="col-md-4"><strong>Valor NF-e:</strong> R$ {{ entrada.xml_resumo.valor_nfe|default:"0" }}</div></div>
     <div class="alert {% if entrada.xml_resumo.diferenca_produtos == '0.00' or entrada.xml_resumo.diferenca_produtos == '0' %}alert-success{% else %}alert-danger{% endif %} py-2">Produtos no total da NF-e: R$ {{ entrada.xml_resumo.valor_produtos }} · soma dos itens: R$ {{ entrada.xml_resumo.soma_itens }} · diferença: R$ {{ entrada.xml_resumo.diferenca_produtos }}.</div>
     {% if fornecedor_xml_pendente %}
     <div class="alert alert-warning">
       {% if entrada.xml_resumo.fornecedor_novo %}O fornecedor foi criado a partir do XML e precisa ser confirmado.{% else %}O fornecedor foi encontrado pelo CNPJ, mas há dados cadastrais diferentes no XML.{% endif %}
+      {% if entrada.fornecedor_config %}<div class="mt-1"><strong>{{ entrada.fornecedor_config.nome }}</strong> · CNPJ {{ entrada.fornecedor_config.cnpj|default:"não informado" }}</div>{% endif %}
       {% if entrada.xml_divergencias_fornecedor %}<div class="small mt-1">Diferenças: {{ entrada.xml_divergencias_fornecedor }}</div>{% endif %}
-      <form method="post" action="{% url 'estoque:confirmar_fornecedor_xml' entrada.id %}" class="mt-2">{% csrf_token %}<button class="btn btn-sm btn-warning">Confirmar fornecedor desta entrada</button></form>
+      <div class="mt-2 d-flex flex-wrap align-items-center" style="gap: .5rem;">
+        {% if entrada.status == 'rascunho' %}
+        <form method="post" action="{% url 'estoque:confirmar_fornecedor_xml' entrada.id %}">{% csrf_token %}<button class="btn btn-sm btn-warning">Confirmar este fornecedor</button></form>
+        {% endif %}
+        {% if entrada.fornecedor_config %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'configuracoes:marcas_fornecedores' %}?edit_fornecedor={{ entrada.fornecedor_config.id }}#tab-fornecedor-cad">Revisar cadastro do fornecedor</a>{% endif %}
+      </div>
     </div>
     {% else %}<div class="alert alert-success py-2">Fornecedor confirmado para esta entrada.</div>{% endif %}
     {% if entrada.gerar_conta_pagar %}
@@ -135,7 +151,7 @@
                 <tr>
                   <td><input class="form-check-input" type="checkbox" name="item_ids" value="{{ item.id }}" {% if item.nivel_correspondencia == 'provavel' or item.nivel_correspondencia == 'conflito' %}disabled{% else %}checked{% endif %} aria-label="Selecionar item {{ item.numero_item }}"></td>
                   <td><strong>{{ item.numero_item }} &mdash; {{ item.descricao }}</strong><div class="small text-muted">{{ item.quantidade }} {{ item.unidade }} &middot; custo XML R$ {{ item.custo_entrada_preview|floatformat:2 }} &middot; NCM {{ item.ncm|default:"-" }}</div></td>
-                  <td>{% if item.produto_id %}<span class="badge badge-success">Produto existente</span><div class="small text-muted">{{ item.produto.nome }}</div>{% elif item.nivel_correspondencia == 'provavel' %}<span class="badge badge-info">Sugest&atilde;o prov&aacute;vel</span><div class="small text-muted">Resolver individualmente</div>{% elif item.nivel_correspondencia == 'conflito' %}<span class="badge badge-danger">Conflito</span><div class="small text-muted">Resolver individualmente</div>{% elif item.status_pre_cadastro == 'pronto' %}<span class="badge badge-primary">Pronto para aprovar</span>{% else %}<span class="badge badge-warning">Rascunho</span><div class="small text-muted">{% if item.pendencias_cadastro %}Falta: {{ item.pendencias_cadastro|join:', ' }}{% endif %}</div>{% endif %}</td>
+                  <td>{% if item.produto_id %}{% if item.produto.ativo %}<span class="badge badge-success">Produto existente</span>{% else %}<span class="badge badge-warning">Produto inativo</span>{% endif %}<div class="small text-muted">{{ item.produto.nome }}{% if not item.produto.ativo %}<br>Será reativado ao aprovar este item.{% endif %}</div>{% elif item.nivel_correspondencia == 'provavel' %}<span class="badge badge-info">Sugest&atilde;o prov&aacute;vel</span><div class="small text-muted">Resolver individualmente</div>{% elif item.nivel_correspondencia == 'conflito' %}<span class="badge badge-danger">Conflito</span><div class="small text-muted">Resolver individualmente</div>{% elif item.status_pre_cadastro == 'pronto' %}<span class="badge badge-primary">Pronto para aprovar</span>{% else %}<span class="badge badge-warning">Rascunho</span><div class="small text-muted">{% if item.pendencias_cadastro %}Falta: {{ item.pendencias_cadastro|join:', ' }}{% endif %}</div>{% endif %}</td>
                   <td><input class="form-control form-control-sm" type="text" maxlength="100" name="nome_{{ item.id }}" value="{% if item.produto_id %}{{ item.produto.nome }}{% else %}{{ item.nome_proposto }}{% endif %}" {% if item.produto_id %}readonly{% endif %}></td>
                   <td>{% if item.produto_id %}{{ item.produto.categoria_config.nome|default:'-' }}{% else %}<select class="form-control form-control-sm js-categoria-xml" name="categoria_{{ item.id }}"><option value="">Selecione</option>{% for categoria in categorias_massa %}<option value="{{ categoria.id }}" {% if item.categoria_proposta_id == categoria.id %}selected{% endif %}>{{ categoria.nome }}</option>{% endfor %}<option value="__nova__">Outros / criar categoria</option></select>{% if item.sugestoes_cadastro.categoria.id %}<div class="small text-info">Sugest&atilde;o {{ item.sugestoes_cadastro.categoria.confianca }}: {{ item.sugestoes_cadastro.categoria.motivo }}</div>{% endif %}{% endif %}</td>
                   <td>{% if item.produto_id %}{{ item.produto.marca.nome|default:'-' }}{% else %}<select class="form-control form-control-sm js-marca-xml" name="marca_{{ item.id }}"><option value="">Sem marca</option>{% for marca in marcas_massa %}<option value="{{ marca.id }}" {% if item.marca_proposta_id == marca.id %}selected{% endif %}>{{ marca.nome }}</option>{% endfor %}<option value="__nova__">Outros / criar marca</option></select>{% if item.sugestoes_cadastro.marca.id %}<div class="small text-info">Sugest&atilde;o {{ item.sugestoes_cadastro.marca.confianca }}: {{ item.sugestoes_cadastro.marca.motivo }}</div>{% endif %}{% endif %}</td>

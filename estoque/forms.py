@@ -1119,7 +1119,15 @@ class ResolverItemXMLForm(forms.Form):
         empresa = kwargs.pop("empresa")
         item = kwargs.pop("item")
         super().__init__(*args, **kwargs)
-        self.fields["produto"].queryset = Produto.objects.filter(empresa=empresa, ativo=True, is_servico=False).order_by("nome")
+        produtos = Produto.objects.filter(empresa=empresa, ativo=True, is_servico=False)
+        if item.produto_id:
+            produtos = Produto.objects.filter(empresa=empresa, is_servico=False).filter(
+                Q(ativo=True) | Q(pk=item.produto_id)
+            )
+        self.fields["produto"].queryset = produtos.order_by("nome")
+        self.fields["produto"].label_from_instance = (
+            lambda produto: f"{produto.nome}{' — INATIVO (será reativado ao confirmar)' if not produto.ativo else ''}"
+        )
         self.fields["categoria"].queryset = CategoriaProduto.objects.filter(empresa=empresa, ativo=True).order_by("ordem", "nome")
         self.fields["marca"].queryset = MarcaGarantia.objects.filter(empresa=empresa, ativo=True).order_by("nome")
         self.fields["categoria"].widget.attrs["class"] = "form-control js-categoria-xml"

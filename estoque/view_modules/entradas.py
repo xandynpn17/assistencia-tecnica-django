@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.forms import formset_factory
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -27,6 +27,7 @@ from ..services_xml import (
     resolver_item_xml,
     resolver_itens_xml_em_massa,
     resolver_lote_importacao,
+    reabrir_entrada_xml_cancelada,
     salvar_rascunhos_produtos_xml,
 )
 from ..services_documentos_fiscais import confirmar_documento_conferencia, importar_documento_conferencia
@@ -183,7 +184,15 @@ def importar_xml_compra_view(request):
                 )
                 return redirect("estoque:entradas_mercadoria")
             entrada, criada = resultados[0]
-            messages.success(request, "XML importado como rascunho para conferência." if criada else "Esta NF-e já havia sido importada; o rascunho existente foi aberto.")
+            if criada:
+                messages.success(request, "XML importado como rascunho para conferência.")
+            elif entrada.status == "cancelada":
+                messages.warning(
+                    request,
+                    "Esta NF-e já havia sido importada e está cancelada. Use 'Reabrir conferência' para continuar sem duplicar a nota.",
+                )
+            else:
+                messages.info(request, "Esta NF-e já havia sido importada; o registro existente foi aberto.")
             return redirect("estoque:detalhe_entrada_mercadoria", entrada_id=entrada.id)
     return render(request, "estoque/importar_xml_compra.html", {"form": form, "menu_app": "estoque", "menu_sub": "entradas_mercadoria"})
 
@@ -230,16 +239,23 @@ def nova_entrada_mercadoria(request):
     if request.method == "POST":
         form = EntradaMercadoriaForm(request.POST, empresa=empresa)
         formset = EntradaMercadoriaItemFormSet(request.POST, prefix="itens", form_kwargs={"empresa": empresa})
-        if form.is_valid() and formset.is_valid():
-            entrada = form.save(commit=False)
-            entrada.empresa = empresa
-            entrada.usuario = request.user
-            entrada.save()
+        form_valido = form.is_valid()
+        itens_validos = formset.is_valid()
+        if form_valido and itens_validos:
             try:
-                itens_salvos = _salvar_itens_formset(entrada, formset)
-            except ValueError as exc:
-                entrada.delete()
-                messages.error(request, str(exc))
+                with transaction.atomic():
+                    entrada = form.save(commit=False)
+                    entrada.empresa = empresa
+                    entrada.usuario = request.user
+                    entrada.save()
+                    itens_salvos = _salvar_itens_formset(entrada, formset)
+            except (ValueError, ValidationError) as exc:
+                form.add_error(None, str(exc))
+            except IntegrityError:
+                form.add_error(
+                    None,
+                    "Não foi possível salvar a entrada por conflito de dados. Revise o documento e tente novamente.",
+                )
             else:
                 messages.success(request, f"Entrada {entrada.numero} criada com {itens_salvos} item(ns).")
                 return redirect("estoque:detalhe_entrada_mercadoria", entrada_id=entrada.id)
@@ -314,9 +330,15 @@ def editar_entrada_mercadoria(request, entrada_id):
                 entrada.itens.all().delete()
                 try:
                     itens_salvos = _salvar_itens_formset(entrada, formset)
-                except ValueError as exc:
+                except (ValueError, ValidationError) as exc:
                     transaction.set_rollback(True)
-                    messages.error(request, str(exc))
+                    form.add_error(None, str(exc))
+                except IntegrityError:
+                    transaction.set_rollback(True)
+                    form.add_error(
+                        None,
+                        "Não foi possível atualizar a entrada por conflito de dados. Revise os itens e tente novamente.",
+                    )
                 else:
                     messages.success(request, f"Entrada {entrada.numero} atualizada com {itens_salvos} item(ns).")
                     return redirect("estoque:detalhe_entrada_mercadoria", entrada_id=entrada.id)
@@ -568,8 +590,10 @@ def resolver_itens_xml_massa_view(request, entrada_id):
             margem_minima=Decimal((request.POST.get("margem_minima") or "0").replace(",", ".")),
             ajustes=ajustes,
         )
-    except (ValidationError, InvalidOperation) as exc:
+    except (ValidationError, InvalidOperation, ValueError, OverflowError) as exc:
         messages.error(request, str(exc))
+    except IntegrityError:
+        messages.error(request, "Não foi possível criar os produtos porque há dados duplicados ou incompatíveis. Revise GTIN, SKU e fornecedor.")
     else:
         _registrar_evento_estoque(
             "xml_revisao_em_massa",
@@ -645,8 +669,10 @@ def confirmar_fornecedor_xml_view(request, entrada_id):
     try:
         confirmar_fornecedor_xml(entrada=entrada, usuario=request.user)
         messages.success(request, "Fornecedor do XML confirmado para esta entrada.")
-    except ValidationError as exc:
+    except (ValidationError, ValueError) as exc:
         messages.error(request, str(exc))
+    except IntegrityError:
+        messages.error(request, "Não foi possível confirmar o fornecedor por conflito cadastral. Revise o CNPJ no cadastro do fornecedor.")
     return redirect("estoque:detalhe_entrada_mercadoria", entrada_id=entrada.id)
 
 
@@ -675,8 +701,10 @@ def resolver_item_xml_view(request, item_id):
                 },
             )
             messages.success(request, f"Item {item.numero_item} conferido.")
-        except ValidationError as exc:
+        except (ValidationError, ValueError, InvalidOperation, OverflowError) as exc:
             messages.error(request, str(exc))
+        except IntegrityError:
+            messages.error(request, "Não foi possível concluir o artigo por conflito cadastral. Revise GTIN, SKU e fornecedor.")
     else:
         messages.error(request, "Corrija a associação e a revisão tributária do item.")
     return redirect("estoque:detalhe_entrada_mercadoria", entrada_id=item.entrada_id)
@@ -690,8 +718,11 @@ def receber_entrada_mercadoria_view(request, entrada_id):
     entrada = get_object_or_404(_entrada_queryset(empresa), id=entrada_id)
     try:
         receber_entrada_mercadoria(entrada, usuario=request.user)
-    except ValueError as exc:
+    except (ValueError, ValidationError) as exc:
         messages.error(request, str(exc))
+        return redirect("estoque:detalhe_entrada_mercadoria", entrada_id=entrada.id)
+    except IntegrityError:
+        messages.error(request, "O recebimento encontrou um conflito de dados e foi desfeito integralmente. Revise os itens e tente novamente.")
         return redirect("estoque:detalhe_entrada_mercadoria", entrada_id=entrada.id)
     messages.success(request, f"Entrada {entrada.numero} recebida no estoque com sucesso.")
     return redirect("estoque:detalhe_entrada_mercadoria", entrada_id=entrada.id)
@@ -724,4 +755,27 @@ def cancelar_entrada_mercadoria(request, entrada_id):
         motivo=motivo,
     )
     messages.success(request, f"Entrada {entrada.numero} cancelada sem movimentar o estoque.")
+    return redirect("estoque:detalhe_entrada_mercadoria", entrada_id=entrada.id)
+
+
+@require_POST
+@role_required(STOCK_MANAGE_ROLES)
+def reabrir_entrada_xml_view(request, entrada_id):
+    require_sensitive_permission(request.user, "perm_estoque_cadastro_produto")
+    empresa = obter_empresa_ativa(request, strict=True)
+    entrada = get_object_or_404(_entrada_queryset(empresa), id=entrada_id, importada_xml=True)
+    try:
+        reabrir_entrada_xml_cancelada(entrada=entrada, usuario=request.user)
+    except (ValidationError, ValueError) as exc:
+        messages.error(request, str(exc))
+    except IntegrityError:
+        messages.error(request, "Não foi possível reabrir a NF-e por conflito de dados.")
+    else:
+        _registrar_evento_estoque(
+            "entrada_xml_reaberta",
+            usuario=request.user,
+            entrada_id=entrada.id,
+            entrada_numero=entrada.numero,
+        )
+        messages.success(request, "Conferência reaberta. Revise fornecedor e artigos antes de receber no estoque.")
     return redirect("estoque:detalhe_entrada_mercadoria", entrada_id=entrada.id)

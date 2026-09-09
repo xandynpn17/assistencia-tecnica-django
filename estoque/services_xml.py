@@ -231,11 +231,19 @@ def _produto_correspondente(*, empresa, fornecedor, item):
         gtin_ean13 = _gtin_para_produto(gtin)
         if gtin_ean13:
             codigos_compativeis.add(gtin_ean13)
-        produto_gtin = Produto.objects.filter(empresa=empresa, ean__in=codigos_compativeis).first()
+        produto_gtin = Produto.objects.filter(
+            empresa=empresa,
+            is_servico=False,
+            ean__in=codigos_compativeis,
+        ).first()
     produto_fornecedor = None
     if item["codigo_fornecedor"]:
         relacao = ProdutoFornecedor.objects.select_related("produto").filter(
-            produto__empresa=empresa, fornecedor_config=fornecedor, codigo_fornecedor=item["codigo_fornecedor"], ativo=True
+            produto__empresa=empresa,
+            produto__is_servico=False,
+            fornecedor_config=fornecedor,
+            codigo_fornecedor=item["codigo_fornecedor"],
+            ativo=True,
         ).first()
         if relacao:
             produto_fornecedor = relacao.produto
@@ -246,12 +254,16 @@ def _produto_correspondente(*, empresa, fornecedor, item):
             {"produto_id": produto_fornecedor.pk, "nome": produto_fornecedor.nome, "score": 100, "motivo": "codigo_fornecedor"},
         ]
     if produto_gtin:
-        return produto_gtin, "gtin", "exato", [
-            {"produto_id": produto_gtin.pk, "nome": produto_gtin.nome, "score": 100, "motivo": "GTIN"}
+        correspondencia = "gtin" if produto_gtin.ativo else "gtin_inativo"
+        motivo = "GTIN" if produto_gtin.ativo else "GTIN de produto inativo; será reativado somente após aprovação"
+        return produto_gtin, correspondencia, "exato", [
+            {"produto_id": produto_gtin.pk, "nome": produto_gtin.nome, "score": 100, "motivo": motivo}
         ]
     if produto_fornecedor:
-        return produto_fornecedor, "codigo_fornecedor", "exato", [
-            {"produto_id": produto_fornecedor.pk, "nome": produto_fornecedor.nome, "score": 100, "motivo": "codigo_fornecedor"}
+        correspondencia = "codigo_fornecedor" if produto_fornecedor.ativo else "codigo_fornecedor_inativo"
+        motivo = "codigo_fornecedor" if produto_fornecedor.ativo else "Código do fornecedor em produto inativo; será reativado somente após aprovação"
+        return produto_fornecedor, correspondencia, "exato", [
+            {"produto_id": produto_fornecedor.pk, "nome": produto_fornecedor.nome, "score": 100, "motivo": motivo}
         ]
 
     descricao = _texto_correspondencia(item.get("descricao"))
@@ -660,12 +672,86 @@ def confirmar_fornecedor_xml(*, entrada, usuario):
     entrada = EntradaMercadoria.objects.select_for_update().get(pk=entrada.pk)
     if not entrada.importada_xml or entrada.status != "rascunho":
         raise ValidationError("Somente fornecedor de XML em rascunho pode ser confirmado.")
+    fornecedor = entrada.fornecedor_config
+    if not fornecedor:
+        raise ValidationError("A NF-e ainda não possui um fornecedor associado.")
+    if not fornecedor.ativo:
+        raise ValidationError("O fornecedor associado está inativo. Revise o cadastro antes de confirmar.")
+    if fornecedor.empresa_id != entrada.empresa_id:
+        raise ValidationError("O fornecedor associado não pertence à empresa ativa.")
+    if not fornecedor.cnpj_normalizado or not fornecedor._cnpj_valido(fornecedor.cnpj_normalizado):
+        raise ValidationError("Revise o CNPJ do fornecedor antes de confirmar a NF-e.")
     resumo = dict(entrada.xml_resumo or {})
     resumo["fornecedor_confirmado"] = True
     resumo["fornecedor_confirmado_por"] = getattr(usuario, "pk", None)
     resumo["fornecedor_confirmado_em"] = timezone.now().isoformat()
     entrada.xml_resumo = resumo
     entrada.save(update_fields=["xml_resumo"])
+    return entrada
+
+
+@transaction.atomic
+def reabrir_entrada_xml_cancelada(*, entrada, usuario):
+    """Reabre uma NF-e cancelada sem movimentação e refaz vínculos inválidos.
+
+    A chave da NF-e é única por empresa. Sem este fluxo, reenviar o mesmo XML
+    apenas reencontra a entrada cancelada e o utilizador não consegue concluir a
+    compra. Produtos inativos nunca devem voltar ao estoque silenciosamente.
+    """
+    from estoque.models import EntradaMercadoria, ItemImportacaoXML
+
+    entrada = (
+        EntradaMercadoria.objects.select_for_update(of=("self",))
+        .select_related("fornecedor_config")
+        .get(pk=entrada.pk)
+    )
+    if not entrada.importada_xml or entrada.status != "cancelada":
+        raise ValidationError("Somente uma NF-e cancelada pode ser reaberta por este fluxo.")
+    if entrada.itens.exists() or entrada.conta_pagar_id:
+        raise ValidationError("Esta entrada já possui efeitos operacionais e não pode ser reaberta.")
+
+    itens = list(
+        ItemImportacaoXML.objects.select_for_update(of=("self",))
+        .select_related("produto")
+        .filter(entrada=entrada)
+    )
+    for item in itens:
+        produto = item.produto
+        if not produto or (
+            produto.empresa_id == entrada.empresa_id
+            and produto.ativo
+            and not produto.is_servico
+        ):
+            continue
+        dados_item = {
+            "gtin": item.gtin,
+            "codigo_fornecedor": item.codigo_fornecedor,
+            "descricao": item.descricao,
+            "ncm": item.ncm,
+        }
+        produto, correspondencia, nivel, candidatos = _produto_correspondente(
+            empresa=entrada.empresa,
+            fornecedor=entrada.fornecedor_config,
+            item=dados_item,
+        )
+        item.produto = produto
+        item.correspondencia = correspondencia
+        item.nivel_correspondencia = nivel
+        item.candidatos_correspondencia = candidatos
+        item.revisao_tributaria_confirmada = False
+        item.status_pre_cadastro = "nao_aplicavel" if produto else "nao_iniciado"
+        item.save(update_fields=[
+            "produto", "correspondencia", "nivel_correspondencia",
+            "candidatos_correspondencia", "revisao_tributaria_confirmada",
+            "status_pre_cadastro",
+        ])
+        inicializar_pre_cadastro_item_xml(item)
+
+    entrada.status = "rascunho"
+    entrada.usuario = usuario or entrada.usuario
+    entrada.recebido_em = None
+    entrada.save(update_fields=["status", "usuario", "recebido_em"])
+    atualizar_status_lotes_entrada(entrada)
     return entrada
 
 
@@ -685,6 +771,29 @@ def atualizar_status_lotes_entrada(entrada):
         if lote.status != novo_status:
             lote.status = novo_status
             lote.save(update_fields=["status", "atualizado_em"])
+
+
+def _reativar_produto_aprovado_no_xml(*, produto, entrada, item, usuario):
+    """Reativa um produto inativo somente depois da aprovação humana do item."""
+    if produto.ativo:
+        return False
+    from estoque.models import ProdutoHistorico
+
+    produto.ativo = True
+    produto.save(update_fields=["ativo"])
+    ProdutoHistorico.objects.create(
+        produto=produto,
+        acao="IMPORTACAO",
+        usuario=usuario if getattr(usuario, "is_authenticated", False) else None,
+        dados_antes={"ativo": False},
+        dados_depois={
+            "ativo": True,
+            "entrada_id": entrada.pk,
+            "item_xml_id": item.pk,
+        },
+        observacao=f"Reativado após aprovação no XML {entrada.documento_numero or entrada.numero}"[:200],
+    )
+    return True
 
 
 @transaction.atomic
@@ -731,10 +840,18 @@ def resolver_item_xml(
     elif produto:
         if produto.empresa_id != item.entrada.empresa_id:
             raise ValidationError("O produto selecionado pertence a outra empresa.")
+        if produto.is_servico:
+            raise ValidationError("Um serviço não pode receber saldo de uma NF-e de mercadoria.")
         item.correspondencia = "manual"
         item.nivel_correspondencia = "exato"
     else:
         raise ValidationError("Selecione um produto ou solicite o cadastro de um novo.")
+    _reativar_produto_aprovado_no_xml(
+        produto=produto,
+        entrada=item.entrada,
+        item=item,
+        usuario=usuario,
+    )
     if item.codigo_fornecedor:
         ProdutoFornecedor.objects.update_or_create(
             produto=produto, fornecedor_config=item.entrada.fornecedor_config, codigo_fornecedor=item.codigo_fornecedor,
@@ -896,6 +1013,14 @@ def resolver_itens_xml_em_massa(
             item.status_pre_cadastro = "aprovado"
             item.pendencias_cadastro = []
             resultado["criados"] += 1
+        elif not produto.ativo:
+            if _reativar_produto_aprovado_no_xml(
+                produto=produto,
+                entrada=entrada,
+                item=item,
+                usuario=usuario,
+            ):
+                resultado["atualizados"] += 1
         elif atualizacoes.get(item.pk):
             proposta = atualizacoes[item.pk]
             campos = set(proposta.get("campos") or [])
