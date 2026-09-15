@@ -214,10 +214,11 @@ class FechamentoBancarioForm(forms.Form):
 
 
 class ConciliarExtratoForm(forms.Form):
-    movimento = forms.ModelChoiceField(
+    movimento = forms.ModelMultipleChoiceField(
         queryset=MovimentoBancario.objects.none(),
-        label="Movimento já registrado",
-        empty_label="Selecione um movimento compatível",
+        widget=forms.CheckboxSelectMultiple,
+        label="Movimentos já registrados",
+        help_text="Selecione um ou mais movimentos que, somados, correspondem à linha do extrato.",
     )
     justificativa = forms.CharField(
         required=False,
@@ -243,7 +244,7 @@ class ConciliarExtratoForm(forms.Form):
             dias = abs((movimento.data_movimento - linha.data_movimento).days)
             return f"{exato}{movimento} · diferença de data: {dias} dia(s)"
         self.fields["movimento"].label_from_instance = rotulo_movimento
-        self.fields["movimento"].widget.attrs.setdefault("class", "form-control")
+        self.fields["movimento"].widget.attrs.setdefault("class", "form-check-input")
         self.fields["justificativa"].widget.attrs.setdefault("class", "form-control")
 
 
@@ -275,6 +276,18 @@ class CriarMovimentoExtratoForm(forms.Form):
         label="Recebimento já registrado", empty_label="Selecione o recebimento",
     )
     aportante = forms.CharField(required=False, max_length=120, label="Sócio/aportante")
+    tipo_aporte_socio = forms.ChoiceField(
+        required=False,
+        choices=AporteCapital.TIPOS,
+        initial="adiantamento_socio",
+        label="Tipo do aporte",
+    )
+    aporte_origem = forms.ModelChoiceField(
+        queryset=AporteCapital.objects.none(),
+        required=False,
+        label="Aporte de origem da retirada",
+        empty_label="Selecione o aporte que está sendo devolvido",
+    )
     confirmar_novo_movimento = forms.BooleanField(
         required=False,
         label="Confirmo que este é um novo movimento, não uma duplicidade",
@@ -284,13 +297,14 @@ class CriarMovimentoExtratoForm(forms.Form):
         ("receita_operacional", "Nova receita operacional"),
         ("recebimento_registrado", "Recebimento já registrado (ex.: PIX)"),
         ("liquidacao_cartao", "Liquidação agrupada de cartão já registrada"),
-        ("aporte_socio", "Capital, AFAC ou empréstimo de sócio"),
+        ("aporte_socio", "Aporte de sócio (capital, AFAC ou empréstimo)"),
         ("transferencia_entre_contas", "Transferência entre contas da empresa"),
         ("rendimento", "Rendimento bancário"),
     ]
     CLASSIFICACOES_SAIDA = [
         ("despesa_operacional", "Nova despesa operacional"),
         ("pagamento_conta_pagar", "Pagamento de conta a pagar já cadastrada"),
+        ("retirada_socio", "Retirada/devolução para sócio (não é despesa)"),
         ("transferencia_entre_contas", "Transferência entre contas da empresa"),
         ("tarifa", "Tarifa bancária"),
         ("juros", "Juros bancários"),
@@ -337,6 +351,16 @@ class CriarMovimentoExtratoForm(forms.Form):
             ).exclude(pk__in=pagamentos_com_movimento).select_related(
                 "ordem_servico", "forma_pagamento"
             ).order_by("-data_movimento", "-id")
+        self.fields["aporte_origem"].queryset = AporteCapital.objects.filter(
+            empresa=empresa,
+            tipo__in=["capital_social", "adiantamento_socio", "emprestimo_socio"],
+        ).order_by("-data_movimento", "-id")
+
+        def rotulo_aporte(aporte):
+            socio = aporte.aportante or "Sócio não informado"
+            return f"{socio} · {aporte.get_tipo_display()} · R$ {aporte.valor:.2f} · {aporte.data_movimento:%d/%m/%Y}"
+
+        self.fields["aporte_origem"].label_from_instance = rotulo_aporte
         if not possui_correspondencia_exata:
             self.fields["confirmar_novo_movimento"].widget = forms.HiddenInput()
 
@@ -361,6 +385,13 @@ class CriarMovimentoExtratoForm(forms.Form):
             self.add_error("pagamento", "Selecione o recebimento já registrado.")
         if classificacao == "aporte_socio" and not (dados.get("aportante") or "").strip():
             self.add_error("aportante", "Informe o sócio ou aportante.")
+        if classificacao == "aporte_socio" and not dados.get("tipo_aporte_socio"):
+            self.add_error("tipo_aporte_socio", "Informe o tipo do aporte do sócio.")
+        if classificacao == "retirada_socio" and not dados.get("aporte_origem"):
+            self.add_error(
+                "aporte_origem",
+                "Selecione o aporte, AFAC ou empréstimo de sócio que está sendo devolvido.",
+            )
         if self.possui_correspondencia_exata and not dados.get("confirmar_novo_movimento"):
             self.add_error(
                 "confirmar_novo_movimento",

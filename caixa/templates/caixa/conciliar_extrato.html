@@ -9,6 +9,11 @@
   .campo-condicional[hidden] { display: none !important; }
   .errorlist { color: #b42318; list-style: none; padding-left: 0; margin: .25rem 0 0; font-size: .875rem; }
   .movimento-sugestao { display: flex; gap: .75rem; align-items: center; justify-content: space-between; }
+  .movimentos-disponiveis ul { list-style: none; padding-left: 0; margin-bottom: 0; }
+  .movimentos-disponiveis li { padding: .55rem .65rem; border-bottom: 1px solid #eef2f5; }
+  .movimentos-disponiveis li:last-child { border-bottom: 0; }
+  .movimentos-disponiveis label { display: flex; gap: .55rem; align-items: flex-start; margin-bottom: 0; cursor: pointer; }
+  .movimentos-disponiveis input { margin-top: .25rem; flex: 0 0 auto; }
   @media (max-width: 767px) { .movimento-sugestao { align-items: flex-start; flex-direction: column; } }
 </style>
 
@@ -35,16 +40,16 @@
   <section class="card conciliacao-opcao mb-3" data-conteudo-painel="existente">
     <div class="card-header"><strong>Vincular a um movimento já registrado</strong></div>
     <div class="card-body">
-      <p class="text-muted">Use quando a venda, pagamento, despesa ou outra operação já existe no sistema. O extrato apenas comprova o movimento.</p>
+      <p class="text-muted">Use quando a venda, pagamento, despesa ou outra operação já existe no sistema. Se um único crédito ou débito do extrato reúne vários lançamentos, selecione todos eles.</p>
       {% if sugestoes %}
         <div class="alert alert-light border"><strong>Sugestões compatíveis</strong><p class="small text-muted mb-2">Mostramos somente movimentos do mesmo sentido (entrada ou saída) com compatibilidade mínima.</p><ul class="list-unstyled mb-0">
           {% for item in sugestoes %}<li class="movimento-sugestao py-2{% if not forloop.last %} border-bottom{% endif %}"><span><strong>{{ item.score }}%</strong> · {{ item.movimento }}{% if item.motivos %}<br><small class="text-muted">{{ item.motivos|join:', ' }}</small>{% endif %}</span><button type="button" class="btn btn-sm btn-outline-primary usar-sugestao" data-movimento="{{ item.movimento.id }}">Selecionar</button></li>{% endfor %}
         </ul></div>
       {% else %}<div class="alert alert-secondary">Nenhuma sugestão segura foi encontrada. Você ainda pode escolher outro movimento compatível abaixo ou criar um novo.</div>{% endif %}
       <form method="post" novalidate>{% csrf_token %}{{ form.non_field_errors }}
-        <div class="form-group"><label for="{{ form.movimento.id_for_label }}">{{ form.movimento.label }}</label>{{ form.movimento }}{{ form.movimento.errors }}</div>
+        <div class="form-group"><label>{{ form.movimento.label }}</label><div class="movimentos-disponiveis border rounded">{{ form.movimento }}</div>{{ form.movimento.errors }}<small class="form-text text-muted">{{ form.movimento.help_text }}</small></div>
         <div class="form-group"><label for="{{ form.justificativa.id_for_label }}">{{ form.justificativa.label }}</label>{{ form.justificativa }}{{ form.justificativa.errors }}<small class="form-text text-muted">Opcional quando os valores coincidem; útil para deixar uma observação de auditoria.</small></div>
-        <button class="btn btn-primary">Conciliar com o movimento selecionado</button>
+        <button class="btn btn-primary">Conciliar com os movimentos selecionados</button>
       </form>
     </div>
   </section>
@@ -63,7 +68,11 @@
         <div class="form-group campo-condicional" data-naturezas="transferencia_entre_contas"><label for="{{ form_criar.conta_relacionada.id_for_label }}">{{ form_criar.conta_relacionada.label }}</label>{{ form_criar.conta_relacionada }}{{ form_criar.conta_relacionada.errors }}</div>
         <div class="form-row campo-condicional" data-naturezas="pagamento_conta_pagar"><div class="form-group col-md-7"><label for="{{ form_criar.conta_pagar.id_for_label }}">{{ form_criar.conta_pagar.label }}</label>{{ form_criar.conta_pagar }}{{ form_criar.conta_pagar.errors }}</div><div class="form-group col-md-5"><label for="{{ form_criar.forma_pagamento.id_for_label }}">{{ form_criar.forma_pagamento.label }}</label>{{ form_criar.forma_pagamento }}{{ form_criar.forma_pagamento.errors }}</div></div>
         <div class="form-group campo-condicional" data-naturezas="recebimento_registrado"><label for="{{ form_criar.pagamento.id_for_label }}">{{ form_criar.pagamento.label }}</label>{{ form_criar.pagamento }}{{ form_criar.pagamento.errors }}<small class="form-text text-muted">A lista considera mesmo valor e até sete dias de diferença, sem outro movimento bancário ativo.</small></div>
-        <div class="form-group campo-condicional" data-naturezas="aporte_socio"><label for="{{ form_criar.aportante.id_for_label }}">{{ form_criar.aportante.label }}</label>{{ form_criar.aportante }}{{ form_criar.aportante.errors }}</div>
+        <div class="form-row campo-condicional" data-naturezas="aporte_socio">
+          <div class="form-group col-md-6"><label for="{{ form_criar.aportante.id_for_label }}">{{ form_criar.aportante.label }}</label>{{ form_criar.aportante }}{{ form_criar.aportante.errors }}</div>
+          <div class="form-group col-md-6"><label for="{{ form_criar.tipo_aporte_socio.id_for_label }}">{{ form_criar.tipo_aporte_socio.label }}</label>{{ form_criar.tipo_aporte_socio }}{{ form_criar.tipo_aporte_socio.errors }}</div>
+        </div>
+        <div class="form-group campo-condicional" data-naturezas="retirada_socio"><label for="{{ form_criar.aporte_origem.id_for_label }}">{{ form_criar.aporte_origem.label }}</label>{{ form_criar.aporte_origem }}{{ form_criar.aporte_origem.errors }}<small class="form-text text-muted">A retirada reduz o saldo do aporte selecionado e não entra como despesa operacional.</small></div>
         {% if possui_correspondencia_exata %}<div class="alert alert-warning"><strong>Possível duplicidade:</strong> já existe um movimento disponível com a mesma data e valor. Prefira vinculá-lo na primeira opção.<div class="form-check mt-2">{{ form_criar.confirmar_novo_movimento }}<label class="form-check-label" for="{{ form_criar.confirmar_novo_movimento.id_for_label }}">{{ form_criar.confirmar_novo_movimento.label }}</label>{{ form_criar.confirmar_novo_movimento.errors }}</div></div>{% else %}{{ form_criar.confirmar_novo_movimento }}{% endif %}
         <button class="btn btn-warning">Criar movimento e conciliar</button>
       </form>
@@ -93,7 +102,14 @@
   var seletorNatureza = document.getElementById('{{ form_criar.classificacao.id_for_label }}');
   function atualizarCampos() { if (!seletorNatureza) return; document.querySelectorAll('.campo-condicional').forEach(function (campo) { campo.hidden = campo.getAttribute('data-naturezas').split(' ').indexOf(seletorNatureza.value) === -1; }); }
   if (seletorNatureza) { seletorNatureza.addEventListener('change', atualizarCampos); atualizarCampos(); }
-  document.querySelectorAll('.usar-sugestao').forEach(function (botao) { botao.addEventListener('click', function () { var seletor = document.getElementById('{{ form.movimento.id_for_label }}'); if (seletor) { seletor.value = this.getAttribute('data-movimento'); seletor.focus(); } abrir('existente'); }); });
+  document.querySelectorAll('.usar-sugestao').forEach(function (botao) { botao.addEventListener('click', function () {
+    var movimentoId = this.getAttribute('data-movimento');
+    var opcoes = document.querySelectorAll('input[name="{{ form.movimento.html_name }}"]');
+    opcoes.forEach(function (opcao) {
+      if (opcao.value === movimentoId) { opcao.checked = true; opcao.focus(); }
+    });
+    abrir('existente');
+  }); });
 })();
 </script>
 {% endblock %}

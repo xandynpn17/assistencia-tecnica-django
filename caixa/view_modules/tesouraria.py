@@ -275,6 +275,8 @@ def tratar_linha_extrato(request, linha_id):
                     forma_pagamento=dados.get("forma_pagamento"),
                     pagamento=dados.get("pagamento"),
                     aportante=dados.get("aportante") or "",
+                    tipo_aporte_socio=dados.get("tipo_aporte_socio") or "adiantamento_socio",
+                    aporte_origem=dados.get("aporte_origem"),
                     usuario=request.user,
                 )
                 conciliar_linha(linha=linha, movimento=movimento, usuario=request.user)
@@ -300,8 +302,17 @@ def tratar_linha_extrato(request, linha_id):
     form = ConciliarExtratoForm(request.POST if acao_conciliar else None, linha=linha, empresa=empresa)
     if acao_conciliar and form.is_valid():
         try:
-            resultado = conciliar_linha(linha=linha, movimento=form.cleaned_data["movimento"], usuario=request.user, justificativa=form.cleaned_data["justificativa"])
-            messages.success(request, f"Linha tratada como {resultado.get_status_display().lower()}.")
+            conciliacao = conciliar_grupo(
+                linhas=[linha],
+                movimentos=form.cleaned_data["movimento"],
+                usuario=request.user,
+                justificativa=form.cleaned_data["justificativa"],
+            )
+            messages.success(
+                request,
+                f"Linha tratada como {conciliacao.get_status_display().lower()} com "
+                f"{conciliacao.itens_movimento.count()} movimento(s).",
+            )
             return redirect("caixa:tesouraria")
         except (ValidationError, IntegrityError) as exc:
             form.add_error(None, exc if isinstance(exc, ValidationError) else (

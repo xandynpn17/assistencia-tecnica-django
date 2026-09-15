@@ -8,7 +8,7 @@ from django.urls import reverse
 
 from caixa.models import (
     AporteCapital, CartaoCorporativo, CategoriaFinanceira, CentroCusto, ContaBancaria,
-    LancamentoCaixa, MovimentoBancario, MovimentoSocio,
+    LancamentoCaixa, MovimentoBancario, MovimentoFinanceiro, MovimentoSocio,
 )
 from caixa.services.cartoes_corporativos import pagar_fatura_cartao, registrar_compra_cartao
 from caixa.services.contabilidade import ativar_plano_contas, criar_plano_contas_gerencial
@@ -207,6 +207,157 @@ class TesourariaAvancadaTests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         linha.refresh_from_db()
         self.assertEqual(linha.status, "conciliado")
+
+    def test_tela_da_linha_concilia_um_credito_com_varios_recebimentos(self):
+        self.client.force_login(self.usuario)
+        linha = importar_extrato_arquivo(
+            conta=self.banco,
+            conteudo=b"data;descricao;valor;identificador\n2026-08-31;PIX agrupado;230,00;PIX-AGRUPADO-230\n",
+            nome_arquivo="pix-agrupado.csv",
+            usuario=self.usuario,
+        )[0]
+        movimentos = [
+            registrar_movimento_bancario(
+                conta=self.banco,
+                tipo="entrada",
+                origem_tipo="manual",
+                origem_id=indice,
+                descricao=f"Recebimento {indice}",
+                valor=valor,
+                data_movimento=linha.data_movimento,
+                chave=f"recebimento-agrupado-{indice}",
+                usuario=self.usuario,
+            )
+            for indice, valor in ((1, Decimal("175.00")), (2, Decimal("55.00")))
+        ]
+
+        resposta = self.client.post(
+            reverse("caixa:tratar_linha_extrato", args=[linha.pk]),
+            {"movimento": [str(item.pk) for item in movimentos], "justificativa": ""},
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        linha.refresh_from_db()
+        self.assertEqual(linha.status, "conciliado")
+        self.assertIsNone(linha.movimento_id)
+        conciliacao = linha.historico_conciliacoes.get(conciliacao__status="conciliado").conciliacao
+        self.assertEqual(conciliacao.total_extrato, Decimal("230.00"))
+        self.assertEqual(conciliacao.total_movimentos, Decimal("230.00"))
+        self.assertEqual(conciliacao.diferenca, Decimal("0.00"))
+        self.assertCountEqual(
+            conciliacao.itens_movimento.values_list("movimento_id", flat=True),
+            [item.pk for item in movimentos],
+        )
+
+    def test_extrato_classifica_retirada_para_cpf_como_devolucao_de_afac(self):
+        aporte = registrar_aporte_capital(
+            empresa=self.empresa,
+            tipo="adiantamento_socio",
+            descricao="AFAC Alexandre",
+            aportante="Alexandre",
+            documento_referencia="AFAC-1",
+            valor=Decimal("500.00"),
+            data_competencia=date(2026, 8, 1),
+            data_movimento=date(2026, 8, 1),
+            conta_bancaria=self.banco,
+            caixa=None,
+            chave="afac-alexandre-1",
+            usuario=self.usuario,
+        )
+        linha = importar_extrato_arquivo(
+            conta=self.banco,
+            conteudo=(
+                b"data;descricao;valor;identificador\n"
+                b"2026-09-10;Transferencia para CPF do socio;-200,00;RETIRADA-SOCIO-200\n"
+            ),
+            nome_arquivo="retirada-socio.csv",
+            usuario=self.usuario,
+        )[0]
+        self.client.force_login(self.usuario)
+
+        resposta = self.client.post(
+            reverse("caixa:tratar_linha_extrato", args=[linha.pk]),
+            {
+                "criar_movimento": "1",
+                "classificacao": "retirada_socio",
+                "descricao_movimento": "Devolução parcial de AFAC para Alexandre",
+                "aporte_origem": str(aporte.pk),
+                "categoria": "",
+                "centro_custo": "",
+                "conta_relacionada": "",
+                "conta_pagar": "",
+                "forma_pagamento": "",
+                "pagamento": "",
+                "aportante": "",
+                "tipo_aporte_socio": "",
+            },
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        linha.refresh_from_db()
+        retirada = MovimentoSocio.objects.get(aporte_origem=aporte)
+        self.assertEqual(linha.status, "conciliado")
+        self.assertEqual(linha.movimento_id, retirada.movimento_bancario_id)
+        self.assertEqual(retirada.tipo, "devolucao_afac")
+        self.assertEqual(retirada.valor, Decimal("200.00"))
+        self.assertEqual(retirada.natureza_resultado, "capital")
+        self.assertFalse(LancamentoCaixa.objects.filter(descricao__icontains="Devolução parcial").exists())
+        self.assertTrue(
+            MovimentoFinanceiro.objects.filter(
+                origem_tipo="ajuste",
+                origem_id=retirada.pk,
+                natureza="capital",
+                tipo="saida",
+                valor=Decimal("200.00"),
+            ).exists()
+        )
+
+    def test_extrato_classifica_entrada_do_socio_com_tipo_de_aporte_escolhido(self):
+        linha = importar_extrato_arquivo(
+            conta=self.banco,
+            conteudo=(
+                b"data;descricao;valor;identificador\n"
+                b"2026-09-09;Transferencia recebida do socio;300,00;APORTE-SOCIO-300\n"
+            ),
+            nome_arquivo="aporte-socio.csv",
+            usuario=self.usuario,
+        )[0]
+        self.client.force_login(self.usuario)
+
+        resposta = self.client.post(
+            reverse("caixa:tratar_linha_extrato", args=[linha.pk]),
+            {
+                "criar_movimento": "1",
+                "classificacao": "aporte_socio",
+                "descricao_movimento": "Empréstimo recebido de Alexandre",
+                "aportante": "Alexandre",
+                "tipo_aporte_socio": "emprestimo_socio",
+                "aporte_origem": "",
+                "categoria": "",
+                "centro_custo": "",
+                "conta_relacionada": "",
+                "conta_pagar": "",
+                "forma_pagamento": "",
+                "pagamento": "",
+            },
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        linha.refresh_from_db()
+        aporte = AporteCapital.objects.get(chave_idempotencia=f"linha-extrato:{linha.pk}:aporte")
+        self.assertEqual(linha.status, "conciliado")
+        self.assertEqual(linha.movimento_id, aporte.movimento_bancario_id)
+        self.assertEqual(aporte.tipo, "emprestimo_socio")
+        self.assertEqual(aporte.aportante, "Alexandre")
+        self.assertTrue(
+            MovimentoFinanceiro.objects.filter(
+                origem_tipo="aporte_capital",
+                origem_id=aporte.pk,
+                natureza="capital",
+                tipo="entrada",
+                valor=Decimal("300.00"),
+            ).exists()
+        )
 
     def test_criar_movimento_pelo_extrato_valida_vazios_sem_erro_500(self):
         self.client.force_login(self.usuario)

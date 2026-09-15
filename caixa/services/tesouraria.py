@@ -637,9 +637,9 @@ def importar_extrato_arquivo(*, conta, conteudo, nome_arquivo="", usuario=None):
 def criar_movimento_de_linha_extrato(
     *, linha, classificacao, descricao, usuario, categoria=None, centro_custo=None,
     conta_relacionada=None, conta_pagar=None, forma_pagamento=None, aportante="",
-    pagamento=None,
+    pagamento=None, tipo_aporte_socio="adiantamento_socio", aporte_origem=None,
 ):
-    from caixa.models import LancamentoCaixa, LinhaExtratoBancario, MovimentoBancario, PagamentoContaPagar
+    from caixa.models import AporteCapital, LancamentoCaixa, LinhaExtratoBancario, MovimentoBancario, PagamentoContaPagar
     from caixa.services.contabilidade import registrar_evento_contabil_se_configurado
     from caixa.services.livro_financeiro import registrar_movimento_financeiro
 
@@ -649,7 +649,7 @@ def criar_movimento_de_linha_extrato(
     classificacoes = {
         "despesa_operacional", "receita_operacional", "tarifa", "juros", "rendimento",
         "pagamento_conta_pagar", "transferencia_entre_contas", "aporte_socio",
-        "recebimento_registrado", "liquidacao_cartao",
+        "retirada_socio", "recebimento_registrado", "liquidacao_cartao",
     }
     if classificacao not in classificacoes:
         raise ValidationError("Classificação de movimento inválida.")
@@ -660,7 +660,8 @@ def criar_movimento_de_linha_extrato(
     }:
         raise ValidationError("A classificação escolhida não é compatível com uma entrada bancária.")
     if not credito and classificacao not in {
-        "despesa_operacional", "tarifa", "juros", "pagamento_conta_pagar", "transferencia_entre_contas"
+        "despesa_operacional", "tarifa", "juros", "pagamento_conta_pagar",
+        "retirada_socio", "transferencia_entre_contas"
     }:
         raise ValidationError("A classificação escolhida não é compatível com uma saída bancária.")
     if classificacao in {
@@ -694,13 +695,42 @@ def criar_movimento_de_linha_extrato(
         return MovimentoBancario.objects.get(chave_idempotencia=f"transferencia:{transferencia.pk}:{sufixo}")
 
     if classificacao == "aporte_socio":
+        tipos_aporte = {valor for valor, _rotulo in AporteCapital.TIPOS}
+        if tipo_aporte_socio not in tipos_aporte:
+            raise ValidationError("Selecione um tipo válido de aporte do sócio.")
         aporte = registrar_aporte_capital(
-            empresa=linha.empresa, tipo="adiantamento_socio", descricao=(descricao or linha.descricao)[:255],
+            empresa=linha.empresa, tipo=tipo_aporte_socio, descricao=(descricao or linha.descricao)[:255],
             valor=valor, data_competencia=linha.data_movimento, data_movimento=linha.data_movimento,
             chave=f"linha-extrato:{linha.pk}:aporte", usuario=usuario,
             aportante=(aportante or "Sócio não informado")[:120], conta_bancaria=linha.conta, caixa=None,
         )
         return aporte.movimento_bancario
+
+    if classificacao == "retirada_socio":
+        if not aporte_origem or aporte_origem.empresa_id != linha.empresa_id:
+            raise ValidationError("Selecione um aporte de origem pertencente à empresa ativa.")
+        tipo_movimento = {
+            "adiantamento_socio": "devolucao_afac",
+            "emprestimo_socio": "amortizacao_emprestimo",
+            "capital_social": "retirada_capital",
+        }.get(aporte_origem.tipo)
+        if not tipo_movimento:
+            raise ValidationError("O aporte selecionado não aceita retirada/devolução por este fluxo.")
+        movimento_socio = registrar_movimento_socio(
+            aporte=aporte_origem,
+            tipo=tipo_movimento,
+            descricao=(descricao or linha.descricao)[:255],
+            valor=valor,
+            data_competencia=linha.data_movimento,
+            data_movimento=linha.data_movimento,
+            conta_bancaria=linha.conta,
+            caixa=None,
+            documento_referencia=linha.identificador_externo,
+            comprovante=None,
+            chave=f"linha-extrato:{linha.pk}:retirada-socio",
+            usuario=usuario,
+        )
+        return movimento_socio.movimento_bancario
 
     if classificacao == "liquidacao_cartao":
         return registrar_movimento_bancario(
