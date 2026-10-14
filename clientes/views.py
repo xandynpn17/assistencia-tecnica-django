@@ -5,7 +5,10 @@ import logging
 from decimal import Decimal
 from ordens.models import OrdemServico, LinhaTrabalho
 from caixa.models import Pagamento
-from configuracoes.permissions import has_role, role_required, STAFF_ROLES
+from configuracoes.permissions import has_role, has_sensitive_permission, require_sensitive_permission, role_required, STAFF_ROLES, ORDER_ROLES
+from caixa.services.historico_cliente import resumo_financeiro_cliente
+from django import forms
+from django.core.paginator import Paginator
 from configuracoes.services.documentos import normalizar_cnpj
 from configuracoes.services.tenant_guard import filtrar_queryset_empresa, obter_empresa_ativa
 
@@ -111,10 +114,45 @@ def buscar_cliente(request):
     return JsonResponse({"erro": "Requisição inválida"}, status=400)
 
 
-@role_required(STAFF_ROLES)
+def _permissoes_ficha(user):
+    return {"pode_ver_dados_cliente": has_sensitive_permission(user, "perm_cliente_ver_dados"), "pode_ver_historico_cliente": has_sensitive_permission(user, "perm_cliente_ver_historico"), "pode_ver_financeiro_cliente": has_sensitive_permission(user, "perm_cliente_ver_financeiro"), "pode_editar_cliente": has_sensitive_permission(user, "perm_cliente_editar")}
+
+
+class PeriodoClienteForm(forms.Form):
+    data_inicio = forms.DateField(label="Data de início", required=False, widget=forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}))
+    data_fim = forms.DateField(label="Data de fim", required=False, widget=forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}))
+
+    def clean(self):
+        dados = super().clean()
+        if dados.get("data_inicio") and dados.get("data_fim") and dados["data_inicio"] > dados["data_fim"]:
+            self.add_error("data_fim", "A data final deve ser posterior à inicial.")
+        return dados
+
+
+@role_required(ORDER_ROLES)
+def resumo_cliente(request, pk):
+    empresa = obter_empresa_ativa(request, strict=True)
+    cliente = get_object_or_404(Cliente, pk=pk, empresa=empresa)
+    permissoes = _permissoes_ficha(request.user)
+    contexto = {"cliente": cliente, **permissoes}
+    if permissoes["pode_ver_historico_cliente"]:
+        contexto["ordens_resumo"] = OrdemServico.objects.filter(empresa=empresa, cliente=cliente).order_by("-data_abertura")[:10]
+    if permissoes["pode_ver_financeiro_cliente"]:
+        financeiro = resumo_financeiro_cliente(cliente, empresa)
+        contexto.update(financeiro)
+        contexto["historico_pagamentos"] = financeiro["historico_pagamentos"][:10]
+    return render(request, "clientes/partials/_ficha_balao.html", contexto)
+
+
+@role_required(ORDER_ROLES)
 def detalhes_cliente(request, pk):
     empresa = obter_empresa_ativa(request, strict=False)
     cliente = get_object_or_404(filtrar_queryset_empresa(Cliente.objects.all(), empresa), pk=pk)
+    permissoes = _permissoes_ficha(request.user)
+    periodo_form = PeriodoClienteForm(request.GET)
+    financeiro = {}
+    if permissoes["pode_ver_financeiro_cliente"] and periodo_form.is_valid():
+        financeiro = resumo_financeiro_cliente(cliente, empresa, inicio=periodo_form.cleaned_data.get("data_inicio"), fim=periodo_form.cleaned_data.get("data_fim"))
 
     total_item_expr = ExpressionWrapper(
         F("servicos_pecas__quantidade") * F("servicos_pecas__valor_unitario"),
@@ -139,25 +177,15 @@ def detalhes_cliente(request, pk):
     total_ordens = len(ordens)
     ordens_ativas = len(ordens_ativas_lista)
     ordens_concluidas = len(ordens_concluidas_lista)
-    pagamentos_cliente = Pagamento.objects.filter(ordem_servico__cliente=cliente)
-    total_gasto = pagamentos_cliente.aggregate(total=Sum("valor")).get("total") or Decimal("0.00")
-    ultimo_pagamento = pagamentos_cliente.order_by("-data").first()
-
-    totais_por_ordem = {
-        row["ordem_servico_id"]: row["total"] or 0
-        for row in (
-            Pagamento.objects.filter(ordem_servico__cliente=cliente)
-            .values("ordem_servico_id")
-            .annotate(total=Sum("valor"))
-        )
-    }
-    total_em_aberto = Decimal("0.00")
+    total_gasto = financeiro.get("total_gasto", Decimal("0.00"))
+    ultimo_pagamento = financeiro.get("ultimo_pagamento")
+    totais_por_ordem = financeiro.get("totais_por_ordem", {})
+    total_em_aberto = financeiro.get("total_em_aberto", Decimal("0.00"))
     total_os = Decimal("0.00")
     for ordem in ordens:
         ordem.total_pago = totais_por_ordem.get(ordem.id, 0)
         ordem.total_os = Decimal(ordem.total_os_calculado or Decimal("0.00"))
         ordem.saldo_aberto = max(Decimal("0.00"), ordem.total_os - Decimal(ordem.total_pago or 0))
-        total_em_aberto += ordem.saldo_aberto
         total_os += ordem.total_os
 
     ordens_com_pagamento = [ordem for ordem in ordens if Decimal(ordem.total_pago or 0) > 0]
@@ -221,12 +249,18 @@ def detalhes_cliente(request, pk):
             "tempo_medio_retirada": tempo_medio_retirada,
             "ultimo_pagamento": ultimo_pagamento,
             "ultima_ordem": ultima_ordem,
+            **permissoes,
+            **financeiro,
+            "periodo_form": periodo_form,
+            "pagina_pagamentos": Paginator(financeiro.get("historico_pagamentos", []), 25).get_page(request.GET.get("pagina_pagamentos")),
+            "pagina_ordens": Paginator(ordens, 25).get_page(request.GET.get("pagina_ordens")),
         },
     )
 
 
 @role_required(STAFF_ROLES)
 def editar_cliente(request, cliente_id):
+    require_sensitive_permission(request.user, "perm_cliente_editar")
     empresa = obter_empresa_ativa(request, strict=False)
     cliente = get_object_or_404(filtrar_queryset_empresa(Cliente.objects.all(), empresa), id=cliente_id)
 
@@ -330,6 +364,7 @@ def unificar_clientes(request):
 
         OrdemServico.objects.filter(cliente=duplicado).update(cliente=principal)
         Orcamento.objects.filter(cliente=duplicado).update(cliente=principal)
+        Pagamento.objects.filter(empresa=empresa, cliente=duplicado).update(cliente=principal)
 
         if not principal.telefone and duplicado.telefone:
             principal.telefone = duplicado.telefone
@@ -377,4 +412,3 @@ def unificar_clientes(request):
             "can_unificar": has_role(request.user, {"adm", "gerente"}),
         },
     )
-

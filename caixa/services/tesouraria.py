@@ -206,6 +206,31 @@ def registrar_transferencia(*, empresa, valor, data_movimento, chave, usuario, c
         },
     )
     if not criada:
+        esperado = {
+            "empresa_id": getattr(empresa, "pk", None),
+            "conta_origem_id": getattr(conta_origem, "pk", None),
+            "caixa_origem_id": getattr(caixa_origem, "pk", None),
+            "conta_destino_id": getattr(conta_destino, "pk", None),
+            "caixa_destino_id": getattr(caixa_destino, "pk", None),
+            "valor": Decimal(valor).quantize(Decimal("0.01")),
+            "data_movimento": data_movimento,
+            "descricao": descricao or "",
+        }
+        atual = {
+            "empresa_id": transferencia.empresa_id,
+            "conta_origem_id": transferencia.conta_origem_id,
+            "caixa_origem_id": transferencia.caixa_origem_id,
+            "conta_destino_id": transferencia.conta_destino_id,
+            "caixa_destino_id": transferencia.caixa_destino_id,
+            "valor": Decimal(transferencia.valor).quantize(Decimal("0.01")),
+            "data_movimento": transferencia.data_movimento,
+            "descricao": transferencia.descricao or "",
+        }
+        if atual != esperado:
+            raise ValidationError(
+                "A chave desta transferencia ja foi usada com dados diferentes. "
+                "Atualize a tela antes de tentar novamente."
+            )
         return transferencia
     transferencia.full_clean()
     transferencia.save()
@@ -276,7 +301,7 @@ def registrar_aporte_capital(
 @transaction.atomic
 def registrar_movimento_socio(
     *, aporte, tipo, descricao, valor, data_competencia, data_movimento,
-    conta_bancaria, caixa, documento_referencia, comprovante, chave, usuario,
+    conta_bancaria, caixa, documento_referencia, comprovante, chave, usuario, empresa=None,
 ):
     from caixa.models import LancamentoCaixa, MovimentoSocio
     from caixa.services.livro_financeiro import registrar_movimento_financeiro
@@ -286,19 +311,24 @@ def registrar_movimento_socio(
         raise ValidationError("Informe valor positivo e data de movimento não futura.")
     if bool(conta_bancaria) == bool(caixa):
         raise ValidationError("Informe exatamente uma origem: banco ou caixa.")
+    empresa = empresa or getattr(aporte, "empresa", None) or getattr(conta_bancaria, "empresa", None) or getattr(caixa, "empresa", None)
+    if empresa is None:
+        raise ValidationError("Nao foi possivel determinar a empresa do movimento.")
     compatibilidade = {
         "devolucao_afac": "adiantamento_socio",
         "amortizacao_emprestimo": "emprestimo_socio",
         "retirada_capital": "capital_social",
     }
+    if tipo in compatibilidade and not aporte:
+        raise ValidationError("Selecione o aporte ou emprestimo de origem para este tipo.")
     if tipo in compatibilidade and aporte.tipo != compatibilidade[tipo]:
         raise ValidationError("O tipo do movimento não é compatível com o aporte selecionado.")
-    if tipo != "juros_emprestimo":
+    if aporte and tipo != "juros_emprestimo":
         devolvido = aporte.movimentos_saida.exclude(tipo="juros_emprestimo").aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
         if valor > Decimal(aporte.valor) - devolvido:
             raise ValidationError("O movimento supera o saldo principal disponível deste aporte.")
     movimento_socio = MovimentoSocio(
-        empresa=aporte.empresa, aporte_origem=aporte, tipo=tipo, descricao=descricao,
+        empresa=empresa, aporte_origem=aporte, tipo=tipo, descricao=descricao,
         valor=valor, data_competencia=data_competencia, data_movimento=data_movimento,
         conta_bancaria=conta_bancaria, caixa=caixa, documento_referencia=documento_referencia,
         comprovante=comprovante, chave_idempotencia=chave, registrado_por=usuario,
@@ -312,41 +342,46 @@ def registrar_movimento_socio(
             conta=conta_bancaria, tipo="saida", origem_tipo="manual", origem_id=movimento_socio.pk,
             descricao=descricao, valor=valor, data_movimento=data_movimento,
             chave=f"movimento-socio:{movimento_socio.pk}:banco", usuario=usuario,
-            metadados={"tipo_interno": "movimento_socio", "tipo": tipo, "aporte_id": aporte.pk},
+            metadados={"tipo_interno": "movimento_socio", "tipo": tipo, "aporte_id": getattr(aporte, "pk", None)},
         )
         MovimentoSocio.objects.filter(pk=movimento_socio.pk).update(movimento_bancario=banco)
         if natureza == "operacional":
             lancamento = LancamentoCaixa.objects.create(
-                empresa=aporte.empresa, conta_bancaria=conta_bancaria, descricao=descricao,
+                empresa=empresa, conta_bancaria=conta_bancaria, descricao=descricao,
                 valor=valor, tipo="saida", natureza="operacional", data_competencia=data_competencia,
                 data_movimento=data_movimento, usuario=usuario,
             )
             MovimentoSocio.objects.filter(pk=movimento_socio.pk).update(lancamento_caixa=lancamento)
     else:
         lancamento = LancamentoCaixa.objects.create(
-            empresa=aporte.empresa, caixa=caixa, descricao=descricao, valor=valor, tipo="saida",
+            empresa=empresa, caixa=caixa, descricao=descricao, valor=valor, tipo="saida",
             natureza=natureza, data_competencia=data_competencia, data_movimento=data_movimento, usuario=usuario,
         )
         MovimentoSocio.objects.filter(pk=movimento_socio.pk).update(lancamento_caixa=lancamento)
     registrar_movimento_financeiro(
-        empresa=aporte.empresa, caixa=caixa, origem_tipo="ajuste", origem_id=movimento_socio.pk,
+        empresa=empresa, caixa=caixa, origem_tipo="ajuste", origem_id=movimento_socio.pk,
         origem_referencia=documento_referencia, tipo="saida", natureza=natureza, valor=valor,
         descricao=descricao, data_competencia=data_competencia, data_movimento=data_movimento,
         chave_idempotencia=f"movimento_socio:{movimento_socio.pk}", usuario=usuario,
-        metadados={"tipo": tipo, "aporte_id": aporte.pk, "conta_bancaria_id": getattr(conta_bancaria, "pk", None)},
+        metadados={"tipo": tipo, "aporte_id": getattr(aporte, "pk", None), "conta_bancaria_id": getattr(conta_bancaria, "pk", None)},
     )
     movimento_socio.refresh_from_db()
     from caixa.services.contabilidade import registrar_evento_contabil_se_configurado
     evento_contabil = {
+        "devolucao_afac": "devolucao_capital",
+        "retirada_capital": "devolucao_capital",
         "amortizacao_emprestimo": "amortizacao_emprestimo_socio",
         "juros_emprestimo": "juros_socio",
-    }.get(tipo, "devolucao_capital")
-    registrar_evento_contabil_se_configurado(
-        empresa=aporte.empresa, evento=evento_contabil, origem_tipo="movimento_socio",
-        origem_id=movimento_socio.pk, competencia=data_competencia, valor=valor,
-        historico=descricao, documento_referencia=documento_referencia,
-        chave=f"movimento-socio:{movimento_socio.pk}:contabil", usuario=usuario,
-    )
+    }.get(tipo)
+    # Novas retiradas sem aporte ficam registradas financeiramente, mas aguardam
+    # classificacao do contador em vez de usar uma conta contabil ficticia.
+    if evento_contabil:
+        registrar_evento_contabil_se_configurado(
+            empresa=empresa, evento=evento_contabil, origem_tipo="movimento_socio",
+            origem_id=movimento_socio.pk, competencia=data_competencia, valor=valor,
+            historico=descricao, documento_referencia=documento_referencia,
+            chave=f"movimento-socio:{movimento_socio.pk}:contabil", usuario=usuario,
+        )
     return movimento_socio
 
 
@@ -371,7 +406,7 @@ def _parse_decimal_extrato(valor, *, linha):
 
 def _importar_extrato_sumup(*, conta, leitor, usuario=None):
     """Importa o relatório Transações da SumUp sem duplicar Pagamento/Depósito."""
-    from caixa.models import LinhaExtratoBancario
+    from caixa.models import LinhaExtratoBancario, TransacaoAdquirente
 
     criadas = []
     status_efetuados = {"efetuado", "pago", "successful", "success"}
@@ -405,6 +440,21 @@ def _importar_extrato_sumup(*, conta, leitor, usuario=None):
                 "data_movimento": data,
                 "descricao": descricao[:255],
                 "valor": valor_liquido,
+            },
+        )
+        TransacaoAdquirente.objects.get_or_create(
+            conta_liquidacao=conta,
+            identificador_externo=identificador[:180],
+            defaults={
+                "empresa": conta.empresa,
+                "adquirente": "SumUp",
+                "data_venda": data,
+                "modalidade": modalidade[:80],
+                "bandeira": bandeira[:40],
+                "parcelas": 1,
+                "valor_bruto": abs(valor_bruto),
+                "taxa": abs(taxa),
+                "valor_liquido": abs(valor_liquido),
             },
         )
         if criada:
@@ -456,7 +506,7 @@ def _extrair_transacoes_pdf_sumup(texto):
 def importar_relatorio_pdf_sumup(*, conta, conteudo, usuario=None):
     from pypdf import PdfReader
     from pypdf.errors import PdfReadError
-    from caixa.models import LinhaExtratoBancario
+    from caixa.models import LinhaExtratoBancario, TransacaoAdquirente
 
     try:
         leitor = PdfReader(io.BytesIO(conteudo))
@@ -486,6 +536,23 @@ def importar_relatorio_pdf_sumup(*, conta, conteudo, usuario=None):
                 "valor": transacao["valor_liquido"],
             },
         )
+        parcelas_texto = transacao["parcelas"]
+        parcelas = int(parcelas_texto[:-1]) if parcelas_texto.endswith("x") and parcelas_texto[:-1].isdigit() else 1
+        TransacaoAdquirente.objects.get_or_create(
+            conta_liquidacao=conta,
+            identificador_externo=f"sumup:{transacao['codigo']}",
+            defaults={
+                "empresa": conta.empresa,
+                "adquirente": "SumUp",
+                "data_venda": transacao["data"],
+                "modalidade": parcelas_texto,
+                "parcelas": parcelas,
+                "valor_bruto": abs(transacao["valor_bruto"]),
+                "taxa": abs(transacao["taxa"]),
+                "deducoes": abs(transacao["deducoes"]),
+                "valor_liquido": abs(transacao["valor_liquido"]),
+            },
+        )
         if criada:
             criadas.append(linha)
     return criadas
@@ -502,12 +569,20 @@ def importar_extrato_csv(*, conta, conteudo, usuario=None):
         return _importar_extrato_sumup(conta=conta, leitor=leitor, usuario=usuario)
 
     criadas = []
+    ocorrencias = {}
     for numero, row in enumerate(leitor, start=2):
         data = _parse_data(row.get("data"))
         descricao = (row.get("descricao") or "").strip()
         valor = _parse_decimal_extrato(row.get("valor"), linha=numero)
-        base = f"{data}|{descricao}|{valor}|{numero}"
-        identificador = (row.get("identificador") or "").strip() or hashlib.sha256(base.encode()).hexdigest()
+        descricao_canonica = " ".join(descricao.casefold().split())
+        base = f"{data}|{descricao_canonica}|{valor.quantize(Decimal('0.01'))}"
+        ocorrencias[base] = ocorrencias.get(base, 0) + 1
+        # O ordinal e por transacao identica, nao pela posicao absoluta no arquivo.
+        # Assim, extratos sobrepostos continuam com a mesma identidade mesmo quando
+        # ganham linhas antes ou depois do periodo comum.
+        identificador = (row.get("identificador") or "").strip() or hashlib.sha256(
+            f"generico|{base}|ocorrencia:{ocorrencias[base]}".encode()
+        ).hexdigest()
         linha, criada = LinhaExtratoBancario.objects.get_or_create(
             conta=conta,
             identificador_externo=identificador,
@@ -1061,12 +1136,27 @@ def sugerir_correspondencias(*, linha, limite=10):
             motivos.append("mesma data")
         if similaridade >= 0.45:
             motivos.append("documento/contraparte semelhante")
+        if diferenca_valor == 0 and similaridade >= 0.45:
+            confianca = "forte"
+        elif diferenca_valor == 0 and diferenca_dias == 0:
+            confianca = "media"
+            score = min(score, 70)
+        else:
+            confianca = "fraca"
+            score = min(score, 55)
+        alertas = []
+        if motivos == ["valor exato"]:
+            alertas.append("Somente o valor coincide; confirme data, documento e contraparte.")
+        elif confianca == "media":
+            alertas.append("Valor e data coincidem, mas a descricao nao confirma a contraparte.")
         resultados.append({
             "movimento": movimento,
             "score": score,
             "diferenca_valor": diferenca_valor,
             "diferenca_dias": diferenca_dias,
             "motivos": motivos,
+            "confianca": confianca,
+            "alertas": alertas,
         })
     resultados.sort(key=lambda item: (-item["score"], item["diferenca_valor"], item["diferenca_dias"], item["movimento"].pk))
     return resultados[:limite]

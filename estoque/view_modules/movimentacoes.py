@@ -23,7 +23,7 @@ from configuracoes.permissions import (
     role_required,
 )
 from configuracoes.services.tenant_guard import filtrar_catalogo_empresa, filtrar_queryset_empresa, obter_empresa_ativa
-from ordens.models import ServicoPeca
+from ordens.models import PedidoCompra, ServicoPeca
 
 from ..forms import ConfiguracaoRateioCustoFixoForm, GerarSnapshotRateioForm, MovimentacaoEstoqueForm, PontoOperacionalForm, TransferenciaEstoqueInterempresaForm, UbicacaoEstoqueForm
 from ..models import (
@@ -803,8 +803,18 @@ def reposicao_estoque(request):
     reservas_map = defaultdict(int)
     reservas_os_map = defaultdict(int)
     os_pendentes_map = defaultdict(int)
+    pedidos_abertos_map = defaultdict(int)
     saidas_30_map = {}
     if produtos:
+        for pedido in PedidoCompra.objects.filter(
+            empresa=empresa,
+            finalidade="reposicao_estoque_os",
+            produto_estoque__in=produtos,
+        ).exclude(status__in=PedidoCompra.STATUS_TERMINAIS).annotate(
+            recebido_ativo=Sum("recebimentos__quantidade", filter=Q(recebimentos__estornado_em__isnull=True))
+        ):
+            pendente = max(Decimal(pedido.quantidade_solicitada or 0) - Decimal(pedido.recebido_ativo or 0), Decimal("0"))
+            pedidos_abertos_map[pedido.produto_estoque_id] += int(pendente.to_integral_value(rounding=ROUND_UP))
         reservas_qs = (
             ReservaEstoque.objects.filter(
                 produto__in=produtos,
@@ -879,7 +889,8 @@ def reposicao_estoque(request):
             or p.custo_unitario
             or Decimal("0.00")
         )
-        faltante_compra = max(sugestao - int(saldo_origem), 0)
+        pedidos_abertos = pedidos_abertos_map.get(p.id, 0)
+        faltante_compra = max(sugestao - max(int(saldo_origem), 0) - pedidos_abertos, 0)
         if demanda_comprometida >= max(minimo, demanda_giro) and os_pendentes_sem_reserva > 0:
             origem_demanda = "os_pendentes"
         elif reservas_ativas >= max(minimo, demanda_giro):
@@ -904,6 +915,8 @@ def reposicao_estoque(request):
                 "demanda_giro": demanda_giro,
                 "demanda_base": demanda_base,
                 "sugestao": sugestao,
+                "pedidos_abertos": pedidos_abertos,
+                "estoque_inconsistente": saldo_origem < 0 or saldo_destino < 0,
                 "pode_repor": max(min(sugestao, int(saldo_origem)), 0),
                 "faltante_compra": faltante_compra,
                 "fornecedor_preferencial": fornecedor_pref,
@@ -997,6 +1010,8 @@ def reposicao_estoque(request):
             "sugestao_total",
             "repor_agora",
             "faltante_compra",
+            "pedidos_abertos",
+            "estoque_inconsistente",
             "fornecedor_preferencial",
             "codigo_fornecedor",
             "prazo_medio_dias",
@@ -1022,6 +1037,8 @@ def reposicao_estoque(request):
                 linha["sugestao"],
                 linha["pode_repor"],
                 linha["faltante_compra"],
+                linha["pedidos_abertos"],
+                "sim" if linha["estoque_inconsistente"] else "nao",
                 linha["fornecedor_nome"],
                 linha["codigo_fornecedor"],
                 linha["prazo_medio_dias"] or "",

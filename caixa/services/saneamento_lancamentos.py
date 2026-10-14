@@ -10,6 +10,7 @@ from caixa.models import (
     AuditoriaFinanceira,
     Caixa,
     CorrecaoLancamentoCaixa,
+    EfeitoCorrecaoCaixa,
     LancamentoCaixa,
     MovimentoFinanceiro,
     MovimentoSocio,
@@ -74,15 +75,35 @@ def _movimento_bancario_ativo(lancamento):
     return None
 
 
-def _aplicar_delta_caixa_fechado(caixa_id, delta):
+def _aplicar_delta_caixa_fechado(caixa_id, delta, *, correcao):
     if not caixa_id or not delta:
         return
     caixa = Caixa.objects.select_for_update().get(pk=caixa_id)
     if caixa.aberto:
         return
-    caixa.saldo_final = Decimal(caixa.saldo_final or 0) + delta
-    caixa.diferenca_fechamento = Decimal(caixa.diferenca_fechamento or 0) - delta
-    caixa.save(update_fields=["saldo_final", "diferenca_fechamento"])
+    saldo_anterior = Decimal(caixa.saldo_final or 0)
+    diferenca_anterior = Decimal(caixa.diferenca_fechamento or 0)
+    saldo_resultante = saldo_anterior + delta
+    diferenca_resultante = diferenca_anterior - delta
+    fechamento = caixa.fechamentos_versionados.order_by("-versao", "-id").first()
+    EfeitoCorrecaoCaixa.objects.create(
+        empresa=caixa.empresa,
+        correcao=correcao,
+        caixa=caixa,
+        fechamento_referencia=fechamento,
+        delta=delta,
+        saldo_final_anterior=saldo_anterior,
+        saldo_final_resultante=saldo_resultante,
+        diferenca_anterior=diferenca_anterior,
+        diferenca_resultante=diferenca_resultante,
+    )
+    # Mantem os campos legados sincronizados para as telas atuais. O fechamento
+    # versionado original nunca e alterado e conserva os valores efetivamente
+    # apresentados no momento do fechamento.
+    Caixa.objects.filter(pk=caixa.pk).update(
+        saldo_final=saldo_resultante,
+        diferenca_fechamento=diferenca_resultante,
+    )
 
 
 def listar_duplicidades_importacao_extrato(empresa):
@@ -262,7 +283,7 @@ def corrigir_lancamento_manual(
     if caixa_destino:
         deltas[caixa_destino.pk] += impacto_corrigido
     for caixa_id, delta in deltas.items():
-        _aplicar_delta_caixa_fechado(caixa_id, delta)
+        _aplicar_delta_caixa_fechado(caixa_id, delta, correcao=correcao)
 
     AuditoriaFinanceira.objects.create(
         evento="lancamento_caixa_corrigido",
@@ -318,7 +339,7 @@ def cancelar_lancamento_manual(*, lancamento, motivo, usuario, permitir_pagament
         movimento_bancario_estorno=banco_estorno,
     )
     impacto = Decimal(lancamento.valor) if lancamento.tipo == "entrada" else -Decimal(lancamento.valor)
-    _aplicar_delta_caixa_fechado(lancamento.caixa_id, -impacto)
+    _aplicar_delta_caixa_fechado(lancamento.caixa_id, -impacto, correcao=correcao)
     AuditoriaFinanceira.objects.create(
         evento="lancamento_caixa_cancelado",
         descricao=f"Lançamento #{lancamento.pk} cancelado. Motivo: {motivo}"[:255],

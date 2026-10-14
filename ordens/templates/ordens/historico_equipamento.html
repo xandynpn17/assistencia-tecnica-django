@@ -1,0 +1,12 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container py-3">
+  <h2>Histórico do equipamento</h2>
+  <p>OS atual: <a href="{% url 'ordens:detalhes_ordem' ordem.pk %}">{{ ordem.numero_os }}</a> · {{ ordem.marca_equipamento }} {{ ordem.modelo_equipamento }} · série {{ ordem.numero_serie_equipamento|default:'não informada' }}</p>
+  <div class="alert alert-info">{{ criterio }}. Série e modelo apenas geram candidatos; o vínculo exige revisão humana.</div>
+  {% if terceiros %}<div class="alert alert-warning">Há {{ terceiros }} registro(s) potencialmente relacionados a outro cliente. Dados pessoais e detalhes não são exibidos.</div>{% endif %}
+  <div class="card mb-3"><div class="card-header">Histórico vinculado</div><div class="card-body p-0"><table class="table mb-0"><thead><tr><th>OS</th><th>Abertura</th><th>Defeito</th><th>Status</th></tr></thead><tbody>{% for item in ordens %}<tr><td><a href="{% url 'ordens:detalhes_ordem' item.pk %}">{{ item.numero_os }}</a></td><td>{{ item.data_abertura|date:'d/m/Y' }}</td><td>{{ item.defeito|truncatechars:100 }}</td><td>{{ item.get_status_display }}</td></tr>{% empty %}<tr><td colspan="4">Nenhuma OS vinculada ainda.</td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="card"><div class="card-header">Possíveis OS anteriores do mesmo cliente</div><div class="card-body p-0"><table class="table mb-0"><thead><tr><th>OS</th><th>Abertura</th><th>Equipamento</th><th>Defeito</th><th></th></tr></thead><tbody>{% for item in candidatos %}<tr><td><a href="{% url 'ordens:detalhes_ordem' item.pk %}">{{ item.numero_os }}</a></td><td>{{ item.data_abertura|date:'d/m/Y' }}</td><td>{{ item.marca_equipamento }} {{ item.modelo_equipamento }}</td><td>{{ item.defeito|truncatechars:80 }}</td><td>{% if pode_vincular %}<form method="post">{% csrf_token %}<input type="hidden" name="ordem_anterior" value="{{ item.pk }}"><button class="btn btn-sm btn-outline-primary" type="submit">Confirmar mesmo equipamento</button></form>{% endif %}</td></tr>{% empty %}<tr><td colspan="5">Nenhum candidato localizado.</td></tr>{% endfor %}</tbody></table></div></div>
+  {% if ordem.equipamento_grupo and pode_vincular %}<form method="post" class="mt-3">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" name="acao" value="desvincular" type="submit">Desvincular esta OS do histórico</button></form>{% endif %}
+</div>
+{% endblock %}

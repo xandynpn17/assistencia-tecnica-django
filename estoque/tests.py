@@ -50,7 +50,7 @@ from estoque.models import (
     VendaRapidaEstoque,
 )
 from estoque.services_inventario_operacional import finalizar_inventario_operacional
-from ordens.models import LinhaTrabalho, OrdemServico, ServicoPeca
+from ordens.models import LinhaTrabalho, OrdemServico, PedidoCompra, ServicoPeca
 
 
 class ConsultaArtigosTests(TestCase):
@@ -584,7 +584,7 @@ class ConsultaArtigosTests(TestCase):
         self.assertIn("ean", form.errors)
         self.assertIn("13", str(form.errors["ean"]))
 
-    def test_produto_form_servico_rejeita_estoque_positivo(self):
+    def test_produto_form_servico_ignora_quantidade_bloqueada_e_rejeita_minimo_positivo(self):
         form = ProdutoForm(
             data={
                 "nome": "Servico com estoque",
@@ -598,7 +598,7 @@ class ConsultaArtigosTests(TestCase):
             }
         )
         self.assertFalse(form.is_valid())
-        self.assertIn("quantidade", form.errors)
+        self.assertEqual(form.cleaned_data["quantidade"], 0)
         self.assertIn("estoque_minimo", form.errors)
 
     def test_transferencia_po3_para_po2_exige_ubicacao(self):
@@ -1940,6 +1940,28 @@ class ConsultaArtigosTests(TestCase):
         self.assertContains(response, "Fornecedor Alfa")
         self.assertContains(response, "ALF-001")
         self.assertContains(response, "R$ 37,50")
+
+    def test_reposicao_desconta_pedido_aberto_da_compra_sugerida(self):
+        armazem = PontoOperacional.objects.create(codigo="PO2", nome="Armazém")
+        SaldoEstoquePonto.objects.create(produto=self.produto, ponto_operacional=armazem, quantidade=1)
+        saldo = SaldoEstoquePonto.objects.get(produto=self.produto, ponto_operacional=self.ponto_loja)
+        saldo.quantidade = 0
+        saldo.save(update_fields=["quantidade"])
+        self.produto.estoque_minimo = 5
+        self.produto.save(update_fields=["estoque_minimo"])
+        cliente = Cliente.objects.create(empresa=self.empresa, nome="Cliente reposição", documento="52998224725", estado="SP")
+        ordem = OrdemServico.objects.create(empresa=self.empresa, cliente=cliente, tipo_equipamento="celular", marca_equipamento="Marca", modelo_equipamento="Modelo", defeito="Teste", tipo_reparo="Fora de Garantia")
+        pedido = PedidoCompra.objects.create(empresa=self.empresa, ordem=ordem, produto_estoque=self.produto, finalidade="reposicao_estoque_os", titulo="Tela", quantidade_solicitada=2)
+        response = self.client.get(reverse("estoque:reposicao_estoque"))
+        linha = next(item for item in response.context["linhas"] if item["produto"].pk == self.produto.pk)
+        self.assertEqual(linha["pedidos_abertos"], 2)
+        self.assertEqual(linha["pode_repor"], 1)
+        self.assertEqual(linha["faltante_compra"], 2)
+        pedido.status = "cancelado"
+        pedido.save(update_fields=["status"])
+        response = self.client.get(reverse("estoque:reposicao_estoque"))
+        linha = next(item for item in response.context["linhas"] if item["produto"].pk == self.produto.pk)
+        self.assertEqual(linha["faltante_compra"], 4)
 
     def test_reposicao_inteligente_considera_reservas_ativas_como_demanda(self):
         po2 = PontoOperacional.objects.create(codigo="PO2", nome="Armazem")

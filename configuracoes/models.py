@@ -534,6 +534,10 @@ class User(AbstractUser):
     perm_os_concluir = models.BooleanField(default=False)
     perm_os_reabrir = models.BooleanField(default=False)
     perm_os_ver_custos = models.BooleanField(default=False)
+    perm_cliente_ver_dados = models.BooleanField(default=False, verbose_name="Consultar dados pessoais completos do cliente")
+    perm_cliente_ver_historico = models.BooleanField(default=False, verbose_name="Consultar histórico operacional do cliente")
+    perm_cliente_ver_financeiro = models.BooleanField(default=False, verbose_name="Consultar histórico financeiro do cliente")
+    perm_cliente_editar = models.BooleanField(default=False, verbose_name="Editar cadastro do cliente")
     perm_os_registrar_custo = models.BooleanField(default=False)
     perm_os_estornar_custo = models.BooleanField(default=False)
     perm_orcamento_editar = models.BooleanField(default=False)
@@ -1672,6 +1676,34 @@ class ConfiguracaoAuditoria(models.Model):
 
     def __str__(self):
         return f"{self.acao} - {self.alvo or '-'}"
+
+
+class PoliticaBackup(models.Model):
+    """Rotina da instalação inteira, não um export de uma única empresa."""
+    ativo = models.BooleanField(default=False, verbose_name="Backup automático ativo")
+    horario = models.TimeField(default="23:00", verbose_name="Horário diário")
+    destino_nuvem = models.CharField(max_length=12, choices=[("nenhum", "Desativado"), ("pasta", "Pasta sincronizada com nuvem")], default="nenhum")
+    pasta_nuvem = models.CharField(max_length=500, blank=True)
+    retencao_nuvem_dias = models.PositiveIntegerField(default=30)
+    ultimo_teste_recuperacao = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(id=1), name="politica_backup_instalacao_unica")]
+
+
+class ExecucaoBackup(models.Model):
+    iniciado_em = models.DateTimeField(default=timezone.now)
+    terminado_em = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=12, choices=[("executando", "Executando"), ("sucesso", "Concluído"), ("falha", "Falhou")], default="executando")
+    pacote = models.CharField(max_length=500, blank=True)
+    tamanho_bytes = models.PositiveBigIntegerField(default=0)
+    sha256 = models.CharField(max_length=64, blank=True)
+    nuvem_status = models.CharField(max_length=20, default="desativado", choices=[("desativado", "Desativado"), ("aguarda_sync", "Copiado; upload não confirmado"), ("falha", "Cópia para nuvem falhou")])
+    erro = models.CharField(max_length=240, blank=True)
+    agendado = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-iniciado_em", "-id"]
 
 
 class IntegracaoEventoLog(models.Model):

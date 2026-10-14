@@ -1,0 +1,171 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Dinheiro fisico{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  {% include 'caixa/_subnav_caixa.html' %}
+
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h1 class="h3 mb-1">Dinheiro fisico</h1>
+      <p class="text-muted mb-0">Gaveta, cofre, sangrias e conferencia sem misturar PIX ou cartoes.</p>
+    </div>
+    <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
+      <div><label class="form-label small mb-1">De</label><input class="form-control" type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}"></div>
+      <div><label class="form-label small mb-1">Ate</label><input class="form-control" type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}"></div>
+      <button class="btn btn-outline-primary">Filtrar</button>
+    </form>
+  </div>
+
+  <div class="row g-3 mb-4">
+    {% for local in locais %}
+    <div class="col-md-6 col-xl-4">
+      <div class="card h-100 shadow-sm border-0">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div><div class="text-uppercase small text-muted">{{ local.get_tipo_display }}</div><h2 class="h5 mb-0">{{ local.nome }}</h2></div>
+            <span class="badge text-bg-light">{{ local.codigo }}</span>
+          </div>
+          <div class="display-6 fw-semibold mt-3">R$ {{ local.saldo_calculado|floatformat:2 }}</div>
+          {% if local.fundo_troco != None %}<div class="small text-muted">Fundo de troco alvo: R$ {{ local.fundo_troco|floatformat:2 }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-xl-7">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-white"><strong>Sangria ou reforco</strong></div>
+        <div class="card-body">
+          <p class="small text-muted">A operacao move dinheiro entre locais. Nao gera despesa, receita ou retirada de socio.</p>
+          <form method="post" class="row g-3">
+            {% csrf_token %}<input type="hidden" name="acao" value="transferir">
+            {{ transferencia_form.chave_idempotencia }}
+            <div class="col-md-4"><label class="form-label">Operacao</label>{{ transferencia_form.tipo }}</div>
+            <div class="col-md-4"><label class="form-label">Origem</label>{{ transferencia_form.origem }}</div>
+            <div class="col-md-4"><label class="form-label">Destino</label>{{ transferencia_form.destino }}</div>
+            <div class="col-md-4"><label class="form-label">Valor</label>{{ transferencia_form.valor }}</div>
+            <div class="col-md-4"><label class="form-label">Data</label>{{ transferencia_form.data_movimento }}</div>
+            <div class="col-md-4"><label class="form-label">Descricao</label>{{ transferencia_form.descricao }}</div>
+            <div class="col-12"><label class="form-label">Justificativa / observacao</label>{{ transferencia_form.justificativa }}</div>
+            {% if transferencia_form.errors %}<div class="col-12 text-danger small">{{ transferencia_form.errors }}</div>{% endif %}
+            <div class="col-12"><button class="btn btn-primary">Registrar movimentacao</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% if pode_configurar %}
+    <div class="col-xl-5">
+      <div class="card shadow-sm mb-3">
+        <div class="card-header bg-white"><strong>Saldo inicial de corte</strong></div>
+        <div class="card-body">
+          <p class="small text-muted">Use uma unica vez por local, apos contagem e aprovacao.</p>
+          <form method="post" class="row g-2">
+            {% csrf_token %}<input type="hidden" name="acao" value="saldo_corte">{{ saldo_corte_form.chave_idempotencia }}
+            <div class="col-6">{{ saldo_corte_form.local }}</div><div class="col-6">{{ saldo_corte_form.valor }}</div>
+            <div class="col-6">{{ saldo_corte_form.data_movimento }}</div><div class="col-12">{{ saldo_corte_form.justificativa }}</div>
+            {% if saldo_corte_form.errors %}<div class="col-12 text-danger small">{{ saldo_corte_form.errors }}</div>{% endif %}
+            <div class="col-12"><button class="btn btn-outline-dark btn-sm">Registrar saldo de corte</button></div>
+          </form>
+        </div>
+      </div>
+      <div class="card shadow-sm">
+        <div class="card-header bg-white"><strong>Fundo de troco</strong></div>
+        <div class="card-body">
+          <form method="post" class="row g-2">
+            {% csrf_token %}<input type="hidden" name="acao" value="fundo_troco">
+            <div class="col-7">{{ fundo_form.local }}</div><div class="col-5">{{ fundo_form.valor_alvo }}</div>
+            <div class="col-12"><button class="btn btn-outline-primary btn-sm">Salvar valor alvo</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if pode_configurar %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white"><strong>Correcoes retroativas e absorcao</strong></div>
+    <div class="card-body">
+      <div class="alert alert-light border small">Este fluxo documenta movimentos que ja existem. Ele nao cria uma segunda entrada, nao muda contagens e nao altera aberturas automaticamente.</div>
+      <div class="row g-4">
+        <div class="col-lg-6">
+          <h3 class="h6">1. Documentar movimento retroativo existente</h3>
+          <form method="post" class="row g-2">{% csrf_token %}<input type="hidden" name="acao" value="documentar_correcao">
+            <div class="col-12">{{ correcao_form.lancamento }}</div><div class="col-12">{{ correcao_form.justificativa }}</div>
+            {% if correcao_form.errors %}<div class="col-12 text-danger small">{{ correcao_form.errors }}</div>{% endif %}
+            <div class="col-12"><button class="btn btn-outline-warning btn-sm">Gerar previa e documentar</button></div>
+          </form>
+        </div>
+        <div class="col-lg-6">
+          <h3 class="h6">2. Vincular a uma diferenca posterior</h3>
+          <form method="post" class="row g-2">{% csrf_token %}<input type="hidden" name="acao" value="absorver_correcao">
+            <div class="col-6">{{ absorcao_form.correcao }}</div><div class="col-6">{{ absorcao_form.divergencia }}</div>
+            <div class="col-4">{{ absorcao_form.valor }}</div><div class="col-8">{{ absorcao_form.justificativa }}</div>
+            {% if absorcao_form.errors %}<div class="col-12 text-danger small">{{ absorcao_form.errors }}</div>{% endif %}
+            <div class="col-12"><button class="btn btn-outline-primary btn-sm">Registrar absorcao sem movimentar dinheiro</button></div>
+          </form>
+        </div>
+      </div>
+      {% if correcoes_retroativas %}<hr><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Correcao</th><th>Movimento</th><th>Caixa original</th><th>Valor</th><th>Status</th><th>Previa preservada</th></tr></thead><tbody>{% for correcao in correcoes_retroativas %}<tr><td>#{{ correcao.id }}</td><td>{{ correcao.lancamento.descricao }}</td><td>{{ correcao.caixa_origem.data|date:'d/m/Y' }}</td><td>R$ {{ correcao.valor|floatformat:2 }}</td><td>{{ correcao.get_status_display }}</td><td class="small">Contagem R$ {{ correcao.previa_efeitos.contagem_preservada }} · diferenca R$ {{ correcao.previa_efeitos.diferenca_atual }} · {{ correcao.previa_efeitos.posteriores|length }} caixa(s) posterior(es) preservado(s)</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white"><strong>Historico de gaveta dos caixas</strong></div>
+    <div class="card-body"><p class="small text-muted mb-0">Somente dinheiro. Partes pagas por PIX e cartao ficam fora deste extrato.</p></div>
+    {% for dia in dias %}
+      <div class="border-top p-3">
+        <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+          <strong>{{ dia.caixa.data|date:'d/m/Y' }} · Caixa #{{ dia.caixa.id }}</strong>
+          <div class="small">
+            Esperado: <strong>R$ {{ dia.esperado|floatformat:2 }}</strong>
+            {% if dia.contado != None %} · Contado: <strong>R$ {{ dia.contado|floatformat:2 }}</strong> · Diferenca: <strong>R$ {{ dia.diferenca|floatformat:2 }}</strong>{% endif %}
+            {% if dia.versao %} · fechamento v{{ dia.versao }}{% endif %}
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Hora</th><th>Movimento</th><th>Referencia</th><th class="text-end">Entrada</th><th class="text-end">Saida</th><th class="text-end">Saldo</th></tr></thead>
+            <tbody>
+            {% for linha in dia.linhas %}
+              <tr><td>{% if linha.momento %}{{ linha.momento|date:'H:i' }}{% else %}-{% endif %}</td><td>{{ linha.descricao }}</td><td class="text-muted small">{{ linha.referencia }}</td><td class="text-end text-success">{% if linha.entrada %}R$ {{ linha.entrada|floatformat:2 }}{% endif %}</td><td class="text-end text-danger">{% if linha.saida %}R$ {{ linha.saida|floatformat:2 }}{% endif %}</td><td class="text-end fw-semibold">R$ {{ linha.saldo|floatformat:2 }}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% empty %}<div class="card-body text-muted">Nenhum caixa no periodo.</div>{% endfor %}
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white"><strong>Sobras e faltas de caixa</strong></div>
+    <div class="card-body"><p class="small text-muted mb-0">A diferenca fica em investigacao. Aprovar nao cria receita, despesa nem ajuste artificial.</p></div>
+    <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Data</th><th>Esperado</th><th>Contado</th><th>Diferenca</th><th>Status</th><th>Justificativa</th><th></th></tr></thead><tbody>
+    {% for divergencia in divergencias %}
+      <tr>
+        <td>{{ divergencia.caixa.data|date:'d/m/Y' }}</td><td>R$ {{ divergencia.esperado|floatformat:2 }}</td><td>R$ {{ divergencia.contado|floatformat:2 }}</td>
+        <td class="fw-semibold {% if divergencia.diferenca_bruta > 0 %}text-success{% else %}text-danger{% endif %}">R$ {{ divergencia.diferenca_bruta|floatformat:2 }}</td>
+        <td>{{ divergencia.get_status_display }}</td><td class="small">{{ divergencia.justificativa_contagem }}</td>
+        <td>{% if pode_configurar and divergencia.status == 'pendente' %}<form method="post" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="acao" value="aprovar_divergencia"><input type="hidden" name="divergencia_id" value="{{ divergencia.id }}"><input name="observacao_aprovacao" minlength="12" required placeholder="Observacao da analise"><button class="btn btn-outline-primary btn-sm">Aprovar investigacao</button></form>{% endif %}</td>
+      </tr>
+    {% empty %}<tr><td colspan="7" class="text-center text-muted py-4">Nenhuma sobra ou falta registrada nos novos fechamentos.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-white"><strong>Operacoes entre locais</strong></div>
+    <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Data</th><th>Operacao</th><th>Descricao</th><th>Movimento</th><th>Status</th></tr></thead><tbody>
+    {% for operacao in operacoes %}<tr><td>{{ operacao.data_movimento|date:'d/m/Y' }}</td><td>{{ operacao.get_tipo_display }}</td><td>{{ operacao.descricao }}</td><td>{% for partida in operacao.partidas.all %}<div>{{ partida.local.nome }}: {% if partida.tipo == 'entrada' %}+{% else %}-{% endif %} R$ {{ partida.valor|floatformat:2 }}</div>{% empty %}<span class="text-muted">Saldo de corte zero</span>{% endfor %}</td><td>{{ operacao.get_status_display }}</td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted py-4">Nenhuma operacao no periodo.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+</div>
+<style>
+  #content select, #content input, #content textarea { max-width: 100%; }
+  .card input, .card select, .card textarea { display:block; width:100%; padding:.45rem .65rem; border:1px solid #ced4da; border-radius:.5rem; }
+</style>
+{% endblock %}

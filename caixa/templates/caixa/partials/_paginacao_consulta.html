@@ -1,0 +1,4 @@
+<nav aria-label="Paginação da consulta" class="d-flex align-items-center justify-content-between small">
+  <span>{{ pagina.paginator.count }} registo(s) · Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+  <span>{% if nav.anterior %}<a class="btn btn-sm btn-outline-secondary" href="{{ nav.anterior }}">Anterior</a>{% endif %} {% if nav.seguinte %}<a class="btn btn-sm btn-outline-secondary" href="{{ nav.seguinte }}">Seguinte</a>{% endif %}</span>
+</nav>

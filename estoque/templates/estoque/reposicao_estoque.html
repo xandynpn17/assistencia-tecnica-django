@@ -171,6 +171,8 @@
               {% if l.demanda_giro > 0 %}
               <span class="badge badge-warning text-dark">{{ l.demanda_giro }} un. na janela de {{ l.janela_reposicao }} dia(s)</span>
               {% endif %}
+              {% if l.pedidos_abertos > 0 %}<span class="badge badge-info">{{ l.pedidos_abertos }} un. já pedida(s)</span>{% endif %}
+              {% if l.estoque_inconsistente %}<span class="badge badge-danger">Saldo negativo: conferir inventário</span>{% endif %}
             </div>
           </td>
           <td>{{ l.saldo_destino }}</td>

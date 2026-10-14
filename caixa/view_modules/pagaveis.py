@@ -17,9 +17,25 @@ from configuracoes.permissions import (
 from configuracoes.services.tenant_guard import obter_empresa_ativa
 from configuracoes.services.tenant_guard import filtrar_catalogo_empresa
 
-from ..forms import ContaPagarEdicaoForm, ContaPagarForm, PagamentoContaPagarForm
-from ..models import CategoriaFinanceira, ContaPagar, PagamentoContaPagar
+from ..forms import (
+    ContaPagarEdicaoForm,
+    ContaPagarForm,
+    CreditoFornecedorForm,
+    ItemRateioCompraFornecedorForm,
+    PagamentoContaPagarForm,
+    RecebimentoCreditoFornecedorForm,
+)
+from ..models import (
+    CategoriaFinanceira, ContaPagar, CreditoFornecedor, ItemRateioCompraFornecedor,
+    PagamentoContaPagar, RateioCompraFornecedor, RecebimentoCreditoFornecedor,
+)
 from ..services.contas import estornar_pagamento_conta_pagar, processar_pagamento_conta_pagar
+from ..services.creditos_fornecedores import (
+    criar_credito_fornecedor,
+    estornar_recebimento_credito_fornecedor,
+    receber_credito_fornecedor,
+)
+from ..services.rateios_fornecedores import adicionar_item_rateio, confirmar_rateio, remover_item_rateio
 from .common import caixa_atual
 from .helpers import (
     _atualizar_status_contas_pagar_abertas,
@@ -371,11 +387,139 @@ def detalhe_conta_pagar(request, conta_id):
     _garantir_formas_pagamento_padrao(empresa)
     conta = get_object_or_404(ContaPagar.objects.select_related("categoria", "centro_custo"), id=conta_id, empresa=empresa)
     pagamentos = conta.pagamentos.select_related("forma_pagamento", "usuario")
+    creditos = conta.creditos_fornecedor.prefetch_related("recebimentos").all()
+    rateio = RateioCompraFornecedor.objects.filter(conta_pagar=conta).prefetch_related(
+        "itens__ordem_servico", "itens__produto", "itens__centro_custo"
+    ).first()
     hoje = timezone.localdate()
     dias_atraso = max(0, (hoje - conta.vencimento).days) if conta.vencimento else 0
 
     if request.method == "POST":
         action = (request.POST.get("action") or "pagar").strip()
+        if action in {"adicionar_item_rateio", "remover_item_rateio", "confirmar_rateio"}:
+            try:
+                require_sensitive_permission(request.user, "perm_caixa_editar_conta_pagar")
+                if action == "adicionar_item_rateio":
+                    rateio_form = ItemRateioCompraFornecedorForm(request.POST, empresa=empresa)
+                    if not rateio_form.is_valid():
+                        raise ValidationError("Revise o tipo, o destino e o valor do rateio.")
+                    dados = rateio_form.cleaned_data
+                    adicionar_item_rateio(
+                        conta=conta, destino_tipo=dados["destino_tipo"], valor=dados["valor"],
+                        ordem_servico=dados.get("ordem_servico"), produto=dados.get("produto"),
+                        centro_custo=dados.get("centro_custo"), descricao=dados.get("descricao"),
+                        usuario=request.user,
+                    )
+                    messages.success(request, "Destino incluído no rascunho do rateio.")
+                elif action == "remover_item_rateio":
+                    item = get_object_or_404(
+                        ItemRateioCompraFornecedor, pk=request.POST.get("item_id"),
+                        rateio__conta_pagar=conta, rateio__empresa=empresa,
+                    )
+                    remover_item_rateio(item=item, usuario=request.user)
+                    messages.success(request, "Destino removido do rascunho.")
+                else:
+                    rateio_atual = get_object_or_404(RateioCompraFornecedor, conta_pagar=conta, empresa=empresa)
+                    confirmar_rateio(rateio=rateio_atual, usuario=request.user)
+                    _log_financeiro(
+                        "rateio_compra_confirmado", request.user,
+                        valor=conta.valor_total, descricao=f"Rateio conta pagar #{conta.pk}",
+                    )
+                    messages.success(request, "Rateio confirmado e bloqueado para alterações.")
+            except (PermissionDenied, ValidationError) as exc:
+                messages.error(request, str(exc) or "Não foi possível alterar o rateio.")
+            return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
+        if action == "criar_credito_fornecedor":
+            try:
+                require_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar")
+            except PermissionDenied as exc:
+                messages.error(request, str(exc) or "Permissão insuficiente para registrar crédito de fornecedor.")
+                return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
+            credito_form = CreditoFornecedorForm(request.POST, conta=conta)
+            if credito_form.is_valid():
+                dados = credito_form.cleaned_data
+                try:
+                    criar_credito_fornecedor(
+                        conta=conta,
+                        descricao=dados["descricao"],
+                        documento=dados.get("documento_referencia"),
+                        valor=dados["valor_total"],
+                        data_reconhecimento=dados["data_reconhecimento"],
+                        observacao=dados.get("observacao"),
+                        chave=dados["chave_idempotencia"],
+                        usuario=request.user,
+                    )
+                    _log_financeiro(
+                        "credito_fornecedor_registrado", request.user,
+                        valor=dados["valor_total"], descricao=f"Conta pagar #{conta.pk}: {dados['descricao']}",
+                    )
+                    messages.success(request, "Crédito do fornecedor registrado sem criar nova receita.")
+                except ValidationError as exc:
+                    messages.error(request, str(exc))
+            else:
+                messages.error(request, "Revise os dados da devolução do fornecedor.")
+            return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
+        if action == "receber_credito_fornecedor":
+            try:
+                require_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar")
+            except PermissionDenied as exc:
+                messages.error(request, str(exc) or "Permissão insuficiente para receber crédito de fornecedor.")
+                return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
+            recebimento_form = RecebimentoCreditoFornecedorForm(request.POST, empresa=empresa)
+            if recebimento_form.is_valid():
+                dados = recebimento_form.cleaned_data
+                credito = dados["credito"]
+                if credito.conta_pagar_id != conta.pk:
+                    messages.error(request, "O crédito selecionado não pertence a esta compra.")
+                else:
+                    try:
+                        receber_credito_fornecedor(
+                            credito=credito,
+                            valor=dados["valor"],
+                            data_movimento=dados["data_movimento"],
+                            usuario=request.user,
+                            caixa=dados.get("caixa"),
+                            conta_bancaria=dados.get("conta_bancaria"),
+                            referencia=dados.get("referencia"),
+                            observacao=dados.get("observacao"),
+                            chave=dados["chave_idempotencia"],
+                        )
+                        _log_financeiro(
+                            "credito_fornecedor_recebido", request.user,
+                            valor=dados["valor"], descricao=f"Crédito fornecedor #{credito.pk}",
+                        )
+                        messages.success(request, "Devolução recebida no destino escolhido.")
+                    except ValidationError as exc:
+                        messages.error(request, str(exc))
+            else:
+                messages.error(request, "Revise o valor e escolha somente um destino financeiro.")
+            return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
+        if action == "estornar_credito_fornecedor":
+            try:
+                require_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar")
+            except PermissionDenied as exc:
+                messages.error(request, str(exc) or "Permissão insuficiente para estornar crédito de fornecedor.")
+                return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
+            recebimento = get_object_or_404(
+                RecebimentoCreditoFornecedor,
+                pk=request.POST.get("recebimento_id"),
+                credito__conta_pagar=conta,
+                empresa=empresa,
+            )
+            try:
+                estornar_recebimento_credito_fornecedor(
+                    recebimento=recebimento,
+                    usuario=request.user,
+                    motivo=request.POST.get("motivo_estorno"),
+                )
+                _log_financeiro(
+                    "credito_fornecedor_recebimento_estornado", request.user,
+                    valor=recebimento.valor, descricao=f"Crédito fornecedor #{recebimento.credito_id}",
+                )
+                messages.success(request, "Recebimento da devolução estornado com trilha de auditoria.")
+            except ValidationError as exc:
+                messages.error(request, str(exc))
+            return redirect("caixa:detalhe_conta_pagar", conta_id=conta.id)
         if action == "estornar_pagamento":
             try:
                 require_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar")
@@ -462,6 +606,11 @@ def detalhe_conta_pagar(request, conta_id):
             "conta": conta,
             "form": form,
             "pagamentos": pagamentos,
+            "creditos": creditos,
+            "credito_form": CreditoFornecedorForm(conta=conta),
+            "recebimento_credito_form": RecebimentoCreditoFornecedorForm(empresa=empresa),
+            "rateio": rateio,
+            "rateio_form": ItemRateioCompraFornecedorForm(empresa=empresa),
             "dias_atraso": dias_atraso,
             "pode_baixar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_baixar_conta_pagar"),
             "pode_cancelar_conta_pagar": has_sensitive_permission(request.user, "perm_caixa_cancelar_conta_pagar"),

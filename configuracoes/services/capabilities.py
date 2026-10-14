@@ -27,6 +27,10 @@ PRESETS: dict[str, PresetPermissao] = {
             "perm_os_reabrir": True,
             "perm_estoque_cancelar_reserva": True,
             "perm_venda_mostrador_trocar_vendedor": True,
+            "perm_cliente_ver_dados": True,
+            "perm_cliente_ver_historico": True,
+            "perm_cliente_ver_financeiro": True,
+            "perm_cliente_editar": True,
         },
     ),
     "tecnico_campo": PresetPermissao(
@@ -45,6 +49,10 @@ PRESETS: dict[str, PresetPermissao] = {
         nome="Gerente de Filial",
         descricao="Visão ampliada operacional e financeira sem superusuário.",
         valores={
+            "perm_cliente_ver_dados": True,
+            "perm_cliente_ver_historico": True,
+            "perm_cliente_ver_financeiro": True,
+            "perm_cliente_editar": True,
             "acesso_ordens_extra": True,
             "acesso_estoque_extra": True,
             "acesso_caixa_operacional_extra": True,
@@ -85,6 +93,10 @@ CAPABILITY_IMPACTO = {
 }
 
 PERMISSION_LABELS = {
+    "perm_cliente_ver_dados": "Consultar dados pessoais completos do cliente",
+    "perm_cliente_ver_historico": "Consultar histórico operacional do cliente",
+    "perm_cliente_ver_financeiro": "Consultar histórico financeiro do cliente",
+    "perm_cliente_editar": "Editar cadastro do cliente",
     "acesso_ordens_extra": "Acesso extra em Ordens",
     "acesso_estoque_extra": "Acesso extra em Estoque",
     "acesso_caixa_operacional_extra": "Acesso extra em Caixa operacional",
@@ -142,6 +154,10 @@ PERMISSION_LABELS = {
 }
 
 SENSITIVE_PERMISSION_GROUPS = {
+    "clientes": {
+        "label": "Dados e histórico dos clientes",
+        "fields": ("perm_cliente_ver_dados", "perm_cliente_ver_historico", "perm_cliente_ver_financeiro", "perm_cliente_editar"),
+    },
     "financeiro": {
         "label": "Financeiro e fraude",
         "fields": (

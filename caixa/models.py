@@ -69,6 +69,367 @@ class Caixa(models.Model):
         return f"Caixa {self.data} - {'Aberto' if self.aberto else 'Fechado'}"
 
 
+class FechamentoCaixa(models.Model):
+    """Snapshot imutavel de cada fechamento ou novo fechamento da sessao."""
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="fechamentos_caixa_versionados",
+    )
+    caixa = models.ForeignKey(Caixa, on_delete=models.PROTECT, related_name="fechamentos_versionados")
+    versao = models.PositiveIntegerField()
+    saldo_contabil = models.DecimalField(max_digits=14, decimal_places=2)
+    dinheiro_esperado = models.DecimalField(max_digits=14, decimal_places=2)
+    dinheiro_contado = models.DecimalField(max_digits=14, decimal_places=2)
+    diferenca = models.DecimalField(max_digits=14, decimal_places=2)
+    justificativa = models.TextField(blank=True)
+    conferencia_formas_pagamento = models.JSONField(default=list, blank=True)
+    fechado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="fechamentos_caixa_realizados",
+    )
+    fechado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fechado_em", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["caixa", "versao"], name="fechamento_caixa_versao_unica"),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("Fechamentos versionados sao imutaveis; reabra e gere uma nova versao.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Fechamentos versionados nao podem ser excluidos.")
+
+
+class EventoSessaoCaixa(models.Model):
+    TIPOS = [
+        ("abertura", "Abertura"),
+        ("fechamento", "Fechamento"),
+        ("reabertura", "Reabertura"),
+    ]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="eventos_sessao_caixa",
+    )
+    caixa = models.ForeignKey(Caixa, on_delete=models.PROTECT, related_name="eventos_sessao")
+    tipo = models.CharField(max_length=12, choices=TIPOS, db_index=True)
+    fechamento = models.ForeignKey(
+        FechamentoCaixa,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="eventos_sessao",
+    )
+    motivo = models.TextField(blank=True)
+    saldo_informado = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    registrado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-registrado_em", "-id"]
+        indexes = [models.Index(fields=["empresa", "caixa", "tipo"], name="cx_evento_sessao_idx")]
+
+
+class DivergenciaCaixa(models.Model):
+    STATUS = [
+        ("pendente", "Pendente de aprovacao"),
+        ("aprovada", "Aprovada para investigacao"),
+        ("identificada", "Origem identificada"),
+        ("resolvida", "Resolvida"),
+        ("estornada", "Estornada"),
+    ]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="divergencias_caixa",
+    )
+    caixa = models.ForeignKey(Caixa, on_delete=models.PROTECT, related_name="divergencias_auditadas")
+    fechamento = models.OneToOneField(
+        FechamentoCaixa,
+        on_delete=models.PROTECT,
+        related_name="divergencia",
+    )
+    esperado = models.DecimalField(max_digits=14, decimal_places=2)
+    contado = models.DecimalField(max_digits=14, decimal_places=2)
+    diferenca_bruta = models.DecimalField(max_digits=14, decimal_places=2)
+    valor_explicado = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    status = models.CharField(max_length=14, choices=STATUS, default="pendente", db_index=True)
+    justificativa_contagem = models.TextField()
+    origem_identificada = models.CharField(max_length=255, blank=True)
+    observacao_analise = models.TextField(blank=True)
+    criada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="divergencias_caixa_criadas",
+    )
+    criada_em = models.DateTimeField(auto_now_add=True)
+    aprovada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="divergencias_caixa_aprovadas",
+    )
+    aprovada_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-caixa__data", "-id"]
+
+    @property
+    def valor_pendente(self):
+        return max(Decimal("0.00"), abs(Decimal(self.diferenca_bruta)) - Decimal(self.valor_explicado or 0))
+
+
+class CorrecaoRetroativaCaixa(models.Model):
+    STATUS = [
+        ("documentada", "Movimento existente documentado"),
+        ("parcial", "Parcialmente absorvida"),
+        ("absorvida", "Absorvida"),
+        ("cancelada", "Cancelada"),
+    ]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="correcoes_retroativas_caixa"
+    )
+    lancamento = models.OneToOneField(
+        "LancamentoCaixa", on_delete=models.PROTECT, related_name="correcao_retroativa"
+    )
+    caixa_origem = models.ForeignKey(Caixa, on_delete=models.PROTECT, related_name="correcoes_retroativas")
+    data_efetiva = models.DateField(db_index=True)
+    valor = models.DecimalField(max_digits=14, decimal_places=2)
+    tipo = models.CharField(max_length=8, choices=[("entrada", "Entrada"), ("saida", "Saida")])
+    justificativa = models.TextField()
+    previa_efeitos = models.JSONField(default=dict)
+    status = models.CharField(max_length=12, choices=STATUS, default="documentada", db_index=True)
+    chave_idempotencia = models.CharField(max_length=180, unique=True)
+    criada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="correcoes_retroativas_criadas"
+    )
+    criada_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-data_efetiva", "-id"]
+
+
+class AbsorcaoCorrecaoCaixa(models.Model):
+    correcao = models.ForeignKey(
+        CorrecaoRetroativaCaixa, on_delete=models.PROTECT, related_name="absorcoes"
+    )
+    divergencia = models.ForeignKey(
+        DivergenciaCaixa, on_delete=models.PROTECT, related_name="absorcoes_correcao"
+    )
+    valor = models.DecimalField(max_digits=14, decimal_places=2)
+    justificativa = models.TextField()
+    aprovada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="absorcoes_correcao_aprovadas"
+    )
+    aprovada_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-aprovada_em", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["correcao", "divergencia"], name="absorcao_correcao_divergencia_unica"),
+            models.CheckConstraint(condition=Q(valor__gt=0), name="absorcao_correcao_valor_positivo"),
+        ]
+
+
+class EfeitoCorrecaoCaixa(models.Model):
+    """Impacto auditado de uma correcao sobre os campos legados de caixa fechado."""
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="efeitos_correcao_caixa",
+    )
+    correcao = models.ForeignKey(
+        "CorrecaoLancamentoCaixa",
+        on_delete=models.PROTECT,
+        related_name="efeitos_caixa",
+    )
+    caixa = models.ForeignKey(Caixa, on_delete=models.PROTECT, related_name="efeitos_correcao")
+    fechamento_referencia = models.ForeignKey(
+        FechamentoCaixa,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="efeitos_correcao",
+    )
+    delta = models.DecimalField(max_digits=14, decimal_places=2)
+    saldo_final_anterior = models.DecimalField(max_digits=14, decimal_places=2)
+    saldo_final_resultante = models.DecimalField(max_digits=14, decimal_places=2)
+    diferenca_anterior = models.DecimalField(max_digits=14, decimal_places=2)
+    diferenca_resultante = models.DecimalField(max_digits=14, decimal_places=2)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["correcao", "caixa"], name="efeito_correcao_caixa_unico"),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("Efeitos de correcao sao imutaveis.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Efeitos de correcao nao podem ser excluidos.")
+
+
+class LocalDinheiroFisico(models.Model):
+    TIPOS = [("gaveta", "Gaveta"), ("cofre", "Cofre"), ("outro", "Outro local")]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        related_name="locais_dinheiro_fisico",
+    )
+    nome = models.CharField(max_length=100)
+    codigo = models.SlugField(max_length=60)
+    tipo = models.CharField(max_length=12, choices=TIPOS)
+    ativo = models.BooleanField(default=True, db_index=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["tipo", "nome", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["empresa", "codigo"], name="local_dinheiro_empresa_codigo_unico"),
+        ]
+
+    def __str__(self):
+        return self.nome
+
+
+class OperacaoDinheiroFisico(models.Model):
+    TIPOS = [
+        ("saldo_corte", "Saldo inicial de corte"),
+        ("sangria", "Sangria para cofre"),
+        ("reforco", "Reforco de troco"),
+        ("transferencia", "Transferencia entre locais"),
+        ("ajuste", "Ajuste aprovado"),
+    ]
+    STATUS = [("confirmada", "Confirmada"), ("estornada", "Estornada")]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        related_name="operacoes_dinheiro_fisico",
+    )
+    tipo = models.CharField(max_length=16, choices=TIPOS, db_index=True)
+    data_movimento = models.DateField(db_index=True)
+    descricao = models.CharField(max_length=255)
+    justificativa = models.TextField(blank=True)
+    status = models.CharField(max_length=12, choices=STATUS, default="confirmada", db_index=True)
+    chave_idempotencia = models.CharField(max_length=180, unique=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="operacoes_dinheiro_fisico_registradas",
+    )
+    registrado_em = models.DateTimeField(auto_now_add=True)
+    estornada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="operacoes_dinheiro_fisico_estornadas",
+    )
+    estornada_em = models.DateTimeField(null=True, blank=True)
+    motivo_estorno = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-data_movimento", "-id"]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            campos_estorno = {"status", "estornada_por", "estornada_em", "motivo_estorno"}
+            update_fields = set(kwargs.get("update_fields") or [])
+            if not update_fields or not update_fields.issubset(campos_estorno):
+                raise ValidationError("Operacoes fisicas confirmadas sao imutaveis; use estorno.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Operacoes fisicas nao podem ser excluidas.")
+
+
+class PartidaDinheiroFisico(models.Model):
+    TIPOS = [("entrada", "Entrada"), ("saida", "Saida")]
+
+    operacao = models.ForeignKey(
+        OperacaoDinheiroFisico,
+        on_delete=models.PROTECT,
+        related_name="partidas",
+    )
+    local = models.ForeignKey(
+        LocalDinheiroFisico,
+        on_delete=models.PROTECT,
+        related_name="partidas",
+    )
+    tipo = models.CharField(max_length=8, choices=TIPOS)
+    valor = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["operacao_id", "id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(valor__gt=0), name="partida_dinheiro_valor_positivo"),
+            models.UniqueConstraint(fields=["operacao", "local"], name="partida_dinheiro_operacao_local_unica"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.operacao_id and self.local_id and self.operacao.empresa_id != self.local.empresa_id:
+            raise ValidationError("A operacao e o local fisico pertencem a empresas diferentes.")
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("Partidas fisicas sao imutaveis.")
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Partidas fisicas nao podem ser excluidas.")
+
+
+class ConfiguracaoFundoTroco(models.Model):
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa",
+        on_delete=models.PROTECT,
+        related_name="configuracoes_fundo_troco",
+    )
+    local = models.OneToOneField(
+        LocalDinheiroFisico,
+        on_delete=models.PROTECT,
+        related_name="configuracao_fundo_troco",
+    )
+    valor_alvo = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    atualizado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+        if self.local_id and self.empresa_id != self.local.empresa_id:
+            raise ValidationError("O fundo de troco e o local pertencem a empresas diferentes.")
+        if Decimal(self.valor_alvo or 0) < Decimal("0.00"):
+            raise ValidationError("O fundo de troco nao pode ser negativo.")
+
+
 class Pagamento(models.Model):
     empresa = models.ForeignKey(
         "configuracoes.Empresa",
@@ -81,6 +442,7 @@ class Pagamento(models.Model):
     ordem_servico = models.ForeignKey("ordens.OrdemServico", on_delete=models.SET_NULL, null=True, blank=True)
     stock_item = models.ForeignKey("estoque.Produto", on_delete=models.SET_NULL, null=True, blank=True)
     cliente_nome = models.CharField(max_length=120, blank=True)
+    cliente = models.ForeignKey("clientes.Cliente", on_delete=models.SET_NULL, null=True, blank=True, related_name="pagamentos_identificados")
     cliente_documento = models.CharField(max_length=30, blank=True)
     cliente_telefone = models.CharField(max_length=30, blank=True)
     formas_pagamento_compostas = models.JSONField(default=list, blank=True)
@@ -199,6 +561,16 @@ class Pagamento(models.Model):
                 or getattr(self.ordem_servico, "empresa_id", None)
                 or getattr(self.caixa, "empresa_id", None)
             )
+        if self.ordem_servico_id and not self.cliente_id and self.ordem_servico.cliente.empresa_id == self.empresa_id:
+            self.cliente_id = self.ordem_servico.cliente_id
+        if self.cliente_id and self.cliente.empresa_id != self.empresa_id:
+            raise ValidationError("O cliente do pagamento deve pertencer à mesma empresa.")
+        if self.ordem_servico_id and self.cliente_id and self.cliente_id != self.ordem_servico.cliente_id:
+            raise ValidationError("O cliente informado não corresponde ao cliente da OS.")
+        if self.cliente_id and criando:
+            self.cliente_nome = self.cliente_nome or self.cliente.nome
+            self.cliente_documento = self.cliente_documento or self.cliente.documento
+            self.cliente_telefone = self.cliente_telefone or self.cliente.telefone
         super().save(*args, **kwargs)
         if not self.numero_talao and self.pk:
             self.numero_talao = self._gerar_numero_talao()
@@ -706,6 +1078,7 @@ class LancamentoCaixa(models.Model):
         ("operacional", "Operacional"),
         ("transferencia", "Transferência de tesouraria"),
         ("capital", "Capital e aportes"),
+        ("devolucao_fornecedor", "Devolução de fornecedor"),
     ]
     empresa = models.ForeignKey(
         "configuracoes.Empresa",
@@ -816,6 +1189,7 @@ class MovimentoFinanceiro(models.Model):
         ("operacional", "Operacional"),
         ("transferencia", "Transferência de tesouraria"),
         ("capital", "Capital e aportes"),
+        ("financeiro", "Resultado financeiro"),
     ]
     STATUS = [
         ("confirmado", "Confirmado"),
@@ -1246,9 +1620,12 @@ class MovimentoSocio(models.Model):
         ("amortizacao_emprestimo", "Amortização de empréstimo de sócio"),
         ("retirada_capital", "Retirada / redução de capital"),
         ("juros_emprestimo", "Juros de empréstimo de sócio"),
+        ("distribuicao_lucros", "Distribuicao de lucros (validacao contabil)"),
+        ("adiantamento_socio", "Adiantamento ao socio"),
+        ("retirada_classificar", "Retirada aguardando classificacao contabil"),
     ]
     empresa = models.ForeignKey("configuracoes.Empresa", on_delete=models.PROTECT, related_name="movimentos_socios")
-    aporte_origem = models.ForeignKey(AporteCapital, on_delete=models.PROTECT, related_name="movimentos_saida")
+    aporte_origem = models.ForeignKey(AporteCapital, on_delete=models.PROTECT, null=True, blank=True, related_name="movimentos_saida")
     tipo = models.CharField(max_length=28, choices=TIPOS)
     descricao = models.CharField(max_length=255)
     valor = models.DecimalField(max_digits=14, decimal_places=2)
@@ -1275,10 +1652,330 @@ class MovimentoSocio(models.Model):
 
     def clean(self):
         super().clean()
+        tipos_com_aporte = {"devolucao_afac", "amortizacao_emprestimo", "retirada_capital", "juros_emprestimo"}
+        if self.tipo in tipos_com_aporte and not self.aporte_origem_id:
+            raise ValidationError("Este tipo exige o aporte ou emprestimo de origem.")
         if self.aporte_origem_id and self.aporte_origem.empresa_id != self.empresa_id:
             raise ValidationError("O aporte de origem pertence a outra empresa.")
         if bool(self.conta_bancaria_id) == bool(self.caixa_id):
             raise ValidationError("Informe exatamente uma origem financeira.")
+
+
+class PessoaFinanceira(models.Model):
+    TIPOS = [
+        ("socio", "Sócio formal"),
+        ("ex_socio", "Ex-sócio"),
+        ("colaborador", "Colaborador"),
+        ("relacionada", "Pessoa relacionada"),
+        ("terceiro", "Terceiro"),
+    ]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="pessoas_financeiras"
+    )
+    nome = models.CharField(max_length=160)
+    documento = models.CharField(max_length=20, blank=True)
+    tipo = models.CharField(max_length=16, choices=TIPOS)
+    inicio_vinculo = models.DateField(null=True, blank=True)
+    fim_vinculo = models.DateField(null=True, blank=True)
+    participacao_percentual = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    ativa = models.BooleanField(default=True)
+    observacoes = models.TextField(blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["nome", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "documento"],
+                condition=~Q(documento=""),
+                name="cx_pessoa_fin_empresa_documento_unico",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.fim_vinculo and self.inicio_vinculo and self.fim_vinculo < self.inicio_vinculo:
+            raise ValidationError("A data final do vínculo não pode ser anterior à data inicial.")
+        if self.participacao_percentual is not None and not Decimal("0") <= self.participacao_percentual <= Decimal("100"):
+            raise ValidationError("A participação deve ficar entre 0% e 100%.")
+
+    def __str__(self):
+        return f"{self.nome} · {self.get_tipo_display()}"
+
+    def socio_formal_na_data(self, data_referencia):
+        if self.tipo != "socio" or not data_referencia:
+            return False
+        if self.inicio_vinculo and data_referencia < self.inicio_vinculo:
+            return False
+        if self.fim_vinculo and data_referencia > self.fim_vinculo:
+            return False
+        return True
+
+
+class MovimentoPessoaFinanceira(models.Model):
+    DIRECOES = [
+        ("empresa_deve", "Empresa deve à pessoa"),
+        ("pessoa_deve", "Pessoa deve à empresa"),
+    ]
+    NATUREZAS = [
+        ("retirada_classificar", "Retirada aguardando classificação"),
+        ("pro_labore", "Pró-labore"),
+        ("adiantamento_pro_labore", "Adiantamento de pró-labore"),
+        ("distribuicao_lucros", "Distribuição de lucros"),
+        ("adiantamento_distribuicao", "Adiantamento de distribuição"),
+        ("aporte_capital", "Aporte de capital"),
+        ("afac", "AFAC"),
+        ("emprestimo_socio", "Empréstimo de sócio à empresa"),
+        ("amortizacao", "Devolução ou amortização"),
+        ("reembolso", "Reembolso de despesa comprovada"),
+        ("despesa_pessoal", "Despesa pessoal paga pela empresa"),
+        ("remuneracao_pendente", "Remuneração pendente de regularização"),
+        ("adiantamento_colaborador", "Adiantamento a colaborador"),
+        ("emprestimo_terceiro", "Empréstimo de terceiro"),
+        ("devolucao_emprestimo", "Devolução de empréstimo"),
+        ("valor_pessoa", "Valor a receber da pessoa"),
+        ("compensacao", "Compensação de conta-corrente"),
+        ("outro_pendente", "Outra natureza pendente"),
+    ]
+    STATUS = [
+        ("pendente", "Pendente de classificação"),
+        ("classificado", "Classificado"),
+        ("aprovado", "Aprovado"),
+        ("compensado", "Compensado"),
+        ("estornado", "Estornado"),
+    ]
+    EXCLUSIVAS_SOCIO = {
+        "retirada_classificar", "pro_labore", "adiantamento_pro_labore", "distribuicao_lucros",
+        "adiantamento_distribuicao", "aporte_capital", "afac", "emprestimo_socio",
+    }
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="movimentos_pessoas_financeiras"
+    )
+    pessoa = models.ForeignKey(PessoaFinanceira, on_delete=models.PROTECT, related_name="movimentos")
+    direcao = models.CharField(max_length=14, choices=DIRECOES)
+    natureza_provisoria = models.CharField(max_length=32, choices=NATUREZAS)
+    valor = models.DecimalField(max_digits=14, decimal_places=2)
+    data_competencia = models.DateField(db_index=True)
+    data_movimento = models.DateField(db_index=True)
+    descricao = models.CharField(max_length=255)
+    documento_referencia = models.CharField(max_length=100, blank=True)
+    comprovante = models.FileField(upload_to="caixa/pessoas/%Y/%m/", null=True, blank=True)
+    movimento_bancario = models.ForeignKey(
+        MovimentoBancario, on_delete=models.PROTECT, null=True, blank=True, related_name="movimentos_pessoa"
+    )
+    lancamento_caixa = models.ForeignKey(
+        LancamentoCaixa, on_delete=models.PROTECT, null=True, blank=True, related_name="movimentos_pessoa"
+    )
+    status = models.CharField(max_length=14, choices=STATUS, default="pendente", db_index=True)
+    chave_idempotencia = models.CharField(max_length=180, unique=True)
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="movimentos_pessoas_registrados",
+    )
+    registrado_em = models.DateTimeField(auto_now_add=True)
+    metadados = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-data_movimento", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(valor__gt=0), name="cx_mov_pessoa_valor_positivo"),
+        ]
+        indexes = [
+            models.Index(fields=["empresa", "pessoa", "data_competencia"], name="cx_mov_pessoa_comp_idx"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.pessoa_id and self.pessoa.empresa_id != self.empresa_id:
+            raise ValidationError("A pessoa financeira pertence a outra empresa.")
+        if (
+            self.natureza_provisoria in self.EXCLUSIVAS_SOCIO
+            and self.pessoa_id
+            and not self.pessoa.socio_formal_na_data(self.data_movimento)
+        ):
+            raise ValidationError("Esta natureza é exclusiva de sócio formal com vínculo ativo.")
+        if self.natureza_provisoria == "aporte_capital" and self.direcao != "empresa_deve":
+            raise ValidationError("Aporte representa entrada de recurso na empresa, nunca uma saída.")
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("Movimentos da conta-corrente são imutáveis; registre classificação ou compensação.")
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Movimentos da conta-corrente não podem ser excluídos.")
+
+
+class ClassificacaoPessoaFinanceira(models.Model):
+    STATUS = [("proposta", "Proposta"), ("aprovada", "Aprovada"), ("cancelada", "Cancelada")]
+    movimento = models.ForeignKey(
+        MovimentoPessoaFinanceira, on_delete=models.PROTECT, related_name="classificacoes"
+    )
+    natureza_definitiva = models.CharField(max_length=32, choices=MovimentoPessoaFinanceira.NATUREZAS)
+    valor = models.DecimalField(max_digits=14, decimal_places=2)
+    competencia = models.DateField(db_index=True)
+    justificativa = models.TextField()
+    documento = models.FileField(upload_to="caixa/pessoas/classificacoes/%Y/%m/", null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS, default="proposta", db_index=True)
+    chave_idempotencia = models.CharField(max_length=180, unique=True)
+    proposto_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="classificacoes_pessoas_propostas",
+    )
+    aprovado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="classificacoes_pessoas_aprovadas",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    aprovado_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-competencia", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(valor__gt=0), name="cx_class_pessoa_valor_positivo"),
+        ]
+
+
+class ContaInvestimento(models.Model):
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="contas_investimento"
+    )
+    conta_bancaria = models.ForeignKey(
+        ContaBancaria, on_delete=models.PROTECT, related_name="investimentos"
+    )
+    nome = models.CharField(max_length=120)
+    instituicao = models.CharField(max_length=120)
+    produto = models.CharField(max_length=80, blank=True)
+    liquidez = models.CharField(max_length=80, blank=True)
+    vencimento = models.DateField(null=True, blank=True)
+    ativa = models.BooleanField(default=True)
+    criada_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["nome", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["empresa", "nome"], name="cx_invest_empresa_nome_unico"),
+        ]
+
+    @property
+    def saldo_principal(self):
+        aplicacoes = self.movimentos.filter(tipo="aplicacao").aggregate(total=models.Sum("valor"))["total"] or Decimal("0")
+        resgates = self.movimentos.filter(tipo="resgate_principal").aggregate(total=models.Sum("valor"))["total"] or Decimal("0")
+        return aplicacoes - resgates
+
+    @property
+    def rendimento_liquido(self):
+        ganhos = self.movimentos.filter(tipo="rendimento").aggregate(total=models.Sum("valor"))["total"] or Decimal("0")
+        custos = self.movimentos.filter(tipo__in=["ir", "iof", "tarifa"]).aggregate(total=models.Sum("valor"))["total"] or Decimal("0")
+        return ganhos - custos
+
+    def clean(self):
+        super().clean()
+        if self.conta_bancaria_id and self.conta_bancaria.empresa_id != self.empresa_id:
+            raise ValidationError("A conta bancária pertence a outra empresa.")
+
+    def __str__(self):
+        return f"{self.nome} · {self.instituicao}"
+
+
+class MovimentoInvestimento(models.Model):
+    TIPOS = [
+        ("aplicacao", "Aplicação"),
+        ("resgate_principal", "Resgate do principal"),
+        ("rendimento", "Rendimento"),
+        ("ir", "IR"),
+        ("iof", "IOF"),
+        ("tarifa", "Tarifa"),
+    ]
+    conta = models.ForeignKey(ContaInvestimento, on_delete=models.PROTECT, related_name="movimentos")
+    tipo = models.CharField(max_length=20, choices=TIPOS)
+    valor = models.DecimalField(max_digits=14, decimal_places=2)
+    data_competencia = models.DateField(db_index=True)
+    data_movimento = models.DateField(db_index=True)
+    descricao = models.CharField(max_length=255)
+    movimento_bancario = models.ForeignKey(
+        MovimentoBancario, on_delete=models.PROTECT, null=True, blank=True, related_name="movimentos_investimento"
+    )
+    movimento_financeiro = models.ForeignKey(
+        MovimentoFinanceiro, on_delete=models.PROTECT, null=True, blank=True, related_name="movimentos_investimento"
+    )
+    chave_idempotencia = models.CharField(max_length=180, unique=True)
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    registrado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-data_movimento", "-id"]
+        constraints = [models.CheckConstraint(condition=Q(valor__gt=0), name="cx_mov_invest_valor_positivo")]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("Movimentos de investimento são imutáveis.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Movimentos de investimento não podem ser excluídos.")
+
+
+class EstornoFinanceiroVinculado(models.Model):
+    STATUS = [("pendente", "Aguardando identificação"), ("vinculado", "Vinculado"), ("cancelado", "Cancelado")]
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="estornos_financeiros_vinculados"
+    )
+    movimento_original = models.ForeignKey(
+        MovimentoFinanceiro, on_delete=models.PROTECT, null=True, blank=True, related_name="estornos_parciais"
+    )
+    movimento_contrapartida = models.OneToOneField(
+        MovimentoFinanceiro, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="estorno_vinculado_origem",
+    )
+    valor = models.DecimalField(max_digits=14, decimal_places=2)
+    data_movimento = models.DateField(db_index=True)
+    motivo = models.TextField()
+    referencia_externa = models.CharField(max_length=120, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS, default="pendente", db_index=True)
+    chave_idempotencia = models.CharField(max_length=180, unique=True)
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    registrado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-data_movimento", "-id"]
+        constraints = [models.CheckConstraint(condition=Q(valor__gt=0), name="cx_estorno_vinc_valor_positivo")]
+
+
+class TransacaoAdquirente(models.Model):
+    STATUS = [("a_receber", "A receber"), ("liquidada", "Liquidada"), ("chargeback", "Chargeback")]
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="transacoes_adquirentes"
+    )
+    conta_liquidacao = models.ForeignKey(
+        ContaBancaria, on_delete=models.PROTECT, related_name="transacoes_adquirente"
+    )
+    adquirente = models.CharField(max_length=80, default="SumUp")
+    identificador_externo = models.CharField(max_length=180)
+    data_venda = models.DateField(db_index=True)
+    modalidade = models.CharField(max_length=80, blank=True)
+    bandeira = models.CharField(max_length=40, blank=True)
+    parcelas = models.PositiveSmallIntegerField(default=1)
+    valor_bruto = models.DecimalField(max_digits=14, decimal_places=2)
+    taxa = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    deducoes = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_liquido = models.DecimalField(max_digits=14, decimal_places=2)
+    status = models.CharField(max_length=12, choices=STATUS, default="a_receber", db_index=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-data_venda", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["conta_liquidacao", "identificador_externo"], name="cx_adquirente_identificador_unico"
+            ),
+            models.CheckConstraint(condition=Q(valor_bruto__gt=0), name="cx_adquirente_bruto_positivo"),
+            models.CheckConstraint(condition=Q(valor_liquido__gte=0), name="cx_adquirente_liquido_nao_negativo"),
+        ]
 
 
 class ImportacaoExtratoBancario(models.Model):
@@ -2134,6 +2831,231 @@ class PagamentoContaPagar(models.Model):
 
     def __str__(self):
         return f"Pgto conta pagar #{self.conta_id} - {self.valor}"
+
+
+class CreditoFornecedor(models.Model):
+    STATUS = [
+        ("aberto", "Aguardando recebimento"),
+        ("parcial", "Recebido parcialmente"),
+        ("recebido", "Recebido"),
+        ("cancelado", "Cancelado"),
+    ]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="creditos_fornecedores"
+    )
+    conta_pagar = models.ForeignKey(
+        ContaPagar, on_delete=models.PROTECT, related_name="creditos_fornecedor"
+    )
+    descricao = models.CharField(max_length=220)
+    documento_referencia = models.CharField(max_length=100, blank=True)
+    valor_total = models.DecimalField(max_digits=12, decimal_places=2)
+    valor_recebido = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    data_reconhecimento = models.DateField(default=timezone.localdate, db_index=True)
+    status = models.CharField(max_length=12, choices=STATUS, default="aberto", db_index=True)
+    observacao = models.TextField(blank=True)
+    chave_idempotencia = models.CharField(max_length=160, unique=True, null=True, blank=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="creditos_fornecedores_criados",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-data_reconhecimento", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(valor_total__gt=0), name="credito_fornecedor_valor_positivo"),
+            models.CheckConstraint(condition=Q(valor_recebido__gte=0), name="credito_fornecedor_recebido_nao_negativo"),
+        ]
+
+    @property
+    def valor_aberto(self):
+        return max(Decimal("0.00"), Decimal(self.valor_total or 0) - Decimal(self.valor_recebido or 0))
+
+    def atualizar_status_automatico(self):
+        if self.status == "cancelado":
+            return
+        if self.valor_aberto <= Decimal("0.00"):
+            self.status = "recebido"
+        elif Decimal(self.valor_recebido or 0) > 0:
+            self.status = "parcial"
+        else:
+            self.status = "aberto"
+
+    def clean(self):
+        super().clean()
+        if self.conta_pagar_id and self.empresa_id != self.conta_pagar.empresa_id:
+            raise ValidationError("O crédito e a conta a pagar pertencem a empresas diferentes.")
+        if Decimal(self.valor_total or 0) <= 0:
+            raise ValidationError({"valor_total": "O valor do crédito deve ser positivo."})
+        if Decimal(self.valor_recebido or 0) > Decimal(self.valor_total or 0):
+            raise ValidationError({"valor_recebido": "O valor recebido não pode superar o crédito."})
+
+    def __str__(self):
+        return f"Crédito de fornecedor #{self.pk or '-'} - {self.descricao}"
+
+
+class RecebimentoCreditoFornecedor(models.Model):
+    STATUS = [("confirmado", "Confirmado"), ("estornado", "Estornado")]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="recebimentos_creditos_fornecedores"
+    )
+    credito = models.ForeignKey(
+        CreditoFornecedor, on_delete=models.PROTECT, related_name="recebimentos"
+    )
+    caixa = models.ForeignKey(
+        Caixa, on_delete=models.PROTECT, null=True, blank=True, related_name="recebimentos_creditos_fornecedores"
+    )
+    conta_bancaria = models.ForeignKey(
+        "ContaBancaria", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="recebimentos_creditos_fornecedores",
+    )
+    lancamento_caixa = models.OneToOneField(
+        "LancamentoCaixa", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="recebimento_credito_fornecedor",
+    )
+    movimento_bancario = models.OneToOneField(
+        "MovimentoBancario", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="recebimento_credito_fornecedor",
+    )
+    valor = models.DecimalField(max_digits=12, decimal_places=2)
+    data_movimento = models.DateField(default=timezone.localdate, db_index=True)
+    referencia = models.CharField(max_length=100, blank=True)
+    observacao = models.TextField(blank=True)
+    status = models.CharField(max_length=12, choices=STATUS, default="confirmado", db_index=True)
+    chave_idempotencia = models.CharField(max_length=160, unique=True)
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="recebimentos_creditos_fornecedores_registrados",
+    )
+    registrado_em = models.DateTimeField(auto_now_add=True)
+    estornado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="recebimentos_creditos_fornecedores_estornados",
+    )
+    estornado_em = models.DateTimeField(null=True, blank=True)
+    motivo_estorno = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-data_movimento", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(valor__gt=0), name="receb_credito_fornecedor_valor_positivo"),
+            models.CheckConstraint(
+                condition=(
+                    Q(caixa__isnull=False, conta_bancaria__isnull=True)
+                    | Q(caixa__isnull=True, conta_bancaria__isnull=False)
+                ),
+                name="receb_credito_fornecedor_uma_origem",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.credito_id and self.empresa_id != self.credito.empresa_id:
+            raise ValidationError("O recebimento e o crédito pertencem a empresas diferentes.")
+        if bool(self.caixa_id) == bool(self.conta_bancaria_id):
+            raise ValidationError("Informe exatamente um destino: caixa físico ou conta bancária.")
+        destino = self.caixa or self.conta_bancaria
+        if destino and self.empresa_id != destino.empresa_id:
+            raise ValidationError("O destino financeiro pertence a outra empresa.")
+        if self.caixa_id and (not self.caixa.aberto or self.caixa.data != self.data_movimento):
+            raise ValidationError("O recebimento em dinheiro exige caixa aberto na mesma data.")
+
+    def __str__(self):
+        return f"Recebimento de crédito #{self.credito_id} - {self.valor}"
+
+
+class RateioCompraFornecedor(models.Model):
+    STATUS = [("rascunho", "Rascunho"), ("confirmado", "Confirmado"), ("cancelado", "Cancelado")]
+
+    empresa = models.ForeignKey(
+        "configuracoes.Empresa", on_delete=models.PROTECT, related_name="rateios_compras_fornecedores"
+    )
+    conta_pagar = models.OneToOneField(
+        ContaPagar, on_delete=models.PROTECT, related_name="rateio_compra"
+    )
+    status = models.CharField(max_length=12, choices=STATUS, default="rascunho", db_index=True)
+    observacao = models.TextField(blank=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="rateios_compras_criados",
+    )
+    confirmado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="rateios_compras_confirmados",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    confirmado_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+
+    @property
+    def total_rateado(self):
+        return self.itens.aggregate(total=models.Sum("valor"))["total"] or Decimal("0.00")
+
+    @property
+    def diferenca(self):
+        return Decimal(self.conta_pagar.valor_total or 0) - Decimal(self.total_rateado or 0)
+
+    def clean(self):
+        super().clean()
+        if self.conta_pagar_id and self.empresa_id != self.conta_pagar.empresa_id:
+            raise ValidationError("O rateio e a compra pertencem a empresas diferentes.")
+
+    def __str__(self):
+        return f"Rateio da conta #{self.conta_pagar_id}"
+
+
+class ItemRateioCompraFornecedor(models.Model):
+    DESTINOS = [("os", "Ordem de serviço"), ("estoque", "Estoque"), ("centro_custo", "Centro de custo")]
+
+    rateio = models.ForeignKey(RateioCompraFornecedor, on_delete=models.CASCADE, related_name="itens")
+    destino_tipo = models.CharField(max_length=16, choices=DESTINOS)
+    ordem_servico = models.ForeignKey(
+        "ordens.OrdemServico", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="rateios_compras_fornecedores",
+    )
+    produto = models.ForeignKey(
+        "estoque.Produto", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="rateios_compras_fornecedores",
+    )
+    centro_custo = models.ForeignKey(
+        CentroCusto, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="rateios_compras_fornecedores",
+    )
+    descricao = models.CharField(max_length=220, blank=True)
+    valor = models.DecimalField(max_digits=12, decimal_places=2)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="itens_rateios_compras_criados",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(valor__gt=0), name="item_rateio_compra_valor_positivo"),
+        ]
+
+    def clean(self):
+        super().clean()
+        destinos = {
+            "os": self.ordem_servico_id,
+            "estoque": self.produto_id,
+            "centro_custo": self.centro_custo_id,
+        }
+        if not destinos.get(self.destino_tipo) or sum(bool(valor) for valor in destinos.values()) != 1:
+            raise ValidationError("Informe exatamente o destino correspondente ao tipo escolhido.")
+        empresa_id = self.rateio.empresa_id if self.rateio_id else None
+        alvo = self.ordem_servico or self.produto or self.centro_custo
+        if alvo and empresa_id and getattr(alvo, "empresa_id", None) not in {None, empresa_id}:
+            raise ValidationError("O destino do rateio pertence a outra empresa.")
+
+    def __str__(self):
+        return f"{self.get_destino_tipo_display()} - {self.valor}"
 
 
 class PlanoContasVersao(models.Model):

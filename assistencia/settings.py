@@ -16,11 +16,13 @@ RUNNING_TESTS = "test" in sys.argv
 APP_VERSION = SYSTEM_VERSION
 APP_VERSION_LABEL = SYSTEM_VERSION_LABEL
 APP_RELEASE_DATE = SYSTEM_RELEASE_DATE
+APP_ENVIRONMENT = os.getenv("DJANGO_ENVIRONMENT", "").strip()
 
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-dev-key-change-in-production")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
+APP_ENVIRONMENT = "Testes" if RUNNING_TESTS else APP_ENVIRONMENT or ("Desenvolvimento" if DEBUG else "Operação")
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 LOCAL_NETWORK_MODE = os.getenv("DJANGO_LOCAL_NETWORK_MODE", "0") == "1"

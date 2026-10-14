@@ -229,6 +229,10 @@
             <small>Permite reabrir OS fechada.</small>
             {{ form.perm_os_reabrir.errors }}
           </div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_cliente_ver_dados }} {{ form.perm_cliente_ver_dados.label }}</label><small>Documento, endereço e observações na ficha e no balão.</small></div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_cliente_ver_historico }} {{ form.perm_cliente_ver_historico.label }}</label><small>Ordens e orçamentos anteriores.</small></div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_cliente_ver_financeiro }} {{ form.perm_cliente_ver_financeiro.label }}</label><small>Pagamentos, descontos e saldo pendente.</small></div>
+          <div class="module-option"><label class="mb-0">{{ form.perm_cliente_editar }} {{ form.perm_cliente_editar.label }}</label></div>
           <div class="module-option"><label class="mb-0">{{ form.perm_os_ver_custos }} {{ form.perm_os_ver_custos.label }}</label><small>Exibe custos internos e margem, nunca em documentos do cliente.</small></div>
           <div class="module-option"><label class="mb-0">{{ form.perm_os_registrar_custo }} {{ form.perm_os_registrar_custo.label }}</label><small>Confirma compras, recebimentos e custos reais.</small></div>
           <div class="module-option"><label class="mb-0">{{ form.perm_os_estornar_custo }} {{ form.perm_os_estornar_custo.label }}</label><small>Permite estornos auditáveis de custos.</small></div>

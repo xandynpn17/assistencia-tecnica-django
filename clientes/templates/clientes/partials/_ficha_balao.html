@@ -1,0 +1,33 @@
+<ul class="nav nav-tabs mb-3" role="tablist">
+  <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#cliente-dados" role="tab">Dados</a></li>
+  {% if pode_ver_historico_cliente %}<li class="nav-item"><a class="nav-link" data-toggle="tab" href="#cliente-historico" role="tab">Histórico</a></li>{% endif %}
+  {% if pode_ver_financeiro_cliente %}<li class="nav-item"><a class="nav-link" data-toggle="tab" href="#cliente-financeiro" role="tab">Financeiro</a></li>{% endif %}
+</ul>
+<div class="tab-content">
+  <div class="tab-pane active" id="cliente-dados" role="tabpanel">
+    <h6>{{ cliente.nome }} <small class="text-muted">{{ cliente.numero_cliente }}</small></h6>
+    <dl class="row mb-0">
+      <dt class="col-sm-3">Telefone</dt><dd class="col-sm-9">{{ cliente.telefone|default:"Não informado" }}</dd>
+      <dt class="col-sm-3">Email</dt><dd class="col-sm-9 text-break">{{ cliente.email|default:"Não informado" }}</dd>
+      {% if pode_ver_dados_cliente %}
+      <dt class="col-sm-3">Tipo</dt><dd class="col-sm-9">{{ cliente.tipo_cliente_exibicao }}</dd>
+      <dt class="col-sm-3">CPF/CNPJ</dt><dd class="col-sm-9">{{ cliente.get_documento_formatado|default:"Não informado" }}</dd>
+      <dt class="col-sm-3">Endereço</dt><dd class="col-sm-9">{{ cliente.endereco_exibicao|default:"Não informado" }}</dd>
+      <dt class="col-sm-3">Origem</dt><dd class="col-sm-9">{{ cliente.origem_cliente_exibicao }}</dd>
+      <dt class="col-sm-3">Cadastro</dt><dd class="col-sm-9">{{ cliente.data_cadastro|date:"d/m/Y" }}</dd>
+      <dt class="col-sm-3">Observações</dt><dd class="col-sm-9">{{ cliente.observacoes|default:"Sem observações"|linebreaksbr }}</dd>
+      {% else %}<dd class="col-12 text-muted small">Dados pessoais completos disponíveis mediante permissão.</dd>{% endif %}
+    </dl>
+  </div>
+  {% if pode_ver_historico_cliente %}<div class="tab-pane" id="cliente-historico" role="tabpanel">
+    {% for os in ordens_resumo %}<div class="border-bottom py-2"><a href="{% url 'ordens:detalhes_ordem' os.pk %}">OS {{ os.numero_os }}</a> · {{ os.data_abertura|date:"d/m/Y" }} · {{ os.modelo_equipamento }} <small class="text-muted">{{ os.status_listagem_label }}</small></div>{% empty %}<p class="text-muted">Sem ordens anteriores.</p>{% endfor %}
+    <small class="text-muted">Últimas 10 ordens. Consulte a ficha ampla para o histórico completo.</small>
+  </div>{% endif %}
+  {% if pode_ver_financeiro_cliente %}<div class="tab-pane" id="cliente-financeiro" role="tabpanel">
+    <div class="row"><div class="col-sm-6"><small>Total pago pelo cliente</small><h5>R$ {{ total_gasto|floatformat:2 }}</h5></div><div class="col-sm-6"><small>Saldo pendente atual</small><h5>R$ {{ total_em_aberto|floatformat:2 }}</h5></div></div>
+    <small>Descontos válidos: R$ {{ total_descontos|floatformat:2 }} · Devoluções parciais: R$ {{ total_devolvido|floatformat:2 }}</small>
+    {% for item in historico_pagamentos %}<div class="border-bottom py-2 small">{{ item.data|date:"d/m/Y" }} · {{ item.pagamento.numero_talao }} · {% if item.tipo == 'devolucao' %}Devolução parcial: {{ item.descricao }}{% else %}{{ item.pagamento.metodo_display }}{% endif %} <strong>R$ {{ item.pago|floatformat:2 }}</strong></div>{% endfor %}
+    <p class="small text-muted mt-2">Não inclui cobranças da fabricante nem desconta taxas da maquininha do gasto do cliente.</p>
+  </div>{% endif %}
+</div>
+<div class="border-top mt-3 pt-3"><a class="btn btn-sm btn-primary" href="{% url 'clientes:detalhes_cliente' cliente.pk %}">Abrir ficha completa</a>{% if pode_editar_cliente %} <a class="btn btn-sm btn-outline-secondary" href="{% url 'clientes:editar_cliente' cliente.pk %}">Editar cadastro</a>{% endif %}</div>

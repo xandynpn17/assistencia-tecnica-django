@@ -74,4 +74,5 @@ def empresa_context(request):
         "system_version": getattr(settings, "APP_VERSION", "1.0.0"),
         "system_version_label": getattr(settings, "APP_VERSION_LABEL", "v1.0.0"),
         "system_release_date": getattr(settings, "APP_RELEASE_DATE", ""),
+        "system_environment": getattr(settings, "APP_ENVIRONMENT", "Operação"),
     }

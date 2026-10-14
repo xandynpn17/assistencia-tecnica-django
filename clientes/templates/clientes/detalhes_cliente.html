@@ -1,281 +1,31 @@
 {% extends 'core/base.html' %}
-{% load static %}
-
-{% block title %}{{ cliente.nome }} - Detalhes{% endblock %}
-
+{% block title %}{{ cliente.nome }} — Ficha do cliente{% endblock %}
 {% block content %}
-<section class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1>
-                    <i class="fas fa-user mr-1"></i>
-                    {{ cliente.nome }}
-                    <small class="text-muted">{{ cliente.numero_cliente }}</small>
-                </h1>
-            </div>
-            <div class="col-sm-6">
-                <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">Home</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'clientes:lista_clientes' %}">Clientes</a></li>
-                    <li class="breadcrumb-item active">Detalhes</li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="content">
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-md-4">
-                <div class="card card-primary">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-id-card mr-1"></i>Informações do Cliente</h3>
-                    </div>
-                    <div class="card-body">
-                        <dl class="row mb-0">
-                            <dt class="col-sm-5">N Cliente:</dt>
-                            <dd class="col-sm-7"><span class="badge bg-primary">{{ cliente.numero_cliente }}</span></dd>
-
-                            <dt class="col-sm-5">Nome:</dt>
-                            <dd class="col-sm-7">{{ cliente.nome }}</dd>
-
-                            <dt class="col-sm-5">Tipo:</dt>
-                            <dd class="col-sm-7">{{ cliente.tipo_cliente_exibicao }}</dd>
-
-                            <dt class="col-sm-5">CPF/CNPJ:</dt>
-                            <dd class="col-sm-7">
-                                {% if cliente.get_documento_formatado %}
-                                    {{ cliente.get_documento_formatado }}
-                                {% else %}
-                                    <span class="text-muted">Não informado</span>
-                                {% endif %}
-                            </dd>
-
-                            <dt class="col-sm-5">Telefone:</dt>
-                            <dd class="col-sm-7">{{ cliente.telefone|default:"-" }}</dd>
-
-                            <dt class="col-sm-5">Email:</dt>
-                            <dd class="col-sm-7">{{ cliente.email|default:"-" }}</dd>
-
-                            <dt class="col-sm-5">Origem:</dt>
-                            <dd class="col-sm-7">{{ cliente.origem_cliente_exibicao }}</dd>
-
-                            <dt class="col-sm-5">Endereço:</dt>
-                            <dd class="col-sm-7">{{ cliente.endereco_exibicao|default:"-" }}</dd>
-
-                            <dt class="col-sm-5">CEP:</dt>
-                            <dd class="col-sm-7">{{ cliente.codigo_postal|default:"-" }}</dd>
-
-                            <dt class="col-sm-5">Cadastrado em:</dt>
-                            <dd class="col-sm-7">{{ cliente.data_cadastro|date:"d/m/Y H:i" }}</dd>
-                        </dl>
-                    </div>
-                    <div class="card-footer">
-                        <a href="{% url 'clientes:editar_cliente' cliente.id %}" class="btn btn-warning btn-sm">
-                            <i class="fas fa-edit"></i> Editar
-                        </a>
-                        {% if user.is_superuser or user.tipo_usuario == 'gerente' %}
-                        <a href="{% url 'clientes:excluir_cliente' cliente.id %}" class="btn btn-danger btn-sm">
-                            <i class="fas fa-trash"></i> Excluir
-                        </a>
-                        {% endif %}
-                        <a href="{% url 'clientes:lista_clientes' %}" class="btn btn-secondary btn-sm">
-                            <i class="fas fa-arrow-left"></i> Voltar
-                        </a>
-                    </div>
-                </div>
-
-                <div class="card card-info mt-3">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-chart-bar mr-1"></i>Estatísticas</h3>
-                    </div>
-                    <div class="card-body text-center">
-                        <div class="row">
-                            <div class="col-4">
-                                <div class="info-box bg-gradient-info">
-                                    <span class="info-box-icon"><i class="fas fa-file-alt"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">Total OS</span>
-                                        <span class="info-box-number">{{ total_ordens }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="info-box bg-gradient-success">
-                                    <span class="info-box-icon"><i class="fas fa-check-circle"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">Concluídas</span>
-                                        <span class="info-box-number">{{ ordens_concluidas }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="info-box bg-gradient-warning">
-                                    <span class="info-box-icon"><i class="fas fa-tools"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">Ativas</span>
-                                        <span class="info-box-number">{{ ordens_ativas }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row text-left mt-3">
-                            <div class="col-sm-6 mb-3">
-                                <div class="small text-muted">Total pago</div>
-                                <div class="h5 text-success mb-0">R$ {{ total_gasto|floatformat:2 }}</div>
-                            </div>
-                            <div class="col-sm-6 mb-3">
-                                <div class="small text-muted">Em aberto</div>
-                                <div class="h5 text-warning mb-0">R$ {{ total_em_aberto|floatformat:2 }}</div>
-                            </div>
-                            <div class="col-sm-6 mb-3">
-                                <div class="small text-muted">Ticket médio</div>
-                                <div class="h6 mb-0">R$ {{ ticket_medio|floatformat:2 }}</div>
-                            </div>
-                            <div class="col-sm-6 mb-3">
-                                <div class="small text-muted">Total OS</div>
-                                <div class="h6 mb-0">R$ {{ total_os_cliente|floatformat:2 }}</div>
-                            </div>
-                            <div class="col-sm-6 mb-3">
-                                <div class="small text-muted">Último pagamento</div>
-                                <div class="h6 mb-0">
-                                    {% if ultimo_pagamento %}
-                                        {{ ultimo_pagamento.data|date:"d/m/Y H:i" }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="col-sm-6 mb-3">
-                                <div class="small text-muted">Última OS</div>
-                                <div class="h6 mb-0">
-                                    {% if ultima_ordem %}
-                                        {{ ultima_ordem.numero_os }} em {{ ultima_ordem.data_abertura|date:"d/m/Y" }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mt-2">
-                            <h6 class="mb-1">Tempo médio de retirada</h6>
-                            <strong>{{ tempo_medio_retirada }}</strong>
-                            <div class="small text-muted">De pronto contactado até concluída</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-bolt mr-1"></i>Ordens Ativas <span class="badge badge-warning ml-2">{{ ordens_ativas }}</span></h3>
-                        <div class="card-tools">
-                            <a href="{% url 'ordens:nova_ordem_cliente' cliente.id %}" class="btn btn-success btn-sm">
-                                <i class="fas fa-plus-circle"></i> Nova OS
-                            </a>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        {% if ordens_ativas_lista %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>N OS</th>
-                                        <th>Data</th>
-                                        <th>Equipamento</th>
-                                        <th>Status</th>
-                                        <th>Valor pago</th>
-                                        <th style="width: 100px">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for ordem in ordens_ativas_lista %}
-                                    <tr>
-                                        <td><strong>#{{ ordem.numero_os }}</strong></td>
-                                        <td>{{ ordem.data_abertura|date:"d/m/Y" }}</td>
-                                        <td>
-                                            {{ ordem.get_tipo_equipamento_display }}
-                                            {% if ordem.marca_equipamento %}<br><small class="text-muted">{{ ordem.marca_equipamento }}</small>{% endif %}
-                                        </td>
-                                        <td><span class="badge bg-info">{{ ordem.status_listagem_label }}</span></td>
-                                        <td>
-                                            {% if ordem.total_pago > 0 %}
-                                            <strong class="text-success">R$ {{ ordem.total_pago|floatformat:2 }}</strong>
-                                            {% else %}
-                                            <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <a href="{% url 'ordens:detalhes_ordem' ordem.id %}" class="btn btn-info btn-sm" title="Ver OS"><i class="fas fa-eye"></i></a>
-                                            <a href="{% url 'ordens:editar_ordem' ordem.id %}" class="btn btn-warning btn-sm" title="Editar"><i class="fas fa-edit"></i></a>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% else %}
-                        <div class="text-center py-4 text-muted">Nenhuma ordem ativa.</div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-history mr-1"></i>Histórico de Ordens Finalizadas <span class="badge badge-success ml-2">{{ ordens_concluidas }}</span></h3>
-                    </div>
-                    <div class="card-body p-0">
-                        {% if ordens_concluidas_lista %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>N OS</th>
-                                        <th>Data</th>
-                                        <th>Equipamento</th>
-                                        <th>Status</th>
-                                        <th>Valor pago</th>
-                                        <th style="width: 80px">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for ordem in ordens_concluidas_lista %}
-                                    <tr>
-                                        <td><strong>#{{ ordem.numero_os }}</strong></td>
-                                        <td>{{ ordem.data_abertura|date:"d/m/Y" }}</td>
-                                        <td>
-                                            {{ ordem.get_tipo_equipamento_display }}
-                                            {% if ordem.marca_equipamento %}<br><small class="text-muted">{{ ordem.marca_equipamento }}</small>{% endif %}
-                                        </td>
-                                        <td><span class="badge bg-success">{{ ordem.status_listagem_label }}</span></td>
-                                        <td>
-                                            {% if ordem.total_pago > 0 %}
-                                            <strong class="text-success">R$ {{ ordem.total_pago|floatformat:2 }}</strong>
-                                            {% else %}
-                                            <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <a href="{% url 'ordens:detalhes_ordem' ordem.id %}" class="btn btn-info btn-sm" title="Ver OS"><i class="fas fa-eye"></i></a>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% else %}
-                        <div class="text-center py-4 text-muted">Nenhuma ordem finalizada.</div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3"><div><h3 class="mb-1">{{ cliente.nome }}</h3><small class="text-muted">{{ cliente.numero_cliente }} · Ficha completa</small></div><a class="btn btn-outline-secondary btn-sm" href="{% url 'clientes:lista_clientes' %}">Voltar aos clientes</a></div>
+  <div class="row"><aside class="col-lg-4">
+    <div class="card"><div class="card-header"><strong>Cadastro</strong></div><div class="card-body">
+      <dl><dt>Telefone</dt><dd>{{ cliente.telefone|default:"Não informado" }}</dd><dt>Email</dt><dd>{{ cliente.email|default:"Não informado" }}</dd>
+      {% if pode_ver_dados_cliente %}<dt>Tipo / documento</dt><dd>{{ cliente.tipo_cliente_exibicao }} · {{ cliente.get_documento_formatado|default:"Não informado" }}</dd><dt>Endereço</dt><dd>{{ cliente.endereco_exibicao|default:"Não informado" }}</dd><dt>Origem</dt><dd>{{ cliente.origem_cliente_exibicao }}</dd><dt>Cadastro</dt><dd>{{ cliente.data_cadastro|date:"d/m/Y H:i" }}</dd><dt>Observações</dt><dd>{{ cliente.observacoes|default:"Sem observações"|linebreaksbr }}</dd>{% else %}<dd class="small text-muted">Dados pessoais completos disponíveis mediante permissão.</dd>{% endif %}</dl>
+      {% if pode_editar_cliente %}<a class="btn btn-sm btn-outline-primary" href="{% url 'clientes:editar_cliente' cliente.pk %}">Editar cadastro</a>{% endif %}
+      {% if user.is_superuser or user.tipo_usuario == 'gerente' %}<a class="btn btn-sm btn-outline-danger" href="{% url 'clientes:excluir_cliente' cliente.pk %}">Excluir</a>{% endif %}
+    </div></div>
+    {% if pode_ver_historico_cliente %}<div class="card"><div class="card-body"><strong>{{ total_ordens }} ordens</strong> · {{ ordens_ativas }} ativas · {{ ordens_concluidas }} concluídas<br><small class="text-muted">Tempo médio de retirada: {{ tempo_medio_retirada }}</small></div></div>{% endif %}
+  </aside><main class="col-lg-8">
+    {% if pode_ver_financeiro_cliente %}<div class="card"><div class="card-header"><strong>Histórico financeiro</strong></div><div class="card-body">
+      <form method="get" class="mb-3"><div class="row">{% for field in periodo_form %}<div class="col-sm-4"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}<div class="col-sm-4 align-self-end"><button class="btn btn-sm btn-primary">Filtrar pagamentos</button> <a href="{% url 'clientes:detalhes_cliente' cliente.pk %}" class="btn btn-sm btn-outline-secondary">Limpar</a></div></div></form>
+      {% if periodo_form.errors %}<p class="text-danger">Corrija o período para consultar os valores. Nenhum total foi apurado com estas datas.</p>{% else %}
+      <div class="row"><div class="col-sm-6 mb-2"><small>Total pago no período</small><h4 class="text-success">R$ {{ total_gasto|floatformat:2 }}</h4></div><div class="col-sm-6 mb-2"><small>Em aberto atualmente (todo o histórico)</small><h4 class="text-warning">R$ {{ total_em_aberto|floatformat:2 }}</h4></div></div>
+      <div class="small text-muted">Descontos menos devoluções: R$ {{ total_descontos|floatformat:2 }} · Devoluções parciais no período: R$ {{ total_devolvido|floatformat:2 }} · Ticket médio por recebimento (antes de devoluções): R$ {{ ticket_medio|floatformat:2 }}.</div>
+      {% endif %}<p class="small text-muted">Taxas da maquininha não reduzem o gasto do cliente. Cobranças à fabricante não são dívida dele. Vendas antigas sem vínculo seguro ao cadastro não são associadas pelo nome.</p>
+      <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Data do pagamento</th><th>Recibo / origem</th><th>Forma</th><th>Pago líquido</th></tr></thead><tbody>
+      {% for item in pagina_pagamentos %}<tr><td>{{ item.data|date:"d/m/Y" }}</td><td>{{ item.pagamento.numero_talao }}<br>{% if item.tipo == 'devolucao' %}<small class="text-warning">Devolução parcial: {{ item.descricao }}</small>{% else %}<small>{{ item.pagamento }}</small>{% if item.pagamento.origens_compostas %}<details><summary class="small">Ver distribuição</summary>{% for origem in item.pagamento.origens_compostas_legiveis %}<div class="small">{{ origem.descricao }} · R$ {{ origem.valor_liquido|floatformat:2 }}{% if origem.estornado %} (estornado){% endif %}</div>{% endfor %}</details>{% endif %}{% endif %}</td><td>{{ item.pagamento.metodo_display }}</td><td>R$ {{ item.pago|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="4">Nenhum pagamento identificado neste período.</td></tr>{% endfor %}
+      </tbody></table></div>
+      <div class="small">Página {{ pagina_pagamentos.number }} de {{ pagina_pagamentos.paginator.num_pages }} {% if pagina_pagamentos.has_previous %}<a href="?data_inicio={{ request.GET.data_inicio|urlencode }}&data_fim={{ request.GET.data_fim|urlencode }}&pagina_pagamentos={{ pagina_pagamentos.previous_page_number }}">Anterior</a>{% endif %} {% if pagina_pagamentos.has_next %}<a href="?data_inicio={{ request.GET.data_inicio|urlencode }}&data_fim={{ request.GET.data_fim|urlencode }}&pagina_pagamentos={{ pagina_pagamentos.next_page_number }}">Seguinte</a>{% endif %}</div>
+    </div></div>{% endif %}
+    {% if pode_ver_historico_cliente %}<div class="card"><div class="card-header d-flex justify-content-between"><strong>Ordens e equipamentos · {{ total_ordens }}</strong><a class="btn btn-sm btn-outline-primary" href="{% url 'ordens:nova_ordem_cliente' cliente.pk %}">Nova OS</a></div><div class="table-responsive"><table class="table table-hover table-sm"><thead><tr><th>OS</th><th>Abertura</th><th>Equipamento</th><th>Situação</th>{% if pode_ver_financeiro_cliente %}<th>Pago no período</th>{% endif %}</tr></thead><tbody>
+      {% for os in pagina_ordens %}<tr><td><a href="{% url 'ordens:detalhes_ordem' os.pk %}">{{ os.numero_os }}</a></td><td>{{ os.data_abertura|date:"d/m/Y" }}</td><td>{{ os.tipo_equipamento }} · {{ os.marca_equipamento }} · {{ os.modelo_equipamento }}<br><small>Série {{ os.numero_serie_equipamento|default:"—" }}</small></td><td>{{ os.status_listagem_label }}</td>{% if pode_ver_financeiro_cliente %}<td>R$ {{ os.total_pago|floatformat:2 }}</td>{% endif %}</tr>{% empty %}<tr><td colspan="5">Sem ordens.</td></tr>{% endfor %}
+    </tbody></table></div><div class="card-footer small">Página {{ pagina_ordens.number }} de {{ pagina_ordens.paginator.num_pages }} {% if pagina_ordens.has_previous %}<a href="?pagina_ordens={{ pagina_ordens.previous_page_number }}&data_inicio={{ request.GET.data_inicio|urlencode }}&data_fim={{ request.GET.data_fim|urlencode }}">Anterior</a>{% endif %} {% if pagina_ordens.has_next %}<a href="?pagina_ordens={{ pagina_ordens.next_page_number }}&data_inicio={{ request.GET.data_inicio|urlencode }}&data_fim={{ request.GET.data_fim|urlencode }}">Seguinte</a>{% endif %}</div></div>{% endif %}
+  </main></div>
+</div>
 {% endblock %}

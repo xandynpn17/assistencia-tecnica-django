@@ -12,6 +12,8 @@ from .dashboard import (
     registrar_pagamento,
     registrar_saida,
 )
+from .dinheiro_fisico import dinheiro_fisico
+from .patrimonio import patrimonio_financeiro
 from .pagaveis import aging_pagar, contas_pagar, criar_conta_pagar, detalhe_conta_pagar, editar_conta_pagar
 from .cartoes_corporativos import cartoes_corporativos
 from .contabilidade import contabilidade_gerencial
@@ -59,6 +61,8 @@ __all__ = [
     "detalhe_caixa",
     "detalhe_conta_pagar",
     "detalhe_conta_receber",
+    "dinheiro_fisico",
+    "patrimonio_financeiro",
     "editar_conta_pagar",
     "editar_conta_receber",
     "editar_conta_bancaria",

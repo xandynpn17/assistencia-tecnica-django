@@ -1,6 +1,7 @@
 import gzip
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -18,6 +19,7 @@ class Command(BaseCommand):
     help = "Gera backup do banco ativo e aplica politica de retencao."
 
     def add_arguments(self, parser):
+        parser.add_argument("--skip-lock", action="store_true", help="Uso interno: rotina já mantém o lock do diretório.")
         parser.add_argument("--output-dir", default="backups", help="Diretorio de saida do backup.")
         parser.add_argument("--gzip", action="store_true", help="Compacta o backup em .gz.")
         parser.add_argument(
@@ -38,6 +40,13 @@ class Command(BaseCommand):
         return ConfiguracaoSistema.resolver_diretorio_backup()
 
     def handle(self, *args, **options):
+        from configuracoes.services.backup_automatico import trava_backup
+        from contextlib import nullcontext
+        output = self._resolve_output_dir(options["output_dir"]).resolve()
+        with (nullcontext() if options.get("skip_lock") else trava_backup(output)):
+            return self._executar(options)
+
+    def _executar(self, options):
         db = settings.DATABASES["default"]
         engine = db.get("ENGINE")
         if engine == "django.db.backends.sqlite3":
@@ -142,14 +151,25 @@ class Command(BaseCommand):
         if not media_root.exists():
             return None
         media_zip = backup_dir / "media.zip"
+        arquivos = {path: (path.stat().st_size, path.stat().st_mtime_ns) for path in media_root.rglob("*") if path.is_file()}
         with zipfile.ZipFile(media_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for path in media_root.rglob("*"):
+            for path in arquivos:
                 if path.is_file():
+                    antes = path.stat()
                     zipf.write(path, path.relative_to(media_root))
+                    depois = path.stat()
+                    if (antes.st_size, antes.st_mtime_ns) != (depois.st_size, depois.st_mtime_ns):
+                        raise CommandError("Um anexo mudou durante a cópia. Repita o backup numa janela sem alterações.")
+        depois = {path: (path.stat().st_size, path.stat().st_mtime_ns) for path in media_root.rglob("*") if path.is_file()}
+        if arquivos != depois:
+            raise CommandError("Os anexos mudaram durante o backup. Repita numa janela sem alterações.")
         return media_zip
 
     def _write_manifest(self, backup_dir, *, engine, database_file, media_file, db):
         manifest = {
+            "format_version": 2,
+            "app_version": getattr(settings, "APP_VERSION", ""),
+            "includes_media": bool(media_file),
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "engine": engine,
             "database": str(db.get("NAME") or ""),
@@ -159,6 +179,11 @@ class Command(BaseCommand):
             "media_file": media_file,
             "django_settings": os.getenv("DJANGO_SETTINGS_MODULE", ""),
         }
+        from configuracoes.services.backup_automatico import hash_arquivo
+        manifest["files"] = {nome: {"size": (backup_dir / nome).stat().st_size, "sha256": hash_arquivo(backup_dir / nome)} for nome in (database_file, media_file) if nome}
+        from django.db import connection
+        from django.db.migrations.recorder import MigrationRecorder
+        manifest["migrations"] = sorted(f"{app}.{name}" for app, name in MigrationRecorder(connection).applied_migrations())
         (backup_dir / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -167,14 +192,19 @@ class Command(BaseCommand):
     def _gerar_pacote_zip(self, backup_dir):
         zip_path = backup_dir.with_suffix(".zip")
         if zip_path.exists():
-            zip_path.unlink(missing_ok=True)
+            raise CommandError("Já existe um pacote com este horário. Aguarde um segundo antes de repetir.")
         with tempfile.TemporaryDirectory() as tmp_dir:
             temp_zip = Path(tmp_dir) / zip_path.name
             with zipfile.ZipFile(temp_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
                 for path in backup_dir.rglob("*"):
                     if path.is_file():
                         zipf.write(path, path.relative_to(backup_dir.parent))
-            shutil.copy2(temp_zip, zip_path)
+            with zipfile.ZipFile(temp_zip) as pacote:
+                if pacote.testzip():
+                    raise CommandError("Falha na integridade do pacote de backup.")
+            parcial = zip_path.with_suffix(".zip.partial")
+            shutil.copy2(temp_zip, parcial)
+            os.replace(parcial, zip_path)
         return zip_path
 
     def _apply_retention(self, output_dir):
@@ -183,12 +213,14 @@ class Command(BaseCommand):
         for file in output_dir.iterdir():
             if not file.is_file():
                 continue
+            if not re.fullmatch(r"backup_\d{8}_\d{6}\.(zip|gz|sqlite3|dump)", file.name):
+                continue
             if file.suffix.lower() not in {".zip", ".gz", ".sqlite3", ".dump"}:
                 continue
             if datetime.fromtimestamp(file.stat().st_mtime) < cutoff:
                 file.unlink(missing_ok=True)
         for directory in output_dir.glob("backup_*"):
-            if directory.is_dir() and datetime.fromtimestamp(directory.stat().st_mtime) < cutoff:
+            if re.fullmatch(r"backup_\d{8}_\d{6}", directory.name) and directory.is_dir() and datetime.fromtimestamp(directory.stat().st_mtime) < cutoff:
                 shutil.rmtree(directory, ignore_errors=True)
 
     def _resolve_pg_tool(self, tool_name, explicit_path=""):

@@ -116,6 +116,14 @@
           <a href="{% url 'caixa:tesouraria' %}" class="btn btn-sm {% if menu_sub == 'tesouraria' %}btn-dark{% else %}btn-outline-dark{% endif %}">
             Bancos e concilia&ccedil;&atilde;o
           </a>
+          <a href="{% url 'caixa:dinheiro_fisico' %}" class="btn btn-sm {% if menu_sub == 'dinheiro_fisico' %}btn-success{% else %}btn-outline-success{% endif %}">
+            Dinheiro f&iacute;sico
+          </a>
+          {% if user|has_perm_sensivel:'perm_caixa_gerir_capital' %}
+          <a href="{% url 'caixa:patrimonio_financeiro' %}" class="btn btn-sm {% if menu_sub == 'patrimonio_financeiro' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+            Pessoas e patrim&ocirc;nio
+          </a>
+          {% endif %}
         </div>
       </section>
 
@@ -129,9 +137,11 @@
               <a href="{% url 'caixa:aging_receber' %}" class="btn btn-sm btn-outline-secondary">Aging receber</a>
               <a href="{% url 'caixa:aging_pagar' %}" class="btn btn-sm btn-outline-secondary">Aging pagar</a>
               <a href="{% url 'caixa:fluxo_projetado' %}" class="btn btn-sm {% if menu_sub == 'fluxo_projetado' %}btn-dark{% else %}btn-outline-dark{% endif %}">Fluxo</a>
+              {% if user|has_perm_sensivel:'perm_os_ver_custos' %}<a href="{% url 'caixa:rentabilidade_os' %}" class="btn btn-sm {% if menu_sub == 'rentabilidade_os' %}btn-dark{% else %}btn-outline-dark{% endif %}">Rentabilidade OS</a>{% endif %}
               {% if user|has_perm_sensivel:'perm_caixa_ver_dre' %}<a href="{% url 'caixa:dre' %}" class="btn btn-sm {% if menu_sub == 'dre' %}btn-dark{% else %}btn-outline-dark{% endif %}">DRE</a>{% endif %}
               {% if user|has_perm_sensivel:'perm_caixa_administrar_plano_contas' %}<a href="{% url 'caixa:contabilidade_gerencial' %}" class="btn btn-sm {% if menu_sub == 'contabilidade_gerencial' %}btn-dark{% else %}btn-outline-dark{% endif %}">Contabilidade gerencial</a>{% endif %}
               {% if user|has_perm_sensivel:'perm_caixa_corrigir_lancamentos' %}<a href="{% url 'caixa:saneamento_lancamentos' %}" class="btn btn-sm {% if menu_sub == 'saneamento_lancamentos' %}btn-warning{% else %}btn-outline-warning{% endif %}">Corrigir lan&ccedil;amentos</a>{% endif %}
+              {% if user|has_perm_sensivel:'perm_caixa_corrigir_lancamentos' and user|has_perm_sensivel:'perm_cliente_ver_financeiro' %}<a href="{% url 'caixa:revisar_identificacao_clientes' %}" class="btn btn-sm btn-outline-secondary">Identificar clientes antigos</a>{% endif %}
             </div>
           </section>
           <section class="caixa-subnav-group">

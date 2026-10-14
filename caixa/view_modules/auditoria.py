@@ -1,6 +1,6 @@
 from calendar import monthrange
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -549,29 +549,70 @@ def fluxo_projetado(request):
         form = DespesaRecorrenteForm()
 
     hoje = timezone.localdate()
+    # Repasses de cartão são referência de liquidação, não nova venda/receita.
+    horizonte_fim = date(hoje.year + ((hoje.month - 1 + 5) // 12), ((hoje.month - 1 + 5) % 12) + 1, 1)
+    horizonte_fim = horizonte_fim.replace(day=monthrange(horizonte_fim.year, horizonte_fim.month)[1])
+    repasses_por_mes = {}
+    pagamentos_cartao = Pagamento.objects.filter(**filtro_empresa, data_movimento__gte=hoje - timedelta(days=120), data_movimento__lte=horizonte_fim)
+    for pagamento in pagamentos_cartao.iterator(chunk_size=500):
+        detalhes = (pagamento.encargos_gerenciais_snapshot or {}).get("taxas_detalhe", [])
+        for parcela in detalhes if isinstance(detalhes, list) else []:
+            if not isinstance(parcela, dict):
+                continue
+            try:
+                dias = int(parcela.get("dias_recebimento") or 0)
+                bruto = Decimal(str(parcela.get("valor") or "0"))
+                taxa = Decimal(str(parcela.get("taxa_valor") or "0"))
+            except (ValueError, TypeError, InvalidOperation):
+                continue
+            if not 0 < dias <= 365:
+                continue
+            previsto_em = pagamento.data_movimento + timedelta(days=dias)
+            if not hoje <= previsto_em <= horizonte_fim:
+                continue
+            chave = (previsto_em.year, previsto_em.month)
+            grupo = repasses_por_mes.setdefault(chave, {"bruto": Decimal("0.00"), "taxas": Decimal("0.00"), "liquido": Decimal("0.00")})
+            grupo["bruto"] += bruto
+            grupo["taxas"] += taxa
+            grupo["liquido"] += bruto - taxa
     meses = []
     for offset in range(6):
         mes_num = ((hoje.month - 1 + offset) % 12) + 1
         ano = hoje.year + ((hoje.month - 1 + offset) // 12)
         ultimo_dia = monthrange(ano, mes_num)[1]
         inicio_mes = date(ano, mes_num, 1)
+        if offset == 0:
+            inicio_mes = hoje
         fim_mes = date(ano, mes_num, ultimo_dia)
-        entradas_previstas = ContaReceber.objects.filter(
+        contas_receber_mes = ContaReceber.objects.filter(
             **filtro_empresa,
             status__in=["aberta", "parcial", "vencida"],
             vencimento__gte=inicio_mes,
             vencimento__lte=fim_mes,
-        ).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
-        despesas = Decimal("0.00")
+        )
+        entradas_previstas = contas_receber_mes.aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+        entradas_fabricante = contas_receber_mes.filter(tipo_origem="garantia_fabricante").aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+        despesas_comprometidas = ContaPagar.objects.filter(
+            **filtro_empresa,
+            status__in=["aberta", "parcial", "vencida"],
+            vencimento__gte=inicio_mes,
+            vencimento__lte=fim_mes,
+        ).aggregate(total=Sum("valor_total") - Sum("valor_pago"))["total"] or Decimal("0.00")
+        recorrentes_referencia = Decimal("0.00")
         for despesa in DespesaRecorrente.objects.filter(**filtro_empresa, ativo=True):
             if despesa.dia_vencimento <= ultimo_dia:
-                despesas += despesa.valor_mensal
-        saldo_previsto = entradas_previstas - despesas
+                recorrentes_referencia += despesa.valor_mensal
+        # Recorrentes são apenas referência: podem já ter virado conta a pagar.
+        saldo_previsto = entradas_previstas - despesas_comprometidas
         meses.append(
             {
                 "competencia": f"{mes_num:02d}/{ano}",
                 "entradas_previstas": entradas_previstas,
-                "despesas_previstas": despesas,
+                "entradas_fabricante": entradas_fabricante,
+                "entradas_outras": entradas_previstas - entradas_fabricante,
+                "despesas_previstas": despesas_comprometidas,
+                "recorrentes_referencia": recorrentes_referencia,
+                "repasses_cartao": repasses_por_mes.get((ano, mes_num), {"bruto": Decimal("0.00"), "taxas": Decimal("0.00"), "liquido": Decimal("0.00")}),
                 "saldo_previsto": saldo_previsto,
             }
         )
@@ -579,6 +620,8 @@ def fluxo_projetado(request):
     total_entradas_previstas = sum((m["entradas_previstas"] for m in meses), Decimal("0.00"))
     total_despesas_previstas = sum((m["despesas_previstas"] for m in meses), Decimal("0.00"))
     saldo_total_previsto = total_entradas_previstas - total_despesas_previstas
+    vencido_receber = ContaReceber.objects.filter(**filtro_empresa, status__in=["aberta", "parcial", "vencida"], vencimento__lt=hoje).aggregate(total=Sum("valor_aberto"))["total"] or Decimal("0.00")
+    vencido_pagar = ContaPagar.objects.filter(**filtro_empresa, status__in=["aberta", "parcial", "vencida"], vencimento__lt=hoje).aggregate(total=Sum("valor_total") - Sum("valor_pago"))["total"] or Decimal("0.00")
     despesas_recorrentes = DespesaRecorrente.objects.select_related("ponto_operacional").filter(**filtro_empresa)
     despesas_ativas = despesas_recorrentes.filter(ativo=True)
 
@@ -593,6 +636,8 @@ def fluxo_projetado(request):
             "saldo_total_previsto": saldo_total_previsto,
             "quantidade_despesas_ativas": despesas_ativas.count(),
             "meses": meses,
+            "vencido_receber": vencido_receber,
+            "vencido_pagar": vencido_pagar,
             "menu_app": "caixa",
             "menu_sub": "fluxo_projetado",
         },

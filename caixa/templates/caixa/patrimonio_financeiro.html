@@ -1,0 +1,101 @@
+{% extends 'core/base.html' %}
+{% block title %}Pessoas, investimentos e estornos{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  {% include 'caixa/_subnav_caixa.html' %}
+
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h1 class="h3 mb-1">Pessoas, investimentos e estornos</h1>
+      <p class="text-muted mb-0">Controle patrimonial separado da receita e despesa operacional.</p>
+    </div>
+    <form method="get" class="d-flex gap-2 align-items-end">
+      <div>
+        <label class="form-label small mb-1">Competência</label>
+        <input type="month" name="competencia" value="{{ competencia|date:'Y-m' }}" class="form-control">
+      </div>
+      <button class="btn btn-outline-primary">Filtrar</button>
+    </form>
+  </div>
+
+  <div class="alert alert-info">
+    <strong>Regra de segurança:</strong> aporte é sempre entrada. Saídas pessoais ficam como retirada ou valor a receber até a classificação validada.
+  </div>
+
+  <ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#pessoas" type="button">Pessoas</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#fechamento" type="button">Fechamento mensal</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#investimentos" type="button">Investimentos</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#estornos" type="button">Estornos</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#adquirentes" type="button">SumUp/adquirentes</button></li>
+  </ul>
+
+  <div class="tab-content">
+    <section class="tab-pane fade show active" id="pessoas">
+      <div class="row g-3">
+        <div class="col-xl-4">
+          <div class="card h-100"><div class="card-body">
+            <h2 class="h5">Cadastrar pessoa financeira</h2>
+            <p class="small text-muted">O vínculo controla quais classificações podem ser usadas.</p>
+            <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="pessoa">{{ pessoa_form.as_p }}<button class="btn btn-primary">Cadastrar</button></form>
+          </div></div>
+        </div>
+        <div class="col-xl-8">
+          <div class="card"><div class="card-body">
+            <h2 class="h5">Registrar fato financeiro</h2>
+            <p class="small text-muted">Para retirada ou despesa pessoal, use “Pessoa deve à empresa”. Para dinheiro colocado na empresa, use “Empresa deve à pessoa”.</p>
+            <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="acao" value="movimento_pessoa">{{ movimento_form.as_p }}<button class="btn btn-primary">Registrar movimento</button></form>
+          </div></div>
+        </div>
+      </div>
+      <div class="card mt-3"><div class="card-body">
+        <h2 class="h5">Saldos por pessoa</h2>
+        <div class="table-responsive"><table class="table table-sm align-middle">
+          <thead><tr><th>Pessoa</th><th>Vínculo</th><th>Empresa deve</th><th>Pessoa deve</th><th>Saldo líquido</th></tr></thead>
+          <tbody>{% for pessoa in pessoas %}<tr><td>{{ pessoa.nome }}</td><td>{{ pessoa.get_tipo_display }}</td><td>R$ {{ pessoa.empresa_deve|floatformat:2 }}</td><td>R$ {{ pessoa.pessoa_deve|floatformat:2 }}</td><td>R$ {{ pessoa.saldo_liquido|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="5" class="text-muted">Nenhuma pessoa cadastrada.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </div></div>
+    </section>
+
+    <section class="tab-pane fade" id="fechamento">
+      <div class="row g-3">
+        <div class="col-xl-5"><div class="card"><div class="card-body">
+          <h2 class="h5">Classificar movimento</h2>
+          <p class="small text-muted">A classificação é um evento novo; o movimento original permanece intacto.</p>
+          <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="acao" value="classificar">{{ classificacao_form.as_p }}<button class="btn btn-primary">Salvar classificação</button></form>
+        </div></div></div>
+        <div class="col-xl-7"><div class="card"><div class="card-body">
+          <h2 class="h5">Movimentos de {{ competencia|date:'m/Y' }}</h2>
+          <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Data</th><th>Pessoa</th><th>Natureza atual</th><th>Status</th><th>Valor</th></tr></thead><tbody>
+          {% for item in movimentos_mes %}<tr><td>{{ item.data_movimento|date:'d/m/Y' }}</td><td>{{ item.pessoa.nome }}</td><td>{{ item.get_natureza_provisoria_display }}</td><td>{{ item.get_status_display }}</td><td>R$ {{ item.valor|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="5" class="text-muted">Sem movimentos nesta competência.</td></tr>{% endfor %}
+          </tbody></table></div>
+          <h3 class="h6 mt-3">Classificações registradas</h3>
+          <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Pessoa</th><th>Natureza</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>{% for item in classificacoes %}<tr><td>{{ item.movimento.pessoa.nome }}</td><td>{{ item.get_natureza_definitiva_display }}</td><td>R$ {{ item.valor|floatformat:2 }}</td><td>{{ item.get_status_display }}</td><td>{% if item.status == 'proposta' and pode_aprovar %}<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="aprovar_classificacao"><input type="hidden" name="classificacao_id" value="{{ item.id }}"><button class="btn btn-sm btn-outline-success">Aprovar</button></form>{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="text-muted">Nenhuma classificação registrada.</td></tr>{% endfor %}</tbody></table></div>
+        </div></div></div>
+      </div>
+    </section>
+
+    <section class="tab-pane fade" id="investimentos">
+      <div class="row g-3">
+        <div class="col-xl-4"><div class="card"><div class="card-body"><h2 class="h5">Nova conta de investimento</h2><form method="post">{% csrf_token %}<input type="hidden" name="acao" value="conta_investimento">{{ conta_investimento_form.as_p }}<button class="btn btn-primary">Cadastrar conta</button></form></div></div></div>
+        <div class="col-xl-4"><div class="card"><div class="card-body"><h2 class="h5">Aplicação, resgate ou rendimento</h2><form method="post">{% csrf_token %}<input type="hidden" name="acao" value="investimento">{{ investimento_form.as_p }}<button class="btn btn-primary">Registrar</button></form></div></div></div>
+        <div class="col-xl-4">
+          {% for conta in contas_investimento %}<div class="card mb-3"><div class="card-body"><h3 class="h6 mb-1">{{ conta.nome }}</h3><div class="small text-muted">{{ conta.instituicao }} · {{ conta.produto }}</div><hr><div>Principal: <strong>R$ {{ conta.saldo_principal|floatformat:2 }}</strong></div><div>Rendimento líquido: <strong>R$ {{ conta.rendimento_liquido|floatformat:2 }}</strong></div></div></div>{% empty %}<div class="alert alert-light border">Nenhuma conta de investimento.</div>{% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-pane fade" id="estornos">
+      <div class="row g-3"><div class="col-xl-5"><div class="card"><div class="card-body"><h2 class="h5">Registrar estorno</h2><p class="small text-muted">Quando a origem for conhecida, o sistema cria uma contrapartida e impede estorno acima do valor original. Pagamentos de clientes e contas a pagar devem usar o botão de estorno da própria operação, pois esse fluxo também reabre a cobrança.</p><form method="post">{% csrf_token %}<input type="hidden" name="acao" value="estorno">{{ estorno_form.as_p }}<button class="btn btn-danger">Registrar estorno</button></form></div></div><div class="card mt-3"><div class="card-body"><h2 class="h5">Vincular estorno pendente</h2><form method="post">{% csrf_token %}<input type="hidden" name="acao" value="vincular_estorno">{{ vincular_estorno_form.as_p }}<button class="btn btn-outline-primary">Vincular à origem</button></form></div></div></div>
+      <div class="col-xl-7"><div class="card"><div class="card-body"><h2 class="h5">Histórico</h2><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Data</th><th>Origem</th><th>Status</th><th>Valor</th><th>Motivo</th></tr></thead><tbody>{% for item in estornos %}<tr><td>{{ item.data_movimento|date:'d/m/Y' }}</td><td>{% if item.movimento_original %}#{{ item.movimento_original_id }} · {{ item.movimento_original.descricao }}{% else %}Aguardando identificação{% endif %}</td><td>{{ item.get_status_display }}</td><td>R$ {{ item.valor|floatformat:2 }}</td><td>{{ item.motivo }}</td></tr>{% empty %}<tr><td colspan="5" class="text-muted">Nenhum estorno registrado.</td></tr>{% endfor %}</tbody></table></div></div></div></div></div>
+    </section>
+
+    <section class="tab-pane fade" id="adquirentes">
+      <div class="row g-3 mb-3"><div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Vendas brutas importadas</div><div class="h4">R$ {{ resumo_adquirente.bruto|floatformat:2 }}</div></div></div></div><div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Taxas</div><div class="h4 text-danger">R$ {{ resumo_adquirente.taxas|floatformat:2 }}</div></div></div></div><div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Líquido</div><div class="h4 text-success">R$ {{ resumo_adquirente.liquido|floatformat:2 }}</div></div></div></div></div>
+      <div class="alert alert-secondary">Importe o relatório de Transações/Pagamentos da SumUp em <a href="{% url 'caixa:tesouraria' %}">Bancos e conciliação</a>. A venda, a taxa e o líquido serão guardados separadamente; o repasse ao Nubank deve ser conciliado como transferência.</div>
+      <div class="card"><div class="card-body"><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Data</th><th>ID</th><th>Modalidade</th><th>Bruto</th><th>Taxa</th><th>Líquido</th></tr></thead><tbody>{% for item in transacoes_adquirentes %}<tr><td>{{ item.data_venda|date:'d/m/Y' }}</td><td>{{ item.identificador_externo }}</td><td>{{ item.modalidade }} {{ item.bandeira }}</td><td>R$ {{ item.valor_bruto|floatformat:2 }}</td><td>R$ {{ item.taxa|floatformat:2 }}</td><td>R$ {{ item.valor_liquido|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="6" class="text-muted">Nenhuma transação de adquirente importada.</td></tr>{% endfor %}</tbody></table></div></div></div>
+    </section>
+  </div>
+</div>
+{% endblock %}

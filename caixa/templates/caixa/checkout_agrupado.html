@@ -292,7 +292,8 @@
                   <label class="mb-1"><input type="checkbox" name="confirmar_desconto_critico" value="1"> Confirmo o desconto crítico, quando aplicável</label>
                   <textarea name="justificativa_desconto_critico" class="form-control" rows="2" placeholder="Justificativa do desconto crítico"></textarea>
                 </div>
-                <div class="full"><label>Comprador</label>{{ form.cliente_nome }}</div>
+            <div class="full"><label>Cliente cadastrado (opcional)</label>{{ form.cliente }}{{ form.cliente.errors }}<small>Vincule para incluir a compra no histórico da ficha do cliente.</small></div>
+            <div class="full"><label>Comprador</label>{{ form.cliente_nome }}</div>
                 <div><label>CPF/CNPJ</label>{{ form.cliente_documento }}</div>
                 <div><label>Telefone</label>{{ form.cliente_telefone }}</div>
               </div>

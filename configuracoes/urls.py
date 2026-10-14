@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from .view_modules.backups import rotina_backup
 
 app_name = "configuracoes"
 
@@ -21,6 +22,7 @@ urlpatterns = [
     path("usuarios/<int:usuario_id>/excluir/", views.excluir_usuario, name="excluir_usuario"),
     path("usuarios/simulador-permissoes/", views.simulador_permissoes, name="simulador_permissoes"),
     path("backup/", views.backup_banco, name="backup_banco"),
+    path("backup/rotina/", rotina_backup, name="rotina_backup"),
     path("backup/download/", views.download_backup, name="download_backup"),
     path("restore/", views.restore_banco, name="restore_banco"),
     path("recuperacao-local/", views.restore_banco_publico, name="restore_banco_publico"),

@@ -32,6 +32,10 @@ CAIXA_ROLES = CAIXA_OPERATIONAL_ROLES
 PERFORMANCE_VIEW_ROLES = RoleSpec({"adm", "gerente", "atendente", "tecnico"}, capability="acesso_caixa_financeiro_extra")
 
 SENSITIVE_PERMISSION_MESSAGES = {
+    "perm_cliente_ver_dados": "Você não tem permissão para consultar dados pessoais completos do cliente.",
+    "perm_cliente_ver_historico": "Você não tem permissão para consultar o histórico operacional do cliente.",
+    "perm_cliente_ver_financeiro": "Você não tem permissão para consultar o histórico financeiro do cliente.",
+    "perm_cliente_editar": "Você não tem permissão para editar o cadastro do cliente.",
     "perm_caixa_administrar_plano_contas": "Você não tem permissão para administrar o plano de contas.",
     "perm_os_ver_custos": "Você não tem permissão para visualizar custos e margem da OS.",
     "perm_os_registrar_custo": "Você não tem permissão para registrar custos da OS.",

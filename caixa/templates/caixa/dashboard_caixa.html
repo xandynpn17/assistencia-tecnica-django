@@ -76,6 +76,8 @@
   </form>
 </div>
 
+{% include 'caixa/partials/_fluxo_financeiro.html' %}
+
 {% if caixa %}
   <div class="alert {% if caixa.aberto %}alert-success{% else %}alert-secondary{% endif %} py-2">
     Caixa do dia: <strong>{% if caixa.aberto %}ABERTO{% else %}FECHADO{% endif %}</strong>

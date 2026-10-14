@@ -10,13 +10,14 @@ from unittest.mock import Mock
 from django.conf import settings
 from django.contrib import messages
 from django.core.management import call_command
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import DatabaseError
 from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
-from configuracoes.models import ConfiguracaoAuditoria, ConfiguracaoSistema, SetupInicialSistema
+from configuracoes.models import ConfiguracaoAuditoria, ConfiguracaoSistema, SetupInicialSistema, Empresa
 from configuracoes.services.auditoria import registrar_evento_configuracao
 from configuracoes.services.integracoes import emitir_evento_interno
 from configuracoes.services.setup_inicial import setup_inicial_concluido
@@ -313,7 +314,14 @@ def _executar_restore(
 
 
 
+def _exigir_acesso_backup_instalacao(request):
+    # Backup/restore são da instalação inteira, não apenas da empresa ativa.
+    if not request.user.is_superuser and Empresa.objects.exclude(pk=request.user.empresa_id).exists():
+        raise PermissionDenied("O backup da instalação inteira exige o administrador da instalação.")
+
+
 def backup_banco_impl(request, logger):
+    _exigir_acesso_backup_instalacao(request)
     backup_dir = _backup_dir()
     if request.method == "POST":
         logger.info(
@@ -378,6 +386,7 @@ def backup_banco_impl(request, logger):
 
 
 def restore_banco_impl(request, logger):
+    _exigir_acesso_backup_instalacao(request)
     if request.method == "POST":
         return _executar_restore(
             request,
@@ -428,6 +437,7 @@ def restore_banco_publico_impl(request, logger):
 
 
 def download_backup_impl(request):
+    _exigir_acesso_backup_instalacao(request)
     backup_path = (request.GET.get("path") or "").strip()
     if not backup_path:
         raise Http404("Backup não informado.")

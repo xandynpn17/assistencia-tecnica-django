@@ -653,6 +653,10 @@ def processar_checkout_agrupado(
 
     cliente = contas[0].ordem_servico.cliente if contas else None
     if cliente:
+        if pagamento.cliente_id and pagamento.cliente_id != cliente.pk:
+            raise ValueError("O comprador deve ser o mesmo cliente das OS selecionadas.")
+        if cliente.empresa_id == pagamento.empresa_id:
+            pagamento.cliente = cliente
         pagamento.cliente_nome = pagamento.cliente_nome or cliente.nome or ""
         pagamento.cliente_documento = pagamento.cliente_documento or cliente.documento or ""
         pagamento.cliente_telefone = pagamento.cliente_telefone or cliente.telefone or ""

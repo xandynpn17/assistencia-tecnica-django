@@ -3,6 +3,7 @@
 
 {% block content %}
 {% include "configuracoes/partials/_operacao_recuperacao_tabs.html" %}
+{% if user.is_superuser or user.tipo_usuario == 'adm' %}<div class="alert alert-light border mb-3"><strong>Proteção automática:</strong> configure horários, cópia cifrada para nuvem e acompanhe as execuções. <a class="btn btn-sm btn-outline-primary ml-2" href="{% url 'configuracoes:rotina_backup' %}">Backup automático e nuvem</a></div>{% endif %}
 
 <div class="row mb-4">
   <div class="col-lg-7 mb-4">

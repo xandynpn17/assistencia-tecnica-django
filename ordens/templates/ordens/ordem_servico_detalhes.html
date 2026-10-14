@@ -268,6 +268,8 @@
         </div>
 
         <div class="d-flex align-items-center flex-wrap justify-content-end os-header-actions ml-auto">
+            <a class="btn btn-outline-primary btn-sm mr-1" href="{% url 'ordens:historico_equipamento' ordem.id %}">Histórico do equipamento</a>
+            <a class="btn btn-outline-primary btn-sm mr-1" href="{% url 'ordens:checklist_entrega' ordem.id %}">Checklist de entrega</a>
             {% if pode_ver_logs and logs_os or pode_ver_logs and logs_confirmacao %}
             <button type="button" class="btn btn-outline-secondary btn-sm" data-toggle="modal" data-target="#modalLogsOS">
                 <i class="fas fa-history mr-1"></i> Logs
@@ -347,7 +349,7 @@
 </div>
 
 <div class="modal fade" id="modalClienteResumo" tabindex="-1" role="dialog" aria-labelledby="modalClienteResumoLabel" aria-hidden="true">
-  <div class="modal-dialog modal-sm" role="document">
+  <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="modalClienteResumoLabel">Dados do Cliente</h5>
@@ -355,17 +357,8 @@
           <span aria-hidden="true">&times;</span>
         </button>
       </div>
-      <div class="modal-body">
-        <p class="mb-1"><strong>Nome:</strong> {{ ordem.cliente.nome }}</p>
-        <p class="mb-1"><strong>Email:</strong> {{ ordem.cliente.email|default:"-" }}</p>
-        <p class="mb-0"><strong>Telefone:</strong> {{ ordem.cliente.telefone|default:"-" }}</p>
-        {% if user.is_superuser or user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}
-        <div class="mt-3">
-          <a href="{% url 'clientes:detalhes_cliente' ordem.cliente.id %}" class="btn btn-sm btn-primary">
-            <i class="fas fa-id-card mr-1"></i> Abrir ficha detalhada
-          </a>
-        </div>
-        {% endif %}
+      <div class="modal-body" id="conteudoFichaCliente" data-url="{% url 'clientes:resumo_cliente' ordem.cliente.id %}">
+        <p class="text-muted">A carregar ficha do cliente…</p>
       </div>
     </div>
   </div>
@@ -877,6 +870,17 @@ document.addEventListener("DOMContentLoaded", function () {
 {% endblock content %}
 
 {% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  $('#modalClienteResumo').on('show.bs.modal', function () {
+    const alvo = $('#conteudoFichaCliente');
+    alvo.html('<p class="text-muted">A carregar ficha do cliente…</p>');
+    alvo.load(alvo.data('url'), function (_response, status) {
+      if (status === 'error') alvo.html('<p class="text-danger">Não foi possível abrir a ficha. Verifique o acesso e tente novamente.</p>');
+    });
+  });
+});
+</script>
 <script>
     $(document).ready(function() {
         $('[data-toggle="tooltip"]').tooltip();

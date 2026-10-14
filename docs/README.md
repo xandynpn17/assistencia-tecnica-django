@@ -2,6 +2,11 @@
 
 ## Fontes ativas
 
+- `entrega_patrimonio_pessoas_estornos_2026-10-13.md`: implementação da conta-corrente por pessoa, fechamento mensal, investimentos, estornos vinculados e detalhamento SumUp/adquirentes.
+
+- `entrega_evolucao_1_a_5_2026-09-16.md`: alterações da versão local 1.2.0, roteiro de teste, atualização gradual e configuração de backup automático com cópia criptografada para pasta da nuvem.
+
+- `plano_evolucao_gradual_2026-09-16.md`: referência das próximas entregas incrementais; bancos, ficha do cliente, backup automático/nuvem, WhatsApp manual, operação, gestão e IA, com critérios de atualização e recuperação sem substituir o banco da loja.
 - `plano_desenvolvimento_sistema.md`: roadmap tecnico e status das fases.
 - `plano_desenvolvimento_estoque.md`: roadmap tecnico especifico do modulo de estoque.
 - `plano_desenvolvimento_caixa.md`: diagnostico e roadmap tecnico especifico do modulo de caixa.
@@ -27,6 +32,7 @@
 - `manual_estoque_fiscal_caixa.md`: manual operacional após as melhorias de estoque, XML, tributação, preço, caixa e conciliação.
 - `manual_caixa_fiscal_dfe.md`: configuração segura do certificado A1, consulta oficial de NF-e destinadas por NSU e importação para conferência no estoque.
 - `manual_rateio_precificacao_canais_custos_os.md`: operação do rateio automático por despesas reais, maquininhas, preços por canal e custos previstos/realizados da OS.
+- `entrega_evolucao_6_e_7_2026-09-21.md`: escopo, limites e roteiro de homologação local da central de pendências, histórico, checklist, rentabilidade, fluxo e reposição.
 - `checklist_homologacao_configuracoes.md`: roteiro de homologacao manual por perfil da app configuracoes.
 - `checklist_migracao_postgresql.md`: guia de validacao da futura migracao de banco.
 - `backup_restore_local.md`: procedimento operacional de backup/restore local com PostgreSQL e media.

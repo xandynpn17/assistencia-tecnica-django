@@ -306,7 +306,7 @@ def checkout_agrupado(request):
                 "forma_pagamento_secundaria", "valor_secundario", "referencia_secundaria",
                 "parcelas_secundaria", "bandeira_secundaria", "referencia",
                 "data_competencia", "data_movimento", "observacao", "cliente_nome",
-                "cliente_documento", "cliente_telefone",
+                "cliente_documento", "cliente_telefone", "cliente",
             )
         }
         nome_rascunho = (request.POST.get("nome_rascunho") or "").strip()
@@ -346,6 +346,7 @@ def checkout_agrupado(request):
 
     cliente = contas_selecionadas[0].ordem_servico.cliente if contas_selecionadas else None
     initial = {
+        "cliente": getattr(cliente, "pk", None),
         "valor": total_bruto if total_bruto > 0 else None,
         "cliente_nome": getattr(cliente, "nome", "") or "",
         "cliente_documento": getattr(cliente, "documento", "") or "",

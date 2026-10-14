@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from .view_modules import evolucao as evolucao_views
 from .views import (
     DetalhesOrdemView,
     OrdemServicoCreateView,
@@ -13,6 +14,10 @@ from .views import (
 app_name = "ordens"
 
 urlpatterns = [
+    path("pendencias/", evolucao_views.central_pendencias, name="central_pendencias"),
+    path("operacao/configuracao/", evolucao_views.configurar_operacao, name="configurar_operacao"),
+    path("<int:pk>/equipamento/historico/", evolucao_views.historico_por_equipamento, name="historico_equipamento"),
+    path("<int:pk>/checklist-entrega/", evolucao_views.checklist_entrega, name="checklist_entrega"),
     path("selecionar-cliente/", views.selecionar_cliente_os, name="selecionar_cliente_os"),
     path("novo/<int:cliente_id>/", OrdemServicoCreateView.as_view(), name="nova_ordem_cliente"),
     path("novo/", OrdemServicoCreateView.as_view(), name="nova_ordem"),

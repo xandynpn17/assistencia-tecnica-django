@@ -132,6 +132,9 @@ class DetalhesClienteTests(TestCase):
             username="atendente_detalhes_cliente",
             password="senha123",
             tipo_usuario="atendente",
+            perm_cliente_ver_dados=True,
+            perm_cliente_ver_historico=True,
+            perm_cliente_ver_financeiro=True,
         )
         self.client.force_login(self.user)
         self.cliente = Cliente.objects.create(

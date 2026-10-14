@@ -9,6 +9,9 @@
     <h3 class="mb-0">Fluxo projetado (6 meses)</h3>
     <a href="{% url 'caixa:dashboard_caixa' %}" class="btn btn-sm btn-outline-secondary">Voltar ao dashboard</a>
   </div>
+  <div class="card mb-3"><div class="card-header">Repasses de cartão estimados</div><div class="card-body"><p class="text-muted">Calculados pelas condições registradas no pagamento. Bruto, taxa prevista e líquido são apenas referência; podem já constar em contas a receber e não são somados novamente à projeção nem ao saldo bancário.</p><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Mês</th><th>Bruto</th><th>Taxas previstas</th><th>Líquido estimado</th></tr></thead><tbody>{% for mes in meses %}<tr><td>{{ mes.competencia }}</td><td>R$ {{ mes.repasses_cartao.bruto|floatformat:2 }}</td><td>R$ {{ mes.repasses_cartao.taxas|floatformat:2 }}</td><td>R$ {{ mes.repasses_cartao.liquido|floatformat:2 }}</td></tr>{% endfor %}</tbody></table></div></div></div>
+  <div class="alert alert-info">Projeção de contas em aberto por vencimento, não saldo disponível no banco. Despesas recorrentes são mostradas à parte para não duplicar contas a pagar já lançadas. A importação de extrato não cria previsão adicional.</div>
+  <p class="text-muted">Vencido até ontem: a receber R$ {{ vencido_receber|floatformat:2 }} · a pagar R$ {{ vencido_pagar|floatformat:2 }} (não incluído nos seis meses abaixo).</p>
 
   <div class="row mb-3">
     <div class="col-md-3">
@@ -23,7 +26,7 @@
       <div class="small-box bg-danger">
         <div class="inner">
           <h4>R$ {{ total_despesas_previstas|floatformat:2 }}</h4>
-          <p>Despesas previstas (6 meses)</p>
+          <p>Obrigações a pagar (6 meses)</p>
         </div>
       </div>
     </div>
@@ -31,7 +34,7 @@
       <div class="small-box {% if saldo_total_previsto < 0 %}bg-warning{% else %}bg-info{% endif %}">
         <div class="inner">
           <h4>R$ {{ saldo_total_previsto|floatformat:2 }}</h4>
-          <p>Saldo projetado (6 meses)</p>
+          <p>Diferença de vencimentos (6 meses)</p>
         </div>
       </div>
     </div>
@@ -86,17 +89,21 @@
         <thead>
           <tr>
             <th>Competência</th>
-            <th class="text-right">Entradas previstas</th>
-            <th class="text-right">Despesas previstas</th>
-            <th class="text-right">Saldo previsto</th>
+            <th class="text-right">Cliente / outros a receber</th>
+            <th class="text-right">Fabricantes a receber</th>
+            <th class="text-right">Contas a pagar</th>
+            <th class="text-right">Recorrentes (referência)</th>
+            <th class="text-right">Diferença projetada</th>
           </tr>
         </thead>
         <tbody>
         {% for mes in meses %}
         <tr>
           <td>{{ mes.competencia }}</td>
-          <td class="text-right">R$ {{ mes.entradas_previstas|floatformat:2 }}</td>
+          <td class="text-right">R$ {{ mes.entradas_outras|floatformat:2 }}</td>
+          <td class="text-right">R$ {{ mes.entradas_fabricante|floatformat:2 }}</td>
           <td class="text-right">R$ {{ mes.despesas_previstas|floatformat:2 }}</td>
+          <td class="text-right text-muted">R$ {{ mes.recorrentes_referencia|floatformat:2 }}</td>
           <td class="text-right {% if mes.saldo_previsto < 0 %}text-danger{% else %}text-success{% endif %}">
             <strong>R$ {{ mes.saldo_previsto|floatformat:2 }}</strong>
           </td>

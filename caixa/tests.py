@@ -15,6 +15,7 @@ from django.utils import timezone
 from caixa.models import (
     AuditoriaFinanceira,
     AuditoriaGarantia,
+    AbsorcaoCorrecaoCaixa,
     Caixa,
     CheckoutRascunho,
     ConciliacaoBancaria,
@@ -26,20 +27,30 @@ from caixa.models import (
     ContaPagar,
     ContaBancaria,
     ContaReceber,
+    CorrecaoRetroativaCaixa,
+    CreditoFornecedor,
     CustoFixoMensal,
     DREFechamento,
     DespesaRecorrente,
+    DivergenciaCaixa,
     EstornoOrigemCheckout,
+    EventoSessaoCaixa,
     FaixaPremioMeta,
+    FechamentoCaixa,
     FormaPagamento,
+    ItemRateioCompraFornecedor,
     LancamentoCaixa,
     LinhaExtratoBancario,
+    LocalDinheiroFisico,
     MovimentoFinanceiro,
     MovimentoBancario,
     Pagamento,
     PagamentoContaPagar,
+    OperacaoDinheiroFisico,
     PremioColaboradorCompetencia,
     RecebimentoConta,
+    RecebimentoCreditoFornecedor,
+    RateioCompraFornecedor,
     RegraComissaoTecnico,
     RegraPremioMeta,
     TransferenciaTesouraria,
@@ -63,6 +74,14 @@ from caixa.services.comissoes import (
     processar_evento_servico_finalizado,
 )
 from caixa.services.livro_financeiro import estornar_movimento_financeiro
+from caixa.services.dinheiro_fisico import (
+    registrar_saldo_corte,
+    registrar_transferencia_entre_locais,
+    saldo_local,
+)
+from caixa.services.correcoes_retroativas import absorver_correcao, documentar_correcao_existente
+from caixa.services.creditos_fornecedores import criar_credito_fornecedor, receber_credito_fornecedor
+from caixa.services.rateios_fornecedores import adicionar_item_rateio, confirmar_rateio
 from caixa.services.pagamentos import estornar_origem_checkout, excluir_pagamento_com_justificativa
 from caixa.services.tesouraria import (
     conciliar_grupo,
@@ -70,6 +89,8 @@ from caixa.services.tesouraria import (
     desfazer_conciliacao,
     importar_extrato_csv,
     registrar_transferencia,
+    registrar_movimento_socio,
+    sugerir_correspondencias,
 )
 
 
@@ -967,6 +988,20 @@ class CaixaPermissoesTests(TestCase):
         self.assertEqual(response.context["saldo_sugerido_abertura"], Decimal("135.00"))
         self.assertContains(response, "Checklist da abertura")
 
+    def test_abrir_caixa_preserva_sugestao_zero_da_ultima_contagem(self):
+        caixa = Caixa.objects.filter(aberto=True).first()
+        caixa.aberto = False
+        caixa.data = timezone.localdate() - timedelta(days=1)
+        caixa.saldo_final = Decimal("250.00")
+        caixa.valor_contado_fisico = Decimal("0.00")
+        caixa.save(update_fields=["aberto", "data", "saldo_final", "valor_contado_fisico"])
+
+        self.client.force_login(self.atendente)
+        response = self.client.get(reverse("caixa:abrir_caixa"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["saldo_sugerido_abertura"], Decimal("0.00"))
+
     def test_fechar_caixa_exibe_resumo_de_conferencia(self):
         caixa = Caixa.objects.filter(aberto=True).first()
         forma = FormaPagamento.objects.create(nome="Dinheiro Teste", codigo="dinheiro_teste", tipo="avista")
@@ -1020,6 +1055,58 @@ class CaixaPermissoesTests(TestCase):
         self.assertFalse(caixa.aberto)
         self.assertEqual(len(caixa.conferencia_formas_pagamento), 1)
         self.assertEqual(caixa.conferencia_formas_pagamento[0]["codigo"], "pix_teste")
+        fechamento = FechamentoCaixa.objects.get(caixa=caixa)
+        self.assertEqual(fechamento.versao, 1)
+        self.assertEqual(fechamento.dinheiro_esperado, Decimal("0.00"))
+        self.assertEqual(fechamento.dinheiro_contado, Decimal("0.00"))
+        self.assertTrue(
+            EventoSessaoCaixa.objects.filter(
+                caixa=caixa, tipo="fechamento", fechamento=fechamento
+            ).exists()
+        )
+
+    def test_reabrir_e_fechar_novamente_preserva_primeira_versao(self):
+        caixa = Caixa.objects.filter(aberto=True).first()
+        self.client.force_login(self.gerente)
+        primeira = self.client.post(
+            reverse("caixa:fechar_caixa"),
+            {"valor_contado_fisico": "0.00", "justificativa_diferenca": ""},
+        )
+        self.assertEqual(primeira.status_code, 302)
+        fechamento_1 = FechamentoCaixa.objects.get(caixa=caixa, versao=1)
+
+        reabertura = self.client.post(
+            reverse("caixa:abrir_caixa"),
+            {"acao": "reabrir", "motivo_reabertura": "Conferencia complementar do expediente"},
+        )
+        self.assertEqual(reabertura.status_code, 302)
+        segunda = self.client.post(
+            reverse("caixa:fechar_caixa"),
+            {"valor_contado_fisico": "0.00", "justificativa_diferenca": ""},
+        )
+        self.assertEqual(segunda.status_code, 302)
+
+        fechamento_1.refresh_from_db()
+        self.assertEqual(fechamento_1.dinheiro_contado, Decimal("0.00"))
+        self.assertTrue(FechamentoCaixa.objects.filter(caixa=caixa, versao=2).exists())
+        self.assertTrue(EventoSessaoCaixa.objects.filter(caixa=caixa, tipo="reabertura").exists())
+
+    def test_diferenca_de_fechamento_cria_pendencia_sem_receita_ou_despesa(self):
+        caixa = Caixa.objects.filter(aberto=True).first()
+        movimentos_antes = MovimentoFinanceiro.objects.count()
+        self.client.force_login(self.gerente)
+        resposta = self.client.post(
+            reverse("caixa:fechar_caixa"),
+            {
+                "valor_contado_fisico": "50.79",
+                "justificativa_diferenca": "Sobra fisica com origem ainda nao confirmada",
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        divergencia = DivergenciaCaixa.objects.get(caixa=caixa)
+        self.assertEqual(divergencia.diferenca_bruta, Decimal("50.79"))
+        self.assertEqual(divergencia.status, "pendente")
+        self.assertEqual(MovimentoFinanceiro.objects.count(), movimentos_antes)
 
     def test_fechar_caixa_separa_pagamento_misto_e_confere_somente_dinheiro_fisico(self):
         caixa = Caixa.objects.filter(aberto=True).first()
@@ -5832,7 +5919,8 @@ class CaixaMultiempresaTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["total_entradas_previstas"], Decimal("100.00"))
-        self.assertEqual(response.context["total_despesas_previstas"], Decimal("180.00"))
+        self.assertEqual(response.context["total_despesas_previstas"], Decimal("0.00"))
+        self.assertEqual(sum((mes["recorrentes_referencia"] for mes in response.context["meses"]), Decimal("0.00")), Decimal("180.00"))
         self.assertContains(response, "Aluguel A")
         self.assertNotContains(response, "Aluguel B")
 
@@ -6803,6 +6891,132 @@ class TesourariaFaseDoisTests(TestCase):
         self.assertEqual(relatorio.context["total_saidas"], Decimal("80.00"))
         self.assertEqual(relatorio.context["pagamentos_contas_bancarios"].count(), 1)
 
+    def test_devolucao_fornecedor_pode_entrar_em_meio_diferente_sem_virar_receita(self):
+        conta = ContaPagar.objects.create(
+            empresa=self.empresa, fornecedor="Fornecedor A", descricao="Compra paga por PIX",
+            valor_total=Decimal("100.00"), valor_pago=Decimal("100.00"), status="paga",
+            vencimento=timezone.localdate(),
+        )
+        credito = criar_credito_fornecedor(
+            conta=conta, descricao="Devolução parcial", valor=Decimal("30.00"),
+            data_reconhecimento=timezone.localdate(), usuario=self.usuario,
+            chave="credito-fornecedor-teste-1",
+        )
+        recebimento = receber_credito_fornecedor(
+            credito=credito, valor=Decimal("30.00"), data_movimento=timezone.localdate(),
+            usuario=self.usuario, caixa=self.caixa, chave="recebimento-credito-teste-1",
+        )
+        credito.refresh_from_db()
+        self.assertEqual(credito.status, "recebido")
+        self.assertEqual(recebimento.lancamento_caixa.natureza, "devolucao_fornecedor")
+        self.assertFalse(MovimentoFinanceiro.objects.filter(origem_tipo="credito_fornecedor").exists())
+
+    def test_saida_manual_com_conta_existente_redireciona_sem_duplicar_despesa(self):
+        conta = ContaPagar.objects.create(
+            empresa=self.empresa, fornecedor="Fornecedor protegido", descricao="Aluguel",
+            valor_total=Decimal("250.00"), vencimento=timezone.localdate(),
+        )
+        categoria = CategoriaFinanceira.objects.create(
+            empresa=self.empresa, nome="Despesa teste", tipo="saida", ativa=True,
+        )
+        centro = CentroCusto.objects.create(empresa=self.empresa, nome="Loja", ativo=True)
+        forma = FormaPagamento.objects.create(empresa=self.empresa, nome="Dinheiro teste", codigo="dinheiro-teste")
+        self.client.force_login(self.usuario)
+        resposta = self.client.post(
+            reverse("caixa:registrar_saida"),
+            {
+                "conta_pagar_existente": conta.pk,
+                "descricao": "Pagamento aluguel",
+                "categoria": categoria.pk,
+                "centro_custo": centro.pk,
+                "valor": "250.00",
+                "forma_pagamento": forma.pk,
+                "caixa": self.caixa.pk,
+                "data_competencia": timezone.localdate().isoformat(),
+                "data_movimento": timezone.localdate().isoformat(),
+            },
+        )
+        self.assertRedirects(resposta, reverse("caixa:detalhe_conta_pagar", args=[conta.pk]))
+        self.assertFalse(LancamentoCaixa.objects.filter(descricao="Pagamento aluguel").exists())
+
+    def test_recebimento_credito_fornecedor_e_idempotente_e_nao_duplica_saldo(self):
+        conta = ContaPagar.objects.create(
+            empresa=self.empresa, fornecedor="Fornecedor B", descricao="Compra",
+            valor_total=Decimal("80.00"), valor_pago=Decimal("80.00"), status="paga",
+            vencimento=timezone.localdate(),
+        )
+        credito = criar_credito_fornecedor(
+            conta=conta, descricao="Restituição", valor=Decimal("20.00"),
+            data_reconhecimento=timezone.localdate(), usuario=self.usuario,
+            chave="credito-fornecedor-teste-2",
+        )
+        primeiro = receber_credito_fornecedor(
+            credito=credito, valor=Decimal("20.00"), data_movimento=timezone.localdate(),
+            usuario=self.usuario, conta_bancaria=self.conta_a, chave="recebimento-credito-teste-2",
+        )
+        repetido = receber_credito_fornecedor(
+            credito=credito, valor=Decimal("20.00"), data_movimento=timezone.localdate(),
+            usuario=self.usuario, conta_bancaria=self.conta_a, chave="recebimento-credito-teste-2",
+        )
+        self.assertEqual(primeiro.pk, repetido.pk)
+        self.assertEqual(RecebimentoCreditoFornecedor.objects.filter(credito=credito).count(), 1)
+        self.assertEqual(MovimentoBancario.objects.filter(origem_tipo="credito_fornecedor").count(), 1)
+
+    def test_rateio_compra_exige_soma_exata_e_confirmacao_humana(self):
+        conta = ContaPagar.objects.create(
+            empresa=self.empresa, fornecedor="Fornecedor rateio", descricao="Peças e insumos",
+            valor_total=Decimal("100.00"), vencimento=timezone.localdate(),
+        )
+        produto = Produto.objects.create(
+            empresa=self.empresa, nome="Peça para estoque", ean="RATEIO000001",
+            preco_final=Decimal("90.00"), quantidade=0,
+        )
+        centro = CentroCusto.objects.create(empresa=self.empresa, nome="Oficina rateio", ativo=True)
+        adicionar_item_rateio(
+            conta=conta, destino_tipo="estoque", produto=produto, valor=Decimal("60.00"), usuario=self.usuario,
+        )
+        rateio = RateioCompraFornecedor.objects.get(conta_pagar=conta)
+        with self.assertRaises(ValidationError):
+            confirmar_rateio(rateio=rateio, usuario=self.usuario)
+        adicionar_item_rateio(
+            conta=conta, destino_tipo="centro_custo", centro_custo=centro,
+            valor=Decimal("40.00"), usuario=self.usuario,
+        )
+        confirmar_rateio(rateio=rateio, usuario=self.usuario)
+        rateio.refresh_from_db()
+        self.assertEqual(rateio.status, "confirmado")
+        self.assertEqual(rateio.total_rateado, Decimal("100.00"))
+        self.assertIsNotNone(rateio.confirmado_por_id)
+
+    def test_rateio_compra_nao_aceita_destino_automatico_ou_excedente(self):
+        conta = ContaPagar.objects.create(
+            empresa=self.empresa, fornecedor="Fornecedor rateio 2", descricao="Compra",
+            valor_total=Decimal("50.00"), vencimento=timezone.localdate(),
+        )
+        with self.assertRaises(ValidationError):
+            adicionar_item_rateio(
+                conta=conta, destino_tipo="estoque", valor=Decimal("10.00"), usuario=self.usuario,
+            )
+        centro = CentroCusto.objects.create(empresa=self.empresa, nome="Centro limite", ativo=True)
+        with self.assertRaises(ValidationError):
+            adicionar_item_rateio(
+                conta=conta, destino_tipo="centro_custo", centro_custo=centro,
+                valor=Decimal("51.00"), usuario=self.usuario,
+            )
+        self.assertFalse(ItemRateioCompraFornecedor.objects.exists())
+
+    def test_detalhe_conta_pagar_exibe_creditos_e_rateio_sem_criar_movimentos(self):
+        conta = ContaPagar.objects.create(
+            empresa=self.empresa, fornecedor="Fornecedor interface", descricao="Compra para distribuir",
+            valor_total=Decimal("70.00"), vencimento=timezone.localdate(),
+        )
+        self.client.force_login(self.usuario)
+        resposta = self.client.get(reverse("caixa:detalhe_conta_pagar", args=[conta.pk]))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, "Devoluções e créditos do fornecedor")
+        self.assertContains(resposta, "Rateio da compra")
+        self.assertFalse(RateioCompraFornecedor.objects.filter(conta_pagar=conta).exists())
+
     def test_detalhe_conta_pagar_nao_vaza_entre_empresas(self):
         outra_empresa = Empresa.objects.create(nome="Empresa externa", cnpj="33.444.555/0001-70")
         conta = ContaPagar.objects.create(
@@ -6831,6 +7045,195 @@ class TesourariaFaseDoisTests(TestCase):
         self.assertEqual(self.conta_a.saldo_atual, Decimal("60.00"))
         self.assertEqual(self.conta_b.saldo_atual, Decimal("20.00"))
 
+    def test_transferencia_repetida_so_e_idempotente_com_mesmo_payload(self):
+        primeira = registrar_transferencia(
+            empresa=self.empresa,
+            valor=Decimal("20.00"),
+            data_movimento=timezone.localdate(),
+            chave="transf-colisao-1",
+            usuario=self.usuario,
+            conta_origem=self.conta_a,
+            conta_destino=self.conta_b,
+            descricao="Transferencia confirmada",
+        )
+        repetida = registrar_transferencia(
+            empresa=self.empresa,
+            valor=Decimal("20.00"),
+            data_movimento=timezone.localdate(),
+            chave="transf-colisao-1",
+            usuario=self.usuario,
+            conta_origem=self.conta_a,
+            conta_destino=self.conta_b,
+            descricao="Transferencia confirmada",
+        )
+        self.assertEqual(primeira.pk, repetida.pk)
+        with self.assertRaises(ValidationError):
+            registrar_transferencia(
+                empresa=self.empresa,
+                valor=Decimal("25.00"),
+                data_movimento=timezone.localdate(),
+                chave="transf-colisao-1",
+                usuario=self.usuario,
+                conta_origem=self.conta_a,
+                conta_destino=self.conta_b,
+                descricao="Transferencia confirmada",
+            )
+        self.assertEqual(TransferenciaTesouraria.objects.filter(chave_idempotencia="transf-colisao-1").count(), 1)
+
+    def test_sangria_move_gaveta_para_cofre_sem_gerar_receita_ou_despesa(self):
+        gaveta = LocalDinheiroFisico.objects.create(
+            empresa=self.empresa, nome="Gaveta teste", codigo="gaveta-teste", tipo="gaveta"
+        )
+        cofre = LocalDinheiroFisico.objects.create(
+            empresa=self.empresa, nome="Cofre teste", codigo="cofre-teste", tipo="cofre"
+        )
+        registrar_saldo_corte(
+            empresa=self.empresa,
+            local=gaveta,
+            valor=Decimal("300.00"),
+            data_movimento=timezone.localdate(),
+            justificativa="Contagem inicial conferida pelo responsavel",
+            usuario=self.usuario,
+            chave="corte-gaveta-teste",
+        )
+        operacao = registrar_transferencia_entre_locais(
+            empresa=self.empresa,
+            origem=gaveta,
+            destino=cofre,
+            valor=Decimal("200.00"),
+            tipo="sangria",
+            data_movimento=timezone.localdate(),
+            descricao="Sangria do fim do turno",
+            justificativa="Custodia interna",
+            usuario=self.usuario,
+            chave="sangria-teste-1",
+        )
+        repetida = registrar_transferencia_entre_locais(
+            empresa=self.empresa,
+            origem=gaveta,
+            destino=cofre,
+            valor=Decimal("200.00"),
+            tipo="sangria",
+            data_movimento=timezone.localdate(),
+            descricao="Sangria do fim do turno",
+            justificativa="Custodia interna",
+            usuario=self.usuario,
+            chave="sangria-teste-1",
+        )
+
+        self.assertEqual(operacao.pk, repetida.pk)
+        self.assertEqual(saldo_local(gaveta), Decimal("100.00"))
+        self.assertEqual(saldo_local(cofre), Decimal("200.00"))
+        self.assertEqual(OperacaoDinheiroFisico.objects.filter(tipo="sangria").count(), 1)
+        self.assertEqual(MovimentoFinanceiro.objects.count(), 0)
+
+    def test_sangria_e_atomica_quando_saldo_e_insuficiente(self):
+        gaveta = LocalDinheiroFisico.objects.create(
+            empresa=self.empresa, nome="Gaveta sem saldo", codigo="gaveta-sem-saldo", tipo="gaveta"
+        )
+        cofre = LocalDinheiroFisico.objects.create(
+            empresa=self.empresa, nome="Cofre vazio", codigo="cofre-vazio", tipo="cofre"
+        )
+        with self.assertRaises(ValidationError):
+            registrar_transferencia_entre_locais(
+                empresa=self.empresa,
+                origem=gaveta,
+                destino=cofre,
+                valor=Decimal("10.00"),
+                tipo="sangria",
+                data_movimento=timezone.localdate(),
+                descricao="Sangria invalida",
+                justificativa="",
+                usuario=self.usuario,
+                chave="sangria-sem-saldo",
+            )
+        self.assertFalse(OperacaoDinheiroFisico.objects.filter(chave_idempotencia="sangria-sem-saldo").exists())
+
+    def test_extrato_fisico_inclui_apenas_parcela_em_dinheiro_do_pagamento_misto(self):
+        forma_pix = FormaPagamento.objects.create(
+            empresa=self.empresa, nome="PIX extrato", codigo="pix-extrato", modalidade="pix"
+        )
+        forma_dinheiro = FormaPagamento.objects.create(
+            empresa=self.empresa, nome="Dinheiro extrato", codigo="dinheiro", modalidade="dinheiro"
+        )
+        Pagamento.objects.create(
+            empresa=self.empresa,
+            caixa=self.caixa,
+            valor=Decimal("120.00"),
+            forma_pagamento=forma_pix,
+            metodo="pix-extrato",
+            formas_pagamento_compostas=[
+                {"forma_id": forma_pix.pk, "forma_codigo": "pix-extrato", "forma_nome": "PIX extrato", "modalidade": "pix", "valor": "100.00"},
+                {"forma_id": forma_dinheiro.pk, "forma_codigo": "dinheiro", "forma_nome": "Dinheiro extrato", "modalidade": "dinheiro", "valor": "20.00"},
+            ],
+        )
+        self.client.force_login(self.usuario)
+        resposta = self.client.get(reverse("caixa:dinheiro_fisico"))
+        self.assertEqual(resposta.status_code, 200)
+        linhas = resposta.context["dias"][0]["linhas"]
+        recebimento = next(linha for linha in linhas if linha["tipo"] == "recebimento")
+        self.assertEqual(recebimento["entrada"], Decimal("20.00"))
+        self.assertEqual(resposta.context["dias"][0]["esperado"], Decimal("120.00"))
+
+    def test_correcao_existente_e_absorvida_sem_duplicar_dinheiro(self):
+        self.caixa.data = timezone.localdate() - timedelta(days=1)
+        self.caixa.aberto = False
+        self.caixa.saldo_final = Decimal("300.00")
+        self.caixa.valor_contado_fisico = Decimal("100.00")
+        self.caixa.diferenca_fechamento = Decimal("-200.00")
+        self.caixa.save(update_fields=["data", "aberto", "saldo_final", "valor_contado_fisico", "diferenca_fechamento"])
+        lancamento = LancamentoCaixa.objects.create(
+            empresa=self.empresa,
+            caixa=self.caixa,
+            descricao="Entrada retroativa do vizinho",
+            valor=Decimal("200.00"),
+            tipo="entrada",
+            natureza="transferencia",
+            data_movimento=self.caixa.data,
+            data_competencia=self.caixa.data,
+            usuario=self.usuario,
+        )
+        caixa_posterior = Caixa.objects.create(empresa=self.empresa, saldo_inicial=Decimal("223.00"), aberto=True)
+        caixa_posterior.aberto = False
+        caixa_posterior.saldo_final = Decimal("223.00")
+        caixa_posterior.valor_contado_fisico = Decimal("423.00")
+        caixa_posterior.diferenca_fechamento = Decimal("200.00")
+        caixa_posterior.save(update_fields=["aberto", "saldo_final", "valor_contado_fisico", "diferenca_fechamento"])
+        fechamento = FechamentoCaixa.objects.create(
+            empresa=self.empresa, caixa=caixa_posterior, versao=1,
+            saldo_contabil=Decimal("223.00"), dinheiro_esperado=Decimal("223.00"),
+            dinheiro_contado=Decimal("423.00"), diferenca=Decimal("200.00"),
+            justificativa="Valor retroativo ja absorvido na contagem", fechado_por=self.usuario,
+        )
+        divergencia = DivergenciaCaixa.objects.create(
+            empresa=self.empresa, caixa=caixa_posterior, fechamento=fechamento,
+            esperado=Decimal("223.00"), contado=Decimal("423.00"), diferenca_bruta=Decimal("200.00"),
+            justificativa_contagem="Valor retroativo ja absorvido na contagem", criada_por=self.usuario,
+        )
+        movimentos_antes = MovimentoFinanceiro.objects.count()
+        correcao = documentar_correcao_existente(
+            lancamento=lancamento,
+            justificativa="Transferencia registrada depois do fechamento",
+            usuario=self.usuario,
+        )
+        absorver_correcao(
+            correcao=correcao,
+            divergencia=divergencia,
+            valor=Decimal("200.00"),
+            justificativa="Contagem posterior absorveu integralmente o valor",
+            usuario=self.usuario,
+        )
+        self.caixa.refresh_from_db()
+        caixa_posterior.refresh_from_db()
+        divergencia.refresh_from_db()
+        correcao.refresh_from_db()
+        self.assertEqual(self.caixa.valor_contado_fisico, Decimal("100.00"))
+        self.assertEqual(caixa_posterior.valor_contado_fisico, Decimal("423.00"))
+        self.assertEqual(divergencia.status, "resolvida")
+        self.assertEqual(correcao.status, "absorvida")
+        self.assertEqual(AbsorcaoCorrecaoCaixa.objects.count(), 1)
+        self.assertEqual(MovimentoFinanceiro.objects.count(), movimentos_antes)
+
     def test_importacao_e_conciliacao_sao_idempotentes(self):
         movimento = MovimentoBancario.objects.create(empresa=self.empresa, conta=self.conta_a, tipo="entrada", origem_tipo="manual", descricao="Crédito teste", valor=Decimal("100.00"), data_movimento=timezone.localdate(), chave_idempotencia="credito-100")
         csv_data = f"data;descricao;valor;identificador\n{timezone.localdate():%d/%m/%Y};Crédito teste;100,00;linha-001\n".encode()
@@ -6842,6 +7245,53 @@ class TesourariaFaseDoisTests(TestCase):
         self.assertEqual(linha.status, "conciliado")
         with self.assertRaises(ValidationError):
             conciliar_linha(linha=linha, movimento=movimento, usuario=self.usuario)
+
+    def test_csv_generico_sobreposto_nao_depende_da_posicao_da_linha(self):
+        data = timezone.localdate()
+        primeiro = f"data;descricao;valor\n{data:%d/%m/%Y};Venda A;10,00\n".encode()
+        sobreposto = (
+            f"data;descricao;valor\n{data:%d/%m/%Y};Tarifa anterior;-2,00\n"
+            f"{data:%d/%m/%Y};Venda A;10,00\n"
+        ).encode()
+        self.assertEqual(len(importar_extrato_csv(conta=self.conta_a, conteudo=primeiro, usuario=self.usuario)), 1)
+        self.assertEqual(len(importar_extrato_csv(conta=self.conta_a, conteudo=sobreposto, usuario=self.usuario)), 1)
+        self.assertEqual(LinhaExtratoBancario.objects.filter(conta=self.conta_a, descricao="Venda A").count(), 1)
+
+    def test_sugestao_apenas_por_valor_nao_e_apresentada_como_forte(self):
+        linha = LinhaExtratoBancario.objects.create(
+            empresa=self.empresa, conta=self.conta_a, identificador_externo="sugestao-fraca",
+            data_movimento=timezone.localdate(), descricao="Contraparte completamente diferente",
+            valor=Decimal("91.00"),
+        )
+        MovimentoBancario.objects.create(
+            empresa=self.empresa, conta=self.conta_a, tipo="entrada", origem_tipo="manual",
+            descricao="Outro documento sem relacao", valor=Decimal("91.00"),
+            data_movimento=timezone.localdate() - timedelta(days=5), chave_idempotencia="mov-sugestao-fraca",
+        )
+        sugestao = sugerir_correspondencias(linha=linha)[0]
+        self.assertNotEqual(sugestao["confianca"], "forte")
+        self.assertLessEqual(sugestao["score"], 55)
+        self.assertTrue(sugestao["alertas"])
+
+    def test_retirada_a_classificar_nao_exige_aporte_ficticio(self):
+        movimento = registrar_movimento_socio(
+            empresa=self.empresa,
+            aporte=None,
+            tipo="retirada_classificar",
+            descricao="Retirada aguardando orientacao contabil",
+            valor=Decimal("40.00"),
+            data_competencia=timezone.localdate(),
+            data_movimento=timezone.localdate(),
+            conta_bancaria=self.conta_a,
+            caixa=None,
+            documento_referencia="RET-TESTE",
+            comprovante=None,
+            chave="mov-socio-sem-aporte",
+            usuario=self.usuario,
+        )
+        self.assertIsNone(movimento.aporte_origem_id)
+        self.assertEqual(movimento.tipo, "retirada_classificar")
+        self.assertTrue(MovimentoBancario.objects.filter(origem_id=movimento.pk, metadados__tipo_interno="movimento_socio").exists())
 
     def test_conciliacao_agrupada_um_para_muitos(self):
         linha = LinhaExtratoBancario.objects.create(

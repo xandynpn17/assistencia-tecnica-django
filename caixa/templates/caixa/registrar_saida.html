@@ -115,6 +115,13 @@
                             <div class="saida-flow-step"><strong>3. Confirme a origem</strong><small>Caixa físico ou conta bancária.</small></div>
                         </div>
 
+                        <div class="form-group border rounded p-3 bg-light">
+                            <label for="{{ form.conta_pagar_existente.id_for_label }}"><strong>{{ form.conta_pagar_existente.label }}</strong></label>
+                            {{ form.conta_pagar_existente|add_class:"form-control" }}
+                            <small class="text-muted">{{ form.conta_pagar_existente.help_text }}</small>
+                            {% if form.conta_pagar_existente.errors %}<small class="text-danger d-block">{{ form.conta_pagar_existente.errors|striptags }}</small>{% endif %}
+                        </div>
+
                         <div class="form-group">
                             <label for="{{ form.descricao.id_for_label }}"><strong>Descrição</strong></label>
                             {{ form.descricao|add_class:"form-control form-control-lg"|attr:"placeholder:Ex: compra de materiais, combustível, frete" }}

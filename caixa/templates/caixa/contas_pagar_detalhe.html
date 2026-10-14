@@ -170,5 +170,125 @@
       </div>
     </div>
   </div>
+
+  <div class="card mt-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+      <div>
+        <strong>Devoluções e créditos do fornecedor</strong>
+        <div class="small text-muted">Registre o direito de receber e depois informe onde o dinheiro entrou. Isso não cria uma nova receita nem repete a despesa.</div>
+      </div>
+      <span class="badge badge-light">{{ creditos|length }} crédito(s)</span>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-lg-7">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover">
+              <thead><tr><th>Crédito</th><th>Status</th><th class="text-right">Total</th><th class="text-right">Recebido</th><th class="text-right">Em aberto</th></tr></thead>
+              <tbody>
+                {% for credito in creditos %}
+                <tr>
+                  <td><strong>#{{ credito.id }} · {{ credito.descricao }}</strong><br><small class="text-muted">{{ credito.data_reconhecimento|date:"d/m/Y" }} · {{ credito.documento_referencia|default:"Sem documento" }}</small></td>
+                  <td>{{ credito.get_status_display }}</td>
+                  <td class="text-right">R$ {{ credito.valor_total|floatformat:2 }}</td>
+                  <td class="text-right">R$ {{ credito.valor_recebido|floatformat:2 }}</td>
+                  <td class="text-right">R$ {{ credito.valor_aberto|floatformat:2 }}</td>
+                </tr>
+                {% for recebimento in credito.recebimentos.all %}
+                <tr class="bg-light">
+                  <td colspan="2" class="pl-4">↳ {{ recebimento.data_movimento|date:"d/m/Y" }} · {% if recebimento.conta_bancaria %}{{ recebimento.conta_bancaria.nome }}{% else %}Caixa físico{% endif %}</td>
+                  <td class="text-right">R$ {{ recebimento.valor|floatformat:2 }}</td>
+                  <td colspan="2">
+                    {% if recebimento.status == 'estornado' %}
+                    <span class="badge badge-secondary">Estornado</span>
+                    {% else %}
+                    <form method="post" class="d-flex" style="gap:4px;">{% csrf_token %}
+                      <input type="hidden" name="action" value="estornar_credito_fornecedor">
+                      <input type="hidden" name="recebimento_id" value="{{ recebimento.id }}">
+                      <input name="motivo_estorno" class="form-control form-control-sm" minlength="12" required placeholder="Motivo do estorno">
+                      <button class="btn btn-sm btn-outline-danger">Estornar</button>
+                    </form>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted">Nenhuma devolução registrada para esta compra.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="col-lg-5">
+          <details class="mb-3">
+            <summary class="btn btn-outline-primary btn-sm">Registrar crédito/devolução</summary>
+            <form method="post" class="border rounded p-3 mt-2">{% csrf_token %}
+              <input type="hidden" name="action" value="criar_credito_fornecedor">
+              {% for field in credito_form %}<div class="mb-2"><label>{{ field.label }}</label>{{ field|add_class:"form-control" }}</div>{% endfor %}
+              <button class="btn btn-primary btn-sm">Salvar crédito</button>
+            </form>
+          </details>
+          {% if creditos %}
+          <details>
+            <summary class="btn btn-outline-success btn-sm">Registrar recebimento</summary>
+            <form method="post" class="border rounded p-3 mt-2">{% csrf_token %}
+              <input type="hidden" name="action" value="receber_credito_fornecedor">
+              {% for field in recebimento_credito_form %}<div class="mb-2"><label>{{ field.label }}</label>{{ field|add_class:"form-control" }}{% if field.help_text %}<small class="text-muted">{{ field.help_text }}</small>{% endif %}</div>{% endfor %}
+              <div class="alert alert-light small">Escolha a conta bancária mesmo que a compra tenha sido paga por outro meio. Para restituição em espécie, escolha apenas o caixa físico.</div>
+              <button class="btn btn-success btn-sm">Confirmar recebimento</button>
+            </form>
+          </details>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header bg-white">
+      <strong>Rateio da compra</strong>
+      <div class="small text-muted">Distribua manualmente entre OS, estoque e centros de custo. Nenhum destino é criado ou confirmado automaticamente.</div>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-lg-7">
+          <div class="d-flex justify-content-between mb-2">
+            <span>Status: <strong>{% if rateio %}{{ rateio.get_status_display }}{% else %}Ainda não iniciado{% endif %}</strong></span>
+            <span>Compra: <strong>R$ {{ conta.valor_total|floatformat:2 }}</strong> · Rateado: <strong>R$ {% if rateio %}{{ rateio.total_rateado|floatformat:2 }}{% else %}0,00{% endif %}</strong> · Diferença: <strong>R$ {% if rateio %}{{ rateio.diferenca|floatformat:2 }}{% else %}{{ conta.valor_total|floatformat:2 }}{% endif %}</strong></span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead><tr><th>Destino</th><th>Descrição</th><th class="text-right">Valor</th><th></th></tr></thead>
+              <tbody>
+                {% for item in rateio.itens.all %}
+                <tr>
+                  <td>{{ item.get_destino_tipo_display }} · {% if item.ordem_servico %}OS {{ item.ordem_servico.numero_os }}{% elif item.produto %}{{ item.produto.nome }}{% else %}{{ item.centro_custo.nome }}{% endif %}</td>
+                  <td>{{ item.descricao|default:"-" }}</td>
+                  <td class="text-right">R$ {{ item.valor|floatformat:2 }}</td>
+                  <td>{% if rateio.status == 'rascunho' %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="remover_item_rateio"><input type="hidden" name="item_id" value="{{ item.id }}"><button class="btn btn-xs btn-outline-danger">Remover</button></form>{% endif %}</td>
+                </tr>
+                {% empty %}<tr><td colspan="4" class="text-center text-muted">Nenhum destino informado.</td></tr>{% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if rateio and rateio.status == 'rascunho' %}
+          <form method="post" class="text-right">{% csrf_token %}<input type="hidden" name="action" value="confirmar_rateio"><button class="btn btn-success">Confirmar somente com soma exata</button></form>
+          {% endif %}
+        </div>
+        <div class="col-lg-5">
+          {% if not rateio or rateio.status == 'rascunho' %}
+          <form method="post" class="border rounded p-3">{% csrf_token %}
+            <input type="hidden" name="action" value="adicionar_item_rateio">
+            {% for field in rateio_form %}<div class="mb-2"><label>{{ field.label }}</label>{{ field|add_class:"form-control" }}{% if field.errors %}<small class="text-danger">{{ field.errors|striptags }}</small>{% endif %}</div>{% endfor %}
+            <div class="alert alert-light small">Escolha o tipo e preencha somente o campo correspondente. Ex.: tipo “Ordem de serviço” + uma OS.</div>
+            <button class="btn btn-primary btn-sm">Adicionar ao rascunho</button>
+          </form>
+          {% else %}
+          <div class="alert alert-success mb-0">Rateio confirmado. Os destinos estão preservados para auditoria e não podem ser alterados silenciosamente.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

@@ -1144,7 +1144,7 @@
                             </details>
 
                             {% if guia_codigo or venda %}
-                            <details id="opcao-comprador" class="pagamento-advanced" {% if form.cliente_nome.errors or form.cliente_documento.errors or form.cliente_telefone.errors %}open{% endif %}>
+                            <details id="opcao-comprador" class="pagamento-advanced" {% if form.cliente.errors or form.cliente_nome.errors or form.cliente_documento.errors or form.cliente_telefone.errors %}open{% endif %}>
                                 <summary>
                                     <span>Identificacao opcional do comprador</span>
                                 </summary>
@@ -1176,6 +1176,7 @@
                             <details id="opcao-datas" class="pagamento-advanced" {% if form.data_competencia.errors or form.data_movimento.errors %}open{% endif %}>
                                 <summary><span>Datas contábeis e financeiras</span></summary>
                                 <div class="pagamento-advanced-body">
+                                    <div class="form-group"><label for="{{ form.cliente.id_for_label }}">Cliente cadastrado (opcional)</label>{{ form.cliente|add_class:"form-control" }}{{ form.cliente.errors }}<small class="text-muted">Vincule para incluir a compra no histórico do cliente.</small></div>
                                     <div class="form-row">
                                         <div class="form-group col-md-6">
                                             <label for="{{ form.data_competencia.id_for_label }}"><strong>Competência</strong></label>

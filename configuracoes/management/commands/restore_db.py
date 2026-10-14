@@ -1,4 +1,5 @@
 import gzip
+import json
 import os
 import shutil
 import subprocess
@@ -47,6 +48,7 @@ class Command(BaseCommand):
 
         source_preparado, temp_root = self._preparar_fonte_restore(source)
         try:
+            self._verificar_manifesto(source_preparado)
             engine = db.get("ENGINE")
             if engine == "django.db.backends.sqlite3":
                 self._restore_sqlite(db, source_preparado)
@@ -70,6 +72,20 @@ class Command(BaseCommand):
                     f"Reparo empresa unica concluido: {resultado.total_atualizado} registros associados."
                 )
             )
+
+    def _verificar_manifesto(self, source):
+        raiz = source if source.is_dir() else source.parent
+        manifesto = raiz / "manifest.json"
+        if not manifesto.exists():
+            return  # Pacotes antigos continuam compatíveis.
+        from configuracoes.services.backup_automatico import hash_arquivo
+        dados = json.loads(manifesto.read_text(encoding="utf-8"))
+        for nome, esperado in dados.get("files", {}).items():
+            arquivo = (raiz / nome).resolve()
+            if raiz.resolve() not in arquivo.parents or not arquivo.is_file():
+                raise CommandError("Arquivo inválido/ausente no manifesto. Banco ativo preservado.")
+            if arquivo.stat().st_size != esperado.get("size") or hash_arquivo(arquivo) != esperado.get("sha256"):
+                raise CommandError("Hash/tamanho do backup não corresponde ao manifesto. Banco ativo preservado.")
 
     def _restore_sqlite(self, db, source):
         if source.is_dir():

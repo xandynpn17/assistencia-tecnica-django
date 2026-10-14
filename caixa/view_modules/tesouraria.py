@@ -1,5 +1,7 @@
 import logging
 from uuid import uuid4
+from urllib.parse import urlsplit
+from django.urls import reverse
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -15,9 +17,28 @@ from ..forms import AporteCapitalForm, ConciliacaoBancariaGrupoForm, ConciliarEx
 from ..models import AporteCapital, AuditoriaFinanceira, ConciliacaoBancaria, ContaBancaria, FechamentoBancario, ImportacaoExtratoBancario, LinhaExtratoBancario, MovimentoBancario, MovimentoSocio, TransferenciaTesouraria
 from ..services.tesouraria import conciliar_grupo, conciliar_linha, criar_movimento_de_linha_extrato, desfazer_conciliacao, fechar_periodo_bancario, ignorar_linha, importar_extrato_arquivo, movimentos_bancarios_disponiveis, reabrir_periodo_bancario, registrar_aporte_capital, registrar_movimento_socio, registrar_transferencia, sugerir_correspondencias
 from .helpers import _garantir_categorias_financeiras_padrao
+from ..services.consulta_bancaria import contexto_consulta_bancaria
 
 
 logger = logging.getLogger(__name__)
+
+
+def _url_retorno_tesouraria(request):
+    destino = reverse('caixa:tesouraria')
+    if request.path == destino:
+        return request.get_full_path()
+    retorno = request.POST.get('next') or request.GET.get('next') or ''
+    try:
+        partes = urlsplit(retorno[:2000])
+    except ValueError:
+        return destino
+    if not partes.scheme and not partes.netloc and partes.path == destino:
+        return retorno[:2000]
+    return destino
+
+
+def _retorno_tesouraria(request):
+    return redirect(_url_retorno_tesouraria(request))
 
 
 @role_required(CAIXA_FINANCIAL_ROLES)
@@ -40,7 +61,7 @@ def tesouraria(request):
         conta.empresa = empresa
         conta.save()
         messages.success(request, "Conta bancária cadastrada.")
-        return redirect("caixa:tesouraria")
+        return _retorno_tesouraria(request)
     if acao == "transferencia" and transferencia_form.is_valid():
         dados = transferencia_form.cleaned_data
         try:
@@ -57,7 +78,7 @@ def tesouraria(request):
                 descricao=dados.get("descricao") or "",
             )
             messages.success(request, "Transferência registrada sem afetar receita ou despesa.")
-            return redirect("caixa:tesouraria")
+            return _retorno_tesouraria(request)
         except ValidationError as exc:
             transferencia_form.add_error(None, exc)
     if acao == "aporte" and aporte_form.is_valid():
@@ -77,7 +98,7 @@ def tesouraria(request):
                     chave=uuid4().hex, usuario=request.user,
                 )
                 messages.success(request, "Capital/aporte registrado sem compor receita operacional.")
-                return redirect("caixa:tesouraria")
+                return _retorno_tesouraria(request)
             except ValidationError as exc:
                 aporte_form.add_error(None, exc)
     if acao == "movimento_socio" and movimento_socio_form.is_valid():
@@ -94,9 +115,10 @@ def tesouraria(request):
                     data_movimento=dados["data_movimento"], conta_bancaria=dados.get("conta_bancaria"),
                     caixa=dados.get("caixa"), documento_referencia=dados.get("documento_referencia") or "",
                     comprovante=dados.get("comprovante"), chave=uuid4().hex, usuario=request.user,
+                    empresa=empresa,
                 )
                 messages.success(request, "Movimento de sócio registrado fora da receita operacional.")
-                return redirect("caixa:tesouraria")
+                return _retorno_tesouraria(request)
             except ValidationError as exc:
                 movimento_socio_form.add_error(None, exc)
     if acao == "extrato" and extrato_form.is_valid():
@@ -110,7 +132,7 @@ def tesouraria(request):
                 usuario=request.user,
             )
             messages.success(request, f"Extrato importado: {len(criadas)} linha(s) nova(s).")
-            return redirect("caixa:tesouraria")
+            return _retorno_tesouraria(request)
         except ValidationError as exc:
             extrato_form.add_error("arquivo", exc)
     if acao == "fechar_periodo" and fechamento_form.is_valid():
@@ -118,7 +140,7 @@ def tesouraria(request):
         try:
             fechar_periodo_bancario(usuario=request.user, **fechamento_form.cleaned_data)
             messages.success(request, "Período bancário fechado com saldo conciliado.")
-            return redirect("caixa:tesouraria")
+            return _retorno_tesouraria(request)
         except ValidationError as exc:
             fechamento_form.add_error(None, exc)
     if acao == "reabrir_periodo":
@@ -131,7 +153,7 @@ def tesouraria(request):
             messages.success(request, "Período bancário reaberto com auditoria preservada.")
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-        return redirect("caixa:tesouraria")
+        return _retorno_tesouraria(request)
 
     possivel_duplicidade = LinhaExtratoBancario.objects.filter(
         conta=OuterRef("pk"),
@@ -142,6 +164,7 @@ def tesouraria(request):
         possivel_saldo_inicial_duplicado=Exists(possivel_duplicidade)
     ).prefetch_related("movimentos")
     return render(request, "caixa/tesouraria.html", {
+        **contexto_consulta_bancaria(request, empresa),
         "contas": contas,
         "conta_form": conta_form,
         "transferencia_form": transferencia_form,
@@ -149,14 +172,9 @@ def tesouraria(request):
         "movimento_socio_form": movimento_socio_form,
         "extrato_form": extrato_form,
         "fechamento_form": fechamento_form,
-        "movimentos": movimentos_bancarios_disponiveis(
-            MovimentoBancario.objects.filter(empresa=empresa).select_related("conta")
-        )[:100],
-        "linhas_extrato": LinhaExtratoBancario.objects.filter(empresa=empresa).select_related("conta", "movimento")[:100],
         "transferencias": TransferenciaTesouraria.objects.filter(empresa=empresa).select_related("conta_origem", "conta_destino", "caixa_origem", "caixa_destino")[:50],
         "aportes": AporteCapital.objects.filter(empresa=empresa).select_related("conta_bancaria", "caixa", "registrado_por")[:50],
         "movimentos_socios": MovimentoSocio.objects.filter(empresa=empresa).select_related("aporte_origem", "conta_bancaria", "caixa")[:50],
-        "conciliacoes": ConciliacaoBancaria.objects.filter(empresa=empresa).select_related("conta", "conciliado_por", "desfeito_por")[:50],
         "importacoes_extrato": ImportacaoExtratoBancario.objects.filter(empresa=empresa).select_related("conta", "importado_por")[:30],
         "fechamentos_bancarios": FechamentoBancario.objects.filter(empresa=empresa).select_related("conta", "fechado_por", "reaberto_por")[:30],
         "pode_editar_conta_bancaria": has_sensitive_permission(
@@ -221,11 +239,12 @@ def editar_conta_bancaria(request, conta_id):
                 request,
                 "Conta bancária atualizada com justificativa registrada na auditoria.",
             )
-            return redirect("caixa:tesouraria")
+            return _retorno_tesouraria(request)
 
     return render(request, "caixa/editar_conta_bancaria.html", {
         "conta": conta,
         "form": form,
+        "retorno_tesouraria": _url_retorno_tesouraria(request),
         "saldo_inicial_antes": saldo_inicial_antes,
         "data_saldo_inicial_antes": data_saldo_inicial_antes,
         "saldo_atual_antes": saldo_atual_antes,
@@ -281,7 +300,7 @@ def tratar_linha_extrato(request, linha_id):
                 )
                 conciliar_linha(linha=linha, movimento=movimento, usuario=request.user)
             messages.success(request, "Movimento criado com confirmação humana e linha conciliada.")
-            return redirect("caixa:tesouraria")
+            return _retorno_tesouraria(request)
         except (ValidationError, IntegrityError) as exc:
             form_criar.add_error(None, exc if isinstance(exc, ValidationError) else (
                 "A conciliação foi alterada por outra operação. Atualize a tela e tente novamente."
@@ -296,7 +315,7 @@ def tratar_linha_extrato(request, linha_id):
         try:
             ignorar_linha(linha=linha, usuario=request.user, justificativa=request.POST.get("justificativa"))
             messages.success(request, "Linha ignorada com justificativa.")
-            return redirect("caixa:tesouraria")
+            return _retorno_tesouraria(request)
         except ValidationError as exc:
             messages.error(request, str(exc))
     form = ConciliarExtratoForm(request.POST if acao_conciliar else None, linha=linha, empresa=empresa)
@@ -313,12 +332,13 @@ def tratar_linha_extrato(request, linha_id):
                 f"Linha tratada como {conciliacao.get_status_display().lower()} com "
                 f"{conciliacao.itens_movimento.count()} movimento(s).",
             )
-            return redirect("caixa:tesouraria")
+            return _retorno_tesouraria(request)
         except (ValidationError, IntegrityError) as exc:
             form.add_error(None, exc if isinstance(exc, ValidationError) else (
                 "A conciliação foi alterada por outra operação. Atualize a tela e tente novamente."
             ))
     return render(request, "caixa/conciliar_extrato.html", {
+        "retorno_tesouraria": _url_retorno_tesouraria(request),
         "linha": linha, "valor_esperado": valor_esperado, "form": form, "form_criar": form_criar,
         "sugestoes": sugerir_correspondencias(linha=linha, limite=5),
         "possui_correspondencia_exata": possui_correspondencia_exata,
@@ -345,12 +365,12 @@ def conciliar_extrato_grupo(request):
                 descricao_diferenca=form.cleaned_data["descricao_diferenca"],
             )
             messages.success(request, f"Conciliação #{conciliacao.pk} registrada como {conciliacao.get_status_display().lower()}.")
-            return redirect("caixa:tesouraria")
+            return _retorno_tesouraria(request)
         except (ValidationError, IntegrityError) as exc:
             form.add_error(None, exc if isinstance(exc, ValidationError) else (
                 "A conciliação foi alterada por outra operação. Atualize a tela e tente novamente."
             ))
-    return render(request, "caixa/conciliar_extrato_grupo.html", {"form": form, "menu_app": "caixa", "menu_sub": "tesouraria"})
+    return render(request, "caixa/conciliar_extrato_grupo.html", {"form": form, "menu_app": "caixa", "menu_sub": "tesouraria", "retorno_tesouraria": _url_retorno_tesouraria(request)})
 
 
 @role_required(CAIXA_FINANCIAL_ROLES)
@@ -359,7 +379,7 @@ def desfazer_conciliacao_bancaria(request, conciliacao_id):
     empresa = obter_empresa_ativa(request, strict=False)
     conciliacao = get_object_or_404(ConciliacaoBancaria, pk=conciliacao_id, empresa=empresa)
     if request.method != "POST":
-        return redirect("caixa:tesouraria")
+        return _retorno_tesouraria(request)
     try:
         desfazer_conciliacao(
             conciliacao=conciliacao,
@@ -369,4 +389,4 @@ def desfazer_conciliacao_bancaria(request, conciliacao_id):
         messages.success(request, f"Conciliação #{conciliacao.pk} desfeita; as linhas voltaram a ficar pendentes.")
     except ValidationError as exc:
         messages.error(request, str(exc))
-    return redirect("caixa:tesouraria")
+    return _retorno_tesouraria(request)

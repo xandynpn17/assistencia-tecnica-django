@@ -19,17 +19,23 @@ from .models import (
     CompraCartaoCorporativo,
     ContaBancaria,
     ContaReceber,
+    CorrecaoRetroativaCaixa,
+    CreditoFornecedor,
     CustoFixoMensal,
     DespesaRecorrente,
+    DivergenciaCaixa,
     FaixaPremioMeta,
     FormaPagamento,
+    ItemRateioCompraFornecedor,
     LancamentoCaixa,
     LinhaExtratoBancario,
+    LocalDinheiroFisico,
     MaquininhaPagamento,
     MovimentoBancario,
     MovimentoSocio,
     Pagamento,
     PagamentoContaPagar,
+    RecebimentoCreditoFornecedor,
     PagamentoFaturaCartao,
     TransferenciaTesouraria,
     TaxaMaquininha,
@@ -37,6 +43,97 @@ from .models import (
     RegraComissaoTecnico,
     RegraPremioMeta,
 )
+
+
+class TransferenciaDinheiroFisicoForm(forms.Form):
+    tipo = forms.ChoiceField(
+        choices=[("sangria", "Sangria para o cofre"), ("reforco", "Reforco de troco"), ("transferencia", "Outra transferencia")]
+    )
+    origem = forms.ModelChoiceField(queryset=LocalDinheiroFisico.objects.none())
+    destino = forms.ModelChoiceField(queryset=LocalDinheiroFisico.objects.none())
+    valor = forms.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
+    data_movimento = forms.DateField(widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}))
+    descricao = forms.CharField(max_length=255, required=False)
+    justificativa = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), required=False)
+    chave_idempotencia = forms.CharField(widget=forms.HiddenInput())
+
+    def __init__(self, *args, empresa, **kwargs):
+        super().__init__(*args, **kwargs)
+        locais = LocalDinheiroFisico.objects.filter(empresa=empresa, ativo=True)
+        self.fields["origem"].queryset = locais
+        self.fields["destino"].queryset = locais
+        if not self.is_bound:
+            self.fields["data_movimento"].initial = timezone.localdate()
+            self.fields["chave_idempotencia"].initial = f"dinheiro-fisico:{uuid4().hex}"
+
+    def clean(self):
+        dados = super().clean()
+        if dados.get("origem") and dados.get("origem") == dados.get("destino"):
+            raise forms.ValidationError("Origem e destino devem ser diferentes.")
+        return dados
+
+
+class SaldoCorteDinheiroForm(forms.Form):
+    local = forms.ModelChoiceField(queryset=LocalDinheiroFisico.objects.none())
+    valor = forms.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.00"))
+    data_movimento = forms.DateField(widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}))
+    justificativa = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), min_length=12)
+    chave_idempotencia = forms.CharField(widget=forms.HiddenInput())
+
+    def __init__(self, *args, empresa, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["local"].queryset = LocalDinheiroFisico.objects.filter(empresa=empresa, ativo=True)
+        if not self.is_bound:
+            self.fields["data_movimento"].initial = timezone.localdate()
+            self.fields["chave_idempotencia"].initial = f"saldo-corte:{uuid4().hex}"
+
+
+class FundoTrocoForm(forms.Form):
+    local = forms.ModelChoiceField(queryset=LocalDinheiroFisico.objects.none())
+    valor_alvo = forms.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.00"))
+
+    def __init__(self, *args, empresa, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["local"].queryset = LocalDinheiroFisico.objects.filter(
+            empresa=empresa, ativo=True, tipo="gaveta"
+        )
+
+
+class DocumentarCorrecaoRetroativaForm(forms.Form):
+    lancamento = forms.ModelChoiceField(queryset=LancamentoCaixa.objects.none())
+    justificativa = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), min_length=12)
+
+    def __init__(self, *args, empresa, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["lancamento"].queryset = LancamentoCaixa.todos.filter(
+            empresa=empresa, caixa__aberto=False, status="ativo"
+        ).select_related("caixa").order_by("-data_movimento", "-id")
+        self.fields["lancamento"].label_from_instance = lambda item: (
+            f"{item.data_movimento:%d/%m/%Y} · {item.get_tipo_display()} · "
+            f"R$ {item.valor:.2f} · {item.descricao}"
+        )
+
+
+class AbsorverCorrecaoForm(forms.Form):
+    correcao = forms.ModelChoiceField(queryset=CorrecaoRetroativaCaixa.objects.none())
+    divergencia = forms.ModelChoiceField(queryset=DivergenciaCaixa.objects.none())
+    valor = forms.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
+    justificativa = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), min_length=12)
+
+    def __init__(self, *args, empresa, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["correcao"].queryset = CorrecaoRetroativaCaixa.objects.filter(
+            empresa=empresa, status__in=["documentada", "parcial"]
+        )
+        self.fields["divergencia"].queryset = DivergenciaCaixa.objects.filter(
+            empresa=empresa, status__in=["pendente", "aprovada"]
+        ).select_related("caixa")
+        self.fields["correcao"].label_from_instance = lambda item: (
+            f"#{item.pk} · {item.data_efetiva:%d/%m/%Y} · {item.get_tipo_display()} R$ {item.valor:.2f}"
+        )
+        self.fields["divergencia"].label_from_instance = lambda item: (
+            f"{item.caixa.data:%d/%m/%Y} · diferenca R$ {item.diferenca_bruta:.2f}"
+        )
 
 
 class CartaoCorporativoForm(forms.ModelForm):
@@ -174,6 +271,10 @@ class MovimentoSocioForm(forms.ModelForm):
         if not self.instance.empresa_id:
             self.instance.empresa = empresa
         self.fields["aporte_origem"].queryset = AporteCapital.objects.filter(empresa=empresa)
+        self.fields["aporte_origem"].required = False
+        self.fields["aporte_origem"].help_text = (
+            "Obrigatorio apenas para devolucao de AFAC, amortizacao, juros ou reducao de capital."
+        )
         self.fields["conta_bancaria"].queryset = ContaBancaria.objects.filter(empresa=empresa, ativa=True)
         self.fields["caixa"].queryset = Caixa.objects.filter(empresa=empresa, aberto=True)
         if not self.is_bound:
@@ -513,6 +614,7 @@ class PagamentoForm(forms.ModelForm):
         model = Pagamento
         fields = [
             "ordem_servico",
+            "cliente",
             "cliente_nome",
             "cliente_documento",
             "cliente_telefone",
@@ -559,6 +661,10 @@ class PagamentoForm(forms.ModelForm):
         self.fields["bandeira_principal"].choices = escolhas_bandeira
         self.fields["bandeira_secundaria"].choices = escolhas_bandeira
         self.fields["cliente_nome"].label = "Comprador"
+        from clientes.models import Cliente
+        self.fields["cliente"].queryset = Cliente.objects.filter(empresa=empresa)
+        self.fields["cliente"].label = "Cliente cadastrado (opcional)"
+        self.fields["cliente"].empty_label = "Sem vínculo cadastral"
         self.fields["cliente_nome"].required = False
         self.fields["cliente_nome"].widget = forms.TextInput(
             attrs={"placeholder": "Nome para garantia, troca ou contato futuro"}
@@ -723,6 +829,13 @@ class PagamentoForm(forms.ModelForm):
 
 
 class LancamentoCaixaForm(forms.ModelForm):
+    conta_pagar_existente = forms.ModelChoiceField(
+        queryset=ContaPagar.objects.none(),
+        required=False,
+        label="Esta saída é pagamento de uma conta já cadastrada?",
+        help_text="Se for, selecione-a para usar a baixa correta e não reconhecer a despesa duas vezes.",
+    )
+
     def __init__(self, *args, **kwargs):
         empresa = kwargs.pop("empresa", None)
         super().__init__(*args, **kwargs)
@@ -744,10 +857,16 @@ class LancamentoCaixaForm(forms.ModelForm):
             formas = formas.filter(Q(empresa=empresa) | Q(empresa__isnull=True))
             contas = contas.filter(empresa=empresa)
             caixas = caixas.filter(empresa=empresa)
+            self.fields["conta_pagar_existente"].queryset = ContaPagar.objects.filter(
+                empresa=empresa, status__in=["aberta", "parcial", "vencida"]
+            ).order_by("vencimento", "id")
         else:
             formas = formas.filter(empresa__isnull=True)
             contas = contas.filter(empresa__isnull=True)
             caixas = caixas.filter(empresa__isnull=True)
+            self.fields["conta_pagar_existente"].queryset = ContaPagar.objects.filter(
+                empresa__isnull=True, status__in=["aberta", "parcial", "vencida"]
+            ).order_by("vencimento", "id")
         self.fields["forma_pagamento"].queryset = formas.order_by("nome")
         self.fields["conta_bancaria"].queryset = contas.order_by("nome")
         self.fields["caixa"].queryset = caixas.order_by("-data", "-id")
@@ -1376,6 +1495,103 @@ class PagamentoContaPagarForm(forms.ModelForm):
                 self.add_error("conta_bancaria", "Selecione a conta usada no pagamento.")
             if caixa:
                 self.add_error("caixa", "Pagamento bancário não deve usar caixa físico.")
+        return dados
+
+
+class CreditoFornecedorForm(forms.ModelForm):
+    chave_idempotencia = forms.CharField(widget=forms.HiddenInput())
+
+    class Meta:
+        model = CreditoFornecedor
+        fields = ["descricao", "documento_referencia", "valor_total", "data_reconhecimento", "observacao"]
+        widgets = {
+            "data_reconhecimento": forms.DateInput(attrs={"type": "date"}),
+            "observacao": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, conta=None, **kwargs):
+        self.conta_origem = conta
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            self.fields["chave_idempotencia"].initial = f"credito-fornecedor:{uuid4().hex}"
+            self.fields["data_reconhecimento"].initial = timezone.localdate()
+            self.fields["descricao"].initial = f"Devolução de {getattr(conta, 'fornecedor', '')}".strip()
+
+
+class RecebimentoCreditoFornecedorForm(forms.ModelForm):
+    credito = forms.ModelChoiceField(queryset=CreditoFornecedor.objects.none(), label="Crédito a receber")
+    chave_idempotencia = forms.CharField(widget=forms.HiddenInput())
+
+    class Meta:
+        model = RecebimentoCreditoFornecedor
+        fields = ["valor", "caixa", "conta_bancaria", "data_movimento", "referencia", "observacao"]
+        widgets = {
+            "data_movimento": forms.DateInput(attrs={"type": "date"}),
+            "observacao": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, empresa=None, credito=None, **kwargs):
+        self.credito_origem = credito
+        super().__init__(*args, **kwargs)
+        creditos = CreditoFornecedor.objects.none()
+        if empresa:
+            creditos = CreditoFornecedor.objects.filter(
+                empresa=empresa, status__in=["aberto", "parcial"]
+            )
+            if credito:
+                creditos = creditos.filter(pk=credito.pk)
+        self.fields["credito"].queryset = creditos.order_by("data_reconhecimento", "id")
+        self.fields["conta_bancaria"].queryset = (
+            ContaBancaria.objects.filter(empresa=empresa, ativa=True).order_by("nome")
+            if empresa else ContaBancaria.objects.none()
+        )
+        self.fields["caixa"].queryset = (
+            Caixa.objects.filter(empresa=empresa, aberto=True).order_by("-data", "-id")
+            if empresa else Caixa.objects.none()
+        )
+        if not self.is_bound:
+            self.fields["chave_idempotencia"].initial = f"recebimento-credito-fornecedor:{uuid4().hex}"
+            self.fields["credito"].initial = getattr(credito, "pk", None)
+            self.fields["valor"].initial = getattr(credito, "valor_aberto", None)
+            self.fields["data_movimento"].initial = timezone.localdate()
+
+    def clean(self):
+        dados = super().clean()
+        caixa = dados.get("caixa")
+        conta_bancaria = dados.get("conta_bancaria")
+        credito = dados.get("credito") or self.credito_origem
+        if bool(caixa) == bool(conta_bancaria):
+            raise forms.ValidationError("Escolha somente um destino: caixa físico ou conta bancária.")
+        valor = Decimal(dados.get("valor") or 0)
+        if credito and valor > credito.valor_aberto:
+            self.add_error("valor", "O recebimento não pode superar o crédito em aberto.")
+        return dados
+
+
+class ItemRateioCompraFornecedorForm(forms.ModelForm):
+    class Meta:
+        model = ItemRateioCompraFornecedor
+        fields = ["destino_tipo", "ordem_servico", "produto", "centro_custo", "descricao", "valor"]
+
+    def __init__(self, *args, empresa=None, **kwargs):
+        from estoque.models import Produto
+        from ordens.models import OrdemServico
+
+        super().__init__(*args, **kwargs)
+        self.fields["ordem_servico"].queryset = OrdemServico.objects.filter(empresa=empresa).order_by("-id") if empresa else OrdemServico.objects.none()
+        produtos = Produto.objects.filter(ativo=True)
+        self.fields["produto"].queryset = produtos.filter(Q(empresa=empresa) | Q(empresa__isnull=True)).order_by("nome") if empresa else Produto.objects.none()
+        centros = CentroCusto.objects.filter(ativo=True)
+        self.fields["centro_custo"].queryset = centros.filter(Q(empresa=empresa) | Q(empresa__isnull=True)).order_by("nome") if empresa else CentroCusto.objects.none()
+
+    def clean(self):
+        dados = super().clean()
+        tipo = dados.get("destino_tipo")
+        campos = {"os": "ordem_servico", "estoque": "produto", "centro_custo": "centro_custo"}
+        campo_esperado = campos.get(tipo)
+        preenchidos = [campo for campo in campos.values() if dados.get(campo)]
+        if not campo_esperado or preenchidos != [campo_esperado]:
+            raise forms.ValidationError("Preencha somente o destino correspondente ao tipo escolhido.")
         return dados
 
 

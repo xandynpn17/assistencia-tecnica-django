@@ -1,0 +1,20 @@
+{% extends 'core/base.html' %}
+{% block title %}Backup automático e nuvem{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between mb-3"><h3>Backup automático e nuvem</h3><a class="btn btn-sm btn-outline-secondary" href="{% url 'configuracoes:backup_banco' %}">Voltar aos backups</a></div>
+  <div class="alert alert-info">Rotina da instalação inteira: inclui o banco de todas as empresas e os anexos. Acesso exclusivo de administrador. Backup automático começa desativado.</div>
+  {% if backup_atrasado %}<div class="alert alert-warning">Não há backup local concluído nas últimas 36 horas. Verifique a tarefa do servidor, acesso ao banco e espaço livre.</div>{% endif %}
+  <div class="row"><div class="col-lg-5"><div class="card"><div class="card-header"><strong>Configuração</strong></div><div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="acao" value="configurar">{{ form.as_p }}<button class="btn btn-primary">Guardar configuração</button></form>
+  <p class="small text-muted mt-3">Requer instalar a tarefa Windows no PC servidor. Hora local do sistema. Sem internet, a cópia local continua independente; acompanhe as falhas de nuvem.</p>
+  <p class="small">Configure <code>ABGEST_BACKUP_KEY</code> no ambiente do servidor para a cópia criptografada. Guarde a chave também fora desse PC. Não envie a chave no chat nem a inclua no Git.</p>
+  </div></div></div><div class="col-lg-7"><div class="card"><div class="card-header"><strong>Proteção dos dados</strong></div><div class="card-body">
+    <p>Último backup local concluído: <strong>{{ ultimo_sucesso.terminado_em|date:"d/m/Y H:i"|default:"Ainda não executado" }}</strong></p>
+    <p>Último teste declarado de recuperação: <strong>{{ politica.ultimo_teste_recuperacao|date:"d/m/Y H:i"|default:"Não registado" }}</strong></p>
+    <div class="alert alert-light border small">“Copiado; upload não confirmado” significa que o pacote cifrado foi colocado na pasta de sincronização, não que já chegou à nuvem. Confirme no aplicativo/site da nuvem. Não sincronize a pasta ativa do PostgreSQL.</div>
+    <form method="post" class="mb-3">{% csrf_token %}<input type="hidden" name="acao" value="executar"><button class="btn btn-success">Executar e verificar backup agora</button></form>
+    <details><summary>Registar teste de recuperação</summary><form method="post" class="mt-2">{% csrf_token %}<input type="hidden" name="acao" value="confirmar_teste"><label><input type="checkbox" name="teste_confirmado" value="1" required> Recuperei uma cópia num ambiente separado e conferi banco e anexos.</label><br><button class="btn btn-sm btn-outline-primary">Registar declaração</button></form></details>
+  </div></div></div></div>
+  <div class="card"><div class="card-header"><strong>Execuções recentes</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Início</th><th>Local</th><th>Nuvem</th><th>Tamanho / integridade</th><th>Observação</th></tr></thead><tbody>{% for e in execucoes %}<tr><td>{{ e.iniciado_em|date:"d/m/Y H:i" }}{% if e.agendado %}<br><small>Agendado</small>{% endif %}</td><td>{{ e.get_status_display }}</td><td>{{ e.get_nuvem_status_display }}</td><td>{{ e.tamanho_bytes|filesizeformat }}<br><code>{{ e.sha256|slice:':12' }}</code></td><td>{{ e.erro|default:"—" }}</td></tr>{% empty %}<tr><td colspan="5">Nenhuma execução registada.</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+{% endblock %}

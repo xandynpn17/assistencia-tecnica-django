@@ -73,6 +73,8 @@
                                 {% endif %}
                             </p>
                             <div id="serie-feedback" class="small"></div>
+                            <p class="mb-1 mt-2"><strong>Data da compra:</strong> {{ ordem.data_compra|date:"d/m/Y"|default:"Não informado" }}</p>
+                            <p class="mb-1 text-break"><strong>Nº da nota fiscal:</strong> {{ ordem.numero_nota_fiscal|default:"Não informado" }}</p>
                             <div class="border-top pt-2 mt-2 text-muted">
                                 <p class="mb-1 text-break">
                                     <strong>Processo anterior:</strong>

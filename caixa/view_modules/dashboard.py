@@ -13,6 +13,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
+from caixa.services.consulta_financeira import fluxo_financeiro_periodo
+from caixa.services.fechamento_caixa import (
+    calcular_resumo_caixa,
+    fechar_caixa_versionado,
+    reabrir_caixa_versionado,
+    saldo_sugerido_abertura as obter_saldo_sugerido_abertura,
+)
 
 from configuracoes.models import ConfiguracaoSistema, MarcaGarantia, RegraGarantiaMarca
 from configuracoes.permissions import (
@@ -40,7 +47,7 @@ from clientes.models import Cliente
 from ordens.models import OrdemServico
 
 from ..forms import LancamentoCaixaForm, PagamentoForm
-from ..models import AuditoriaFinanceira, Caixa, ContaPagar, ContaReceber, CustoFixoMensal, LancamentoCaixa, Pagamento, PagamentoContaPagar
+from ..models import AuditoriaFinanceira, Caixa, ContaPagar, ContaReceber, CustoFixoMensal, EventoSessaoCaixa, LancamentoCaixa, Pagamento, PagamentoContaPagar
 from .common import caixa_atual
 from .helpers import (
     _atualizar_status_contas_abertas,
@@ -200,12 +207,7 @@ def abrir_caixa(request):
     resumo_ultimo_caixa = _resumo_movimento_caixa(ultimo_caixa)
     saldo_sugerido_abertura = Decimal("0.00")
     if ultimo_caixa:
-        saldo_sugerido_abertura = (
-            ultimo_caixa.valor_contado_fisico
-            or ultimo_caixa.saldo_final
-            or resumo_ultimo_caixa["saldo"]
-            or Decimal("0.00")
-        )
+        saldo_sugerido_abertura = obter_saldo_sugerido_abertura(ultimo_caixa)
 
     def _contexto_abrir(caixa_ref, pode_abrir, mensagem, saldo_digitado=""):
         return {
@@ -231,38 +233,20 @@ def abrir_caixa(request):
         and not caixa_hoje.aberto
     ):
         try:
-            require_sensitive_permission(request.user, "perm_caixa_corrigir_lancamentos")
             motivo = (request.POST.get("motivo_reabertura") or "").strip()
-            if not motivo:
-                messages.error(request, "Informe o motivo da reabertura do caixa.")
-                return render(
-                    request,
-                    "caixa/abrir_caixa.html",
-                    _contexto_abrir(
-                        caixa_hoje,
-                        False,
-                        "O caixa de hoje está encerrado. A reabertura exige justificativa.",
-                    ),
-                )
-            with transaction.atomic():
-                caixa_reabrir = Caixa.objects.select_for_update().get(pk=caixa_hoje.pk)
-                outro_aberto = caixas_empresa.select_for_update().filter(aberto=True).exclude(
-                    pk=caixa_reabrir.pk
-                ).first()
-                if outro_aberto:
-                    raise ValidationError(
-                        f"Já existe um caixa aberto em {outro_aberto.data:%d/%m/%Y}."
-                    )
-                if caixa_reabrir.aberto:
-                    messages.info(request, "O caixa já estava aberto.")
-                    return _redirect_pos_operacao(request, "caixa:registrar_pagamento")
-                resumo_fecho = (
-                    f"saldo_final={caixa_reabrir.saldo_final:.2f} | "
-                    f"contado={caixa_reabrir.valor_contado_fisico:.2f} | "
-                    f"diferenca={caixa_reabrir.diferenca_fechamento:.2f}"
-                )
-                caixa_reabrir.aberto = True
-                caixa_reabrir.save(update_fields=["aberto"])
+            caixa_reabrir, alterado = reabrir_caixa_versionado(
+                caixa=caixa_hoje,
+                motivo=motivo,
+                usuario=request.user,
+            )
+            if not alterado:
+                messages.info(request, "O caixa já estava aberto.")
+                return _redirect_pos_operacao(request, "caixa:registrar_pagamento")
+            resumo_fecho = (
+                f"saldo_final={caixa_reabrir.saldo_final:.2f} | "
+                f"contado={caixa_reabrir.valor_contado_fisico:.2f} | "
+                f"diferenca={caixa_reabrir.diferenca_fechamento:.2f}"
+            )
             _log_financeiro(
                 "caixa_reaberto",
                 request.user,
@@ -314,6 +298,13 @@ def abrir_caixa(request):
                     aberto=True,
                     empresa=getattr(request.user, "empresa", None),
                 )
+                EventoSessaoCaixa.objects.create(
+                    empresa=novo_caixa.empresa,
+                    caixa=novo_caixa,
+                    tipo="abertura",
+                    saldo_informado=saldo_inicial,
+                    usuario=request.user,
+                )
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
             return render(
@@ -339,13 +330,14 @@ def fechar_caixa(request):
 
     def _contexto_fechar(valor_contado_fisico=None, justificativa_diferenca=""):
         resumo_caixa = _resumo_movimento_caixa(caixa)
-        total_entradas = resumo_caixa["total_entradas"]
-        total_saidas = resumo_caixa["total_saidas"]
-        saldo_contabil = resumo_caixa["saldo"]
+        resumo_fisico = calcular_resumo_caixa(caixa)
+        total_entradas = resumo_fisico.total_entradas
+        total_saidas = resumo_fisico.total_saidas
+        saldo_contabil = resumo_fisico.saldo_contabil
         pagamentos_qs = resumo_caixa["pagamentos"].select_related("ordem_servico", "forma_pagamento")
         saidas_qs = resumo_caixa["lancamentos"].filter(tipo="saida").select_related("categoria", "centro_custo")
-        conferencia_formas = _montar_conferencia_formas(pagamentos_qs)
-        saldo_dinheiro = _saldo_dinheiro_esperado(caixa, resumo_caixa, conferencia_formas)
+        conferencia_formas = resumo_fisico.conferencia_formas
+        saldo_dinheiro = resumo_fisico.dinheiro_esperado
         if valor_contado_fisico in (None, ""):
             valor_contado_fisico_exibicao = ""
             diferenca = Decimal("0.00")
@@ -428,28 +420,38 @@ def fechar_caixa(request):
                     "conferencia_formas": conferencia_formas,
                 },
             )
-        caixa.aberto = False
-        caixa.saldo_final = saldo_contabil
-        caixa.valor_contado_fisico = valor_contado
-        caixa.diferenca_fechamento = diferenca
-        caixa.justificativa_diferenca = justificativa
-        caixa.conferencia_formas_pagamento = [
-            {
-                "codigo": item["codigo"],
-                "nome": item["nome"],
-                "apurado": f"{item['apurado']:.2f}",
-                "contado": f"{item['contado']:.2f}",
-                "diferenca": f"{item['diferenca']:.2f}",
-            }
-            for item in conferencia_formas
-        ]
-        caixa.save()
+        try:
+            fechamento, resumo_aplicado = fechar_caixa_versionado(
+                caixa=caixa,
+                valor_contado=valor_contado,
+                justificativa=justificativa,
+                payload=request.POST,
+                usuario=request.user,
+            )
+        except ValidationError as exc:
+            mensagem = "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+            messages.error(request, mensagem)
+            return render(
+                request,
+                "caixa/fechar_caixa.html",
+                {
+                    **_contexto_fechar(
+                        valor_contado_fisico=valor_contado,
+                        justificativa_diferenca=justificativa,
+                    ),
+                    "conferencia_formas": conferencia_formas,
+                },
+            )
+        saldo_contabil = resumo_aplicado.saldo_contabil
+        saldo_dinheiro = resumo_aplicado.dinheiro_esperado
+        diferenca = fechamento.diferenca
         _log_financeiro(
             "caixa_fechado",
             request.user,
             valor=saldo_contabil,
             descricao=(
-                f"Caixa #{caixa.id} | saldo_contabil={saldo_contabil:.2f} | "
+                f"Caixa #{caixa.id} | fechamento_v{fechamento.versao} | "
+                f"saldo_contabil={saldo_contabil:.2f} | "
                 f"dinheiro_esperado={saldo_dinheiro:.2f} | contado={valor_contado:.2f} | diferenca={diferenca:.2f}"
             ),
         )
@@ -881,6 +883,7 @@ def _dashboard_caixa_context(request, menu_sub):
         "max_serie_financeira": max_serie_financeira,
         "diferencas_por_forma": diferencas_por_forma,
         "pagamentos_recentes": pagamentos_recentes,
+        "fluxo_financeiro": fluxo_financeiro_periodo(empresa, data_inicio, data_fim),
         "lancamentos_recentes": lancamentos_recentes,
         "saidas_recentes": saidas_recentes,
         "contas_pagar_vencidas": contas_pagar_vencidas,
@@ -1301,6 +1304,9 @@ def registrar_pagamento(request):
             if not _validar_datas_financeiras(form, request.user):
                 return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             pagamento_preview = form.save(commit=False)
+            if ordem and pagamento_preview.cliente_id and pagamento_preview.cliente_id != ordem.cliente_id:
+                form.add_error("cliente", "O comprador deve ser o mesmo cliente da OS.")
+                return render(request, "caixa/registrar_pagamento.html", _context_pagamento(form))
             desconto_valor = form.cleaned_data.get("desconto_valor") or Decimal("0.00")
             desconto_percentual = form.cleaned_data.get("desconto_percentual") or Decimal("0.00")
             valor_bruto_pagamento = Decimal(pagamento_preview.valor or Decimal("0.00"))
@@ -1649,6 +1655,13 @@ def registrar_saida(request):
     if request.method == "POST":
         form = LancamentoCaixaForm(request.POST, empresa=empresa)
         if form.is_valid():
+            conta_pagar_existente = form.cleaned_data.get("conta_pagar_existente")
+            if conta_pagar_existente:
+                messages.info(
+                    request,
+                    "Use o bloco Registrar pagamento desta conta. Assim a saída financeira quita a obrigação sem duplicar a despesa.",
+                )
+                return redirect("caixa:detalhe_conta_pagar", conta_id=conta_pagar_existente.pk)
             if not _validar_datas_financeiras(form, request.user):
                 return render(
                     request,

@@ -1,9 +1,13 @@
 from django.urls import path
 from . import views
+from .view_modules.historico_clientes import revisar_identificacao_clientes
+from .view_modules.rentabilidade import rentabilidade_os
 
 app_name = "caixa"
 
 urlpatterns = [
+    path("rentabilidade-os/", rentabilidade_os, name="rentabilidade_os"),
+    path('pagamentos/clientes/revisar/', revisar_identificacao_clientes, name='revisar_identificacao_clientes'),
     path("", views.dashboard_caixa, name="dashboard_caixa"),
     path("financeiro/", views.dashboard_financeiro, name="dashboard_financeiro"),
     path("historico/<int:caixa_id>/", views.detalhe_caixa, name="detalhe_caixa"),
@@ -16,6 +20,8 @@ urlpatterns = [
     path("saida/", views.registrar_saida, name="registrar_saida"),
     path("abrir/", views.abrir_caixa, name="abrir_caixa"),
     path("fechar/", views.fechar_caixa, name="fechar_caixa"),
+    path("dinheiro-fisico/", views.dinheiro_fisico, name="dinheiro_fisico"),
+    path("patrimonio/", views.patrimonio_financeiro, name="patrimonio_financeiro"),
     path("contas-receber/", views.contas_receber, name="contas_receber"),
     path("contas-receber/nova/", views.criar_conta_receber, name="criar_conta_receber"),
     path("contas-receber/<int:conta_id>/", views.detalhe_conta_receber, name="detalhe_conta_receber"),

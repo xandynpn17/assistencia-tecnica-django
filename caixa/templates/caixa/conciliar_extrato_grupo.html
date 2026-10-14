@@ -22,7 +22,7 @@
   {% include 'caixa/_subnav_caixa.html' %}
   <div class="d-flex justify-content-between align-items-center flex-wrap mb-3" style="gap:10px;">
     <div><h1 class="h4 mb-1">Conciliação bancária agrupada</h1><div class="text-muted">Uma transferência da SumUp pode ser comparada com vários pagamentos do sistema.</div></div>
-    <a class="btn btn-outline-secondary" href="{% url 'caixa:tesouraria' %}">Voltar à tesouraria</a>
+    <a class="btn btn-outline-secondary" href="{{ retorno_tesouraria }}">Voltar à tesouraria</a>
   </div>
 
   <form method="post" id="conciliacaoGrupoForm">

@@ -1,0 +1,23 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container py-3">
+  <h2>Configurações da operação</h2>
+  <p class="text-muted">Prazos e checklist válidos apenas para a empresa ativa. Alterar os itens não reescreve conferências antigas.</p>
+  <form method="post" class="card card-body">
+    {% csrf_token %}
+    <h5>Prazos dos alertas (dias)</h5>
+    <div class="row">
+      {% for field in form %}{% if field.name != 'itens' and field.name != 'checklist_obrigatorio' %}
+      <div class="col-md-4 form-group"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for erro in field.errors %}<div class="text-danger">{{ erro }}</div>{% endfor %}</div>
+      {% endif %}{% endfor %}
+    </div>
+    <hr>
+    <h5>Conferência de entrega</h5>
+    <div class="form-group"><label for="{{ form.itens.id_for_label }}">{{ form.itens.label }}</label>{{ form.itens }}{% for erro in form.itens.errors %}<div class="text-danger">{{ erro }}</div>{% endfor %}</div>
+    <div class="form-group"><label for="{{ form.itens_tipo.id_for_label }}">{{ form.itens_tipo.label }}</label>{{ form.itens_tipo }}<small class="form-text text-muted">Exemplo: celular | Conferir carregamento. Tipo deve coincidir com o cadastrado na OS.</small>{% for erro in form.itens_tipo.errors %}<div class="text-danger">{{ erro }}</div>{% endfor %}</div>
+    <div class="form-check mb-3">{{ form.checklist_obrigatorio }}<label class="form-check-label" for="{{ form.checklist_obrigatorio.id_for_label }}">Exigir conferência completa para marcar o checklist como concluído</label></div>
+    <p class="small text-muted">Esta opção ainda não bloqueia o fechamento antigo da OS nem altera o PDF. A integração da entrega será homologada separadamente.</p>
+    <button class="btn btn-primary align-self-start" type="submit">Salvar configuração</button>
+  </form>
+</div>
+{% endblock %}

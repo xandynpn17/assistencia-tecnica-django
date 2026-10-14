@@ -1,0 +1,7 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3"><div><h2>Central de pendências</h2><p class="text-muted mb-0">{{ total }} alerta(s) em {{ hoje|date:'d/m/Y' }}. Os alertas não fecham nem alteram ordens.</p></div>{% if user.tipo_usuario == 'adm' or user.tipo_usuario == 'gerente' %}<a class="btn btn-outline-primary" href="{% url 'ordens:configurar_operacao' %}">Configurar prazos</a>{% endif %}</div>
+  {% for grupo in grupos %}<section class="card mb-3"><div class="card-header d-flex justify-content-between"><strong>{{ grupo.titulo }}</strong><span class="badge badge-primary">{{ grupo.total }}</span></div><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>OS</th><th>Referência</th><th>Motivo</th><th>Responsável</th><th></th></tr></thead><tbody>{% for linha in grupo.linhas %}<tr><td>{% if linha.ordem %}{{ linha.ordem.numero_os }}{% else %}—{% endif %}</td><td>{{ linha.quando|date:'d/m/Y' }}</td><td>{{ linha.motivo }}</td><td>{{ linha.responsavel|default:'—' }}</td><td>{% if linha.ordem %}<a href="{% url 'ordens:detalhes_ordem' linha.ordem.pk %}">Abrir OS</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="text-muted">Nenhuma pendência nesta categoria.</td></tr>{% endfor %}</tbody></table></div>{% if grupo.total > 50 %}<div class="p-2 text-muted">Mostrando as primeiras 50 ocorrências.</div>{% endif %}</div></section>{% endfor %}
+</div>
+{% endblock %}

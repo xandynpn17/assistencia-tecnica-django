@@ -127,6 +127,7 @@ class OrdemServico(models.Model):
     )
     modelo_equipamento = models.CharField(max_length=50)
     numero_serie_equipamento = models.CharField(max_length=50, blank=True)
+    equipamento_grupo = models.UUIDField(null=True, blank=True, db_index=True, help_text="Identificador interno atribuído após revisão humana do histórico.")
     local_armazenamento = models.CharField(max_length=200, blank=True)
 
     # ===========================
@@ -584,6 +585,51 @@ class LinhaTrabalho(models.Model):
 
     class Meta:
         ordering = ['id']
+
+
+class ConfiguracaoOperacaoEmpresa(models.Model):
+    """Prazos e checklist de operação; nunca fecha uma OS automaticamente."""
+    empresa = models.OneToOneField("configuracoes.Empresa", on_delete=models.CASCADE, related_name="configuracao_operacao")
+    dias_os_parada = models.PositiveSmallIntegerField(default=5)
+    dias_orcamento_sem_resposta = models.PositiveSmallIntegerField(default=3)
+    dias_pronto_aguardando = models.PositiveSmallIntegerField(default=3)
+    dias_compra_pendente = models.PositiveSmallIntegerField(default=5)
+    dias_cobranca_fabricante = models.PositiveSmallIntegerField(default=0)
+    checklist_itens = models.JSONField(default=list, blank=True)
+    checklist_por_tipo = models.JSONField(default=dict, blank=True)
+    checklist_obrigatorio = models.BooleanField(default=False)
+
+    def clean(self):
+        super().clean()
+        if not isinstance(self.checklist_itens, list) or len(self.checklist_itens) > 20 or any(not isinstance(item, str) or not item.strip() or len(item) > 100 for item in self.checklist_itens):
+            raise ValidationError({"checklist_itens": "Informe até 20 itens de texto com até 100 caracteres."})
+        if not isinstance(self.checklist_por_tipo, dict) or any(
+            not isinstance(tipo, str) or not tipo.strip() or len(tipo) > 40
+            or not isinstance(itens, list) or len(itens) > 20
+            or any(not isinstance(item, str) or not item.strip() or len(item) > 100 for item in itens)
+            for tipo, itens in self.checklist_por_tipo.items()
+        ):
+            raise ValidationError({"checklist_por_tipo": "Use tipos de até 40 caracteres e até 20 itens por tipo."})
+
+
+class ChecklistEntregaOS(models.Model):
+    ordem = models.OneToOneField(OrdemServico, on_delete=models.CASCADE, related_name="checklist_entrega")
+    empresa = models.ForeignKey("configuracoes.Empresa", on_delete=models.PROTECT, related_name="checklists_entrega_os")
+    itens_snapshot = models.JSONField(default=list, blank=True)
+    marcados = models.JSONField(default=list, blank=True)
+    acessorios_conferidos = models.BooleanField(default=False)
+    testes_finais_conferidos = models.BooleanField(default=False)
+    observacao = models.TextField(blank=True)
+    concluido_em = models.DateTimeField(null=True, blank=True)
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+        if self.ordem_id and self.empresa_id != self.ordem.empresa_id:
+            raise ValidationError({"empresa": "A OS pertence a outra empresa."})
+        if any(item not in self.itens_snapshot for item in self.marcados):
+            raise ValidationError({"marcados": "Item fora do checklist configurado."})
 
 
         # ==============================
